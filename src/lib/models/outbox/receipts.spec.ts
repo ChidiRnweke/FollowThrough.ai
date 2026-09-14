@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
 import {
 	appendWrite,
+	settleWrite,
 	acknowledgeWrite,
 	beginWrite,
 	retainWriteReceipt,
@@ -76,4 +77,43 @@ describe('exact acknowledgement ancestry', () => {
 
 it('retains the existing proof when a replay has the same version', () => {
 	expect(retainWriteReceipt(receipt, { ...receipt, operationId: secondId })).toEqual(receipt);
+});
+
+describe('application proof without an original body', () => {
+	const proof = { operationId: firstId, resourceKind: 'found' as const, etag: syncEtag(2n) };
+	const pending = () =>
+		appendWrite(
+			[beginWrite(appendWrite([], { ...draft(), operationId: firstId, basedOn: null }, 1)[0])],
+			draft(),
+			2
+		);
+	it('retains dependent typing for explicit review without inventing a new base', () => {
+		const [child] = settleWrite(pending(), firstId, { kind: 'proven', proof });
+		expect({
+			base: child.intent.base,
+			local: child.intent.local,
+			delivery: child.delivery
+		}).toEqual({
+			base: original,
+			local: 'Later typing',
+			delivery: { kind: 'conflict', remote: { kind: 'unavailable' } }
+		});
+	});
+	it('rejects proof for another operation without changing the queue', () => {
+		expect(() => settleWrite(pending(), secondId, { kind: 'proven', proof })).toThrow(
+			'another operation'
+		);
+	});
+	it('releases an independent resource after its creation dependency is proven', () => {
+		const [parent] = pending();
+		const entries = appendWrite(
+			[parent],
+			{ ...draft(), key: 'note:2', basedOn: null, references: ['note:1'] },
+			2
+		);
+		expect(settleWrite(entries, firstId, { kind: 'proven', proof })[0]).toMatchObject({
+			intent: { base: original, dependencies: [] },
+			delivery: { kind: 'queued' }
+		});
+	});
 });

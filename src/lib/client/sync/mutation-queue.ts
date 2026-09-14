@@ -98,8 +98,7 @@ export class MutationQueue<C, T> {
 				.map((entry) => entry.intent.operationId)
 		);
 		for (const id of this.retryAfter.keys())
-			if (!retryable.has(id) && id !== 'acknowledgements' && id !== 'writer' && id !== 'storage')
-				this.retryAfter.delete(id);
+			if (!retryable.has(id) && id !== 'writer' && id !== 'storage') this.retryAfter.delete(id);
 		this.entries = state.entries;
 		this.receipts.clear();
 		for (const [key, receipt] of state.receipts) this.receipts.set(key, receipt);
@@ -169,7 +168,8 @@ export class MutationQueue<C, T> {
 						? { kind: 'rejected', message: 'Cancelled before application' }
 						: outcome
 				);
-				if (outcome.kind === 'applied' && !this.stopped) this.dependencies.committed();
+				if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
+					this.dependencies.committed();
 			}
 			const remaining = await this.dependencies.repository.list(this.accountId);
 			await this.dependencies.repository.discard(
@@ -178,29 +178,6 @@ export class MutationQueue<C, T> {
 			);
 		});
 		await this.reload();
-	}
-	private async acknowledgePending(): Promise<SubmissionResult> {
-		const recovery = this.dependencies.transport.recovery;
-		if (!recovery) return { kind: 'complete' };
-		if ((this.retryAfter.get('acknowledgements')?.at ?? 0) > this.dependencies.scheduler.now())
-			return { kind: 'waiting' };
-		try {
-			for (const operationId of await this.dependencies.repository.pendingAcknowledgements(
-				this.accountId
-			)) {
-				if (this.stopped || !this.online) return { kind: 'stopped' };
-				await recovery.acknowledge(operationId);
-				await this.dependencies.repository.acknowledged(this.accountId, operationId);
-			}
-			this.retryAfter.delete('acknowledgements');
-			return { kind: 'complete' };
-		} catch (error) {
-			this.deferRetry('acknowledgements');
-			return {
-				kind: 'failure',
-				message: error instanceof Error ? error.message : 'Receipt acknowledgement failed'
-			};
-		}
 	}
 
 	flush(force = false): Promise<SubmissionResult> {
@@ -233,7 +210,7 @@ export class MutationQueue<C, T> {
 							.filter(([, retry]) => retry.at > this.dependencies.scheduler.now())
 							.map(([id]) => id)
 					);
-					let failure: SubmissionResult = await this.acknowledgePending();
+					let failure: SubmissionResult = { kind: 'complete' };
 					while (!this.stopped && this.online) {
 						const unresolved = unresolvedWrite(
 							await this.dependencies.repository.list(this.accountId),
@@ -293,10 +270,9 @@ export class MutationQueue<C, T> {
 						const outcome = response.outcome;
 						await this.dependencies.repository.settle(this.accountId, sent, outcome);
 						this.retryAfter.delete(sent.intent.operationId);
-						if (outcome.kind === 'applied' && !this.stopped) this.dependencies.committed();
+						if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
+							this.dependencies.committed();
 						await this.reload();
-						const acknowledged = await this.acknowledgePending();
-						if (acknowledged.kind === 'failure') failure = acknowledged;
 					}
 					return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
 				}

@@ -33,7 +33,6 @@ export interface WorkspaceController {
 		actor: ActorContext,
 		input: WorkspaceWriteCancellation
 	): Promise<WorkspaceWriteRecovery>;
-	acknowledgeMutation(actor: ActorContext, operationId: string): Promise<void>;
 	readResource(
 		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
@@ -101,9 +100,7 @@ export class Workspace implements WorkspaceController {
 	cancelMutation(actor: ActorContext, input: WorkspaceWriteCancellation) {
 		return this.dependencies.writeRecovery.cancel(actor, input);
 	}
-	acknowledgeMutation(actor: ActorContext, operationId: string) {
-		return this.dependencies.writeRecovery.acknowledge(actor, operationId);
-	}
+
 	readResource(actor: ActorContext, identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
 		return this.dependencies.syncObjects.read(actor, identity, etag);
 	}

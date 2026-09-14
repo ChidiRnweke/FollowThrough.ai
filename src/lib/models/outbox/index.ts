@@ -39,21 +39,21 @@ export const retainWriteReceipt = <T>(
 
 export type WriteOutcome<T> =
 	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
-	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof }
+	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof }
 	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> }
 	| { readonly kind: 'rejected'; readonly message: string };
 
-/** Original application proof after the client has acknowledged durable settlement. */
-export const compactWriteProofSchema = z.object({
+/** Permanent application evidence. The server need not retain the original resource body. */
+export const appliedWriteProofSchema = z.object({
 	operationId: z.string().uuid(),
 	etag: syncEtagSchema,
 	resourceKind: z.enum(['found', 'deleted'])
 });
-export type CompactWriteProof = z.infer<typeof compactWriteProofSchema>;
+export type AppliedWriteProof = z.infer<typeof appliedWriteProofSchema>;
 export type WriteRecovery<T> =
 	| { readonly kind: 'cancelled' }
 	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
-	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof };
+	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof };
 
 /** Imported drafts may retain a real base representation before learning its sync validator. */
 export type WriteBase<T> = { readonly etag: SyncEtag | null; readonly value: T };
@@ -264,7 +264,7 @@ export const settleWrite = <C, T>(
 	operationId: string,
 	outcome: WriteOutcome<T>
 ): readonly OutboxEntry<C, T>[] => {
-	if (outcome.kind === 'compacted') {
+	if (outcome.kind === 'proven') {
 		if (outcome.proof.operationId !== operationId)
 			throw new Error('The proof identifies another operation');
 		return entries
@@ -297,7 +297,7 @@ export const settleWrite = <C, T>(
 	);
 };
 
-/** Lists may use retained bodies while detail reads enforce the cache's online barrier. */
+/** Lists and detail reads share retained content while replication runs. */
 export const visibleResources = <C, T>(
 	records: ReadonlyMap<string, ResourceState<T>>,
 	pending: readonly OutboxEntry<C, T>[]

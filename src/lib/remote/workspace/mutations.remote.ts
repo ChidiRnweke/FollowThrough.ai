@@ -17,20 +17,6 @@ export const cancelWorkspaceMutation = command(
 	}
 );
 
-export const acknowledgeWorkspaceMutation = command(
-	z.object({
-		accountId: z.string().uuid(),
-		operationId: z.string().uuid(),
-		protocol: z.literal(2)
-	}),
-	async ({ accountId, operationId }) => {
-		const actor = requestActor();
-		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
-		await AppFactory.controllers().workspace().acknowledgeMutation(actor, operationId);
-		return { kind: 'acknowledged' as const };
-	}
-);
-
 export const pushWorkspaceMutation = command(
 	workspaceMutationRequestSchema.extend({ accountId: z.string().uuid() }),
 	async (input) => {

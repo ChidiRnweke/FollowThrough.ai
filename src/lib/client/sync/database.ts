@@ -72,7 +72,6 @@ export class WorkspaceDatabase extends Dexie {
 		super(name);
 		this.version(2).stores({
 			'recovery-heads': 'accountId',
-			acknowledgements: '[accountId+operationId], accountId',
 			quarantine: '[accountId+source+key], accountId',
 			records: '[accountId+key], accountId',
 			cursors: 'accountId',

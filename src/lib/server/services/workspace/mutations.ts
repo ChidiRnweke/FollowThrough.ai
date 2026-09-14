@@ -36,17 +36,13 @@ export class SyncMutationTransactions {
 				);
 				if (previous.kind === 'reused')
 					throw new ValidationError('The operation ID was already used for different input');
-				if (previous.kind === 'receipt') return { kind: 'applied', receipt: previous.receipt };
-				if (previous.kind === 'compacted') return previous;
+				if (previous.kind === 'proven') return previous;
 				if (previous.kind === 'missing')
 					await this.dependencies.mutationReceipts.cancel(actor, input.operationId, request);
 				return { kind: 'cancelled' };
 			},
 			{ retry: 'database-only' }
 		);
-	}
-	acknowledge(actor: ActorContext, operationId: string): Promise<void> {
-		return this.dependencies.mutationReceipts.compact(actor, operationId);
 	}
 	async run(
 		actor: ActorContext,
@@ -66,10 +62,22 @@ export class SyncMutationTransactions {
 					);
 					if (previous.kind === 'reused')
 						throw new ValidationError('The operation ID was already used for different input');
-					if (previous.kind === 'receipt') return { kind: 'applied', receipt: previous.receipt };
 					if (previous.kind === 'cancelled')
 						return { kind: 'rejected', message: 'This edit was cancelled on this device.' };
-					if (previous.kind === 'compacted') return previous;
+					if (previous.kind === 'proven') {
+						const resource = await this.dependencies.syncObjects.read(actor, identity, null);
+						const etag =
+							resource.kind === 'found'
+								? resource.snapshot.etag
+								: resource.kind === 'deleted'
+									? resource.etag
+									: null;
+						return resource.kind === previous.proof.resourceKind &&
+							etag === previous.proof.etag &&
+							(resource.kind === 'found' || resource.kind === 'deleted')
+							? { kind: 'applied', receipt: { operationId: input.operationId, resource } }
+							: previous;
+					}
 					await this.dependencies.mutationReceipts.lockResource(actor, identity);
 					const current = await this.dependencies.syncObjects.read(actor, identity, null);
 					if (current.kind === 'unchanged')

@@ -33,20 +33,6 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		databaseName = 'followthrough-workspace-sync',
 		readonly database = new WorkspaceDatabase(databaseName)
 	) {}
-	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
-		const rows = await this.database
-			.table('acknowledgements')
-			.where('accountId')
-			.equals(accountId)
-			.toArray();
-		return z
-			.array(z.object({ accountId: z.literal(accountId), operationId: z.string().uuid() }))
-			.parse(rows)
-			.map((row) => row.operationId);
-	}
-	async acknowledged(accountId: string, operationId: string): Promise<void> {
-		await this.database.table('acknowledgements').delete([accountId, operationId]);
-	}
 	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
 		return this.database.transaction('rw', ['write-receipts', 'quarantine'], (transaction) =>
 			this.appliedReceipt(accountId, key, transaction)
@@ -255,10 +241,6 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		return this.edit(accountId, async (entries, transaction) => {
 			const next = settleWrite(entries, sent.intent.operationId, outcome);
 			if (outcome.kind === 'applied') {
-				await storedTable(transaction, 'acknowledgements').put({
-					accountId,
-					operationId: sent.intent.operationId
-				});
 				const previous = await this.appliedReceipt(accountId, sent.intent.key, transaction);
 				const receipt = retainWriteReceipt(
 					previous,
@@ -420,7 +402,6 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				'records',
 				'imports',
 				'write-receipts',
-				'acknowledgements',
 				'quarantine',
 				'cursors',
 				'recovery-heads'

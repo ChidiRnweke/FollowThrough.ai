@@ -18,8 +18,7 @@ import {
 } from '$lib/models/workspace-mutations';
 import {
 	pushWorkspaceMutation,
-	cancelWorkspaceMutation,
-	acknowledgeWorkspaceMutation
+	cancelWorkspaceMutation
 } from '$lib/remote/workspace/mutations.remote';
 import type { OutboxTransport } from './outbox-contracts';
 import { OutboxAccountChangedError } from './outbox-contracts';
@@ -67,11 +66,6 @@ export const workspaceWriteTransport = (
 					accountId
 				})
 			);
-		},
-		async acknowledge(operationId) {
-			z.object({ kind: z.literal('acknowledged') }).parse(
-				await acknowledgeWorkspaceMutation({ accountId, operationId, protocol: 2 })
-			);
 		}
 	},
 	async send(input) {
@@ -84,7 +78,7 @@ export const workspaceWriteTransport = (
 		);
 		if (result.kind === 'applied' && result.receipt.operationId !== input.operationId)
 			throw new Error('The server acknowledged a different operation');
-		if (result.kind === 'compacted' && result.proof.operationId !== input.operationId)
+		if (result.kind === 'proven' && result.proof.operationId !== input.operationId)
 			throw new Error('The server acknowledged a different operation');
 		const resource =
 			result.kind === 'applied'

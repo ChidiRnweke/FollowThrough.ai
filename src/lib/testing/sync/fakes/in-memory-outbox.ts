@@ -39,13 +39,6 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		};
 	}
 	snapshotFailure: string | null = null;
-	private readonly acknowledgements = new Map<string, Set<string>>();
-	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
-		return [...(this.acknowledgements.get(accountId) ?? [])];
-	}
-	async acknowledged(accountId: string, operationId: string): Promise<void> {
-		this.acknowledgements.get(accountId)?.delete(operationId);
-	}
 	appendFailure: string | null = null;
 	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
 		return this.receipts.get(accountId)?.get(key) ?? null;
@@ -163,9 +156,6 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		if (resource) await this.saveResource(accountId, sent.intent.key, resource);
 		this.accounts.set(accountId, next);
 		if (receipt) {
-			const pending = this.acknowledgements.get(accountId) ?? new Set<string>();
-			pending.add(sent.intent.operationId);
-			this.acknowledgements.set(accountId, pending);
 			receipts.set(sent.intent.key, receipt);
 			this.receipts.set(accountId, receipts);
 		}

@@ -8,7 +8,6 @@ import type { WorkspaceWriteRecovery } from '$lib/models/workspace-mutations';
 
 export interface SyncWriteRecovery {
 	cancel(actor: ActorContext, input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery>;
-	acknowledge(actor: ActorContext, operationId: string): Promise<void>;
 }
 export type { SyncReceiptRepository as SyncReceiptWriter } from '$lib/server/repositories/workspace/sync-receipts';
 

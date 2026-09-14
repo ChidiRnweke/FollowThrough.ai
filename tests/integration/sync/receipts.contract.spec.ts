@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
@@ -26,11 +25,19 @@ const savedReceipt = async (suffix: string) => {
 };
 
 describe('durable synchronization operation receipts', () => {
-	it('returns the original authoritative receipt when retrying identical input', async () => {
+	it('returns only permanent version proof for identical input', async () => {
 		const { owner, request, receipt } = await savedReceipt('8901');
 		expect(
 			await new WorkspaceSyncReceipts(context.db).find(owner, receipt.operationId, request)
-		).toEqual({ kind: 'receipt', receipt });
+		).toEqual({
+			kind: 'proven',
+			proof: {
+				operationId: receipt.operationId,
+				resourceKind: receipt.resource.kind,
+				etag:
+					receipt.resource.kind === 'found' ? receipt.resource.snapshot.etag : receipt.resource.etag
+			}
+		});
 	});
 
 	it('recognizes equivalent input independently of JSON object key order', async () => {
@@ -38,7 +45,15 @@ describe('durable synchronization operation receipts', () => {
 		const reordered = JSON.stringify({ title: 'Renamed', noteId: note.id, kind: 'renameNote' });
 		expect(
 			await new WorkspaceSyncReceipts(context.db).find(owner, receipt.operationId, reordered)
-		).toEqual({ kind: 'receipt', receipt });
+		).toEqual({
+			kind: 'proven',
+			proof: {
+				operationId: receipt.operationId,
+				resourceKind: receipt.resource.kind,
+				etag:
+					receipt.resource.kind === 'found' ? receipt.resource.snapshot.etag : receipt.resource.etag
+			}
+		});
 	});
 
 	it('rejects reuse of an operation identity with different input', async () => {
@@ -87,15 +102,13 @@ describe('durable synchronization operation receipts', () => {
 	});
 });
 
-it('retains the original proof after compacting an acknowledged receipt twice', async () => {
+it('retains the original proof after later resource edits', async () => {
 	const { owner, request, receipt, note } = await savedReceipt('8910');
 	const receipts = new WorkspaceSyncReceipts(context.db);
-	await receipts.compact(owner, receipt.operationId);
 	await context.client`update notes set title = 'Later edit' where id = ${note.id}`;
-	await receipts.compact(owner, receipt.operationId);
 	const resource = receipt.resource;
 	expect(await receipts.find(owner, receipt.operationId, request)).toEqual({
-		kind: 'compacted',
+		kind: 'proven',
 		proof: {
 			operationId: receipt.operationId,
 			resourceKind: resource.kind,
@@ -103,7 +116,7 @@ it('retains the original proof after compacting an acknowledged receipt twice', 
 		}
 	});
 });
-it('retains cancellation proof after repeated acknowledgement', async () => {
+it('retains cancellation proof without a receipt body', async () => {
 	const { owner } = await seedNote('8911');
 	const operationId = crypto.randomUUID();
 	await context.db.transaction(async (transaction) => {
@@ -112,51 +125,21 @@ it('retains cancellation proof after repeated acknowledgement', async () => {
 		await receipts.cancel(owner, operationId, '{"command":"cancelled"}');
 	});
 	const receipts = new WorkspaceSyncReceipts(context.db);
-	await receipts.compact(owner, operationId);
-	await receipts.compact(owner, operationId);
 	expect(await receipts.find(owner, operationId, '{"command":"cancelled"}')).toEqual({
 		kind: 'cancelled'
 	});
 });
-it('still rejects different input after the receipt payload is compacted', async () => {
+it('rejects different input using permanent proof', async () => {
 	const { owner, receipt } = await savedReceipt('8912');
 	const receipts = new WorkspaceSyncReceipts(context.db);
-	await receipts.compact(owner, receipt.operationId);
 	expect(await receipts.find(owner, receipt.operationId, '{"different":true}')).toEqual({
 		kind: 'reused'
 	});
 });
 
-it('preserves the same proof when acknowledgements arrive concurrently', async () => {
-	const { owner, request, receipt } = await savedReceipt('8913');
-	const receipts = new WorkspaceSyncReceipts(context.db);
-	const other = connectPostgresTestDatabase(context.url);
-	try {
-		await Promise.all([
-			receipts.compact(owner, receipt.operationId),
-			new WorkspaceSyncReceipts(other.db).compact(owner, receipt.operationId)
-		]);
-	} finally {
-		await other.close();
-	}
-	const resource = receipt.resource;
-	expect(await receipts.find(owner, receipt.operationId, request)).toEqual({
-		kind: 'compacted',
-		proof: {
-			operationId: receipt.operationId,
-			resourceKind: resource.kind,
-			etag: resource.kind === 'found' ? resource.snapshot.etag : resource.etag
-		}
-	});
-});
-
-it('does not create a receipt when acknowledging an unknown operation repeatedly', async () => {
-	const { owner } = await seedNote('8914');
-	const operationId = crypto.randomUUID();
-	const receipts = new WorkspaceSyncReceipts(context.db);
-	await receipts.compact(owner, operationId);
-	await receipts.compact(owner, operationId);
-	expect(await receipts.find(owner, operationId, '{"command":"missing"}')).toEqual({
-		kind: 'missing'
-	});
+it('stores no document content in the permanent operation ledger', async () => {
+	const { owner, receipt } = await savedReceipt('8913');
+	const [row] =
+		await context.client`select result from workspace_sync_receipts where account_id = ${owner.userId} and operation_id = ${receipt.operationId}`;
+	expect(Object.keys(row.result).sort()).toEqual(['etag', 'operationId', 'resourceKind']);
 });

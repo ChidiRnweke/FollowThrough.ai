@@ -17,8 +17,6 @@ export interface OutboxProjection<C, T> {
 
 export interface OutboxRepository<C, T> {
 	snapshot(accountId: string): Promise<OutboxProjection<C, T>>;
-	pendingAcknowledgements(accountId: string): Promise<readonly string[]>;
-	acknowledged(accountId: string, operationId: string): Promise<void>;
 	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null>;
 	list(accountId: string): Promise<readonly OutboxEntry<C, T>[]>;
 	append(accountId: string, draft: WriteDraft<C, T>): Promise<string>;
@@ -45,7 +43,6 @@ export interface OutboxTransport<C, T> {
 			baseEtag: SyncEtag | null;
 			command: C;
 		}): Promise<WriteRecovery<T>>;
-		acknowledge(operationId: string): Promise<void>;
 	};
 	send(input: {
 		readonly operationId: string;

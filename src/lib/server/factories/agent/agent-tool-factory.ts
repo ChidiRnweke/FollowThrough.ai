@@ -164,10 +164,6 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Browser recovery cancels uncertain local operations.'
 		},
-		acknowledgeMutation: {
-			kind: 'excluded',
-			reason: 'Browser durable settlement permits receipt compaction.'
-		},
 		readResource: {
 			kind: 'excluded',
 			reason: 'Conditional resource reads are a browser persistence protocol.'

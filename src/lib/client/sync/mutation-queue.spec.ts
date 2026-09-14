@@ -55,32 +55,13 @@ describe('shared mutation submission', () => {
 			},
 			recovery: {
 				observe: async () => ({ kind: 'unavailable' }),
-				cancel: async () => ({ kind: 'cancelled' }),
-				acknowledge: async () => undefined
+				cancel: async () => ({ kind: 'cancelled' })
 			}
 		});
 		await queue.append(draft(firstId));
 		await queue.flush();
 		await queue.discard([firstId]);
 		expect(queue.pending).toEqual([]);
-	});
-	it('keeps an acknowledgement pending when its server response is lost', async () => {
-		const { queue, repository } = setup({
-			send: async (input) => applied(input.operationId, input.command),
-			recovery: {
-				observe: async () => ({ kind: 'unavailable' }),
-				cancel: async () => ({ kind: 'cancelled' }),
-				acknowledge: async () => {
-					throw new Error('Response lost');
-				}
-			}
-		});
-		await queue.append(draft(firstId));
-		await queue.flush();
-		expect({
-			writes: queue.pending,
-			acknowledgements: await repository.pendingAcknowledgements('alice')
-		}).toEqual({ writes: [], acknowledgements: [firstId] });
 	});
 	it('sends independent work after a transport failure while preserving its descendants', async () => {
 		const { queue } = setup({
@@ -449,29 +430,6 @@ it('becomes idle when an imported retry requires a decision', async () => {
 	available = true;
 	await dependencies.scheduler.advance(1000);
 	expect(queue.pending.map((entry) => entry.delivery.kind)).toEqual(['conflict']);
-});
-
-it('preserves acknowledgement backoff while independent edits become durable', async () => {
-	let acknowledgementAvailable = false;
-	const { queue, repository } = setup({
-		send: async (input) => applied(input.operationId, input.command),
-		recovery: {
-			observe: async () => ({ kind: 'unavailable' }),
-			cancel: async () => ({ kind: 'cancelled' }),
-			acknowledge: async () => {
-				if (!acknowledgementAvailable) throw new Error('Unavailable');
-			}
-		}
-	});
-	await queue.append(draft(firstId));
-	await queue.flush();
-	acknowledgementAvailable = true;
-	await queue.append({ ...draft(secondId), key: 'note:2' });
-	await queue.flush();
-	expect({
-		pending: queue.pending,
-		acknowledgements: await repository.pendingAcknowledgements('alice')
-	}).toEqual({ pending: [], acknowledgements: [firstId, secondId] });
 });
 
 it('automatically retries the first storage failure before any operation is submitted', async () => {

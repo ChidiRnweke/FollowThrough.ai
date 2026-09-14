@@ -26,7 +26,6 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
-import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 
 export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
 
@@ -90,20 +89,18 @@ export const workspaceSyncReceipts = pgTable(
 		operationId: uuid('operation_id').notNull(),
 		requestHash: text('request_hash').notNull(),
 		disposition: text('disposition').notNull().default('applied'),
-		result: jsonb('result').$type<
-			WorkspaceWriteReceipt | import('$lib/models/outbox').CompactWriteProof
-		>(),
+		result: jsonb('result').$type<import('$lib/models/outbox').AppliedWriteProof>(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
 		primaryKey({ columns: [table.accountId, table.operationId] }),
 		check(
 			'workspace_sync_receipt_disposition',
-			sql`${table.disposition} in ('applied', 'cancelled', 'compacted')`
+			sql`${table.disposition} in ('applied', 'cancelled')`
 		),
 		check(
 			'workspace_sync_receipt_payload',
-			sql`(${table.disposition} = 'cancelled' and ${table.result} is null) or (${table.disposition} in ('applied', 'compacted') and ${table.result} is not null)`
+			sql`(${table.disposition} = 'cancelled' and ${table.result} is null) or (${table.disposition} = 'applied' and ${table.result} is not null)`
 		)
 	]
 );
