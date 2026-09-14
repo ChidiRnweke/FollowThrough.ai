@@ -120,7 +120,6 @@ export default defineConfig({
 						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',
 						'src/lib/client/sync/storage-recovery.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
-						'src/lib/client/sync/legacy-notes.svelte.spec.ts',
 						'src/lib/stores/workspace/resources.svelte.spec.ts',
 						'src/lib/stores/workspace/drafts.svelte.spec.ts',
 						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',
