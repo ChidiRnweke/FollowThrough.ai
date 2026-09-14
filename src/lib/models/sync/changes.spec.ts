@@ -96,3 +96,17 @@ describe('applying compact resource changes', () => {
 		).toEqual({ kind: 'present', etag: syncEtag(2n), body: null });
 	});
 });
+
+it('does not retain a deleted old body when another tab learns about a recreation', () => {
+	const deleted: ResourceState<string> = { kind: 'deleted', etag: syncEtag(2n) };
+	const otherTab: ResourceState<string> = {
+		kind: 'present',
+		etag: syncEtag(3n),
+		body: { etag: syncEtag(1n), value: 'Before deletion' }
+	};
+	expect(mergeResourceStates(deleted, otherTab)).toEqual({
+		kind: 'present',
+		etag: syncEtag(3n),
+		body: null
+	});
+});

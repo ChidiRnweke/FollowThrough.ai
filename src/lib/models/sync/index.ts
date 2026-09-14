@@ -190,7 +190,14 @@ export const mergeResourceStates = <T>(
 	if (!current || current.kind === 'requested') return incoming;
 	if (incoming.kind === 'requested') return current;
 	const order = compareSyncEtags(incoming.etag, current.etag);
-	if (current.kind === 'deleted') return order > 0 ? incoming : current;
+	if (current.kind === 'deleted') {
+		if (order <= 0) return current;
+		return incoming.kind === 'present' &&
+			incoming.body &&
+			compareSyncEtags(incoming.body.etag, current.etag) <= 0
+			? { ...incoming, body: null }
+			: incoming;
+	}
 	if (incoming.kind === 'deleted') return order >= 0 ? incoming : current;
 	const body =
 		incoming.body && (!current.body || compareSyncEtags(incoming.body.etag, current.body.etag) > 0)

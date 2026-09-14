@@ -37,6 +37,9 @@ PR #38 merged into #37 while this work was in progress. The owned branch is now 
 
 ## Verified result
 
-The follow-up removes 135 net production source lines. Local validation passed: 3,450 unit tests,
+The follow-up removes 128 net production source lines. Local validation passed: 3,450 unit tests,
 552 browser tests, 194 PostgreSQL contracts, and all 26 production PWA scenarios. Lint, type checking,
 architecture, and docs checks passed; docs retain one existing hint. CI remains the delivery gate.
+
+Final ordering review added a regression for a newer recreation notice carrying a retained body
+from before a known deletion. The body is dropped. All 72 focused sync tests passed after this fix.
