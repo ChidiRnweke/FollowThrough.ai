@@ -1,6 +1,5 @@
 import {
 	accessCache,
-	cachedSnapshot,
 	receiveResource,
 	resourceVersion,
 	type ResourceDeletion,
@@ -73,13 +72,8 @@ export class ResourceCache<T> {
 		return this.entries;
 	}
 
-	get availability(): 'unknown' | 'partial' | 'complete' {
-		if (this.cursor === null || !this.inventoryComplete || this.stopped) return 'unknown';
-		return [...this.entries.values()].every(
-			(entry) => entry.kind === 'deleted' || cachedSnapshot(entry) !== null
-		)
-			? 'complete'
-			: 'partial';
+	get availability(): 'unknown' | 'complete' {
+		return this.cursor !== null && this.inventoryComplete && !this.stopped ? 'complete' : 'unknown';
 	}
 
 	access(key: string): CacheAccess<T> {

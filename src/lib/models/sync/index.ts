@@ -212,14 +212,3 @@ export const accessCache = <T>(
 	if (transfer?.kind === 'failed') return { kind: 'failure', message: transfer.message };
 	return { kind: 'wait' };
 };
-
-/** A collection is usable only when its membership and every required body are known. */
-export const collectionReadiness = <T>(
-	inventoryComplete: boolean,
-	entries: readonly ResourceState<T>[]
-): 'unknown' | 'incomplete' | 'ready' => {
-	if (!inventoryComplete) return 'unknown';
-	return entries.every((entry) => entry.kind === 'deleted' || cachedSnapshot(entry) !== null)
-		? 'ready'
-		: 'incomplete';
-};

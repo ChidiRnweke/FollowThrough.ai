@@ -134,7 +134,7 @@ describe('shared workspace reads', () => {
 		const paused = transport.pause('changes');
 		const warming = cache.refresh();
 		await paused.started;
-		await resources.prepare(['projects']);
+		await resources.prepare();
 		const listed = resources.records.get(key);
 		paused.release();
 		await warming;
@@ -159,7 +159,7 @@ describe('shared workspace reads', () => {
 		});
 		transport.records.set(key, { etag: syncEtag(1n), value: project });
 		transport.records.set(userKey, { etag: syncEtag(2n), value: user });
-		await resources.requireCollections(['projects']);
+		await resources.requireCollections();
 		expect({ listed: resources.records.get(key), unrelated: cache.access(userKey) }).toEqual({
 			listed: project,
 			unrelated: { kind: 'ready', value: user }
@@ -457,7 +457,7 @@ it('prepares a complete collection within the batch transport capacity', async (
 			value: record
 		});
 	}
-	await resources.requireCollections(['projects']);
+	await resources.requireCollections();
 	expect(resources.records.size).toBe(70);
 });
 
@@ -465,8 +465,8 @@ it('prepares a complete collection within the batch transport capacity', async (
 it('marks an empty collection ready after its full inventory arrives', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	await resources.requireCollections(['projects']);
-	expect(resources.collectionReadiness(['attachments', 'attachment_versions'])).toBe('ready');
+	await resources.requireCollections();
+	expect(resources.collectionReadiness()).toBe('ready');
 });
 
 it('downloads authoritative records while an unrelated submission is stalled', async () => {
@@ -523,7 +523,7 @@ it('does not publish required collection readiness when its initial body failed'
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
 	transport.pullFailure = 'Disconnected';
-	await expect(resources.requireCollections(['projects'])).rejects.toThrow(
+	await expect(resources.requireCollections()).rejects.toThrow(
 		'Required workspace data is not available on this device'
 	);
 });

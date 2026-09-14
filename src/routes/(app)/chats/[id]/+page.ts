@@ -6,6 +6,6 @@ export const load: PageLoad = async ({ parent, params }) => {
 	const conversationId = routeResourceId(resourceDataSchemas.conversations.shape.id, params.id);
 	const opened = await session.resources.open({ type: 'conversations', id: [conversationId] });
 	requireRouteResource(opened, session.resources.online, 'chat');
-	await session.resources.prepare(['messages', 'agent_runs']);
+	await session.resources.prepare();
 	return { conversationId };
 };

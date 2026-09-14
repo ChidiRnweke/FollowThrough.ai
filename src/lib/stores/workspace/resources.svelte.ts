@@ -1,4 +1,4 @@
-import { SvelteDate } from 'svelte/reactivity';
+import { SvelteDate, SvelteMap } from 'svelte/reactivity';
 import {
 	DexieWorkspaceRepository,
 	type WorkspaceLocalProjection,
@@ -40,7 +40,6 @@ import {
 import { WorkspaceViews } from '$lib/models/workspace-views';
 import {
 	cachedSnapshot,
-	collectionReadiness,
 	compareSyncEtags,
 	type CacheAccess,
 	type SyncSnapshot
@@ -70,7 +69,7 @@ export class WorkspaceResources {
 		null
 	);
 	private readonly cached = $derived(
-		new Map(this.local?.cache.records.map((row) => [row.key, row.entry]) ?? [])
+		new SvelteMap(this.local?.cache.records.map((row) => [row.key, row.entry]) ?? [])
 	);
 	private readonly projected = $derived(visibleResources(this.cached, this.pending));
 	private readonly projections = $derived(new WorkspaceViews(this.projected));
@@ -176,25 +175,20 @@ export class WorkspaceResources {
 	}
 
 	/** Render cached collections immediately while the runtime refreshes their inventory. */
-	async prepare(_types: readonly WorkspaceResourceType[]): Promise<void> {
+	async prepare(): Promise<void> {
 		await this.initialize();
 		this.runtime.committed();
 	}
-	collectionReadiness(types: readonly WorkspaceResourceType[]): 'unknown' | 'incomplete' | 'ready' {
+	collectionReadiness(): 'unknown' | 'ready' {
 		void this.revision;
-		return collectionReadiness(
-			this.active && this.dependencies.cache.downloadProgress.inventoryComplete,
-			[...this.cached]
-				.filter(([key]) => types.some((type) => key.startsWith(`["${type}",`)))
-				.map(([, entry]) => entry)
-		);
+		return this.active && this.local?.cache.inventoryComplete ? 'ready' : 'unknown';
 	}
 
-	async requireCollections(types: readonly WorkspaceResourceType[]): Promise<void> {
+	async requireCollections(): Promise<void> {
 		await this.initialize();
 		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
 		await this.readLocal();
-		if (this.collectionReadiness(types) !== 'ready')
+		if (this.collectionReadiness() !== 'ready')
 			throw new Error(
 				'Required workspace data is not available on this device. Reconnect and retry.'
 			);

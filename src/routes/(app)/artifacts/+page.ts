@@ -17,7 +17,7 @@ export const load: PageLoad = async ({ parent, url }) => {
 	if (selectedProjectId) {
 		const opened = await session.resources.open({ type: 'projects', id: [selectedProjectId] });
 		requireRouteResource(opened, session.resources.online, 'project');
-		await session.resources.prepare(['artifacts', 'project_templates', 'notes']);
+		await session.resources.prepare();
 		const total = session.resources.views.artifacts(selectedProjectId, query).length;
 		page = Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
 		const params = new URLSearchParams({ projectId: selectedProjectId });

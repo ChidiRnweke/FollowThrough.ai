@@ -65,7 +65,7 @@
 	const resources = $derived(workspaceSession.current?.resources);
 	$effect(() => {
 		if (!resources) return;
-		void resources.prepare(['todos']).catch((error) => {
+		void resources.prepare().catch((error) => {
 			titleError = error instanceof Error ? error.message : 'Todo titles unavailable';
 			return { kind: 'failure', message: titleError };
 		});

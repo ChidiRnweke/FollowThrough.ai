@@ -159,7 +159,7 @@ const begin = async (): Promise<WorkspaceSession> => {
 		resources.views.get('agent_preferences', bootstrap.accountId) !== undefined ||
 		resources.availability !== 'unknown';
 	if (!cachedShell?.projects.some((project) => project.role === 'inbox') || !preferencesKnown)
-		await resources.requireCollections(['users', 'projects', 'agent_preferences']);
+		await resources.requireCollections();
 	void session.shell;
 	void session.preferences;
 	void resources.synchronize();

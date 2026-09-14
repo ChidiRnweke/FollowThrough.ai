@@ -103,7 +103,7 @@
 		if (!resources) return;
 		loading = true;
 		void resources
-			.prepare(['memory_entries', 'suggestions', 'source_anchors', 'provenance'])
+			.prepare()
 			.catch((error) => {
 				loadError = error instanceof Error ? error.message : 'Could not load memory';
 				return { kind: 'failure', message: loadError };
@@ -218,9 +218,7 @@
 	{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
 		<p class="text-sm text-muted-foreground">Still downloading memory.</p>
 		{@render addButton()}
-	{:else if isEmpty && resources?.collectionReadiness( ['memory_entries', 'suggestions'] ) !== 'ready'}<p
-			role="status"
-		>
+	{:else if isEmpty && resources?.collectionReadiness() !== 'ready'}<p role="status">
 			Still downloading memory.
 		</p>
 		{@render addButton()}{:else if isEmpty}

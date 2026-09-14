@@ -87,7 +87,7 @@ class ProjectActionsStore {
 	): Promise<Note> {
 		const session = await workspaceSession.start();
 		await session.resources.open({ type: 'projects', id: [projectId] });
-		await session.resources.prepare(['notes']);
+		await session.resources.prepare();
 		const id = crypto.randomUUID() as NoteId;
 		const record = await session.resources.create(
 			kind === 'note'

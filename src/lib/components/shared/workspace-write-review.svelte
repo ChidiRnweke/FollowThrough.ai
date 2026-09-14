@@ -333,9 +333,7 @@
 			{#if confirmation}
 				<div class={cn('flex flex-col', SYNC_GAP_ITEM)} role="group" aria-label="Confirm removal">
 					<p class="text-sm">
-						{confirmation === 'discard'
-							? `Your change${reviewed.length > 1 ? ` and ${reviewed.length - 1} ${reviewed.length === 2 ? 'change that depends' : 'changes that depend'} on it` : ''} will be removed from this device.${selected?.delivery.kind === 'conflict' ? (selected.delivery.remote.kind === 'deleted' ? ' This item will remain deleted.' : selected.delivery.remote.kind === 'found' ? ' The latest copy will remain.' : ' The latest copy is unavailable.') : ''}`
-							: 'The unreadable data will be removed from this device. Keep the downloaded copy; dependent edits still need a decision.'}
+						{`Your change${reviewed.length > 1 ? ` and ${reviewed.length - 1} ${reviewed.length === 2 ? 'change that depends' : 'changes that depend'} on it` : ''} will be removed from this device.${selected?.delivery.kind === 'conflict' ? (selected.delivery.remote.kind === 'deleted' ? ' This item will remain deleted.' : selected.delivery.remote.kind === 'found' ? ' The latest copy will remain.' : ' The latest copy is unavailable.') : ''}`}
 					</p>
 					<div class="flex flex-wrap justify-end gap-3">
 						<Button variant="ghost" disabled={busy} onclick={() => (confirmation = null)}
@@ -343,10 +341,8 @@
 						>
 						<Button
 							variant="destructive"
-							disabled={busy || (confirmation === 'discard' && !canDiscard)}
-							onclick={() => {
-								if (confirmation === 'discard') void resolve('discard');
-							}}>{confirmation === 'discard' ? 'Discard change' : 'Remove from this device'}</Button
+							disabled={busy || !canDiscard}
+							onclick={() => void resolve('discard')}>Discard change</Button
 						>
 					</div>
 				</div>

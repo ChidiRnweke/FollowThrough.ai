@@ -58,7 +58,7 @@
 </script>
 
 <section class="flex max-w-3xl flex-col gap-6">
-	{#if session.resources.collectionReadiness(['trust_policies']) !== 'ready'}
+	{#if session.resources.collectionReadiness() !== 'ready'}
 		<p role="status" class="text-sm text-muted-foreground">
 			Some settings are unavailable on this device. Connect to finish downloading them before making
 			changes.
@@ -79,7 +79,7 @@
 				{/if}
 				<TrustPolicyControl
 					{policy}
-					disabled={busy || session.resources.collectionReadiness(['trust_policies']) !== 'ready'}
+					disabled={busy || session.resources.collectionReadiness() !== 'ready'}
 					onchange={(input) => void change(input)}
 				/>
 			{/each}
