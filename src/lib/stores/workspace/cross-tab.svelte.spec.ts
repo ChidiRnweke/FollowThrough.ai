@@ -19,10 +19,8 @@ it('observes an offline edit from another client without a refresh', async () =>
 				key: workspaceResourceKey(identity),
 				entry: {
 					kind: 'present',
-					cache: {
-						kind: 'cached',
-						snapshot: { etag: syncEtag(1n), value: { type: 'projects', value: project } }
-					}
+					etag: syncEtag(1n),
+					body: { etag: syncEtag(1n), value: { type: 'projects', value: project } }
 				}
 			}
 		],

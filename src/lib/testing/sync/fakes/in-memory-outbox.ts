@@ -35,11 +35,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	constructor(private readonly cache = new InMemorySyncCache<T>()) {
 		this.projectedCache = {
 			load: async (accountId) => (await this.read(accountId)).cache,
-			commit: async (accountId, changes) => {
-				const result = await this.cache.commit(accountId, changes);
-				await this.read(accountId);
-				return result;
-			}
+			commit: (accountId, changes) => this.cache.commit(accountId, changes)
 		};
 	}
 	snapshotFailure: string | null = null;
@@ -185,7 +181,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 					key,
 					entry:
 						resource.kind === 'found'
-							? { kind: 'present', cache: { kind: 'cached', snapshot: resource.snapshot } }
+							? { kind: 'present', etag: resource.snapshot.etag, body: resource.snapshot }
 							: resource
 				}
 			],

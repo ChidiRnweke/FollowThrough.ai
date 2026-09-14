@@ -304,7 +304,7 @@ export const visibleResources = <C, T>(
 ): ReadonlyMap<string, T> => {
 	const visible = new Map<string, T>();
 	for (const [key, entry] of records) {
-		const snapshot = entry.kind === 'present' ? cachedSnapshot(entry.cache) : null;
+		const snapshot = entry.kind === 'present' ? cachedSnapshot(entry) : null;
 		if (snapshot) visible.set(key, snapshot.value);
 	}
 	for (const { intent } of pending) {

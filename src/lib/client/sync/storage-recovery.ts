@@ -75,11 +75,8 @@ export const recoverCacheRow = async <T>(
 		},
 		raw
 	);
-	const entry: ResourceState<T> = {
-		kind: 'present',
-		cache: { kind: 'updating', previous: null, target: null, transfer: { kind: 'queued' } }
-	};
-	await storedTable(transaction, 'records').put({ schemaVersion: 2, accountId, key, entry });
+	const entry: ResourceState<T> = { kind: 'requested' };
+	await storedTable(transaction, 'records').put({ schemaVersion: 3, accountId, key, entry });
 	await invalidateInventory(transaction, accountId);
 	return { key, entry };
 };

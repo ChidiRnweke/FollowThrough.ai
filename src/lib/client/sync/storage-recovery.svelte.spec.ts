@@ -57,7 +57,8 @@ describe('damaged workspace storage recovery', () => {
 					key: 'note:2',
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: 'Healthy' } }
+						etag: syncEtag(1n),
+						body: { etag: syncEtag(1n), value: 'Healthy' }
 					}
 				}
 			],
@@ -67,7 +68,7 @@ describe('damaged workspace storage recovery', () => {
 		await damage(name, 'records', {
 			accountId: 'account',
 			key: 'note:1',
-			schemaVersion: 2,
+			schemaVersion: 3,
 			entry: 'broken'
 		});
 		const loaded = await cache.load('account');
@@ -88,7 +89,7 @@ describe('damaged workspace storage recovery', () => {
 		await damage(name, 'records', {
 			accountId: 'account',
 			key: 'note:1',
-			schemaVersion: 2,
+			schemaVersion: 3,
 			entry: 'broken'
 		});
 		await cache.load('account');
@@ -106,7 +107,7 @@ describe('damaged workspace storage recovery', () => {
 		await damage(name, 'records', {
 			accountId: 'account',
 			key: 'note:1',
-			schemaVersion: 2,
+			schemaVersion: 3,
 			entry: 'irreplaceable raw bytes'
 		});
 		await cache.load('account');
@@ -294,4 +295,28 @@ it('can finish recovery removal again after its durable removal marker exists', 
 	await recovery.remove('account', item.source, item.key);
 	await recovery.remove('account', item.source, item.key);
 	expect(await recovery.list('account')).toEqual([]);
+});
+
+it('quarantines legacy version facts that contradict their retained body', async () => {
+	const { name, cache, recovery } = setup();
+	await damage(name, 'records', {
+		accountId: 'account',
+		key: 'note:1',
+		schemaVersion: 2,
+		entry: {
+			kind: 'present',
+			cache: {
+				kind: 'updating',
+				target: syncEtag(1n),
+				previous: { etag: syncEtag(2n), value: 'Recover this copy' },
+				transfer: { kind: 'queued' }
+			}
+		}
+	});
+	const loaded = await cache.load('account');
+	const exported = await (await recovery.download('account', 'records', 'note:1')).text();
+	expect({
+		state: loaded.records[0].entry,
+		retained: exported.includes('Recover this copy')
+	}).toEqual({ state: { kind: 'requested' }, retained: true });
 });

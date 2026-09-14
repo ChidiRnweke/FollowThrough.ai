@@ -58,6 +58,7 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
+	recovery: IndexedDbStorageRecovery;
 	scheduler?: SyncScheduler;
 	dispose?(): void;
 	restoreLocalWrites(): Promise<void>;
@@ -69,7 +70,6 @@ export interface WorkspaceResourcesDependencies {
 export class WorkspaceResources {
 	private revision = $state(0);
 	private readonly runtime: WorkspaceSyncRuntime;
-	private readonly recoveryStorage = new IndexedDbStorageRecovery();
 	private readonly projected = $derived.by(() => {
 		void this.revision;
 		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
@@ -80,19 +80,19 @@ export class WorkspaceResources {
 		return this.recovery;
 	}
 	async loadRecovery(): Promise<void> {
-		const items = await this.recoveryStorage.list(this.accountId);
+		const items = await this.dependencies.recovery.list(this.accountId);
 		if (!this.stopped) this.recovery = items;
 	}
 
 	async removeRecovery(item: StorageRecoveryItem): Promise<void> {
 		if (!this.active) throw new Error('This account is no longer active');
-		await this.recoveryStorage.remove(this.accountId, item.source, item.key);
+		await this.dependencies.recovery.remove(this.accountId, item.source, item.key);
 		await this.loadRecovery();
 		await this.synchronize();
 	}
 
 	downloadRecovery(item: StorageRecoveryItem): Promise<Blob> {
-		return this.recoveryStorage.download(this.accountId, item.source, item.key);
+		return this.dependencies.recovery.download(this.accountId, item.source, item.key);
 	}
 	get downloadProgress() {
 		void this.revision;
@@ -192,9 +192,7 @@ export class WorkspaceResources {
 	initialize(): Promise<void> {
 		this.initializing ??= this.dependencies
 			.restoreLocalWrites()
-			.then(() =>
-				Promise.all([this.dependencies.cache.initialize(), this.dependencies.writes.reload()])
-			)
+			.then(() => this.dependencies.cache.initialize())
 			.then(() => undefined)
 			.catch((error) => {
 				this.initializing = null;
@@ -208,8 +206,8 @@ export class WorkspaceResources {
 		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
 		const missing = [...this.dependencies.cache.records].filter(
 			([key, entry]) =>
-				entry.kind === 'present' &&
-				cachedSnapshot(entry.cache) === null &&
+				entry.kind !== 'deleted' &&
+				cachedSnapshot(entry) === null &&
 				types.some((type) => key.startsWith(`["${type}",`))
 		);
 		await this.dependencies.cache.prepare(missing.map(([key]) => key));
@@ -294,7 +292,7 @@ export class WorkspaceResources {
 	snapshot(identity: WorkspaceResourceIdentity): SyncSnapshot<WorkspaceRecord> | null {
 		void this.revision;
 		const entry = this.dependencies.cache.records.get(workspaceResourceKey(identity));
-		return entry?.kind === 'present' ? cachedSnapshot(entry.cache) : null;
+		return entry?.kind === 'present' ? cachedSnapshot(entry) : null;
 	}
 	refreshConflict(operationId: string): Promise<void> {
 		return this.dependencies.writes.refreshConflict(operationId);
@@ -337,7 +335,6 @@ export class WorkspaceResources {
 		this.stopped = true;
 		this.revision++;
 		this.runtime.stop();
-		this.recoveryStorage.close();
 		this.dependencies.cache.stop();
 		this.dependencies.writes.stop();
 		for (const unsubscribe of this.unsubscribe) unsubscribe();
@@ -350,11 +347,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 	const cache = new ResourceCache(accountId, {
 		repository: {
 			load: async (account) => (await repository.read(account)).cache,
-			commit: async (account, changes) => {
-				const committed = await repository.cache.commit(account, changes);
-				await repository.read(account);
-				return committed;
-			}
+			commit: (account, changes) => repository.cache.commit(account, changes)
 		},
 		transport: workspaceReadTransport(accountId)
 	});
@@ -372,6 +365,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(accountId, {
+		recovery: repository.recovery,
 		cache,
 		writes,
 
@@ -481,7 +475,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			throw new Error('The initial value belongs to a different resource');
 		const state = this.resources.state(this.identity);
 		const pending = this.resources.pending.some((entry) => entry.intent.key === this.key);
-		if (pending || state?.kind === 'present') this.capture();
+		if (pending || (state && state.kind !== 'deleted')) this.capture();
 		else if (state?.kind === 'deleted' || this.resources.availability !== 'unknown')
 			this.current = { base: null, basedOn: null, local: initial };
 		else throw new Error('This resource is not available on this device');

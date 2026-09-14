@@ -1,3 +1,4 @@
+import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -99,6 +100,7 @@ const setup = async (
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(conversation.userId, {
+		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,

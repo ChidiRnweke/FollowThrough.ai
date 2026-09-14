@@ -167,7 +167,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		const current = (
 			await recoverCacheRow(transaction, accountId, draft.key, this.valueSchema, storedResource)
 		)?.entry;
-		const snapshot = current?.kind === 'present' ? cachedSnapshot(current.cache) : null;
+		const snapshot = current?.kind === 'present' ? cachedSnapshot(current) : null;
 		const observed =
 			current?.kind === 'deleted'
 				? current
@@ -316,10 +316,10 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		const stored = await records.get([accountId, key]);
 		const current = await recoverCacheRow(transaction, accountId, key, this.valueSchema, stored);
 		const entry = receiveResource(
-			current?.entry ?? { kind: 'present', cache: { kind: 'uncached' } },
+			current?.entry,
 			resource.kind === 'found' ? resource.snapshot : resource
 		);
-		await records.put({ schemaVersion: 2, accountId, key: key, entry });
+		await records.put({ schemaVersion: 3, accountId, key: key, entry });
 	}
 
 	private entriesSchema(accountId: string) {

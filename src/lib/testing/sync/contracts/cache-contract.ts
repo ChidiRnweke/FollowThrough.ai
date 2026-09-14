@@ -4,7 +4,8 @@ import { syncCursorSchema, syncEtag, type ResourceState } from '$lib/models/sync
 
 const body = (version: bigint, value: string): ResourceState<string> => ({
 	kind: 'present',
-	cache: { kind: 'cached', snapshot: { etag: syncEtag(version), value } }
+	etag: syncEtag(version),
+	body: { etag: syncEtag(version), value }
 });
 
 /** The same durable contract is required of test and browser repositories. */

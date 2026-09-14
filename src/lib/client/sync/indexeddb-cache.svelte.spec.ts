@@ -21,10 +21,8 @@ const setup = (name = `workspace-sync-test-${crypto.randomUUID()}`) => {
 
 const entry: ResourceState<string> = {
 	kind: 'present',
-	cache: {
-		kind: 'cached',
-		snapshot: { etag: syncEtag(1n), value: 'My note' }
-	}
+	etag: syncEtag(1n),
+	body: { etag: syncEtag(1n), value: 'My note' }
 };
 
 afterEach(async () => {
@@ -44,7 +42,8 @@ describe('durable workspace cache', () => {
 		const other = setup(name).repository;
 		const newer: ResourceState<string> = {
 			kind: 'present',
-			cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Newer' } }
+			etag: syncEtag(2n),
+			body: { etag: syncEtag(2n), value: 'Newer' }
 		};
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry: newer }], remove: [] });
 		await other.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
@@ -147,15 +146,7 @@ describe('durable workspace cache', () => {
 				records: [
 					{
 						key: 'note:1',
-						entry: {
-							kind: 'present',
-							cache: {
-								kind: 'updating',
-								previous: null,
-								target: null,
-								transfer: { kind: 'queued' }
-							}
-						}
+						entry: { kind: 'requested' }
 					}
 				]
 			});

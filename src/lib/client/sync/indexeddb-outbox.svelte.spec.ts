@@ -119,7 +119,7 @@ describe('durable local writes', () => {
 				local: entry.intent.local
 			}))
 		}).toEqual({
-			records: [{ key: 'note:1', entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }],
+			records: [{ key: 'note:1', entry: { kind: 'present', etag: snapshot.etag, body: snapshot } }],
 			pending: [{ base: snapshot, dependencies: [], local: 'edited' }]
 		});
 	});
@@ -217,7 +217,7 @@ describe('durable conflict resolution', () => {
 			records: (await cache.load('alice')).records
 		}).toEqual({
 			pending: [],
-			records: [{ key: input.key, entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }]
+			records: [{ key: input.key, entry: { kind: 'present', etag: snapshot.etag, body: snapshot } }]
 		});
 	});
 	it('makes a confirmed keep-local decision durable with a new guarded operation', async () => {
@@ -280,7 +280,7 @@ describe('durable conflict resolution', () => {
 			records: (await cache.load('alice')).records
 		}).toEqual({
 			delivery: { kind: 'conflict', remote: { kind: 'found', snapshot } },
-			records: [{ key: input.key, entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }]
+			records: [{ key: input.key, entry: { kind: 'present', etag: snapshot.etag, body: snapshot } }]
 		});
 	});
 });
@@ -314,7 +314,8 @@ describe('durable acknowledgement ancestry', () => {
 					key: first.key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Other client' } }
+						etag: syncEtag(2n),
+						body: { etag: syncEtag(2n), value: 'Other client' }
 					}
 				}
 			],

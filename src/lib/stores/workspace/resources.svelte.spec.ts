@@ -1,3 +1,4 @@
+import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
@@ -56,6 +57,7 @@ const setup = (
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources('alice', {
+		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,
@@ -95,7 +97,8 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						etag: syncEtag(1n),
+						body: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -124,7 +127,8 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						etag: syncEtag(1n),
+						body: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -175,7 +179,8 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						etag: syncEtag(1n),
+						body: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -279,15 +284,7 @@ describe('optional workspace records', () => {
 			put: [
 				{
 					key,
-					entry: {
-						kind: 'present',
-						cache: {
-							kind: 'updating',
-							previous: null,
-							target: syncEtag(1n),
-							transfer: { kind: 'queued' }
-						}
-					}
+					entry: { kind: 'present', etag: syncEtag(1n), body: null }
 				}
 			],
 			remove: [],
@@ -330,7 +327,8 @@ describe('drafting optional resources', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						etag: syncEtag(1n),
+						body: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -391,15 +389,7 @@ it('keeps the displayed base when capturing an optional resource already refresh
 		put: [
 			{
 				key,
-				entry: {
-					kind: 'present',
-					cache: {
-						kind: 'updating',
-						previous: { etag: syncEtag(1n), value: project },
-						target: syncEtag(2n),
-						transfer: { kind: 'queued' }
-					}
-				}
+				entry: { kind: 'present', etag: syncEtag(2n), body: { etag: syncEtag(1n), value: project } }
 			}
 		],
 		remove: [],
@@ -425,15 +415,7 @@ it('refuses an optional default when a known resource has no downloaded body', a
 		put: [
 			{
 				key,
-				entry: {
-					kind: 'present',
-					cache: {
-						kind: 'updating',
-						previous: null,
-						target: syncEtag(1n),
-						transfer: { kind: 'queued' }
-					}
-				}
+				entry: { kind: 'present', etag: syncEtag(1n), body: null }
 			}
 		],
 		remove: [],
@@ -452,7 +434,8 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 				key,
 				entry: {
 					kind: 'present',
-					cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+					etag: syncEtag(1n),
+					body: { etag: syncEtag(1n), value: project }
 				}
 			}
 		],
@@ -562,4 +545,19 @@ it('does not publish required collection readiness when its initial body failed'
 	await expect(resources.requireCollections(['projects'])).rejects.toThrow(
 		'Required workspace data is not available on this device'
 	);
+});
+
+it('does not treat an admitted download as permission to create a default', async () => {
+	const { resources, cache, transport } = setup();
+	await cache.refresh();
+	const paused = transport.pause(key);
+	const opening = cache.open(key);
+	await paused.started;
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	try {
+		expect(() => draft.captureOrCreate(project)).toThrow('Open the resource before editing it');
+	} finally {
+		paused.release();
+		await opening;
+	}
 });

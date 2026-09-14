@@ -27,17 +27,31 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 		this.inventories.set(accountId, false);
 	}
 	writeFailure: string | null = null;
+	private nextLoad: { started(): void; ready: Promise<void> } | null = null;
+	pauseNextLoad(): { started: Promise<void>; release(): void } {
+		const started = Promise.withResolvers<void>();
+		const ready = Promise.withResolvers<void>();
+		this.nextLoad = { started: started.resolve, ready: ready.promise };
+		return { started: started.promise, release: ready.resolve };
+	}
 
 	async load(accountId: string): Promise<StoredCache<T>> {
-		return {
+		const stored = {
 			generation: this.generations.get(accountId) ?? initialCacheGeneration,
 			inventoryComplete: this.inventories.get(accountId) ?? this.cursors.has(accountId),
 			records: [...(this.accounts.get(accountId)?.values() ?? [])],
 			cursor: this.cursors.get(accountId) ?? null
 		};
+		const paused = this.nextLoad;
+		this.nextLoad = null;
+		if (paused) {
+			paused.started();
+			await paused.ready;
+		}
+		return stored;
 	}
 
-	async commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>> {
+	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
 		if (this.writeFailure) throw new Error(this.writeFailure);
 		const generation = this.generations.get(accountId) ?? initialCacheGeneration;
 		if (changes.generation !== undefined && changes.generation !== generation)
@@ -49,8 +63,6 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 		if (new Set(keys).size !== keys.length)
 			throw new Error('A cache commit must touch each resource only once');
 		const records = this.accounts.get(accountId) ?? new Map<string, CachedRecord<T>>();
-		const put: CachedRecord<T>[] = [];
-		const remove: CacheCommit<T>['remove'][number][] = [];
 		for (const proposed of changes.put) {
 			const previous = records.get(proposed.key);
 			const record = {
@@ -58,14 +70,12 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 				entry: previous ? mergeResourceStates(previous.entry, proposed.entry) : proposed.entry
 			};
 			records.set(record.key, record);
-			put.push(record);
 		}
 		for (const removal of changes.remove) {
 			const previous = records.get(removal.key);
 			if (!previous || resourceVersion(previous.entry) === removal.etag) {
 				records.delete(removal.key);
-				remove.push(removal);
-			} else put.push(previous);
+			}
 		}
 		this.accounts.set(accountId, records);
 		const cursor = this.cursors.get(accountId);
@@ -76,7 +86,6 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 			this.cursors.set(accountId, changes.cursor);
 		if (changes.inventoryComplete !== undefined)
 			this.inventories.set(accountId, changes.inventoryComplete);
-		return { ...changes, put, remove };
 	}
 }
 

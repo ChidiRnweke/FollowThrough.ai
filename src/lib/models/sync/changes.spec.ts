@@ -9,10 +9,8 @@ import {
 
 const present: ResourceState<string> = {
 	kind: 'present',
-	cache: {
-		kind: 'cached',
-		snapshot: { etag: syncEtag(1n), value: 'Saved' }
-	}
+	etag: syncEtag(1n),
+	body: { etag: syncEtag(1n), value: 'Saved' }
 };
 
 describe('applying compact resource changes', () => {
@@ -20,21 +18,13 @@ describe('applying compact resource changes', () => {
 		const current = receiveResource(present, { etag: syncEtag(2n), value: 'Newest available' });
 		const incoming: ResourceState<string> = {
 			kind: 'present',
-			cache: {
-				kind: 'updating',
-				previous: { etag: syncEtag(1n), value: 'Older' },
-				target: syncEtag(3n),
-				transfer: { kind: 'queued' }
-			}
+			etag: syncEtag(3n),
+			body: { etag: syncEtag(1n), value: 'Older' }
 		};
 		expect(mergeResourceStates(current, incoming)).toEqual({
 			kind: 'present',
-			cache: {
-				kind: 'updating',
-				previous: { etag: syncEtag(2n), value: 'Newest available' },
-				target: syncEtag(3n),
-				transfer: { kind: 'queued' }
-			}
+			etag: syncEtag(3n),
+			body: { etag: syncEtag(2n), value: 'Newest available' }
 		});
 	});
 	it('does not let a late deletion erase a newer recreation', () => {
@@ -84,7 +74,7 @@ describe('applying compact resource changes', () => {
 		);
 		expect(
 			[...next]
-				.filter(([, state]) => state.kind === 'present' && state.cache.kind === 'updating')
+				.filter(([, state]) => state.kind === 'present' && state.body?.etag !== state.etag)
 				.map(([key]) => key)
 		).toEqual(['todo:1']);
 	});
@@ -103,14 +93,6 @@ describe('applying compact resource changes', () => {
 			applyResourceChanges(new Map([['note:1', deleted]]), [
 				{ kind: 'upsert', key: 'note:1', etag: syncEtag(2n) }
 			]).get('note:1')
-		).toEqual({
-			kind: 'present',
-			cache: {
-				kind: 'updating',
-				previous: null,
-				target: syncEtag(2n),
-				transfer: { kind: 'queued' }
-			}
-		});
+		).toEqual({ kind: 'present', etag: syncEtag(2n), body: null });
 	});
 });

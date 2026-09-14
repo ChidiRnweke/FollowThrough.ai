@@ -311,3 +311,58 @@ describe('shared device cache reload', () => {
 		expect(await cache.open('note:1')).toEqual({ kind: 'deleted' });
 	});
 });
+
+describe('authoritative local snapshots', () => {
+	it('removes a cached copy when storage confirms its version is unavailable', async () => {
+		const { cache, repository } = setup();
+		await cache.accept('note:1', first);
+		await repository.commit('user-a', { put: [], remove: [{ key: 'note:1', etag: first.etag }] });
+		await cache.reload();
+		cache.setOnline(false);
+		expect(cache.access('note:1')).toEqual({ kind: 'unavailable' });
+	});
+	it('ignores an older reload result after a newer snapshot was published', async () => {
+		const { cache, repository } = setup();
+		await cache.accept('note:1', first);
+		const paused = repository.pauseNextLoad();
+		const reload = cache.reload();
+		await paused.started;
+		await repository.commit('user-a', {
+			put: [{ key: 'note:1', entry: { kind: 'present', etag: second.etag, body: second } }],
+			remove: []
+		});
+		cache.applyStored(await repository.load('user-a'));
+		paused.release();
+		await reload;
+		expect(cache.access('note:1')).toEqual({ kind: 'ready', value: 'Second copy' });
+	});
+});
+
+it('rejects a journal response started before another tab recovered storage', async () => {
+	const { cache, repository, transport } = setup();
+	transport.records.set('note:1', first);
+	const paused = transport.pause('changes');
+	const refresh = cache.refresh();
+	await paused.started;
+	repository.recoverInventory('user-a');
+	cache.applyStored(await repository.load('user-a'));
+	paused.release();
+	await refresh;
+	expect((await repository.load('user-a')).cursor).toBeNull();
+});
+
+it('rejects a body response started before another tab recovered storage', async () => {
+	const { cache, repository, transport } = setup();
+	transport.records.set('note:1', first);
+	await cache.refresh();
+	const paused = transport.pause('note:1');
+	const warming = cache.warm();
+	await paused.started;
+	repository.recoverInventory('user-a');
+	cache.applyStored(await repository.load('user-a'));
+	paused.release();
+	expect(await warming).toEqual({
+		kind: 'failure',
+		message: 'Workspace storage was recovered in another tab. Retry synchronization.'
+	});
+});

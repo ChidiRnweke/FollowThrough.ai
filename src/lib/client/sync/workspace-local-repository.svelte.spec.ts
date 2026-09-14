@@ -27,7 +27,7 @@ afterEach(async () => {
 
 const body = (projection: WorkspaceLocalProjection<string, string>) => {
 	const record = projection.cache.records.find((row) => row.key === 'note:1');
-	return record?.entry.kind === 'present' ? cachedSnapshot(record.entry.cache)?.value : undefined;
+	return record?.entry.kind === 'present' ? cachedSnapshot(record.entry)?.value : undefined;
 };
 const saveBody = (
 	repository: DexieWorkspaceRepository<string, string>,
@@ -40,7 +40,8 @@ const saveBody = (
 				key: 'note:1',
 				entry: {
 					kind: 'present',
-					cache: { kind: 'cached', snapshot: { etag: syncEtag(version), value } }
+					etag: syncEtag(version),
+					body: { etag: syncEtag(version), value }
 				}
 			}
 		],
@@ -162,7 +163,8 @@ it('never publishes another account’s projection to an existing account observ
 				key: 'note:1',
 				entry: {
 					kind: 'present',
-					cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Bob private note' } }
+					etag: syncEtag(2n),
+					body: { etag: syncEtag(2n), value: 'Bob private note' }
 				}
 			}
 		],

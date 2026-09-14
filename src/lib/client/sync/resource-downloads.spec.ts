@@ -142,15 +142,7 @@ it('persists download admission without persisting the live network attempt', as
 	const stored = await repository.load('account');
 	gate.release();
 	await opening;
-	expect(stored.records[0].entry).toEqual({
-		kind: 'present',
-		cache: {
-			kind: 'updating',
-			previous: null,
-			target: null,
-			transfer: { kind: 'queued' }
-		}
-	});
+	expect(stored.records[0].entry).toEqual({ kind: 'requested' });
 });
 
 it('keeps download failure local while retaining a durable retry target', async () => {
@@ -164,15 +156,7 @@ it('keeps download failure local while retaining a durable retry target', async 
 		durable: stored.records.find((row) => row.key === 'note:1')?.entry
 	}).toEqual({
 		local: { kind: 'failure', message: 'Unreadable body' },
-		durable: {
-			kind: 'present',
-			cache: {
-				kind: 'updating',
-				previous: null,
-				target: syncEtag(1n),
-				transfer: { kind: 'queued' }
-			}
-		}
+		durable: { kind: 'present', etag: syncEtag(1n), body: null }
 	});
 });
 
@@ -200,4 +184,18 @@ it('retries failed body targets on the next warming attempt without another jour
 	transport.failures.delete('note:1');
 	await cache.warm();
 	expect(cache.access('note:1')).toEqual({ kind: 'ready', value: 'Note 1' });
+});
+
+it('returns a failure when a stale response is followed by a transport failure', async () => {
+	const repository = new InMemorySyncCache<string>();
+	const transport = new InMemoryBatchSyncTransport<string>();
+	transport.records.set('note:1', { etag: syncEtag(2n), value: 'Newest' });
+	transport.readSnapshots.set('note:1', { etag: syncEtag(1n), value: 'Older' });
+	transport.readBudget = 1;
+	const cache = new ResourceCache('account', { repository, transport });
+	await cache.refresh();
+	expect(await cache.warm()).toEqual({
+		kind: 'failure',
+		message: 'Transport capacity exhausted without progress'
+	});
 });

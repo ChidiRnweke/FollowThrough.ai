@@ -92,13 +92,11 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 		);
 	}
 
-	async commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>> {
+	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
 		const committed = await this.database.transaction(
 			'rw',
 			['records', 'cursors', 'quarantine', 'recovery-heads'],
 			async (transaction) => {
-				const put: CacheCommit<T>['put'][number][] = [];
-				const remove: CacheCommit<T>['remove'][number][] = [];
 				let recovered: boolean;
 				const generation = await recoveryGeneration(transaction, accountId);
 				if (changes.generation !== undefined && changes.generation !== generation)
@@ -127,15 +125,13 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 						key: proposed.key,
 						entry: previous ? mergeResourceStates(previous.entry, proposed.entry) : proposed.entry
 					};
-					await records.put({ schemaVersion: 2, accountId, ...record });
-					put.push(record);
+					await records.put({ schemaVersion: 3, accountId, ...record });
 				}
 				for (const removal of changes.remove) {
 					const previous = current.get(removal.key);
 					if (!previous || resourceVersion(previous.entry) === removal.etag) {
 						await records.delete([accountId, removal.key]);
-						remove.push(removal);
-					} else put.push({ key: removal.key, entry: previous.entry });
+					}
 				}
 				const parsed = z
 					.object({
@@ -172,14 +168,13 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 							(parsed.success && parsed.data.inventoryComplete) ||
 							(changes.inventoryComplete ?? true)
 					});
-				return { put, remove, recovered };
+				return { recovered };
 			}
 		);
 		if (committed.recovered)
 			throw new Error(
 				'Damaged workspace storage was recovered. Retry synchronization to rebuild its inventory.'
 			);
-		return { ...changes, put: committed.put, remove: committed.remove };
 	}
 
 	async close(): Promise<void> {

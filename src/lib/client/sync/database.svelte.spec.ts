@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { IndexedDbSyncCache } from './indexeddb-cache';
 import { afterEach, describe, expect, it } from 'vitest';
 import { appendWrite } from '$lib/models/outbox';
 import { syncEtag } from '$lib/models/sync';
@@ -146,12 +148,12 @@ describe('native workspace storage upgrade', () => {
 		const oldTab = await openNativeVersionSix(name);
 		oldTab.onversionchange = () => oldTab.close();
 		const upgraded = await open(name);
-		expect(upgraded.backendDB().version).toBe(10);
+		expect(upgraded.backendDB().version).toBe(20);
 	});
 	it('closes this connection when a newer release needs to upgrade', async () => {
 		const name = nameForTest();
 		const database = await open(name);
-		const upgraded = await requestValue(indexedDB.open(name, 11));
+		const upgraded = await requestValue(indexedDB.open(name, 21));
 		connections.push(upgraded);
 		expect(database.isOpen()).toBe(false);
 	});
@@ -174,5 +176,47 @@ describe('native workspace storage upgrade', () => {
 		oldTab.close();
 		const upgraded = await open(name);
 		expect(await upgraded.table('outbox').toArray()).toEqual([row]);
+	});
+});
+
+describe('legacy cache row projection', () => {
+	it('reads a native cached body as version facts without dropping it', async () => {
+		const name = nameForTest();
+		const native = await openNativeVersionSix(name);
+		const transaction = native.transaction('records', 'readwrite');
+		const done = completed(transaction);
+		transaction.objectStore('records').put(migrationRows().records);
+		await done;
+		native.close();
+		const repository = new IndexedDbSyncCache(z.string(), name);
+		connections.push(repository);
+		expect((await repository.load('alice')).records).toEqual([
+			{ key: 'note:1', entry: { kind: 'present', etag: savedVersion.etag, body: savedVersion } }
+		]);
+	});
+	it('retains an older body and newer target while forgetting an old tabs failed attempt', async () => {
+		const name = nameForTest();
+		const native = await openNativeVersionSix(name);
+		const transaction = native.transaction('records', 'readwrite');
+		const done = completed(transaction);
+		transaction.objectStore('records').put({
+			...migrationRows().records,
+			entry: {
+				kind: 'present',
+				cache: {
+					kind: 'updating',
+					previous: savedVersion,
+					target: syncEtag(2n),
+					transfer: { kind: 'failed', message: 'Old connection lost' }
+				}
+			}
+		});
+		await done;
+		native.close();
+		const repository = new IndexedDbSyncCache(z.string(), name);
+		connections.push(repository);
+		expect((await repository.load('alice')).records).toEqual([
+			{ key: 'note:1', entry: { kind: 'present', etag: syncEtag(2n), body: savedVersion } }
+		]);
 	});
 });

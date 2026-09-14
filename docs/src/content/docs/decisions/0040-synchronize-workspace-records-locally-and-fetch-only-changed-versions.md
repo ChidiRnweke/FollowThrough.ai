@@ -213,7 +213,8 @@ outside the read-only live-query context, so it can quarantine damaged rows tran
 application no longer implements separate cache and outbox BroadcastChannel messages. Observation
 listeners and overlapping read publication are scoped by account.
 
-The existing native version-6 database upgrades in place to Dexie version 1 (native version 10).
+The existing native version-6 database upgrades in place to Dexie version 2 (native version 20).
+This also closes Dexie version-1 tabs before they can read the new resource row format.
 Store keys, queued operation identities and order, exact receipts, recovery evidence, and legacy
 import markers remain intact. A blocked upgrade asks the user to close older tabs. Failed upgrades
 roll back. Queue sequence allocation remains unchanged; a storage wrapper change does not require
@@ -227,8 +228,14 @@ operation-specific backoff; a future deadline for one edit does not delay a newl
 edit. Successful retries clear their own errors and consume obsolete deadlines.
 
 Foreground reads, collection preparation, and warming use one deduplicating batch download path.
-Durable storage records admission, target versions, retained bodies and tombstones. Live request
-promises and queued/fetching/failed attempt state belong to the current runtime. All demand shares
+Durable resource state contains only admission, the latest known server version, a retained body,
+or a tombstone. A body is current exactly when its version equals the known version. Otherwise it
+is updating; no separate cached/updating state is persisted. The repository parser translates older
+row formats into these facts. Live request promises and fetching/failed attempt state belong to the
+current runtime. Version ordering is applied only inside the storage transaction. Cache commits
+return no publication delta; readers reload the authoritative account snapshot. A read ticket keeps
+an older reload result from replacing a newer observation. Warming selects missing or outdated
+bodies from this snapshot, rather than maintaining a second download queue. All demand shares
 the measured body capacity, and failures remain visible without persisting a claim that a network
 request is still running after reload.
 

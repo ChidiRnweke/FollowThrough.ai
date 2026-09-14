@@ -49,11 +49,7 @@ const setup = async () => {
 		transport,
 		repository: {
 			load: async (accountId) => (await outbox.read(accountId)).cache,
-			commit: async (accountId, changes) => {
-				const result = await repository.commit(accountId, changes);
-				await outbox.read(accountId);
-				return result;
-			}
+			commit: (accountId, changes) => repository.commit(accountId, changes)
 		}
 	});
 	const writes = new MutationQueue(note.userId, {
@@ -69,6 +65,7 @@ const setup = async () => {
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(note.userId, {
+		recovery: outbox.recovery,
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,

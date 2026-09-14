@@ -146,175 +146,85 @@ export type TransferState =
 	| { readonly kind: 'fetching' }
 	| { readonly kind: 'failed'; readonly message: string };
 
-export type CacheEntry<T> =
-	| { readonly kind: 'uncached' }
-	| { readonly kind: 'cached'; readonly snapshot: SyncSnapshot<T> }
-	| {
-			readonly kind: 'updating';
-			readonly previous: SyncSnapshot<T> | null;
-			readonly target: SyncEtag | null;
-			readonly transfer: TransferState;
-	  };
-
-/** Server existence is independent of cache freshness and of a pending local draft. */
+/** Durable facts only. Freshness follows from the known version and retained body. */
 export type ResourceState<T> =
-	{ readonly kind: 'present'; readonly cache: CacheEntry<T> } | ResourceDeletion;
+	| { readonly kind: 'requested' }
+	| { readonly kind: 'present'; readonly etag: SyncEtag; readonly body: SyncSnapshot<T> | null }
+	| ResourceDeletion;
+
+export const resourceVersionsConsistent = <T>(state: ResourceState<T>): boolean =>
+	state.kind !== 'present' ||
+	state.body === null ||
+	compareSyncEtags(state.body.etag, state.etag) <= 0;
 
 export const resourceStateSchema = <T>(value: z.ZodType<T>): z.ZodType<ResourceState<T>> =>
-	z.discriminatedUnion('kind', [
-		z.object({ kind: z.literal('present'), cache: cacheEntrySchema(value) }),
-		deletionSchema
-	]);
+	z
+		.discriminatedUnion('kind', [
+			z.object({ kind: z.literal('requested') }),
+			z.object({
+				kind: z.literal('present'),
+				etag: syncEtagSchema,
+				body: z.object({ etag: syncEtagSchema, value }).nullable()
+			}),
+			deletionSchema
+		])
+		.refine(
+			resourceVersionsConsistent,
+			'A retained body cannot be newer than the known resource version'
+		);
 
-export const resourceVersion = <T>(state: ResourceState<T>): SyncEtag | null =>
-	state.kind === 'deleted'
-		? state.etag
-		: state.cache.kind === 'updating'
-			? (state.cache.target ?? state.cache.previous?.etag ?? null)
-			: state.cache.kind === 'cached'
-				? state.cache.snapshot.etag
-				: null;
+export const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
+	state && state.kind !== 'requested' ? state.etag : null;
 
-export const receiveResource = <T>(
-	state: ResourceState<T>,
-	received: SyncSnapshot<T> | ResourceDeletion
-): ResourceState<T> => {
-	const known = resourceVersion(state);
-	if ('kind' in received)
-		return known && compareSyncEtags(received.etag, known) < 0 ? state : received;
-	if (state.kind === 'deleted' && compareSyncEtags(received.etag, state.etag) <= 0) return state;
-	return {
-		kind: 'present',
-		cache: transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
-			kind: 'receive',
-			snapshot: received
-		})
-	};
-};
+export const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
+	state?.kind === 'present' ? state.body : null;
 
-/** Storage merges knowledge from independent tabs before publishing a proposed cache write. */
+export const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
+	state?.kind === 'present' && state.body?.etag === state.etag;
+
+/** The storage transaction is the sole owner of monotonic version knowledge. */
 export const mergeResourceStates = <T>(
-	current: ResourceState<T>,
+	current: ResourceState<T> | undefined,
 	incoming: ResourceState<T>
 ): ResourceState<T> => {
-	if (incoming.kind === 'deleted') return receiveResource(current, incoming);
-	if (incoming.cache.kind === 'cached') return receiveResource(current, incoming.cache.snapshot);
-	if (incoming.cache.kind === 'uncached') return current;
-	const state = incoming.cache.previous
-		? receiveResource(current, incoming.cache.previous)
-		: current;
-	if (incoming.cache.target === null) {
-		if (state.kind === 'present' && state.cache.kind === 'uncached') return incoming;
-		return state;
-	}
-	if (state.kind === 'deleted' && compareSyncEtags(incoming.cache.target, state.etag) <= 0)
-		return state;
-	const observed = transitionCache(state.kind === 'present' ? state.cache : { kind: 'uncached' }, {
-		kind: 'observe',
-		etag: incoming.cache.target
-	});
-	return {
-		kind: 'present',
-		cache:
-			observed.kind === 'updating' && observed.target === incoming.cache.target
-				? { ...observed, transfer: incoming.cache.transfer }
-				: observed
-	};
+	if (!current || current.kind === 'requested') return incoming;
+	if (incoming.kind === 'requested') return current;
+	const order = compareSyncEtags(incoming.etag, current.etag);
+	if (current.kind === 'deleted') return order > 0 ? incoming : current;
+	if (incoming.kind === 'deleted') return order >= 0 ? incoming : current;
+	const body =
+		incoming.body && (!current.body || compareSyncEtags(incoming.body.etag, current.body.etag) > 0)
+			? incoming.body
+			: current.body;
+	return { kind: 'present', etag: order > 0 ? incoming.etag : current.etag, body };
 };
 
-/** A compact journal batch changes only the named resources, never infers deletion from absence. */
+export const receiveResource = <T>(
+	state: ResourceState<T> | undefined,
+	received: SyncSnapshot<T> | ResourceDeletion
+): ResourceState<T> =>
+	mergeResourceStates(
+		state,
+		'kind' in received ? received : { kind: 'present', etag: received.etag, body: received }
+	);
+
+/** Absence from a journal batch conveys no change. */
 export const applyResourceChanges = <T>(
 	current: ReadonlyMap<string, ResourceState<T>>,
 	changes: readonly ResourceChange[]
 ): ReadonlyMap<string, ResourceState<T>> => {
 	const next = new Map(current);
-	for (const change of changes) {
-		const previous = current.get(change.key);
-		if (previous) {
-			const known = resourceVersion(previous);
-			if (known && compareSyncEtags(change.etag, known) < 0) continue;
-			if (previous.kind === 'deleted' && change.kind === 'upsert' && change.etag === previous.etag)
-				continue;
-		}
+	for (const change of changes)
 		next.set(
 			change.key,
-			change.kind === 'delete'
-				? { kind: 'deleted', etag: change.etag }
-				: {
-						kind: 'present',
-						cache: transitionCache(
-							previous?.kind === 'present' ? previous.cache : { kind: 'uncached' },
-							{ kind: 'observe', etag: change.etag }
-						)
-					}
-		);
-	}
-	return next;
-};
-
-export type CacheEvent<T> =
-	| { readonly kind: 'observe'; readonly etag: SyncEtag }
-	| { readonly kind: 'request' }
-	| { readonly kind: 'receive'; readonly snapshot: SyncSnapshot<T> }
-	| { readonly kind: 'failure'; readonly message: string };
-
-export const cacheEntrySchema = <T>(value: z.ZodType<T>): z.ZodType<CacheEntry<T>> => {
-	const snapshot = z.object({ etag: syncEtagSchema, value });
-	return z.discriminatedUnion('kind', [
-		z.object({ kind: z.literal('uncached') }),
-		z.object({ kind: z.literal('cached'), snapshot }),
-		z.object({
-			kind: z.literal('updating'),
-			previous: snapshot.nullable(),
-			target: syncEtagSchema.nullable(),
-			transfer: z.discriminatedUnion('kind', [
-				z.object({ kind: z.literal('queued') }),
-				z.object({ kind: z.literal('fetching') }),
-				z.object({ kind: z.literal('failed'), message: z.string() })
-			])
-		})
-	]);
-};
-
-export const cachedSnapshot = <T>(entry: CacheEntry<T>): SyncSnapshot<T> | null =>
-	entry.kind === 'cached' ? entry.snapshot : entry.kind === 'updating' ? entry.previous : null;
-
-/** No I/O: all readers, including offline readers, share these freshness rules. */
-export const transitionCache = <T>(entry: CacheEntry<T>, event: CacheEvent<T>): CacheEntry<T> => {
-	const previous = cachedSnapshot(entry);
-	switch (event.kind) {
-		case 'observe': {
-			const known = entry.kind === 'updating' ? entry.target : previous?.etag;
-			if (known && compareSyncEtags(event.etag, known) <= 0) return entry;
-			return {
-				kind: 'updating',
-				previous,
-				target: event.etag,
-				transfer: entry.kind === 'updating' ? entry.transfer : { kind: 'queued' }
-			};
-		}
-		case 'request':
-			return {
-				kind: 'updating',
-				previous,
-				target: entry.kind === 'updating' ? entry.target : (previous?.etag ?? null),
-				transfer: { kind: 'fetching' }
-			};
-		case 'receive': {
-			if (previous && compareSyncEtags(event.snapshot.etag, previous.etag) < 0) return entry;
-			if (
-				entry.kind === 'updating' &&
-				entry.target &&
-				compareSyncEtags(event.snapshot.etag, entry.target) < 0
+			mergeResourceStates(
+				current.get(change.key),
+				change.kind === 'delete'
+					? { kind: 'deleted', etag: change.etag }
+					: { kind: 'present', etag: change.etag, body: null }
 			)
-				return { ...entry, previous: event.snapshot, transfer: { kind: 'queued' } };
-			return { kind: 'cached', snapshot: event.snapshot };
-		}
-		case 'failure':
-			return entry.kind === 'updating'
-				? { ...entry, transfer: { kind: 'failed', message: event.message } }
-				: entry;
-	}
+		);
+	return next;
 };
 
 export type CacheAccess<T> =
@@ -324,13 +234,17 @@ export type CacheAccess<T> =
 	| { readonly kind: 'deleted' }
 	| { readonly kind: 'failure'; readonly message: string };
 
-export const accessCache = <T>(entry: CacheEntry<T>, online: boolean): CacheAccess<T> => {
-	const snapshot = cachedSnapshot(entry);
-	if (entry.kind === 'cached' || (!online && snapshot))
-		return snapshot ? { kind: 'ready', value: snapshot.value } : { kind: 'unavailable' };
+export const accessCache = <T>(
+	state: ResourceState<T> | undefined,
+	online: boolean,
+	transfer?: TransferState
+): CacheAccess<T> => {
+	if (state?.kind === 'deleted') return { kind: 'deleted' };
+	const snapshot = cachedSnapshot(state);
+	if (snapshot && (resourceCurrent(state) || !online))
+		return { kind: 'ready', value: snapshot.value };
 	if (!online) return { kind: 'unavailable' };
-	if (entry.kind === 'updating' && entry.transfer.kind === 'failed')
-		return { kind: 'failure', message: entry.transfer.message };
+	if (transfer?.kind === 'failed') return { kind: 'failure', message: transfer.message };
 	return { kind: 'wait' };
 };
 
@@ -340,7 +254,7 @@ export const collectionReadiness = <T>(
 	entries: readonly ResourceState<T>[]
 ): 'unknown' | 'incomplete' | 'ready' => {
 	if (!inventoryComplete) return 'unknown';
-	return entries.every((entry) => entry.kind === 'deleted' || cachedSnapshot(entry.cache) !== null)
+	return entries.every((entry) => entry.kind === 'deleted' || cachedSnapshot(entry) !== null)
 		? 'ready'
 		: 'incomplete';
 };

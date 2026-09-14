@@ -128,7 +128,7 @@ const begin = async (): Promise<WorkspaceSession> => {
 			const preferences = resources.views.get('agent_preferences', bootstrap.accountId);
 			if (preferences) return preferences;
 			const state = resources.state({ type: 'agent_preferences', id: [bootstrap.accountId] });
-			if (state?.kind === 'present' || resources.availability === 'unknown')
+			if ((state && state.kind !== 'deleted') || resources.availability === 'unknown')
 				throw new Error('Agent preferences have not been downloaded to this device');
 			return resources.views.agentPreferences(bootstrap.accountId);
 		},

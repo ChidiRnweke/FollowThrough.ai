@@ -23,7 +23,7 @@ export interface StoredCache<T> {
 
 export interface SyncCacheRepository<T> {
 	load(accountId: string): Promise<StoredCache<T>>;
-	commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>>;
+	commit(accountId: string, changes: CacheCommit<T>): Promise<void>;
 }
 
 export type ObjectRead<T> = SyncObjectRead<T>;

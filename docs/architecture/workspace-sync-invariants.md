@@ -124,3 +124,7 @@ application change channel are replaced by Dexie; their historical results remai
   with queue settlement rather than relying on a second callback write.
 - PostgreSQL contracts check concurrent/repeated acknowledgement and receipt replay while a source
   row is locked by another transaction.
+
+- Authoritative snapshot regressions verify removal after a version-guarded unavailable result and
+  prevent an older local reload from replacing a newer observed snapshot. Cached/updating is derived
+  from durable version facts; runtime attempts cannot change the stored resource representation.
