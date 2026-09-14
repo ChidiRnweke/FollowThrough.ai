@@ -1,4 +1,3 @@
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
@@ -54,7 +53,6 @@ const setup = (
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources('alice', {
-		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
@@ -93,8 +91,7 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						etag: syncEtag(1n),
-						body: { etag: syncEtag(1n), value: project }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -118,8 +115,7 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						etag: syncEtag(1n),
-						body: { etag: syncEtag(1n), value: project }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -170,8 +166,7 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						etag: syncEtag(1n),
-						body: { etag: syncEtag(1n), value: project }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -269,15 +264,11 @@ describe('optional workspace records', () => {
 		resources.setOnline(false);
 		expect(await resources.lookup(identity)).toEqual({ kind: 'absent' });
 	});
-	it('keeps a missing body distinct from an absent record', async () => {
+	it('keeps an unfinished inventory distinct from known absence', async () => {
 		const { resources, repository } = setup();
 		await repository.commit('alice', {
-			put: [
-				{
-					key,
-					entry: { kind: 'present', etag: syncEtag(1n), body: null }
-				}
-			],
+			put: [],
+			inventoryComplete: false,
 			remove: [],
 			cursor: initialSyncCursor
 		});
@@ -318,8 +309,7 @@ describe('drafting optional resources', () => {
 					key,
 					entry: {
 						kind: 'present',
-						etag: syncEtag(1n),
-						body: { etag: syncEtag(1n), value: project }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -380,7 +370,7 @@ it('keeps the displayed base when capturing an optional resource already refresh
 		put: [
 			{
 				key,
-				entry: { kind: 'present', etag: syncEtag(2n), body: { etag: syncEtag(1n), value: project } }
+				entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: project } }
 			}
 		],
 		remove: [],
@@ -400,21 +390,17 @@ it('keeps the displayed base when capturing an optional resource already refresh
 	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
 });
 
-it('refuses an optional default when a known resource has no downloaded body', async () => {
+it('refuses an optional default before inventory proves absence', async () => {
 	const { resources, repository } = setup();
 	await repository.commit('alice', {
-		put: [
-			{
-				key,
-				entry: { kind: 'present', etag: syncEtag(1n), body: null }
-			}
-		],
+		put: [],
+		inventoryComplete: false,
 		remove: [],
 		cursor: initialSyncCursor
 	});
 	await resources.initialize();
 	const draft = resources.draft({ type: 'projects', id: identity.id });
-	expect(() => draft.captureOrCreate(project)).toThrow('Open the resource');
+	expect(() => draft.captureOrCreate(project)).toThrow('not available');
 });
 
 it('does not adopt a new conflict base when an editor read has been superseded', async () => {
@@ -425,8 +411,7 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 				key,
 				entry: {
 					kind: 'present',
-					etag: syncEtag(1n),
-					body: { etag: syncEtag(1n), value: project }
+					snapshot: { etag: syncEtag(1n), value: project }
 				}
 			}
 		],

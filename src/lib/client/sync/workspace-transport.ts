@@ -34,7 +34,14 @@ const identityFromKey = (key: string) => {
 export const workspaceReadTransport = (accountId: string): SyncReadTransport<WorkspaceRecord> => ({
 	async pull(since) {
 		const request = pullWorkspaceChangePage({ accountId, since });
-		return syncPageSchema(workspaceRecordSchema).parse(await request);
+		const page = syncPageSchema(workspaceRecordSchema).parse(await request);
+		for (const { key, resource } of page.records)
+			if (
+				resource.kind === 'found' &&
+				workspaceResourceKey(workspaceRecordIdentity(resource.snapshot.value)) !== key
+			)
+				throw new Error('The server page returned a different resource');
+		return page;
 	},
 	async read(key, etag) {
 		const request = readWorkspaceResource({ accountId, identity: identityFromKey(key), etag });

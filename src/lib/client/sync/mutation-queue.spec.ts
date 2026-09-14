@@ -131,8 +131,7 @@ describe('shared mutation submission', () => {
 						key: 'note:1',
 						entry: {
 							kind: 'present',
-							etag: syncEtag(1n),
-							body: { etag: syncEtag(1n), value: 'Edited' }
+							snapshot: { etag: syncEtag(1n), value: 'Edited' }
 						}
 					}
 				]
@@ -227,8 +226,7 @@ describe('shared mutation submission', () => {
 					key: 'note:1',
 					entry: {
 						kind: 'present',
-						etag: syncEtag(1n),
-						body: { etag: syncEtag(1n), value: 'Edited' }
+						snapshot: { etag: syncEtag(1n), value: 'Edited' }
 					}
 				}
 			]
@@ -248,7 +246,7 @@ describe('conflict cache publication', () => {
 			stored: (await cache.load('alice')).records,
 			local: queue.pending[0].intent.local
 		}).toEqual({
-			stored: [{ key: 'note:1', entry: { kind: 'present', etag: snapshot.etag, body: snapshot } }],
+			stored: [{ key: 'note:1', entry: { kind: 'present', snapshot: snapshot } }],
 			local: 'Edited'
 		});
 	});

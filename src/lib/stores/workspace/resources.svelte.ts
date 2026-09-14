@@ -42,8 +42,6 @@ import {
 } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
-import type { StorageRecoveryItem } from '$lib/models/sync';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
@@ -53,7 +51,6 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
-	recovery: IndexedDbStorageRecovery;
 	scheduler?: SyncScheduler;
 	dispose?(): void;
 	cache: ResourceCache<WorkspaceRecord>;
@@ -69,25 +66,6 @@ export class WorkspaceResources {
 		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
 	});
 	private readonly projections = $derived(new WorkspaceViews(this.projected));
-	private recovery = $state<readonly StorageRecoveryItem[]>([]);
-	get recoveryItems(): readonly StorageRecoveryItem[] {
-		return this.recovery;
-	}
-	async loadRecovery(): Promise<void> {
-		const items = await this.dependencies.recovery.list(this.accountId);
-		if (!this.stopped) this.recovery = items;
-	}
-
-	async removeRecovery(item: StorageRecoveryItem): Promise<void> {
-		if (!this.active) throw new Error('This account is no longer active');
-		await this.dependencies.recovery.remove(this.accountId, item.source, item.key);
-		await this.loadRecovery();
-		await this.synchronize();
-	}
-
-	downloadRecovery(item: StorageRecoveryItem): Promise<Blob> {
-		return this.dependencies.recovery.download(this.accountId, item.source, item.key);
-	}
 	get downloadProgress() {
 		void this.revision;
 		return this.dependencies.cache.downloadProgress;
@@ -135,7 +113,6 @@ export class WorkspaceResources {
 		const previous = this.dependencies.writes.pending;
 		this.dependencies.cache.applyStored(projection.cache, false);
 		this.dependencies.writes.applyStored(projection.writes, false);
-		this.recovery = projection.recovery;
 		this.revision++;
 		// Only a newly queued identity wakes submissions. Cache changes and delivery updates do not loop.
 		if (
@@ -151,7 +128,10 @@ export class WorkspaceResources {
 		this.runtime.committed();
 	}
 	observationFailed(error: Error): void {
-		if (!this.stopped) this.failure = { kind: 'failure', message: error.message };
+		if (!this.stopped) {
+			this.failure = { kind: 'failure', message: error.message };
+			this.stop();
+		}
 	}
 
 	draft<K extends WorkspaceResourceType>(
@@ -183,8 +163,10 @@ export class WorkspaceResources {
 		return this.dependencies.writes.status;
 	}
 	initialize(): Promise<void> {
-		this.initializing ??= this.dependencies.cache
-			.initialize()
+		this.initializing ??= Promise.all([
+			this.dependencies.cache.initialize(),
+			this.dependencies.writes.reload()
+		])
 			.then(() => undefined)
 			.catch((error) => {
 				this.initializing = null;
@@ -328,7 +310,11 @@ export class WorkspaceResources {
 }
 
 export const createWorkspaceResources = (accountId: string): WorkspaceResources => {
-	const repository = new DexieWorkspaceRepository(workspaceCommandSchema, workspaceRecordSchema);
+	const repository = new DexieWorkspaceRepository(
+		accountId,
+		workspaceCommandSchema,
+		workspaceRecordSchema
+	);
 	const cache = new ResourceCache(accountId, {
 		repository: {
 			load: async (account) => (await repository.read(account)).cache,
@@ -344,19 +330,12 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(accountId, {
-		recovery: repository.recovery,
 		cache,
 		writes,
 
 		dispose: () => {
 			unsubscribe();
-			void writes
-				.settled()
-				.then(() => repository.close())
-				.catch((error) => {
-					console.error('Workspace storage could not close', error);
-					return { kind: 'failure' };
-				});
+			repository.database.stop();
 		}
 	});
 	const unsubscribe = repository.observe(

@@ -154,7 +154,6 @@ const begin = async (): Promise<WorkspaceSession> => {
 	};
 	const session = current;
 	await resources.initialize();
-	await resources.loadRecovery();
 	await resources.requireCollections(['users', 'projects', 'agent_preferences']);
 	void session.shell;
 	void session.preferences;
@@ -219,11 +218,13 @@ export const workspaceSession = {
 		if (!accountId)
 			throw new Error('Sign in to identify the account whose saved edits you want to download');
 		const recovery = new IndexedDbStorageRecovery();
-		try {
-			return await recovery.downloadAccount(accountId);
-		} finally {
-			recovery.close();
-		}
+		return recovery.downloadAccount(accountId);
+	},
+	async resetLocalWorkspace(): Promise<void> {
+		const accountId = workspaceAccountHint(document.cookie);
+		if (!accountId) throw new Error('Sign in to identify the account to reset');
+		stop();
+		await new IndexedDbStorageRecovery().resetAccount(accountId);
 	},
 	synchronize,
 	stop,

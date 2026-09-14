@@ -97,7 +97,6 @@ const setup = async (
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(conversation.userId, {
-		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes

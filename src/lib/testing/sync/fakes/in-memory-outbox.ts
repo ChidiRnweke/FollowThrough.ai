@@ -53,8 +53,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 			writes: {
 				entries: this.accounts.get(accountId) ?? [],
 				receipts: new Map(this.receipts.get(accountId))
-			},
-			recovery: []
+			}
 		};
 		for (const observer of this.observers.get(accountId) ?? []) observer(state);
 		return state;
@@ -167,9 +166,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 				{
 					key,
 					entry:
-						resource.kind === 'found'
-							? { kind: 'present', etag: resource.snapshot.etag, body: resource.snapshot }
-							: resource
+						resource.kind === 'found' ? { kind: 'present', snapshot: resource.snapshot } : resource
 				}
 			],
 			remove: []

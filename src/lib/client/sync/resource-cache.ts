@@ -1,6 +1,5 @@
 import {
 	accessCache,
-	initialCacheGeneration,
 	cachedSnapshot,
 	receiveResource,
 	resourceVersion,
@@ -42,7 +41,6 @@ export class ResourceCache<T> {
 	private stopped = false;
 	private online = true;
 	private cursor: SyncCursor | null = null;
-	private generation: string = initialCacheGeneration;
 	private inventoryComplete = false;
 	private result: SynchronizationResult = { kind: 'idle' };
 
@@ -68,7 +66,8 @@ export class ResourceCache<T> {
 		};
 	}
 	get failedDownloads(): number {
-		return [...this.entries.keys()].filter((key) => this.transfer(key)?.kind === 'failed').length;
+		return [...this.attempts.values()].filter((attempt) => attempt.transfer.kind === 'failed')
+			.length;
 	}
 	get records(): ReadonlyMap<string, ResourceState<T>> {
 		return this.entries;
@@ -173,17 +172,10 @@ export class ResourceCache<T> {
 	}
 
 	/** One authoritative snapshot; live attempts never alter durable resource knowledge. */
-	applyStored(
-		{ records, cursor, generation, inventoryComplete }: StoredCache<T>,
-		notify = true
-	): void {
+	applyStored({ records, cursor, inventoryComplete }: StoredCache<T>, notify = true): void {
 		if (this.stopped) return;
 		this.readGeneration++;
 		this.initializing ??= Promise.resolve();
-		if (generation !== this.generation) {
-			this.attempts.clear();
-		}
-		this.generation = generation;
 		this.cursor = cursor;
 		this.inventoryComplete = inventoryComplete;
 		this.entries = new Map(records.map(({ key, entry }) => [key, entry]));
@@ -191,11 +183,10 @@ export class ResourceCache<T> {
 		if (notify) this.notify();
 	}
 
-	private async commit(compute: () => CacheCommit<T>, generation = this.generation): Promise<void> {
+	private async commit(compute: () => CacheCommit<T>): Promise<void> {
 		if (this.stopped) return;
 		await this.dependencies.repository.commit(this.accountId, {
-			...compute(),
-			generation
+			...compute()
 		});
 		await this.restore();
 	}
@@ -208,7 +199,6 @@ export class ResourceCache<T> {
 			let more: boolean;
 			do {
 				const before = this.cursor ?? initialSyncCursor;
-				const generation = this.generation;
 				const batch = await this.dependencies.transport.pull(before);
 				more = batch.hasMore;
 				if (more && BigInt(batch.cursor) <= BigInt(before))
@@ -229,7 +219,7 @@ export class ResourceCache<T> {
 						cursor: batch.cursor,
 						inventoryComplete: this.inventoryComplete || !more
 					};
-				}, generation);
+				});
 				if (!this.online) return { kind: 'offline' };
 			} while (more && !this.stopped);
 			if (this.stopped) return { kind: 'stopped' };
@@ -267,27 +257,23 @@ export class ResourceCache<T> {
 	}
 
 	private async read(key: string): Promise<SynchronizationResult> {
-		const generation = this.generation;
 		try {
 			const response = await this.dependencies.transport.read(key, null);
 			if (this.stopped) return { kind: 'stopped' };
 			if (response.kind === 'unchanged') throw new Error('An uncached read returned no body');
 			if (response.kind === 'unavailable') return { kind: 'unavailable' };
-			await this.commit(
-				() => ({
-					put: [
-						{
-							key,
-							entry: receiveResource<T>(
-								undefined,
-								response.kind === 'found' ? response.snapshot : response
-							)
-						}
-					],
-					remove: []
-				}),
-				generation
-			);
+			await this.commit(() => ({
+				put: [
+					{
+						key,
+						entry: receiveResource<T>(
+							undefined,
+							response.kind === 'found' ? response.snapshot : response
+						)
+					}
+				],
+				remove: []
+			}));
 			this.attempts.delete(key);
 			return { kind: 'complete' };
 		} catch (error) {

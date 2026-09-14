@@ -1,7 +1,5 @@
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
-import type { StorageRecoveryItem } from '$lib/models/sync';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { afterEach, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -43,10 +41,9 @@ const setup = async (
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(project.userId, {
-		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
-		writes,
+		writes
 	});
 	repository.observe(project.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);
@@ -175,67 +172,4 @@ it('cancels the destructive decision without changing saved intent', async () =>
 	await screen.getByRole('button', { name: /^Discard/ }).click();
 	await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
 	expect(resources.pending).toHaveLength(1);
-});
-
-const recoveries: StorageRecoveryItem[] = [];
-afterEach(async () => {
-	const recovery = new IndexedDbStorageRecovery();
-	for (const item of recoveries.splice(0))
-		await recovery.remove(item.accountId, item.source, item.key);
-});
-const damagedScenario = async () => {
-	const { resources } = await setup();
-	const item: StorageRecoveryItem = {
-		accountId: resources.accountId,
-		source: 'outbox',
-		key: crypto.randomUUID(),
-		message: 'Unreadable edit',
-		impact: { kind: 'write', operationId: null }
-	};
-	await new IndexedDbStorageRecovery().save(item, 'Original damaged data');
-	recoveries.push(item);
-	await resources.loadRecovery();
-	return resources;
-};
-it('offers recovery removal only after a copy has been exported', async () => {
-	const resources = await damagedScenario();
-	const screen = render(WorkspaceWriteReview, { resources, open: true });
-	await expect
-		.element(screen.getByRole('button', { name: /Remove from this device/ }))
-		.not.toBeInTheDocument();
-});
-it('keeps damaged data until its removal is confirmed', async () => {
-	const resources = await damagedScenario();
-	const screen = render(WorkspaceWriteReview, { resources, open: true });
-	await screen.getByRole('button', { name: 'Download copy', exact: true }).click();
-	await screen.getByRole('button', { name: 'Remove from this device…', exact: true }).click();
-	expect(resources.recoveryItems).toHaveLength(1);
-});
-it('removes only the explicitly confirmed recovery item', async () => {
-	const resources = await damagedScenario();
-	const screen = render(WorkspaceWriteReview, { resources, open: true });
-	await screen.getByRole('button', { name: 'Download copy', exact: true }).click();
-	await screen.getByRole('button', { name: 'Remove from this device…', exact: true }).click();
-	await screen.getByRole('button', { name: 'Remove from this device', exact: true }).click();
-	await expect
-		.element(screen.getByText('Some saved data could not be read.'))
-		.not.toBeInTheDocument();
-});
-
-it('returns to the list when a reviewed change is resolved elsewhere', async () => {
-	const { resources, operationId } = await setup();
-	const screen = render(WorkspaceWriteReview, { resources, open: true });
-	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	await resources.discard([operationId]);
-	await expect.element(screen.getByText('Everything is saved')).toBeVisible();
-});
-
-it('does not promise a retained latest copy when the item was deleted elsewhere', async () => {
-	const { resources } = await setup('conflict', 'deleted');
-	const screen = render(WorkspaceWriteReview, { resources, open: true });
-	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	await screen.getByRole('button', { name: /Use latest…|Discard…/ }).click();
-	await expect
-		.element(screen.getByRole('group', { name: 'Confirm removal' }))
-		.toHaveTextContent('This item will remain deleted.');
 });

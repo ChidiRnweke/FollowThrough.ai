@@ -1,4 +1,3 @@
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
@@ -25,7 +24,6 @@ export const workspaceResourcesFixture = (accountId: string) => {
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(accountId, {
-		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes

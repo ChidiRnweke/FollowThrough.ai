@@ -1,6 +1,5 @@
 import {
 	mergeResourceStates,
-	initialCacheGeneration,
 	resourceVersion,
 	type SyncSnapshot,
 	type SyncCursor,
@@ -20,13 +19,6 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 	private readonly accounts = new Map<string, Map<string, CachedRecord<T>>>();
 	private readonly cursors = new Map<string, SyncCursor>();
 	private readonly inventories = new Map<string, boolean>();
-	private readonly generations = new Map<string, string>();
-
-	recoverInventory(accountId: string): void {
-		this.generations.set(accountId, crypto.randomUUID());
-		this.cursors.delete(accountId);
-		this.inventories.set(accountId, false);
-	}
 	writeFailure: string | null = null;
 	private nextLoad: { started(): void; ready: Promise<void> } | null = null;
 	pauseNextLoad(): { started: Promise<void>; release(): void } {
@@ -38,7 +30,6 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 
 	async load(accountId: string): Promise<StoredCache<T>> {
 		const stored = {
-			generation: this.generations.get(accountId) ?? initialCacheGeneration,
 			inventoryComplete: this.inventories.get(accountId) ?? this.cursors.has(accountId),
 			records: [...(this.accounts.get(accountId)?.values() ?? [])],
 			cursor: this.cursors.get(accountId) ?? null
@@ -54,9 +45,6 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 
 	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
 		if (this.writeFailure) throw new Error(this.writeFailure);
-		const generation = this.generations.get(accountId) ?? initialCacheGeneration;
-		if (changes.generation !== undefined && changes.generation !== generation)
-			throw new Error('Workspace storage was recovered in another tab. Retry synchronization.');
 		const keys = [
 			...changes.put.map((record) => record.key),
 			...changes.remove.map((record) => record.key)

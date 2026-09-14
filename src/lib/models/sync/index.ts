@@ -1,24 +1,5 @@
 import { z } from 'zod';
 
-export const initialCacheGeneration = '00000000-0000-0000-0000-000000000000';
-
-export const storageRecoveryItemSchema = z.object({
-	accountId: z.string(),
-	source: z.string(),
-	key: z.string(),
-	message: z.string(),
-	impact: z.discriminatedUnion('kind', [
-		z.object({ kind: z.literal('cache') }),
-		z.object({
-			kind: z.literal('resource'),
-			key: z.string().min(1),
-			operationId: z.string().uuid().nullable()
-		}),
-		z.object({ kind: z.literal('write'), operationId: z.string().uuid().nullable() })
-	])
-});
-export type StorageRecoveryItem = z.infer<typeof storageRecoveryItemSchema>;
-
 export interface SyncIndicatorInput {
 	readonly online: boolean;
 	readonly pending: number;
@@ -178,93 +159,39 @@ export type TransferState =
 	| { readonly kind: 'fetching' }
 	| { readonly kind: 'failed'; readonly message: string };
 
-/** Durable facts only. Freshness follows from the known version and retained body. */
+/** Complete versioned records or tombstones. Network attempts are not persisted. */
 export type ResourceState<T> =
-	| { readonly kind: 'requested' }
-	| { readonly kind: 'present'; readonly etag: SyncEtag; readonly body: SyncSnapshot<T> | null }
-	| ResourceDeletion;
-
-export const resourceVersionsConsistent = <T>(state: ResourceState<T>): boolean =>
-	state.kind !== 'present' ||
-	state.body === null ||
-	compareSyncEtags(state.body.etag, state.etag) <= 0;
-
+	{ readonly kind: 'present'; readonly snapshot: SyncSnapshot<T> } | ResourceDeletion;
 export const resourceStateSchema = <T>(value: z.ZodType<T>): z.ZodType<ResourceState<T>> =>
-	z
-		.discriminatedUnion('kind', [
-			z.object({ kind: z.literal('requested') }),
-			z.object({
-				kind: z.literal('present'),
-				etag: syncEtagSchema,
-				body: z.object({ etag: syncEtagSchema, value }).nullable()
-			}),
-			deletionSchema
-		])
-		.refine(
-			resourceVersionsConsistent,
-			'A retained body cannot be newer than the known resource version'
-		);
-
+	z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('present'), snapshot: z.object({ etag: syncEtagSchema, value }) }),
+		deletionSchema
+	]);
 export const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
-	state && state.kind !== 'requested' ? state.etag : null;
-
+	state?.kind === 'present' ? state.snapshot.etag : (state?.etag ?? null);
 export const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
-	state?.kind === 'present' ? state.body : null;
-
+	state?.kind === 'present' ? state.snapshot : null;
 export const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
-	state?.kind === 'present' && state.body?.etag === state.etag;
-
-/** The storage transaction is the sole owner of monotonic version knowledge. */
+	state?.kind === 'present';
+/** Page replication, targeted reads and write receipts all use the same monotonic merge. */
 export const mergeResourceStates = <T>(
 	current: ResourceState<T> | undefined,
 	incoming: ResourceState<T>
 ): ResourceState<T> => {
-	if (!current || current.kind === 'requested') return incoming;
-	if (incoming.kind === 'requested') return current;
-	const order = compareSyncEtags(incoming.etag, current.etag);
-	if (current.kind === 'deleted') {
-		if (order <= 0) return current;
-		return incoming.kind === 'present' &&
-			incoming.body &&
-			compareSyncEtags(incoming.body.etag, current.etag) <= 0
-			? { ...incoming, body: null }
-			: incoming;
-	}
-	if (incoming.kind === 'deleted') return order >= 0 ? incoming : current;
-	const body =
-		incoming.body && (!current.body || compareSyncEtags(incoming.body.etag, current.body.etag) > 0)
-			? incoming.body
-			: current.body;
-	return { kind: 'present', etag: order > 0 ? incoming.etag : current.etag, body };
+	if (!current) return incoming;
+	const before = current.kind === 'present' ? current.snapshot.etag : current.etag;
+	const after = incoming.kind === 'present' ? incoming.snapshot.etag : incoming.etag;
+	const order = compareSyncEtags(after, before);
+	return order > 0 || (order === 0 && incoming.kind === 'deleted') ? incoming : current;
 };
-
 export const receiveResource = <T>(
 	state: ResourceState<T> | undefined,
 	received: SyncSnapshot<T> | ResourceDeletion
 ): ResourceState<T> =>
 	mergeResourceStates(
 		state,
-		'kind' in received ? received : { kind: 'present', etag: received.etag, body: received }
+		'kind' in received ? received : { kind: 'present', snapshot: received }
 	);
-
-/** Absence from a journal batch conveys no change. */
-export const applyResourceChanges = <T>(
-	current: ReadonlyMap<string, ResourceState<T>>,
-	changes: readonly ResourceChange[]
-): ReadonlyMap<string, ResourceState<T>> => {
-	const next = new Map(current);
-	for (const change of changes)
-		next.set(
-			change.key,
-			mergeResourceStates(
-				current.get(change.key),
-				change.kind === 'delete'
-					? { kind: 'deleted', etag: change.etag }
-					: { kind: 'present', etag: change.etag, body: null }
-			)
-		);
-	return next;
-};
 
 export type CacheAccess<T> =
 	| { readonly kind: 'ready'; readonly value: T }
@@ -295,13 +222,4 @@ export const collectionReadiness = <T>(
 	return entries.every((entry) => entry.kind === 'deleted' || cachedSnapshot(entry) !== null)
 		? 'ready'
 		: 'incomplete';
-};
-
-export const recoveryBlocksWrite = (
-	impact: StorageRecoveryItem['impact'],
-	key: string
-): boolean => {
-	if (impact.kind === 'cache') return false;
-	if (impact.kind === 'write') return true;
-	return impact.key === key;
 };

@@ -18,6 +18,7 @@ const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
 	const local = { ...note, plainText: 'Offline draft' };
 	const outbox = new DexieWorkspaceRepository(
+		note.userId,
 		workspaceCommandSchema,
 		workspaceRecordSchema,
 		newName
@@ -50,7 +51,6 @@ const setup = async () => {
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(note.userId, {
-		recovery: outbox.recovery,
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
@@ -69,7 +69,7 @@ const setup = async () => {
 		resources.stop();
 		await repository.close();
 		await outbox.close();
-		await requestValue(indexedDB.deleteDatabase(newName));
+		await requestValue(indexedDB.deleteDatabase(outbox.database.name));
 	});
 	return { note, local, key, transport, resources, store, outbox };
 };

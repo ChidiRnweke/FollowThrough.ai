@@ -1,4 +1,5 @@
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
+import { WorkspaceDatabase } from '$lib/client/sync/database';
 import { expect, it } from 'vitest';
 import { workspaceRecordSchema, resourceDataSchemas } from '$lib/models/workspace-records';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -11,7 +12,7 @@ import { syncEtag } from '$lib/models/sync';
 it('observes an offline edit from another client without a refresh', async () => {
 	const accountId = resourceDataSchemas.users.shape.id.parse(crypto.randomUUID());
 	const project = projectBuilder({ userId: accountId });
-	const cache = new IndexedDbSyncCache(workspaceRecordSchema);
+	const cache = new IndexedDbSyncCache(workspaceRecordSchema, new WorkspaceDatabase(accountId));
 	const identity = { type: 'projects', id: [project.id] } satisfies WorkspaceResourceIdentity;
 	await cache.commit(accountId, {
 		put: [
@@ -19,8 +20,7 @@ it('observes an offline edit from another client without a refresh', async () =>
 				key: workspaceResourceKey(identity),
 				entry: {
 					kind: 'present',
-					etag: syncEtag(1n),
-					body: { etag: syncEtag(1n), value: { type: 'projects', value: project } }
+					snapshot: { etag: syncEtag(1n), value: { type: 'projects', value: project } }
 				}
 			}
 		],
@@ -50,7 +50,7 @@ it('observes an offline edit from another client without a refresh', async () =>
 	}
 });
 
-it('observes recovery data committed by another client', async () => {
+it('stops both open clients when this account is reset', async () => {
 	const accountId = crypto.randomUUID();
 	const first = createWorkspaceResources(accountId);
 	const second = createWorkspaceResources(accountId);
@@ -58,19 +58,8 @@ it('observes recovery data committed by another client', async () => {
 	second.setOnline(false);
 	try {
 		await Promise.all([first.initialize(), second.initialize()]);
-		await new IndexedDbStorageRecovery().save(
-			{
-				accountId,
-				source: 'legacy-note',
-				key: `${accountId}:damaged`,
-				message: 'Unreadable',
-				impact: { kind: 'write', operationId: null }
-			},
-			'Preserved'
-		);
-		await expect
-			.poll(() => second.recoveryItems.map((item) => item.message))
-			.toEqual(['Unreadable']);
+		await new IndexedDbStorageRecovery().resetAccount(accountId);
+		expect({ first: first.active, second: second.active }).toEqual({ first: false, second: false });
 	} finally {
 		first.stop();
 		second.stop();
