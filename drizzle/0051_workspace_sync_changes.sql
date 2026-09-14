@@ -1,26 +1,9 @@
--- A compact change journal: one latest change per account/resource, never application events.
-CREATE TABLE workspace_sync_heads (
-  account_id uuid PRIMARY KEY,
-  cursor bigint NOT NULL CHECK (cursor > 0)
-);
---> statement-breakpoint
-CREATE TABLE workspace_sync_changes (
-  account_id uuid NOT NULL,
-  resource_type text NOT NULL,
-  resource_id jsonb NOT NULL,
-  cursor bigint NOT NULL CHECK (cursor > 0),
-  operation text NOT NULL CHECK (operation IN ('upsert', 'delete')),
-  version bigint NOT NULL CHECK (version > 0),
-  PRIMARY KEY (account_id, resource_type, resource_id)
-);
---> statement-breakpoint
-CREATE INDEX workspace_sync_changes_cursor ON workspace_sync_changes (account_id, cursor);
---> statement-breakpoint
-ALTER TABLE workspace_sync_versions ADD COLUMN account_id uuid;
+-- Idempotent installation shared by migrations and db:push setup. Run in a transaction.
+SELECT pg_advisory_xact_lock(hashtextextended('workspace-sync-setup', 0));
 --> statement-breakpoint
 -- Resolve ownership while the source row still exists. Persist it with the version so
 -- cascading deletes can emit tombstones after their owning parent has disappeared.
-CREATE FUNCTION workspace_sync_account(resource text, data jsonb) RETURNS uuid
+CREATE OR REPLACE FUNCTION workspace_sync_account(resource text, data jsonb) RETURNS uuid
 LANGUAGE plpgsql STABLE AS $$
 DECLARE owner uuid;
 BEGIN
@@ -49,24 +32,6 @@ BEGIN
   RETURN owner;
 END;
 $$;
---> statement-breakpoint
-DO $$
-DECLARE resource text; identity_sql text;
-BEGIN
-  FOR resource IN SELECT DISTINCT resource_type FROM workspace_sync_versions LOOP
-    SELECT 'to_jsonb(ARRAY[' || string_agg(format('r.%I::text', a.attname), ', ' ORDER BY k.ordinal) || '])'
-      INTO identity_sql FROM pg_index i
-      CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ordinal)
-      JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
-      WHERE i.indrelid = resource::regclass AND i.indisprimary;
-    EXECUTE format('UPDATE workspace_sync_versions v
-      SET account_id = workspace_sync_account(%L, to_jsonb(r)) FROM %I r
-      WHERE v.resource_type = %L AND v.resource_id = %s', resource, resource, resource, identity_sql);
-  END LOOP;
-END;
-$$;
---> statement-breakpoint
-ALTER TABLE workspace_sync_versions ALTER COLUMN account_id SET NOT NULL;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION advance_workspace_sync_version() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE identity jsonb; old_identity jsonb; row_data jsonb;
@@ -103,7 +68,7 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE FUNCTION record_workspace_sync_change(owner uuid, resource text, identity jsonb,
+CREATE OR REPLACE FUNCTION record_workspace_sync_change(owner uuid, resource text, identity jsonb,
   action text, resource_version bigint) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE next_cursor bigint;
 BEGIN
@@ -119,7 +84,7 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE FUNCTION journal_workspace_sync_version() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION journal_workspace_sync_version() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     PERFORM record_workspace_sync_change(OLD.account_id, OLD.resource_type, OLD.resource_id, 'delete', OLD.version);
@@ -133,15 +98,77 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE TRIGGER workspace_sync_journal AFTER INSERT OR UPDATE OR DELETE ON workspace_sync_versions
-  FOR EACH ROW EXECUTE FUNCTION journal_workspace_sync_version();
+-- Journal events run after domain locks, and remain atomic with the domain write.
+DROP TRIGGER IF EXISTS workspace_sync_journal ON workspace_sync_versions;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER workspace_sync_journal
+AFTER INSERT OR UPDATE OR DELETE ON workspace_sync_versions
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION journal_workspace_sync_version();
 --> statement-breakpoint
 DO $$
-DECLARE resource record;
+DECLARE
+  registration record;
+  arguments text;
+  identity_sql text;
 BEGIN
-  FOR resource IN SELECT * FROM workspace_sync_versions ORDER BY account_id, resource_type, resource_id LOOP
-    PERFORM record_workspace_sync_change(resource.account_id, resource.resource_type, resource.resource_id,
-      'upsert', resource.version);
+  FOR registration IN SELECT * FROM (VALUES
+    ('users', ARRAY['id']),
+    ('projects', ARRAY['id']),
+    ('notes', ARRAY['id']),
+    ('source_anchors', ARRAY['id']),
+    ('provenance', ARRAY['id']),
+    ('todos', ARRAY['id']),
+    ('note_relationships', ARRAY['id']),
+    ('references', ARRAY['id']),
+    ('diagrams', ARRAY['id']),
+    ('skills', ARRAY['note_id']),
+    ('project_skill_pins', ARRAY['project_id', 'skill_note_id']),
+    ('attachments', ARRAY['id']),
+    ('attachment_versions', ARRAY['id']),
+    ('todo_attachments', ARRAY['todo_id', 'attachment_id']),
+    ('skill_usages', ARRAY['id']),
+    ('suggestions', ARRAY['id']),
+    ('conversations', ARRAY['id']),
+    ('messages', ARRAY['id']),
+    ('agent_runs', ARRAY['id']),
+    ('agent_preferences', ARRAY['user_id']),
+    ('user_preferences', ARRAY['user_id']),
+    ('tool_preferences', ARRAY['user_id', 'tool_name']),
+    ('project_tool_overrides', ARRAY['user_id', 'project_id', 'tool_name']),
+    ('trust_policies', ARRAY['user_id', 'pipeline']),
+    ('memory_entries', ARRAY['id']),
+    ('project_templates', ARRAY['id']),
+    ('export_settings', ARRAY['user_id', 'project_id']),
+    ('artifacts', ARRAY['id'])
+  ) AS resources(table_name, key_columns) LOOP
+    SELECT string_agg(quote_literal(field), ', ' ORDER BY ordinal),
+           'to_jsonb(ARRAY[' || string_agg(format('%I::text', field), ', ' ORDER BY ordinal) || '])'
+      INTO arguments, identity_sql
+      FROM unnest(registration.key_columns) WITH ORDINALITY AS fields(field, ordinal);
+    EXECUTE format('CREATE OR REPLACE TRIGGER workspace_sync_version AFTER INSERT OR UPDATE OR DELETE ON %I
+      FOR EACH ROW EXECUTE FUNCTION advance_workspace_sync_version(%s)', registration.table_name, arguments);
+    EXECUTE format('CREATE OR REPLACE TRIGGER workspace_sync_truncate AFTER TRUNCATE ON %I
+      FOR EACH STATEMENT EXECUTE FUNCTION advance_workspace_sync_version()', registration.table_name);
+    EXECUTE format('INSERT INTO workspace_sync_versions (resource_type, resource_id, account_id)
+      SELECT %L, %s, workspace_sync_account(%L, to_jsonb(r)) FROM %I r ON CONFLICT (resource_type, resource_id) DO NOTHING', registration.table_name, identity_sql, registration.table_name, registration.table_name);
   END LOOP;
 END;
 $$;
+
+--> statement-breakpoint
+-- Flush seeded versions before filling any missing journal entries. Reinstallation
+-- retains all existing checkpoints and tombstones.
+SET CONSTRAINTS workspace_sync_journal IMMEDIATE;
+--> statement-breakpoint
+DO $$ DECLARE resource record; BEGIN
+  FOR resource IN SELECT v.* FROM workspace_sync_versions v WHERE NOT EXISTS
+    (SELECT 1 FROM workspace_sync_changes c WHERE c.account_id = v.account_id
+      AND c.resource_type = v.resource_type AND c.resource_id = v.resource_id)
+    ORDER BY account_id, resource_type, resource_id LOOP
+    PERFORM record_workspace_sync_change(resource.account_id, resource.resource_type,
+      resource.resource_id, 'upsert', resource.version);
+  END LOOP;
+END $$;
+--> statement-breakpoint
+SET CONSTRAINTS workspace_sync_journal DEFERRED;
