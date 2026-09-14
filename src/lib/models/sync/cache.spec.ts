@@ -16,8 +16,8 @@ describe('opening cached content', () => {
 	it('opens cached content online without waiting for inventory validation', () => {
 		expect(accessCache(cached, true)).toEqual({ kind: 'ready', value: 'Saved note' });
 	});
-	it('waits online for content known to have changed', () => {
-		expect(accessCache(updating(), true)).toEqual({ kind: 'wait' });
+	it('opens retained content while a newer version is downloading', () => {
+		expect(accessCache(updating(), true)).toEqual({ kind: 'ready', value: 'Saved note' });
 	});
 	it('opens the previous copy of updating content offline', () => {
 		expect(accessCache(updating(), false)).toEqual({ kind: 'ready', value: 'Saved note' });
@@ -25,10 +25,10 @@ describe('opening cached content', () => {
 	it('does not invent content for an offline cache miss', () => {
 		expect(accessCache({ kind: 'requested' }, false)).toEqual({ kind: 'unavailable' });
 	});
-	it('reports an online refresh failure rather than calling the old copy current', () => {
+	it('keeps retained content accessible after an online refresh failure', () => {
 		expect(
 			accessCache(updating(), true, { kind: 'failed', message: 'Server unavailable' })
-		).toEqual({ kind: 'failure', message: 'Server unavailable' });
+		).toEqual({ kind: 'ready', value: 'Saved note' });
 	});
 	it('retains offline access after a refresh failed', () => {
 		expect(accessCache(updating(), false, { kind: 'failed', message: 'Connection lost' })).toEqual({
@@ -43,14 +43,14 @@ describe('version races', () => {
 		const newer = receiveResource(cached, { etag: syncEtag(3n), value: 'Newer note' });
 		expect(receiveResource(newer, snapshot)).toEqual(newer);
 	});
-	it('keeps updating when a response predates the latest inventory version', () => {
+	it('opens the latest retained body during an inventory version race', () => {
 		const latest = mergeResourceStates(updating(), {
 			kind: 'present',
 			etag: syncEtag(3n),
 			body: null
 		});
 		const received = receiveResource(latest, { etag: syncEtag(2n), value: 'Intermediate note' });
-		expect(accessCache(received, true)).toEqual({ kind: 'wait' });
+		expect(accessCache(received, true)).toEqual({ kind: 'ready', value: 'Intermediate note' });
 	});
 	it('accepts a response newer than the inventory that scheduled it', () => {
 		expect(
@@ -62,7 +62,7 @@ describe('version races', () => {
 			mergeResourceStates(updating(), { kind: 'present', etag: syncEtag(1n), body: null })
 		).toEqual(updating());
 	});
-	it('compares versions without losing integer precision', () => {
+	it('retains content while observing versions above integer precision', () => {
 		const large: ResourceState<string> = receiveResource(undefined, {
 			etag: syncEtag(9007199254740992n),
 			value: 'Earlier'
@@ -76,6 +76,6 @@ describe('version races', () => {
 				}),
 				true
 			)
-		).toEqual({ kind: 'wait' });
+		).toEqual({ kind: 'ready', value: 'Earlier' });
 	});
 });

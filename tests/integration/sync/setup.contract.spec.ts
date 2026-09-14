@@ -6,8 +6,12 @@ import { context, seedNote } from '../database-harness';
 it('can reinstall development sync SQL without advancing existing account checkpoints', async () => {
 	const { owner } = await seedNote('8822');
 	const journal = new WorkspaceSyncChanges(context.db);
-	const before = await journal.pull(owner, initialSyncCursor);
+	const before = await journal.pullPage(owner, initialSyncCursor);
 	await installWorkspaceSync(context.client);
 	await installWorkspaceSync(context.client);
-	expect(await journal.pull(owner, before.cursor)).toEqual({ cursor: before.cursor, changes: [] });
+	expect(await journal.pullPage(owner, before.cursor)).toEqual({
+		cursor: before.cursor,
+		records: [],
+		hasMore: false
+	});
 });

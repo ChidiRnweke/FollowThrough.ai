@@ -89,7 +89,7 @@ describe('shared workspace reads', () => {
 		});
 		expect(await resources.open(identity)).toEqual({ kind: 'ready', value: project });
 	});
-	it('renders a retained list value while an explicit open waits for the updating resource', async () => {
+	it('opens a retained resource while its newer page is downloading', async () => {
 		const { resources, repository, transport, cache } = setup();
 		await repository.commit('alice', {
 			put: [
@@ -106,18 +106,13 @@ describe('shared workspace reads', () => {
 		});
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
 		await resources.initialize();
-		await cache.refresh();
-		const paused = transport.pause(key);
-		let opened = false;
-		const opening = resources.open(identity).then((result) => {
-			opened = true;
-			return result;
-		});
+		const paused = transport.pause('changes');
+		const pulling = cache.refresh();
 		await paused.started;
-		const during = { listed: resources.records.get(key), opened };
+		const opened = await resources.open(identity);
 		paused.release();
-		await opening;
-		expect(during).toEqual({ listed: project, opened: false });
+		await pulling;
+		expect(opened).toEqual({ kind: 'ready', value: project });
 	});
 	it('does not wait for a retained collection body that is already refreshing', async () => {
 		const { resources, repository, transport, cache } = setup();
@@ -136,8 +131,8 @@ describe('shared workspace reads', () => {
 		});
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
 		await cache.refresh();
-		const paused = transport.pause(key);
-		const warming = cache.warm();
+		const paused = transport.pause('changes');
+		const warming = cache.refresh();
 		await paused.started;
 		await resources.prepare(['projects']);
 		const listed = resources.records.get(key);
@@ -145,7 +140,7 @@ describe('shared workspace reads', () => {
 		await warming;
 		expect(listed).toEqual(project);
 	});
-	it('prepares missing collection bodies without downloading unrelated resource types', async () => {
+	it('downloads all records included in a complete page', async () => {
 		const { resources, transport, cache } = setup();
 		const user = workspaceRecordSchema.parse({
 			type: 'users',
@@ -167,7 +162,7 @@ describe('shared workspace reads', () => {
 		await resources.prepare(['projects']);
 		expect({ listed: resources.records.get(key), unrelated: cache.access(userKey) }).toEqual({
 			listed: project,
-			unrelated: { kind: 'wait' }
+			unrelated: { kind: 'ready', value: user }
 		});
 	});
 
@@ -217,7 +212,7 @@ describe('shared editor context', () => {
 		});
 		expect(resources.editBase(identity)).toEqual({ base: null, basedOn: id, local: project });
 	});
-	it('submits edits appended after the write phase while background warming is still running', async () => {
+	it('submits edits appended after the write phase while a background page is still downloading', async () => {
 		if (project.type !== 'projects') throw new Error('Expected project');
 		const saved = { ...project, value: { ...project.value, name: 'Edited' } };
 		const { resources, cache, transport } = setup({
@@ -232,7 +227,7 @@ describe('shared editor context', () => {
 		});
 		await cache.accept(key, { etag: syncEtag(1n), value: project });
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
-		const paused = transport.pause(key);
+		const paused = transport.pause('changes');
 		const syncing = resources.synchronize();
 		await paused.started;
 		await resources.append({
@@ -360,7 +355,7 @@ it('can explicitly draft a new override after its server tombstone', async () =>
 it('does not replace a failed known resource read with writable initial values', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	transport.readFailure = 'Download failed';
+	transport.pullFailure = 'Download failed';
 	const draft = resources.draft({ type: 'projects', id: identity.id });
 	expect(await draft.readOrCreate(project)).toEqual({
 		kind: 'failure',
@@ -480,10 +475,9 @@ it('prepares a complete collection within the batch transport capacity', async (
 });
 
 // SYNC-READINESS: unrelated missing bodies cannot disable an available collection.
-it('makes a known empty collection ready while an unrelated body is unavailable', async () => {
+it('marks an empty collection ready after its full inventory arrives', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	transport.readFailure = 'Unavailable project body';
 	await resources.prepare(['projects']);
 	expect(resources.collectionReadiness(['attachments', 'attachment_versions'])).toBe('ready');
 });
@@ -541,21 +535,21 @@ it('downloads authoritative records while an unrelated submission is stalled', a
 it('does not publish required collection readiness when its initial body failed', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	transport.readFailure = 'Disconnected';
+	transport.pullFailure = 'Disconnected';
 	await expect(resources.requireCollections(['projects'])).rejects.toThrow(
 		'Required workspace data is not available on this device'
 	);
 });
 
-it('does not treat an admitted download as permission to create a default', async () => {
+it('does not create a default while an unknown resource is being downloaded', async () => {
 	const { resources, cache, transport } = setup();
-	await cache.refresh();
+	await cache.initialize();
 	const paused = transport.pause(key);
 	const opening = cache.open(key);
 	await paused.started;
 	const draft = resources.draft({ type: 'projects', id: identity.id });
 	try {
-		expect(() => draft.captureOrCreate(project)).toThrow('Open the resource before editing it');
+		expect(() => draft.captureOrCreate(project)).toThrow('not available');
 	} finally {
 		paused.release();
 		await opening;

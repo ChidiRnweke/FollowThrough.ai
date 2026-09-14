@@ -4,6 +4,7 @@ import {
 	resourceVersion,
 	type SyncSnapshot,
 	type SyncCursor,
+	type SyncPage,
 	type ResourceChange
 } from '$lib/models/sync';
 import type {
@@ -128,26 +129,30 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 			this.versions.delete(key);
 			this.changes.set(key, { cursor: ++this.cursor, change: { kind: 'delete', key, etag } });
 		}
-		const batch = {
-			cursor: String(this.cursor) as SyncCursor,
-			changes: [...this.changes.values()]
-				.filter((item) => item.cursor > BigInt(since))
-				.map((item) => item.change)
+		const changes = [...this.changes.values()]
+			.filter((item) => item.cursor > BigInt(since))
+			.sort((a, b) => (a.cursor < b.cursor ? -1 : 1));
+		const selected = this.pageSize === null ? changes : changes.slice(0, this.pageSize);
+		const hasMore = selected.length < changes.length;
+		const records: SyncPage<T>['records'] = selected.map(({ change }) => {
+			if (change.kind === 'delete')
+				return { key: change.key, resource: { kind: 'deleted', etag: change.etag } };
+			const snapshot = this.records.get(change.key);
+			if (!snapshot) throw new Error('The journal resource is missing');
+			const failure = this.failures.get(change.key);
+			if (failure) throw new Error(failure);
+			return { key: change.key, resource: { kind: 'found', snapshot } };
+		});
+		const page = {
+			cursor: String(hasMore ? selected.at(-1)!.cursor : this.cursor) as SyncCursor,
+			hasMore,
+			records
 		};
 		await this.wait('changes');
-		if (this.pageSize !== null) {
-			const changes = [...this.changes.values()]
-				.filter((item) => item.cursor > BigInt(since))
-				.sort((a, b) => (a.cursor < b.cursor ? -1 : 1));
-			const selected = changes.slice(0, this.pageSize);
-			const hasMore = changes.length > selected.length;
-			return {
-				cursor: (hasMore ? String(selected.at(-1)!.cursor) : batch.cursor) as SyncCursor,
-				changes: selected.map((item) => item.change),
-				hasMore
-			};
-		}
-		return { ...batch, hasMore: false };
+		this.deliveredBodies.push(
+			...records.filter((row) => row.resource.kind === 'found').map((row) => row.key)
+		);
+		return page;
 	}
 
 	async read(key: string, etag: SyncSnapshot<T>['etag'] | null): Promise<ObjectRead<T>> {
@@ -168,21 +173,6 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 	}
 
 	readonly failures = new Map<string, string>();
-	readonly batches: string[][] = [];
-	async readMany(requests: readonly { key: string; etag: SyncSnapshot<T>['etag'] | null }[]) {
-		this.batches.push(requests.map((request) => request.key));
-		return Promise.all(
-			requests.map(async ({ key, etag }) => {
-				const failure = this.failures.get(key);
-				return {
-					key,
-					result: failure
-						? { kind: 'failure' as const, message: failure }
-						: await this.read(key, etag)
-				};
-			})
-		);
-	}
 	private async wait(key: string): Promise<void> {
 		const paused = this.paused.get(key);
 		if (!paused) return;

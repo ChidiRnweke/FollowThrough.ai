@@ -64,14 +64,6 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 /** Note revision changes in this fake supply monotonically increasing test versions. */
 export class InMemoryWorkspaceNoteReads implements SyncObjectReader {
 	constructor(private readonly content: InMemoryNoteContent) {}
-	readMany(actor: ActorContext, requests: readonly { identity: WorkspaceResourceIdentity }[]) {
-		return Promise.all(
-			requests.map(async ({ identity }) => ({
-				key: JSON.stringify([identity.type, ...identity.id]),
-				result: await this.read(actor, identity)
-			}))
-		);
-	}
 	async read(actor: ActorContext, identity: WorkspaceResourceIdentity) {
 		const note = this.content.notes.find(
 			(note) =>

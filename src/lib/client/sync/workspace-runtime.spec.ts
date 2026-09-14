@@ -7,7 +7,6 @@ const setup = (operations: Pick<WorkspaceSyncRuntimeDependencies, 'pull' | 'writ
 	const runtime = new WorkspaceSyncRuntime({
 		scheduler,
 		initialize: async () => undefined,
-		bodies: async () => ({ kind: 'complete' }),
 		failed: () => undefined,
 		...operations
 	});
@@ -132,7 +131,6 @@ it('clears the retry deadline after startup storage recovers', async () => {
 			if (unavailable) throw new Error('Unavailable');
 		},
 		pull: async () => ({ kind: 'complete' }),
-		bodies: async () => ({ kind: 'complete' }),
 		writes: async () => {
 			state = 'recovered';
 			return { kind: 'complete' };
@@ -159,7 +157,6 @@ it('clears an error after its automatic retry succeeds', async () => {
 			if (unavailable) throw new Error('Unavailable');
 			return { kind: 'complete' };
 		},
-		bodies: async () => ({ kind: 'complete' }),
 		writes: async () => ({ kind: 'complete' }),
 		failed: (message) => {
 			reported.push(message);

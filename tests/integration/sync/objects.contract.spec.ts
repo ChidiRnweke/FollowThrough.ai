@@ -18,12 +18,13 @@ describe('conditional normalized object reads', () => {
 	it('returns a normalized note and the version of that same database snapshot', async () => {
 		const { note, owner } = await seedNote('8701');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const batch = await new WorkspaceSyncChanges(context.db).pull(owner, initialSyncCursor);
-		const entry = batch.changes.find((entry) => entry.key === workspaceResourceKey(identity));
-		if (entry?.kind !== 'upsert') throw new Error('Seeded note is missing from the journal');
+		const batch = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+		const entry = batch.records.find((entry) => entry.key === workspaceResourceKey(identity));
+		if (entry?.resource.kind !== 'found')
+			throw new Error('Seeded note is missing from the journal');
 		expect(await new WorkspaceSyncObjects(context.db).read(owner, identity, null)).toEqual({
 			kind: 'found',
-			snapshot: { etag: entry.etag, value: { type: 'notes', value: note } }
+			snapshot: { etag: entry.resource.snapshot.etag, value: { type: 'notes', value: note } }
 		});
 	});
 

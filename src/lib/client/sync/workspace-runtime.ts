@@ -2,7 +2,7 @@ import type { SyncScheduler } from './scheduler';
 import type { SynchronizationResult } from './contracts';
 import type { SubmissionResult } from './mutation-queue';
 
-type Lane = 'pull' | 'bodies' | 'writes';
+type Lane = 'pull' | 'writes';
 type Result = SynchronizationResult | SubmissionResult;
 interface LaneState {
 	requested: boolean;
@@ -15,7 +15,6 @@ export interface WorkspaceSyncRuntimeDependencies {
 	scheduler: SyncScheduler;
 	initialize(): Promise<void>;
 	pull(): Promise<Result>;
-	bodies(): Promise<Result>;
 	writes(): Promise<Result>;
 	failed(message: string | null): void;
 }
@@ -24,7 +23,6 @@ export interface WorkspaceSyncRuntimeDependencies {
 export class WorkspaceSyncRuntime {
 	private readonly lanes: Record<Lane, LaneState> = {
 		pull: { requested: false, running: null, retry: null, failures: 0, error: null },
-		bodies: { requested: false, running: null, retry: null, failures: 0, error: null },
 		writes: { requested: false, running: null, retry: null, failures: 0, error: null }
 	};
 	private writeWake: { at: number } | null = null;
@@ -58,7 +56,6 @@ export class WorkspaceSyncRuntime {
 	async synchronize(force = false): Promise<void> {
 		if (force) for (const state of Object.values(this.lanes)) state.retry = null;
 		await Promise.all([this.request('pull'), this.request('writes')]);
-		await this.lanes.bodies.running;
 	}
 	committed(): void {
 		void this.request('pull');
@@ -96,7 +93,6 @@ export class WorkspaceSyncRuntime {
 				state.failures = 0;
 				state.error = null;
 				this.notifyFailures();
-				if (lane === 'pull') void this.request('bodies');
 			} catch (error) {
 				if (this.stopped) return { kind: 'failure' };
 				state.failures++;

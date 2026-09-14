@@ -121,7 +121,6 @@ export class WorkspaceResources {
 			scheduler: dependencies.scheduler ?? browserSyncScheduler,
 			initialize: () => this.initialize(),
 			pull: () => dependencies.cache.refresh(),
-			bodies: () => dependencies.cache.warm(),
 			writes: () => dependencies.writes.flush(),
 			failed: (message) => {
 				if (!this.stopped) this.failure = message === null ? null : { kind: 'failure', message };
@@ -201,16 +200,9 @@ export class WorkspaceResources {
 		return this.initializing;
 	}
 	/** List reads wait only for missing bodies; retained bodies remain renderable during updates. */
-	async prepare(types: readonly WorkspaceResourceType[]): Promise<void> {
+	async prepare(_types: readonly WorkspaceResourceType[]): Promise<void> {
 		await this.initialize();
 		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
-		const missing = [...this.dependencies.cache.records].filter(
-			([key, entry]) =>
-				entry.kind !== 'deleted' &&
-				cachedSnapshot(entry) === null &&
-				types.some((type) => key.startsWith(`["${type}",`))
-		);
-		await this.dependencies.cache.prepare(missing.map(([key]) => key));
 	}
 	collectionReadiness(types: readonly WorkspaceResourceType[]): 'unknown' | 'incomplete' | 'ready' {
 		void this.revision;

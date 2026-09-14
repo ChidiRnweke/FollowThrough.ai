@@ -5,13 +5,11 @@ import {
 	receiveResource,
 	resourceVersion,
 	type ResourceDeletion,
-	applyResourceChanges,
 	initialSyncCursor,
 	type SyncCursor,
 	type SyncEtag,
 	type ResourceState,
 	resourceCurrent,
-	syncBodyBatchSize,
 	type CacheAccess,
 	type TransferState,
 	type SyncSnapshot
@@ -38,13 +36,9 @@ export class ResourceCache<T> {
 		string,
 		{ target: SyncEtag | null; transfer: TransferState }
 	>();
-	private readingBodies = 0;
-	private readonly capacityWaiters = new Set<() => void>();
-	private readonly stalled = new Map<string, { target: SyncEtag | null; attempts: number }>();
 	private readGeneration = 0;
 	private initializing: Promise<void> | null = null;
 	private checking: Promise<SynchronizationResult> | null = null;
-	private draining: Promise<SynchronizationResult> | null = null;
 	private stopped = false;
 	private online = true;
 	private cursor: SyncCursor | null = null;
@@ -102,7 +96,6 @@ export class ResourceCache<T> {
 	stop(): void {
 		this.stopped = true;
 		this.attempts.clear();
-		this.stalled.clear();
 		this.entries.clear();
 		this.result = { kind: 'stopped' };
 		this.notify();
@@ -128,39 +121,6 @@ export class ResourceCache<T> {
 				this.checking = null;
 			});
 		return this.checking;
-	}
-
-	/** Warming is independent of route rendering; foreground reads bypass this serial lane. */
-	warm(): Promise<SynchronizationResult> {
-		if (!this.draining)
-			this.draining = this.drain().finally(() => {
-				this.draining = null;
-			});
-		return this.draining;
-	}
-
-	/** Prepare collection bodies through the same bounded transfer path as warming. */
-	async prepare(keys: readonly string[]): Promise<void> {
-		await this.initialize();
-		if (!this.online || this.stopped) return;
-		for (
-			let offset = 0;
-			offset < keys.length && this.online && !this.stopped;
-			offset += syncBodyBatchSize
-		) {
-			const batch = keys.slice(offset, offset + syncBodyBatchSize);
-			const joined = batch.flatMap((key) => {
-				const active = this.fetching.get(key);
-				return active ? [active] : [];
-			});
-			const missing = batch.filter(
-				(key) =>
-					!this.fetching.has(key) &&
-					cachedSnapshot(this.entry(key)) === null &&
-					this.entries.get(key)?.kind !== 'deleted'
-			);
-			await Promise.all([this.downloadBatch(missing), ...joined]);
-		}
 	}
 
 	async open(key: string): Promise<CacheAccess<T>> {
@@ -222,7 +182,6 @@ export class ResourceCache<T> {
 		this.initializing ??= Promise.resolve();
 		if (generation !== this.generation) {
 			this.attempts.clear();
-			this.stalled.clear();
 		}
 		this.generation = generation;
 		this.cursor = cursor;
@@ -257,9 +216,15 @@ export class ResourceCache<T> {
 				await this.commit(() => {
 					if (BigInt(batch.cursor) < BigInt(this.cursor ?? initialSyncCursor))
 						throw new Error('The server change cursor moved backwards');
-					const next = applyResourceChanges<T>(new Map(), batch.changes);
+					const put = batch.records.map(({ key, resource }) => ({
+						key,
+						entry: receiveResource<T>(
+							undefined,
+							resource.kind === 'found' ? resource.snapshot : resource
+						)
+					}));
 					return {
-						put: [...next].map(([key, entry]) => ({ key, entry })),
+						put,
 						remove: [],
 						cursor: batch.cursor,
 						inventoryComplete: this.inventoryComplete || !more
@@ -283,8 +248,9 @@ export class ResourceCache<T> {
 	private fetch(key: string): Promise<SynchronizationResult> {
 		const existing = this.fetching.get(key);
 		if (existing) return existing;
-		void this.downloadBatch([key]);
-		return this.fetching.get(key)!;
+		const request = this.read(key).finally(() => this.fetching.delete(key));
+		this.fetching.set(key, request);
+		return request;
 	}
 
 	private async waitForRead(key: string): Promise<SynchronizationResult> {
@@ -300,200 +266,39 @@ export class ResourceCache<T> {
 		}
 	}
 
-	private async withBodyCapacity<R>(count: number, work: () => Promise<R>): Promise<R> {
-		while (this.readingBodies + count > syncBodyBatchSize)
-			await new Promise<void>((resolve) => this.capacityWaiters.add(resolve));
-		if (this.stopped || !this.online) throw new Error('The workspace download is no longer active');
-		this.readingBodies += count;
+	private async read(key: string): Promise<SynchronizationResult> {
+		const generation = this.generation;
 		try {
-			return await work();
-		} finally {
-			this.readingBodies -= count;
-			const waiting = [...this.capacityWaiters];
-			this.capacityWaiters.clear();
-			for (const wake of waiting) wake();
-		}
-	}
-	private async finishRead(
-		key: string,
-		requested: SyncEtag | null
-	): Promise<SynchronizationResult> {
-		const current = this.entries.get(key);
-		if (!current || current.kind === 'deleted' || resourceCurrent(current)) {
-			this.stalled.delete(key);
-			return { kind: 'complete' };
-		}
-		const target = resourceVersion(current);
-		const previous = this.stalled.get(key);
-		const attempts =
-			target !== requested ? 0 : previous?.target === target ? previous.attempts + 1 : 1;
-		if (attempts < 2) {
-			this.stalled.set(key, { target, attempts });
-			return { kind: 'complete' };
-		}
-		const message = 'The latest copy could not be downloaded. Retry to check again.';
-		this.stalled.delete(key);
-		this.failDownload(key, message);
-		this.notify();
-		return { kind: 'failure', message };
-	}
-
-	private async downloadBatch(keys: readonly string[]): Promise<void> {
-		if (!keys.length) return;
-		const existing = keys.flatMap((key) => {
-			const pending = this.fetching.get(key);
-			return pending ? [pending] : [];
-		});
-		keys = [...new Set(keys)].filter((key) => !this.fetching.has(key));
-		const batch = Promise.resolve().then(() => this.performBatch(keys));
-		await Promise.all([
-			...existing,
-			...keys.map((key) => {
-				const pending = batch
-					.then(({ results }) => results.get(key) ?? { kind: 'stopped' as const })
-					.finally(() => this.fetching.delete(key));
-				this.fetching.set(key, pending);
-				return pending;
-			})
-		]);
-	}
-
-	private async performBatch(keys: readonly string[]): Promise<{
-		kind: 'complete' | 'failure';
-		results: ReadonlyMap<string, SynchronizationResult>;
-	}> {
-		const results = new Map<string, SynchronizationResult>();
-		try {
-			const missing = keys.filter((key) => !this.entries.has(key));
-			if (missing.length)
-				await this.commit(() => ({
-					put: missing.map((key) => ({ key, entry: { kind: 'requested' } })),
+			const response = await this.dependencies.transport.read(key, null);
+			if (this.stopped) return { kind: 'stopped' };
+			if (response.kind === 'unchanged') throw new Error('An uncached read returned no body');
+			if (response.kind === 'unavailable') return { kind: 'unavailable' };
+			await this.commit(
+				() => ({
+					put: [
+						{
+							key,
+							entry: receiveResource<T>(
+								undefined,
+								response.kind === 'found' ? response.snapshot : response
+							)
+						}
+					],
 					remove: []
-				}));
-			for (const key of keys) {
-				if (this.entry(key)?.kind === 'deleted' || resourceCurrent(this.entry(key))) {
-					results.set(key, { kind: 'complete' });
-					continue;
-				}
-				this.attempts.set(key, {
-					target: resourceVersion(this.entry(key)),
-					transfer: { kind: 'fetching' }
-				});
-			}
-			keys = keys.filter((key) => !results.has(key));
-			this.notify();
-			if (!keys.length) return { kind: 'complete', results };
-			if (this.stopped || !this.online)
-				return {
-					kind: 'complete',
-					results: new Map(keys.map((key) => [key, { kind: this.stopped ? 'stopped' : 'offline' }]))
-				};
-			const snapshots = new Map(keys.map((key) => [key, cachedSnapshot(this.entry(key))]));
-			const versions = new Map(keys.map((key) => [key, resourceVersion(this.entry(key))]));
-			const generation = this.generation;
-			const rows = await this.withBodyCapacity(keys.length, () =>
-				this.dependencies.transport.readMany(
-					keys.map((key) => ({ key, etag: snapshots.get(key)?.etag ?? null }))
-				)
+				}),
+				generation
 			);
-			if (this.stopped) return { kind: 'complete', results };
-			await this.commit(() => {
-				const put: CacheCommit<T>['put'][number][] = [];
-				const remove: CacheCommit<T>['remove'][number][] = [];
-				for (const key of keys) {
-					const matches = rows.filter((row) => row.key === key);
-					const response =
-						matches.length === 1
-							? matches[0].result
-							: {
-									kind: 'failure' as const,
-									message: 'The batch did not return exactly one result for this item'
-								};
-					const snapshot = snapshots.get(key);
-					const failure =
-						response.kind === 'failure'
-							? response.message
-							: response.kind === 'unchanged' && (!snapshot || snapshot.etag !== response.etag)
-								? 'The server confirmed a version this device does not have'
-								: null;
-					if (failure) {
-						results.set(key, { kind: 'failure', message: failure });
-					} else if (response.kind === 'unavailable') {
-						remove.push({ key, etag: versions.get(key) ?? null });
-						results.set(key, { kind: 'unavailable' });
-					} else {
-						const received =
-							response.kind === 'found'
-								? response.snapshot
-								: response.kind === 'deleted'
-									? response
-									: snapshot;
-						if (!received) throw new Error('The batch contained no usable body');
-						put.push({ key, entry: receiveResource(undefined, received) });
-						results.set(key, { kind: 'complete' });
-					}
-				}
-				return { put, remove };
-			}, generation);
-			for (const key of keys) {
-				const result = results.get(key);
-				if (result?.kind === 'complete')
-					results.set(key, await this.finishRead(key, versions.get(key) ?? null));
-				else if (result?.kind === 'failure') this.failDownload(key, result.message);
-				else if (result?.kind === 'unavailable') {
-					const current = this.entries.get(key);
-					if (current && resourceVersion(current) !== versions.get(key))
-						results.set(key, { kind: 'complete' });
-				}
-			}
-			this.notify();
-			return { kind: 'complete', results };
+			this.attempts.delete(key);
+			return { kind: 'complete' };
 		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Object batch download failed';
-			for (const key of keys) {
-				this.failDownload(key, message);
-				results.set(key, this.stopped ? { kind: 'stopped' } : { kind: 'failure', message });
-			}
+			const message =
+				error instanceof Error ? error.message : 'The resource could not be downloaded';
+			this.attempts.set(key, {
+				target: resourceVersion(this.entry(key)),
+				transfer: { kind: 'failed', message }
+			});
 			this.notify();
-			// The public per-resource result is consumed by foreground readers and the indicator.
-			return { kind: 'failure', results };
+			return { kind: 'failure', message };
 		}
-	}
-
-	private failDownload(key: string, message: string): void {
-		this.stalled.delete(key);
-		if (this.stopped || this.entry(key)?.kind === 'deleted') return;
-		this.attempts.set(key, {
-			target: resourceVersion(this.entry(key)),
-			transfer: { kind: 'failed', message }
-		});
-	}
-
-	private async drain(): Promise<SynchronizationResult> {
-		const attempted = new Map<string, SyncEtag | null>();
-		while (this.online && !this.stopped) {
-			const keys = [...this.entries]
-				.filter(
-					([key, entry]) =>
-						entry.kind !== 'deleted' &&
-						!resourceCurrent(entry) &&
-						!this.fetching.has(key) &&
-						(!attempted.has(key) ||
-							attempted.get(key) !== resourceVersion(entry) ||
-							this.stalled.has(key))
-				)
-				.slice(0, syncBodyBatchSize)
-				.map(([key]) => key);
-			if (!keys.length) break;
-			for (const key of keys) attempted.set(key, resourceVersion(this.entry(key)));
-			await this.downloadBatch(keys);
-		}
-		if (this.stopped) return { kind: 'stopped' };
-		if (!this.online) return { kind: 'offline' };
-		for (const key of this.entries.keys()) {
-			const transfer = this.transfer(key);
-			if (transfer?.kind === 'failed') return { kind: 'failure', message: transfer.message };
-		}
-		return { kind: 'complete' };
 	}
 }

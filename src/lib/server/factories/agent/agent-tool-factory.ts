@@ -160,10 +160,6 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Browser synchronization checkpoints each journal page.'
 		},
-		readResources: {
-			kind: 'excluded',
-			reason: 'Browser synchronization batches changed resource downloads.'
-		},
 		cancelMutation: {
 			kind: 'excluded',
 			reason: 'Browser recovery cancels uncertain local operations.'
@@ -171,10 +167,6 @@ export const agentToolCoverage = {
 		acknowledgeMutation: {
 			kind: 'excluded',
 			reason: 'Browser durable settlement permits receipt compaction.'
-		},
-		pullChanges: {
-			kind: 'excluded',
-			reason: 'Browser synchronization uses the account change journal.'
 		},
 		readResource: {
 			kind: 'excluded',

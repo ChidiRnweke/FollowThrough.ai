@@ -122,10 +122,42 @@ export type SyncChanges = z.infer<typeof syncChangesSchema>;
 export const syncChangePageSchema = syncChangesSchema.safeExtend({ hasMore: z.boolean() });
 export type SyncChangePage = z.infer<typeof syncChangePageSchema>;
 
+/** A replication page carries every body needed to commit its checkpoint. */
+export interface SyncPage<T> {
+	readonly cursor: SyncCursor;
+	readonly hasMore: boolean;
+	readonly records: readonly {
+		readonly key: string;
+		readonly resource:
+			{ readonly kind: 'found'; readonly snapshot: SyncSnapshot<T> } | ResourceDeletion;
+	}[];
+}
+export const syncPageSchema = <T>(value: z.ZodType<T>): z.ZodType<SyncPage<T>> =>
+	z
+		.object({
+			cursor: syncCursorSchema,
+			hasMore: z.boolean(),
+			records: z.array(
+				z.object({
+					key: z.string().min(1),
+					resource: z.discriminatedUnion('kind', [
+						z.object({
+							kind: z.literal('found'),
+							snapshot: z.object({ etag: syncEtagSchema, value })
+						}),
+						z.object({ kind: z.literal('deleted'), etag: syncEtagSchema })
+					])
+				})
+			)
+		})
+		.refine(
+			(page) => new Set(page.records.map((record) => record.key)).size === page.records.length,
+			'A sync page must contain each resource only once'
+		);
+
 // The 7,000-record browser benchmark is recorded in docs/pr-evidence/incremental-sync/performance.md.
 // These are transfer groups, never limits on the workspace inventory.
-export const syncChangePageSize = 256;
-export const syncBodyBatchSize = 32;
+export const syncChangePageSize = 32;
 
 export interface SyncSnapshot<T> {
 	readonly etag: SyncEtag;
@@ -248,8 +280,7 @@ export const accessCache = <T>(
 ): CacheAccess<T> => {
 	if (state?.kind === 'deleted') return { kind: 'deleted' };
 	const snapshot = cachedSnapshot(state);
-	if (snapshot && (resourceCurrent(state) || !online))
-		return { kind: 'ready', value: snapshot.value };
+	if (snapshot) return { kind: 'ready', value: snapshot.value };
 	if (!online) return { kind: 'unavailable' };
 	if (transfer?.kind === 'failed') return { kind: 'failure', message: transfer.message };
 	return { kind: 'wait' };
