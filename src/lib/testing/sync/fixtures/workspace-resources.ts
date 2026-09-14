@@ -21,10 +21,9 @@ export const workspaceResourcesFixture = (accountId: string) => {
 				throw new Error('This scenario does not submit edits');
 			}
 		},
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(accountId, {
-		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
 	});

@@ -6,7 +6,6 @@ const setup = (operations: Pick<WorkspaceSyncRuntimeDependencies, 'pull' | 'writ
 	const scheduler = new InMemorySyncScheduler();
 	const runtime = new WorkspaceSyncRuntime({
 		scheduler,
-		initialize: async () => undefined,
 		failed: () => undefined,
 		...operations
 	});
@@ -109,7 +108,7 @@ it('submits independent new work before another operation retry deadline', async
 				independentApplied = true;
 				applied.resolve();
 			}
-			runtime.writeScheduler.schedule(60_000, async () => undefined);
+			runtime.deferWrite('another-operation');
 			return { kind: 'failure', message: 'Another operation awaits retry' };
 		}
 	});
@@ -127,11 +126,9 @@ it('clears the retry deadline after startup storage recovers', async () => {
 	let state: string;
 	const runtime = new WorkspaceSyncRuntime({
 		scheduler,
-		initialize: async () => {
-			if (unavailable) throw new Error('Unavailable');
-		},
 		pull: async () => ({ kind: 'complete' }),
 		writes: async () => {
+			if (unavailable) throw new Error('Unavailable');
 			state = 'recovered';
 			return { kind: 'complete' };
 		},
@@ -152,7 +149,6 @@ it('clears an error after its automatic retry succeeds', async () => {
 	const reported: (string | null)[] = [];
 	const runtime = new WorkspaceSyncRuntime({
 		scheduler,
-		initialize: async () => undefined,
 		pull: async () => {
 			if (unavailable) throw new Error('Unavailable');
 			return { kind: 'complete' };
@@ -167,4 +163,29 @@ it('clears an error after its automatic retry succeeds', async () => {
 	await scheduler.advance(1000);
 	runtime.stop();
 	expect(reported.at(-1)).toBeNull();
+});
+
+it('backs off storage failures when an operation deadline has already expired', async () => {
+	let storageUnavailable = false;
+	let delivered = false;
+	const { runtime, scheduler } = setup({
+		pull: async () => ({ kind: 'complete' }),
+		writes: async () => {
+			if (storageUnavailable) throw new Error('Storage unavailable');
+			if (scheduler.now() === 0) {
+				runtime.deferWrite('pending');
+				return { kind: 'failure', message: 'Connection lost' };
+			}
+			delivered = true;
+			runtime.clearWriteRetry('pending');
+			return { kind: 'complete' };
+		}
+	});
+	await runtime.synchronize();
+	storageUnavailable = true;
+	await scheduler.advance(5000);
+	storageUnavailable = false;
+	await scheduler.advance(10_000);
+	runtime.stop();
+	expect(delivered).toBe(true);
 });

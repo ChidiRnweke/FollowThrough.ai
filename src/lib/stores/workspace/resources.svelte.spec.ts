@@ -50,10 +50,9 @@ const setup = (
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: writeTransport,
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources('alice', {
-		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
 	});

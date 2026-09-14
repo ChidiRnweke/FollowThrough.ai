@@ -48,10 +48,9 @@ const setup = async () => {
 		transport,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(note.userId, {
-		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
 	});

@@ -1,3 +1,5 @@
+import { WorkspaceSyncRuntime } from './workspace-runtime';
+import type { SynchronizationResult } from './contracts';
 import type { SyncScheduler } from './scheduler';
 import {
 	dependentWrites,
@@ -17,15 +19,13 @@ export interface AccountWriterLock {
 	): Promise<{ kind: 'acquired'; value: T } | { kind: 'busy' }>;
 	run<T>(accountId: string, work: () => Promise<T>): Promise<T>;
 }
-export type SubmissionResult =
-	| { kind: 'idle' | 'complete' | 'offline' | 'stopped' | 'waiting' }
-	| { kind: 'failure'; message: string };
+export type SubmissionResult = SynchronizationResult | { kind: 'waiting' };
 export interface MutationQueueDependencies<C, T> {
 	scheduler: SyncScheduler;
 	repository: OutboxRepository<C, T>;
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
-	committed(): void;
+	pull(): Promise<SynchronizationResult>;
 }
 
 /** Submissions are serialized per account; the durable queue owns ordering and recovery. */
@@ -34,16 +34,24 @@ export class MutationQueue<C, T> {
 	private reloadGeneration = 0;
 	private readonly receipts = new Map<string, WriteReceipt<T>>();
 	private readonly listeners = new Set<() => void>();
-	private flushing: Promise<SubmissionResult> | null = null;
-	private online = true;
-	private stopped = false;
-	private result: SubmissionResult = { kind: 'idle' };
-	private cancelWake: (() => void) | null = null;
-	private readonly retryAfter = new Map<string, { attempts: number; at: number }>();
+	readonly runtime: WorkspaceSyncRuntime;
+	private get online() {
+		return this.runtime.online;
+	}
+	private get stopped() {
+		return this.runtime.stopped;
+	}
 	constructor(
 		readonly accountId: string,
 		private readonly dependencies: MutationQueueDependencies<C, T>
-	) {}
+	) {
+		this.runtime = new WorkspaceSyncRuntime({
+			scheduler: dependencies.scheduler,
+			pull: dependencies.pull,
+			writes: () => this.submit(),
+			failed: () => this.notify()
+		});
+	}
 	get pending(): readonly OutboxEntry<C, T>[] {
 		return this.entries;
 	}
@@ -51,35 +59,21 @@ export class MutationQueue<C, T> {
 		return this.receipts.get(key)?.operationId === operationId;
 	}
 	get status(): SubmissionResult {
-		return this.result;
+		return this.runtime.writeStatus;
 	}
 	subscribe(listener: () => void): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
 	}
-	useScheduler(scheduler: SyncScheduler): void {
-		this.cancelWake?.();
-		this.cancelWake = null;
-		this.dependencies.scheduler = scheduler;
-		this.scheduleRetry();
-	}
-
 	setOnline(online: boolean): void {
-		this.online = online;
-		this.scheduleRetry();
+		this.runtime.setOnline(online);
 		this.notify();
 	}
 	stop(): void {
-		this.stopped = true;
-		this.cancelWake?.();
-		this.cancelWake = null;
+		this.runtime.stop();
 		this.entries = [];
 		this.receipts.clear();
-		this.result = { kind: 'stopped' };
 		this.notify();
-	}
-	async settled(): Promise<void> {
-		await this.flushing;
 	}
 	async reload(): Promise<void> {
 		const generation = ++this.reloadGeneration;
@@ -91,11 +85,15 @@ export class MutationQueue<C, T> {
 		this.reloadGeneration++;
 		const retryable = new Set(
 			state.entries
-				.filter((entry) => entry.delivery.kind === 'retry' || entry.delivery.kind === 'queued')
+				.filter(
+					(entry) =>
+						entry.delivery.kind === 'retry' ||
+						entry.delivery.kind === 'queued' ||
+						entry.delivery.kind === 'sending'
+				)
 				.map((entry) => entry.intent.operationId)
 		);
-		for (const id of this.retryAfter.keys())
-			if (!retryable.has(id) && id !== 'writer' && id !== 'storage') this.retryAfter.delete(id);
+		this.runtime.retainWriteRetries(retryable);
 		this.entries = state.entries;
 		this.receipts.clear();
 		for (const [key, receipt] of state.receipts) this.receipts.set(key, receipt);
@@ -166,7 +164,7 @@ export class MutationQueue<C, T> {
 						: outcome
 				);
 				if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
-					this.dependencies.committed();
+					this.runtime.committed();
 			}
 			const remaining = await this.dependencies.repository.list(this.accountId);
 			await this.dependencies.repository.discard(
@@ -178,114 +176,65 @@ export class MutationQueue<C, T> {
 	}
 
 	flush(force = false): Promise<SubmissionResult> {
-		if (force) this.retryNow();
-		this.flushing ??= this.submit().finally(() => {
-			this.flushing = null;
-			this.scheduleRetry();
-		});
-		return this.flushing;
+		return this.runtime.flushWrites(force);
 	}
 	retryNow(): void {
-		for (const retry of this.retryAfter.values()) retry.at = 0;
+		this.runtime.retryNow();
 	}
 	private async submit(): Promise<SubmissionResult> {
-		try {
-			if (this.stopped) return { kind: 'stopped' };
-			await this.reload();
-			if (this.stopped) return { kind: 'stopped' };
-			if (!this.online) return { kind: 'offline' };
-			const ownership = await this.dependencies.writerLock.tryRun(
-				this.accountId,
-				async (): Promise<SubmissionResult> => {
+		if (this.stopped) return { kind: 'stopped' };
+		await this.reload();
+		if (this.stopped) return { kind: 'stopped' };
+		if (!this.online) return { kind: 'offline' };
+		const ownership = await this.dependencies.writerLock.tryRun(
+			this.accountId,
+			async (): Promise<SubmissionResult> => {
+				if (this.stopped) return { kind: 'stopped' };
+				if (!this.online) return { kind: 'offline' };
+				await this.dependencies.repository.recover(this.accountId);
+				const excluded = new Set(this.runtime.excludedWrites());
+				let failure: SubmissionResult = { kind: 'complete' };
+				while (!this.stopped && this.online) {
+					const sent = await this.dependencies.repository.take(this.accountId, excluded);
+					await this.reload();
+					if (!sent) {
+						if (nextWrite(this.entries, excluded)) continue;
+						const deferred = this.entries.find((entry) => entry.delivery.kind === 'retry');
+						return deferred?.delivery.kind === 'retry'
+							? { kind: 'failure', message: deferred.delivery.message }
+							: failure;
+					}
 					if (this.stopped) return { kind: 'stopped' };
 					if (!this.online) return { kind: 'offline' };
-					this.retryAfter.delete('writer');
-					this.retryAfter.delete('storage');
-					await this.dependencies.repository.recover(this.accountId);
-					const excluded = new Set(
-						[...this.retryAfter]
-							.filter(([, retry]) => retry.at > this.dependencies.scheduler.now())
-							.map(([id]) => id)
-					);
-					let failure: SubmissionResult = { kind: 'complete' };
-					while (!this.stopped && this.online) {
-						const sent = await this.dependencies.repository.take(this.accountId, excluded);
+					// Once taken, the input remains immutable even if the request's outcome is lost.
+					const response = await this.send(sent);
+					if (response.kind === 'failure') {
+						await this.dependencies.repository.retry(
+							this.accountId,
+							sent.intent.operationId,
+							response.message
+						);
 						await this.reload();
-						if (!sent) {
-							if (nextWrite(this.entries, excluded)) continue;
-							const deferred = this.entries.find((entry) => entry.delivery.kind === 'retry');
-							return deferred?.delivery.kind === 'retry'
-								? { kind: 'failure', message: deferred.delivery.message }
-								: failure;
+						this.runtime.deferWrite(sent.intent.operationId);
+						excluded.add(sent.intent.operationId);
+						failure = { kind: 'failure', message: response.message };
+						if (response.accountChanged) {
+							this.runtime.setOnline(false);
+							return failure;
 						}
-						if (this.stopped) return { kind: 'stopped' };
-						if (!this.online) return { kind: 'offline' };
-						// Once taken, the input remains immutable even if the request's outcome is lost.
-						const response = await this.send(sent);
-						if (response.kind === 'failure') {
-							await this.dependencies.repository.retry(
-								this.accountId,
-								sent.intent.operationId,
-								response.message
-							);
-							await this.reload();
-							this.deferRetry(sent.intent.operationId);
-							excluded.add(sent.intent.operationId);
-							failure = { kind: 'failure', message: response.message };
-							if (response.accountChanged) {
-								this.online = false;
-								return failure;
-							}
-							continue;
-						}
-						const outcome = response.outcome;
-						await this.dependencies.repository.settle(this.accountId, sent, outcome);
-						this.retryAfter.delete(sent.intent.operationId);
-						if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
-							this.dependencies.committed();
-						await this.reload();
+						continue;
 					}
-					return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
+					const outcome = response.outcome;
+					await this.dependencies.repository.settle(this.accountId, sent, outcome);
+					this.runtime.clearWriteRetry(sent.intent.operationId);
+					if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
+						this.runtime.committed();
+					await this.reload();
 				}
-			);
-			if (ownership.kind === 'busy') this.deferRetry('writer');
-			const result: SubmissionResult =
-				ownership.kind === 'busy' ? { kind: 'waiting' } : ownership.value;
-			if (!this.stopped) {
-				this.result = result;
-				this.notify();
+				return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
 			}
-			return result;
-		} catch (error) {
-			this.deferRetry('storage');
-			for (const [id, retry] of this.retryAfter) {
-				if (retry.at <= this.dependencies.scheduler.now()) this.deferRetry(id);
-			}
-			const message = error instanceof Error ? error.message : 'Local write storage failed';
-			if (!this.stopped) {
-				this.result = { kind: 'failure', message };
-				this.notify();
-			}
-			return { kind: 'failure', message };
-		}
-	}
-	private scheduleRetry(): void {
-		this.cancelWake?.();
-		this.cancelWake = null;
-		if (this.stopped || !this.online || !this.retryAfter.size) return;
-		const deadline = Math.min(...[...this.retryAfter.values()].map((retry) => retry.at));
-		this.cancelWake = this.dependencies.scheduler.schedule(deadline, async () => {
-			this.cancelWake = null;
-			await this.flush();
-		});
-	}
-	private deferRetry(operationId: string): void {
-		const attempts = (this.retryAfter.get(operationId)?.attempts ?? 0) + 1;
-		this.retryAfter.set(operationId, {
-			attempts,
-			at:
-				this.dependencies.scheduler.now() + Math.min(60_000, 1000 * 2 ** Math.min(attempts - 1, 6))
-		});
+		);
+		return ownership.kind === 'busy' ? { kind: 'waiting' } : ownership.value;
 	}
 
 	private async send(

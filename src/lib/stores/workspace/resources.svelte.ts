@@ -2,8 +2,8 @@ import {
 	DexieWorkspaceRepository,
 	type WorkspaceLocalProjection
 } from '$lib/client/sync/workspace-local-repository';
-import { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
-import { type SyncScheduler, browserSyncScheduler } from '$lib/client/sync/scheduler';
+import type { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
+import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import { type NoteId, type NoteView } from '$lib/models/notes';
 import {
 	visibleResources,
@@ -51,7 +51,6 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
-	scheduler?: SyncScheduler;
 	dispose?(): void;
 	cache: ResourceCache<WorkspaceRecord>;
 	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
@@ -74,12 +73,12 @@ export class WorkspaceResources {
 		void this.revision;
 		return this.dependencies.cache.failedDownloads;
 	}
-	private connected = $state(true);
 	get active(): boolean {
 		return !this.stopped;
 	}
 	get online(): boolean {
-		return this.connected;
+		void this.revision;
+		return this.runtime.online;
 	}
 	private readonly unsubscribe: (() => void)[];
 	private stopped = $state(false);
@@ -89,16 +88,7 @@ export class WorkspaceResources {
 		readonly accountId: string,
 		private readonly dependencies: WorkspaceResourcesDependencies
 	) {
-		this.runtime = new WorkspaceSyncRuntime({
-			scheduler: dependencies.scheduler ?? browserSyncScheduler,
-			initialize: () => this.initialize(),
-			pull: () => dependencies.cache.refresh(),
-			writes: () => dependencies.writes.flush(),
-			failed: (message) => {
-				if (!this.stopped) this.failure = message === null ? null : { kind: 'failure', message };
-			}
-		});
-		dependencies.writes.useScheduler(this.runtime.writeScheduler);
+		this.runtime = dependencies.writes.runtime;
 		this.unsubscribe = [
 			dependencies.cache.subscribe(() => {
 				this.revision++;
@@ -123,9 +113,6 @@ export class WorkspaceResources {
 			)
 		)
 			this.runtime.changed();
-	}
-	committed(): void {
-		this.runtime.committed();
 	}
 	observationFailed(error: Error): void {
 		if (!this.stopped) {
@@ -156,7 +143,12 @@ export class WorkspaceResources {
 	}
 	get readStatus() {
 		void this.revision;
-		return this.failure ?? this.dependencies.cache.status;
+		return (
+			this.failure ??
+			(this.runtime.failure
+				? { kind: 'failure' as const, message: this.runtime.failure }
+				: this.dependencies.cache.status)
+		);
 	}
 	get writeStatus() {
 		void this.revision;
@@ -288,13 +280,10 @@ export class WorkspaceResources {
 		return operationId;
 	}
 	setOnline(online: boolean): void {
-		this.connected = online;
-		this.runtime.setOnline(online);
 		this.dependencies.cache.setOnline(online);
 		this.dependencies.writes.setOnline(online);
 	}
 	synchronize(force = false): Promise<void> {
-		if (force) this.dependencies.writes.retryNow();
 		return this.runtime.synchronize(force);
 	}
 
@@ -327,7 +316,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		transport: workspaceWriteTransport(accountId),
 		scheduler: browserSyncScheduler,
 		writerLock: browserWriterLock,
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(accountId, {
 		cache,

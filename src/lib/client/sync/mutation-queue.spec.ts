@@ -39,7 +39,7 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		scheduler: new InMemorySyncScheduler(),
 		writerLock,
 		transport,
-		committed: () => undefined
+		pull: async () => ({ kind: 'complete' as const })
 	};
 	return { repository, dependencies, cache, queue: new MutationQueue('alice', dependencies) };
 };
@@ -89,14 +89,6 @@ describe('shared mutation submission', () => {
 			result: await queue.flush(),
 			local: (await repository.list('alice'))[0].intent.local
 		}).toEqual({ result: { kind: 'offline' }, local: 'Edited' });
-	});
-	it('coalesces simultaneous flush requests', async () => {
-		const { queue } = setup({ send: async (input) => applied(input.operationId, input.command) });
-		await queue.append(draft(firstId));
-		const first = queue.flush();
-		const second = queue.flush();
-		await first;
-		expect(second).toBe(first);
 	});
 	it('retries an interrupted request with the same identity and input', async () => {
 		const requests: { operationId: string; command: string }[] = [];
@@ -264,7 +256,7 @@ describe('shared offline queue reload', () => {
 		const other = new MutationQueue('alice', dependencies);
 		other.setOnline(false);
 		await other.append(draft(firstId));
-		await queue.flush();
+		await queue.reload();
 		expect(queue.pending.map((entry) => entry.intent.local)).toEqual(['Edited']);
 	});
 	it('removes another tab’s discarded edit from the offline projection', async () => {
@@ -278,7 +270,7 @@ describe('shared offline queue reload', () => {
 		const other = new MutationQueue('alice', dependencies);
 		other.setOnline(false);
 		await other.discard([firstId]);
-		await queue.flush();
+		await queue.reload();
 		expect(queue.pending).toEqual([]);
 	});
 });

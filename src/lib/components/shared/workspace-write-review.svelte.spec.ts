@@ -38,10 +38,9 @@ const setup = async (
 				throw new Error('This review stays offline');
 			}
 		},
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(project.userId, {
-		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
 	});

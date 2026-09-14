@@ -1,4 +1,3 @@
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -94,10 +93,9 @@ const setup = async (
 		transport: new InMemoryNoteWrites(),
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(conversation.userId, {
-		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes
 	});
