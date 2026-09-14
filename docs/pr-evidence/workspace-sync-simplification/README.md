@@ -16,7 +16,11 @@ node docs/pr-evidence/workspace-sync-simplification/benchmark.mjs WORKTREE after
 ```
 
 The script builds that worktree, starts preview on port 4184, and runs Chromium at
-1440 × 1000 in light mode. It removes its PostgreSQL container and closes the browser
+1440 × 1000 in light mode. Measurements use Playwright’s default headless shell. The CI PWA suite now selects regular
+Chromium headless mode after the separate shell repeatedly segfaulted during context creation
+on GitHub runners; application code is unchanged. See [Playwright’s browser modes](https://playwright.dev/docs/browsers#chromium-new-headless-mode).
+
+The script removes its PostgreSQL container and closes the browser
 and server on completion or failure. `METRICS_ONLY=1` omits the later capture/reset
 scenarios. `SKIP_BENCHMARK_BUILD=1` reuses a build made from the same source.
 

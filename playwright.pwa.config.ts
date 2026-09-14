@@ -8,6 +8,9 @@ export default defineConfig({
 	fullyParallel: false,
 	testMatch: '**/pwa.e2e.{ts,js}',
 	use: {
+		// The separate headless shell segfaults during context creation on CI.
+		// Use regular Chromium's headless mode for the installed-app scenarios.
+		channel: 'chromium',
 		baseURL: 'http://127.0.0.1:4173',
 		storageState: 'tests/.auth/state.json',
 		trace: 'retain-on-failure'
