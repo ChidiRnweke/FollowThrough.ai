@@ -136,9 +136,10 @@ export const syncPageSchema = <T>(value: z.ZodType<T>): z.ZodType<SyncPage<T>> =
 			'A sync page must contain each resource only once'
 		);
 
-// The 7,000-record browser benchmark is recorded in docs/pr-evidence/incremental-sync/performance.md.
-// These are transfer groups, never limits on the workspace inventory.
-export const syncChangePageSize = 32;
+// The PostgreSQL/PWA benchmark at docs/pr-evidence/workspace-sync-simplification/README.md
+// measured 219 commits and 14 seconds of long tasks with 32-record pages. Amortize page overhead.
+// This is a transfer group, never a limit on the workspace inventory.
+export const syncChangePageSize = 128;
 
 export interface SyncSnapshot<T> {
 	readonly etag: SyncEtag;
