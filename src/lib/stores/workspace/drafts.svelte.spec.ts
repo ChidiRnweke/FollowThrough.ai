@@ -13,8 +13,7 @@ import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAccountWriterLock } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
 import { seedLegacyNoteStorage } from '$lib/testing/sync/fixtures/legacy-note-storage';
-import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
-import { IndexedDbOutbox } from '$lib/client/sync/indexeddb-outbox';
+import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
 import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
 import { requestValue } from '$lib/client/sync/database';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
@@ -37,12 +36,26 @@ const setup = async () => {
 		updatedAt: note.updatedAt
 	};
 	await seedLegacyNoteStorage(oldName, [record]);
-	const repository = new IndexedDbSyncCache(workspaceRecordSchema, newName);
-	const outbox = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema, newName);
+	const outbox = new DexieWorkspaceRepository(
+		workspaceCommandSchema,
+		workspaceRecordSchema,
+		newName
+	);
+	const repository = outbox.cache;
 	const transport = new InMemoryNoteWrites();
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
 	transport.records.set(key, { etag: syncEtag(1n), value: { type: 'notes', value: note } });
-	const cache = new ResourceCache(note.userId, { repository, transport });
+	const cache = new ResourceCache(note.userId, {
+		transport,
+		repository: {
+			load: async (accountId) => (await outbox.read(accountId)).cache,
+			commit: async (accountId, changes) => {
+				const result = await repository.commit(accountId, changes);
+				await outbox.read(accountId);
+				return result;
+			}
+		}
+	});
 	const writes = new MutationQueue(note.userId, {
 		repository: outbox,
 		transport,
@@ -53,17 +66,25 @@ const setup = async () => {
 			if (remote.kind === 'unchanged') throw new Error('Expected full base');
 			return resolveImportedNoteBase(base, local, remote);
 		},
-		received: async (key, resource) =>
-			cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource)
+		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(note.userId, {
+		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,
 		restoreLocalWrites: () => migrateLegacyNotes(note.userId, outbox, oldName)
 	});
+	const unsubscribe = outbox.observe(
+		note.userId,
+		(state) => resources.applyLocal(state),
+		(error) => {
+			throw error;
+		}
+	);
 	resources.setOnline(false);
 	const store = resources.draft({ type: 'notes', id: [note.id] });
 	cleanups.push(async () => {
+		unsubscribe();
 		resources.stop();
 		await repository.close();
 		await outbox.close();
@@ -118,10 +139,12 @@ it('retains the editor buffer with an error after a discard committed outside th
 		(await outbox.list(note.userId)).map((entry) => entry.intent.operationId)
 	);
 	await resources.synchronize();
-	expect({ status: store.status, retained: store.value?.plainText }).toEqual({
-		status: 'error',
-		retained: local.plainText
-	});
+	await expect
+		.poll(() => ({ status: store.status, retained: store.value?.plainText }))
+		.toEqual({
+			status: 'error',
+			retained: local.plainText
+		});
 });
 
 it('recognizes a durable acknowledgement from another writer while this tab remains offline', async () => {
@@ -144,5 +167,5 @@ it('recognizes a durable acknowledgement from another writer while this tab rema
 	});
 	await outbox.settle(note.userId, sent, result);
 	await resources.synchronize();
-	expect(store.status).toBe('synced');
+	await expect.poll(() => store.status).toBe('synced');
 });

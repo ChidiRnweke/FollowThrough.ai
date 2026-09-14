@@ -43,28 +43,30 @@ const setup = (
 	transport = new InMemorySyncTransport<typeof project>()
 ) => {
 	const repository = new InMemorySyncCache<typeof project>();
-	const cache = new ResourceCache('alice', { repository, transport });
+	const outbox = new InMemoryOutbox<WorkspaceCommand, typeof project>(repository);
+	const cache = new ResourceCache('alice', { repository: outbox.projectedCache, transport });
 	const writes = new MutationQueue<WorkspaceCommand, typeof project>('alice', {
-		repository: new InMemoryOutbox(),
+		repository: outbox,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: writeTransport,
 		resolveBase: async () => {
 			throw new Error('This fixture has no imported draft');
 		},
-		received: async (key, resource) => {
-			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
-		}
+		committed: () => resources.committed()
 	});
+	const resources = new WorkspaceResources('alice', {
+		scheduler: new InMemorySyncScheduler(),
+		cache,
+		writes,
+		restoreLocalWrites: async () => undefined
+	});
+	outbox.observe('alice', (state) => resources.applyLocal(state));
 	return {
 		repository,
 		transport,
 		cache,
-		resources: new WorkspaceResources('alice', {
-			cache,
-			writes,
-			restoreLocalWrites: async () => undefined
-		})
+		resources
 	};
 };
 

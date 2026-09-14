@@ -1,10 +1,4 @@
-import type {
-	ResourceState,
-	SyncCursor,
-	SyncChanges,
-	SyncEtag,
-	SyncObjectRead
-} from '$lib/models/sync';
+import type { ResourceState, SyncCursor, SyncEtag, SyncObjectRead } from '$lib/models/sync';
 import type { SyncChangePage } from '$lib/models/sync';
 
 export interface CachedRecord<T> {
@@ -35,9 +29,9 @@ export interface SyncCacheRepository<T> {
 export type ObjectRead<T> = SyncObjectRead<T>;
 
 export interface SyncReadTransport<T> {
-	pull(since: SyncCursor): Promise<SyncChanges | SyncChangePage>;
+	pull(since: SyncCursor): Promise<SyncChangePage>;
 	read(key: string, etag: SyncEtag | null): Promise<ObjectRead<T>>;
-	readMany?(
+	readMany(
 		requests: readonly { key: string; etag: SyncEtag | null }[]
 	): Promise<
 		readonly { key: string; result: ObjectRead<T> | { kind: 'failure'; message: string } }[]

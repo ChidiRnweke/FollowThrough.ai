@@ -1,3 +1,4 @@
+import type { Transaction } from 'dexie';
 import { z } from 'zod';
 import {
 	authoritativeWriteResource,
@@ -21,45 +22,61 @@ import {
 	type WriteOutcome
 } from '$lib/models/outbox';
 import { receiveResource, cachedSnapshot, recoveryBlocksWrite } from '$lib/models/sync';
-import { completed, openSyncDatabase, requestValue, transactionLifetime } from './database';
-import type { OutboxRepository } from './outbox-contracts';
+import { WorkspaceDatabase, storedTable } from './database';
+import type { OutboxRepository, OutboxProjection } from './outbox-contracts';
 import { quarantineRow, recoveryItems, recoverCacheRow } from './storage-recovery';
 
 export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
-	private opening: Promise<IDBDatabase> | null = null;
 	constructor(
 		private readonly commandSchema: z.ZodType<C>,
 		private readonly valueSchema: z.ZodType<T>,
-		private readonly databaseName = 'followthrough-workspace-sync',
-		private readonly onCommit?: () => void
+		databaseName = 'followthrough-workspace-sync',
+		readonly database = new WorkspaceDatabase(databaseName)
 	) {}
 	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
-		const database = await this.open();
-		const transaction = database.transaction('acknowledgements', 'readonly');
-		const done = completed(transaction);
-		const rows = await requestValue(
-			transaction.objectStore('acknowledgements').index('accountId').getAll(accountId)
-		);
-		await done;
+		const rows = await this.database
+			.table('acknowledgements')
+			.where('accountId')
+			.equals(accountId)
+			.toArray();
 		return z
 			.array(z.object({ accountId: z.literal(accountId), operationId: z.string().uuid() }))
 			.parse(rows)
 			.map((row) => row.operationId);
 	}
 	async acknowledged(accountId: string, operationId: string): Promise<void> {
-		const database = await this.open();
-		const transaction = database.transaction('acknowledgements', 'readwrite');
-		const done = completed(transaction);
-		transaction.objectStore('acknowledgements').delete([accountId, operationId]);
-		await done;
+		await this.database.table('acknowledgements').delete([accountId, operationId]);
+	}
+	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
+		return this.database.transaction('rw', ['write-receipts', 'quarantine'], (transaction) =>
+			this.appliedReceipt(accountId, key, transaction)
+		);
+	}
+	async receipts(accountId: string): Promise<ReadonlyMap<string, WriteReceipt<T>>> {
+		return this.database.transaction(
+			'rw',
+			['write-receipts', 'quarantine'],
+			async (transaction) => {
+				const keys = await storedTable(transaction, 'write-receipts')
+					.where('[accountId+key]')
+					.between([accountId, ''], [accountId, []])
+					.primaryKeys();
+				const receipts = new Map<string, WriteReceipt<T>>();
+				for (const raw of keys) {
+					const [, key] = z.tuple([z.literal(accountId), z.string()]).parse(raw);
+					const receipt = await this.appliedReceipt(accountId, key, transaction);
+					if (receipt) receipts.set(key, receipt);
+				}
+				return receipts;
+			}
+		);
 	}
 
-	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
-		const database = await this.open();
-		const transaction = database.transaction(['write-receipts', 'quarantine'], 'readwrite');
-		const done = completed(transaction);
-		const [receipt] = await Promise.all([this.appliedReceipt(accountId, key, transaction), done]);
-		return receipt;
+	snapshot(accountId: string): Promise<OutboxProjection<C, T>> {
+		return this.database.transaction('rw', this.database.tables, async () => ({
+			entries: await this.list(accountId),
+			receipts: await this.receipts(accountId)
+		}));
 	}
 
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
@@ -82,8 +99,8 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		return this.edit<
 			{ kind: 'imported'; operationId: string } | { kind: 'failure'; message: string }
 		>(accountId, async (entries, transaction) => {
-			const imports = transaction.objectStore('imports');
-			const saved = await requestValue(imports.get([accountId, source]));
+			const imports = storedTable(transaction, 'imports');
+			const saved = await imports.get([accountId, source]);
 			if (saved !== undefined) {
 				const marker = z
 					.object({
@@ -95,7 +112,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				if (!marker.success) {
 					const message =
 						'The legacy import marker is damaged. Its source was preserved for recovery.';
-					quarantineRow(
+					await quarantineRow(
 						transaction,
 						{
 							accountId,
@@ -129,10 +146,10 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		accountId: string,
 		draft: WriteDraft<C, T>,
 		entries: readonly OutboxEntry<C, T>[],
-		transaction: IDBTransaction
+		transaction: Transaction
 	): Promise<{ entries: readonly OutboxEntry<C, T>[]; result: string }> {
-		const heads = transaction.objectStore('queue-heads');
-		const stored = await requestValue(heads.get(accountId));
+		const heads = storedTable(transaction, 'queue-heads');
+		const stored = await heads.get(accountId);
 		if (stored === undefined && entries.length)
 			throw new Error('The local queue has lost its sequence head');
 		const previous =
@@ -146,9 +163,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		const sequence = previous + 1;
 		if (!Number.isSafeInteger(sequence)) throw new Error('The local queue sequence is exhausted');
 		const receipt = await this.appliedReceipt(accountId, draft.key, transaction);
-		const storedResource = await requestValue(
-			transaction.objectStore('records').get([accountId, draft.key])
-		);
+		const storedResource = await storedTable(transaction, 'records').get([accountId, draft.key]);
 		const current = (
 			await recoverCacheRow(transaction, accountId, draft.key, this.valueSchema, storedResource)
 		)?.entry;
@@ -162,7 +177,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		const next = appendWrite(entries, draft, sequence, receipt, observed);
 		const appended = next.findLast((entry) => entry.intent.key === draft.key);
 		if (!appended) throw new Error('The queued resource was not appended');
-		heads.put({ accountId, sequence });
+		await heads.put({ accountId, sequence });
 		return { entries: next, result: appended.intent.operationId };
 	}
 
@@ -240,15 +255,20 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		return this.edit(accountId, async (entries, transaction) => {
 			const next = settleWrite(entries, sent.intent.operationId, outcome);
 			if (outcome.kind === 'applied') {
-				transaction
-					.objectStore('acknowledgements')
-					.put({ accountId, operationId: sent.intent.operationId });
+				await storedTable(transaction, 'acknowledgements').put({
+					accountId,
+					operationId: sent.intent.operationId
+				});
 				const previous = await this.appliedReceipt(accountId, sent.intent.key, transaction);
 				const receipt = retainWriteReceipt(
 					previous,
 					writeReceiptSchema(this.valueSchema).parse(outcome.receipt)
 				);
-				transaction.objectStore('write-receipts').put({ accountId, key: sent.intent.key, receipt });
+				await storedTable(transaction, 'write-receipts').put({
+					accountId,
+					key: sent.intent.key,
+					receipt
+				});
 			}
 			const resource = authoritativeWriteResource(outcome);
 			if (resource) await this.saveResource(accountId, sent.intent.key, resource, transaction);
@@ -259,11 +279,9 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	private async appliedReceipt(
 		accountId: string,
 		key: string,
-		transaction: IDBTransaction
+		transaction: Transaction
 	): Promise<WriteReceipt<T> | null> {
-		const stored = await requestValue(
-			transaction.objectStore('write-receipts').get([accountId, key])
-		);
+		const stored = await storedTable(transaction, 'write-receipts').get([accountId, key]);
 		if (stored === undefined) return null;
 		const parsed = z
 			.object({
@@ -273,7 +291,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 			})
 			.safeParse(stored);
 		if (parsed.success) return parsed.data.receipt;
-		quarantineRow(
+		await quarantineRow(
 			transaction,
 			{
 				accountId,
@@ -284,7 +302,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 			},
 			stored
 		);
-		transaction.objectStore('write-receipts').delete([accountId, key]);
+		await storedTable(transaction, 'write-receipts').delete([accountId, key]);
 		return null;
 	}
 
@@ -292,16 +310,16 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		accountId: string,
 		key: string,
 		resource: WriteReceipt<T>['resource'],
-		transaction: IDBTransaction
+		transaction: Transaction
 	): Promise<void> {
-		const records = transaction.objectStore('records');
-		const stored = await requestValue(records.get([accountId, key]));
+		const records = storedTable(transaction, 'records');
+		const stored = await records.get([accountId, key]);
 		const current = await recoverCacheRow(transaction, accountId, key, this.valueSchema, stored);
 		const entry = receiveResource(
 			current?.entry ?? { kind: 'present', cache: { kind: 'uncached' } },
 			resource.kind === 'found' ? resource.snapshot : resource
 		);
-		records.put({ schemaVersion: 2, accountId, key: key, entry });
+		await records.put({ schemaVersion: 2, accountId, key: key, entry });
 	}
 
 	private entriesSchema(accountId: string) {
@@ -314,29 +332,27 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	}
 	private async readEntries(
 		accountId: string,
-		transaction: IDBTransaction
+		transaction: Transaction
 	): Promise<readonly OutboxEntry<C, T>[]> {
-		const store = transaction.objectStore('outbox');
+		const store = storedTable(transaction, 'outbox');
 		const [rows, keys] = await Promise.all([
-			requestValue(store.index('accountId').getAll(accountId)),
-			requestValue(store.index('accountId').getAllKeys(accountId))
+			store.where('accountId').equals(accountId).toArray(),
+			store.where('accountId').equals(accountId).primaryKeys()
 		]);
 		const entries: OutboxEntry<C, T>[] = [];
-		let repaired = false;
 		for (const [index, row] of rows.entries()) {
 			const parsed = this.entriesSchema(accountId).element.safeParse(row);
 			if (parsed.success) {
 				entries.push(parsed.data.entry);
 				continue;
 			}
-			repaired = true;
 			const identity = z
 				.object({ entry: z.object({ intent: z.object({ operationId: z.string().uuid() }) }) })
 				.safeParse(row);
 			const resource = z
 				.object({ entry: z.object({ intent: z.object({ key: z.string().min(1) }) }) })
 				.safeParse(row);
-			quarantineRow(
+			await quarantineRow(
 				transaction,
 				{
 					accountId,
@@ -352,10 +368,10 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				},
 				row
 			);
-			store.delete(keys[index]);
+			await store.delete(keys[index]);
 		}
-		const heads = transaction.objectStore('queue-heads');
-		const rawHead = await requestValue(heads.get(accountId));
+		const heads = storedTable(transaction, 'queue-heads');
+		const rawHead = await heads.get(accountId);
 		const head = z
 			.object({ accountId: z.literal(accountId), sequence: z.number().int().nonnegative() })
 			.safeParse(rawHead);
@@ -369,7 +385,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		);
 		if (!head.success || head.data.sequence !== sequence) {
 			if (rawHead !== undefined)
-				quarantineRow(
+				await quarantineRow(
 					transaction,
 					{
 						accountId,
@@ -380,12 +396,12 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 					},
 					rawHead
 				);
-			heads.put({ accountId, sequence });
+			await heads.put({ accountId, sequence });
 		}
 
 		const recovered = rejectUnprovenAncestry(entries);
-		for (const entry of recovered) if (!entries.includes(entry)) store.put({ accountId, entry });
-		if (repaired) transaction.addEventListener('complete', () => this.onCommit?.(), { once: true });
+		for (const entry of recovered)
+			if (!entries.includes(entry)) await store.put({ accountId, entry });
 		return recovered;
 	}
 
@@ -393,11 +409,11 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		accountId: string,
 		work: (
 			entries: readonly OutboxEntry<C, T>[],
-			transaction: IDBTransaction
+			transaction: Transaction
 		) => Promise<{ entries: readonly OutboxEntry<C, T>[]; result: R }>
 	): Promise<R> {
-		const database = await this.open();
-		const transaction = database.transaction(
+		return this.database.transaction(
+			'rw',
 			[
 				'outbox',
 				'queue-heads',
@@ -409,50 +425,25 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				'cursors',
 				'recovery-heads'
 			],
-			'readwrite'
+			async (transaction) => {
+				const store = storedTable(transaction, 'outbox');
+				const previous = await this.readEntries(accountId, transaction);
+				const change = await work(previous, transaction);
+				const retained = new Set(change.entries.map((entry) => entry.sequence));
+				for (const entry of previous)
+					if (!retained.has(entry.sequence)) await store.delete([accountId, entry.sequence]);
+				for (const entry of change.entries)
+					if (!previous.includes(entry))
+						await store.put({
+							accountId,
+							entry: outboxEntrySchema(this.commandSchema, this.valueSchema).parse(entry)
+						});
+				return change.result;
+			}
 		);
-		const { done, abort } = transactionLifetime(transaction);
-		try {
-			const store = transaction.objectStore('outbox');
-			const previous = await this.readEntries(accountId, transaction);
-			const change = await work(previous, transaction);
-			const retained = new Set(change.entries.map((entry) => entry.sequence));
-			for (const entry of previous)
-				if (!retained.has(entry.sequence)) store.delete([accountId, entry.sequence]);
-			for (const entry of change.entries)
-				if (!previous.includes(entry))
-					store.put({
-						accountId,
-						entry: outboxEntrySchema(this.commandSchema, this.valueSchema).parse(entry)
-					});
-			await done;
-			if (
-				change.entries.length !== previous.length ||
-				change.entries.some((entry, index) => entry !== previous[index])
-			)
-				this.onCommit?.();
-			return change.result;
-		} catch (error) {
-			abort();
-			await done.catch(() => {
-				return { kind: 'failure' };
-			});
-			throw error;
-		}
 	}
 
 	async close(): Promise<void> {
-		if (!this.opening) return;
-		(await this.opening).close();
-		this.opening = null;
-	}
-	private open(): Promise<IDBDatabase> {
-		this.opening ??= openSyncDatabase(this.databaseName, () => {
-			this.opening = null;
-		}).catch((error) => {
-			this.opening = null;
-			throw error;
-		});
-		return this.opening;
+		this.database.close();
 	}
 }

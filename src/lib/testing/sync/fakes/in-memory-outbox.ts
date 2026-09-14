@@ -1,4 +1,5 @@
 import {
+	authoritativeWriteResource,
 	retryConflictedWrite,
 	retainWriteReceipt,
 	type WriteReceipt,
@@ -14,13 +15,34 @@ import {
 	type WriteDraft,
 	type WriteOutcome
 } from '$lib/models/outbox';
-import type { OutboxRepository } from '$lib/client/sync/outbox-contracts';
+import type {
+	WorkspaceLocalProjection,
+	WorkspaceLocalRepository
+} from '$lib/client/sync/workspace-local-repository';
+import { InMemorySyncCache } from './in-memory-sync';
+import type { SyncCacheRepository } from '$lib/client/sync/contracts';
 import type { AccountWriterLock } from '$lib/client/sync/mutation-queue';
 
-export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
+export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
 	private sequence = 0;
-	private readonly receipts = new Map<string, WriteReceipt<T>>();
+	private readonly receipts = new Map<string, Map<string, WriteReceipt<T>>>();
+	private readonly observers = new Map<
+		string,
+		Set<(state: WorkspaceLocalProjection<C, T>) => void>
+	>();
+	readonly projectedCache: SyncCacheRepository<T>;
+	constructor(private readonly cache = new InMemorySyncCache<T>()) {
+		this.projectedCache = {
+			load: async (accountId) => (await this.read(accountId)).cache,
+			commit: async (accountId, changes) => {
+				const result = await this.cache.commit(accountId, changes);
+				await this.read(accountId);
+				return result;
+			}
+		};
+	}
+	snapshotFailure: string | null = null;
 	private readonly acknowledgements = new Map<string, Set<string>>();
 	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
 		return [...(this.acknowledgements.get(accountId) ?? [])];
@@ -30,8 +52,33 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 	}
 	appendFailure: string | null = null;
 	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
-		return this.receipts.get(JSON.stringify([accountId, key])) ?? null;
+		return this.receipts.get(accountId)?.get(key) ?? null;
 	}
+	async snapshot(accountId: string) {
+		return (await this.read(accountId)).writes;
+	}
+	async read(accountId: string): Promise<WorkspaceLocalProjection<C, T>> {
+		if (this.snapshotFailure) throw new Error(this.snapshotFailure);
+		const state = {
+			cache: await this.cache.load(accountId),
+			writes: {
+				entries: this.accounts.get(accountId) ?? [],
+				receipts: new Map(this.receipts.get(accountId))
+			},
+			recovery: []
+		};
+		for (const observer of this.observers.get(accountId) ?? []) observer(state);
+		return state;
+	}
+	observe(accountId: string, changed: (state: WorkspaceLocalProjection<C, T>) => void): () => void {
+		const observers = this.observers.get(accountId) ?? new Set();
+		observers.add(changed);
+		this.observers.set(accountId, observers);
+		return () => {
+			observers.delete(changed);
+		};
+	}
+
 	async list(accountId: string): Promise<readonly OutboxEntry<C, T>[]> {
 		return this.accounts.get(accountId) ?? [];
 	}
@@ -41,7 +88,7 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 			await this.list(accountId),
 			draft,
 			++this.sequence,
-			this.receipts.get(JSON.stringify([accountId, draft.key])) ?? null
+			this.receipts.get(accountId)?.get(draft.key) ?? null
 		);
 		this.accounts.set(accountId, next);
 		const appended = next.findLast((entry) => entry.intent.key === draft.key);
@@ -53,10 +100,16 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 		operationId: string,
 		resolution: WriteBaseResolution<T>
 	): Promise<void> {
-		this.accounts.set(
-			accountId,
-			resolveWriteBase(await this.list(accountId), operationId, resolution)
-		);
+		const entries = await this.list(accountId);
+		const next = resolveWriteBase(entries, operationId, resolution);
+		const original = entries.find((entry) => entry.intent.operationId === operationId);
+		const resource =
+			resolution.kind === 'matched'
+				? { kind: 'found' as const, snapshot: resolution.snapshot }
+				: resolution.remote;
+		if (original && resource.kind !== 'unavailable')
+			await this.saveResource(accountId, original.intent.key, resource);
+		this.accounts.set(accountId, next);
 	}
 
 	async keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void> {
@@ -104,17 +157,40 @@ export class InMemoryOutbox<C, T> implements OutboxRepository<C, T> {
 		sent: OutboxEntry<C, T>,
 		outcome: WriteOutcome<T>
 	): Promise<void> {
-		this.accounts.set(
-			accountId,
-			settleWrite(await this.list(accountId), sent.intent.operationId, outcome)
-		);
-		if (outcome.kind === 'applied') {
+		const next = settleWrite(await this.list(accountId), sent.intent.operationId, outcome);
+		const receipts = this.receipts.get(accountId) ?? new Map<string, WriteReceipt<T>>();
+		const receipt =
+			outcome.kind === 'applied'
+				? retainWriteReceipt(receipts.get(sent.intent.key) ?? null, outcome.receipt)
+				: null;
+		const resource = authoritativeWriteResource(outcome);
+		if (resource) await this.saveResource(accountId, sent.intent.key, resource);
+		this.accounts.set(accountId, next);
+		if (receipt) {
 			const pending = this.acknowledgements.get(accountId) ?? new Set<string>();
 			pending.add(sent.intent.operationId);
 			this.acknowledgements.set(accountId, pending);
-			const key = JSON.stringify([accountId, sent.intent.key]);
-			this.receipts.set(key, retainWriteReceipt(this.receipts.get(key) ?? null, outcome.receipt));
+			receipts.set(sent.intent.key, receipt);
+			this.receipts.set(accountId, receipts);
 		}
+	}
+	private async saveResource(
+		accountId: string,
+		key: string,
+		resource: WriteReceipt<T>['resource']
+	): Promise<void> {
+		await this.cache.commit(accountId, {
+			put: [
+				{
+					key,
+					entry:
+						resource.kind === 'found'
+							? { kind: 'present', cache: { kind: 'cached', snapshot: resource.snapshot } }
+							: resource
+				}
+			],
+			remove: []
+		});
 	}
 }
 

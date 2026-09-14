@@ -115,6 +115,8 @@ export default defineConfig({
 						'src/lib/components/notes/note-conflict-dialog.svelte.spec.ts',
 						'src/lib/components/shared/safe-svg-preview.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
+						'src/lib/client/sync/database.svelte.spec.ts',
+						'src/lib/client/sync/workspace-local-repository.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',
 						'src/lib/client/sync/storage-recovery.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',

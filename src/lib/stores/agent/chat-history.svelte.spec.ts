@@ -13,7 +13,7 @@ import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-rec
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
+import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
@@ -83,26 +83,28 @@ const setup = async (
 	} = {}
 ) => {
 	const transport = new InMemorySyncTransport<WorkspaceRecord>();
+	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>();
 	const cache = new ResourceCache(conversation.userId, {
-		repository: new InMemorySyncCache<WorkspaceRecord>(),
+		repository: repository.projectedCache,
 		transport
 	});
 	const writes = new MutationQueue(conversation.userId, {
-		repository: new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(),
+		repository,
 		transport: new InMemoryNoteWrites(),
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		resolveBase: async () => {
 			throw new Error('No imported drafts');
 		},
-		received: async (key, value) =>
-			cache.accept(key, value.kind === 'found' ? value.snapshot : value)
+		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(conversation.userId, {
+		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,
 		restoreLocalWrites: async () => undefined
 	});
+	repository.observe(conversation.userId, (state) => resources.applyLocal(state));
 	const records: Extract<WorkspaceRecord, { type: 'conversations' | 'messages' | 'agent_runs' }>[] =
 		[
 			{ type: 'conversations', value: { ...conversation, ...options.conversation } },

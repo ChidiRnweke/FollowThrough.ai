@@ -1,5 +1,9 @@
-import { WorkspaceChangeChannel } from '$lib/client/sync/change-channel';
-import { browserSyncScheduler } from '$lib/client/sync/scheduler';
+import {
+	DexieWorkspaceRepository,
+	type WorkspaceLocalProjection
+} from '$lib/client/sync/workspace-local-repository';
+import { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
+import { type SyncScheduler, browserSyncScheduler } from '$lib/client/sync/scheduler';
 import { type NoteId, type NoteView } from '$lib/models/notes';
 import {
 	visibleResources,
@@ -39,8 +43,6 @@ import {
 } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
-import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
-import { IndexedDbOutbox } from '$lib/client/sync/indexeddb-outbox';
 import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import type { StorageRecoveryItem } from '$lib/models/sync';
@@ -56,8 +58,8 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
+	scheduler?: SyncScheduler;
 	dispose?(): void;
-	recoveryCommitted?(): void;
 	restoreLocalWrites(): Promise<void>;
 	cache: ResourceCache<WorkspaceRecord>;
 	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
@@ -66,6 +68,8 @@ export interface WorkspaceResourcesDependencies {
 /** Features share resource identity, local overlays, and the same explicit-open read barrier. */
 export class WorkspaceResources {
 	private revision = $state(0);
+	private readonly runtime: WorkspaceSyncRuntime;
+	private readonly recoveryStorage = new IndexedDbStorageRecovery();
 	private readonly projected = $derived.by(() => {
 		void this.revision;
 		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
@@ -76,27 +80,19 @@ export class WorkspaceResources {
 		return this.recovery;
 	}
 	async loadRecovery(): Promise<void> {
-		const items = await new IndexedDbStorageRecovery().list(this.accountId);
+		const items = await this.recoveryStorage.list(this.accountId);
 		if (!this.stopped) this.recovery = items;
-	}
-	async observeChanges(): Promise<void> {
-		if (this.stopped) return;
-		await this.initialize();
-		if (this.stopped) return;
-		await Promise.all([this.dependencies.cache.reload(), this.dependencies.writes.reload()]);
-		await this.loadRecovery();
 	}
 
 	async removeRecovery(item: StorageRecoveryItem): Promise<void> {
 		if (!this.active) throw new Error('This account is no longer active');
-		await new IndexedDbStorageRecovery().remove(this.accountId, item.source, item.key);
+		await this.recoveryStorage.remove(this.accountId, item.source, item.key);
 		await this.loadRecovery();
-		this.dependencies.recoveryCommitted?.();
 		await this.synchronize();
 	}
 
 	downloadRecovery(item: StorageRecoveryItem): Promise<Blob> {
-		return new IndexedDbStorageRecovery().download(this.accountId, item.source, item.key);
+		return this.recoveryStorage.download(this.accountId, item.source, item.key);
 	}
 	get downloadProgress() {
 		void this.revision;
@@ -114,8 +110,6 @@ export class WorkspaceResources {
 		return this.connected;
 	}
 	private readonly unsubscribe: (() => void)[];
-	private syncing: Promise<void> | null = null;
-	private requested = false;
 	private stopped = $state(false);
 	private failure = $state<{ kind: 'failure'; message: string } | null>(null);
 	private initializing: Promise<void> | null = null;
@@ -123,6 +117,17 @@ export class WorkspaceResources {
 		readonly accountId: string,
 		private readonly dependencies: WorkspaceResourcesDependencies
 	) {
+		this.runtime = new WorkspaceSyncRuntime({
+			scheduler: dependencies.scheduler ?? browserSyncScheduler,
+			initialize: () => this.initialize(),
+			pull: () => dependencies.cache.refresh(),
+			bodies: () => dependencies.cache.warm(),
+			writes: () => dependencies.writes.flush(),
+			failed: (message) => {
+				if (!this.stopped) this.failure = message === null ? null : { kind: 'failure', message };
+			}
+		});
+		dependencies.writes.useScheduler(this.runtime.writeScheduler);
 		this.unsubscribe = [
 			dependencies.cache.subscribe(() => {
 				this.revision++;
@@ -132,6 +137,30 @@ export class WorkspaceResources {
 			})
 		];
 	}
+	applyLocal(projection: WorkspaceLocalProjection<WorkspaceCommand, WorkspaceRecord>): void {
+		if (this.stopped) return;
+		const previous = this.dependencies.writes.pending;
+		this.dependencies.cache.applyStored(projection.cache, false);
+		this.dependencies.writes.applyStored(projection.writes, false);
+		this.recovery = projection.recovery;
+		this.revision++;
+		// Only a newly queued identity wakes submissions. Cache changes and delivery updates do not loop.
+		if (
+			projection.writes.entries.some(
+				(entry) =>
+					entry.delivery.kind === 'queued' &&
+					!previous.some((old) => old.intent.operationId === entry.intent.operationId)
+			)
+		)
+			this.runtime.changed();
+	}
+	committed(): void {
+		this.runtime.committed();
+	}
+	observationFailed(error: Error): void {
+		if (!this.stopped) this.failure = { kind: 'failure', message: error.message };
+	}
+
 	draft<K extends WorkspaceResourceType>(
 		identity: WorkspaceResourceIdentity & { type: K }
 	): WorkspaceDraft<K> {
@@ -295,64 +324,40 @@ export class WorkspaceResources {
 	}
 	setOnline(online: boolean): void {
 		this.connected = online;
+		this.runtime.setOnline(online);
 		this.dependencies.cache.setOnline(online);
 		this.dependencies.writes.setOnline(online);
 	}
 	synchronize(force = false): Promise<void> {
 		if (force) this.dependencies.writes.retryNow();
-		this.requested = true;
-		this.syncing ??= this.synchronizeResources()
-			.catch((error) => {
-				if (!this.stopped)
-					this.failure = {
-						kind: 'failure',
-						message: error instanceof Error ? error.message : 'Workspace synchronization failed'
-					};
-				return { kind: 'failure' };
-			})
-			.then(() => undefined)
-			.finally(() => {
-				this.syncing = null;
-				if (this.requested && !this.stopped) void this.synchronize();
-			});
-		return this.syncing;
+		return this.runtime.synchronize(force);
 	}
+
 	stop(): void {
 		this.stopped = true;
+		this.revision++;
+		this.runtime.stop();
+		this.recoveryStorage.close();
 		this.dependencies.cache.stop();
 		this.dependencies.writes.stop();
 		for (const unsubscribe of this.unsubscribe) unsubscribe();
 		this.dependencies.dispose?.();
 	}
-	private async synchronizeResources(): Promise<void> {
-		do {
-			this.requested = false;
-			await this.initialize();
-			if (this.stopped) return;
-			this.failure = null;
-			await Promise.all([
-				this.dependencies.writes.flush(),
-				this.dependencies.cache.refresh().then(() => this.dependencies.cache.warm())
-			]);
-		} while (this.requested && !this.stopped);
-	}
 }
 
 export const createWorkspaceResources = (accountId: string): WorkspaceResources => {
-	const channel = new WorkspaceChangeChannel(accountId);
-	const cached = new IndexedDbSyncCache(workspaceRecordSchema, undefined, () =>
-		channel.publish('cache')
-	);
+	const repository = new DexieWorkspaceRepository(workspaceCommandSchema, workspaceRecordSchema);
 	const cache = new ResourceCache(accountId, {
-		repository: cached,
+		repository: {
+			load: async (account) => (await repository.read(account)).cache,
+			commit: async (account, changes) => {
+				const committed = await repository.cache.commit(account, changes);
+				await repository.read(account);
+				return committed;
+			}
+		},
 		transport: workspaceReadTransport(accountId)
 	});
-	const repository = new IndexedDbOutbox(
-		workspaceCommandSchema,
-		workspaceRecordSchema,
-		undefined,
-		() => channel.publish('writes')
-	);
 	const writes = new MutationQueue(accountId, {
 		repository,
 		transport: workspaceWriteTransport(accountId),
@@ -364,39 +369,30 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 				throw new Error('An imported base requires a complete server representation');
 			return resolveImportedNoteBase(base, local, remote);
 		},
-		received: async (key, resource) => {
-			await cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource);
-		}
+		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(accountId, {
-		recoveryCommitted: () => channel.publish('writes'),
+		cache,
+		writes,
+
+		restoreLocalWrites: () =>
+			withWorkspaceMigrationLock(accountId, () => migrateLegacyNotes(accountId, repository)),
 		dispose: () => {
-			channel.close();
+			unsubscribe();
 			void writes
 				.settled()
-				.then(() => Promise.all([cached.close(), repository.close()]))
+				.then(() => repository.close())
 				.catch((error) => {
 					console.error('Workspace storage could not close', error);
 					return { kind: 'failure' };
 				});
-		},
-		cache,
-		writes,
-		restoreLocalWrites: () =>
-			withWorkspaceMigrationLock(accountId, () => migrateLegacyNotes(accountId, repository))
+		}
 	});
-	channel.subscribe((change) => {
-		void resources
-			.observeChanges()
-			.then(async () => {
-				if (change === 'writes' && resources.active && resources.online)
-					await resources.synchronize();
-			})
-			.catch((error) => {
-				console.error('Workspace changes could not be loaded', error);
-				return { kind: 'failure' };
-			});
-	});
+	const unsubscribe = repository.observe(
+		accountId,
+		(projection) => resources.applyLocal(projection),
+		(error) => resources.observationFailed(error)
+	);
 	return resources;
 };
 

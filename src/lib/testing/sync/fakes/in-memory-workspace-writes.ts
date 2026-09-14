@@ -13,7 +13,7 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 		{ request: string; outcome: Exclude<ReceiptLookup, { kind: 'missing' | 'reused' }> }
 	>();
 	writeFailure: string | null = null;
-	async lock(): Promise<void> {}
+	async lockResource(): Promise<void> {}
 	async lockOperation(): Promise<void> {}
 	async cancel(actor: ActorContext, operationId: string, request: string): Promise<void> {
 		this.receipts.set(JSON.stringify([actor.userId, operationId]), {

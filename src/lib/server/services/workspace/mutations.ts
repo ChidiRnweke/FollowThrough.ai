@@ -46,13 +46,7 @@ export class SyncMutationTransactions {
 		);
 	}
 	acknowledge(actor: ActorContext, operationId: string): Promise<void> {
-		return this.dependencies.transactionRunner.run(
-			async () => {
-				await this.dependencies.mutationReceipts.lockOperation(actor, operationId);
-				await this.dependencies.mutationReceipts.compact(actor, operationId);
-			},
-			{ retry: 'database-only' }
-		);
+		return this.dependencies.mutationReceipts.compact(actor, operationId);
 	}
 	async run(
 		actor: ActorContext,
@@ -64,7 +58,7 @@ export class SyncMutationTransactions {
 				async () => {
 					const identity = mutationResource(input.command);
 					const request = JSON.stringify(input);
-					await this.dependencies.mutationReceipts.lock(actor, input.operationId, identity);
+					await this.dependencies.mutationReceipts.lockOperation(actor, input.operationId);
 					const previous = await this.dependencies.mutationReceipts.find(
 						actor,
 						input.operationId,
@@ -76,6 +70,7 @@ export class SyncMutationTransactions {
 					if (previous.kind === 'cancelled')
 						return { kind: 'rejected', message: 'This edit was cancelled on this device.' };
 					if (previous.kind === 'compacted') return previous;
+					await this.dependencies.mutationReceipts.lockResource(actor, identity);
 					const current = await this.dependencies.syncObjects.read(actor, identity, null);
 					if (current.kind === 'unchanged')
 						throw new Error('An unconditional resource read returned no body');

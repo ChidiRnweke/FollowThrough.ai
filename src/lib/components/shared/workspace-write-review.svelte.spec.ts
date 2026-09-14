@@ -8,7 +8,7 @@ import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
+import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
@@ -28,7 +28,7 @@ const setup = async (
 	const key = workspaceResourceKey(identity);
 	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>();
 	const cache = new ResourceCache(project.userId, {
-		repository: new InMemorySyncCache<WorkspaceRecord>(),
+		repository: repository.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()
 	});
 	const writes = new MutationQueue(project.userId, {
@@ -43,14 +43,15 @@ const setup = async (
 		resolveBase: async () => {
 			throw new Error('No imported draft');
 		},
-		received: async (key, resource) =>
-			cache.accept(key, resource.kind === 'found' ? resource.snapshot : resource)
+		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(project.userId, {
+		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,
 		restoreLocalWrites: async () => undefined
 	});
+	repository.observe(project.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);
 	const operationId = await resources.append({
 		operationId: crypto.randomUUID(),

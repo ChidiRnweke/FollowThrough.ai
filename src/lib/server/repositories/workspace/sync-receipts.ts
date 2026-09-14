@@ -22,11 +22,7 @@ export interface SyncReceiptRepository {
 	lockOperation(actor: ActorContext, operationId: string): Promise<void>;
 	cancel(actor: ActorContext, operationId: string, request: string): Promise<void>;
 	compact(actor: ActorContext, operationId: string): Promise<void>;
-	lock(
-		actor: ActorContext,
-		operationId: string,
-		identity: WorkspaceResourceIdentity
-	): Promise<void>;
+	lockResource(actor: ActorContext, identity: WorkspaceResourceIdentity): Promise<void>;
 	find(actor: ActorContext, operationId: string, request: string): Promise<ReceiptLookup>;
 	save(actor: ActorContext, request: string, receipt: WorkspaceWriteReceipt): Promise<void>;
 }
@@ -36,7 +32,7 @@ export interface SyncReceiptRepository {
 const requestHash = (request: string) =>
 	sql`encode(sha256(convert_to(${request}::jsonb::text, 'UTF8')), 'hex')`;
 
-/** All methods participate in the caller's existing domain transaction. */
+/** Mutation locks and receipt creation participate in the domain transaction. */
 export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 	constructor(private readonly db: Database) {}
 	async publishChanges(): Promise<void> {
@@ -63,12 +59,7 @@ export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 			where account_id = ${actor.userId} and operation_id = ${operationId} and disposition = 'applied'`);
 	}
 
-	async lock(
-		actor: ActorContext,
-		operationId: string,
-		identity: WorkspaceResourceIdentity
-	): Promise<void> {
-		await this.lockOperation(actor, operationId);
+	async lockResource(actor: ActorContext, identity: WorkspaceResourceIdentity): Promise<void> {
 		await this.db.execute(
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'resource:' + workspaceResourceKey(identity)}))`
 		);

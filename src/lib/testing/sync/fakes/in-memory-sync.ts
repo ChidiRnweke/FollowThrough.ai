@@ -138,7 +138,7 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 				hasMore
 			};
 		}
-		return batch;
+		return { ...batch, hasMore: false };
 	}
 
 	async read(key: string, etag: SyncSnapshot<T>['etag'] | null): Promise<ObjectRead<T>> {
@@ -158,17 +158,6 @@ export class InMemorySyncTransport<T> implements SyncReadTransport<T> {
 		return { kind: 'found', snapshot };
 	}
 
-	private async wait(key: string): Promise<void> {
-		const paused = this.paused.get(key);
-		if (!paused) return;
-		this.paused.delete(key);
-		paused.start();
-		await paused.ready;
-	}
-}
-
-/** A batch connection can fail one body while delivering the other requested records. */
-export class InMemoryBatchSyncTransport<T> extends InMemorySyncTransport<T> {
 	readonly failures = new Map<string, string>();
 	readonly batches: string[][] = [];
 	async readMany(requests: readonly { key: string; etag: SyncSnapshot<T>['etag'] | null }[]) {
@@ -185,4 +174,14 @@ export class InMemoryBatchSyncTransport<T> extends InMemorySyncTransport<T> {
 			})
 		);
 	}
+	private async wait(key: string): Promise<void> {
+		const paused = this.paused.get(key);
+		if (!paused) return;
+		this.paused.delete(key);
+		paused.start();
+		await paused.ready;
+	}
 }
+
+/** Named batch fixture retained for focused download scenarios. */
+export { InMemorySyncTransport as InMemoryBatchSyncTransport };

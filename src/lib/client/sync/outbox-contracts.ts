@@ -10,7 +10,13 @@ import type { WriteRecovery } from '$lib/models/outbox';
 
 export class OutboxAccountChangedError extends Error {}
 
+export interface OutboxProjection<C, T> {
+	readonly entries: readonly OutboxEntry<C, T>[];
+	readonly receipts: ReadonlyMap<string, WriteReceipt<T>>;
+}
+
 export interface OutboxRepository<C, T> {
+	snapshot(accountId: string): Promise<OutboxProjection<C, T>>;
 	pendingAcknowledgements(accountId: string): Promise<readonly string[]>;
 	acknowledged(accountId: string, operationId: string): Promise<void>;
 	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null>;

@@ -1,4 +1,3 @@
-import { WorkspaceChangeChannel } from '$lib/client/sync/change-channel';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { expect, it } from 'vitest';
 import { workspaceRecordSchema, resourceDataSchemas } from '$lib/models/workspace-records';
@@ -59,7 +58,6 @@ it('observes recovery data committed by another client', async () => {
 	const second = createWorkspaceResources(accountId);
 	first.setOnline(false);
 	second.setOnline(false);
-	const channel = new WorkspaceChangeChannel(accountId);
 	try {
 		await Promise.all([first.initialize(), second.initialize()]);
 		await new IndexedDbStorageRecovery().save(
@@ -72,12 +70,10 @@ it('observes recovery data committed by another client', async () => {
 			},
 			'Preserved'
 		);
-		channel.publish('writes');
 		await expect
 			.poll(() => second.recoveryItems.map((item) => item.message))
 			.toEqual(['Unreadable']);
 	} finally {
-		channel.close();
 		first.stop();
 		second.stop();
 	}

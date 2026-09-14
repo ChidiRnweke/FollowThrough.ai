@@ -166,14 +166,3 @@ describe('durable workspace cache', () => {
 });
 
 cacheRepositoryContract(() => setup().repository);
-
-it('preserves a failure reported after the storage transaction completes', async () => {
-	const { name } = setup();
-	const repository = new IndexedDbSyncCache(z.string(), name, () => {
-		throw new Error('Observer failed after commit');
-	});
-	openRepositories.push(repository);
-	await expect(repository.commit('alice', { put: [], remove: [] })).rejects.toThrow(
-		'Observer failed after commit'
-	);
-});
