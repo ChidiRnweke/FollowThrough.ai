@@ -154,18 +154,15 @@ const begin = async (): Promise<WorkspaceSession> => {
 	};
 	const session = current;
 	await resources.initialize();
-	await resources.requireCollections(['users', 'projects', 'agent_preferences']);
+	const cachedShell = resources.views.shell(bootstrap.accountId);
+	const preferencesKnown =
+		resources.views.get('agent_preferences', bootstrap.accountId) !== undefined ||
+		resources.availability !== 'unknown';
+	if (!cachedShell?.projects.some((project) => project.role === 'inbox') || !preferencesKnown)
+		await resources.requireCollections(['users', 'projects', 'agent_preferences']);
 	void session.shell;
 	void session.preferences;
-	await resources.prepare([
-		'users',
-		'projects',
-		'notes',
-		'skills',
-		'suggestions',
-		'agent_preferences',
-		'conversations'
-	]);
+	void resources.synchronize();
 	if (generation !== openingGeneration || current !== session)
 		throw new Error('The workspace account changed while opening');
 	const refresh = (): void => {

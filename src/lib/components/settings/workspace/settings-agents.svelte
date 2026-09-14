@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount } from 'svelte';
 	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
@@ -31,7 +32,8 @@
 		| { kind: 'ready'; draft: WorkspaceDraft<'agent_preferences'> }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
-	let busy = $state(false);
+	const editorSession = new EditorSession(() => form.kind === 'ready' && form.draft.active);
+	const busy = $derived(editorSession.saving);
 	onMount(() => {
 		let cancelled = false;
 		void openPreferenceDraft('agent_preferences')
@@ -51,6 +53,7 @@
 			});
 		return () => {
 			cancelled = true;
+			editorSession.close();
 		};
 	});
 	async function save(event: SubmitEvent): Promise<void> {
@@ -61,24 +64,25 @@
 			toast.error('Reopen these preferences before editing');
 			return;
 		}
-		busy = true;
-		try {
-			const saved = await form.draft.stage({
-				kind: 'updateAgentPreferences',
-				userId: value.userId,
-				patch: {
-					webSearchEngine: searchEngine || null,
-					webSearchMaxResults: searchMaxResults,
-					webSearchMaxTotalResults: searchMaxTotalResults,
-					agentMaxTurns: maxTurns,
-					executionMode: mode
-				}
-			});
-			if (saved.kind === 'failure') toast.error(saved.message);
-			else toast.success('Agent defaults saved on this device');
-		} finally {
-			busy = false;
-		}
+		const draft = form.draft;
+		if (!editorSession.dirty) return;
+		await editorSession.save(
+			() =>
+				draft.stage({
+					kind: 'updateAgentPreferences',
+					userId: value.userId,
+					patch: {
+						webSearchEngine: searchEngine || null,
+						webSearchMaxResults: searchMaxResults,
+						webSearchMaxTotalResults: searchMaxTotalResults,
+						agentMaxTurns: maxTurns,
+						executionMode: mode
+					}
+				}),
+			() => undefined
+		);
+		if (editorSession.failure) toast.error(editorSession.failure);
+		else toast.success('Agent defaults saved on this device');
 	}
 
 	const describeResultsPerSearch = (current: number): string => {
@@ -134,6 +138,7 @@
 						type="single"
 						value={searchEngine}
 						onValueChange={(next) => {
+							editorSession.changed();
 							if (next === '') searchEngine = '';
 							else {
 								const engine = webSearchEngines.find((engine) => engine === next);
@@ -181,7 +186,10 @@
 						describe={describeResultsPerSearch}
 						format={(current) =>
 							searchMaxResults === null ? `Default (${current})` : String(current)}
-						onchange={(next) => (searchMaxResults = next)}
+						onchange={(next) => {
+							searchMaxResults = next;
+							editorSession.changed();
+						}}
 					/>
 					{#if searchMaxResults !== null}
 						<Button
@@ -189,7 +197,10 @@
 							variant="link"
 							size="sm"
 							class="h-auto self-end px-0 text-xs"
-							onclick={() => (searchMaxResults = null)}>Reset to default</Button
+							onclick={() => {
+								searchMaxResults = null;
+								editorSession.changed();
+							}}>Reset to default</Button
 						>
 					{/if}
 				</div>
@@ -216,7 +227,10 @@
 						describe={describeTotalResults}
 						format={(current) =>
 							searchMaxTotalResults === null ? `Default (${current})` : String(current)}
-						onchange={(next) => (searchMaxTotalResults = next)}
+						onchange={(next) => {
+							searchMaxTotalResults = next;
+							editorSession.changed();
+						}}
 					/>
 					{#if searchMaxTotalResults !== null}
 						<Button
@@ -224,7 +238,10 @@
 							variant="link"
 							size="sm"
 							class="h-auto self-end px-0 text-xs"
-							onclick={() => (searchMaxTotalResults = null)}>Reset to default</Button
+							onclick={() => {
+								searchMaxTotalResults = null;
+								editorSession.changed();
+							}}>Reset to default</Button
 						>
 					{/if}
 				</div>
@@ -253,7 +270,10 @@
 						]}
 						describe={describeTurnLimit}
 						format={(current) => (maxTurns === null ? `Default (${current})` : String(current))}
-						onchange={(next) => (maxTurns = next)}
+						onchange={(next) => {
+							maxTurns = next;
+							editorSession.changed();
+						}}
 					/>
 					{#if maxTurns !== null}
 						<Button
@@ -261,7 +281,10 @@
 							variant="link"
 							size="sm"
 							class="h-auto self-end px-0 text-xs"
-							onclick={() => (maxTurns = null)}>Reset to default</Button
+							onclick={() => {
+								maxTurns = null;
+								editorSession.changed();
+							}}>Reset to default</Button
 						>
 					{/if}
 				</div>
@@ -275,7 +298,15 @@
 					>
 				</Field.Content>
 				<div class={controlClass}>
-					<ExecutionModeControl bind:value={mode} />
+					<ExecutionModeControl
+						bind:value={
+							() => mode,
+							(next) => {
+								mode = next;
+								editorSession.changed();
+							}
+						}
+					/>
 				</div>
 			</div>
 		</div>

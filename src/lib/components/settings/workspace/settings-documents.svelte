@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount } from 'svelte';
 	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
@@ -16,7 +17,8 @@
 		| { kind: 'ready'; draft: WorkspaceDraft<'user_preferences'> }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
-	let busy = $state(false);
+	const editorSession = new EditorSession(() => form.kind === 'ready' && form.draft.active);
+	const busy = $derived(editorSession.saving);
 	onMount(() => {
 		let cancelled = false;
 		void openPreferenceDraft('user_preferences')
@@ -32,6 +34,7 @@
 			});
 		return () => {
 			cancelled = true;
+			editorSession.close();
 		};
 	});
 	async function save(event: SubmitEvent): Promise<void> {
@@ -42,18 +45,19 @@
 			toast.error('Reopen these preferences before editing');
 			return;
 		}
-		busy = true;
-		try {
-			const saved = await form.draft.stage({
-				kind: 'updateUserPreferences',
-				userId: value.userId,
-				sectionNumberingDefault
-			});
-			if (saved.kind === 'failure') toast.error(saved.message);
-			else toast.success('Document defaults saved on this device');
-		} finally {
-			busy = false;
-		}
+		const draft = form.draft;
+		if (!editorSession.dirty) return;
+		await editorSession.save(
+			() =>
+				draft.stage({
+					kind: 'updateUserPreferences',
+					userId: value.userId,
+					sectionNumberingDefault
+				}),
+			() => undefined
+		);
+		if (editorSession.failure) toast.error(editorSession.failure);
+		else toast.success('Document defaults saved on this device');
 	}
 </script>
 
@@ -78,7 +82,16 @@
 						Number headings like a Word document: 1. for H1, 1.1 for H2, down to H4.
 					</Field.Description>
 				</Field.Content>
-				<Switch aria-label="Section numbering" bind:checked={sectionNumberingDefault} />
+				<Switch
+					aria-label="Section numbering"
+					bind:checked={
+						() => sectionNumberingDefault,
+						(next) => {
+							sectionNumberingDefault = next;
+							editorSession.changed();
+						}
+					}
+				/>
 			</Field.Field>
 		</Field.Group>
 	</Form>

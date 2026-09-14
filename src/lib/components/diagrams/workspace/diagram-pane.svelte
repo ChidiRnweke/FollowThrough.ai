@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/models/diagrams';
 	import type {
@@ -36,7 +37,7 @@
 	const resources = session.resources;
 	const draft = untrack(() => resources.draft({ type: 'diagrams', id: [diagramId] }));
 	let opened = $state(false);
-	let displayedVersion = $state<string | null>(null);
+	const editorSession = new EditorSession(() => resources.active);
 	let control = $state<DrawioControl>();
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
 	let renaming = $state(false);
@@ -85,13 +86,12 @@
 	);
 
 	async function load(): Promise<void> {
-		const result = await draft.read();
+		const result = await draft.read(editorSession.checkpoint());
 		opened = result.kind === 'ready';
-		if (opened)
-			displayedVersion = resources.snapshot({ type: 'diagrams', id: [diagramId] })?.etag ?? null;
 	}
 	onMount(() => {
 		void load();
+		return () => editorSession.close();
 	});
 
 	$effect(() => {
@@ -108,7 +108,7 @@
 			!opened ||
 			!control ||
 			!snapshot ||
-			snapshot.etag === displayedVersion ||
+			snapshot.etag === draft.observedEtag ||
 			draft.status !== 'synced' ||
 			editor.modified ||
 			busy ||
@@ -121,7 +121,7 @@
 			const changedSource = draft.value?.source.trim() !== value.value.source.trim();
 			draft.capture();
 			if (changedSource) control?.replace(value.value.source);
-			displayedVersion = snapshot.etag;
+			editorSession.accept();
 		});
 	});
 
@@ -210,6 +210,7 @@
 			const value = editable();
 			if (!resources.online || draft.status !== 'synced' || editor.modified)
 				throw new Error('Save the diagram and connect before restoring a version');
+			const isCurrent = editorSession.checkpoint();
 			const result = await restoreDiagramRevision({
 				diagramId,
 				revisionId,
@@ -218,7 +219,7 @@
 			if (result.outcome !== 'saved')
 				throw new Error('The diagram changed. Review it before restoring a version');
 			await resources.synchronize();
-			const opened = await draft.read(() => !editor.modified);
+			const opened = await draft.read(() => isCurrent() && !editor.modified);
 			if (opened.kind === 'ready') control?.replace(opened.value.source);
 			else if (opened.kind === 'superseded')
 				toast.info('Your later edits are retained for review.');
@@ -229,7 +230,9 @@
 		}
 	}
 	async function useRemote(): Promise<void> {
-		const result = await draft.discard();
+		const isCurrent = editorSession.checkpoint();
+		const result = await draft.discard(isCurrent);
+		if (result.kind === 'superseded') return;
 		if (result.kind === 'ready') control?.replace(result.value.source);
 		else if (result.kind !== 'deleted') throw new Error('The server copy could not be opened');
 		conflictOpen = false;
@@ -346,7 +349,10 @@
 				onautosave={autosave}
 				onreview={(output) => (reviewSource = output.xml)}
 				onmodifiedchange={(modified) => {
-					if (modified) reviewSource = null;
+					if (modified) {
+						editorSession.changed();
+						reviewSource = null;
+					}
 				}}
 				oncontrol={(value) => (control = value)}
 				onstatus={(value) => (editor = value)}

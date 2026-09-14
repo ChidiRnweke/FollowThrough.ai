@@ -170,10 +170,10 @@ export class WorkspaceResources {
 			});
 		return this.initializing;
 	}
-	/** List reads wait only for missing bodies; retained bodies remain renderable during updates. */
+	/** Render cached collections immediately while the runtime refreshes their inventory. */
 	async prepare(_types: readonly WorkspaceResourceType[]): Promise<void> {
 		await this.initialize();
-		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
+		this.runtime.committed();
 	}
 	collectionReadiness(types: readonly WorkspaceResourceType[]): 'unknown' | 'incomplete' | 'ready' {
 		void this.revision;
@@ -186,7 +186,8 @@ export class WorkspaceResources {
 	}
 
 	async requireCollections(types: readonly WorkspaceResourceType[]): Promise<void> {
-		await this.prepare(types);
+		await this.initialize();
+		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
 		if (this.collectionReadiness(types) !== 'ready')
 			throw new Error(
 				'Required workspace data is not available on this device. Reconnect and retry.'
@@ -386,6 +387,13 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	) {
 		this.key = workspaceResourceKey(identity);
 	}
+	get active(): boolean {
+		return this.resources.active;
+	}
+	get observedEtag(): string | null {
+		return this.current?.base?.etag ?? null;
+	}
+
 	private get entries() {
 		return this.resources.pending.filter((entry) => entry.intent.key === this.key);
 	}
@@ -607,7 +615,13 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		}
 		await this.resources.synchronize();
 	}
-	async discard(): Promise<CacheAccess<WorkspaceValues[K]>> {
+	discard(): Promise<CacheAccess<WorkspaceValues[K]>>;
+	discard(
+		isCurrent: () => boolean
+	): Promise<CacheAccess<WorkspaceValues[K]> | { kind: 'superseded' }>;
+	async discard(
+		isCurrent: () => boolean = () => true
+	): Promise<CacheAccess<WorkspaceValues[K]> | { kind: 'superseded' }> {
 		const reviewed = this.entries;
 		const conflict = reviewed.find((entry) => entry.delivery.kind === 'conflict');
 		const state = this.resources.state(this.identity);
@@ -625,10 +639,11 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			}
 		}
 		await this.resources.discard(reviewed.map((entry) => entry.intent.operationId));
+		if (!isCurrent()) return { kind: 'superseded' };
 		if (state?.kind === 'deleted') {
 			this.current = null;
 			return { kind: 'deleted' };
 		}
-		return this.read();
+		return this.read(isCurrent);
 	}
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { noteCommand, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
@@ -96,8 +97,9 @@
 	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
 	let syncReady = $state(false);
-	let dirty = $state(false);
-	let saveFailed = $state(false);
+	const editorSession = untrack(() => new EditorSession(() => draft.active));
+	const dirty = $derived(editorSession.dirty);
+	const saveFailed = $derived(editorSession.failure !== null);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
 	const actionRuns = noteActionRunsFor(untrack(() => view.note.id));
@@ -107,10 +109,7 @@
 	const cancellingAction = $derived(actionRuns.activeSelectionAction?.cancelling ?? false);
 	let publishing = $state(false);
 	let reconciling = false;
-	let editVersion = 0;
 	let lastSaveKeyTime = 0;
-	let saveQueued = false;
-	let activeSave: Promise<void> | undefined;
 	// Local copy so title edits and fresh revisions survive between loads;
 	// the page remounts this component per note via {#key}.
 	let note = $state(untrack(() => ({ ...view.note })));
@@ -172,6 +171,7 @@
 		});
 		return () => {
 			cancelled = true;
+			editorSession.close();
 			actionRuns.detach();
 		};
 	});
@@ -198,9 +198,9 @@
 		)
 			return;
 		reconciling = true;
-		const version = editVersion;
+		const isCurrent = editorSession.checkpoint();
 		void draft
-			.read(() => version === editVersion && !dirty)
+			.read(() => isCurrent() && !dirty)
 			.then((opened) => {
 				if (opened.kind === 'superseded') return;
 				if (opened.kind !== 'ready') {
@@ -257,9 +257,7 @@
 	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 
 	function markDirty(): void {
-		editVersion += 1;
-		dirty = true;
-		saveFailed = false;
+		editorSession.changed();
 		clearTimeout(autosaveTimer);
 		autosaveTimer = setTimeout(() => void save({ auto: true }), AUTOSAVE_DELAY);
 	}
@@ -280,52 +278,33 @@
 			return Promise.resolve();
 		}
 		clearTimeout(autosaveTimer);
-		saveQueued = true;
-		activeSave ??= flushSaves(options).finally(() => {
-			activeSave = undefined;
-		});
-		return activeSave;
-	}
-
-	async function flushSaves(options: { auto?: boolean }): Promise<void> {
-		while (saveQueued && editorRef) {
-			saveQueued = false;
-			const savingVersion = editVersion;
-			const record = await draft.stage(
-				noteCommand({
-					...note,
-					title: note.title.trim(),
-					document: editorRef.getDocument(),
-					plainText: editorRef.getPlainText()
-				})
-			);
-			if (record.kind === 'failure' || !record.value) {
-				saveFailed = true;
-				dirty = true;
-				if (!options.auto) toast.error('Could not save the note. Try again.');
-				return;
-			}
-
-			saveFailed = false;
-			if (savingVersion === editVersion) {
-				note = { ...record.value };
-				dirty = false;
-			} else {
-				note = {
-					...note,
-					currentRevision: record.value.currentRevision,
-					updatedAt: record.value.updatedAt
-				};
-				dirty = true;
-				saveQueued = true;
-			}
-			if (draft.status === 'conflict') {
-				conflictOpen = true;
-				if (!saveQueued) return;
-			} else if (draft.status === 'synced') {
-				await workspaceSession.synchronize();
-			}
-		}
+		return editorSession
+			.save(
+				async () => {
+					if (!editorRef) return { kind: 'failure', message: 'The editor is unavailable' };
+					const result = await draft.stage(
+						noteCommand({
+							...note,
+							title: note.title.trim(),
+							document: editorRef.getDocument(),
+							plainText: editorRef.getPlainText()
+						})
+					);
+					if (result.kind === 'failure') return result;
+					return result.value
+						? { kind: 'saved', value: result.value }
+						: { kind: 'failure', message: 'The note no longer exists' };
+				},
+				(value, unchanged) => {
+					note = unchanged
+						? { ...value }
+						: { ...note, currentRevision: value.currentRevision, updatedAt: value.updatedAt };
+					conflictOpen = draft.status === 'conflict';
+				}
+			)
+			.then(() => {
+				if (editorSession.failure && !options.auto) toast.error(editorSession.failure);
+			});
 	}
 
 	async function ensureSynchronized(message: string): Promise<boolean> {
@@ -343,6 +322,7 @@
 			await save({ auto: true });
 			if (dirty) return;
 		}
+		const isCurrent = editorSession.checkpoint();
 		const toggled = { ...note, isPinned: !note.isPinned };
 		const record = await draft.stage(
 			noteCommand({
@@ -352,8 +332,9 @@
 			})
 		);
 		if (record.kind === 'saved' && record.value) {
+			if (!isCurrent()) return;
 			note = { ...record.value };
-			dirty = false;
+			editorSession.accept();
 			conflictOpen = draft.status === 'conflict';
 			toast.success(note.isPinned ? 'Pinned' : 'Unpinned');
 			if (draft.status === 'synced') await workspaceSession.synchronize();
@@ -633,31 +614,35 @@
 	}
 
 	async function retrySync(): Promise<void> {
+		const isCurrent = editorSession.checkpoint();
 		await draft.retry();
 		const local = draft.value;
 		if (!local) {
 			toast.error(draft.lastError ?? 'This resource is unavailable');
 			return;
 		}
-		note = { ...local };
+		if (isCurrent() && !dirty) note = { ...local };
 		conflictOpen = draft.status === 'conflict';
 		if (draft.status === 'synced') await workspaceSession.synchronize();
 		else if (draft.lastError) toast.error(draft.lastError);
 	}
 
 	async function useRemoteVersion(): Promise<void> {
-		const remote = await draft.discard();
+		const remote = await draft.discard(editorSession.checkpoint());
+		if (remote.kind === 'superseded') return;
 		if (remote.kind !== 'ready') throw new Error('The server copy is unavailable');
 		note = { ...remote.value };
 		editorRef?.replaceDocument(remote.value.document);
-		dirty = false;
+		editorSession.accept();
 		await workspaceSession.synchronize();
 	}
 
 	async function keepLocalVersion(): Promise<void> {
+		const isCurrent = editorSession.checkpoint();
 		await draft.keep();
 		const local = draft.value;
 		if (!local) throw new Error('The local edit is unavailable');
+		if (!isCurrent() || dirty) return;
 		note = { ...local };
 		conflictOpen = draft.status === 'conflict';
 
@@ -730,13 +715,13 @@
 	async function restoreRevision(revisionId: NoteRevisionId): Promise<void> {
 		if (!(await ensureSynchronized('Sync the note before restoring a version.'))) return;
 		try {
-			const version = editVersion;
+			const isCurrent = editorSession.checkpoint();
 			await restoreNoteRevision({
 				noteId: note.id,
 				revisionId
 			});
 			await workspaceSession.synchronize();
-			const opened = await draft.read(() => version === editVersion);
+			const opened = await draft.read(() => isCurrent());
 			if (opened.kind === 'superseded') {
 				toast.info('The server version changed. Your later edits are retained for review.');
 				return;
@@ -745,7 +730,7 @@
 			const local = opened.value;
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
-			dirty = false;
+			editorSession.accept();
 			toast.success('Restored that version');
 			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — restore failure is reported and the current note remains authoritative.
@@ -762,15 +747,15 @@
 			return;
 		}
 		try {
-			const version = editVersion;
+			const isCurrent = editorSession.checkpoint();
 			const { revisions } = await listNoteRevisions(note.id);
 			const published = revisions.find((revision) => revision.revision === note.publishedRevision);
 			if (!published) throw new Error('The published version is unavailable');
 			const { revision } = await getNoteRevision({ noteId: note.id, revisionId: published.id });
-			if (version !== editVersion) return;
+			if (!isCurrent()) return;
 			const result = await draft.discardPublished(revision);
 			if (result.kind === 'failure') throw new Error(result.message);
-			const opened = await draft.read(() => version === editVersion);
+			const opened = await draft.read(() => isCurrent());
 			if (opened.kind === 'superseded') {
 				toast.info('The server version changed. Your later edits are retained for review.');
 				return;
@@ -779,7 +764,7 @@
 			const local = opened.value;
 			note = { ...local };
 			editorRef?.replaceDocument(local.document);
-			dirty = false;
+			editorSession.accept();
 			toast.success('Reverted to last published version');
 			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — discard failure is reported and the local draft remains available.

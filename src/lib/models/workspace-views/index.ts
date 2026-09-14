@@ -32,9 +32,16 @@ export type WorkspaceSkill = WorkspaceValues['skills'] & {
 
 /** Pure projections of the normalized workspace, including the caller's local write overlays. */
 export class WorkspaceViews {
-	constructor(private readonly records: ReadonlyMap<string, WorkspaceRecord>) {}
+	private readonly byType = new Map<WorkspaceRecord['type'], WorkspaceRecord[]>();
+	constructor(private readonly records: ReadonlyMap<string, WorkspaceRecord>) {
+		for (const record of records.values()) {
+			const bucket = this.byType.get(record.type);
+			if (bucket) bucket.push(record);
+			else this.byType.set(record.type, [record]);
+		}
+	}
 	all<K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K][] {
-		return [...this.records.values()]
+		return (this.byType.get(type) ?? [])
 			.filter((record): record is WorkspaceRecordOf<K> => record.type === type)
 			.map((record) => record.value);
 	}

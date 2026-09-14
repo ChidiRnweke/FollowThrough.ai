@@ -121,7 +121,7 @@ describe('shared workspace reads', () => {
 			remove: []
 		});
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
-		await cache.refresh();
+		await resources.initialize();
 		const paused = transport.pause('changes');
 		const warming = cache.refresh();
 		await paused.started;
@@ -150,7 +150,7 @@ describe('shared workspace reads', () => {
 		});
 		transport.records.set(key, { etag: syncEtag(1n), value: project });
 		transport.records.set(userKey, { etag: syncEtag(2n), value: user });
-		await resources.prepare(['projects']);
+		await resources.requireCollections(['projects']);
 		expect({ listed: resources.records.get(key), unrelated: cache.access(userKey) }).toEqual({
 			listed: project,
 			unrelated: { kind: 'ready', value: user }
@@ -448,7 +448,7 @@ it('prepares a complete collection within the batch transport capacity', async (
 			value: record
 		});
 	}
-	await resources.prepare(['projects']);
+	await resources.requireCollections(['projects']);
 	expect(resources.records.size).toBe(70);
 });
 
@@ -456,7 +456,7 @@ it('prepares a complete collection within the batch transport capacity', async (
 it('marks an empty collection ready after its full inventory arrives', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	await resources.prepare(['projects']);
+	await resources.requireCollections(['projects']);
 	expect(resources.collectionReadiness(['attachments', 'attachment_versions'])).toBe('ready');
 });
 
