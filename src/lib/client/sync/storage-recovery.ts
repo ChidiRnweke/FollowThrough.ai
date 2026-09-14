@@ -6,13 +6,7 @@ import {
 	type StorageRecoveryItem,
 	type ResourceState
 } from '$lib/models/sync';
-import {
-	completed,
-	WorkspaceDatabase,
-	storedTable,
-	requestValue,
-	storedResourceSchema
-} from './database';
+import { WorkspaceDatabase, storedTable, storedResourceSchema } from './database';
 
 export const recoveryGeneration = async (
 	transaction: Transaction,
@@ -133,42 +127,16 @@ export const recoveryItems = async (
 	return items;
 };
 
-const legacyRecoveryText = async (accountId: string): Promise<string> => {
-	const name = 'followthrough-note-sync';
-	if (!(await indexedDB.databases()).some((database) => database.name === name)) return '[]';
-	const database = await new Promise<IDBDatabase>((resolve, reject) => {
-		const request = indexedDB.open(name);
-		request.onsuccess = () => resolve(request.result);
-		request.onerror = () =>
-			reject(request.error ?? new Error('Saved legacy edits could not be opened'));
-	});
-	try {
-		if (!database.objectStoreNames.contains('note-sync-records')) return '[]';
-		const transaction = database.transaction('note-sync-records', 'readonly');
-		const done = completed(transaction);
-		const rows = await requestValue(
-			transaction
-				.objectStore('note-sync-records')
-				.getAll(IDBKeyRange.bound(`${accountId}:`, `${accountId}:\uffff`))
-		);
-		await done;
-		return JSON.stringify(rows);
-	} finally {
-		database.close();
-	}
-};
-
 export class IndexedDbStorageRecovery {
 	private readonly database: WorkspaceDatabase;
 	constructor(
 		databaseName = 'followthrough-workspace-sync',
-		private readonly legacyDatabaseName = 'followthrough-note-sync',
+		_unusedLegacyDatabaseName?: string,
 		database = new WorkspaceDatabase(databaseName)
 	) {
 		this.database = database;
 	}
 	async downloadAccount(accountId: string): Promise<Blob> {
-		const legacyNotes = await legacyRecoveryText(accountId);
 		const [outbox, quarantine] = await this.database.transaction(
 			'r',
 			['outbox', 'quarantine'],
@@ -179,7 +147,7 @@ export class IndexedDbStorageRecovery {
 					)
 				)
 		);
-		return recoveryBlob({ accountId, outbox, quarantine, legacyNotes });
+		return recoveryBlob({ accountId, outbox, quarantine });
 	}
 	async remove(accountId: string, source: string, key: string): Promise<void> {
 		await this.database.transaction('rw', 'quarantine', async (transaction) => {
@@ -194,24 +162,6 @@ export class IndexedDbStorageRecovery {
 				await store.put({ accountId, source, key, resolution: 'removed' });
 			else await store.delete([accountId, source, key]);
 		});
-		if (source === 'legacy-note') await this.removeLegacyRow(accountId, key);
-	}
-	private async removeLegacyRow(accountId: string, key: string): Promise<void> {
-		if (!key.startsWith(`${accountId}:`))
-			throw new Error('The recovery source belongs to another account');
-		if (
-			!(await indexedDB.databases()).some((database) => database.name === this.legacyDatabaseName)
-		)
-			return;
-		const database = await requestValue(indexedDB.open(this.legacyDatabaseName));
-		try {
-			const transaction = database.transaction('note-sync-records', 'readwrite');
-			const done = completed(transaction);
-			transaction.objectStore('note-sync-records').delete(key);
-			await done;
-		} finally {
-			database.close();
-		}
 	}
 
 	async save(item: StorageRecoveryItem, raw: unknown): Promise<void> {

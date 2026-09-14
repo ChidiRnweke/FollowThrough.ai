@@ -51,17 +51,13 @@ const setup = (
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: writeTransport,
-		resolveBase: async () => {
-			throw new Error('This fixture has no imported draft');
-		},
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources('alice', {
 		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
-		writes,
-		restoreLocalWrites: async () => undefined
+		writes
 	});
 	outbox.observe('alice', (state) => resources.applyLocal(state));
 	return {

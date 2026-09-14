@@ -162,47 +162,6 @@ describe('durable local writes', () => {
 	});
 });
 
-describe('durable draft import', () => {
-	it('does not resurrect an imported draft after its acknowledgement', async () => {
-		const { outbox } = setup();
-		const input = draft();
-		await outbox.importOnce('alice', 'old-note', input, null);
-		const sent = await outbox.take('alice');
-		if (!sent) throw new Error('Expected a submitted import');
-		await outbox.settle('alice', sent, {
-			kind: 'applied',
-			receipt: { operationId: input.operationId, resource: { kind: 'found', snapshot } }
-		});
-		await outbox.importOnce('alice', 'old-note', input, null);
-		expect(await outbox.list('alice')).toEqual([]);
-	});
-	it('retains unversioned base, local, and remote copies across reopening', async () => {
-		const { name, outbox } = setup();
-		const input = { ...draft(), base: { etag: null, value: 'Original' }, local: 'Offline edit' };
-		const remote = { kind: 'found' as const, snapshot: { etag: null, value: 'Other client' } };
-		await outbox.importOnce('alice', 'old-note', input, remote);
-		await outbox.close();
-		const [saved] = await setup(name).outbox.list('alice');
-		expect({
-			base: saved.intent.base,
-			local: saved.intent.local,
-			delivery: saved.delivery
-		}).toEqual({ base: input.base, local: input.local, delivery: { kind: 'conflict', remote } });
-	});
-	it('rolls back the import marker when appending fails', async () => {
-		const { outbox } = setup();
-		const input = draft();
-		await outbox.append('alice', input);
-		await outbox.importOnce('alice', 'old-note', input, null).catch(() => ({ kind: 'failure' }));
-		const replacement = draft('note:2');
-		await outbox.importOnce('alice', 'old-note', replacement, null);
-		expect((await outbox.list('alice')).map((entry) => entry.intent.operationId)).toEqual([
-			input.operationId,
-			replacement.operationId
-		]);
-	});
-});
-
 describe('durable conflict resolution', () => {
 	it('keeps the authoritative server copy after discarding a rejected local edit', async () => {
 		const { outbox, cache } = setup();
@@ -222,8 +181,14 @@ describe('durable conflict resolution', () => {
 	});
 	it('makes a confirmed keep-local decision durable with a new guarded operation', async () => {
 		const { outbox } = setup();
-		const input = { ...draft('note:1', 'Edited'), base: { etag: null, value: 'Original' } };
-		await outbox.importOnce('alice', 'conflict', input, { kind: 'found', snapshot });
+		const input = { ...draft('note:1', 'Edited'), base: { etag: syncEtag(1n), value: 'Original' } };
+		await outbox.append('alice', input);
+		const original = await outbox.take('alice');
+		if (!original) throw new Error('Expected queued edit');
+		await outbox.settle('alice', original, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
 		const replacement = crypto.randomUUID();
 		await outbox.keepLocal('alice', input.operationId, replacement);
 		const sent = await outbox.take('alice');
@@ -236,7 +201,13 @@ describe('durable conflict resolution', () => {
 	it('preserves both creation-conflict copies when keep-local is refused', async () => {
 		const { outbox, name } = setup();
 		const input = draft();
-		await outbox.importOnce('alice', 'creation-conflict', input, { kind: 'found', snapshot });
+		await outbox.append('alice', input);
+		const submitted = await outbox.take('alice');
+		if (!submitted) throw new Error('Expected queued creation');
+		await outbox.settle('alice', submitted, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
 		const [original] = await outbox.list('alice');
 		const outcome = await outbox
 			.keepLocal('alice', input.operationId, crypto.randomUUID())
@@ -267,10 +238,13 @@ describe('durable conflict resolution', () => {
 			records: (await cache.load('alice')).records
 		}).toEqual({ local: input.local, records: [{ key: input.key, entry: remote }] });
 	});
-	it('persists an imported base validation alongside its authoritative server copy', async () => {
+	it('persists a refreshed conflict alongside its authoritative server copy', async () => {
 		const { outbox, cache } = setup();
-		const input = { ...draft(), base: { etag: null, value: 'Original' } };
+		const input = { ...draft(), base: { etag: syncEtag(1n), value: 'Original' } };
 		await outbox.append('alice', input);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected queued edit');
+		await outbox.settle('alice', sent, { kind: 'conflict', remote: { kind: 'unavailable' } });
 		await outbox.resolveBase('alice', input.operationId, {
 			kind: 'conflict',
 			remote: { kind: 'found', snapshot }

@@ -1,41 +1,22 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
-import { noteEtag } from '$lib/models/notes';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
-import {
-	workspaceCommandSchema,
-	resolveImportedNoteBase,
-	type LegacyNoteSyncRecord
-} from '$lib/models/workspace-mutations';
+import { workspaceCommandSchema, noteWrite } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAccountWriterLock } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
-import { seedLegacyNoteStorage } from '$lib/testing/sync/fixtures/legacy-note-storage';
 import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
-import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
 import { requestValue } from '$lib/client/sync/database';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {
-	const oldName = `editor-old-${crypto.randomUUID()}`;
 	const newName = `editor-new-${crypto.randomUUID()}`;
 	const note = noteBuilder({ plainText: 'Original' });
 	const local = { ...note, plainText: 'Offline draft' };
-	const record: LegacyNoteSyncRecord = {
-		userId: note.userId,
-		noteId: note.id,
-		base: { note, etag: noteEtag(note) },
-		local,
-		operationId: crypto.randomUUID(),
-		editVersion: 1,
-		state: 'pending',
-		updatedAt: note.updatedAt
-	};
-	await seedLegacyNoteStorage(oldName, [record]);
 	const outbox = new DexieWorkspaceRepository(
 		workspaceCommandSchema,
 		workspaceRecordSchema,
@@ -45,6 +26,15 @@ const setup = async () => {
 	const transport = new InMemoryNoteWrites();
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
 	transport.records.set(key, { etag: syncEtag(1n), value: { type: 'notes', value: note } });
+	await outbox.append(note.userId, {
+		operationId: crypto.randomUUID(),
+		key,
+		...noteWrite(local),
+		base: { etag: syncEtag(1n), value: { type: 'notes', value: note } },
+		basedOn: null,
+		coalesce: 'document',
+		references: []
+	});
 	const cache = new ResourceCache(note.userId, {
 		transport,
 		repository: {
@@ -57,19 +47,13 @@ const setup = async () => {
 		transport,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
-		resolveBase: async (key, base, local) => {
-			const remote = await transport.read(key, null);
-			if (remote.kind === 'unchanged') throw new Error('Expected full base');
-			return resolveImportedNoteBase(base, local, remote);
-		},
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(note.userId, {
 		recovery: outbox.recovery,
 		scheduler: new InMemorySyncScheduler(),
 		cache,
-		writes,
-		restoreLocalWrites: () => migrateLegacyNotes(note.userId, outbox, oldName)
+		writes
 	});
 	const unsubscribe = outbox.observe(
 		note.userId,
@@ -85,16 +69,15 @@ const setup = async () => {
 		resources.stop();
 		await repository.close();
 		await outbox.close();
-		await requestValue(indexedDB.deleteDatabase(oldName));
 		await requestValue(indexedDB.deleteDatabase(newName));
 	});
-	return { note, local, key, transport, resources, store, outbox, oldName };
+	return { note, local, key, transport, resources, store, outbox };
 };
 afterEach(async () => {
 	for (const cleanup of cleanups.splice(0)) await cleanup();
 });
-describe('legacy drafts opened by the shared editor', () => {
-	it('opens an imported offline draft before any authoritative resource has been downloaded', async () => {
+describe('durable offline drafts opened by the shared editor', () => {
+	it('opens a durable offline draft before any authoritative resource has been downloaded', async () => {
 		const { local, store } = await setup();
 		const opened = await store.read();
 		expect({ opened, status: store.status }).toEqual({
@@ -102,12 +85,11 @@ describe('legacy drafts opened by the shared editor', () => {
 			status: 'pending'
 		});
 	});
-	it('validates and submits an imported draft without resurrecting it on the next upgrade attempt', async () => {
-		const { note, key, store, resources, transport, outbox, oldName } = await setup();
+	it('submits a durable offline draft when reconnected', async () => {
+		const { note, key, store, resources, transport, outbox } = await setup();
 		await store.read();
 		resources.setOnline(true);
 		await store.retry();
-		await migrateLegacyNotes(note.userId, outbox, oldName);
 		expect({
 			pending: await outbox.list(note.userId),
 			saved: transport.records.get(key)?.value
@@ -145,18 +127,10 @@ it('retains the editor buffer with an error after a discard committed outside th
 });
 
 it('recognizes a durable acknowledgement from another writer while this tab remains offline', async () => {
-	const { store, resources, outbox, note, transport, key } = await setup();
+	const { store, resources, outbox, note, transport } = await setup();
 	await store.read();
-	const remote = await transport.read(key, null);
-	if (remote.kind !== 'found') throw new Error('The original server copy must exist');
-	const pending = (await outbox.list(note.userId))[0];
-	if (!pending) throw new Error('The imported edit must be queued');
-	await outbox.resolveBase(note.userId, pending.intent.operationId, {
-		kind: 'matched',
-		snapshot: remote.snapshot
-	});
 	const sent = await outbox.take(note.userId);
-	if (!sent || !sent.intent.base?.etag) throw new Error('The imported base must be validated');
+	if (!sent || !sent.intent.base?.etag) throw new Error('The persisted edit must retain its base');
 	const result = await transport.send({
 		operationId: sent.intent.operationId,
 		baseEtag: sent.intent.base.etag,

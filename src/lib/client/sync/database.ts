@@ -1,6 +1,6 @@
 import { Dexie, type Table, type Transaction } from 'dexie';
 import { z } from 'zod';
-import { resourceStateSchema, resourceVersionsConsistent, syncEtagSchema } from '$lib/models/sync';
+import { resourceStateSchema } from '$lib/models/sync';
 
 export const requestValue = <T>(request: IDBRequest<T>): Promise<T> =>
 	new Promise((resolve, reject) => {
@@ -17,53 +17,13 @@ export const completed = (transaction: IDBTransaction): Promise<void> =>
 			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
 	});
 
-export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) => {
-	const identity = { accountId: z.literal(accountId), key: z.string().min(1) };
-	const snapshot = z.object({ etag: syncEtagSchema, value });
-	const legacyCache = z
-		.discriminatedUnion('kind', [
-			z.object({ kind: z.literal('uncached') }),
-			z.object({ kind: z.literal('cached'), snapshot }),
-			z.object({
-				kind: z.literal('updating'),
-				previous: snapshot.nullable(),
-				target: syncEtagSchema.nullable(),
-				transfer: z.discriminatedUnion('kind', [
-					z.object({ kind: z.literal('queued') }),
-					z.object({ kind: z.literal('fetching') }),
-					z.object({ kind: z.literal('failed'), message: z.string() })
-				])
-			})
-		])
-		.transform((cache) => {
-			const body =
-				cache.kind === 'cached'
-					? cache.snapshot
-					: cache.kind === 'updating'
-						? cache.previous
-						: null;
-			const etag = cache.kind === 'updating' ? (cache.target ?? body?.etag) : body?.etag;
-			return etag ? { kind: 'present' as const, etag, body } : { kind: 'requested' as const };
-		})
-		.refine(
-			resourceVersionsConsistent,
-			'A retained body cannot be newer than the known resource version'
-		);
-	return z.union([
-		z.object({ ...identity, schemaVersion: z.literal(3), entry: resourceStateSchema(value) }),
-		z.object({
-			...identity,
-			schemaVersion: z.literal(2),
-			entry: z.union([
-				z
-					.object({ kind: z.literal('present'), cache: legacyCache })
-					.transform(({ cache }) => cache),
-				z.object({ kind: z.literal('deleted'), etag: syncEtagSchema })
-			])
-		}),
-		z.object({ ...identity, schemaVersion: z.literal(1), entry: legacyCache })
-	]);
-};
+export const storedResourceSchema = <T>(accountId: string, value: z.ZodType<T>) =>
+	z.object({
+		accountId: z.literal(accountId),
+		key: z.string().min(1),
+		schemaVersion: z.literal(3),
+		entry: resourceStateSchema(value)
+	});
 
 /** Native storage upgrades in place; version 2 closes tabs using the old cache shape. */
 export class WorkspaceDatabase extends Dexie {
@@ -77,7 +37,6 @@ export class WorkspaceDatabase extends Dexie {
 			cursors: 'accountId',
 			outbox: '[accountId+entry.sequence], accountId, &[accountId+entry.intent.operationId]',
 			'write-receipts': '[accountId+key]',
-			imports: '[accountId+source]',
 			'queue-heads': 'accountId'
 		});
 		this.on('blocked', () => {

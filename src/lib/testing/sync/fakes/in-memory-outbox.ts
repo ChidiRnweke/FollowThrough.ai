@@ -92,10 +92,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		const entries = await this.list(accountId);
 		const next = resolveWriteBase(entries, operationId, resolution);
 		const original = entries.find((entry) => entry.intent.operationId === operationId);
-		const resource =
-			resolution.kind === 'matched'
-				? { kind: 'found' as const, snapshot: resolution.snapshot }
-				: resolution.remote;
+		const resource = resolution.remote;
 		if (original && resource.kind !== 'unavailable')
 			await this.saveResource(accountId, original.intent.key, resource);
 		this.accounts.set(accountId, next);

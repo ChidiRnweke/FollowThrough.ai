@@ -34,6 +34,8 @@ Complete-page replication: 3,219 node tests, 29 workspace browser tests, 23 affe
 
 Proof-only writes: focused node tests and all 80 sync PostgreSQL contracts pass (the changed cancellation contract passed on rerun). Svelte check and architecture pass. Added dependent-edit review and ledger-content assertions.
 
+Account-store preparation: removed legacy note import code, migration lock/markers and unresolved-base submission. Converted editor tests to current durable drafts. 137 focused node tests and 59 browser tests pass. Storage topology/repair replacement remains in progress.
+
 ## Dependency decisions
 
 Dexie owns transaction and observation mechanics. dexie-export-import owns chunked raw database export (https://dexie.org/docs/ExportImport/dexie-export-import). TanStack offline transactions currently bypass durable offline execution in nonleader tabs; RxDB lacks the multi-record ACID transactions this design uses. No extra scheduler/query/state-machine framework or sync service. Existing small service worker and SvelteKit offline shell remain.

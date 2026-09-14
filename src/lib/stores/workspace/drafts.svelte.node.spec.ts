@@ -33,17 +33,13 @@ const setup = async () => {
 		transport,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
-		resolveBase: async () => {
-			throw new Error('No imported bases in this fixture');
-		},
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(note.userId, {
 		recovery: new IndexedDbStorageRecovery(),
 		scheduler: new InMemorySyncScheduler(),
 		cache,
-		writes,
-		restoreLocalWrites: async () => undefined
+		writes
 	});
 	outbox.observe(note.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);

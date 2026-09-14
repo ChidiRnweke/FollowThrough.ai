@@ -10,9 +10,3 @@ export const browserWriterLock: AccountWriterLock = {
 		),
 	run: (accountId, work) => navigator.locks.request(`workspace-sync:write:${accountId}`, work)
 };
-
-/** Migration markers are atomic in IndexedDB and do not need submission ownership. */
-export const withWorkspaceMigrationLock = <T>(
-	accountId: string,
-	work: () => Promise<T>
-): Promise<T> => navigator.locks.request(`workspace-sync:migrate:${accountId}`, work);

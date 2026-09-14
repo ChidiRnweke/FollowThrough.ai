@@ -1,9 +1,7 @@
 import type { SyncScheduler } from './scheduler';
 import {
 	dependentWrites,
-	unresolvedWrite,
 	nextWrite,
-	type WriteBaseResolution,
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteReceipt,
@@ -27,7 +25,6 @@ export interface MutationQueueDependencies<C, T> {
 	repository: OutboxRepository<C, T>;
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
-	resolveBase(key: string, value: T, local: T | null): Promise<WriteBaseResolution<T>>;
 	committed(): void;
 }
 
@@ -212,36 +209,10 @@ export class MutationQueue<C, T> {
 					);
 					let failure: SubmissionResult = { kind: 'complete' };
 					while (!this.stopped && this.online) {
-						const unresolved = unresolvedWrite(
-							await this.dependencies.repository.list(this.accountId),
-							excluded
-						);
-						if (unresolved?.intent.base) {
-							const resolution = await this.resolveImportedBase(
-								unresolved.intent.key,
-								unresolved.intent.base.value,
-								unresolved.intent.local
-							);
-							if (resolution.kind === 'failure') {
-								excluded.add(unresolved.intent.operationId);
-								this.deferRetry(unresolved.intent.operationId);
-								failure = resolution;
-								continue;
-							}
-							await this.dependencies.repository.resolveBase(
-								this.accountId,
-								unresolved.intent.operationId,
-								resolution
-							);
-							this.retryAfter.delete(unresolved.intent.operationId);
-							await this.reload();
-							continue;
-						}
 						const sent = await this.dependencies.repository.take(this.accountId, excluded);
 						await this.reload();
 						if (!sent) {
-							if (nextWrite(this.entries, excluded) || unresolvedWrite(this.entries, excluded))
-								continue;
+							if (nextWrite(this.entries, excluded)) continue;
 							const deferred = this.entries.find((entry) => entry.delivery.kind === 'retry');
 							return deferred?.delivery.kind === 'retry'
 								? { kind: 'failure', message: deferred.delivery.message }
@@ -315,23 +286,6 @@ export class MutationQueue<C, T> {
 			at:
 				this.dependencies.scheduler.now() + Math.min(60_000, 1000 * 2 ** Math.min(attempts - 1, 6))
 		});
-	}
-	private async resolveImportedBase(
-		key: string,
-		base: T,
-		local: T | null
-	): Promise<WriteBaseResolution<T> | { kind: 'failure'; message: string }> {
-		try {
-			return await this.dependencies.resolveBase(key, base, local);
-		} catch (error) {
-			return {
-				kind: 'failure',
-				message:
-					error instanceof Error
-						? error.message
-						: 'The original server version could not be checked'
-			};
-		}
 	}
 
 	private async send(

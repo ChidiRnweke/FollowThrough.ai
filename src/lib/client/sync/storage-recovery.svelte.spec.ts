@@ -127,20 +127,6 @@ describe('damaged workspace storage recovery', () => {
 				.length
 		}).toEqual({ retained: 1, quarantined: 1 });
 	});
-	it('preserves a damaged legacy marker instead of reimporting a possibly settled edit', async () => {
-		const { name, outbox, recovery } = setup();
-		await damage(name, 'imports', {
-			accountId: 'account',
-			source: 'legacy',
-			operationId: 'broken'
-		});
-		const result = await outbox.importOnce('account', 'legacy', draft(), null);
-		expect({
-			kind: result.kind,
-			pending: (await outbox.list('account')).length,
-			quarantined: (await recovery.list('account')).map((item) => item.source)
-		}).toEqual({ kind: 'failure', pending: 0, quarantined: ['imports'] });
-	});
 });
 
 it('exports only the selected account edits without needing bootstrap metadata', async () => {

@@ -40,9 +40,6 @@ const setup = async (
 				throw new Error('This review stays offline');
 			}
 		},
-		resolveBase: async () => {
-			throw new Error('No imported draft');
-		},
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(project.userId, {
@@ -50,7 +47,6 @@ const setup = async (
 		scheduler: new InMemorySyncScheduler(),
 		cache,
 		writes,
-		restoreLocalWrites: async () => undefined
 	});
 	repository.observe(project.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);

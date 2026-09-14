@@ -25,7 +25,6 @@ import {
 	workspaceCommandSchema,
 	mutationResource,
 	assertWorkspaceWriteIdentity,
-	resolveImportedNoteBase,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
 import {
@@ -43,13 +42,9 @@ import {
 } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
-import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import type { StorageRecoveryItem } from '$lib/models/sync';
-import {
-	browserWriterLock,
-	withWorkspaceMigrationLock
-} from '$lib/client/sync/browser-writer-lock';
+import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
 	workspaceWriteTransport
@@ -61,7 +56,6 @@ export interface WorkspaceResourcesDependencies {
 	recovery: IndexedDbStorageRecovery;
 	scheduler?: SyncScheduler;
 	dispose?(): void;
-	restoreLocalWrites(): Promise<void>;
 	cache: ResourceCache<WorkspaceRecord>;
 	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
 }
@@ -189,9 +183,8 @@ export class WorkspaceResources {
 		return this.dependencies.writes.status;
 	}
 	initialize(): Promise<void> {
-		this.initializing ??= this.dependencies
-			.restoreLocalWrites()
-			.then(() => this.dependencies.cache.initialize())
+		this.initializing ??= this.dependencies.cache
+			.initialize()
 			.then(() => undefined)
 			.catch((error) => {
 				this.initializing = null;
@@ -348,12 +341,6 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		transport: workspaceWriteTransport(accountId),
 		scheduler: browserSyncScheduler,
 		writerLock: browserWriterLock,
-		resolveBase: async (key, base, local) => {
-			const remote = await workspaceReadTransport(accountId).read(key, null);
-			if (remote.kind === 'unchanged')
-				throw new Error('An imported base requires a complete server representation');
-			return resolveImportedNoteBase(base, local, remote);
-		},
 		committed: () => resources.committed()
 	});
 	const resources = new WorkspaceResources(accountId, {
@@ -361,8 +348,6 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		cache,
 		writes,
 
-		restoreLocalWrites: () =>
-			withWorkspaceMigrationLock(accountId, () => migrateLegacyNotes(accountId, repository)),
 		dispose: () => {
 			unsubscribe();
 			void writes

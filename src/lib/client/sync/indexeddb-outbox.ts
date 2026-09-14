@@ -15,7 +15,6 @@ import {
 	settleWrite,
 	resolveWriteBase,
 	type WriteBaseResolution,
-	type WriteObservation,
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteReceipt,
@@ -75,59 +74,6 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		);
 	}
 
-	/** The source marker and imported intent commit together; an interrupted upgrade can safely retry. */
-	importOnce(
-		accountId: string,
-		source: string,
-		draft: WriteDraft<C, T>,
-		conflict: WriteObservation<T> | null
-	): Promise<{ kind: 'imported'; operationId: string } | { kind: 'failure'; message: string }> {
-		return this.edit<
-			{ kind: 'imported'; operationId: string } | { kind: 'failure'; message: string }
-		>(accountId, async (entries, transaction) => {
-			const imports = storedTable(transaction, 'imports');
-			const saved = await imports.get([accountId, source]);
-			if (saved !== undefined) {
-				const marker = z
-					.object({
-						accountId: z.literal(accountId),
-						source: z.literal(source),
-						operationId: z.string().uuid()
-					})
-					.safeParse(saved);
-				if (!marker.success) {
-					const message =
-						'The legacy import marker is damaged. Its source was preserved for recovery.';
-					await quarantineRow(
-						transaction,
-						{
-							accountId,
-							source: 'imports',
-							key: source,
-							message,
-							impact: { kind: 'write', operationId: null }
-						},
-						saved
-					);
-					return { entries, result: { kind: 'failure', message } };
-				}
-				return { entries, result: { kind: 'imported', operationId: marker.data.operationId } };
-			}
-			const appended = await this.appendEntry(accountId, draft, entries, transaction);
-			imports.put({ accountId, source, operationId: appended.result });
-			return {
-				entries: conflict
-					? appended.entries.map((entry) =>
-							entry.intent.operationId === appended.result
-								? { ...entry, delivery: { kind: 'conflict' as const, remote: conflict } }
-								: entry
-						)
-					: appended.entries,
-				result: { kind: 'imported', operationId: appended.result }
-			};
-		});
-	}
-
 	private async appendEntry(
 		accountId: string,
 		draft: WriteDraft<C, T>,
@@ -174,10 +120,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	): Promise<void> {
 		return this.edit(accountId, async (entries, transaction) => {
 			const original = entries.find((entry) => entry.intent.operationId === operationId);
-			const resource =
-				resolution.kind === 'matched'
-					? { kind: 'found' as const, snapshot: resolution.snapshot }
-					: resolution.remote;
+			const resource = resolution.remote;
 			if (original && resource.kind !== 'unavailable')
 				await this.saveResource(accountId, original.intent.key, resource, transaction);
 			return { entries: resolveWriteBase(entries, operationId, resolution), result: undefined };
@@ -400,7 +343,6 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				'outbox',
 				'queue-heads',
 				'records',
-				'imports',
 				'write-receipts',
 				'quarantine',
 				'cursors',

@@ -39,9 +39,6 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		scheduler: new InMemorySyncScheduler(),
 		writerLock,
 		transport,
-		resolveBase: async () => {
-			throw new Error('This fixture has no imported draft');
-		},
 		committed: () => undefined
 	};
 	return { repository, dependencies, cache, queue: new MutationQueue('alice', dependencies) };
@@ -79,25 +76,6 @@ describe('shared mutation submission', () => {
 			[firstId, 'retry'],
 			[secondId, 'queued']
 		]);
-	});
-	it('durably resolves an imported base before submitting its unchanged operation', async () => {
-		const requests: (string | null)[] = [];
-		const { dependencies } = setup({
-			send: async (input) => {
-				requests.push(input.baseEtag);
-				return applied(input.operationId, input.command);
-			}
-		});
-		const queue = new MutationQueue('alice', {
-			...dependencies,
-			resolveBase: async () => ({
-				kind: 'matched',
-				snapshot: { etag: syncEtag(4n), value: 'Original' }
-			})
-		});
-		await queue.append({ ...draft(firstId), base: { etag: null, value: 'Original' } });
-		await queue.flush();
-		expect(requests).toEqual([syncEtag(4n)]);
 	});
 	it('keeps offline writes durable without starting submission', async () => {
 		const { queue, repository } = setup({
@@ -333,20 +311,6 @@ it('does not treat disappearance from another writer’s discard as acknowledgem
 	expect(queue.acknowledged('note:1', firstId)).toBe(false);
 });
 
-it('sends independent edits when an imported base cannot be checked', async () => {
-	const { queue, cache } = setup({
-		send: async (input) => applied(input.operationId, input.command)
-	});
-	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Legacy original' } });
-	await queue.append({ ...draft(secondId), key: 'note:2' });
-	await queue.flush();
-	expect({
-		pending: queue.pending.map((entry) => entry.intent.operationId),
-		saved: (await cache.load('alice')).records.map((record) => record.key)
-	}).toEqual({ pending: [firstId], saved: ['note:2'] });
-});
-
-// SYNC-PROGRESS: elapsed time, rather than user activity, retries an eligible write.
 it('settles a failed edit at its retry deadline without another user action', async () => {
 	let reachable = false;
 	const { dependencies } = setup({
@@ -408,28 +372,6 @@ it('returns a waiting state without recovering another tab’s unresolved submis
 	queue.stop();
 	other.stop();
 	expect(result).toEqual({ kind: 'waiting' });
-});
-
-it('becomes idle when an imported retry requires a decision', async () => {
-	const { dependencies } = setup({
-		send: async (input) => applied(input.operationId, input.command)
-	});
-	let available = false;
-	const queue = new MutationQueue('alice', {
-		...dependencies,
-		resolveBase: async () => {
-			if (!available) throw new Error('Disconnected');
-			return {
-				kind: 'conflict',
-				remote: { kind: 'found', snapshot: { etag: syncEtag(2n), value: 'Elsewhere' } }
-			};
-		}
-	});
-	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Original' } });
-	await queue.flush();
-	available = true;
-	await dependencies.scheduler.advance(1000);
-	expect(queue.pending.map((entry) => entry.delivery.kind)).toEqual(['conflict']);
 });
 
 it('automatically retries the first storage failure before any operation is submitted', async () => {
