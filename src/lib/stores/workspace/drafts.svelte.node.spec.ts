@@ -1,7 +1,7 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { noteWrite, type WorkspaceCommand } from '$lib/models/workspace-mutations';
+import { noteCommand, type WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import {
@@ -56,24 +56,30 @@ describe('note editor using shared resource writes', () => {
 	it('persists typing in the shared outbox before reporting a local save', async () => {
 		const { note, store, outbox } = await setup();
 		await store.read();
-		await store.stage(noteWrite({ ...note, plainText: 'Offline draft' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Offline draft' }));
 		expect((await outbox.list(note.userId))[0].intent.local).toEqual({
 			type: 'notes',
-			value: { ...note, plainText: 'Offline draft' }
+			value: { ...note, plainText: 'Offline draft', updatedAt: expect.any(String) }
 		});
 	});
 	it('keeps the first observed base while unsent typing coalesces', async () => {
 		const { note, store, outbox } = await setup();
 		await store.read();
-		await store.stage(noteWrite({ ...note, plainText: 'First edit' }));
-		await store.stage(noteWrite({ ...note, plainText: 'Later edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Later edit' }));
 		expect(
 			(await outbox.list(note.userId)).map((entry) => ({
 				base: entry.intent.base?.etag,
 				local: entry.intent.local
 			}))
 		).toEqual([
-			{ base: syncEtag(1n), local: { type: 'notes', value: { ...note, plainText: 'Later edit' } } }
+			{
+				base: syncEtag(1n),
+				local: {
+					type: 'notes',
+					value: { ...note, plainText: 'Later edit', updatedAt: expect.any(String) }
+				}
+			}
 		]);
 	});
 	it('keeps unsaved text recoverable when device storage rejects a save', async () => {
@@ -81,7 +87,7 @@ describe('note editor using shared resource writes', () => {
 		await store.read();
 		outbox.appendFailure = 'Device full';
 		expect({
-			result: await store.stage(noteWrite({ ...note, plainText: 'Keep this text' })),
+			result: await store.stage(noteCommand({ ...note, plainText: 'Keep this text' })),
 			status: store.status,
 			error: store.lastError
 		}).toEqual({
@@ -97,22 +103,22 @@ describe('note editor using shared resource writes', () => {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
-		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await store.retry();
 		expect(store.conflict).toEqual({
 			base: note,
-			local: { ...note, plainText: 'My edit' },
+			local: { ...note, plainText: 'My edit', updatedAt: expect.any(String) },
 			remote: { kind: 'found', value: { ...note, plainText: 'Other client' } }
 		});
 	});
 	it('adopts an acknowledgement before submitting later typing from the same editor', async () => {
 		const { note, store, resources, transport, key } = await setup();
 		await store.read();
-		await store.stage(noteWrite({ ...note, plainText: 'First edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
 		resources.setOnline(true);
 		await resources.synchronize();
-		await store.stage(noteWrite({ ...note, plainText: 'Later typing' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Later typing' }));
 		await resources.synchronize();
 		expect({ status: store.status, saved: transport.records.get(key)?.value }).toEqual({
 			status: 'synced',
@@ -127,7 +133,7 @@ describe('shared note conflict decisions', () => {
 		await store.read();
 		const remote = { ...note, plainText: 'Other client' };
 		transport.records.set(key, { etag: syncEtag(2n), value: { type: 'notes', value: remote } });
-		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await store.retry();
 		await store.retry();
@@ -143,10 +149,10 @@ describe('shared note conflict decisions', () => {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
-		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await store.retry();
-		await store.stage(noteWrite({ ...note, plainText: 'More typing' }));
+		await store.stage(noteCommand({ ...note, plainText: 'More typing' }));
 		await store.keep();
 		expect({ pending: resources.pending, text: store.value?.plainText }).toEqual({
 			pending: [],
@@ -158,7 +164,7 @@ describe('shared note conflict decisions', () => {
 		await store.read();
 		const remote = { ...note, plainText: 'Other client' };
 		transport.records.set(key, { etag: syncEtag(2n), value: { type: 'notes', value: remote } });
-		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await store.retry();
 		const chosen = await store.discard();
@@ -180,12 +186,7 @@ describe('shared draft identity and resource semantics', () => {
 		});
 		const draft = resources.draft(identity);
 		await draft.read();
-		await draft.stage({
-			command: { kind: 'renameProject', projectId: project.id, name: 'Offline name' },
-			local: { type: 'projects', value: { ...project, name: 'Offline name' } },
-			coalesce: 'name',
-			references: []
-		});
+		await draft.stage({ kind: 'renameProject', projectId: project.id, name: 'Offline name' });
 		expect({
 			value: draft.value?.name,
 			status: draft.status,
@@ -195,7 +196,7 @@ describe('shared draft identity and resource semantics', () => {
 	it('rejects a command addressed to a different resource before persisting it', async () => {
 		const { store, note, resources } = await setup();
 		await store.read();
-		const result = await store.stage(noteWrite({ ...note, id: testNoteId(2) }));
+		const result = await store.stage(noteCommand({ ...note, id: testNoteId(2) }));
 		expect({ result, pending: resources.pending }).toEqual({
 			result: { kind: 'failure', message: 'The edit belongs to a different resource' },
 			pending: []
@@ -211,7 +212,7 @@ describe('a rendered form base', () => {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
-		await store.stage(noteWrite({ ...note, plainText: 'Still typing' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Still typing' }));
 		expect(resources.pending[0].intent.base?.etag).toBe(syncEtag(1n));
 	});
 });
@@ -220,16 +221,16 @@ describe('a mounted editor after acknowledgement', () => {
 	it('preserves later typing as a normal conflict when another surface supersedes its receipt', async () => {
 		const { note, store, resources } = await setup();
 		await store.read();
-		await store.stage(noteWrite({ ...note, plainText: 'First edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'First edit' }));
 		resources.setOnline(true);
 		await resources.synchronize();
 		const other = resources.draft({ type: 'notes', id: [note.id] });
 		await other.read();
 		const current = other.value;
 		if (!current) throw new Error('The saved note must exist');
-		await other.stage(noteWrite({ ...current, plainText: 'Other surface' }));
+		await other.stage(noteCommand({ ...current, plainText: 'Other surface' }));
 		await resources.synchronize();
-		await store.stage(noteWrite({ ...note, plainText: 'My later typing' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My later typing' }));
 		await resources.synchronize();
 		expect({
 			status: store.status,
@@ -247,9 +248,9 @@ describe('a mounted editor after acknowledgement', () => {
 	it('never automatically resurrects an edit discarded by another surface', async () => {
 		const { note, store, resources, transport, key } = await setup();
 		await store.read();
-		await store.stage(noteWrite({ ...note, plainText: 'Discarded edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Discarded edit' }));
 		await resources.discard(resources.pending.map((entry) => entry.intent.operationId));
-		await store.stage(noteWrite({ ...note, plainText: 'Keep my buffer' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Keep my buffer' }));
 		resources.setOnline(true);
 		await resources.synchronize();
 		expect({
@@ -265,7 +266,7 @@ describe('a mounted editor after acknowledgement', () => {
 	it('conflicts with a later server revision even when that revision has identical editor content', async () => {
 		const { note, key, store, transport, resources, cache } = await setup();
 		await store.read();
-		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await resources.synchronize();
 		const changed = {
@@ -277,7 +278,7 @@ describe('a mounted editor after acknowledgement', () => {
 		};
 		transport.records.set(key, changed);
 		await cache.accept(key, changed);
-		await store.stage(noteWrite({ ...note, plainText: 'Later typing' }));
+		await store.stage(noteCommand({ ...note, plainText: 'Later typing' }));
 		await resources.synchronize();
 		expect(store.status).toBe('conflict');
 	});
@@ -288,11 +289,11 @@ describe('a mounted editor after acknowledgement', () => {
 			etag: syncEtag(2n),
 			value: { type: 'notes', value: { ...note, plainText: 'Other client' } }
 		});
-		await store.stage(noteWrite({ ...note, plainText: 'My edit' }));
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
 		resources.setOnline(true);
 		await resources.synchronize();
 		await store.keep();
-		await store.stage(noteWrite({ ...note, plainText: 'After explicit keep' }));
+		await store.stage(noteCommand({ ...note, plainText: 'After explicit keep' }));
 		await resources.synchronize();
 		expect(store.status).toBe('synced');
 	});
@@ -302,11 +303,11 @@ it('coalesces overlapping local saves using their serialized observed ancestry',
 	const { note, store, resources } = await setup();
 	await store.read();
 	await Promise.all([
-		store.stage(noteWrite({ ...note, plainText: 'First' })),
-		store.stage(noteWrite({ ...note, plainText: 'Second' }))
+		store.stage(noteCommand({ ...note, plainText: 'First' })),
+		store.stage(noteCommand({ ...note, plainText: 'Second' }))
 	]);
 	expect(resources.pending.map((entry) => entry.intent.local)).toEqual([
-		{ type: 'notes', value: { ...note, plainText: 'Second' } }
+		{ type: 'notes', value: { ...note, plainText: 'Second', updatedAt: expect.any(String) } }
 	]);
 });
 
@@ -314,7 +315,7 @@ it('coalesces overlapping local saves using their serialized observed ancestry',
 it('discards a queued edit without changing the authoritative note after reconnecting', async () => {
 	const { note, key, store, transport, resources } = await setup();
 	await store.read();
-	await store.stage(noteWrite({ ...note, plainText: 'Do not submit this' }));
+	await store.stage(noteCommand({ ...note, plainText: 'Do not submit this' }));
 	await resources.synchronize();
 	resources.setOnline(true);
 	const outcome = await store.discard().then(
@@ -330,4 +331,56 @@ it('discards a queued edit without changing the authoritative note after reconne
 		authoritative: { type: 'notes', value: note },
 		pending: []
 	});
+});
+
+it('prepares overlapping commands against preceding local changes without replacing unseen metadata', async () => {
+	const { note, store, resources } = await setup();
+	await store.read();
+	await Promise.all([
+		store.stage({ kind: 'renameNote', noteId: note.id, title: 'Renamed' }),
+		store.stage({
+			kind: 'saveNote',
+			noteId: note.id,
+			document: note.document,
+			plainText: 'Later text'
+		})
+	]);
+	expect(
+		resources.views.all('notes').map(({ title, plainText }) => ({ title, plainText }))
+	).toEqual([{ title: 'Renamed', plainText: 'Later text' }]);
+});
+
+it('rejects a published body from another note before queuing a discard', async () => {
+	const { note, store, resources } = await setup();
+	await store.read();
+	const result = await store.discardPublished({
+		id: 'a0000000-0000-4000-8000-000000000091' as import('$lib/models/notes').NoteRevisionId,
+		noteId: testNoteId(2),
+		revision: note.publishedRevision,
+		title: note.title,
+		document: note.document,
+		plainText: note.plainText,
+		createdAt: note.createdAt
+	});
+	expect({ result: result.kind, queued: resources.pending.length }).toEqual({
+		result: 'failure',
+		queued: 0
+	});
+});
+
+it('creates an offline note and waits for its locally created project', async () => {
+	const { note, resources, outbox } = await setup();
+	const project = projectBuilder();
+	await resources.create({ kind: 'createProject', id: project.id, name: project.name });
+	const created = await resources.create({
+		kind: 'createNote',
+		id: testNoteId(3),
+		projectId: project.id,
+		title: '  Captured offline  '
+	});
+	const entries = await outbox.list(note.userId);
+	expect({
+		title: created.type === 'notes' ? created.value.title : null,
+		dependencies: entries[1].intent.dependencies
+	}).toEqual({ title: 'Captured offline', dependencies: [entries[0].intent.operationId] });
 });

@@ -25,13 +25,11 @@ import {
 	emptyNoteTrash,
 	createSkill
 } from '$lib/remote/projects/projects.remote';
-import { newProject, newNote, noteTrashWrite } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import type { DateTime } from '$lib/models/workspace';
-import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
+
+import type { WorkspaceValues } from '$lib/models/workspace-records';
+
 import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-import type { WriteContent } from '$lib/models/outbox';
 
 class ProjectActionsStore {
 	busy = $state(false);
@@ -69,17 +67,18 @@ class ProjectActionsStore {
 	private async edit<K extends 'projects' | 'notes'>(
 		type: K,
 		id: string,
-		content: (value: WorkspaceValues[K]) => WriteContent<WorkspaceCommand, WorkspaceRecord>
+		command: PreparedWorkspaceCommand
 	): Promise<WorkspaceValues[K]> {
 		const session = await workspaceSession.start();
 		const draft = session.resources.draft({ type, id: [id] });
 		const opened = await draft.read();
 		if (opened.kind !== 'ready') throw new Error(draft.lastError ?? 'The resource is unavailable');
-		const staged = await draft.stage(content(opened.value));
+		const staged = await draft.stage(command);
 		if (staged.kind === 'failure') throw new Error(staged.message);
 		if (!staged.value) throw new Error('The edited resource no longer exists');
 		return staged.value;
 	}
+
 	private async createEntry(
 		title: string,
 		projectId: ProjectId,
@@ -87,58 +86,29 @@ class ProjectActionsStore {
 		parentId?: NoteId
 	): Promise<Note> {
 		const session = await workspaceSession.start();
-		const opened = await session.resources.open({ type: 'projects', id: [projectId] });
-		if (opened.kind !== 'ready' || opened.value.type !== 'projects')
-			throw new Error('The project is unavailable');
+		await session.resources.open({ type: 'projects', id: [projectId] });
 		await session.resources.prepare(['notes']);
-		const note = newNote(
-			crypto.randomUUID() as NoteId,
-			opened.value.value,
-			title,
-			kind,
-			session.resources.views.all('notes'),
-			new Date().toISOString() as DateTime,
-			parentId
+		const id = crypto.randomUUID() as NoteId;
+		const record = await session.resources.create(
+			kind === 'note'
+				? { kind: 'createNote', id, projectId, parentId, title }
+				: { kind: 'createFolder', id, projectId, parentId, name: title }
 		);
-		await session.resources.append({
-			operationId: crypto.randomUUID(),
-			key: workspaceResourceKey({ type: 'notes', id: [note.id] }),
-			command:
-				kind === 'note'
-					? { kind: 'createNote', id: note.id, projectId, parentId, title }
-					: { kind: 'createFolder', id: note.id, projectId, parentId, name: title },
-			base: null,
-			basedOn: null,
-			local: { type: 'notes', value: note },
-			coalesce: null,
-			references: [
-				workspaceResourceKey({ type: 'projects', id: [projectId] }),
-				...(parentId ? [workspaceResourceKey({ type: 'notes', id: [parentId] })] : [])
-			]
-		});
-		return note;
+		if (record.type !== 'notes') throw new Error('Note creation returned another resource');
+		return record.value;
 	}
 	createProject = (name: string) =>
 		this.run<CreateProjectOutput>(async () => {
 			const session = await workspaceSession.start();
-			const project = newProject(
-				crypto.randomUUID() as ProjectId,
-				session.shell.user.id,
-				name,
-				new Date().toISOString() as DateTime
-			);
-			await session.resources.append({
-				operationId: crypto.randomUUID(),
-				key: workspaceResourceKey({ type: 'projects', id: [project.id] }),
-				command: { kind: 'createProject', id: project.id, name },
-				base: null,
-				basedOn: null,
-				local: { type: 'projects', value: project },
-				coalesce: null,
-				references: []
+			const record = await session.resources.create({
+				kind: 'createProject',
+				id: crypto.randomUUID() as ProjectId,
+				name
 			});
-			return { project };
+			if (record.type !== 'projects') throw new Error('Project creation returned another resource');
+			return { project: record.value };
 		});
+
 	editor<K extends 'notes' | 'projects'>(type: K, id: string): WorkspaceDraft<K> {
 		const session = workspaceSession.current;
 		if (!session) throw new Error('Open the workspace before editing');
@@ -150,15 +120,7 @@ class ProjectActionsStore {
 		this.run<RenameProjectOutput>(async () => {
 			const project = draft.value;
 			if (!project) throw new Error('The project is unavailable');
-			const result = await draft.stage({
-				command: { kind: 'renameProject', projectId: project.id, name },
-				local: {
-					type: 'projects',
-					value: { ...project, name: name.trim() }
-				},
-				coalesce: null,
-				references: []
-			});
+			const result = await draft.stage({ kind: 'renameProject', projectId: project.id, name });
 			if (result.kind === 'failure') throw new Error(result.message);
 			if (!result.value) throw new Error('The project no longer exists');
 			return { project: result.value };
@@ -166,25 +128,17 @@ class ProjectActionsStore {
 
 	archiveProject = (projectId: ProjectId) =>
 		this.run(async () => ({
-			project: await this.edit('projects', projectId, (project) => ({
-				command: { kind: 'archiveProject', projectId },
-				local: {
-					type: 'projects',
-					value: { ...project, archivedAt: new Date().toISOString() as DateTime }
-				},
-				coalesce: null,
-				references: []
-			}))
+			project: await this.edit('projects', projectId, { kind: 'archiveProject', projectId })
 		}));
 	setSectionNumberingDefault = (projectId: ProjectId, enabled?: boolean) =>
 		this.run<SetProjectSectionNumberingOutput>(async () => ({
-			project: await this.edit('projects', projectId, (project) => ({
-				command: { kind: 'projectNumbering', projectId, enabled },
-				local: { type: 'projects', value: { ...project, sectionNumberingDefault: enabled } },
-				coalesce: null,
-				references: []
-			}))
+			project: await this.edit('projects', projectId, {
+				kind: 'projectNumbering',
+				projectId,
+				enabled
+			})
 		}));
+
 	createFolder = (projectId: ProjectId, name: string, parentId?: NoteId) =>
 		this.run<CreateFolderOutput>(async () => ({
 			folder: await this.createEntry(name, projectId, 'folder', parentId)
@@ -209,28 +163,19 @@ class ProjectActionsStore {
 		this.run<RenameNoteOutput>(async () => {
 			const note = draft.value;
 			if (!note) throw new Error('The note is unavailable');
-			const result = await draft.stage({
-				command: { kind: 'renameNote', noteId: note.id, title },
-				local: { type: 'notes', value: { ...note, title: title.trim() } },
-				coalesce: null,
-				references: []
-			});
+			const result = await draft.stage({ kind: 'renameNote', noteId: note.id, title });
 			if (result.kind === 'failure') throw new Error(result.message);
 			if (!result.value) throw new Error('The note no longer exists');
 			return { note: result.value };
 		});
 
-	private async changeTrash(noteId: NoteId, action: 'archive' | 'restore'): Promise<Note> {
-		const session = await workspaceSession.start();
-		return this.edit('notes', noteId, (note) =>
-			noteTrashWrite(
-				note,
-				action,
-				session.resources.views.all('notes'),
-				new Date().toISOString() as DateTime
-			)
-		);
+	private changeTrash(noteId: NoteId, action: 'archive' | 'restore'): Promise<Note> {
+		return this.edit('notes', noteId, {
+			kind: action === 'archive' ? 'archiveNote' : 'restoreNote',
+			noteId
+		});
 	}
+
 	archiveNote = (noteId: NoteId) =>
 		this.run<ArchiveNoteOutput>(async () => ({ note: await this.changeTrash(noteId, 'archive') }));
 	restoreNote = (noteId: NoteId) =>

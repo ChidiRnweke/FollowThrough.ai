@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { noteWrite, skillMetadataWrite } from '$lib/models/workspace-mutations';
+	import { noteCommand } from '$lib/models/workspace-mutations';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -146,9 +146,11 @@
 				return;
 			}
 			if (description !== savedDescription || note.title !== details.name) {
-				const result = await metadata.stage(
-					skillMetadataWrite(details, { description, displayName: note.title })
-				);
+				const result = await metadata.stage({
+					kind: 'updateSkill',
+					noteId: details.noteId,
+					...{ description, displayName: note.title }
+				});
 				if (result.kind === 'failure') {
 					saveFailed = true;
 					if (!options.auto) toast.error(result.message);
@@ -157,7 +159,7 @@
 				savedDescription = description.trim() || details.description;
 			}
 			const record = await draft.stage(
-				noteWrite({
+				noteCommand({
 					...note,
 					document: bodyRef.getDocument(),
 					plainText: bodyRef.getMarkdown()

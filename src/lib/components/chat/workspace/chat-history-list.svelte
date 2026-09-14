@@ -65,10 +65,9 @@
 		try {
 			const value = renameDraft.value;
 			const result = await renameDraft.stage({
-				command: { kind: 'renameConversation', conversationId: value.id, title },
-				local: { type: 'conversations', value: { ...value, title } },
-				coalesce: null,
-				references: []
+				kind: 'renameConversation',
+				conversationId: value.id,
+				title
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Chat name saved on this device.');

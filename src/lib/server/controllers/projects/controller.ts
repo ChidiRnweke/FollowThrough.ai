@@ -96,9 +96,6 @@ export class Projects implements ProjectsController {
 				case 'createFolder':
 					await this.createFolder(actor, command);
 					break;
-				case 'moveNote':
-					await this.move(actor, command);
-					break;
 			}
 		});
 	}

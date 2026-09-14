@@ -1,7 +1,7 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
-import { workspaceCommandSchema, noteWrite } from '$lib/models/workspace-mutations';
+import { workspaceCommandSchema, noteCommand } from '$lib/models/workspace-mutations';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -30,7 +30,8 @@ const setup = async () => {
 	await outbox.append(note.userId, {
 		operationId: crypto.randomUUID(),
 		key,
-		...noteWrite(local),
+		command: noteCommand(local),
+		local: { type: 'notes', value: local },
 		base: { etag: syncEtag(1n), value: { type: 'notes', value: note } },
 		basedOn: null,
 		coalesce: 'document',

@@ -45,10 +45,9 @@
 		busy = true;
 		try {
 			const saved = await form.draft.stage({
-				command: { kind: 'updateUserPreferences', userId: value.userId, sectionNumberingDefault },
-				local: { type: 'user_preferences', value: { ...value, sectionNumberingDefault } },
-				coalesce: null,
-				references: []
+				kind: 'updateUserPreferences',
+				userId: value.userId,
+				sectionNumberingDefault
 			});
 			if (saved.kind === 'failure') toast.error(saved.message);
 			else toast.success('Document defaults saved on this device');

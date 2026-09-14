@@ -4,7 +4,7 @@
 	import type { ToolClassification, ToolPreference } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
 	import type { DateTime } from '$lib/models/workspace';
-	import { workspaceResourceKey } from '$lib/models/workspace-sync';
+
 	import type { WorkspaceRecord } from '$lib/models/workspace-records';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -153,8 +153,8 @@
 					: { type: 'tool_preferences', id: [userId, preference.name] }
 			);
 			draft.captureOrCreate(local);
-			const result = await draft.stage({
-				command: projectId
+			const result = await draft.stage(
+				projectId
 					? {
 							kind: 'setProjectToolOverride',
 							userId,
@@ -162,11 +162,8 @@
 							toolName: preference.name,
 							enabled
 						}
-					: { kind: 'setToolPreference', userId, toolName: preference.name, enabled },
-				local,
-				coalesce: null,
-				references: projectId ? [workspaceResourceKey({ type: 'projects', id: [projectId] })] : []
-			});
+					: { kind: 'setToolPreference', userId, toolName: preference.name, enabled }
+			);
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Saved on device');
 			// audit-allow: silent-catch — the failed authority change is reported and refreshed state remains authoritative.
@@ -188,10 +185,10 @@
 			});
 			draft.capture();
 			const result = await draft.stage({
-				command: { kind: 'resetProjectToolOverride', userId, projectId, toolName: preference.name },
-				local: null,
-				coalesce: null,
-				references: []
+				kind: 'resetProjectToolOverride',
+				userId,
+				projectId,
+				toolName: preference.name
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success(`${readable(preference.name)} follows your default again`);

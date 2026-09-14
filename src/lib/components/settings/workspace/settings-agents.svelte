@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import { agentPreferenceWrite } from '$lib/models/workspace-mutations';
+
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentExecutionMode, WebSearchEngine } from '$lib/models/agent';
 	import { webSearchEngines } from '$lib/models/agent';
@@ -63,15 +63,17 @@
 		}
 		busy = true;
 		try {
-			const saved = await form.draft.stage(
-				agentPreferenceWrite(value, {
+			const saved = await form.draft.stage({
+				kind: 'updateAgentPreferences',
+				userId: value.userId,
+				patch: {
 					webSearchEngine: searchEngine || null,
 					webSearchMaxResults: searchMaxResults,
 					webSearchMaxTotalResults: searchMaxTotalResults,
 					agentMaxTurns: maxTurns,
 					executionMode: mode
-				})
-			);
+				}
+			});
 			if (saved.kind === 'failure') toast.error(saved.message);
 			else toast.success('Agent defaults saved on this device');
 		} finally {

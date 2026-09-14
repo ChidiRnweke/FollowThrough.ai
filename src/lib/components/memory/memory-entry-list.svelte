@@ -25,10 +25,9 @@
 		FtPlus as Plus
 	} from '$lib/components/icons';
 	import EmptyState from '../shared/empty-state.svelte';
-	import { newMemory, memoryWrite } from '$lib/models/workspace-mutations';
-	import { workspaceResourceKey } from '$lib/models/workspace-sync';
+
 	import type { WorkspaceDraft, WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
-	import type { DateTime } from '$lib/models/workspace';
+
 	import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 	import { formatRelativeTime, memoryEntryTypeLabels } from '../shared/labels';
 
@@ -87,12 +86,7 @@
 		const resource = deletion;
 		const entry = resource?.value;
 		if (!resource || !entry) return;
-		const result = await resource.stage({
-			command: { kind: 'deleteMemory', memoryEntryId: entry.id },
-			local: null,
-			coalesce: null,
-			references: []
-		});
+		const result = await resource.stage({ kind: 'deleteMemory', memoryEntryId: entry.id });
 		if (result.kind === 'failure') toast.error(result.message);
 		else if (deletion === resource) deletion = null;
 	}
@@ -165,32 +159,13 @@
 		try {
 			const session = workspaceSession.current;
 			if (!session) throw new Error('Open the workspace before adding memory');
-			const entry = newMemory(
-				crypto.randomUUID() as MemoryEntryId,
-				session.shell.user.id,
-				{
-					projectId,
-					content,
-					...(draftType !== 'none' ? { type: draftType } : {})
-				},
-				new Date().toISOString() as DateTime
-			);
-			await session.resources.append({
-				operationId: crypto.randomUUID(),
-				key: workspaceResourceKey({ type: 'memory_entries', id: [entry.id] }),
-				command: {
-					kind: 'createMemory',
-					id: entry.id,
-					projectId,
-					content: entry.content,
-					type: entry.type,
-					shareWithAgents: entry.shareWithAgents
-				},
-				base: null,
-				basedOn: null,
-				local: { type: 'memory_entries', value: entry },
-				coalesce: null,
-				references: projectId ? [workspaceResourceKey({ type: 'projects', id: [projectId] })] : []
+			await session.resources.create({
+				kind: 'createMemory',
+				id: crypto.randomUUID() as MemoryEntryId,
+				projectId,
+				content,
+				type: draftType === 'none' ? undefined : draftType,
+				shareWithAgents: true
 			});
 			draft = '';
 			draftType = 'none';
@@ -216,14 +191,22 @@
 		if (!edit || !entry) return;
 		const content = edit.content.trim();
 		if (!content) return;
-		const result = await edit.resource.stage(memoryWrite(entry, { content }));
+		const result = await edit.resource.stage({
+			kind: 'updateMemory',
+			memoryEntryId: entry.id,
+			...{ content }
+		});
 		if (result.kind === 'failure') toast.error(result.message);
 		else if (editing === edit && edit.content.trim() === content) editing = null;
 	}
 
 	async function toggleShare(entry: MemoryEntry, shareWithAgents: boolean): Promise<void> {
 		const resource = editorFor(entry);
-		const result = await resource.stage(memoryWrite(entry, { shareWithAgents }));
+		const result = await resource.stage({
+			kind: 'updateMemory',
+			memoryEntryId: entry.id,
+			...{ shareWithAgents }
+		});
 		if (result.kind === 'failure') toast.error(result.message);
 	}
 </script>

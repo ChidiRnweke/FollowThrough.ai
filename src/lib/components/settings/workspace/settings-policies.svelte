@@ -42,10 +42,9 @@
 			const local: WorkspaceRecord = { type: 'trust_policies', value: { ...policy, ...input } };
 			draft.captureOrCreate(local);
 			const result = await draft.stage({
-				command: { kind: 'updateTrustPolicy', userId: policy.userId, ...input },
-				local,
-				coalesce: null,
-				references: []
+				kind: 'updateTrustPolicy',
+				userId: policy.userId,
+				...input
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Saved on device');

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import { agentPreferenceWrite } from '$lib/models/workspace-mutations';
+
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentModel } from '$lib/models/agent';
 	import { ModelPicker } from '$lib/components/agent';
@@ -65,15 +65,17 @@
 		}
 		busy = true;
 		try {
-			const saved = await form.draft.stage(
-				agentPreferenceWrite(value, {
+			const saved = await form.draft.stage({
+				kind: 'updateAgentPreferences',
+				userId: value.userId,
+				patch: {
 					defaultModel: model,
 					defaultVisionModel: visionModel,
 					inlineModel,
 					attachmentVisionModel,
 					inlineSuggestionsEnabled
-				})
-			);
+				}
+			});
 			if (saved.kind === 'failure') toast.error(saved.message);
 			else toast.success('Model defaults saved on this device');
 		} finally {

@@ -380,10 +380,9 @@ it('keeps the displayed base when capturing an optional resource already refresh
 	draft.captureOrCreate(project);
 	if (project.type !== 'projects') throw new Error('Expected project');
 	const saved = await draft.stage({
-		command: { kind: 'renameProject', projectId: project.value.id, name: 'Changed' },
-		local: project,
-		coalesce: null,
-		references: []
+		kind: 'renameProject',
+		projectId: project.value.id,
+		name: 'Changed'
 	});
 	if (saved.kind !== 'saved') throw new Error(saved.message);
 	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
@@ -425,10 +424,9 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 	await draft.read(() => false);
 	if (project.type !== 'projects') throw new Error('Expected project');
 	const saved = await draft.stage({
-		command: { kind: 'renameProject', projectId: project.value.id, name: 'Later typing' },
-		local: project,
-		coalesce: null,
-		references: []
+		kind: 'renameProject',
+		projectId: project.value.id,
+		name: 'Later typing'
 	});
 	if (saved.kind !== 'saved') throw new Error(saved.message);
 	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));

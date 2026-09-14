@@ -1,15 +1,17 @@
+import { SvelteDate } from 'svelte/reactivity';
 import {
 	DexieWorkspaceRepository,
 	type WorkspaceLocalProjection
 } from '$lib/client/sync/workspace-local-repository';
 import type { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
-import { type NoteId, type NoteView } from '$lib/models/notes';
+import type { UserId } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import { type NoteId, type NoteView, type NoteRevision } from '$lib/models/notes';
 import {
 	visibleResources,
 	localResource,
 	type WriteDraft,
-	type WriteContent,
 	type DraftStatus,
 	type WriteConflictView,
 	type WriteBase
@@ -24,6 +26,8 @@ import {
 import {
 	workspaceCommandSchema,
 	mutationResource,
+	prepareWorkspaceCommand,
+	type PreparedWorkspaceCommand,
 	assertWorkspaceWriteIdentity,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
@@ -271,6 +275,38 @@ export class WorkspaceResources {
 		await this.dependencies.writes.discard(operationIds);
 	}
 
+	prepareCommand(
+		command: PreparedWorkspaceCommand,
+		observed: WorkspaceRecord | null,
+		now: DateTime
+	) {
+		return prepareWorkspaceCommand(command, observed, {
+			userId: this.accountId as UserId,
+			now,
+			records: this.records
+		});
+	}
+	async create(
+		command: Extract<
+			PreparedWorkspaceCommand,
+			{ kind: 'createProject' | 'createNote' | 'createFolder' | 'createTodo' | 'createMemory' }
+		>
+	): Promise<WorkspaceRecord> {
+		const input = plain(command);
+		const now = new SvelteDate().toISOString() as DateTime;
+		await this.initialize();
+		const content = this.prepareCommand(input, null, now);
+		if (!content.local) throw new Error('Creation must produce a resource');
+		await this.append({
+			...content,
+			operationId: crypto.randomUUID(),
+			key: workspaceResourceKey(mutationResource(input)),
+			base: null,
+			basedOn: null
+		});
+		return content.local;
+	}
+
 	async append(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<string> {
 		assertWorkspaceWriteIdentity(draft);
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
@@ -335,6 +371,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 	return resources;
 };
 
+type DraftCommand = PreparedWorkspaceCommand | { kind: 'discardPublished'; revision: NoteRevision };
 type EditContext = ReturnType<WorkspaceResources['editBase']>;
 /** An editor's observed base, not another resource cache. All persistence and delivery use its workspace. */
 export class WorkspaceDraft<K extends WorkspaceResourceType> {
@@ -475,12 +512,18 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		}
 	}
 
-	stage(
-		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
-	): ReturnType<WorkspaceDraft<K>['save']> {
+	stage(command: PreparedWorkspaceCommand): ReturnType<WorkspaceDraft<K>['save']> {
+		return this.enqueue(command);
+	}
+	discardPublished(revision: NoteRevision): ReturnType<WorkspaceDraft<K>['save']> {
+		return this.enqueue({ kind: 'discardPublished', revision });
+	}
+	private enqueue(command: DraftCommand): ReturnType<WorkspaceDraft<K>['save']> {
+		const input = plain(command);
+		const now = new SvelteDate().toISOString() as DateTime;
 		this.savingLocal++;
 		const operation = this.staging
-			.then(() => this.save(content))
+			.then(() => this.save(input, now))
 			.finally(() => {
 				this.savingLocal--;
 			});
@@ -488,7 +531,8 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		return operation;
 	}
 	private async save(
-		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
+		command: DraftCommand,
+		now: DateTime
 	): Promise<
 		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }
 	> {
@@ -496,6 +540,10 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		try {
 			const context = this.current;
 			if (!context) throw new Error('Open the resource before editing');
+			const content =
+				command.kind === 'discardPublished'
+					? this.publishedContent(command.revision, context.local)
+					: this.resources.prepareCommand(command, context.local, now);
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');
 			if (content.local) this.valueOf(content.local);
@@ -513,6 +561,30 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			return { kind: 'failure', message: this.error };
 		}
 	}
+	private publishedContent(revision: NoteRevision, record: WorkspaceRecord) {
+		if (
+			record.type !== 'notes' ||
+			record.value.id !== revision.noteId ||
+			record.value.publishedRevision !== revision.revision
+		)
+			throw new Error('Load the observed published version before discarding changes');
+		return {
+			command: { kind: 'discardNoteDraft' as const, noteId: revision.noteId },
+			local: {
+				type: 'notes' as const,
+				value: {
+					...record.value,
+					document: revision.document,
+					plainText: revision.plainText,
+					title: revision.title,
+					currentRevision: record.value.currentRevision + 1
+				}
+			},
+			coalesce: null,
+			references: []
+		};
+	}
+
 	async retry(): Promise<void> {
 		this.error = null;
 		if (!this.current) await this.read();

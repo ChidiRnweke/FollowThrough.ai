@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { noteWrite, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
+	import { noteCommand, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -22,7 +22,7 @@
 		SectionNumberingLevel,
 		TextSelection
 	} from '$lib/models/notes';
-	import type { ShellContext, DateTime } from '$lib/models/workspace';
+	import type { ShellContext } from '$lib/models/workspace';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { sectionNumberingOverrideFor } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
@@ -50,7 +50,6 @@
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
 	import {
-		discardNoteDraft,
 		listNoteRevisions,
 		getNoteRevision,
 		restoreNoteRevision
@@ -119,12 +118,7 @@
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
 		const enabled = sectionNumberingOverrideFor(level);
-		const result = await draft.stage({
-			command: { kind: 'noteNumbering', noteId: note.id, enabled },
-			local: { type: 'notes', value: { ...note, sectionNumbering: enabled } },
-			coalesce: null,
-			references: []
-		});
+		const result = await draft.stage({ kind: 'noteNumbering', noteId: note.id, enabled });
 		if (result.kind === 'failure') toast.error(result.message);
 		else note = { ...note, sectionNumbering: enabled };
 	}
@@ -298,7 +292,7 @@
 			saveQueued = false;
 			const savingVersion = editVersion;
 			const record = await draft.stage(
-				noteWrite({
+				noteCommand({
 					...note,
 					title: note.title.trim(),
 					document: editorRef.getDocument(),
@@ -351,7 +345,7 @@
 		}
 		const toggled = { ...note, isPinned: !note.isPinned };
 		const record = await draft.stage(
-			noteWrite({
+			noteCommand({
 				...toggled,
 				document: editorRef.getDocument(),
 				plainText: editorRef.getPlainText()
@@ -679,16 +673,7 @@
 		}
 		publishing = true;
 		try {
-			const publishedAt = new Date().toISOString() as DateTime;
-			const result = await draft.stage({
-				command: { kind: 'publishNote', noteId: note.id },
-				local: {
-					type: 'notes',
-					value: { ...note, publishedRevision: note.currentRevision, publishedAt }
-				},
-				coalesce: null,
-				references: []
-			});
+			const result = await draft.stage({ kind: 'publishNote', noteId: note.id });
 			if (result.kind === 'failure') {
 				toast.error(result.message);
 				return;
@@ -778,8 +763,13 @@
 		}
 		try {
 			const version = editVersion;
-			await discardNoteDraft({ noteId: note.id });
-			await workspaceSession.synchronize();
+			const { revisions } = await listNoteRevisions(note.id);
+			const published = revisions.find((revision) => revision.revision === note.publishedRevision);
+			if (!published) throw new Error('The published version is unavailable');
+			const { revision } = await getNoteRevision({ noteId: note.id, revisionId: published.id });
+			if (version !== editVersion) return;
+			const result = await draft.discardPublished(revision);
+			if (result.kind === 'failure') throw new Error(result.message);
 			const opened = await draft.read(() => version === editVersion);
 			if (opened.kind === 'superseded') {
 				toast.info('The server version changed. Your later edits are retained for review.');

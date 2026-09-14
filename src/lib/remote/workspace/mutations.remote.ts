@@ -47,7 +47,6 @@ export const pushWorkspaceMutation = command(
 			case 'saveDiagram':
 			case 'renameDiagram':
 			case 'publishDiagram':
-			case 'restoreDiagramRevision':
 			case 'archiveDiagram':
 			case 'restoreDiagram':
 			case 'deleteDiagram':
@@ -57,14 +56,12 @@ export const pushWorkspaceMutation = command(
 			case 'archiveProject':
 			case 'projectNumbering':
 			case 'createFolder':
-			case 'moveNote':
 				return controllers.projects().synchronize(actor, { ...mutation, command });
 			case 'createTodo':
 			case 'updateTodo':
 			case 'deleteTodo':
 				return controllers.todos().synchronize(actor, { ...mutation, command });
 			case 'updateSkill':
-			case 'createSkill':
 				return controllers.skills().synchronize(actor, { ...mutation, command });
 			case 'createNote':
 			case 'renameNote':
@@ -73,7 +70,6 @@ export const pushWorkspaceMutation = command(
 			case 'restoreNote':
 			case 'publishNote':
 			case 'discardNoteDraft':
-			case 'deleteNote':
 			case 'noteNumbering':
 				return controllers.notes().synchronize(actor, { ...mutation, command });
 			default:

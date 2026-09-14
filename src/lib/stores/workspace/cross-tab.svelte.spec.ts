@@ -34,12 +34,7 @@ it('observes an offline edit from another client without a refresh', async () =>
 		await Promise.all([first.initialize(), second.initialize()]);
 		const draft = first.draft(identity);
 		await draft.read();
-		await draft.stage({
-			command: { kind: 'renameProject', projectId: project.id, name: 'From another tab' },
-			local: { type: 'projects', value: { ...project, name: 'From another tab' } },
-			coalesce: 'name',
-			references: []
-		});
+		await draft.stage({ kind: 'renameProject', projectId: project.id, name: 'From another tab' });
 		await expect
 			.poll(() => second.views.get('projects', project.id)?.name)
 			.toBe('From another tab');
