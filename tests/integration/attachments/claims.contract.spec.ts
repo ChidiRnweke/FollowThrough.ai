@@ -19,7 +19,7 @@ const setup = () => {
 		client,
 		...transactions,
 		claims: new PostgresAttachmentClaims(
-			{ open: () => postgres(context.url, { max: 1 }) },
+			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
 			transactions.connectionScope
 		),
 		versionId: crypto.randomUUID() as AttachmentVersionId
@@ -68,7 +68,11 @@ describe('attachment processing connection claims', () => {
 		});
 		expect(result).toEqual({ kind: 'claimed', value: 'idle' });
 	});
-	it('refuses completion after the owning session is terminated', async () => {
+	it('refuses completion after the owning session is terminated', async ({ onTestFailed }) => {
+		let phase = 'claim';
+		onTestFailed(() => {
+			throw new Error(`Connection-loss check failed during ${phase}`);
+		});
 		const { claims, versionId, database, client, transactionRunner } = setup();
 		let completed = false;
 		let entered = false;
@@ -76,10 +80,13 @@ describe('attachment processing connection claims', () => {
 			.withClaim(versionId, async (claim) => {
 				const [row] = await database.execute(sql`select pg_backend_pid() as pid`);
 				entered = true;
+				phase = 'terminate session';
 				await client`select pg_terminate_backend(${Number(row?.pid)})`;
+				phase = 'begin completion';
 				await transactionRunner.run(async () => {
 					await claim.assertOwned();
 					completed = true;
+					phase = 'completion committed';
 				});
 			})
 			.then(
@@ -88,6 +95,7 @@ describe('attachment processing connection claims', () => {
 				},
 				() => undefined
 			);
+		phase = 'assert refusal';
 		expect({ entered, completed }).toEqual({ entered: true, completed: false });
 	});
 	it('releases ownership so another worker can resume the version', async () => {

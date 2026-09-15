@@ -61,7 +61,7 @@ const setup = async (suffix: string) => {
 	const worker = new AttachmentProcessing({
 		records,
 		claims: new PostgresAttachmentClaims(
-			{ open: () => postgres(context.url, { max: 1 }) },
+			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
 			transaction.connectionScope
 		),
 		extraction,

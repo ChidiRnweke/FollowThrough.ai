@@ -176,7 +176,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		deferEmbedding
 	});
 	const {
-		repository: searchRepository,
 		condenser,
 		noteIndexer,
 		diagramIndexer,

@@ -15,7 +15,7 @@ export const postgresSessionConnections = {
 	open: () => {
 		const databaseUrl = process.env.DATABASE_URL;
 		if (!databaseUrl) throw new Error('DATABASE_URL is not set');
-		return postgres(databaseUrl, { max: 1 });
+		return postgres(databaseUrl, { max: 1, idle_timeout: 0, max_lifetime: 0 });
 	}
 };
 

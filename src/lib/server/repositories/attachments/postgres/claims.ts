@@ -44,7 +44,7 @@ export class PostgresAttachmentClaims implements AttachmentClaims {
 			);
 			return { kind: 'claimed', value };
 		} finally {
-			await connection.end();
+			await connection.end({ timeout: 0 });
 		}
 	}
 }
