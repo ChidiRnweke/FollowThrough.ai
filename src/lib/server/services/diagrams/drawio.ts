@@ -1,3 +1,4 @@
+import { decodeHTMLStrict } from 'entities';
 import createDOMPurify from 'dompurify';
 import type { WindowLike } from 'dompurify';
 import { JSDOM } from 'jsdom';
@@ -72,18 +73,8 @@ const locate = (element: Element): string => {
 
 const excerpt = (value: string): string => (value.length > 60 ? `${value.slice(0, 60)}…` : value);
 
-/**
- * One HTML document, kept only to borrow its entity table.
- *
- * Created lazily so a process that never parses a diagram never builds it.
- */
-let entityDecoder: Document | undefined;
-
 const decodeNamedEntity = (entity: string): string | undefined => {
-	entityDecoder ??= new JSDOM('').window.document;
-	const holder = entityDecoder.createElement('div');
-	holder.innerHTML = entity;
-	const decoded = holder.textContent ?? '';
+	const decoded = decodeHTMLStrict(entity);
 	return decoded === entity ? undefined : decoded;
 };
 
