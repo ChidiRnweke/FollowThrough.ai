@@ -2,88 +2,62 @@ import { DomainError } from '$lib/errors';
 import { logLevelEnabled, summarize, traceOperation } from '$lib/server/services/telemetry';
 
 type BoundaryLogger = Pick<Console, 'info' | 'debug' | 'warn' | 'error'>;
+export type ControllerSurface<T> = {
+	readonly [K in keyof T]:
+		false | (T[K] extends (...args: never[]) => PromiseLike<infer _Value> ? true : never);
+};
 
 /**
- * Central boundary instrumentation for controllers.
- *
- * Every public prototype method is shadowed with a wrapper that opens a
- * `domain.method` operation span and logs around the call: `info` before
- * (actor + summarised arguments), `debug` after (duration + summarised
- * result), `warn` for domain failures (expected outcomes — mirrors
- * `handleError` in hooks.server.ts) and `error` for anything else. Applied
- * once in ProductionControllerFactory, so UI remote functions, the MCP
- * endpoint and agent tool calls are all covered without per-controller code,
- * and every record inherits the operation span's trace id via the console
- * bridge. Payloads are summarised, never logged raw.
- *
- * TypeScript `private` is erased at runtime, so a controller's internal
- * helpers show up here alongside its public API. A helper with a synchronous
- * contract is called without `await`; wrapping it in an async function would
- * hand its caller a Promise where a value was expected (this broke
- * `Agent.submit`, whose sync `freezeInput` suddenly returned one). Synchronous
- * methods therefore pass through uninstrumented with their contract intact —
- * only promise-returning methods get the span and the logs, which also means
- * the `info` record is written as the call starts settling rather than before
- * the body's synchronous prefix runs.
- *
- * Call sites must not add their own boundary logging — this is the coverage
- * mechanism; log at `debug` inside services for finer detail.
+ * Instrument the declared public asynchronous capabilities before executing them.
+ * The facade binds calls to the original instance. Internal calls and synchronous
+ * helpers keep their contracts and do not create additional boundary spans.
  */
 export const instrumentedController = <T extends object>(
 	domain: string,
 	controller: T,
+	surface: ControllerSurface<T>,
 	logger: BoundaryLogger = console
 ): T => {
-	const prototype = Object.getPrototypeOf(controller);
-	for (const name of Object.getOwnPropertyNames(prototype)) {
-		if (name === 'constructor' || name.startsWith('_')) continue;
-		const descriptor = Object.getOwnPropertyDescriptor(prototype, name);
-		if (!descriptor || typeof descriptor.value !== 'function') continue;
-		const method = descriptor.value as (...args: unknown[]) => unknown;
-		// audit-allow: no-unknown-type — A decorator wrapper stands in for every controller method; no one signature covers them.
-		const wrapped = (...args: unknown[]): unknown => {
-			const result = Reflect.apply(method, controller, args);
-			if (!result || typeof (result as Promise<unknown>).then !== 'function') return result;
-			const pending = result as Promise<unknown>;
-			// `kind: null` leaves the span without `openinference.span.kind`, so the
-			// collector's filter/openinference keeps these operation spans out of
-			// Phoenix — they exist to carry the trace id the boundary logs inherit,
-			// not to surface as LLM tracing. They still reach the traces pipeline.
-			return traceOperation(`${domain}.${name}`, { kind: null }, async () => {
-				const [actor, ...rest] = args;
-				const userId =
-					typeof actor === 'object' && actor !== null && 'userId' in actor
-						? actor.userId
-						: undefined;
-				if (logLevelEnabled('info'))
-					logger.info(
-						`[${domain}] ${name}`,
-						summarize({ ...(userId !== undefined ? { userId } : {}), args: rest })
-					);
-				const startedAt = performance.now();
-				try {
-					const value = await pending;
-					if (logLevelEnabled('debug'))
-						logger.debug(
-							`[${domain}] ${name} completed in ${Math.round(performance.now() - startedAt)}ms`,
-							summarize(value)
+	// audit-allow: no-unknown-type — The boundary facade preserves heterogeneous controller method signatures.
+	const methods = new Map<PropertyKey, (...args: unknown[]) => unknown>();
+	return new Proxy(controller, {
+		get(target, name) {
+			const value = Reflect.get(target, name, target);
+			if (typeof value !== 'function') return value;
+			const cached = methods.get(name);
+			if (cached) return cached;
+			if (!Object.hasOwn(surface, name) || !surface[name as keyof T]) return value.bind(target);
+			// audit-allow: no-unknown-type — One wrapper handles each declared capability without changing its input or output.
+			const wrapped = (...args: unknown[]): Promise<unknown> =>
+				traceOperation(`${domain}.${String(name)}`, { kind: null }, async () => {
+					const [actor, ...rest] = args;
+					const userId =
+						typeof actor === 'object' && actor !== null && 'userId' in actor
+							? actor.userId
+							: undefined;
+					if (logLevelEnabled('info'))
+						logger.info(
+							`[${domain}] ${String(name)}`,
+							summarize({ ...(userId !== undefined ? { userId } : {}), args: rest })
 						);
-					return value;
-				} catch (error) {
-					if (error instanceof DomainError) {
-						if (logLevelEnabled('warn')) logger.warn(`[${domain}] ${name} failed`, error);
-					} else {
-						logger.error(`[${domain}] ${name} failed`, error);
+					const startedAt = performance.now();
+					try {
+						const result = await Reflect.apply(value, target, args);
+						if (logLevelEnabled('debug'))
+							logger.debug(
+								`[${domain}] ${String(name)} completed in ${Math.round(performance.now() - startedAt)}ms`,
+								summarize(result)
+							);
+						return result;
+					} catch (error) {
+						if (error instanceof DomainError) {
+							if (logLevelEnabled('warn')) logger.warn(`[${domain}] ${String(name)} failed`, error);
+						} else logger.error(`[${domain}] ${String(name)} failed`, error);
+						throw error;
 					}
-					throw error;
-				}
-			});
-		};
-		Object.defineProperty(controller, name, {
-			value: wrapped,
-			configurable: true,
-			writable: true
-		});
-	}
-	return controller;
+				});
+			methods.set(name, wrapped);
+			return wrapped;
+		}
+	});
 };
