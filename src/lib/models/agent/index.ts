@@ -212,7 +212,7 @@ interface ToolActivityBase {
  */
 export type ToolActivity =
 	| (ToolActivityBase & { readonly status: 'running' })
-	| (ToolActivityBase & { readonly status: 'approval_required' })
+	| (ToolActivityBase & { readonly status: 'approval_required'; readonly review?: AgentReview })
 	| (ToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
 	| (ToolActivityBase & {
 			readonly status: 'reported_failure';
@@ -367,6 +367,12 @@ export interface ToolPreference {
 	readonly source: 'default' | 'user' | 'project';
 }
 
+/** Domain-owned review serialized for the agent checkpoint and transcript. */
+export const agentReviewSchema = z
+	.object({ kind: z.literal('note_change'), content: z.string() })
+	.strict();
+export type AgentReview = z.infer<typeof agentReviewSchema>;
+
 /**
  * A tool call parked at an approval checkpoint, waiting for `decide`/`decideMany`.
  *
@@ -377,6 +383,7 @@ export interface ToolPreference {
  * and never parks.
  */
 export interface PendingAgentDecision {
+	readonly review?: AgentReview;
 	readonly callId: string;
 	readonly toolName: ToolName;
 	readonly arguments: AgentPayloadObject;
@@ -800,6 +807,7 @@ export type AgentEvent =
 	  }
 	| {
 			readonly type: 'approval_required';
+			readonly review?: AgentReview;
 			readonly runId: AgentRunId;
 			readonly callId: string;
 			readonly name: AgentToolName;
@@ -929,6 +937,7 @@ export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
 export const pendingAgentDecisionSchema = z
 	.object({
 		callId: z.string().min(1),
+		review: agentReviewSchema.optional(),
 		toolName: toolNameSchema,
 		arguments: eventPayloadObjectSchema
 	})
@@ -949,10 +958,8 @@ const readCallId = (row: unknown): string | undefined =>
  * can warn with them, which is what `SuggestionInbox.listByStatus` does with
  * unreadable suggestion rows.
  *
- * The column holds in-flight state only — cleared on resume and by
- * `abandonPendingCalls`, and empty in every stored row when this boundary was
- * written — so there is no legacy shape to map here, and nothing for the
- * corpus to capture.
+ * Legacy decisions without a review remain readable and rejectable. Note tooling
+ * refuses to apply them because they do not identify an authorized base and result.
  */
 export const readPendingDecisions = (
 	// audit-allow: no-unknown-type — The stored pending_decisions jsonb, which the column hands out unparsed.
@@ -1011,6 +1018,7 @@ const agentEventSchema = z.discriminatedUnion('type', [
 	...toolOutcomeSchemas,
 	z.object({
 		type: z.literal('approval_required'),
+		review: agentReviewSchema.optional(),
 		runId: runIdSchema,
 		callId: z.string(),
 		name: agentToolNameSchema,
@@ -1076,6 +1084,7 @@ export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefin
 			callId: event.callId,
 			name: event.name,
 			input: event.arguments,
+			...(event.review ? { review: event.review } : {}),
 			status: 'approval_required'
 		};
 	const outcome = toolOutcomeEvent(event);

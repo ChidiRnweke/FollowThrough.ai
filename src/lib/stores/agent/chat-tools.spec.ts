@@ -1,3 +1,5 @@
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
+import { readNoteReview } from './chat-tools';
 import { describe, expect, it } from 'vitest';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import {
@@ -213,5 +215,38 @@ describe('Reading the arguments a call was made with', () => {
 
 	it('records no arguments when the payload is not an object', () => {
 		expect(toolArguments(['skills'])).toEqual({});
+	});
+});
+
+describe('Reading saved note reviews', () => {
+	it('reads the prepared document from a journalled approval', () => {
+		const noteReview = noteReviewBuilder();
+		const parsed = readJournalledTool(
+			{
+				name: 'save_note',
+				callId: 'review-1',
+				status: 'approval_required',
+				input: { noteId: noteReview.change.noteId, markdown: 'Tuesday' },
+				review: { kind: 'note_change', content: JSON.stringify(noteReview) }
+			},
+			{}
+		);
+		expect(parsed).toMatchObject({
+			kind: 'readable',
+			tool: { status: 'approval_required', noteReview }
+		});
+	});
+	it('reports corrupt review JSON explicitly', () => {
+		expect(readNoteReview({ kind: 'note_change', content: '{' })).toMatchObject({
+			kind: 'failure'
+		});
+	});
+	it('rejects incomplete prepared documents instead of inventing a base', () => {
+		expect(
+			readNoteReview({
+				kind: 'note_change',
+				content: JSON.stringify({ kind: 'prepared', change: { noteId: 'missing-base' } })
+			})
+		).toMatchObject({ kind: 'failure' });
 	});
 });

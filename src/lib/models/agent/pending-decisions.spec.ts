@@ -1,3 +1,4 @@
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import { readPendingDecisions } from '$lib/models/agent';
 
@@ -57,5 +58,28 @@ describe('Reading the pending decisions off a run row', () => {
 
 	it('answers a column that is not an array at all with no decisions', () => {
 		expect(readPendingDecisions('call-1').decisions).toEqual([]);
+	});
+});
+
+describe('Stored domain review transport', () => {
+	it('preserves a prepared note review through JSON checkpoint storage', () => {
+		const noteReview = noteReviewBuilder();
+		const decision = {
+			callId: 'review-1',
+			toolName: 'save_note',
+			arguments: { noteId: noteReview.change.noteId, markdown: 'Tuesday' },
+			review: { kind: 'note_change', content: JSON.stringify(noteReview) }
+		};
+		expect(readPendingDecisions(JSON.parse(JSON.stringify([decision]))).decisions).toEqual([
+			decision
+		]);
+	});
+	it('keeps legacy note approvals readable so they remain rejectable', () => {
+		const decision = {
+			callId: 'legacy-note',
+			toolName: 'save_note',
+			arguments: { noteId: noteReviewBuilder().change.noteId, markdown: 'Tuesday' }
+		};
+		expect(readPendingDecisions([decision]).decisions).toEqual([decision]);
 	});
 });

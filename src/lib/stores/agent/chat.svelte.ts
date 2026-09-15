@@ -1,3 +1,4 @@
+import { readNoteReview } from './chat-tools';
 import type {
 	AgentEvent,
 	AgentExecutionMode,
@@ -1077,6 +1078,7 @@ export class ChatStore {
 					callId: pending.callId,
 					name: pending.toolName,
 					arguments: toolArguments(pending.arguments),
+					...(pending.review ? { noteReview: readNoteReview(pending.review) } : {}),
 					runId: snapshot.run.id,
 					status: 'approval_required'
 				});
@@ -1154,6 +1156,7 @@ export class ChatStore {
 				callId: event.callId,
 				name: event.name,
 				arguments: toolArguments(event.arguments),
+				...(event.review ? { noteReview: readNoteReview(event.review) } : {}),
 				runId: event.runId,
 				status: 'approval_required'
 			});

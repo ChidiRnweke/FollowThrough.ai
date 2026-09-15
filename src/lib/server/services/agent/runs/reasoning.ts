@@ -418,6 +418,7 @@ export class AgentReasoning {
 			agentTools(alreadyPromoted?: readonly string[]): Tool<unknown>[];
 			offeredToolNames(alreadyPromoted?: readonly string[]): ToolName[];
 			catalog(): readonly { readonly name: string }[];
+			reviewDecision(pending: PendingAgentDecision): PendingAgentDecision;
 		}>,
 		private readonly sessions: AgentSessionRepository,
 		private readonly apiKey = process.env.OPENROUTER_API_KEY,
@@ -614,23 +615,12 @@ export class AgentReasoning {
 					stream.state._currentAgentSpan?.end();
 					const pending: PendingAgentDecision[] = interruptions.map((item) => {
 						const call = parkedCall(item);
-						return {
+						return registry.reviewDecision({
 							callId: call.callId,
 							toolName: call.name,
 							arguments: call.arguments
-						};
+						});
 					});
-					for (const item of pending)
-						yield {
-							type: 'event',
-							event: {
-								type: 'approval_required',
-								runId: run.id,
-								callId: item.callId,
-								name: item.toolName,
-								arguments: item.arguments
-							}
-						};
 					yield {
 						type: 'approval_checkpoint',
 						serializedState: stream.state.toString(),

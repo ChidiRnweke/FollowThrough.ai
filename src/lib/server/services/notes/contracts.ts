@@ -115,3 +115,9 @@ export interface SelectionOriginService {
 		producer: SelectionProducer
 	): Promise<SelectionOrigin<Note>>;
 }
+
+/** Editor-schema conversion at the document boundary. */
+export interface NoteMarkdown {
+	read(markdown: string): Pick<Note, 'document' | 'plainText'>;
+	write(document: Note['document']): string;
+}

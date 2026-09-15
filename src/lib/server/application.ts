@@ -474,6 +474,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoViewAssembler: todos
 		},
 		notes: {
+			markdown: noteCapability.markdown,
 			syncMutations: synchronization.mutations,
 			noteReader: notes,
 			noteTreeReader: notes,

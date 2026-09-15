@@ -261,6 +261,9 @@ export class ConversationArchive {
 			callId: activity.callId ?? null,
 			name: activity.name,
 			input: activity.input,
+			...(activity.status === 'approval_required' && activity.review
+				? { review: { ...activity.review } }
+				: {}),
 			// Read off the arm that can have it. `decision` is gone: no writer ever
 			// set it, so every row ever journalled carried its `null`.
 			// A succeeded call with no output journals `null` rather than raising:

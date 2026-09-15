@@ -10,12 +10,13 @@
  * It runs per event rather than per render, so a large result is walked once.
  */
 import { z } from 'zod';
+import { noteChangeReviewSchema, type NoteChangeReview } from '$lib/models/notes';
 import {
 	readAgentPayloadObject,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
-import { agentToolNameSchema } from '$lib/models/agent';
+import { agentReviewSchema, type AgentReview, agentToolNameSchema } from '$lib/models/agent';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 
 export type ChatToolStatus =
@@ -47,7 +48,10 @@ export interface ChatToolActivityBase {
  */
 export type ChatToolActivity =
 	| (ChatToolActivityBase & { readonly status: 'running' })
-	| (ChatToolActivityBase & { readonly status: 'approval_required' })
+	| (ChatToolActivityBase & {
+			readonly status: 'approval_required';
+			readonly noteReview?: NoteChangeReview;
+	  })
 	| (ChatToolActivityBase & { readonly status: 'succeeded'; readonly output?: AgentPayload })
 	/** The tool returned, and what it returned says it failed (ADR 0035). */
 	| (ChatToolActivityBase & {
@@ -87,7 +91,26 @@ export type JournalledTool =
 	| { readonly kind: 'readable'; readonly tool: ChatToolActivity }
 	| { readonly kind: 'unreadable'; readonly reason: string };
 
+/** Interpret the domain payload once where a checkpoint/event enters the browser. */
+export const readNoteReview = (review: AgentReview): NoteChangeReview => {
+	try {
+		return noteChangeReviewSchema.parse(JSON.parse(review.content));
+	} catch {
+		return {
+			kind: 'failure',
+			problems: ['The saved review could not be read. Reject this call and request a new review.']
+		};
+	}
+};
+
+/** Missing is a legacy checkpoint, never permission to recompute against current content. */
+export const legacyNoteReview: NoteChangeReview = {
+	kind: 'failure',
+	problems: ['This older approval has no saved review. Reject this call and request a new review.']
+};
+
 const journalledToolSchema = z.object({
+	review: agentReviewSchema.optional(),
 	callId: z.string().nullish(),
 	// A journalled row naming a tool the agent surface no longer has becomes an
 	// `unreadable` transcript part rather than a row nothing can label.
@@ -116,8 +139,16 @@ export const readJournalledTool = (
 	// cannot carry `undefined`. Both spellings mean the field is not there.
 	const output = row.output ?? undefined;
 	const failure = row.failure ?? undefined;
-	if (row.status === 'running' || row.status === 'approval_required')
-		return { kind: 'readable', tool: { ...base, status: row.status } };
+	if (row.status === 'running') return { kind: 'readable', tool: { ...base, status: 'running' } };
+	if (row.status === 'approval_required')
+		return {
+			kind: 'readable',
+			tool: {
+				...base,
+				status: 'approval_required',
+				...(row.review ? { noteReview: readNoteReview(row.review) } : {})
+			}
+		};
 	if (row.status === 'succeeded')
 		return {
 			kind: 'readable',

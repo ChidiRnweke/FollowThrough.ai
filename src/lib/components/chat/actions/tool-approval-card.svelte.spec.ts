@@ -1,3 +1,5 @@
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
+import ToolApprovalGroup from './tool-approval-group.svelte';
 import type { ShellContext } from '$lib/client/shell/views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
@@ -150,5 +152,61 @@ describe('The review card only offers the room a change actually needs', () => {
 	it('states the model being replaced, which the arguments alone never said', async () => {
 		const screen = await renderSettings();
 		expect(await visible(screen, { previous: 'openai/gpt-5.6' })).toEqual({ previous: 1 });
+	});
+});
+
+describe('Reviewed note approval controls', () => {
+	it('names the prepared note without downloading the current note', async () => {
+		const review = noteReviewBuilder();
+		const screen = await renderCard({
+			...pendingCall('save_note', { noteId: review.change.noteId, markdown: 'Tuesday' }),
+			status: 'approval_required',
+			noteReview: review
+		});
+		await expect.element(screen.getByText('Save note · Release', { exact: true })).toBeVisible();
+	});
+	it('disables approval for a legacy note change', async () => {
+		const screen = await renderCard(
+			pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' })
+		);
+		await expect
+			.element(screen.getByRole('button', { name: 'Approve', exact: true }))
+			.toBeDisabled();
+	});
+	it('keeps rejection available for a legacy note change', async () => {
+		const screen = await renderCard(
+			pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' })
+		);
+		await expect.element(screen.getByRole('button', { name: 'Reject', exact: true })).toBeEnabled();
+	});
+	it('does not approve a bundle containing a missing note review', async () => {
+		const screen = await render(ToolApprovalGroup, {
+			tools: [
+				pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' }),
+				{ ...pendingCall('archive_note', { noteId: NOTE_ID }), callId: 'another-call' }
+			],
+			onapprove: () => undefined,
+			onreject: () => undefined
+		});
+		await expect.element(screen.getByRole('button', { name: 'Approve all (2)' })).toBeDisabled();
+	});
+	it('also blocks bundle approval from an expanded prepared review', async () => {
+		const screen = await render(ToolApprovalGroup, {
+			tools: [
+				pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' }),
+				{
+					...pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' }),
+					callId: 'prepared-call',
+					status: 'approval_required',
+					noteReview: noteReviewBuilder()
+				}
+			],
+			onapprove: () => undefined,
+			onreject: () => undefined
+		});
+		await screen.getByRole('button', { name: 'Review in full' }).click();
+		await expect
+			.element(screen.getByRole('button', { name: 'Approve', exact: true }))
+			.toBeDisabled();
 	});
 });

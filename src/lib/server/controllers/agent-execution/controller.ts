@@ -157,6 +157,25 @@ export class AgentRunLifecycle {
 						await this.deps.sessions.replace(run.conversationId, update.sessionItems);
 						for (const decision of decisions)
 							await this.deps.decisions.consume(run.id, decision.callId, new Date());
+						for (const pending of update.pendingDecisions) {
+							const event: AgentEvent = {
+								type: 'approval_required',
+								runId: run.id,
+								callId: pending.callId,
+								name: pending.toolName,
+								arguments: pending.arguments,
+								...(pending.review ? { review: pending.review } : {})
+							};
+							const record = await this.deps.events.append(run.id, 1, event);
+							const activity = toolActivityFromEvent(event);
+							if (activity)
+								await this.deps.conversations.recordToolActivity(
+									actor,
+									run.conversationId,
+									activity,
+									{ runId: run.id, eventCursor: record.cursor }
+								);
+						}
 					});
 					// The park lost the race with a cancellation: the row is `cancelling`,
 					// so settle it rather than report a park that never happened.
@@ -164,10 +183,7 @@ export class AgentRunLifecycle {
 						await this.finishCancellation(run.id);
 						return 'cancelled';
 					}
-					// Every other durable transition notifies; without this one a
-					// subscriber waiting on the run reaching a terminal status never
-					// learns it parked, because the preceding `approval_required`
-					// event fires while the run is still `running`.
+					// Publish only after the checkpoint and its approval events commit together.
 					this.deps.eventBus.notify(run.id);
 					return 'awaiting_approval';
 				}
