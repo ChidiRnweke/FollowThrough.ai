@@ -105,6 +105,9 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
 - P03: start logging and tracing before public capability execution. The explicit, typed
   surface excludes helpers; internal calls retain one boundary. Sixteen instrumentation tests
   and the full 3,506-test suite passed, including pre-await child span parentage.
+- P05/A11: search-query generation now rejects missing or blank provider output. The provider
+  belongs to knowledge search, and the evaluation cache uses a new namespace. Eleven focused
+  tests and the full 3,511-test suite passed. Vision preparation lifetime (A13) remains open.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.

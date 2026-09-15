@@ -3,7 +3,8 @@ import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId, StoredMessage } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { Condenser, KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
+import type { KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
+import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 import type { DateTime } from '$lib/models/workspace';
 
@@ -40,7 +41,7 @@ export interface RetrievalController {
 
 export interface RetrievalDependencies {
 	knowledgeSearcher: KnowledgeSearcher;
-	condenser: Condenser;
+	queryGenerator: ISearchQueryGeneration;
 	conversations: ConversationJournal;
 }
 
@@ -85,18 +86,18 @@ export class Retrieval implements RetrievalController {
 	}
 
 	/**
-	 * Multi-turn: condense the whole conversation (+ the model's query) into one
+	 * Multi-turn: generate the whole conversation (+ the model's query) into one
 	 * statement to embed. Single-turn / no history: use the query directly.
 	 */
 	private async resolveQuery(actor: ActorContext, input: SearchKnowledgeInput): Promise<string> {
 		if (!input.conversationId) return input.query;
 		const history = await this.dependencies.conversations.listMessages(actor, input.conversationId);
 		if (history.length <= 1) return input.query;
-		// An unreadable row contributes no text to condense. It is left out rather
+		// An unreadable row contributes no text to generate. It is left out rather
 		// than stood in for: a placeholder would put words in the transcript that
-		// nobody in the conversation said, and the condenser would embed them.
+		// nobody in the conversation said, and the queryGenerator would embed them.
 		const spoken = history.map(messageText).filter((text) => text !== undefined);
 		const transcript = [...spoken, `user: ${input.query}`].join('\n');
-		return this.dependencies.condenser.condense(transcript);
+		return this.dependencies.queryGenerator.generate(transcript);
 	}
 }
