@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.10](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.9...v0.5.10) (2026-09-15)
+
+
+### Code Refactoring
+
+* **notes:** bind approval to reviewed content ([#66](https://github.com/ChidiRnweke/FollowThrough.ai/issues/66)) ([9e8f153](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9e8f15305a1a0ffc8bc71a0a36ad6938642d5142))
+
 ## [0.5.9](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.8...v0.5.9) (2026-09-15)
 
 
