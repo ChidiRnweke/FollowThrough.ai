@@ -24,26 +24,45 @@ when feasible. Never reset another agent's worktree.
 
 ## Write in Simplified Technical English
 
-Use short sentences, one idea per sentence, active voice, and common words. Use the same term
-for the same thing. Define necessary technical terms on first use. Prefer concrete verbs.
-Remove filler, praise, metaphors, and sales language. Apply these practical STE conventions;
-do not claim formal certification.
+Write in the register of an architecture decision record: dry, precise, and about behavior
+and its consequences. A PR is durable context for a human or agent who arrives later, so the
+body must state the reason for the change as well as the change itself. Do not write a
+marketing summary, a change log, or a work diary.
+
+Apply the practical STE conventions without claiming formal certification: short sentences,
+one idea per sentence, active voice, and common words; the same term for the same thing; a
+necessary technical term defined at its first use; concrete verbs. Remove filler, praise,
+metaphor, and sales language. Adjectives name a quality, not a value; a value statement names
+what a user or system can now do.
+
+Make the body semantic, not mechanical. Group changes by behavior and explain why each
+behavior exists; a component inventory is not a description. "The app writes an edit to a
+queue before it reports success, so closing the browser cannot lose the edit" describes
+behavior and its reason. "A queue store was added" lists a part. State the reason for a
+consequential choice, and keep a rejected alternative only when it explains a material choice.
 
 Use the repository's Conventional Commit title format. Name the concrete problem or resulting
-behavior. Rewrite the title and body around the final implementation when scope changes.
+behavior, not the internal mechanism. Rewrite the title and the body around the final
+implementation when scope changes.
 
 Use exactly these four sections, in this order:
 
 ### Why
 
-State the original problem, who or what it affects, and the intended outcome. Preserve the
-reason the work was requested. Do not open with a list of edits.
+Open with the problem, stated concretely and in behavior terms, and say who or what it
+affects. State the intended outcome as an observable consequence, not a quality. Define the
+subject before you refer to it by a shorthand: a reader cannot act on a noun the text has not
+named. Do not open with a slogan (for example, a feature "needs to work offline"), and do not
+open with a list of edits. Preserve the reason the work was requested.
 
 ### What changed
 
-Explain previous and resulting behavior with a concrete trigger or example when useful.
-Describe the final solution and consequential choices. Include API, compatibility, migration,
+Explain previous and resulting behavior, with a concrete trigger or example when useful.
+Describe the final solution and the choices behind it. Include API, compatibility, migration,
 or rollout details here only when a reader needs them to understand or use the change.
+
+Format for scanning: lead each behavior group with a bold phrase, keep paragraphs to a few
+sentences, and keep the section headings stable across the body.
 
 ### Evidence
 
