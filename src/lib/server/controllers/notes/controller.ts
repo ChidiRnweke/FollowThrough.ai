@@ -337,9 +337,6 @@ export class Notes implements NotesController {
 				case 'discardNoteDraft':
 					await this.discardDraft(actor, command);
 					break;
-				case 'deleteNote':
-					await this.deleteForever(actor, command);
-					break;
 				case 'noteNumbering':
 					await this.setSectionNumbering(actor, command);
 					break;

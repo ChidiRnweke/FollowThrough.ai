@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { redirect } from '@sveltejs/kit';
-import { command, form, query } from '$app/server';
+import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { ExtractPromisesInput } from '$lib/models/todos';
@@ -16,16 +15,11 @@ import type {
 } from '$lib/models/notes';
 import type { RelateSelectionInput } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
-import type { ProjectId } from '$lib/models/projects';
 
 const noteId = z
 	.string()
 	.uuid()
 	.transform((value) => value as NoteId);
-const projectId = z
-	.string()
-	.uuid()
-	.transform((value) => value as ProjectId);
 const textSelection = z
 	.object({
 		noteId,
@@ -120,20 +114,5 @@ export const convertDiagram = command(
 		return AppFactory.controllers()
 			.diagrams()
 			.startConvertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
-	}
-);
-
-export const captureNote = form(
-	z.object({
-		title: z.string().trim().min(1, 'Give the note a title first.'),
-		projectId
-	}),
-	async ({ title, projectId }) => {
-		const actor = requestActor();
-		// The page passes the inbox, found by role. Note creation used to answer a
-		// missing project itself with `findFirstActive`, filing the note wherever
-		// the sort order happened to land.
-		const { note } = await AppFactory.controllers().notes().create(actor, { title, projectId });
-		redirect(303, `/notes/${note.id}`);
 	}
 );

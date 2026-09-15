@@ -51,7 +51,7 @@
 							: result.kind === 'deleted'
 								? 'This todo was deleted.'
 								: 'This todo is not available on this device. Reconnect to download it.';
-				await session.resources.prepare(['source_anchors', 'provenance']);
+				await session.resources.prepare();
 			})
 			.catch((error) => {
 				const message = error instanceof Error ? error.message : 'Could not open this todo';

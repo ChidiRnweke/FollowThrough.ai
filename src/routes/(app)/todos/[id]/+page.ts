@@ -8,6 +8,6 @@ export const load: PageLoad = async ({ params, url, parent }) => {
 	const { session } = await parent();
 	const opened = await session.resources.open({ type: 'todos', id: [todoId] });
 	requireRouteResource(opened, session.resources.online, 'todo');
-	await session.resources.prepare(['source_anchors', 'provenance']);
+	await session.resources.prepare();
 	return { todoId, returnTo: safeReturnUrl(url.searchParams.get('returnTo')) };
 };

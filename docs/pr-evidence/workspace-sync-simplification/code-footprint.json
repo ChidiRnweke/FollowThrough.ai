@@ -1,0 +1,60 @@
+{
+	"base": "c908e1769e5d5951f9c9802cfa7f69fe0cd3a377",
+	"classification": "application: src/lib or src/routes excluding .spec. and /testing/; tests/fakes: excluded files plus tests/; other: remaining paths",
+	"revisions": {
+		"98194989d91f59d14db24845267734a4f1baf2fc": {
+			"other": {
+				"added": 274,
+				"deleted": 68,
+				"net": 206
+			},
+			"docs": {
+				"added": 1510,
+				"deleted": 3,
+				"net": 1507
+			},
+			"migrations": {
+				"added": 305,
+				"deleted": 1,
+				"net": 304
+			},
+			"application": {
+				"added": 12392,
+				"deleted": 4960,
+				"net": 7432
+			},
+			"tests/fakes": {
+				"added": 10403,
+				"deleted": 1399,
+				"net": 9004
+			}
+		},
+		"d824d92615e72902916ea18ed146a549792c56f7": {
+			"other": {
+				"added": 247,
+				"deleted": 69,
+				"net": 178
+			},
+			"docs": {
+				"added": 1063,
+				"deleted": 3,
+				"net": 1060
+			},
+			"migrations": {
+				"added": 239,
+				"deleted": 1,
+				"net": 238
+			},
+			"application": {
+				"added": 11323,
+				"deleted": 5099,
+				"net": 6224
+			},
+			"tests/fakes": {
+				"added": 9260,
+				"deleted": 1405,
+				"net": 7855
+			}
+		}
+	}
+}

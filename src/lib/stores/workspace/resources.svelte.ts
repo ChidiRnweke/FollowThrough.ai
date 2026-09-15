@@ -1,15 +1,18 @@
+import { SvelteDate, SvelteMap } from 'svelte/reactivity';
 import {
 	DexieWorkspaceRepository,
-	type WorkspaceLocalProjection
+	type WorkspaceLocalProjection,
+	type WorkspaceLocalRepository
 } from '$lib/client/sync/workspace-local-repository';
-import { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
-import { type SyncScheduler, browserSyncScheduler } from '$lib/client/sync/scheduler';
-import { type NoteId, type NoteView } from '$lib/models/notes';
+import type { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
+import { browserSyncScheduler } from '$lib/client/sync/scheduler';
+import type { UserId } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
+import { type NoteId, type NoteView, type NoteRevision } from '$lib/models/notes';
 import {
 	visibleResources,
 	localResource,
 	type WriteDraft,
-	type WriteContent,
 	type DraftStatus,
 	type WriteConflictView,
 	type WriteBase
@@ -24,8 +27,9 @@ import {
 import {
 	workspaceCommandSchema,
 	mutationResource,
+	prepareWorkspaceCommand,
+	type PreparedWorkspaceCommand,
 	assertWorkspaceWriteIdentity,
-	resolveImportedNoteBase,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
 import {
@@ -36,20 +40,13 @@ import {
 import { WorkspaceViews } from '$lib/models/workspace-views';
 import {
 	cachedSnapshot,
-	collectionReadiness,
 	compareSyncEtags,
 	type CacheAccess,
 	type SyncSnapshot
 } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
-import { migrateLegacyNotes } from '$lib/client/sync/legacy-notes';
-import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
-import type { StorageRecoveryItem } from '$lib/models/sync';
-import {
-	browserWriterLock,
-	withWorkspaceMigrationLock
-} from '$lib/client/sync/browser-writer-lock';
+import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
 	workspaceWriteTransport
@@ -58,9 +55,8 @@ import {
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
 
 export interface WorkspaceResourcesDependencies {
-	scheduler?: SyncScheduler;
 	dispose?(): void;
-	restoreLocalWrites(): Promise<void>;
+	repository: Pick<WorkspaceLocalRepository<WorkspaceCommand, WorkspaceRecord>, 'read'>;
 	cache: ResourceCache<WorkspaceRecord>;
 	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
 }
@@ -69,31 +65,14 @@ export interface WorkspaceResourcesDependencies {
 export class WorkspaceResources {
 	private revision = $state(0);
 	private readonly runtime: WorkspaceSyncRuntime;
-	private readonly recoveryStorage = new IndexedDbStorageRecovery();
-	private readonly projected = $derived.by(() => {
-		void this.revision;
-		return visibleResources(this.dependencies.cache.records, this.dependencies.writes.pending);
-	});
+	private local = $state.raw<WorkspaceLocalProjection<WorkspaceCommand, WorkspaceRecord> | null>(
+		null
+	);
+	private readonly cached = $derived(
+		new SvelteMap(this.local?.cache.records.map((row) => [row.key, row.entry]) ?? [])
+	);
+	private readonly projected = $derived(visibleResources(this.cached, this.pending));
 	private readonly projections = $derived(new WorkspaceViews(this.projected));
-	private recovery = $state<readonly StorageRecoveryItem[]>([]);
-	get recoveryItems(): readonly StorageRecoveryItem[] {
-		return this.recovery;
-	}
-	async loadRecovery(): Promise<void> {
-		const items = await this.recoveryStorage.list(this.accountId);
-		if (!this.stopped) this.recovery = items;
-	}
-
-	async removeRecovery(item: StorageRecoveryItem): Promise<void> {
-		if (!this.active) throw new Error('This account is no longer active');
-		await this.recoveryStorage.remove(this.accountId, item.source, item.key);
-		await this.loadRecovery();
-		await this.synchronize();
-	}
-
-	downloadRecovery(item: StorageRecoveryItem): Promise<Blob> {
-		return this.recoveryStorage.download(this.accountId, item.source, item.key);
-	}
 	get downloadProgress() {
 		void this.revision;
 		return this.dependencies.cache.downloadProgress;
@@ -102,12 +81,12 @@ export class WorkspaceResources {
 		void this.revision;
 		return this.dependencies.cache.failedDownloads;
 	}
-	private connected = $state(true);
 	get active(): boolean {
 		return !this.stopped;
 	}
 	get online(): boolean {
-		return this.connected;
+		void this.revision;
+		return this.runtime.online;
 	}
 	private readonly unsubscribe: (() => void)[];
 	private stopped = $state(false);
@@ -117,17 +96,7 @@ export class WorkspaceResources {
 		readonly accountId: string,
 		private readonly dependencies: WorkspaceResourcesDependencies
 	) {
-		this.runtime = new WorkspaceSyncRuntime({
-			scheduler: dependencies.scheduler ?? browserSyncScheduler,
-			initialize: () => this.initialize(),
-			pull: () => dependencies.cache.refresh(),
-			bodies: () => dependencies.cache.warm(),
-			writes: () => dependencies.writes.flush(),
-			failed: (message) => {
-				if (!this.stopped) this.failure = message === null ? null : { kind: 'failure', message };
-			}
-		});
-		dependencies.writes.useScheduler(this.runtime.writeScheduler);
+		this.runtime = dependencies.writes.runtime;
 		this.unsubscribe = [
 			dependencies.cache.subscribe(() => {
 				this.revision++;
@@ -139,10 +108,10 @@ export class WorkspaceResources {
 	}
 	applyLocal(projection: WorkspaceLocalProjection<WorkspaceCommand, WorkspaceRecord>): void {
 		if (this.stopped) return;
-		const previous = this.dependencies.writes.pending;
+		const previous = this.local?.writes.entries ?? [];
+		this.local = projection;
 		this.dependencies.cache.applyStored(projection.cache, false);
 		this.dependencies.writes.applyStored(projection.writes, false);
-		this.recovery = projection.recovery;
 		this.revision++;
 		// Only a newly queued identity wakes submissions. Cache changes and delivery updates do not loop.
 		if (
@@ -154,11 +123,11 @@ export class WorkspaceResources {
 		)
 			this.runtime.changed();
 	}
-	committed(): void {
-		this.runtime.committed();
-	}
 	observationFailed(error: Error): void {
-		if (!this.stopped) this.failure = { kind: 'failure', message: error.message };
+		if (!this.stopped) {
+			this.failure = { kind: 'failure', message: error.message };
+			this.stop();
+		}
 	}
 
 	draft<K extends WorkspaceResourceType>(
@@ -175,58 +144,54 @@ export class WorkspaceResources {
 	}
 	get pending() {
 		void this.revision;
-		return this.dependencies.writes.pending;
+		return this.local?.writes.entries ?? [];
 	}
 	get availability() {
 		void this.revision;
-		return this.dependencies.cache.availability;
+		return this.active && this.local?.cache.inventoryComplete ? 'complete' : 'unknown';
 	}
 	get readStatus() {
 		void this.revision;
-		return this.failure ?? this.dependencies.cache.status;
+		return (
+			this.failure ??
+			(this.runtime.failure
+				? { kind: 'failure' as const, message: this.runtime.failure }
+				: this.dependencies.cache.status)
+		);
 	}
 	get writeStatus() {
 		void this.revision;
 		return this.dependencies.writes.status;
 	}
+	private async readLocal(): Promise<void> {
+		this.applyLocal(await this.dependencies.repository.read(this.accountId));
+	}
 	initialize(): Promise<void> {
-		this.initializing ??= this.dependencies
-			.restoreLocalWrites()
-			.then(() =>
-				Promise.all([this.dependencies.cache.initialize(), this.dependencies.writes.reload()])
-			)
-			.then(() => undefined)
-			.catch((error) => {
-				this.initializing = null;
-				throw error;
-			});
+		this.initializing ??= this.readLocal().catch((error) => {
+			this.initializing = null;
+			throw error;
+		});
 		return this.initializing;
 	}
-	/** List reads wait only for missing bodies; retained bodies remain renderable during updates. */
-	async prepare(types: readonly WorkspaceResourceType[]): Promise<void> {
+
+	/** Render cached collections immediately while the runtime refreshes their inventory. */
+	async prepare(): Promise<void> {
 		await this.initialize();
-		if (this.dependencies.cache.availability === 'unknown') await this.dependencies.cache.refresh();
-		const missing = [...this.dependencies.cache.records].filter(
-			([key, entry]) =>
-				entry.kind === 'present' &&
-				cachedSnapshot(entry.cache) === null &&
-				types.some((type) => key.startsWith(`["${type}",`))
-		);
-		await this.dependencies.cache.prepare(missing.map(([key]) => key));
+		this.runtime.committed();
 	}
-	collectionReadiness(types: readonly WorkspaceResourceType[]): 'unknown' | 'incomplete' | 'ready' {
+	collectionReadiness(): 'unknown' | 'ready' {
 		void this.revision;
-		return collectionReadiness(
-			this.active && this.dependencies.cache.downloadProgress.inventoryComplete,
-			[...this.dependencies.cache.records]
-				.filter(([key]) => types.some((type) => key.startsWith(`["${type}",`)))
-				.map(([, entry]) => entry)
-		);
+		return this.active && this.local?.cache.inventoryComplete ? 'ready' : 'unknown';
 	}
 
-	async requireCollections(types: readonly WorkspaceResourceType[]): Promise<void> {
-		await this.prepare(types);
-		if (this.collectionReadiness(types) !== 'ready')
+	async requireCollections(): Promise<void> {
+		await this.initialize();
+		if (this.dependencies.cache.availability === 'unknown') {
+			const result = await this.dependencies.cache.refresh();
+			if (result.kind === 'failure') throw new Error(result.message);
+		}
+		await this.readLocal();
+		if (this.collectionReadiness() !== 'ready')
 			throw new Error(
 				'Required workspace data is not available on this device. Reconnect and retry.'
 			);
@@ -234,10 +199,11 @@ export class WorkspaceResources {
 	async open(identity: WorkspaceResourceIdentity): Promise<CacheAccess<WorkspaceRecord>> {
 		await this.initialize();
 		const key = workspaceResourceKey(identity);
-		const local = localResource(this.dependencies.writes.pending, key);
+		const local = localResource(this.pending, key);
 		if (local) return local;
 		const result = await this.dependencies.cache.open(key);
-		return localResource(this.dependencies.writes.pending, key) ?? result;
+		await this.readLocal();
+		return localResource(this.pending, key) ?? result;
 	}
 	/** Optional records may use defaults only after the journal proves their absence. */
 	async lookup(
@@ -246,15 +212,14 @@ export class WorkspaceResources {
 		await this.initialize();
 		if (this.stopped) return { kind: 'unavailable' };
 		const key = workspaceResourceKey(identity);
-		if (localResource(this.dependencies.writes.pending, key)) return this.open(identity);
+		if (localResource(this.pending, key)) return this.open(identity);
 		if (this.dependencies.cache.availability === 'unknown') {
 			const result = await this.dependencies.cache.refresh();
 			if (result.kind === 'failure') return result;
 			if (this.dependencies.cache.availability === 'unknown') return { kind: 'unavailable' };
 		}
 		if (this.stopped) return { kind: 'unavailable' };
-		return localResource(this.dependencies.writes.pending, key) ||
-			this.dependencies.cache.records.has(key)
+		return localResource(this.pending, key) || this.cached.has(key)
 			? this.open(identity)
 			: { kind: 'absent' };
 	}
@@ -273,7 +238,7 @@ export class WorkspaceResources {
 	} {
 		void this.revision;
 		const key = workspaceResourceKey(identity);
-		const pending = this.dependencies.writes.pending.findLast((entry) => entry.intent.key === key);
+		const pending = this.pending.findLast((entry) => entry.intent.key === key);
 		if (pending) {
 			if (!pending.intent.local) throw new Error('A locally deleted resource cannot be edited');
 			return {
@@ -288,30 +253,65 @@ export class WorkspaceResources {
 	}
 	state(identity: WorkspaceResourceIdentity) {
 		void this.revision;
-		return this.dependencies.cache.records.get(workspaceResourceKey(identity));
+		return this.cached.get(workspaceResourceKey(identity));
 	}
 
 	snapshot(identity: WorkspaceResourceIdentity): SyncSnapshot<WorkspaceRecord> | null {
 		void this.revision;
-		const entry = this.dependencies.cache.records.get(workspaceResourceKey(identity));
-		return entry?.kind === 'present' ? cachedSnapshot(entry.cache) : null;
+		const entry = this.cached.get(workspaceResourceKey(identity));
+		return entry?.kind === 'present' ? cachedSnapshot(entry) : null;
 	}
 	refreshConflict(operationId: string): Promise<void> {
-		return this.dependencies.writes.refreshConflict(operationId);
+		return this.dependencies.writes.refreshConflict(operationId).then(() => this.readLocal());
 	}
 	async keepLocal(operationId: string): Promise<string> {
-		return this.dependencies.writes.keepLocal(operationId);
+		const replacement = await this.dependencies.writes.keepLocal(operationId);
+		await this.readLocal();
+		return replacement;
 	}
 	uncertainWrite(key: string, operationId: string | null): boolean {
 		void this.revision;
 		return (
 			operationId !== null &&
 			!this.pending.some((entry) => entry.intent.operationId === operationId) &&
-			!this.dependencies.writes.acknowledged(key, operationId)
+			this.local?.writes.receipts.get(key)?.operationId !== operationId
 		);
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
 		await this.dependencies.writes.discard(operationIds);
+		await this.readLocal();
+	}
+
+	prepareCommand(
+		command: PreparedWorkspaceCommand,
+		observed: WorkspaceRecord | null,
+		now: DateTime
+	) {
+		return prepareWorkspaceCommand(command, observed, {
+			userId: this.accountId as UserId,
+			now,
+			records: this.records
+		});
+	}
+	async create(
+		command: Extract<
+			PreparedWorkspaceCommand,
+			{ kind: 'createProject' | 'createNote' | 'createFolder' | 'createTodo' | 'createMemory' }
+		>
+	): Promise<WorkspaceRecord> {
+		const input = plain(command);
+		const now = new SvelteDate().toISOString() as DateTime;
+		await this.initialize();
+		const content = this.prepareCommand(input, null, now);
+		if (!content.local) throw new Error('Creation must produce a resource');
+		await this.append({
+			...content,
+			operationId: crypto.randomUUID(),
+			key: workspaceResourceKey(mutationResource(input)),
+			base: null,
+			basedOn: null
+		});
+		return content.local;
 	}
 
 	async append(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<string> {
@@ -319,25 +319,23 @@ export class WorkspaceResources {
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
 		await this.initialize();
 		const operationId = await this.dependencies.writes.append(plain(draft));
+		await this.readLocal();
 		void this.synchronize();
 		return operationId;
 	}
 	setOnline(online: boolean): void {
-		this.connected = online;
-		this.runtime.setOnline(online);
 		this.dependencies.cache.setOnline(online);
 		this.dependencies.writes.setOnline(online);
 	}
 	synchronize(force = false): Promise<void> {
-		if (force) this.dependencies.writes.retryNow();
 		return this.runtime.synchronize(force);
 	}
 
 	stop(): void {
 		this.stopped = true;
+		this.local = null;
 		this.revision++;
 		this.runtime.stop();
-		this.recoveryStorage.close();
 		this.dependencies.cache.stop();
 		this.dependencies.writes.stop();
 		for (const unsubscribe of this.unsubscribe) unsubscribe();
@@ -346,15 +344,15 @@ export class WorkspaceResources {
 }
 
 export const createWorkspaceResources = (accountId: string): WorkspaceResources => {
-	const repository = new DexieWorkspaceRepository(workspaceCommandSchema, workspaceRecordSchema);
+	const repository = new DexieWorkspaceRepository(
+		accountId,
+		workspaceCommandSchema,
+		workspaceRecordSchema
+	);
 	const cache = new ResourceCache(accountId, {
 		repository: {
 			load: async (account) => (await repository.read(account)).cache,
-			commit: async (account, changes) => {
-				const committed = await repository.cache.commit(account, changes);
-				await repository.read(account);
-				return committed;
-			}
+			commit: (account, changes) => repository.cache.commit(account, changes)
 		},
 		transport: workspaceReadTransport(accountId)
 	});
@@ -363,29 +361,16 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		transport: workspaceWriteTransport(accountId),
 		scheduler: browserSyncScheduler,
 		writerLock: browserWriterLock,
-		resolveBase: async (key, base, local) => {
-			const remote = await workspaceReadTransport(accountId).read(key, null);
-			if (remote.kind === 'unchanged')
-				throw new Error('An imported base requires a complete server representation');
-			return resolveImportedNoteBase(base, local, remote);
-		},
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(accountId, {
+		repository,
 		cache,
 		writes,
 
-		restoreLocalWrites: () =>
-			withWorkspaceMigrationLock(accountId, () => migrateLegacyNotes(accountId, repository)),
 		dispose: () => {
 			unsubscribe();
-			void writes
-				.settled()
-				.then(() => repository.close())
-				.catch((error) => {
-					console.error('Workspace storage could not close', error);
-					return { kind: 'failure' };
-				});
+			repository.database.stop();
 		}
 	});
 	const unsubscribe = repository.observe(
@@ -396,6 +381,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 	return resources;
 };
 
+type DraftCommand = PreparedWorkspaceCommand | { kind: 'discardPublished'; revision: NoteRevision };
 type EditContext = ReturnType<WorkspaceResources['editBase']>;
 /** An editor's observed base, not another resource cache. All persistence and delivery use its workspace. */
 export class WorkspaceDraft<K extends WorkspaceResourceType> {
@@ -410,6 +396,13 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	) {
 		this.key = workspaceResourceKey(identity);
 	}
+	get active(): boolean {
+		return this.resources.active;
+	}
+	get observedEtag(): string | null {
+		return this.current?.base?.etag ?? null;
+	}
+
 	private get entries() {
 		return this.resources.pending.filter((entry) => entry.intent.key === this.key);
 	}
@@ -481,7 +474,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			throw new Error('The initial value belongs to a different resource');
 		const state = this.resources.state(this.identity);
 		const pending = this.resources.pending.some((entry) => entry.intent.key === this.key);
-		if (pending || state?.kind === 'present') this.capture();
+		if (pending || (state && state.kind !== 'deleted')) this.capture();
 		else if (state?.kind === 'deleted' || this.resources.availability !== 'unknown')
 			this.current = { base: null, basedOn: null, local: initial };
 		else throw new Error('This resource is not available on this device');
@@ -536,12 +529,18 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		}
 	}
 
-	stage(
-		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
-	): ReturnType<WorkspaceDraft<K>['save']> {
+	stage(command: PreparedWorkspaceCommand): ReturnType<WorkspaceDraft<K>['save']> {
+		return this.enqueue(command);
+	}
+	discardPublished(revision: NoteRevision): ReturnType<WorkspaceDraft<K>['save']> {
+		return this.enqueue({ kind: 'discardPublished', revision });
+	}
+	private enqueue(command: DraftCommand): ReturnType<WorkspaceDraft<K>['save']> {
+		const input = plain(command);
+		const now = new SvelteDate().toISOString() as DateTime;
 		this.savingLocal++;
 		const operation = this.staging
-			.then(() => this.save(content))
+			.then(() => this.save(input, now))
 			.finally(() => {
 				this.savingLocal--;
 			});
@@ -549,7 +548,8 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		return operation;
 	}
 	private async save(
-		content: WriteContent<WorkspaceCommand, WorkspaceRecord>
+		command: DraftCommand,
+		now: DateTime
 	): Promise<
 		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }
 	> {
@@ -557,6 +557,10 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		try {
 			const context = this.current;
 			if (!context) throw new Error('Open the resource before editing');
+			const content =
+				command.kind === 'discardPublished'
+					? this.publishedContent(command.revision, context.local)
+					: this.resources.prepareCommand(command, context.local, now);
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');
 			if (content.local) this.valueOf(content.local);
@@ -574,6 +578,30 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			return { kind: 'failure', message: this.error };
 		}
 	}
+	private publishedContent(revision: NoteRevision, record: WorkspaceRecord) {
+		if (
+			record.type !== 'notes' ||
+			record.value.id !== revision.noteId ||
+			record.value.publishedRevision !== revision.revision
+		)
+			throw new Error('Load the observed published version before discarding changes');
+		return {
+			command: { kind: 'discardNoteDraft' as const, noteId: revision.noteId },
+			local: {
+				type: 'notes' as const,
+				value: {
+					...record.value,
+					document: revision.document,
+					plainText: revision.plainText,
+					title: revision.title,
+					currentRevision: record.value.currentRevision + 1
+				}
+			},
+			coalesce: null,
+			references: []
+		};
+	}
+
 	async retry(): Promise<void> {
 		this.error = null;
 		if (!this.current) await this.read();
@@ -596,7 +624,13 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 		}
 		await this.resources.synchronize();
 	}
-	async discard(): Promise<CacheAccess<WorkspaceValues[K]>> {
+	discard(): Promise<CacheAccess<WorkspaceValues[K]>>;
+	discard(
+		isCurrent: () => boolean
+	): Promise<CacheAccess<WorkspaceValues[K]> | { kind: 'superseded' }>;
+	async discard(
+		isCurrent: () => boolean = () => true
+	): Promise<CacheAccess<WorkspaceValues[K]> | { kind: 'superseded' }> {
 		const reviewed = this.entries;
 		const conflict = reviewed.find((entry) => entry.delivery.kind === 'conflict');
 		const state = this.resources.state(this.identity);
@@ -614,10 +648,11 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			}
 		}
 		await this.resources.discard(reviewed.map((entry) => entry.intent.operationId));
+		if (!isCurrent()) return { kind: 'superseded' };
 		if (state?.kind === 'deleted') {
 			this.current = null;
 			return { kind: 'deleted' };
 		}
-		return this.read();
+		return this.read(isCurrent);
 	}
 }

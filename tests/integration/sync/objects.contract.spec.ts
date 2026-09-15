@@ -18,12 +18,13 @@ describe('conditional normalized object reads', () => {
 	it('returns a normalized note and the version of that same database snapshot', async () => {
 		const { note, owner } = await seedNote('8701');
 		const identity = { type: 'notes' as const, id: [note.id] as [string] };
-		const batch = await new WorkspaceSyncChanges(context.db).pull(owner, initialSyncCursor);
-		const entry = batch.changes.find((entry) => entry.key === workspaceResourceKey(identity));
-		if (entry?.kind !== 'upsert') throw new Error('Seeded note is missing from the journal');
+		const batch = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+		const entry = batch.records.find((entry) => entry.key === workspaceResourceKey(identity));
+		if (entry?.resource.kind !== 'found')
+			throw new Error('Seeded note is missing from the journal');
 		expect(await new WorkspaceSyncObjects(context.db).read(owner, identity, null)).toEqual({
 			kind: 'found',
-			snapshot: { etag: entry.etag, value: { type: 'notes', value: note } }
+			snapshot: { etag: entry.resource.snapshot.etag, value: { type: 'notes', value: note } }
 		});
 	});
 
@@ -136,5 +137,24 @@ it('reads message content and its ordering cursor without loss of precision', as
 		kind: 'readable',
 		content: { type: 'text', text: 'Saved answer' },
 		eventCursor: '9007199254740993'
+	});
+});
+
+it('normalizes PostgreSQL provenance timestamps in complete pages', async () => {
+	const { owner } = await seedNote('8733');
+	const id = crypto.randomUUID();
+	const runId = crypto.randomUUID();
+	await context.client`insert into provenance (id, user_id, producer_kind, producer_name, pipeline, run_id, model, created_at)
+ values (${id}, ${owner.userId}, 'agent', 'FollowThrough Workbench Agent', 'agent', ${runId}, 'contract-model', '2026-09-14T10:30:45.123+02:00')`;
+	const page = await new WorkspaceSyncChanges(context.db).pullPage(owner, initialSyncCursor);
+	expect(
+		page.records.find(
+			(entry) => entry.key === workspaceResourceKey({ type: 'provenance', id: [id] })
+		)?.resource
+	).toMatchObject({
+		kind: 'found',
+		snapshot: {
+			value: { type: 'provenance', value: { id, createdAt: '2026-09-14T08:30:45.123Z' } }
+		}
 	});
 });

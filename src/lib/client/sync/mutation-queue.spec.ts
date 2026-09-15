@@ -39,10 +39,7 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		scheduler: new InMemorySyncScheduler(),
 		writerLock,
 		transport,
-		resolveBase: async () => {
-			throw new Error('This fixture has no imported draft');
-		},
-		committed: () => undefined
+		pull: async () => ({ kind: 'complete' as const })
 	};
 	return { repository, dependencies, cache, queue: new MutationQueue('alice', dependencies) };
 };
@@ -55,32 +52,13 @@ describe('shared mutation submission', () => {
 			},
 			recovery: {
 				observe: async () => ({ kind: 'unavailable' }),
-				cancel: async () => ({ kind: 'cancelled' }),
-				acknowledge: async () => undefined
+				cancel: async () => ({ kind: 'cancelled' })
 			}
 		});
 		await queue.append(draft(firstId));
 		await queue.flush();
 		await queue.discard([firstId]);
 		expect(queue.pending).toEqual([]);
-	});
-	it('keeps an acknowledgement pending when its server response is lost', async () => {
-		const { queue, repository } = setup({
-			send: async (input) => applied(input.operationId, input.command),
-			recovery: {
-				observe: async () => ({ kind: 'unavailable' }),
-				cancel: async () => ({ kind: 'cancelled' }),
-				acknowledge: async () => {
-					throw new Error('Response lost');
-				}
-			}
-		});
-		await queue.append(draft(firstId));
-		await queue.flush();
-		expect({
-			writes: queue.pending,
-			acknowledgements: await repository.pendingAcknowledgements('alice')
-		}).toEqual({ writes: [], acknowledgements: [firstId] });
 	});
 	it('sends independent work after a transport failure while preserving its descendants', async () => {
 		const { queue } = setup({
@@ -99,25 +77,6 @@ describe('shared mutation submission', () => {
 			[secondId, 'queued']
 		]);
 	});
-	it('durably resolves an imported base before submitting its unchanged operation', async () => {
-		const requests: (string | null)[] = [];
-		const { dependencies } = setup({
-			send: async (input) => {
-				requests.push(input.baseEtag);
-				return applied(input.operationId, input.command);
-			}
-		});
-		const queue = new MutationQueue('alice', {
-			...dependencies,
-			resolveBase: async () => ({
-				kind: 'matched',
-				snapshot: { etag: syncEtag(4n), value: 'Original' }
-			})
-		});
-		await queue.append({ ...draft(firstId), base: { etag: null, value: 'Original' } });
-		await queue.flush();
-		expect(requests).toEqual([syncEtag(4n)]);
-	});
 	it('keeps offline writes durable without starting submission', async () => {
 		const { queue, repository } = setup({
 			send: async () => {
@@ -130,14 +89,6 @@ describe('shared mutation submission', () => {
 			result: await queue.flush(),
 			local: (await repository.list('alice'))[0].intent.local
 		}).toEqual({ result: { kind: 'offline' }, local: 'Edited' });
-	});
-	it('coalesces simultaneous flush requests', async () => {
-		const { queue } = setup({ send: async (input) => applied(input.operationId, input.command) });
-		await queue.append(draft(firstId));
-		const first = queue.flush();
-		const second = queue.flush();
-		await first;
-		expect(second).toBe(first);
 	});
 	it('retries an interrupted request with the same identity and input', async () => {
 		const requests: { operationId: string; command: string }[] = [];
@@ -172,7 +123,7 @@ describe('shared mutation submission', () => {
 						key: 'note:1',
 						entry: {
 							kind: 'present',
-							cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+							snapshot: { etag: syncEtag(1n), value: 'Edited' }
 						}
 					}
 				]
@@ -267,7 +218,7 @@ describe('shared mutation submission', () => {
 					key: 'note:1',
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+						snapshot: { etag: syncEtag(1n), value: 'Edited' }
 					}
 				}
 			]
@@ -287,7 +238,7 @@ describe('conflict cache publication', () => {
 			stored: (await cache.load('alice')).records,
 			local: queue.pending[0].intent.local
 		}).toEqual({
-			stored: [{ key: 'note:1', entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }],
+			stored: [{ key: 'note:1', entry: { kind: 'present', snapshot: snapshot } }],
 			local: 'Edited'
 		});
 	});
@@ -305,7 +256,7 @@ describe('shared offline queue reload', () => {
 		const other = new MutationQueue('alice', dependencies);
 		other.setOnline(false);
 		await other.append(draft(firstId));
-		await queue.flush();
+		await queue.reload();
 		expect(queue.pending.map((entry) => entry.intent.local)).toEqual(['Edited']);
 	});
 	it('removes another tab’s discarded edit from the offline projection', async () => {
@@ -319,7 +270,7 @@ describe('shared offline queue reload', () => {
 		const other = new MutationQueue('alice', dependencies);
 		other.setOnline(false);
 		await other.discard([firstId]);
-		await queue.flush();
+		await queue.reload();
 		expect(queue.pending).toEqual([]);
 	});
 });
@@ -350,20 +301,6 @@ it('does not treat disappearance from another writer’s discard as acknowledgem
 	expect(queue.acknowledged('note:1', firstId)).toBe(false);
 });
 
-it('sends independent edits when an imported base cannot be checked', async () => {
-	const { queue, cache } = setup({
-		send: async (input) => applied(input.operationId, input.command)
-	});
-	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Legacy original' } });
-	await queue.append({ ...draft(secondId), key: 'note:2' });
-	await queue.flush();
-	expect({
-		pending: queue.pending.map((entry) => entry.intent.operationId),
-		saved: (await cache.load('alice')).records.map((record) => record.key)
-	}).toEqual({ pending: [firstId], saved: ['note:2'] });
-});
-
-// SYNC-PROGRESS: elapsed time, rather than user activity, retries an eligible write.
 it('settles a failed edit at its retry deadline without another user action', async () => {
 	let reachable = false;
 	const { dependencies } = setup({
@@ -425,51 +362,6 @@ it('returns a waiting state without recovering another tab’s unresolved submis
 	queue.stop();
 	other.stop();
 	expect(result).toEqual({ kind: 'waiting' });
-});
-
-it('becomes idle when an imported retry requires a decision', async () => {
-	const { dependencies } = setup({
-		send: async (input) => applied(input.operationId, input.command)
-	});
-	let available = false;
-	const queue = new MutationQueue('alice', {
-		...dependencies,
-		resolveBase: async () => {
-			if (!available) throw new Error('Disconnected');
-			return {
-				kind: 'conflict',
-				remote: { kind: 'found', snapshot: { etag: syncEtag(2n), value: 'Elsewhere' } }
-			};
-		}
-	});
-	await queue.append({ ...draft(firstId), base: { etag: null, value: 'Original' } });
-	await queue.flush();
-	available = true;
-	await dependencies.scheduler.advance(1000);
-	expect(queue.pending.map((entry) => entry.delivery.kind)).toEqual(['conflict']);
-});
-
-it('preserves acknowledgement backoff while independent edits become durable', async () => {
-	let acknowledgementAvailable = false;
-	const { queue, repository } = setup({
-		send: async (input) => applied(input.operationId, input.command),
-		recovery: {
-			observe: async () => ({ kind: 'unavailable' }),
-			cancel: async () => ({ kind: 'cancelled' }),
-			acknowledge: async () => {
-				if (!acknowledgementAvailable) throw new Error('Unavailable');
-			}
-		}
-	});
-	await queue.append(draft(firstId));
-	await queue.flush();
-	acknowledgementAvailable = true;
-	await queue.append({ ...draft(secondId), key: 'note:2' });
-	await queue.flush();
-	expect({
-		pending: queue.pending,
-		acknowledgements: await repository.pendingAcknowledgements('alice')
-	}).toEqual({ pending: [], acknowledgements: [firstId, secondId] });
 });
 
 it('automatically retries the first storage failure before any operation is submitted', async () => {

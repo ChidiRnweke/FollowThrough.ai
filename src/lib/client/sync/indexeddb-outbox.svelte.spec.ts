@@ -1,3 +1,4 @@
+import { WorkspaceDatabase } from './database';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -11,10 +12,14 @@ import { IndexedDbSyncCache } from './indexeddb-cache';
 
 const databases = new Set<string>();
 const repositories: { close(): Promise<void> }[] = [];
-const setup = (name = `outbox-test-${crypto.randomUUID()}`) => {
-	databases.add(name);
-	const outbox = new IndexedDbOutbox(z.string(), z.string(), name);
-	const cache = new IndexedDbSyncCache(z.string(), name);
+const setup = (name = `outbox-test-${crypto.randomUUID()}`, accountId = 'alice') => {
+	databases.add(new WorkspaceDatabase(accountId, name).name);
+	const outbox = new IndexedDbOutbox(
+		z.string(),
+		z.string(),
+		new WorkspaceDatabase(accountId, name)
+	);
+	const cache = new IndexedDbSyncCache(z.string(), new WorkspaceDatabase(accountId, name));
 	repositories.push(outbox, cache);
 	return { name, outbox, cache };
 };
@@ -53,9 +58,9 @@ describe('durable local writes', () => {
 		]);
 	});
 	it('isolates pending writes between accounts', async () => {
-		const { outbox } = setup();
+		const { name, outbox } = setup();
 		await outbox.append('alice', draft());
-		expect(await outbox.list('bob')).toEqual([]);
+		expect(await setup(name, 'bob').outbox.list('bob')).toEqual([]);
 	});
 	it('serializes concurrent appends from separate tabs', async () => {
 		const { name, outbox } = setup();
@@ -119,7 +124,7 @@ describe('durable local writes', () => {
 				local: entry.intent.local
 			}))
 		}).toEqual({
-			records: [{ key: 'note:1', entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }],
+			records: [{ key: 'note:1', entry: { kind: 'present', snapshot: snapshot } }],
 			pending: [{ base: snapshot, dependencies: [], local: 'edited' }]
 		});
 	});
@@ -162,47 +167,6 @@ describe('durable local writes', () => {
 	});
 });
 
-describe('durable draft import', () => {
-	it('does not resurrect an imported draft after its acknowledgement', async () => {
-		const { outbox } = setup();
-		const input = draft();
-		await outbox.importOnce('alice', 'old-note', input, null);
-		const sent = await outbox.take('alice');
-		if (!sent) throw new Error('Expected a submitted import');
-		await outbox.settle('alice', sent, {
-			kind: 'applied',
-			receipt: { operationId: input.operationId, resource: { kind: 'found', snapshot } }
-		});
-		await outbox.importOnce('alice', 'old-note', input, null);
-		expect(await outbox.list('alice')).toEqual([]);
-	});
-	it('retains unversioned base, local, and remote copies across reopening', async () => {
-		const { name, outbox } = setup();
-		const input = { ...draft(), base: { etag: null, value: 'Original' }, local: 'Offline edit' };
-		const remote = { kind: 'found' as const, snapshot: { etag: null, value: 'Other client' } };
-		await outbox.importOnce('alice', 'old-note', input, remote);
-		await outbox.close();
-		const [saved] = await setup(name).outbox.list('alice');
-		expect({
-			base: saved.intent.base,
-			local: saved.intent.local,
-			delivery: saved.delivery
-		}).toEqual({ base: input.base, local: input.local, delivery: { kind: 'conflict', remote } });
-	});
-	it('rolls back the import marker when appending fails', async () => {
-		const { outbox } = setup();
-		const input = draft();
-		await outbox.append('alice', input);
-		await outbox.importOnce('alice', 'old-note', input, null).catch(() => ({ kind: 'failure' }));
-		const replacement = draft('note:2');
-		await outbox.importOnce('alice', 'old-note', replacement, null);
-		expect((await outbox.list('alice')).map((entry) => entry.intent.operationId)).toEqual([
-			input.operationId,
-			replacement.operationId
-		]);
-	});
-});
-
 describe('durable conflict resolution', () => {
 	it('keeps the authoritative server copy after discarding a rejected local edit', async () => {
 		const { outbox, cache } = setup();
@@ -217,13 +181,19 @@ describe('durable conflict resolution', () => {
 			records: (await cache.load('alice')).records
 		}).toEqual({
 			pending: [],
-			records: [{ key: input.key, entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }]
+			records: [{ key: input.key, entry: { kind: 'present', snapshot: snapshot } }]
 		});
 	});
 	it('makes a confirmed keep-local decision durable with a new guarded operation', async () => {
 		const { outbox } = setup();
-		const input = { ...draft('note:1', 'Edited'), base: { etag: null, value: 'Original' } };
-		await outbox.importOnce('alice', 'conflict', input, { kind: 'found', snapshot });
+		const input = { ...draft('note:1', 'Edited'), base: { etag: syncEtag(1n), value: 'Original' } };
+		await outbox.append('alice', input);
+		const original = await outbox.take('alice');
+		if (!original) throw new Error('Expected queued edit');
+		await outbox.settle('alice', original, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
 		const replacement = crypto.randomUUID();
 		await outbox.keepLocal('alice', input.operationId, replacement);
 		const sent = await outbox.take('alice');
@@ -236,7 +206,13 @@ describe('durable conflict resolution', () => {
 	it('preserves both creation-conflict copies when keep-local is refused', async () => {
 		const { outbox, name } = setup();
 		const input = draft();
-		await outbox.importOnce('alice', 'creation-conflict', input, { kind: 'found', snapshot });
+		await outbox.append('alice', input);
+		const submitted = await outbox.take('alice');
+		if (!submitted) throw new Error('Expected queued creation');
+		await outbox.settle('alice', submitted, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
 		const [original] = await outbox.list('alice');
 		const outcome = await outbox
 			.keepLocal('alice', input.operationId, crypto.randomUUID())
@@ -267,10 +243,13 @@ describe('durable conflict resolution', () => {
 			records: (await cache.load('alice')).records
 		}).toEqual({ local: input.local, records: [{ key: input.key, entry: remote }] });
 	});
-	it('persists an imported base validation alongside its authoritative server copy', async () => {
+	it('persists a refreshed conflict alongside its authoritative server copy', async () => {
 		const { outbox, cache } = setup();
-		const input = { ...draft(), base: { etag: null, value: 'Original' } };
+		const input = { ...draft(), base: { etag: syncEtag(1n), value: 'Original' } };
 		await outbox.append('alice', input);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected queued edit');
+		await outbox.settle('alice', sent, { kind: 'conflict', remote: { kind: 'unavailable' } });
 		await outbox.resolveBase('alice', input.operationId, {
 			kind: 'conflict',
 			remote: { kind: 'found', snapshot }
@@ -280,7 +259,7 @@ describe('durable conflict resolution', () => {
 			records: (await cache.load('alice')).records
 		}).toEqual({
 			delivery: { kind: 'conflict', remote: { kind: 'found', snapshot } },
-			records: [{ key: input.key, entry: { kind: 'present', cache: { kind: 'cached', snapshot } } }]
+			records: [{ key: input.key, entry: { kind: 'present', snapshot: snapshot } }]
 		});
 	});
 });
@@ -314,7 +293,7 @@ describe('durable acknowledgement ancestry', () => {
 					key: first.key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Other client' } }
+						snapshot: { etag: syncEtag(2n), value: 'Other client' }
 					}
 				}
 			],
@@ -380,9 +359,14 @@ outboxRepositoryContract(() => setup().outbox);
 
 it('retains identical normalized input for submission and uncertain cancellation', async () => {
 	const { name } = setup();
-	const outbox = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema, name);
-	repositories.push(outbox);
 	const project = projectBuilder({ name: 'Plan' });
+	const outbox = new IndexedDbOutbox(
+		workspaceCommandSchema,
+		workspaceRecordSchema,
+		new WorkspaceDatabase(project.userId, name)
+	);
+	databases.add(outbox.database.name);
+	repositories.push(outbox);
 	const operationId = crypto.randomUUID();
 	await outbox.append(project.userId, {
 		operationId,
@@ -397,7 +381,11 @@ it('retains identical normalized input for submission and uncertain cancellation
 	const sent = await outbox.take(project.userId);
 	await outbox.retry(project.userId, operationId, 'Response lost');
 	await outbox.close();
-	const reopened = new IndexedDbOutbox(workspaceCommandSchema, workspaceRecordSchema, name);
+	const reopened = new IndexedDbOutbox(
+		workspaceCommandSchema,
+		workspaceRecordSchema,
+		new WorkspaceDatabase(project.userId, name)
+	);
 	repositories.push(reopened);
 	const [retained] = await reopened.list(project.userId);
 	expect({ submitted: sent?.intent.command, cancelled: retained.intent.command }).toEqual({

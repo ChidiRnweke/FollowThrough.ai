@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount } from 'svelte';
 	import { openPreferenceDraft } from '$lib/stores/workspace/account-preferences';
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import { agentPreferenceWrite } from '$lib/models/workspace-mutations';
+
 	import { Form } from '$lib/components/ui/form';
 	import type { AgentModel } from '$lib/models/agent';
 	import { ModelPicker } from '$lib/components/agent';
@@ -33,7 +34,8 @@
 		| { kind: 'ready'; draft: WorkspaceDraft<'agent_preferences'> }
 		| { kind: 'failure'; message: string }
 	>({ kind: 'loading' });
-	let busy = $state(false);
+	const editorSession = new EditorSession(() => form.kind === 'ready' && form.draft.active);
+	const busy = $derived(editorSession.saving);
 	onMount(() => {
 		let cancelled = false;
 		void openPreferenceDraft('agent_preferences')
@@ -53,6 +55,7 @@
 			});
 		return () => {
 			cancelled = true;
+			editorSession.close();
 		};
 	});
 	async function save(event: SubmitEvent): Promise<void> {
@@ -63,22 +66,25 @@
 			toast.error('Reopen these preferences before editing');
 			return;
 		}
-		busy = true;
-		try {
-			const saved = await form.draft.stage(
-				agentPreferenceWrite(value, {
-					defaultModel: model,
-					defaultVisionModel: visionModel,
-					inlineModel,
-					attachmentVisionModel,
-					inlineSuggestionsEnabled
-				})
-			);
-			if (saved.kind === 'failure') toast.error(saved.message);
-			else toast.success('Model defaults saved on this device');
-		} finally {
-			busy = false;
-		}
+		const draft = form.draft;
+		if (!editorSession.dirty) return;
+		await editorSession.save(
+			() =>
+				draft.stage({
+					kind: 'updateAgentPreferences',
+					userId: value.userId,
+					patch: {
+						defaultModel: model,
+						defaultVisionModel: visionModel,
+						inlineModel,
+						attachmentVisionModel,
+						inlineSuggestionsEnabled
+					}
+				}),
+			() => undefined
+		);
+		if (editorSession.failure) toast.error(editorSession.failure);
+		else toast.success('Model defaults saved on this device');
 	}
 </script>
 
@@ -104,7 +110,18 @@
 					<Field.Title>Default chat model</Field.Title>
 					<Field.Description>Used when a conversation has no model override.</Field.Description>
 				</Field.Content>
-				<ModelPicker {models} bind:value={model} allowDefault defaultLabel="App default" />
+				<ModelPicker
+					{models}
+					bind:value={
+						() => model,
+						(next) => {
+							model = next;
+							editorSession.changed();
+						}
+					}
+					allowDefault
+					defaultLabel="App default"
+				/>
 			</Field.Field>
 			<Field.Separator />
 			<Field.Field orientation="responsive">
@@ -119,7 +136,13 @@
 				</Field.Content>
 				<ModelPicker
 					models={visionModels}
-					bind:value={visionModel}
+					bind:value={
+						() => visionModel,
+						(next) => {
+							visionModel = next;
+							editorSession.changed();
+						}
+					}
 					allowDefault
 					defaultLabel="App default"
 					requireTools={false}
@@ -136,7 +159,13 @@
 				</Field.Content>
 				<ModelPicker
 					models={visionModels}
-					bind:value={attachmentVisionModel}
+					bind:value={
+						() => attachmentVisionModel,
+						(next) => {
+							attachmentVisionModel = next;
+							editorSession.changed();
+						}
+					}
 					allowDefault
 					defaultLabel="App default"
 					requireTools={false}
@@ -148,7 +177,16 @@
 					<Field.Title>Inline writing suggestions</Field.Title>
 					<Field.Description>Show grounded ghost text while you write notes.</Field.Description>
 				</Field.Content>
-				<Switch aria-label="Inline writing suggestions" bind:checked={inlineSuggestionsEnabled} />
+				<Switch
+					aria-label="Inline writing suggestions"
+					bind:checked={
+						() => inlineSuggestionsEnabled,
+						(next) => {
+							inlineSuggestionsEnabled = next;
+							editorSession.changed();
+						}
+					}
+				/>
 			</Field.Field>
 			<Field.Separator />
 			<Field.Field orientation="responsive">
@@ -160,7 +198,13 @@
 				</Field.Content>
 				<ModelPicker
 					{models}
-					bind:value={inlineModel}
+					bind:value={
+						() => inlineModel,
+						(next) => {
+							inlineModel = next;
+							editorSession.changed();
+						}
+					}
 					allowDefault
 					defaultLabel="App default"
 					requireTools={false}

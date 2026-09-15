@@ -39,7 +39,7 @@
 	let loadError = $state<string | null>(null);
 	$effect(() => {
 		if (!resources) return;
-		void resources.prepare(['attachments', 'attachment_versions']).catch((error) => {
+		void resources.prepare().catch((error) => {
 			loadError = error instanceof Error ? error.message : 'Could not load attachments';
 			return { kind: 'failure', message: loadError };
 		});
@@ -153,7 +153,7 @@
 <div class="flex flex-col gap-6">
 	{#if loadError}<p role="alert">
 			{loadError}
-		</p>{:else if items.length === 0 && resources?.collectionReadiness( ['attachments', 'attachment_versions'] ) !== 'ready'}<p
+		</p>{:else if items.length === 0 && resources?.collectionReadiness() !== 'ready'}<p
 			role="status"
 		>
 			Still downloading attachments.

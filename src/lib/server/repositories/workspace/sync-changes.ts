@@ -1,14 +1,16 @@
 import { sql } from 'drizzle-orm';
+import { WorkspaceSyncObjects } from './sync-objects';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { SyncPage } from '$lib/models/sync';
 import { z } from 'zod';
 import type { Database } from '$lib/server/db';
 import type { ActorContext } from '$lib/models/identity';
-import { syncCursorSchema, syncEtag, type SyncCursor, type SyncChanges } from '$lib/models/sync';
+import { syncCursorSchema, syncEtag, type SyncCursor } from '$lib/models/sync';
 import { workspaceResourceIdentitySchema, workspaceResourceKey } from '$lib/models/workspace-sync';
 import { syncChangePageSize, type SyncChangePage } from '$lib/models/sync';
 
 export interface SyncChangesRepository {
-	pull(actor: ActorContext, since: SyncCursor): Promise<SyncChanges>;
-	pullPage(actor: ActorContext, since: SyncCursor): Promise<SyncChangePage>;
+	pullPage(actor: ActorContext, since: SyncCursor): Promise<SyncPage<WorkspaceRecord>>;
 }
 
 const batchSchema = z.object({
@@ -25,7 +27,30 @@ const batchSchema = z.object({
 
 export class WorkspaceSyncChanges implements SyncChangesRepository {
 	constructor(private readonly db: Database) {}
-	async pullPage(actor: ActorContext, since: SyncCursor): Promise<SyncChangePage> {
+	async pullPage(actor: ActorContext, since: SyncCursor): Promise<SyncPage<WorkspaceRecord>> {
+		return this.db.transaction(
+			async (transaction) => {
+				const page = await new WorkspaceSyncChanges(transaction).readPage(actor, since);
+				const objects = new WorkspaceSyncObjects(transaction);
+				const records: SyncPage<WorkspaceRecord>['records'][number][] = [];
+				for (const change of page.changes) {
+					if (change.kind === 'delete') {
+						records.push({ key: change.key, resource: { kind: 'deleted', etag: change.etag } });
+						continue;
+					}
+					const [type, ...id] = z.array(z.string()).parse(JSON.parse(change.key));
+					const identity = workspaceResourceIdentitySchema.parse({ type, id });
+					const resource = await objects.read(actor, identity, null);
+					if (resource.kind !== 'found' || resource.snapshot.etag !== change.etag)
+						throw new Error('The synchronization journal does not match its resource');
+					records.push({ key: change.key, resource });
+				}
+				return { cursor: page.cursor, hasMore: page.hasMore, records };
+			},
+			{ isolationLevel: 'repeatable read', accessMode: 'read only' }
+		);
+	}
+	private async readPage(actor: ActorContext, since: SyncCursor): Promise<SyncChangePage> {
 		const result = await this.db.execute(sql`
 			with head as (select cursor from workspace_sync_heads where account_id = ${actor.userId}),
 			page as (select c.* from workspace_sync_changes c, head h where c.account_id = ${actor.userId}
@@ -55,36 +80,6 @@ export class WorkspaceSyncChanges implements SyncChangesRepository {
 				key: workspaceResourceKey(workspaceResourceIdentitySchema.parse(change)),
 				etag: syncEtag(BigInt(change.version))
 			}))
-		};
-	}
-
-	async pull(actor: ActorContext, since: SyncCursor): Promise<SyncChanges> {
-		// Head and compact journal share one statement snapshot. An uncommitted transaction
-		// cannot appear in the head; later same-account transactions cannot overtake its lock.
-		const result = await this.db.execute(sql`
-			select h.cursor::text as cursor, coalesce((
-				select jsonb_agg(jsonb_build_object('type', c.resource_type, 'id', c.resource_id,
-					'operation', c.operation, 'version', c.version::text) order by c.cursor)
-				from workspace_sync_changes c where c.account_id = h.account_id
-					and c.cursor > ${since}::bigint and c.cursor <= h.cursor
-			), '[]'::jsonb) as changes
-			from workspace_sync_heads h where h.account_id = ${actor.userId}`);
-		const rows = z.array(batchSchema);
-		const batch = z
-			.union([rows, z.object({ rows })])
-			.transform((value) => (Array.isArray(value) ? value : value.rows))
-			.parse(result)[0];
-		if (!batch) throw new Error('The account has no synchronization head');
-		if (BigInt(since) > BigInt(batch.cursor))
-			throw new Error('The client cursor is ahead of this account');
-		return {
-			cursor: batch.cursor,
-			changes: batch.changes.map((change) => {
-				const key = workspaceResourceKey(workspaceResourceIdentitySchema.parse(change));
-				return change.operation === 'delete'
-					? { kind: 'delete', key, etag: syncEtag(BigInt(change.version)) }
-					: { kind: 'upsert', key, etag: syncEtag(BigInt(change.version)) };
-			})
 		};
 	}
 }

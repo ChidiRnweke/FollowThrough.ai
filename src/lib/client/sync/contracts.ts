@@ -1,5 +1,5 @@
 import type { ResourceState, SyncCursor, SyncEtag, SyncObjectRead } from '$lib/models/sync';
-import type { SyncChangePage } from '$lib/models/sync';
+import type { SyncPage } from '$lib/models/sync';
 
 export interface CachedRecord<T> {
 	readonly key: string;
@@ -7,7 +7,6 @@ export interface CachedRecord<T> {
 }
 
 export interface CacheCommit<T> {
-	readonly generation?: string;
 	readonly put: readonly CachedRecord<T>[];
 	readonly remove: readonly { readonly key: string; readonly etag: SyncEtag | null }[];
 	readonly cursor?: SyncCursor;
@@ -15,7 +14,6 @@ export interface CacheCommit<T> {
 }
 
 export interface StoredCache<T> {
-	readonly generation: string;
 	readonly inventoryComplete: boolean;
 	readonly records: readonly CachedRecord<T>[];
 	readonly cursor: SyncCursor | null;
@@ -23,19 +21,14 @@ export interface StoredCache<T> {
 
 export interface SyncCacheRepository<T> {
 	load(accountId: string): Promise<StoredCache<T>>;
-	commit(accountId: string, changes: CacheCommit<T>): Promise<CacheCommit<T>>;
+	commit(accountId: string, changes: CacheCommit<T>): Promise<void>;
 }
 
 export type ObjectRead<T> = SyncObjectRead<T>;
 
 export interface SyncReadTransport<T> {
-	pull(since: SyncCursor): Promise<SyncChangePage>;
+	pull(since: SyncCursor): Promise<SyncPage<T>>;
 	read(key: string, etag: SyncEtag | null): Promise<ObjectRead<T>>;
-	readMany(
-		requests: readonly { key: string; etag: SyncEtag | null }[]
-	): Promise<
-		readonly { key: string; result: ObjectRead<T> | { kind: 'failure'; message: string } }[]
-	>;
 }
 
 export type SynchronizationResult =

@@ -7,7 +7,6 @@ import {
 	type CacheAccess,
 	deletionSchema,
 	type SyncSnapshot,
-	type SyncEtag,
 	type SyncObjectRead
 } from '$lib/models/sync';
 
@@ -39,30 +38,31 @@ export const retainWriteReceipt = <T>(
 
 export type WriteOutcome<T> =
 	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
-	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof }
+	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof }
 	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> }
 	| { readonly kind: 'rejected'; readonly message: string };
 
-/** Original application proof after the client has acknowledged durable settlement. */
-export const compactWriteProofSchema = z.object({
+/** Permanent application evidence. The server need not retain the original resource body. */
+export const appliedWriteProofSchema = z.object({
 	operationId: z.string().uuid(),
 	etag: syncEtagSchema,
 	resourceKind: z.enum(['found', 'deleted'])
 });
-export type CompactWriteProof = z.infer<typeof compactWriteProofSchema>;
+export type AppliedWriteProof = z.infer<typeof appliedWriteProofSchema>;
 export type WriteRecovery<T> =
 	| { readonly kind: 'cancelled' }
 	| { readonly kind: 'applied'; readonly receipt: WriteReceipt<T> }
-	| { readonly kind: 'compacted'; readonly proof: CompactWriteProof };
+	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof };
 
-/** Imported drafts may retain a real base representation before learning its sync validator. */
-export type WriteBase<T> = { readonly etag: SyncEtag | null; readonly value: T };
+/** Every observed base carries the validator of its exact server representation. */
+export type WriteBase<T> = SyncSnapshot<T>;
 export type WriteObservation<T> =
 	| Exclude<ServerResource<T>, { kind: 'found' }>
 	| { readonly kind: 'found'; readonly snapshot: WriteBase<T> };
-export type WriteBaseResolution<T> =
-	| { readonly kind: 'matched'; readonly snapshot: SyncSnapshot<T> }
-	| { readonly kind: 'conflict'; readonly remote: ServerResource<T> };
+export type WriteBaseResolution<T> = {
+	readonly kind: 'conflict';
+	readonly remote: ServerResource<T>;
+};
 
 export interface WriteDraft<C, T> {
 	readonly operationId: string;
@@ -95,14 +95,14 @@ export const outboxEntrySchema = <C, T>(
 	command: z.ZodType<C>,
 	value: z.ZodType<T>
 ): z.ZodType<OutboxEntry<C, T>> => {
-	const snapshot = z.object({ etag: syncEtagSchema.nullable(), value });
+	const snapshot = z.object({ etag: syncEtagSchema, value });
 	return z.object({
 		sequence: z.number().int().positive(),
 		intent: z.object({
 			operationId: z.string().uuid(),
 			key: z.string().min(1),
 			command,
-			base: z.object({ etag: syncEtagSchema.nullable(), value }).nullable(),
+			base: z.object({ etag: syncEtagSchema, value }).nullable(),
 			basedOn: z.string().uuid().nullable(),
 			local: value.nullable(),
 			coalesce: z.string().nullable(),
@@ -208,15 +208,13 @@ export const nextWrite = <C, T>(
 		(entry) =>
 			!excluded.has(entry.intent.operationId) &&
 			(entry.delivery.kind === 'queued' || entry.delivery.kind === 'retry') &&
-			(entry.intent.base === null || entry.intent.base.etag !== null) &&
 			entry.intent.dependencies.length === 0
 	) ?? null;
 
 export const beginWrite = <C, T>(entry: OutboxEntry<C, T>): OutboxEntry<C, T> => {
 	if (
 		(entry.delivery.kind !== 'queued' && entry.delivery.kind !== 'retry') ||
-		entry.intent.dependencies.length ||
-		(entry.intent.base !== null && entry.intent.base.etag === null)
+		entry.intent.dependencies.length
 	)
 		throw new Error('Only an unblocked queued write can be sent');
 	return { ...entry, delivery: { kind: 'sending' } };
@@ -264,7 +262,7 @@ export const settleWrite = <C, T>(
 	operationId: string,
 	outcome: WriteOutcome<T>
 ): readonly OutboxEntry<C, T>[] => {
-	if (outcome.kind === 'compacted') {
+	if (outcome.kind === 'proven') {
 		if (outcome.proof.operationId !== operationId)
 			throw new Error('The proof identifies another operation');
 		return entries
@@ -297,14 +295,14 @@ export const settleWrite = <C, T>(
 	);
 };
 
-/** Lists may use retained bodies while detail reads enforce the cache's online barrier. */
+/** Lists and detail reads share retained content while replication runs. */
 export const visibleResources = <C, T>(
 	records: ReadonlyMap<string, ResourceState<T>>,
 	pending: readonly OutboxEntry<C, T>[]
 ): ReadonlyMap<string, T> => {
 	const visible = new Map<string, T>();
 	for (const [key, entry] of records) {
-		const snapshot = entry.kind === 'present' ? cachedSnapshot(entry.cache) : null;
+		const snapshot = entry.kind === 'present' ? cachedSnapshot(entry) : null;
 		if (snapshot) visible.set(key, snapshot.value);
 	}
 	for (const { intent } of pending) {
@@ -365,43 +363,17 @@ export const retryConflictedWrite = <C, T>(
 	);
 };
 
-export const unresolvedWrite = <C, T>(
-	entries: readonly OutboxEntry<C, T>[],
-	excluded: ReadonlySet<string> = new Set()
-): OutboxEntry<C, T> | null =>
-	entries.find(
-		(entry) =>
-			!excluded.has(entry.intent.operationId) &&
-			entry.delivery.kind === 'queued' &&
-			entry.intent.dependencies.length === 0 &&
-			entry.intent.base !== null &&
-			entry.intent.base.etag === null
-	) ?? null;
-
-/** The operation id changes whenever unsent input is coalesced, so an obsolete resolution is ignored. */
+/** Refresh only the server side of a conflict; keep the observed base and local edit. */
 export const resolveWriteBase = <C, T>(
 	entries: readonly OutboxEntry<C, T>[],
 	operationId: string,
 	resolution: WriteBaseResolution<T>
 ): readonly OutboxEntry<C, T>[] =>
-	entries.map((entry) => {
-		if (
-			entry.intent.operationId === operationId &&
-			entry.delivery.kind === 'conflict' &&
-			resolution.kind === 'conflict'
-		)
-			return { ...entry, delivery: resolution };
-		if (
-			entry.intent.operationId !== operationId ||
-			entry.delivery.kind !== 'queued' ||
-			entry.intent.base === null ||
-			entry.intent.base.etag !== null
-		)
-			return entry;
-		return resolution.kind === 'matched'
-			? { ...entry, intent: { ...entry.intent, base: resolution.snapshot } }
-			: { ...entry, delivery: resolution };
-	});
+	entries.map((entry) =>
+		entry.intent.operationId === operationId && entry.delivery.kind === 'conflict'
+			? { ...entry, delivery: resolution }
+			: entry
+	);
 
 /** Include every descendant so a review cannot hide edits that depend on the selected base. */
 export const dependentWrites = <C, T>(

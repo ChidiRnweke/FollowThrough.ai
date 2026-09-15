@@ -7,15 +7,7 @@ export const load: PageLoad = async ({ parent, params }) => {
 	const { session } = await parent();
 	const opened = await session.resources.open({ type: 'projects', id: [projectId] });
 	requireRouteResource(opened, session.resources.online, 'project');
-	await session.resources.prepare([
-		'todos',
-		'memory_entries',
-		'artifacts',
-		'diagrams',
-		'attachments',
-		'attachment_versions',
-		'user_preferences'
-	]);
+	await session.resources.prepare();
 	return {
 		projectId,
 		today: todayLocalDate(),

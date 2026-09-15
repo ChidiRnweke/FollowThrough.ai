@@ -99,9 +99,6 @@ export class Skills implements SkillsController {
 				case 'updateSkill':
 					await this.update(actor, command);
 					break;
-				case 'createSkill':
-					await this.create(actor, command);
-					break;
 			}
 		});
 	}

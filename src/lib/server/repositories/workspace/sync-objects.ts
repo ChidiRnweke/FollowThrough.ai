@@ -9,7 +9,12 @@ import {
 	workspaceObjectReadSchema,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
-import { syncIdentitySql, syncRegistrations } from './sync-catalog';
+import {
+	syncIdentitySql,
+	syncIdentityPredicate,
+	syncRegistrations,
+	syncOwnerSql
+} from './sync-catalog';
 
 export interface SyncObjectRepository {
 	read(
@@ -93,33 +98,6 @@ const publicRecordSql = (type: WorkspaceResourceType): SQL =>
 
 export class WorkspaceSyncObjects implements SyncObjectRepository {
 	constructor(private readonly db: Database) {}
-	readMany(
-		actor: ActorContext,
-		requests: readonly { identity: WorkspaceResourceIdentity; etag: SyncEtag | null }[]
-	) {
-		return Promise.all(
-			requests.map(async ({ identity, etag }) => ({
-				key: JSON.stringify([identity.type, ...identity.id]),
-				result: await this.readResult(actor, identity, etag)
-			}))
-		);
-	}
-	private async readResult(
-		actor: ActorContext,
-		identity: WorkspaceResourceIdentity,
-		etag: SyncEtag | null
-	): Promise<SyncObjectRead<WorkspaceRecord> | { kind: 'failure'; message: string }> {
-		try {
-			return await this.read(actor, identity, etag);
-		} catch (error) {
-			console.debug('Workspace resource read failed', { identity, error });
-			return {
-				kind: 'failure',
-				message: 'This saved copy could not be read. Retry to download it.'
-			};
-		}
-	}
-
 	async read(
 		actor: ActorContext,
 		identity: WorkspaceResourceIdentity,
@@ -138,7 +116,7 @@ export class WorkspaceSyncObjects implements SyncObjectRepository {
 			from ${sql.identifier(identity.type)} r
 			left join workspace_sync_versions v on v.resource_type = ${identity.type}
 				and v.resource_id = ${syncIdentitySql(registration)}
-			where ${registration.scope(actor)} and ${syncIdentitySql(registration)} = ${JSON.stringify(identity.id)}::jsonb
+			where ${syncOwnerSql(registration.type, actor)} and ${syncIdentityPredicate(registration, identity.id)}
 			union all select jsonb_build_object('kind', 'deleted', 'etag', 'sync-v1-' || c.version::text) as result
 			from workspace_sync_changes c where c.account_id = ${actor.userId}
 				and c.resource_type = ${identity.type} and c.resource_id = ${JSON.stringify(identity.id)}::jsonb

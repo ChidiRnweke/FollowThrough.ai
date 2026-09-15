@@ -128,7 +128,7 @@ const begin = async (): Promise<WorkspaceSession> => {
 			const preferences = resources.views.get('agent_preferences', bootstrap.accountId);
 			if (preferences) return preferences;
 			const state = resources.state({ type: 'agent_preferences', id: [bootstrap.accountId] });
-			if (state?.kind === 'present' || resources.availability === 'unknown')
+			if ((state && state.kind !== 'deleted') || resources.availability === 'unknown')
 				throw new Error('Agent preferences have not been downloaded to this device');
 			return resources.views.agentPreferences(bootstrap.accountId);
 		},
@@ -154,19 +154,15 @@ const begin = async (): Promise<WorkspaceSession> => {
 	};
 	const session = current;
 	await resources.initialize();
-	await resources.loadRecovery();
-	await resources.requireCollections(['users', 'projects', 'agent_preferences']);
+	const cachedShell = resources.views.shell(bootstrap.accountId);
+	const preferencesKnown =
+		resources.views.get('agent_preferences', bootstrap.accountId) !== undefined ||
+		resources.availability !== 'unknown';
+	if (!cachedShell?.projects.some((project) => project.role === 'inbox') || !preferencesKnown)
+		await resources.requireCollections();
 	void session.shell;
 	void session.preferences;
-	await resources.prepare([
-		'users',
-		'projects',
-		'notes',
-		'skills',
-		'suggestions',
-		'agent_preferences',
-		'conversations'
-	]);
+	void resources.synchronize();
 	if (generation !== openingGeneration || current !== session)
 		throw new Error('The workspace account changed while opening');
 	const refresh = (): void => {
@@ -219,11 +215,13 @@ export const workspaceSession = {
 		if (!accountId)
 			throw new Error('Sign in to identify the account whose saved edits you want to download');
 		const recovery = new IndexedDbStorageRecovery();
-		try {
-			return await recovery.downloadAccount(accountId);
-		} finally {
-			recovery.close();
-		}
+		return recovery.downloadAccount(accountId);
+	},
+	async resetLocalWorkspace(): Promise<void> {
+		const accountId = workspaceAccountHint(document.cookie);
+		if (!accountId) throw new Error('Sign in to identify the account to reset');
+		stop();
+		await new IndexedDbStorageRecovery().resetAccount(accountId);
 	},
 	synchronize,
 	stop,

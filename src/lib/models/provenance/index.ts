@@ -208,7 +208,9 @@ export type ProvenanceRequest = Requested<Provenance>;
 const provenanceIdentitySchema = {
 	id: z.uuid().transform((value) => value as ProvenanceId),
 	userId: z.uuid().transform((value) => value as UserId),
-	createdAt: z.iso.datetime().transform((value) => value as DateTime)
+	createdAt: z.iso
+		.datetime({ offset: true })
+		.transform((value) => new Date(value).toISOString() as DateTime)
 };
 
 const sourceAnchorIdSchema = z.uuid().transform((value) => value as SourceAnchorId);

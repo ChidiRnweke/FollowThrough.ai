@@ -1,5 +1,5 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -34,6 +34,10 @@ const identity: WorkspaceResourceIdentity = {
 	id: ['a0000000-0000-4000-8000-000000000001']
 };
 const key = workspaceResourceKey(identity);
+const activeResources: WorkspaceResources[] = [];
+afterEach(() => {
+	for (const resources of activeResources.splice(0)) resources.stop();
+});
 const setup = (
 	writeTransport: OutboxTransport<WorkspaceCommand, typeof project> = {
 		send: async () => {
@@ -50,19 +54,19 @@ const setup = (
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		transport: writeTransport,
-		resolveBase: async () => {
-			throw new Error('This fixture has no imported draft');
-		},
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources('alice', {
-		scheduler: new InMemorySyncScheduler(),
+		repository: outbox,
 		cache,
-		writes,
-		restoreLocalWrites: async () => undefined
+		writes
 	});
-	outbox.observe('alice', (state) => resources.applyLocal(state));
+	const stopObserving = outbox.observe('alice', (state) => resources.applyLocal(state));
+	activeResources.push(resources);
 	return {
+		outbox,
+		writes,
+		stopObserving,
 		repository,
 		transport,
 		cache,
@@ -87,7 +91,7 @@ describe('shared workspace reads', () => {
 		});
 		expect(await resources.open(identity)).toEqual({ kind: 'ready', value: project });
 	});
-	it('renders a retained list value while an explicit open waits for the updating resource', async () => {
+	it('opens a retained resource while its newer page is downloading', async () => {
 		const { resources, repository, transport, cache } = setup();
 		await repository.commit('alice', {
 			put: [
@@ -95,7 +99,7 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -103,18 +107,13 @@ describe('shared workspace reads', () => {
 		});
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
 		await resources.initialize();
-		await cache.refresh();
-		const paused = transport.pause(key);
-		let opened = false;
-		const opening = resources.open(identity).then((result) => {
-			opened = true;
-			return result;
-		});
+		const paused = transport.pause('changes');
+		const pulling = cache.refresh();
 		await paused.started;
-		const during = { listed: resources.records.get(key), opened };
+		const opened = await resources.open(identity);
 		paused.release();
-		await opening;
-		expect(during).toEqual({ listed: project, opened: false });
+		await pulling;
+		expect(opened).toEqual({ kind: 'ready', value: project });
 	});
 	it('does not wait for a retained collection body that is already refreshing', async () => {
 		const { resources, repository, transport, cache } = setup();
@@ -124,24 +123,24 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
 			remove: []
 		});
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
-		await cache.refresh();
-		const paused = transport.pause(key);
-		const warming = cache.warm();
+		await resources.initialize();
+		const paused = transport.pause('changes');
+		const warming = cache.refresh();
 		await paused.started;
-		await resources.prepare(['projects']);
+		await resources.prepare();
 		const listed = resources.records.get(key);
 		paused.release();
 		await warming;
 		expect(listed).toEqual(project);
 	});
-	it('prepares missing collection bodies without downloading unrelated resource types', async () => {
+	it('downloads all records included in a complete page', async () => {
 		const { resources, transport, cache } = setup();
 		const user = workspaceRecordSchema.parse({
 			type: 'users',
@@ -160,10 +159,10 @@ describe('shared workspace reads', () => {
 		});
 		transport.records.set(key, { etag: syncEtag(1n), value: project });
 		transport.records.set(userKey, { etag: syncEtag(2n), value: user });
-		await resources.prepare(['projects']);
+		await resources.requireCollections();
 		expect({ listed: resources.records.get(key), unrelated: cache.access(userKey) }).toEqual({
 			listed: project,
-			unrelated: { kind: 'wait' }
+			unrelated: { kind: 'ready', value: user }
 		});
 	});
 
@@ -175,7 +174,7 @@ describe('shared workspace reads', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -212,7 +211,7 @@ describe('shared editor context', () => {
 		});
 		expect(resources.editBase(identity)).toEqual({ base: null, basedOn: id, local: project });
 	});
-	it('submits edits appended after the write phase while background warming is still running', async () => {
+	it('submits edits appended after the write phase while a background page is still downloading', async () => {
 		if (project.type !== 'projects') throw new Error('Expected project');
 		const saved = { ...project, value: { ...project.value, name: 'Edited' } };
 		const { resources, cache, transport } = setup({
@@ -227,7 +226,7 @@ describe('shared editor context', () => {
 		});
 		await cache.accept(key, { etag: syncEtag(1n), value: project });
 		transport.records.set(key, { etag: syncEtag(2n), value: project });
-		const paused = transport.pause(key);
+		const paused = transport.pause('changes');
 		const syncing = resources.synchronize();
 		await paused.started;
 		await resources.append({
@@ -273,23 +272,11 @@ describe('optional workspace records', () => {
 		resources.setOnline(false);
 		expect(await resources.lookup(identity)).toEqual({ kind: 'absent' });
 	});
-	it('keeps a missing body distinct from an absent record', async () => {
+	it('keeps an unfinished inventory distinct from known absence', async () => {
 		const { resources, repository } = setup();
 		await repository.commit('alice', {
-			put: [
-				{
-					key,
-					entry: {
-						kind: 'present',
-						cache: {
-							kind: 'updating',
-							previous: null,
-							target: syncEtag(1n),
-							transfer: { kind: 'queued' }
-						}
-					}
-				}
-			],
+			put: [],
+			inventoryComplete: false,
 			remove: [],
 			cursor: initialSyncCursor
 		});
@@ -330,7 +317,7 @@ describe('drafting optional resources', () => {
 					key,
 					entry: {
 						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+						snapshot: { etag: syncEtag(1n), value: project }
 					}
 				}
 			],
@@ -362,7 +349,7 @@ it('can explicitly draft a new override after its server tombstone', async () =>
 it('does not replace a failed known resource read with writable initial values', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	transport.readFailure = 'Download failed';
+	transport.pullFailure = 'Download failed';
 	const draft = resources.draft({ type: 'projects', id: identity.id });
 	expect(await draft.readOrCreate(project)).toEqual({
 		kind: 'failure',
@@ -391,15 +378,7 @@ it('keeps the displayed base when capturing an optional resource already refresh
 		put: [
 			{
 				key,
-				entry: {
-					kind: 'present',
-					cache: {
-						kind: 'updating',
-						previous: { etag: syncEtag(1n), value: project },
-						target: syncEtag(2n),
-						transfer: { kind: 'queued' }
-					}
-				}
+				entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: project } }
 			}
 		],
 		remove: [],
@@ -410,38 +389,25 @@ it('keeps the displayed base when capturing an optional resource already refresh
 	draft.captureOrCreate(project);
 	if (project.type !== 'projects') throw new Error('Expected project');
 	const saved = await draft.stage({
-		command: { kind: 'renameProject', projectId: project.value.id, name: 'Changed' },
-		local: project,
-		coalesce: null,
-		references: []
+		kind: 'renameProject',
+		projectId: project.value.id,
+		name: 'Changed'
 	});
 	if (saved.kind !== 'saved') throw new Error(saved.message);
 	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
 });
 
-it('refuses an optional default when a known resource has no downloaded body', async () => {
+it('refuses an optional default before inventory proves absence', async () => {
 	const { resources, repository } = setup();
 	await repository.commit('alice', {
-		put: [
-			{
-				key,
-				entry: {
-					kind: 'present',
-					cache: {
-						kind: 'updating',
-						previous: null,
-						target: syncEtag(1n),
-						transfer: { kind: 'queued' }
-					}
-				}
-			}
-		],
+		put: [],
+		inventoryComplete: false,
 		remove: [],
 		cursor: initialSyncCursor
 	});
 	await resources.initialize();
 	const draft = resources.draft({ type: 'projects', id: identity.id });
-	expect(() => draft.captureOrCreate(project)).toThrow('Open the resource');
+	expect(() => draft.captureOrCreate(project)).toThrow('not available');
 });
 
 it('does not adopt a new conflict base when an editor read has been superseded', async () => {
@@ -452,7 +418,7 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 				key,
 				entry: {
 					kind: 'present',
-					cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: project } }
+					snapshot: { etag: syncEtag(1n), value: project }
 				}
 			}
 		],
@@ -467,10 +433,9 @@ it('does not adopt a new conflict base when an editor read has been superseded',
 	await draft.read(() => false);
 	if (project.type !== 'projects') throw new Error('Expected project');
 	const saved = await draft.stage({
-		command: { kind: 'renameProject', projectId: project.value.id, name: 'Later typing' },
-		local: project,
-		coalesce: null,
-		references: []
+		kind: 'renameProject',
+		projectId: project.value.id,
+		name: 'Later typing'
 	});
 	if (saved.kind !== 'saved') throw new Error(saved.message);
 	expect(resources.pending[0]?.intent.base?.etag).toEqual(syncEtag(1n));
@@ -492,17 +457,16 @@ it('prepares a complete collection within the batch transport capacity', async (
 			value: record
 		});
 	}
-	await resources.prepare(['projects']);
+	await resources.requireCollections();
 	expect(resources.records.size).toBe(70);
 });
 
 // SYNC-READINESS: unrelated missing bodies cannot disable an available collection.
-it('makes a known empty collection ready while an unrelated body is unavailable', async () => {
+it('marks an empty collection ready after its full inventory arrives', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	transport.readFailure = 'Unavailable project body';
-	await resources.prepare(['projects']);
-	expect(resources.collectionReadiness(['attachments', 'attachment_versions'])).toBe('ready');
+	await resources.requireCollections();
+	expect(resources.collectionReadiness()).toBe('ready');
 });
 
 it('downloads authoritative records while an unrelated submission is stalled', async () => {
@@ -555,11 +519,54 @@ it('downloads authoritative records while an unrelated submission is stalled', a
 	}
 });
 
-it('does not publish required collection readiness when its initial body failed', async () => {
+it('reports the transport failure when required inventory cannot load', async () => {
 	const { resources, transport } = setup();
 	transport.records.set(key, { etag: syncEtag(1n), value: project });
-	transport.readFailure = 'Disconnected';
-	await expect(resources.requireCollections(['projects'])).rejects.toThrow(
-		'Required workspace data is not available on this device'
-	);
+	transport.pullFailure = 'Disconnected';
+	await expect(resources.requireCollections()).rejects.toThrow('Disconnected');
+});
+
+it('does not create a default while an unknown resource is being downloaded', async () => {
+	const { resources, cache, transport } = setup();
+	await cache.initialize();
+	const paused = transport.pause(key);
+	const opening = cache.open(key);
+	await paused.started;
+	const draft = resources.draft({ type: 'projects', id: identity.id });
+	try {
+		expect(() => draft.captureOrCreate(project)).toThrow('not available');
+	} finally {
+		paused.release();
+		await opening;
+	}
+});
+
+it('keeps a created resource visible until its complete settled projection arrives', async () => {
+	const { resources, outbox, writes, stopObserving } = setup();
+	if (project.type !== 'projects') throw new Error('Expected project fixture');
+	resources.setOnline(false);
+	await resources.append({
+		operationId: crypto.randomUUID(),
+		key,
+		command: { kind: 'createProject', id: project.value.id, name: project.value.name },
+		local: project,
+		base: null,
+		basedOn: null,
+		coalesce: null,
+		references: []
+	});
+	stopObserving();
+	const sent = await outbox.take('alice');
+	if (!sent) throw new Error('The created project was not queued');
+	await outbox.settle('alice', sent, {
+		kind: 'applied',
+		receipt: {
+			operationId: sent.intent.operationId,
+			resource: { kind: 'found', snapshot: { etag: syncEtag(2n), value: project } }
+		}
+	});
+	await writes.reload();
+	const beforePublication = resources.records.get(key);
+	resources.applyLocal(await outbox.read('alice'));
+	expect([beforePublication, resources.records.get(key)]).toEqual([project, project]);
 });

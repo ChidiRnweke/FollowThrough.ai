@@ -93,16 +93,12 @@ const setup = async (
 		transport: new InMemoryNoteWrites(),
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
-		resolveBase: async () => {
-			throw new Error('No imported drafts');
-		},
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(conversation.userId, {
-		scheduler: new InMemorySyncScheduler(),
+		repository: repository,
 		cache,
-		writes,
-		restoreLocalWrites: async () => undefined
+		writes
 	});
 	repository.observe(conversation.userId, (state) => resources.applyLocal(state));
 	const records: Extract<WorkspaceRecord, { type: 'conversations' | 'messages' | 'agent_runs' }>[] =

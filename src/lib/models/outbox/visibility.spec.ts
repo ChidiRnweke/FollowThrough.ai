@@ -13,18 +13,7 @@ const draft: WriteDraft<string, string> = {
 	references: []
 };
 const records = new Map<string, ResourceState<string>>([
-	[
-		'note:1',
-		{
-			kind: 'present',
-			cache: {
-				kind: 'updating',
-				previous: { etag: syncEtag(1n), value: 'Saved' },
-				target: syncEtag(2n),
-				transfer: { kind: 'fetching' }
-			}
-		}
-	]
+	['note:1', { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Saved' } }]
 ]);
 
 describe('local resource visibility', () => {

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { readLegacyNoteImports } from '$lib/client/sync/legacy-notes';
 import type { NoteId } from '$lib/models/notes';
 import { IndexedDbWorkbenchLayout, type WorkbenchLayoutRecord } from './indexeddb-layout';
 
@@ -91,15 +90,6 @@ describe('IndexedDB workspace storage', () => {
 		const stored = await repository.get();
 		repository.close();
 		expect(stored).toBeUndefined();
-	});
-
-	it('retains the shell layout while reading migrated note drafts', async () => {
-		const { databaseName, repository } = setup();
-		await repository.put(record());
-		await readLegacyNoteImports('00000000-0000-4000-8000-000000000099', databaseName);
-		const stored = await repository.get();
-		repository.close();
-		expect(stored).toEqual(record());
 	});
 
 	it('round-trips a non-default split ratio', async () => {

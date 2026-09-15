@@ -47,16 +47,13 @@
 		writeStatus,
 		hasReviewContent
 	} from '$lib/models/workspace-write-review';
-	import type { StorageRecoveryItem } from '$lib/models/sync';
 
 	type Entry = OutboxEntry<WorkspaceCommand, WorkspaceRecord>;
 	let { resources, open = $bindable(false) }: { resources: WorkspaceResources; open?: boolean } =
 		$props();
 	let reviewed = $state<readonly Entry[]>([]);
 	let busy = $state(false);
-	let confirmation = $state<'discard' | StorageRecoveryItem | null>(null);
-	let exported = $state<string[]>([]);
-	const recoveryKey = (item: StorageRecoveryItem) => `${item.source}:${item.key}`;
+	let confirmation = $state<'discard' | null>(null);
 	let failure = $state<string | null>(null);
 	$effect(() => {
 		if (!resources.active) open = false;
@@ -94,35 +91,6 @@
 		{ kind: 'waiting', label: 'Waiting to sync' },
 		{ kind: 'sending', label: 'Syncing' }
 	] as const;
-	$effect(() => {
-		if (open)
-			void resources.loadRecovery().catch((error) => {
-				failure = error instanceof Error ? error.message : 'Recovery data could not be read';
-				return { kind: 'failure' };
-			});
-	});
-	async function downloadRecovery(item: StorageRecoveryItem): Promise<void | { kind: 'failure' }> {
-		try {
-			downloadBlob(await resources.downloadRecovery(item), 'followthrough-recovery.json');
-			exported = [...exported, recoveryKey(item)];
-		} catch (error) {
-			failure = error instanceof Error ? error.message : 'Recovery export failed';
-			return { kind: 'failure' };
-		}
-	}
-	async function removeRecovery(item: StorageRecoveryItem): Promise<void | { kind: 'failure' }> {
-		busy = true;
-		failure = null;
-		try {
-			await resources.removeRecovery(item);
-			confirmation = null;
-		} catch (error) {
-			failure = error instanceof Error ? error.message : 'Saved data could not be removed';
-			return { kind: 'failure' };
-		} finally {
-			busy = false;
-		}
-	}
 	function downloadBlob(blob: Blob, name: string): void {
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
@@ -351,27 +319,8 @@
 										</section>{/if}
 								{/each}
 							</div>
-							{#if resources.recoveryItems.length}<div class={cn('flex flex-col', SYNC_GAP_ITEM)}>
-									{#each resources.recoveryItems as item (recoveryKey(item))}
-										<div class={cn('flex flex-col', SYNC_GAP_BOND)}>
-											<p class={SYNC_STATUS}>Some saved data could not be read.</p>
-											<div class="flex flex-wrap items-center gap-3">
-												<Button
-													variant="link"
-													class="h-auto p-0 text-label"
-													onclick={() => void downloadRecovery(item)}>Download copy</Button
-												>
-												{#if exported.includes(recoveryKey(item))}<Button
-														variant="link"
-														class="h-auto p-0 text-label text-muted-foreground"
-														onclick={() => (confirmation = item)}>Remove from this device…</Button
-													>{/if}
-											</div>
-										</div>
-									{/each}
-								</div>{/if}
 						</div>
-						{#if !resources.pending.length && !resources.recoveryItems.length}<EmptyState
+						{#if !resources.pending.length}<EmptyState
 								icon={FtCheck}
 								title="Everything is saved"
 								hint="There are no changes waiting for your decision."
@@ -384,9 +333,7 @@
 			{#if confirmation}
 				<div class={cn('flex flex-col', SYNC_GAP_ITEM)} role="group" aria-label="Confirm removal">
 					<p class="text-sm">
-						{confirmation === 'discard'
-							? `Your change${reviewed.length > 1 ? ` and ${reviewed.length - 1} ${reviewed.length === 2 ? 'change that depends' : 'changes that depend'} on it` : ''} will be removed from this device.${selected?.delivery.kind === 'conflict' ? (selected.delivery.remote.kind === 'deleted' ? ' This item will remain deleted.' : selected.delivery.remote.kind === 'found' ? ' The latest copy will remain.' : ' The latest copy is unavailable.') : ''}`
-							: 'The unreadable data will be removed from this device. Keep the downloaded copy; dependent edits still need a decision.'}
+						{`Your change${reviewed.length > 1 ? ` and ${reviewed.length - 1} ${reviewed.length === 2 ? 'change that depends' : 'changes that depend'} on it` : ''} will be removed from this device.${selected?.delivery.kind === 'conflict' ? (selected.delivery.remote.kind === 'deleted' ? ' This item will remain deleted.' : selected.delivery.remote.kind === 'found' ? ' The latest copy will remain.' : ' The latest copy is unavailable.') : ''}`}
 					</p>
 					<div class="flex flex-wrap justify-end gap-3">
 						<Button variant="ghost" disabled={busy} onclick={() => (confirmation = null)}
@@ -394,11 +341,8 @@
 						>
 						<Button
 							variant="destructive"
-							disabled={busy || (confirmation === 'discard' && !canDiscard)}
-							onclick={() => {
-								if (confirmation === 'discard') void resolve('discard');
-								else if (confirmation) void removeRecovery(confirmation);
-							}}>{confirmation === 'discard' ? 'Discard change' : 'Remove from this device'}</Button
+							disabled={busy || !canDiscard}
+							onclick={() => void resolve('discard')}>Discard change</Button
 						>
 					</div>
 				</div>

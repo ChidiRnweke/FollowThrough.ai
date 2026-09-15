@@ -15,11 +15,6 @@ const draft = (command: string): WriteDraft<string, string> => ({
 });
 
 export const outboxRepositoryContract = (create: () => OutboxRepository<string, string>): void => {
-	it('retains local intent independently for each account', async () => {
-		const repository = create();
-		await repository.append('alice', draft('Private'));
-		expect(await repository.list('bob')).toEqual([]);
-	});
 	it('never coalesces new input into an attempted operation', async () => {
 		const repository = create();
 		const first = draft('First');

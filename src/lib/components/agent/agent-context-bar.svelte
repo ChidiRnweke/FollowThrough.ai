@@ -47,11 +47,10 @@
 		if (!resources) return { memory: null, notes: null, todos: null, attachments: null };
 		const values = resources.views.capabilityCounts(activeProjectId);
 		return {
-			memory: resources.collectionReadiness(['memory_entries']) === 'ready' ? values.memory : null,
-			notes: resources.collectionReadiness(['notes']) === 'ready' ? values.notes : null,
-			todos: resources.collectionReadiness(['todos']) === 'ready' ? values.todos : null,
-			attachments:
-				resources.collectionReadiness(['attachments']) === 'ready' ? values.attachments : null
+			memory: resources.collectionReadiness() === 'ready' ? values.memory : null,
+			notes: resources.collectionReadiness() === 'ready' ? values.notes : null,
+			todos: resources.collectionReadiness() === 'ready' ? values.todos : null,
+			attachments: resources.collectionReadiness() === 'ready' ? values.attachments : null
 		};
 	});
 

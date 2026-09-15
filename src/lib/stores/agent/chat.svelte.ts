@@ -539,7 +539,7 @@ export class ChatStore {
 				await this.revalidate();
 				return;
 			}
-			await resources.prepare(['messages', 'agent_runs']);
+			await resources.prepare();
 			if (generation !== this.generation || !resources.active) return;
 			const conversation = resources.views.conversation(conversationId);
 			if (!conversation) throw new Error('This chat is no longer available');

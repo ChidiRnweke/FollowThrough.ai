@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { projectBuilder, noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { WriteDraft } from '$lib/models/outbox';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
@@ -42,13 +42,13 @@ it('rejects a command aimed at a different object', () => {
 	).toThrow('command belongs to a different resource');
 });
 it('allows a correctly identified local deletion', () => {
-	const note = noteBuilder();
+	const note = todoBuilder();
 	expect(() =>
 		assertWorkspaceWriteIdentity({
 			...input,
-			key: workspaceResourceKey({ type: 'notes', id: [note.id] }),
-			command: { kind: 'deleteNote', noteId: note.id },
-			base: { etag: syncEtag(1n), value: { type: 'notes', value: note } },
+			key: workspaceResourceKey({ type: 'todos', id: [note.id] }),
+			command: { kind: 'deleteTodo', todoId: note.id },
+			base: { etag: syncEtag(1n), value: { type: 'todos', value: note } },
 			local: null
 		})
 	).not.toThrow();

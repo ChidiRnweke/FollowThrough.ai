@@ -9,7 +9,6 @@
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { DateTime } from '$lib/models/workspace';
 	import type { ProjectId } from '$lib/models/projects';
-	import { workspaceResourceKey } from '$lib/models/workspace-sync';
 
 	let {
 		open = $bindable(false),
@@ -76,15 +75,10 @@
 		busy = true;
 		try {
 			const result = await draft.stage({
-				command: {
-					kind: 'updateExportSettings',
-					userId: value.userId,
-					projectId: value.projectId,
-					settings: { ...settings }
-				},
-				local: { type: 'export_settings', value: { ...value, settings: { ...settings } } },
-				coalesce: null,
-				references: [workspaceResourceKey({ type: 'projects', id: [value.projectId] })]
+				kind: 'updateExportSettings',
+				userId: value.userId,
+				projectId: value.projectId,
+				settings: { ...settings }
 			});
 			if (result.kind === 'failure') throw new Error(result.message);
 			toast.success('Export defaults saved on this device');

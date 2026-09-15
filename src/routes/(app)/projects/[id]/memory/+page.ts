@@ -6,11 +6,6 @@ export const load: PageLoad = async ({ parent, params }) => {
 	const { session } = await parent();
 	const opened = await session.resources.open({ type: 'projects', id: [projectId] });
 	requireRouteResource(opened, session.resources.online, 'project');
-	await session.resources.prepare([
-		'memory_entries',
-		'suggestions',
-		'source_anchors',
-		'provenance'
-	]);
+	await session.resources.prepare();
 	return { projectId };
 };

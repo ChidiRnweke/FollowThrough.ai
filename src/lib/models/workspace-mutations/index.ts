@@ -5,22 +5,16 @@ import type {
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import { z } from 'zod';
-import { compactWriteProofSchema } from '$lib/models/outbox';
+import { appliedWriteProofSchema } from '$lib/models/outbox';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
-import type { DiagramId, DiagramRevisionId } from '$lib/models/diagrams';
+import type { DiagramId } from '$lib/models/diagrams';
 import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import { noteEtag, noteSyncContentEquals, type Note, type NoteId } from '$lib/models/notes';
-import type {
-	WriteContent,
-	WriteDraft,
-	WriteObservation,
-	WriteBaseResolution,
-	ServerResource
-} from '$lib/models/outbox';
+import { type Note, type NoteId } from '$lib/models/notes';
+import type { WriteContent, WriteDraft } from '$lib/models/outbox';
 import { syncEtagSchema } from '$lib/models/sync';
 import {
 	resourceDataSchemas,
@@ -30,6 +24,7 @@ import {
 	workspaceObjectReadSchema,
 	workspaceWriteReceiptSchema,
 	workspaceRecordIdentity,
+	isWorkspaceRecord,
 	type WorkspaceRecord,
 	type WorkspaceValues
 } from '$lib/models/workspace-records';
@@ -158,14 +153,6 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		title: z.string().trim().min(1)
 	}),
 	z.object({
-		kind: z.literal('createSkill'),
-		id: noteId,
-		projectId,
-		parentId: noteId.optional(),
-		name: z.string().trim().min(1),
-		description: z.string().optional()
-	}),
-	z.object({
 		kind: z.literal('updateSkill'),
 		noteId,
 		displayName: z.string().trim().min(1).optional(),
@@ -186,15 +173,7 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('restoreNote'), noteId }),
 	z.object({ kind: z.literal('publishNote'), noteId }),
 	z.object({ kind: z.literal('discardNoteDraft'), noteId }),
-	z.object({ kind: z.literal('deleteNote'), noteId }),
 	z.object({ kind: z.literal('noteNumbering'), noteId, enabled: z.boolean().optional() }),
-	z.object({
-		kind: z.literal('moveNote'),
-		projectId,
-		entryId: noteId,
-		parentId: noteId.optional(),
-		position: z.number().int().nonnegative()
-	}),
 	z.object({
 		kind: z.literal('createTodo'),
 		id: todoId,
@@ -229,14 +208,6 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		source: z.string().min(1).max(2_000_000),
 		renderedSvg: z.string().min(1).max(3_000_000)
 	}),
-	z.object({
-		kind: z.literal('restoreDiagramRevision'),
-		diagramId,
-		revisionId: z
-			.string()
-			.uuid()
-			.transform((value) => value as DiagramRevisionId)
-	}),
 	z.object({ kind: z.literal('archiveDiagram'), diagramId }),
 	z.object({ kind: z.literal('restoreDiagram'), diagramId }),
 	z.object({ kind: z.literal('deleteDiagram'), diagramId })
@@ -261,16 +232,10 @@ export type NoteMutationRequest = MutationFor<
 	| 'restoreNote'
 	| 'publishNote'
 	| 'discardNoteDraft'
-	| 'deleteNote'
 	| 'noteNumbering'
 >;
 export type ProjectMutationRequest = MutationFor<
-	| 'createProject'
-	| 'renameProject'
-	| 'archiveProject'
-	| 'projectNumbering'
-	| 'createFolder'
-	| 'moveNote'
+	'createProject' | 'renameProject' | 'archiveProject' | 'projectNumbering' | 'createFolder'
 >;
 export type TodoMutationRequest = MutationFor<'createTodo' | 'updateTodo' | 'deleteTodo'>;
 export type ConversationMutationRequest = MutationFor<'renameConversation'>;
@@ -282,19 +247,18 @@ export type UserPreferenceMutationRequest = MutationFor<'updateUserPreferences'>
 export type AgentPreferenceMutationRequest = MutationFor<'updateAgentPreferences'>;
 export type DeliverableMutationRequest = MutationFor<'updateExportSettings'>;
 export type MemoryMutationRequest = MutationFor<'createMemory' | 'updateMemory' | 'deleteMemory'>;
-export type SkillMutationRequest = MutationFor<'createSkill' | 'updateSkill'>;
+export type SkillMutationRequest = MutationFor<'updateSkill'>;
 export type DiagramMutationRequest = MutationFor<
 	| 'saveDiagram'
 	| 'renameDiagram'
 	| 'publishDiagram'
-	| 'restoreDiagramRevision'
 	| 'archiveDiagram'
 	| 'restoreDiagram'
 	| 'deleteDiagram'
 >;
 
 export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
-	z.object({ kind: z.literal('compacted'), proof: compactWriteProofSchema }),
+	z.object({ kind: z.literal('proven'), proof: appliedWriteProofSchema }),
 	z.object({ kind: z.literal('applied'), receipt: workspaceWriteReceiptSchema }),
 	z.object({
 		kind: z.literal('conflict'),
@@ -311,7 +275,7 @@ export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSche
 export const workspaceWriteRecoverySchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('cancelled') }),
 	z.object({ kind: z.literal('applied'), receipt: workspaceWriteReceiptSchema }),
-	z.object({ kind: z.literal('compacted'), proof: compactWriteProofSchema })
+	z.object({ kind: z.literal('proven'), proof: appliedWriteProofSchema })
 ]);
 export type WorkspaceWriteRecovery = z.infer<typeof workspaceWriteRecoverySchema>;
 
@@ -347,7 +311,6 @@ export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceId
 		case 'saveDiagram':
 		case 'renameDiagram':
 		case 'publishDiagram':
-		case 'restoreDiagramRevision':
 		case 'archiveDiagram':
 		case 'restoreDiagram':
 		case 'deleteDiagram':
@@ -360,10 +323,7 @@ export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceId
 			return { type: 'projects', id: [command.projectId] };
 		case 'createFolder':
 		case 'createNote':
-		case 'createSkill':
 			return { type: 'notes', id: [command.id] };
-		case 'moveNote':
-			return { type: 'notes', id: [command.entryId] };
 		case 'createTodo':
 			return { type: 'todos', id: [command.id] };
 		case 'updateTodo':
@@ -374,117 +334,16 @@ export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceId
 	}
 };
 
-const legacyVersionSchema = z
-	.object({ note: noteRecordSchema, etag: z.string() })
-	.refine(
-		(value) => value.etag === noteEtag(value.note),
-		'The legacy note validator does not match its base'
-	);
-const legacyRecordFields = {
-	userId: noteRecordSchema.shape.userId,
-	noteId,
-	base: legacyVersionSchema,
-	local: noteRecordSchema,
-	operationId: z.string().uuid(),
-	editVersion: z.number().int().nonnegative(),
-	updatedAt: noteRecordSchema.shape.updatedAt
-};
-/** The old store remains intact; this boundary proves the identities before importing a draft. */
-export const legacyNoteSyncRecordSchema = z
-	.discriminatedUnion('state', [
-		z.object({ ...legacyRecordFields, state: z.literal('synced') }).strict(),
-		z.object({
-			...legacyRecordFields,
-			state: z.enum(['pending', 'syncing']),
-			remote: legacyVersionSchema.optional()
-		}),
-		z.object({ ...legacyRecordFields, state: z.literal('conflict'), remote: legacyVersionSchema })
-	])
-	.refine(
-		(record) =>
-			record.base.note.id === record.noteId &&
-			record.local.id === record.noteId &&
-			record.base.note.userId === record.userId &&
-			record.local.userId === record.userId &&
-			(record.state === 'synced' ||
-				!record.remote ||
-				(record.remote.note.id === record.noteId && record.remote.note.userId === record.userId)),
-		'The saved draft belongs to a different resource or account'
-	);
-export type LegacyNoteSyncRecord = z.infer<typeof legacyNoteSyncRecordSchema>;
-export type LegacyNoteImport = {
-	readonly source: string;
-	readonly draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>;
-	readonly conflict: WriteObservation<WorkspaceRecord> | null;
-};
-export const legacyNoteImport = (record: LegacyNoteSyncRecord): LegacyNoteImport | null => {
-	if (record.state === 'synced') return null;
-	const local = record.local;
-	const base = record.base.note;
-	return {
-		source: `legacy-note:${record.noteId}:${record.operationId}:${record.editVersion}`,
-		draft: {
-			operationId: record.operationId,
-			key: workspaceResourceKey({ type: 'notes', id: [record.noteId] }),
-			command: {
-				kind: 'saveNote',
-				noteId: record.noteId,
-				document: local.document,
-				plainText: local.plainText,
-				...(local.title !== base.title ? { title: local.title } : {}),
-				...(local.isPinned !== base.isPinned ? { isPinned: local.isPinned } : {}),
-				...(local.sectionNumbering !== base.sectionNumbering
-					? { sectionNumbering: local.sectionNumbering ?? null }
-					: {})
-			},
-			base: { etag: null, value: { type: 'notes', value: base } },
-			basedOn: null,
-			local: { type: 'notes', value: local },
-			coalesce: 'document',
-			references: []
-		},
-		conflict: record.remote
-			? {
-					kind: 'found',
-					snapshot: { etag: null, value: { type: 'notes', value: record.remote.note } }
-				}
-			: null
-	};
-};
-
-/** Old revision validators are never sent as workspace validators. Validate the preserved base first. */
-export const resolveImportedNoteBase = (
-	base: WorkspaceRecord,
-	local: WorkspaceRecord | null,
-	remote: ServerResource<WorkspaceRecord>
-): WriteBaseResolution<WorkspaceRecord> => {
-	const matches = (left: Note, right: Note) =>
-		noteSyncContentEquals(left, right) && left.sectionNumbering === right.sectionNumbering;
-	if (
-		remote.kind === 'found' &&
-		base.type === 'notes' &&
-		remote.snapshot.value.type === 'notes' &&
-		((base.value.currentRevision === remote.snapshot.value.value.currentRevision &&
-			matches(base.value, remote.snapshot.value.value)) ||
-			(local?.type === 'notes' && matches(local.value, remote.snapshot.value.value)))
-	)
-		return { kind: 'matched', snapshot: remote.snapshot };
-	return { kind: 'conflict', remote };
-};
-
-/** Document editing contributes a command and local representation, never cache or retry behavior. */
-export const noteWrite = (note: Note): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
-	command: {
-		kind: 'saveNote',
-		noteId: note.id,
-		document: note.document,
-		plainText: note.plainText,
-		title: note.title,
-		isPinned: note.isPinned
-	},
-	local: { type: 'notes', value: note },
-	coalesce: 'document',
-	references: []
+/** Serialize only editable note fields into a command. */
+export const noteCommand = (
+	note: Pick<Note, 'id' | 'document' | 'plainText' | 'title' | 'isPinned'>
+): Extract<WorkspaceCommand, { kind: 'saveNote' }> => ({
+	kind: 'saveNote',
+	noteId: note.id,
+	document: note.document,
+	plainText: note.plainText,
+	title: note.title,
+	isPinned: note.isPinned
 });
 
 export const todoWrite = (
@@ -693,3 +552,259 @@ export const workspaceWriteCancellationSchema = z.object({
 	request: z.string().min(2)
 });
 export type WorkspaceWriteCancellation = z.infer<typeof workspaceWriteCancellationSchema>;
+
+export type PreparedWorkspaceCommand = Exclude<WorkspaceCommand, { kind: 'discardNoteDraft' }>;
+export interface WorkspaceCommandContext {
+	readonly userId: UserId;
+	readonly now: DateTime;
+	readonly records: ReadonlyMap<string, WorkspaceRecord>;
+}
+
+/** Derive local effects from the command and the version this editor actually observed. */
+export const prepareWorkspaceCommand = (
+	command: PreparedWorkspaceCommand,
+	observed: WorkspaceRecord | null,
+	context: WorkspaceCommandContext
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
+	const { userId, now, records } = context;
+	const value = <K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K] => {
+		if (!observed || !isWorkspaceRecord(observed, type))
+			throw new Error('Open the resource before editing');
+		return observed.value;
+	};
+	const content = (
+		local: WorkspaceRecord | null,
+		references: readonly string[] = [],
+		coalesce: string | null = null
+	): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({ command, local, references, coalesce });
+	const projectKey = (id: ProjectId) => workspaceResourceKey({ type: 'projects', id: [id] });
+	const notes = () =>
+		[...records.values()].filter((record) => record.type === 'notes').map((record) => record.value);
+	switch (command.kind) {
+		case 'createProject':
+			return content({
+				type: 'projects',
+				value: newProject(command.id, userId, command.name, now)
+			});
+		case 'createNote':
+		case 'createFolder': {
+			const project = records.get(projectKey(command.projectId));
+			if (project?.type !== 'projects') throw new Error('The project is unavailable');
+			const note = newNote(
+				command.id,
+				project.value,
+				command.kind === 'createNote' ? command.title : command.name,
+				command.kind === 'createNote' ? 'note' : 'folder',
+				notes(),
+				now,
+				command.parentId
+			);
+			return content({ type: 'notes', value: note }, [
+				projectKey(command.projectId),
+				...(command.parentId
+					? [workspaceResourceKey({ type: 'notes', id: [command.parentId] })]
+					: [])
+			]);
+		}
+		case 'renameProject':
+			return content({
+				type: 'projects',
+				value: { ...value('projects'), name: command.name.trim(), updatedAt: now }
+			});
+		case 'archiveProject':
+			return content({
+				type: 'projects',
+				value: { ...value('projects'), archivedAt: now, updatedAt: now }
+			});
+		case 'projectNumbering':
+			return content({
+				type: 'projects',
+				value: { ...value('projects'), sectionNumberingDefault: command.enabled, updatedAt: now }
+			});
+		case 'renameNote':
+			return content({
+				type: 'notes',
+				value: { ...value('notes'), title: command.title.trim(), updatedAt: now }
+			});
+		case 'noteNumbering':
+			return content({
+				type: 'notes',
+				value: { ...value('notes'), sectionNumbering: command.enabled, updatedAt: now }
+			});
+		case 'saveNote': {
+			const note = value('notes');
+			return content(
+				{
+					type: 'notes',
+					value: {
+						...note,
+						document: command.document,
+						plainText: command.plainText,
+						...(command.title !== undefined ? { title: command.title.trim() } : {}),
+						...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {}),
+						updatedAt: now
+					}
+				},
+				[],
+				'document'
+			);
+		}
+		case 'publishNote': {
+			const note = value('notes');
+			return content({
+				type: 'notes',
+				value: { ...note, publishedRevision: note.currentRevision, publishedAt: now }
+			});
+		}
+		case 'archiveNote':
+		case 'restoreNote':
+			return noteTrashWrite(
+				value('notes'),
+				command.kind === 'archiveNote' ? 'archive' : 'restore',
+				notes(),
+				now
+			);
+		case 'createTodo':
+			return content(
+				{
+					type: 'todos',
+					value: {
+						id: command.id,
+						userId,
+						projectId: command.projectId,
+						title: command.title.trim(),
+						responsibility: command.responsibility,
+						status: command.status ?? 'open',
+						createdAt: now,
+						updatedAt: now,
+						...(command.status === 'done' ? { completedAt: now } : {})
+					}
+				},
+				[projectKey(command.projectId)]
+			);
+		case 'updateTodo': {
+			const { kind, todoId, ...patch } = command;
+			void kind;
+			void todoId;
+			return todoWrite(value('todos'), patch, now);
+		}
+		case 'createMemory':
+			return content(
+				{ type: 'memory_entries', value: newMemory(command.id, userId, command, now) },
+				command.projectId ? [projectKey(command.projectId)] : []
+			);
+		case 'updateMemory': {
+			const { kind, memoryEntryId, ...patch } = command;
+			void kind;
+			void memoryEntryId;
+			return memoryWrite(value('memory_entries'), patch);
+		}
+		case 'deleteTodo':
+		case 'deleteMemory':
+		case 'resetProjectToolOverride':
+			return content(null);
+		case 'renameConversation':
+			return content({
+				type: 'conversations',
+				value: { ...value('conversations'), title: command.title.trim(), updatedAt: now }
+			});
+		case 'updateSkill': {
+			const { kind, noteId, ...patch } = command;
+			void kind;
+			void noteId;
+			return skillMetadataWrite(value('skills'), patch);
+		}
+		case 'updateAgentPreferences':
+			return agentPreferenceWrite(value('agent_preferences'), command.patch);
+		case 'updateUserPreferences':
+			return content({
+				type: 'user_preferences',
+				value: {
+					...value('user_preferences'),
+					sectionNumberingDefault: command.sectionNumberingDefault,
+					updatedAt: now
+				}
+			});
+		case 'updateExportSettings':
+			return content(
+				{
+					type: 'export_settings',
+					value: { ...value('export_settings'), settings: command.settings, updatedAt: now }
+				},
+				[projectKey(command.projectId)]
+			);
+		case 'updateTrustPolicy':
+			return content({
+				type: 'trust_policies',
+				value: {
+					...value('trust_policies'),
+					autoAcceptEnabled: command.autoAcceptEnabled,
+					minimumConfidence: command.minimumConfidence,
+					updatedAt: now
+				}
+			});
+		case 'setToolPreference':
+			return content({
+				type: 'tool_preferences',
+				value: { ...value('tool_preferences'), enabled: command.enabled, updatedAt: now }
+			});
+		case 'setProjectToolOverride':
+			return content(
+				{
+					type: 'project_tool_overrides',
+					value: { ...value('project_tool_overrides'), enabled: command.enabled, updatedAt: now }
+				},
+				[projectKey(command.projectId)]
+			);
+		case 'renameDiagram':
+			return content({
+				type: 'diagrams',
+				value: { ...value('diagrams'), title: command.title.trim(), updatedAt: now }
+			});
+		case 'archiveDiagram':
+		case 'restoreDiagram':
+		case 'deleteDiagram': {
+			const diagram = value('diagrams');
+			if (command.kind === 'archiveDiagram' ? Boolean(diagram.archivedAt) : !diagram.archivedAt)
+				throw new Error(
+					command.kind === 'archiveDiagram'
+						? 'The diagram is already in the trash'
+						: 'The diagram is not in the trash'
+				);
+			if (command.kind === 'deleteDiagram') return content(null);
+			const { archivedAt, ...restored } = diagram;
+			void archivedAt;
+			return content({
+				type: 'diagrams',
+				value:
+					command.kind === 'archiveDiagram'
+						? { ...diagram, archivedAt: now, updatedAt: now }
+						: { ...restored, updatedAt: now }
+			});
+		}
+		case 'saveDiagram':
+		case 'publishDiagram': {
+			const diagram = value('diagrams');
+			if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
+			const revision = diagram.currentRevision + (diagram.source === command.source ? 0 : 1);
+			return content(
+				{
+					type: 'diagrams',
+					value: {
+						...diagram,
+						source: command.source,
+						currentRevision: revision,
+						updatedAt: now,
+						...(command.kind === 'publishDiagram'
+							? { renderedSvg: command.renderedSvg, publishedRevision: revision, publishedAt: now }
+							: {})
+					}
+				},
+				[],
+				command.kind === 'saveDiagram' ? 'document' : null
+			);
+		}
+		default:
+			throw new Error(`Unhandled command: ${command satisfies never}`);
+	}
+};

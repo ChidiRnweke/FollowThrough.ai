@@ -35,21 +35,10 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	constructor(private readonly cache = new InMemorySyncCache<T>()) {
 		this.projectedCache = {
 			load: async (accountId) => (await this.read(accountId)).cache,
-			commit: async (accountId, changes) => {
-				const result = await this.cache.commit(accountId, changes);
-				await this.read(accountId);
-				return result;
-			}
+			commit: (accountId, changes) => this.cache.commit(accountId, changes)
 		};
 	}
 	snapshotFailure: string | null = null;
-	private readonly acknowledgements = new Map<string, Set<string>>();
-	async pendingAcknowledgements(accountId: string): Promise<readonly string[]> {
-		return [...(this.acknowledgements.get(accountId) ?? [])];
-	}
-	async acknowledged(accountId: string, operationId: string): Promise<void> {
-		this.acknowledgements.get(accountId)?.delete(operationId);
-	}
 	appendFailure: string | null = null;
 	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
 		return this.receipts.get(accountId)?.get(key) ?? null;
@@ -64,8 +53,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 			writes: {
 				entries: this.accounts.get(accountId) ?? [],
 				receipts: new Map(this.receipts.get(accountId))
-			},
-			recovery: []
+			}
 		};
 		for (const observer of this.observers.get(accountId) ?? []) observer(state);
 		return state;
@@ -103,10 +91,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		const entries = await this.list(accountId);
 		const next = resolveWriteBase(entries, operationId, resolution);
 		const original = entries.find((entry) => entry.intent.operationId === operationId);
-		const resource =
-			resolution.kind === 'matched'
-				? { kind: 'found' as const, snapshot: resolution.snapshot }
-				: resolution.remote;
+		const resource = resolution.remote;
 		if (original && resource.kind !== 'unavailable')
 			await this.saveResource(accountId, original.intent.key, resource);
 		this.accounts.set(accountId, next);
@@ -167,9 +152,6 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		if (resource) await this.saveResource(accountId, sent.intent.key, resource);
 		this.accounts.set(accountId, next);
 		if (receipt) {
-			const pending = this.acknowledgements.get(accountId) ?? new Set<string>();
-			pending.add(sent.intent.operationId);
-			this.acknowledgements.set(accountId, pending);
 			receipts.set(sent.intent.key, receipt);
 			this.receipts.set(accountId, receipts);
 		}
@@ -184,9 +166,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 				{
 					key,
 					entry:
-						resource.kind === 'found'
-							? { kind: 'present', cache: { kind: 'cached', snapshot: resource.snapshot } }
-							: resource
+						resource.kind === 'found' ? { kind: 'present', snapshot: resource.snapshot } : resource
 				}
 			],
 			remove: []

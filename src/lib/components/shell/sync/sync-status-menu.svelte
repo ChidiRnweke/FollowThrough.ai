@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import WorkspaceRecoveryDownload from '$lib/components/shared/workspace-recovery-download.svelte';
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
 	let {
 		resources,
@@ -21,13 +22,12 @@
 			online: resources.online,
 			pending: resources.pending.length,
 			sending: resources.pending.some((entry) => entry.delivery.kind === 'sending'),
-			review:
-				resources.pending.filter(
-					(entry) =>
-						entry.delivery.kind === 'conflict' ||
-						entry.delivery.kind === 'rejected' ||
-						entry.delivery.kind === 'retry'
-				).length + resources.recoveryItems.filter((item) => item.impact.kind !== 'cache').length,
+			review: resources.pending.filter(
+				(entry) =>
+					entry.delivery.kind === 'conflict' ||
+					entry.delivery.kind === 'rejected' ||
+					entry.delivery.kind === 'retry'
+			).length,
 			failedDownloads: resources.failedDownloads,
 			downloading:
 				!resources.downloadProgress.inventoryComplete ||
@@ -97,6 +97,7 @@
 							: resources.synchronize(true))}>Retry now</DropdownMenu.Item
 				>{/if}
 		</DropdownMenu.Group>
+		{#if !resources.active}<WorkspaceRecoveryDownload />{/if}
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
 <WorkspaceWriteReview {resources} bind:open={review} />

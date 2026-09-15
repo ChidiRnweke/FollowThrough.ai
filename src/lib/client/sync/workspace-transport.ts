@@ -1,18 +1,15 @@
 import { z } from 'zod';
 import { workspaceBootstrapSchema } from '$lib/models/workspace-bootstrap';
 import { readWorkspaceBootstrap } from '$lib/remote/workspace/bootstrap.remote';
-import { syncChangePageSchema } from '$lib/models/sync';
+import { syncPageSchema } from '$lib/models/sync';
 import { workspaceResourceIdentitySchema, workspaceResourceKey } from '$lib/models/workspace-sync';
 import {
 	workspaceObjectReadSchema,
+	workspaceRecordSchema,
 	workspaceRecordIdentity,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
-import {
-	pullWorkspaceChangePage,
-	readWorkspaceResource,
-	readWorkspaceResources
-} from '$lib/remote/workspace/sync.remote';
+import { pullWorkspaceChangePage, readWorkspaceResource } from '$lib/remote/workspace/sync.remote';
 import {
 	workspaceMutationResultSchema,
 	workspaceWriteRecoverySchema,
@@ -21,8 +18,7 @@ import {
 } from '$lib/models/workspace-mutations';
 import {
 	pushWorkspaceMutation,
-	cancelWorkspaceMutation,
-	acknowledgeWorkspaceMutation
+	cancelWorkspaceMutation
 } from '$lib/remote/workspace/mutations.remote';
 import type { OutboxTransport } from './outbox-contracts';
 import { OutboxAccountChangedError } from './outbox-contracts';
@@ -38,46 +34,14 @@ const identityFromKey = (key: string) => {
 export const workspaceReadTransport = (accountId: string): SyncReadTransport<WorkspaceRecord> => ({
 	async pull(since) {
 		const request = pullWorkspaceChangePage({ accountId, since });
-		return syncChangePageSchema.parse(await request);
-	},
-	async readMany(requests) {
-		const response = await readWorkspaceResources({
-			accountId,
-			requests: requests.map(({ key, etag }) => ({ identity: identityFromKey(key), etag }))
-		});
-		const resultSchema = z.union([
-			workspaceObjectReadSchema,
-			z.object({ kind: z.literal('failure'), message: z.string() })
-		]);
-		const results = z
-			.array(z.object({ key: z.string(), result: z.json() }))
-			.parse(response)
-			.map(({ key, result }) => {
-				const parsed = resultSchema.safeParse(result);
-				return {
-					key,
-					result: parsed.success
-						? parsed.data
-						: {
-								kind: 'failure' as const,
-								message: 'This saved copy has an incompatible format. Retry after updating the app.'
-							}
-				};
-			});
-		if (
-			results.length !== requests.length ||
-			new Set(results.map((item) => item.key)).size !== results.length ||
-			results.some((item) => !requests.some((request) => request.key === item.key))
-		)
-			throw new Error('The server returned a different resource batch');
-		return results.map(({ key, result }) => ({
-			key,
-			result:
-				result.kind === 'found' &&
-				workspaceResourceKey(workspaceRecordIdentity(result.snapshot.value)) !== key
-					? { kind: 'failure' as const, message: 'The server returned a different resource' }
-					: result
-		}));
+		const page = syncPageSchema(workspaceRecordSchema).parse(await request);
+		for (const { key, resource } of page.records)
+			if (
+				resource.kind === 'found' &&
+				workspaceResourceKey(workspaceRecordIdentity(resource.snapshot.value)) !== key
+			)
+				throw new Error('The server page returned a different resource');
+		return page;
 	},
 	async read(key, etag) {
 		const request = readWorkspaceResource({ accountId, identity: identityFromKey(key), etag });
@@ -109,11 +73,6 @@ export const workspaceWriteTransport = (
 					accountId
 				})
 			);
-		},
-		async acknowledge(operationId) {
-			z.object({ kind: z.literal('acknowledged') }).parse(
-				await acknowledgeWorkspaceMutation({ accountId, operationId, protocol: 2 })
-			);
 		}
 	},
 	async send(input) {
@@ -126,7 +85,7 @@ export const workspaceWriteTransport = (
 		);
 		if (result.kind === 'applied' && result.receipt.operationId !== input.operationId)
 			throw new Error('The server acknowledged a different operation');
-		if (result.kind === 'compacted' && result.proof.operationId !== input.operationId)
+		if (result.kind === 'proven' && result.proof.operationId !== input.operationId)
 			throw new Error('The server acknowledged a different operation');
 		const resource =
 			result.kind === 'applied'

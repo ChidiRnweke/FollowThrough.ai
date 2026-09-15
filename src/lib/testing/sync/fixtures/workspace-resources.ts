@@ -21,16 +21,12 @@ export const workspaceResourcesFixture = (accountId: string) => {
 				throw new Error('This scenario does not submit edits');
 			}
 		},
-		resolveBase: async () => {
-			throw new Error('This scenario has no imported edits');
-		},
-		committed: () => resources.committed()
+		pull: () => cache.refresh()
 	});
 	const resources = new WorkspaceResources(accountId, {
-		scheduler: new InMemorySyncScheduler(),
+		repository: outbox,
 		cache,
-		writes,
-		restoreLocalWrites: async () => undefined
+		writes
 	});
 	outbox.observe(accountId, (state) => resources.applyLocal(state));
 	return {

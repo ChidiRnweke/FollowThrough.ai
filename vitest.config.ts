@@ -13,7 +13,12 @@ const lib = fileURLToPath(new URL('./src/lib', import.meta.url));
  * Named rather than written inline because the topology audit checks that every
  * `include:` array in this file matches real spec files, and these are packages.
  */
-const browserPrebundled = ['harper.js', 'harper.js/binary', '@floating-ui/dom'];
+const browserPrebundled = [
+	'dexie-export-import',
+	'harper.js',
+	'harper.js/binary',
+	'@floating-ui/dom'
+];
 const common = {
 	expect: { requireAssertions: true },
 	pool: 'forks' as const
@@ -120,7 +125,6 @@ export default defineConfig({
 						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',
 						'src/lib/client/sync/storage-recovery.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
-						'src/lib/client/sync/legacy-notes.svelte.spec.ts',
 						'src/lib/stores/workspace/resources.svelte.spec.ts',
 						'src/lib/stores/workspace/drafts.svelte.spec.ts',
 						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',

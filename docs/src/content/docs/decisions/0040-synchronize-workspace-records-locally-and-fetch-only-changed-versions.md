@@ -5,282 +5,153 @@ description: Make navigation and offline editing use one local copy of workspace
 
 ## Status
 
-Accepted.
+Accepted. The unreleased implementation was simplified before deployment. The current decision
+below replaces intermediate compatibility, body-download and granular recovery protocols.
 
 ## Context
 
-Opening an already downloaded object should not require downloading it again. Users also need
-to read and edit their workspace without a connection. Today, server route loaders, page
-snapshots in the service worker, and the note write queue each own part of this behavior.
-They do not provide a shared read lifecycle.
-
-The user chose an initial download of all current workspace records, followed by incremental
-synchronization. This includes saved chats and file metadata. File bytes and historical
-revisions remain on demand. Actions that need server execution remain online operations.
+Users need to read and edit downloaded workspace records without a connection. Reopening an
+unchanged object should not download it again. Separate route snapshots, note queues and caches
+made that behavior inconsistent. The chosen scope is an initial download of current workspace
+records, including saved chats and file metadata, followed by incremental synchronization.
+File bytes, historical revisions and actions requiring server execution stay on demand.
 
 ## Decision
 
-We chose one account-scoped local store of normalized records. Lists and detail views are
-projections of these records, with pending local edits applied over the last server copy.
-The private app renders through a browser shell so route navigation does not wait for a server
-loader. The service worker stores a generated, data-free SPA fallback and public assets. It never stores private HTML or page-data responses; activation deletes the superseded page caches. Synchronization RPCs use uncached remote commands so the shared resource cache is the sole owner of refresh and request coalescing.
+### One local workspace
 
-The server keeps a compact synchronization journal: one latest change per account and resource
-identity, containing a cursor, an upsert or delete operation, and the resource version. This is
-metadata for synchronization, not application events or event sourcing. Initial synchronization
-starts at cursor zero; subsequent pulls return only entries changed since the client's cursor.
-The client downloads new or changed bodies. A matching ETag never schedules a body download.
-Deletion is an explicit durable tombstone, including for objects this device never downloaded;
-absence from a change batch means nothing changed. A never-known identity remains distinct from
-a deleted identity. Recreating an identity replaces its tombstone with an upsert.
-Tombstones retain the deleted resource's ETag. A deletion wins over an upsert of that same
-version, while a newer recreation wins over the old tombstone. Delayed batches and reads cannot
-undo this ordering.
+Each account has one Dexie database with four stores: records, outbox, receipts and metadata.
+Lists and details project the cached server records with pending local commands applied over them.
+Dexie owns transactions and observation. A readonly live query reads one coherent account
+projection; queue settlement and its cached body become visible together. Reads validate external
+rows but do not repair, rewrite or remove them. Write operations open only the stores they need.
 
-Cursors are account-scoped decimal integers. Updating an account's head row acquires a lock held
-until the domain transaction commits. Later writers for that account cannot commit a higher
-cursor ahead of it. Head and journal are read in one database statement snapshot. Using a
-sequence alone would be incorrect: a client could observe a later committed transaction and
-permanently skip an earlier, still-uncommitted one. The resource version sequence is safe for
-ETags but is deliberately not a change cursor. Account ownership is retained in version metadata
-so cascading deletes can record tombstones after their owning parent disappears.
-The application has no transfer-between-accounts operation. The database rejects changes to a
-resource's owning account, protecting inherited child membership. Supporting account transfers
-later would require journaling both removal from the old account and all newly visible children.
+The outbox sequence uses IndexedDB auto-increment. Operation identity has a unique index.
+There are no separate queue heads, import markers, quarantine records or acknowledgements.
+The database opens explicitly with automatic reopening disabled. Account stop, reset and version
+change end that connection's lifetime permanently. Reset awaits deletion before a new instance opens.
 
-The browser stores a batch's invalidations, tombstones, and cursor in one IndexedDB transaction.
-Bodies can arrive afterward: interrupted downloads remain updating and resume after reload.
-Failed storage never advances the durable cursor. The journal retains tombstones without a
-guessed expiry; future pruning would require an explicit cursor-expiry and full-reset protocol.
+The private app uses a browser shell. The service worker stores a generated, data-free fallback
+and public assets, never private HTML or page-data responses. Installation fetches those assets
+freshly. Workspace RPCs use uncached SvelteKit remote commands.
 
-Database-maintained synchronization versions cover writes from humans, agents, and workers.
-They are distinct from the document revisions in ADR 0010. A note revision does not describe
-every field of a note, and cannot describe related tasks or inherited preferences.
+### Complete incremental pages
 
-The read lifecycle has three states:
+The server journal retains one latest change per account and resource identity. A change records
+a cursor, version and upsert/delete disposition. It is replication metadata, not event sourcing.
+Initial sync starts at zero; later pulls select changes after the durable checkpoint.
 
-- **Uncached:** no server copy is stored locally.
-- **Cached:** a server copy is stored and no newer version is known.
-- **Updating:** a newer version is known, or an initial fetch is in progress. The previous copy,
-  if present, remains stored. Queued, fetching, and failed attempts are explicit substates.
+A readonly repeatable-read PostgreSQL transaction reads the head, selected changes and their
+exact versioned bodies. A missing or malformed live record fails the page. The browser commits
+all page records and its checkpoint atomically. An interrupted page advances neither. There is
+no separate notice/body protocol or background body downloader. Pages contain 128 records,
+based on the PostgreSQL/PWA measurement of repeated page and projection costs at 32 records.
+There is no total inventory cap or excluded type.
 
-Cached records open immediately, including while a change pull is running. Opening a
-known-updating record online promotes or joins its fetch and waits for the live copy. Offline,
-the previous copy is available. An online failure is reported and never makes an old copy current.
-There is one in-flight fetch per object, and obsolete responses cannot replace newer state.
+Tombstones are explicit and retain their version and account. Absence from a page means no change,
+not deletion. A never-known identity differs from a tombstone. Deletion wins over a body of the
+same version; newer recreation wins over an older tombstone. Delayed reads cannot undo this order.
 
-Resource identity, durable cache metadata, and the optional in-flight operation belong to this
-generic mechanism. Routes and features request resources through it; they do not choose their
-own freshness policy. Updating is a foreground read barrier, not permission to render stale
-content while fetching. A change pull by itself does not make every cached record
-updating: only evidence of a changed tag does. This preserves immediate navigation for unchanged
-objects. Offline access to the retained copy is the explicit exception to that barrier.
+Database triggers cover writes from people, agents and workers. Resource versions differ from
+published document revisions in ADR 0010. Journal publication runs through a deferred constraint
+trigger after domain work. Updating the account head holds its lock through commit, so later
+committed cursors cannot skip an earlier unpublished transaction. A sequence alone cannot provide
+that guarantee. Guarded mutations flush the trigger before reading their authoritative outcome.
 
-Losing connectivity releases an already-waiting reader to its retained copy, or reports that no
-offline copy exists. A transient online failure preserves the previous copy and reports failure;
-it does not falsely transition to cached. A later foreground request or synchronization retries
-the transfer. There is no separate fresh state, and no busy retry loop on failure. Optional records use the same read barrier. A completed journal can prove that an override is absent; an unknown inventory or a known record without its body cannot. Features may apply product defaults only for proven absence or deletion, never for a failed download. Optional forms use the same rule when creating an override: a default-valued draft starts only after proven absence or deletion. It does not become a cached server object or a queued creation until the user saves. If another client creates the override first, the absent-base write conflicts rather than overwriting it.
+Version metadata retains ownership for cascaded deletions. Account transfer is unsupported and
+rejected. The same SQL ownership resolver governs triggers, selected reads and mutation locks;
+source lookups compare primary-key columns directly so existing indexes apply. A public field
+allowlist still excludes credentials and execution internals. One idempotent
+installer serves the initial feature migration and development setup without rewriting SQL text.
 
-The write lifecycle is separate. Ordinary creates, edits, moves, publication, archive/restore,
-and deletions enter a durable local queue before being sent. Dependent operations retain their
-order. Conflicts block dependent work, not unrelated objects. A refresh cannot erase a draft.
-The base/local/server comparison and safe-retry policy follow ADR 0010, extended to these
-ordinary workspace mutations. We ask on divergence rather than merging fields automatically.
-New local objects have stable client-generated identities and no server base; dirty existing
-objects retain their server base; local deletions retain that base with a deletion intent.
-These facts belong to pending mutations, independently of the cache lifecycle and server
-tombstones. A server deletion must not discard a conflicting local draft.
+### Reads and startup
 
-Queue entries preserve their command, base, local representation, and preceding operation IDs.
-Unsent document edits can coalesce. A definitively rejected document may also be replaced by a
-new operation from the same observed edit, provided no other queued edit depends on it. This lets
-corrected content be submitted without retrying invalid input. Once submission starts, its operation identity and input
-remain immutable, including after a transport failure. Publication and other distinct operations
-preserve their positions between edits. Queue order and edit ancestry are distinct: a draft names
-its pending local base with `basedOn`. Successful acknowledgement supplies a new server base only
-for edits made against that local version. Competing tabs retain their original server bases and
-therefore conflict instead of silently rebasing over each other. Coalescing requires that exact
-local predecessor and no dependent entries; it replaces the superseded operation identity so a stale
-tab cannot mistake changed local content for the version it edited. Acknowledgement, cached body, and queue settlement commit atomically. The device retains one exact
-applied receipt per account/resource, independently of subsequent cache refreshes. Appending a late
-descendant checks that receipt inside the same storage transaction: only its exact operation ID can
-supply a new base. Content equality and queue disappearance never prove acknowledgement. A newer
-local receipt may replace the proof; an older editor then retains its original base and can conflict
-conservatively. This bounds retained snapshots by resource count rather than autosave count. A deleted
-outcome preserves later edits as conflicts instead of authorizing recreation. Mounted drafts retain
-their own observed content, and explicit keep-local adopts only the replacement operation it reviewed. References to locally created parents wait for those parents' acknowledgement.
-Conflicts retain dependent entries while unrelated resources remain sendable.
+Cached records open immediately, including during a background pull. Complete pages never expose
+a known new version without its body. Uncached detail and conflict refresh use deduplicated targeted
+reads; those reads cannot advance or complete inventory. Failures remain explicit, and offline
+requests can use a retained copy. Runtime attempts are not persisted as resource state.
 
-A shared review dialog exposes pending writes, rejection reasons, and the retained base/local/server
-copies. Review captures the exact operation identities, including all dependent edits. Discard refuses
-unknown send outcomes and any newly added, unreviewed descendants. A download preserves the reviewed
-records before an explicit discard. Keeping a conflict replays its original command against the
-reviewed server version; creation conflicts and server-deleted items require explicit recreation.
-Mounted editors require an exact durable receipt before treating a removed queued operation as
-acknowledged. If another tab discards or supersedes that ancestry, the next saved edit enters
-ordinary conflict review with its original base and local content. It does not silently rebase
-or require reopening the editor; queue absence never proves success.
+Partial inventory never proves absence. Optional preferences use product defaults only after
+an authoritative absent/deleted result or completed inventory. Opening a default-valued form does
+not stage an operation. Cached startup can render from its known shell records while synchronization
+continues; first-ever startup needs the required server records before rendering.
 
-The guarded outbox operates on one independently versioned resource per command. A parent ETag
-cannot protect changes to its children. Compound operations such as skill import, recursive removal,
-and note moves therefore remain online operations; their resulting changes use the same journal.
-Binary transfers, historical revision retrieval, generation, and credentials also remain on demand.
-This scope does not introduce a second cache or an alternate offline mutation path.
+### Durable commands and editor buffers
 
-The server checks the base version, applies the domain mutation, and stores an operation receipt
-in one transaction. Retrying the same operation returns its receipt. An operation identifier
-cannot be reused for different input. Client-generated identities let offline-created objects
-refer to each other without changing identity after synchronization.
+Single-resource commands enter the outbox before local save succeeds. A shared pure preparation
+boundary derives identity, optimistic content, parent references and coalescing from the command
+and observed state. UI callers do not construct queue bookkeeping. New objects keep stable
+client-generated IDs. Today quick capture uses this same durable creation path.
 
-Deployment model metadata and resolved deployment-dependent defaults are not database resources.
-A small, validated bootstrap binds the active account and retains deployment defaults and the
-model catalog for offline startup. User preferences, tool overrides, and trust policies are ordinary
-synchronized records; deleting an override immediately restores its deployment or product default. It is refreshed on app start and never contains workspace page snapshots. A readable,
-non-secret account-hint cookie must match before cached bootstrap data can be restored. The server
-sets that hint only after resolving the actor and clears it when sign-in starts, the session is
-invalid, or the user signs out. It is not an authentication credential; synchronization requests
-still validate the real session and account. Clearing the hint blocks offline reopening without
-deleting unsent drafts from IndexedDB. Ordinary workspace records and mutation intents remain in account-scoped IndexedDB.
+One account runtime owns pull/send wakeups, lane failures and per-operation retry eligibility.
+A failed operation blocks its dependents, not unrelated work. A Web Lock serializes senders;
+followers do not wait for that lock to initialize. Accepted mutations request another pull to
+include secondary records absent from the primary response.
 
-Account changes stop synchronization and remove access to the previous account's local records.
-Unsent changes remain recoverable after that same account authenticates again. Invalid storage,
-failed downloads, and unavailable server actions are explicit failures under ADR 0015.
+Attempted operation identity and normalized input are immutable. Unsent compatible edits can
+coalesce only when their exact ancestry permits it. Mounted drafts retain their observed base;
+queue order, equal content and a disappeared entry do not prove acknowledgement. Locally created
+parent references wait for the parent's applied result. A shared editor session tracks dirty
+generations, serializes local persistence and guards adoption against later typing, replacement,
+account changes and closed panes. Editor-specific serialization and selection remain local.
 
-Legacy note drafts retain their original base, local content, and any observed conflict copy.
-Their old revision validator is not a workspace version: an imported existing base explicitly
-has an unknown sync ETag until an authoritative read validates it. An absent base still means a
-new local object. Unvalidated imports cannot be submitted. Matching the original content and
-revision, or finding that the desired content already reached the server, supplies the real
-validator; divergence retains a conflict. Only metadata actually changed offline is submitted.
-The import marker and queued draft commit atomically, so restarting migration cannot resurrect
-an acknowledged draft. The original database is retained and upgraded to exclude old writers;
-a blocked upgrade explicitly asks the user to close older tabs before retrying.
+The client atomically commits settlement, its body and an exact receipt. It keeps the latest
+local receipt per resource to resolve late descendants. Only the exact predecessor operation
+can supply a new base. Missing evidence preserves the original content for explicit conflict
+review. Server deletion never silently authorizes recreation.
 
-Conflict responses persist the authoritative body or tombstone alongside the retained local edit.
-Keeping an edit uses a new operation identity guarded against the reviewed server version.
-Discarding removes exactly the reviewed set: an attempted write first needs receipt recovery,
-and every dependent edit must be included explicitly. This prevents an apparently local discard
-from silently destroying or unblocking work the user did not review.
+### Permanent server proofs
 
-Journal publication runs in a deferred constraint trigger at commit. Guarded mutations flush
-that trigger after all domain writes, before reading the authoritative receipt. This makes deletion
-tombstones visible inside the transaction. Resource versions advance immediately. The account
-head is acquired after domain work, avoiding the extra head/resource deadlock cycle. A transaction
-that starts later may commit first; its cursor is assigned first, so incremental readers cannot
-skip the earlier transaction when that transaction eventually commits. PostgreSQL defers these
-[constraint triggers until transaction end](https://www.postgresql.org/docs/17/sql-createtrigger.html).
-Database-only callbacks also have bounded whole-transaction retry for ordinary transient failures.
-Callbacks with external effects do not opt into replay.
+The server operation lock, version guard, domain mutation and permanent applied/cancelled proof
+share one transaction. The proof stores operation identity, normalized request hash and outcome
+version, without a response body. Reusing an identity with different input fails. Retrying cannot
+apply the operation again. There is no acknowledgement endpoint or receipt compaction lifecycle.
 
-Journal reads use durable page checkpoints and an explicit initial-inventory completion flag.
-A partial first inventory never implies complete offline availability. Body reads use bounded
-batches with per-resource failure results, and persist successful bodies together. Page and batch
-sizes are based on the recorded client benchmark in `docs/pr-evidence/incremental-sync/performance.md`.
-No total resource cap or record-type exclusion is applied.
+Normal success includes the authoritative body. Replay returns that body only if the original
+version is still current; otherwise it returns the application proof. A newer body cannot stand
+in for the original result. Descendant edits without exact local evidence retain their content
+and enter review. Cancelling an uncertain operation acquires the same operation lock. If application
+won, cancellation returns its proof instead of pretending to undo the mutation.
 
-An uncertain write does not block unrelated edits. Its input remains immutable, dependencies stay
-blocked, and retries use per-session exponential backoff with an explicit retry action. Acquiring
-the account writer lock still serializes tabs. Cancelling an uncertain write acquires the same
-server operation lock as submission and stores a durable cancellation marker. If submission won
-the race, cancellation returns the original receipt instead.
+Review captures exact operations and dependents. Keep uses the reviewed server version and a new
+operation identity. Discard refuses unreviewed descendants and resolves uncertain submission first.
+Published-note discard requires the actual loaded published body. Compound operations such as
+recursive deletion, note moves and skill import stay online because one parent ETag cannot guard
+all children. Historical restore, binary transfers, generation and security actions also stay online.
 
-After queue settlement and the received body commit atomically, a durable client acknowledgement
-allows the server to replace a receipt body with its original operation/version proof. The operation
-identity and request hash remain indefinitely. Old clients can still use the original endpoints;
-a replay of an already compacted operation returns proof and cannot reapply the write. A client
-that cannot read that response must upgrade. Missing local predecessor proof stages a conflict,
-retaining the original base and local content. A current server copy never substitutes for the
-original receipt, and refreshing conflict evidence never accepts a version on the user's behalf.
+### Account identity and damaged storage
 
-Storage readers quarantine malformed rows individually and preserve their original content for
-export. Damaged cache data resets the inventory generation; a stale tab cannot commit its old
-checkpoint across that recovery. Unknown write identities block submission rather than guessing
-at dependencies. Damaged import markers remain in place and prevent duplicate imports. The legacy
-database and version fence remain. Online startup replaces a corrupt bootstrap from the server.
-The public account hint renews halfway through its 30-day lifetime instead of on every request.
+A validated bootstrap retains deployment-dependent defaults and model metadata for offline startup.
+It contains no workspace page snapshots. A readable account-hint cookie must match before restore;
+the server sets it only after authenticating and clears it on invalidation/sign-in/sign-out.
+The hint is not a credential. Every server request still authenticates the session and account.
+Clearing the hint blocks offline reopening without deleting unsent work.
 
-### Local storage and execution ownership
+Malformed local storage blocks the account and leaves raw rows untouched. A separate export path
+uses lazily loaded dexie-export-import without normal startup. Confirmed account reset removes
+local records and unsent work, then downloads server data again. Other tabs must release their
+connections. No legacy migration, old-tab compatibility, granular quarantine or ancestry repair
+protocol is required for this unreleased feature.
 
-Dexie owns IndexedDB transactions and observation. The account repository reads cached records,
-queued intents, exact receipts, inventory checkpoints, and recovery state in one transaction.
-Settlement writes the authoritative body only once, together with its receipt and queue transition.
-The UI applies that combined projection before notifying readers. It does not infer acknowledgement
-from a disappeared queue entry or use a second cache write as a publication signal.
+### Dependencies
 
-Dexie live queries observe account-scoped primary-key ranges, including updates whose row count
-stays unchanged. Their notifications trigger the repository's combined read. Corruption repair runs
-outside the read-only live-query context, so it can quarantine damaged rows transactionally. The
-application no longer implements separate cache and outbox BroadcastChannel messages. Observation
-listeners and overlapping read publication are scoped by account.
-
-The existing native version-6 database upgrades in place to Dexie version 1 (native version 10).
-Store keys, queued operation identities and order, exact receipts, recovery evidence, and legacy
-import markers remain intact. A blocked upgrade asks the user to close older tabs. Failed upgrades
-roll back. Queue sequence allocation remains unchanged; a storage wrapper change does not require
-rekeying pending edits.
-
-One account runtime owns wake-ups for independent journal, download, and submission lanes. A request
-arriving during a lane's work remains pending. Successful mutation settlement requests another
-journal pull, including changes to secondary resources absent from the primary receipt. Lane
-failures receive retry deadlines even before an operation is selected. The queue retains
-operation-specific backoff; a future deadline for one edit does not delay a newly queued independent
-edit. Successful retries clear their own errors and consume obsolete deadlines.
-
-Foreground reads, collection preparation, and warming use one deduplicating batch download path.
-Durable storage records admission, target versions, retained bodies and tombstones. Live request
-promises and queued/fetching/failed attempt state belong to the current runtime. All demand shares
-the measured body capacity, and failures remain visible without persisting a claim that a network
-request is still running after reload.
-
-Receipt acknowledgement uses a single conditional PostgreSQL UPDATE, whose row lock and predicate
-make repeated compaction idempotent. Submission takes the operation lock and checks immutable proof
-before locking a resource. A replay therefore needs no resource lock. New mutations still use the
-resource lock, ETag guard, domain transaction, and receipt; an upsert cannot replace those conflict
-checks.
-
-We considered complete replication engines. Electric leaves write-path synchronization to the
-application. PowerSync and TanStack's offline transaction package require adaptation for independent
-pending work and this app's follower behavior. Replicache and RxDB would still need the application's
-explicit ancestry and conflict-review records. Dexie removes storage and observation plumbing while
-retaining the existing SvelteKit/PostgreSQL deployment and domain rules. See
-[Dexie observation](<https://dexie.org/docs/liveQuery()>),
-[Electric writes](https://electric.ax/docs/sync/guides/writes),
-[PowerSync consistency](https://docs.powersync.com/architecture/consistency),
-[TanStack offline transactions](https://github.com/TanStack/db/tree/main/packages/offline-transactions),
-[Replicache reconciliation](https://doc.replicache.dev/concepts/how-it-works), and
-[RxDB replication](https://rxdb.info/replication.html).
+Dexie supplies transaction and live-query mechanics; dexie-export-import supplies raw chunked
+export. Existing Svelte state, PostgreSQL constraints and Web Locks cover the remaining coordination.
+The selected design needs atomic multi-store updates, explicit version conflicts and independent
+follower progress. Adding a replication service or another client state framework would require
+adapting those semantics and another operational boundary. No additional framework is introduced.
 
 ## Consequences
 
-- Subsequent synchronization transfers changed identities and content only.
-- Normalized records prevent a task change from requiring another download of an unchanged note.
-- The first download and browser storage use grow with the current workspace.
-- First-ever startup needs JavaScript and a network connection before workspace data can appear.
-- Receipt bodies compact after acknowledgement, but small operation proof rows grow with the number
-  of accepted or cancelled operations. There is no retention expiry that could allow duplicate writes.
-- Pending writes require durable receipts and visible conflict resolution across editable objects.
-- Writes in one account serialize their journal publication at commit. Domain work does not
-  hold the head lock while waiting for another resource row. Explicitly declared database-only transactions retry deadlock or
-  serialization failures after rollback, at most three times. Sync uses that mode when embedding
-  work is deferred. Upload promotion and inline embedding callbacks are not replayed automatically. Other accounts do not share this head lock.
-- Offline availability is limited by completed downloads and the browser's available storage.
-- AI runs, generated exports, uploads, credentials, and security changes remain server operations.
-- The first pull includes the compact journal's retained tombstones as well as live identities.
-  Journal retention grows with distinct resource identities, not the number of edits.
-
-The first draft used a complete ID/ETag inventory on every sync. The compact journal replaces
-that choice because it communicates explicit deletion and avoids retransmitting unchanged
-identities. The generic client remains an ordinary module under `client/sync`; server code uses
-the existing repositories, services, controllers, and factories. No architectural layer is added.
-
-## Evidence
-
-- ADR 0007 governs controller orchestration; ADR 0009 governs project archive visibility.
-- ADR 0010 defines document conflict and retry behavior; ADR 0037 governs parsed storage boundaries.
-- `client/sync/legacy-notes.ts` preserves the historical base/local/server format during the one-time
-  migration. The old note coordinator, repositories, transport, and sync inventory API are removed.
-- The note route now opens through `stores/workspace/resources.svelte.ts`; its former server loader
-  required a live view before local drafts could load.
-- `src/service-worker.ts` serves the generated SPA fallback during offline workspace navigation and removes the old private page snapshots. All private page loaders now open from the shared workspace records.
-- `docs/plans/incremental-sync-plan.md` tracks implementation and verification; acceptance of this decision
-  separates implementation coverage from final validation results.
+- Subsequent sync transfers changed records only. There is one durable body/version representation.
+- Initial transfer and browser storage grow with the workspace. Cached startup need not repeat it.
+- Small server operation proofs grow with accepted/cancelled operations. They have no guessed expiry.
+- Journal retention grows with distinct resource identities, including tombstones. Pruning requires
+  an explicit cursor-expiry/reset protocol.
+- Journal publication serializes per account at commit; unrelated accounts do not share the lock.
+  Declared database-only transactions may retry transient failures after rollback. Callbacks with
+  external effects do not opt into replay.
+- Browser storage loss cannot be eliminated. Raw export and confirmed reset replace complex partial
+  repair, while valid unsent edits, exact ancestry and cancellation safety remain protected.
+- The generic mechanism stays under the existing client, model, repository, service and controller
+  layers. No new architecture layer or client-side event-sourcing system is added.

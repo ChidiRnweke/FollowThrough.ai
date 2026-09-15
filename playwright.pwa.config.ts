@@ -7,7 +7,14 @@ export default defineConfig({
 	workers: 1,
 	fullyParallel: false,
 	testMatch: '**/pwa.e2e.{ts,js}',
-	use: { baseURL: 'http://127.0.0.1:4173', storageState: 'tests/.auth/state.json' },
+	use: {
+		// The separate headless shell segfaults during context creation on CI.
+		// Use regular Chromium's headless mode for the installed-app scenarios.
+		channel: 'chromium',
+		baseURL: 'http://127.0.0.1:4173',
+		storageState: 'tests/.auth/state.json',
+		trace: 'retain-on-failure'
+	},
 	webServer: {
 		command: 'pnpm build:web && pnpm preview --host 127.0.0.1 --port 4173 --strictPort',
 		env: testEnv,

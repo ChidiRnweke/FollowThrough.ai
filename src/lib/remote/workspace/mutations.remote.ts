@@ -17,20 +17,6 @@ export const cancelWorkspaceMutation = command(
 	}
 );
 
-export const acknowledgeWorkspaceMutation = command(
-	z.object({
-		accountId: z.string().uuid(),
-		operationId: z.string().uuid(),
-		protocol: z.literal(2)
-	}),
-	async ({ accountId, operationId }) => {
-		const actor = requestActor();
-		if (actor.userId !== accountId) error(403, 'The synchronization account changed');
-		await AppFactory.controllers().workspace().acknowledgeMutation(actor, operationId);
-		return { kind: 'acknowledged' as const };
-	}
-);
-
 export const pushWorkspaceMutation = command(
 	workspaceMutationRequestSchema.extend({ accountId: z.string().uuid() }),
 	async (input) => {
@@ -61,7 +47,6 @@ export const pushWorkspaceMutation = command(
 			case 'saveDiagram':
 			case 'renameDiagram':
 			case 'publishDiagram':
-			case 'restoreDiagramRevision':
 			case 'archiveDiagram':
 			case 'restoreDiagram':
 			case 'deleteDiagram':
@@ -71,14 +56,12 @@ export const pushWorkspaceMutation = command(
 			case 'archiveProject':
 			case 'projectNumbering':
 			case 'createFolder':
-			case 'moveNote':
 				return controllers.projects().synchronize(actor, { ...mutation, command });
 			case 'createTodo':
 			case 'updateTodo':
 			case 'deleteTodo':
 				return controllers.todos().synchronize(actor, { ...mutation, command });
 			case 'updateSkill':
-			case 'createSkill':
 				return controllers.skills().synchronize(actor, { ...mutation, command });
 			case 'createNote':
 			case 'renameNote':
@@ -87,7 +70,6 @@ export const pushWorkspaceMutation = command(
 			case 'restoreNote':
 			case 'publishNote':
 			case 'discardNoteDraft':
-			case 'deleteNote':
 			case 'noteNumbering':
 				return controllers.notes().synchronize(actor, { ...mutation, command });
 			default:

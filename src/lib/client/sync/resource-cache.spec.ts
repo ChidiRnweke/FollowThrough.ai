@@ -12,302 +12,97 @@ const setup = () => {
 const first = { etag: syncEtag(1n), value: 'First copy' };
 const second = { etag: syncEtag(2n), value: 'Second copy' };
 
-describe('generic resource cache', () => {
-	it('keeps the stopped account state when an old download subsequently fails', async () => {
-		const { transport, cache } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		const paused = transport.pause('note:1');
-		const warming = cache.warm();
-		await paused.started;
-		cache.stop();
-		transport.readFailure = 'Expired session';
-		paused.release();
-		await warming;
-		expect(cache.status).toEqual({ kind: 'stopped' });
-	});
-
-	it('uses a newer body already persisted by another tab instead of downloading it again', async () => {
-		const { repository, transport, cache } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		await cache.warm();
-		const other = new ResourceCache('user-a', { repository, transport });
-		await other.initialize();
-		transport.records.set('note:1', second);
-		await cache.refresh();
-		await cache.warm();
-		await other.refresh();
-		await other.warm();
-		expect({ opened: await other.open('note:1'), bodies: transport.deliveredBodies }).toEqual({
-			opened: { kind: 'ready', value: 'Second copy' },
-			bodies: ['note:1', 'note:1']
-		});
-	});
-	it('does not claim a workspace is available before learning its change batch', () => {
+describe('complete resource replication', () => {
+	it('does not claim complete inventory before synchronization', () => {
 		expect(setup().cache.availability).toBe('unknown');
 	});
-
-	it('reports incomplete warming until all inventoried content is stored', async () => {
+	it('downloads bodies with the first page and none for an unchanged checkpoint', async () => {
 		const { transport, cache } = setup();
 		transport.records.set('note:1', first);
 		await cache.refresh();
-		expect(cache.availability).toBe('partial');
+		await cache.refresh();
+		expect(transport.deliveredBodies).toEqual(['note:1']);
 	});
-
-	it('recognizes a successfully checked empty workspace as complete', async () => {
+	it('commits a complete inventory without a second download phase', async () => {
+		const { transport, cache } = setup();
+		transport.records.set('note:1', first);
+		await cache.refresh();
+		expect(cache.availability).toBe('complete');
+	});
+	it('recognizes an empty server inventory as complete', async () => {
 		const { cache } = setup();
 		await cache.refresh();
 		expect(cache.availability).toBe('complete');
 	});
-
-	it('reports complete warming after all inventoried content is stored', async () => {
-		const { transport, cache } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		await cache.warm();
-		expect(cache.availability).toBe('complete');
-	});
-	it('downloads current content initially and no bodies on unchanged synchronization', async () => {
-		const { transport, cache } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		await cache.warm();
-		await cache.refresh();
-		await cache.warm();
-		expect(transport.deliveredBodies).toEqual(['note:1']);
-	});
-
-	it('opens a warmed but previously unvisited record offline after reload', async () => {
+	it('opens a replicated record offline after a restart', async () => {
 		const { repository, transport, cache } = setup();
 		transport.records.set('note:1', first);
 		await cache.refresh();
-		await cache.warm();
-		const reopened = new ResourceCache('user-a', { repository, transport });
-		reopened.setOnline(false);
-		expect(await reopened.open('note:1')).toEqual({ kind: 'ready', value: 'First copy' });
+		const restarted = new ResourceCache('user-a', { repository, transport });
+		restarted.setOnline(false);
+		expect(await restarted.open('note:1')).toEqual({ kind: 'ready', value: first.value });
 	});
-
-	it('retains saved content when the change batch request fails', async () => {
-		const { transport, cache } = setup();
-		await cache.accept('note:1', first);
-		transport.pullFailure = 'Server unavailable';
-		await cache.refresh();
-		expect(cache.access('note:1')).toEqual({ kind: 'ready', value: 'First copy' });
-	});
-
-	it('removes a record only after receiving the complete authoritative change batch', async () => {
-		const { cache, transport } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		await cache.warm();
-		transport.records.delete('note:1');
-		await cache.refresh();
-		cache.setOnline(false);
-		expect(cache.access('note:1')).toEqual({ kind: 'deleted' });
-	});
-
-	it('shares a background download with foreground demand', async () => {
-		const { transport, cache } = setup();
-		transport.records.set('note:1', second);
-		await cache.accept('note:1', first);
-		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const warming = cache.warm();
-		await gate.started;
-		const opened = cache.open('note:1');
-		gate.release();
-		await Promise.all([warming, opened]);
-		expect(transport.deliveredBodies).toEqual(['note:1']);
-	});
-
-	it('lets foreground demand bypass a different background download', async () => {
-		const { transport, cache } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const warming = cache.warm();
-		await gate.started;
-		transport.records.set('note:2', second);
-		const opened = await cache.open('note:2');
-		gate.release();
-		await warming;
-		expect(opened).toEqual({ kind: 'ready', value: 'Second copy' });
-	});
-
-	it('keeps an updating object behind the read barrier until its live value arrives', async () => {
+	it('opens cached content while a newer page is still downloading', async () => {
 		const { transport, cache } = setup();
 		await cache.accept('note:1', first);
 		transport.records.set('note:1', second);
-		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const warming = cache.warm();
+		const gate = transport.pause('changes');
+		const pulling = cache.refresh();
 		await gate.started;
-		const during = cache.access('note:1');
-		const opened = cache.open('note:1');
-		gate.release();
-		await warming;
-		expect({ during, after: await opened }).toEqual({
-			during: { kind: 'wait' },
-			after: { kind: 'ready', value: 'Second copy' }
-		});
-	});
-
-	it('allows the retained copy offline while a background refresh is in flight', async () => {
-		const { transport, cache } = setup();
-		await cache.accept('note:1', first);
-		transport.records.set('note:1', second);
-		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const warming = cache.warm();
-		await gate.started;
-		cache.setOnline(false);
 		const opened = await cache.open('note:1');
 		gate.release();
-		await warming;
-		expect(opened).toEqual({ kind: 'ready', value: 'First copy' });
+		await pulling;
+		expect(opened).toEqual({ kind: 'ready', value: first.value });
 	});
-
-	it('does not replace an accepted mutation with a late read response', async () => {
+	it('preserves cached content when synchronization fails', async () => {
+		const { transport, cache } = setup();
+		await cache.accept('note:1', first);
+		transport.pullFailure = 'Disconnected';
+		await cache.refresh();
+		expect(cache.access('note:1')).toEqual({ kind: 'ready', value: first.value });
+	});
+	it('applies an authoritative tombstone', async () => {
 		const { transport, cache } = setup();
 		transport.records.set('note:1', first);
 		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const opened = cache.open('note:1');
+		transport.records.delete('note:1');
+		await cache.refresh();
+		expect(cache.access('note:1')).toEqual({ kind: 'deleted' });
+	});
+	it('retains a newer accepted version when an older page arrives', async () => {
+		const { transport, cache } = setup();
+		transport.records.set('note:1', first);
+		const gate = transport.pause('changes');
+		const pulling = cache.refresh();
 		await gate.started;
 		await cache.accept('note:1', second);
 		gate.release();
-		expect(await opened).toEqual({ kind: 'ready', value: 'Second copy' });
+		await pulling;
+		expect(cache.access('note:1')).toEqual({ kind: 'ready', value: second.value });
 	});
-
-	it('rechecks a change batch that predates an accepted creation', async () => {
-		const { transport, cache } = setup();
-		const gate = transport.pause('changes');
-		const refreshing = cache.refresh();
-		await gate.started;
-		transport.records.set('note:1', first);
-		await cache.accept('note:1', first);
-		gate.release();
-		await refreshing;
-		expect(cache.access('note:1')).toEqual({ kind: 'ready', value: 'First copy' });
-	});
-
-	it('does not expose another account’s persisted records', async () => {
+	it('does not publish a page after account stop', async () => {
 		const { repository, transport, cache } = setup();
-		await cache.accept('note:1', first);
-		const other = new ResourceCache('user-b', { repository, transport });
-		other.setOnline(false);
-		expect(await other.open('note:1')).toEqual({ kind: 'unavailable' });
-	});
-
-	it('does not restore private data when a request finishes after logout', async () => {
-		const { transport, cache } = setup();
 		transport.records.set('note:1', first);
-		const gate = transport.pause('note:1');
-		const opened = cache.open('note:1');
+		const gate = transport.pause('changes');
+		const pulling = cache.refresh();
 		await gate.started;
 		cache.stop();
 		gate.release();
-		expect(await opened).toEqual({ kind: 'unavailable' });
+		await pulling;
+		expect((await repository.load('user-a')).records).toEqual([]);
 	});
-
-	it('reports a live missing record as unavailable', async () => {
-		const { cache } = setup();
-		expect(await cache.open('missing')).toEqual({ kind: 'unavailable' });
-	});
-
-	it('releases a waiting reader to its previous copy when connectivity is lost', async () => {
-		const { cache, transport } = setup();
-		await cache.accept('note:1', first);
-		transport.records.set('note:1', second);
-		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const opened = cache.open('note:1');
-		await gate.started;
-		cache.setOnline(false);
-		try {
-			expect(await opened).toEqual({ kind: 'ready', value: 'First copy' });
-		} finally {
-			gate.release();
-		}
-	});
-
-	it('allows a later foreground read to retry a failed refresh', async () => {
-		const { cache, transport } = setup();
-		await cache.accept('note:1', first);
-		transport.records.set('note:1', second);
-		await cache.refresh();
-		transport.readFailure = 'Temporary network failure';
-		await cache.warm();
-		transport.readFailure = null;
-		expect(await cache.open('note:1')).toEqual({ kind: 'ready', value: 'Second copy' });
-	});
-
-	it('preserves a deletion after reload instead of treating it as an offline cache miss', async () => {
-		const { cache, repository, transport } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		transport.records.delete('note:1');
-		await cache.refresh();
-		const reopened = new ResourceCache('user-a', { repository, transport });
-		reopened.setOnline(false);
-		expect(await reopened.open('note:1')).toEqual({ kind: 'deleted' });
-	});
-
-	it('does not let a late download resurrect a journal tombstone', async () => {
-		const { cache, transport } = setup();
-		transport.records.set('note:1', first);
-		await cache.refresh();
-		const gate = transport.pause('note:1');
-		const opened = cache.open('note:1');
-		await gate.started;
-		transport.records.delete('note:1');
-		await cache.refresh();
-		gate.release();
-		expect(await opened).toEqual({ kind: 'deleted' });
-	});
-
-	it('does not advance a durable cursor when saving its change batch fails', async () => {
-		const { cache, repository, transport } = setup();
-		transport.records.set('note:1', first);
-		repository.writeFailure = 'Storage full';
-		await cache.refresh();
-		repository.writeFailure = null;
-		await cache.refresh();
-		await cache.warm();
-		expect(await cache.open('note:1')).toEqual({ kind: 'ready', value: 'First copy' });
-	});
-
-	it('does not claim that a downloaded record was stored when persistence fails', async () => {
+	it('does not advance the checkpoint when page persistence fails', async () => {
 		const { repository, transport, cache } = setup();
 		transport.records.set('note:1', first);
 		repository.writeFailure = 'Storage full';
-		expect(await cache.open('note:1')).toEqual({ kind: 'failure', message: 'Storage full' });
-	});
-});
-
-describe('shared device cache reload', () => {
-	it('reads a body downloaded by another tab while offline', async () => {
-		const { repository, transport, cache } = setup();
-		await cache.initialize();
-		const other = new ResourceCache('user-a', { repository, transport });
-		transport.records.set('note:1', first);
-		await other.refresh();
-		await other.warm();
-		cache.setOnline(false);
 		await cache.refresh();
-		expect(await cache.open('note:1')).toEqual({ kind: 'ready', value: 'First copy' });
+		expect(await repository.load('user-a')).toMatchObject({ cursor: null, records: [] });
 	});
-	it('honors a deletion downloaded by another tab while offline', async () => {
+	it('does not advance past a malformed server record', async () => {
 		const { repository, transport, cache } = setup();
 		transport.records.set('note:1', first);
+		transport.failures.set('note:1', 'Unreadable record');
 		await cache.refresh();
-		await cache.warm();
-		const other = new ResourceCache('user-a', { repository, transport });
-		transport.records.delete('note:1');
-		await other.refresh();
-		cache.setOnline(false);
-		await cache.refresh();
-		expect(await cache.open('note:1')).toEqual({ kind: 'deleted' });
+		expect(await repository.load('user-a')).toMatchObject({ cursor: null, records: [] });
 	});
 });

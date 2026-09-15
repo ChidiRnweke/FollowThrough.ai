@@ -33,7 +33,7 @@
 	let unavailable = $state(false);
 	$effect(() => {
 		if (!resources) return;
-		void resources.prepare(['memory_entries']).catch(() => {
+		void resources.prepare().catch(() => {
 			unavailable = true;
 			return { kind: 'failure', message: 'Memory is unavailable' };
 		});

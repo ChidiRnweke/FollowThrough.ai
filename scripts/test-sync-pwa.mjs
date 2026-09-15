@@ -29,7 +29,15 @@ try {
 
 	const child = spawn(
 		'pnpm',
-		['exec', 'playwright', 'test', '-c', 'playwright.pwa.config.ts', '--max-failures=1'],
+		[
+			'exec',
+			'playwright',
+			'test',
+			'-c',
+			'playwright.pwa.config.ts',
+			'--max-failures=1',
+			...process.argv.slice(2)
+		],
 		{
 			stdio: 'inherit',
 			env: {

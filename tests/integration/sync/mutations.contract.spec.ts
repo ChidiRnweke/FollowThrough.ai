@@ -233,7 +233,16 @@ it('matches cancellation to normalized input after an applied response is lost',
 		operationId: input.operationId,
 		request: JSON.stringify(input)
 	});
-	expect(recovered).toEqual(applied);
+	if (applied.kind !== 'applied' || applied.receipt.resource.kind !== 'found')
+		throw new Error('Expected applied note');
+	expect(recovered).toEqual({
+		kind: 'proven',
+		proof: {
+			operationId: input.operationId,
+			resourceKind: 'found',
+			etag: applied.receipt.resource.snapshot.etag
+		}
+	});
 });
 
 it('recovers a completed write while another transaction locks its resource', async () => {

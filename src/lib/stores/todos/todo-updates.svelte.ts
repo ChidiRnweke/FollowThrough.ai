@@ -1,8 +1,7 @@
 import { SvelteSet } from 'svelte/reactivity';
 import type { ProjectId } from '$lib/models/projects';
-import type { Todo, TodoId, TodoStatus, UpdateTodoInput } from '$lib/models/todos';
-import { todoWrite } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import type { TodoId, TodoStatus, UpdateTodoInput } from '$lib/models/todos';
+
 import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import { rightPanel } from '../shell/right-panel.svelte';
@@ -30,9 +29,7 @@ class TodoUpdatesStore {
 		}
 		this.pendingIds.add(todo.id);
 		try {
-			const result = await editor.stage(
-				todoWrite(todo, patch, new Date().toISOString() as Todo['updatedAt'])
-			);
+			const result = await editor.stage({ kind: 'updateTodo', todoId: todo.id, ...patch });
 			this.lastError = result.kind === 'failure' ? result.message : null;
 			return result.kind === 'saved';
 		} finally {
@@ -50,12 +47,7 @@ class TodoUpdatesStore {
 	async remove(todoId: TodoId): Promise<boolean> {
 		const editor = this.editor(todoId);
 		await editor.read();
-		const result = await editor.stage({
-			command: { kind: 'deleteTodo', todoId },
-			local: null,
-			coalesce: null,
-			references: []
-		});
+		const result = await editor.stage({ kind: 'deleteTodo', todoId });
 		this.lastError = result.kind === 'failure' ? result.message : null;
 		if (result.kind === 'saved' && rightPanel.todoId === todoId) rightPanel.close();
 		return result.kind === 'saved';
@@ -73,34 +65,13 @@ class TodoUpdatesStore {
 				projectId ?? session.shell.projects.find((project) => project.role === 'inbox')?.id;
 			if (!target) throw new Error('The inbox is not available on this device');
 			const id = crypto.randomUUID() as TodoId;
-			const timestamp = new Date().toISOString() as Todo['updatedAt'];
-			const todo: Todo = {
+			await session.resources.create({
+				kind: 'createTodo',
 				id,
-				userId: session.shell.user.id,
 				projectId: target,
-				title: title.trim(),
+				title,
 				status,
-				responsibility: 'mine',
-				createdAt: timestamp,
-				updatedAt: timestamp,
-				...(status === 'done' ? { completedAt: timestamp } : {})
-			};
-			await session.resources.append({
-				operationId: crypto.randomUUID(),
-				key: workspaceResourceKey({ type: 'todos', id: [id] }),
-				command: {
-					kind: 'createTodo',
-					id,
-					projectId: target,
-					title,
-					status,
-					responsibility: 'mine'
-				},
-				base: null,
-				basedOn: null,
-				local: { type: 'todos', value: todo },
-				coalesce: null,
-				references: [workspaceResourceKey({ type: 'projects', id: [target] })]
+				responsibility: 'mine'
 			});
 			return true;
 			// audit-allow: silent-catch — the creation form retains its input on false and displays lastError.

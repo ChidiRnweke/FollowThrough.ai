@@ -21,23 +21,6 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 			outcome: { kind: 'cancelled' }
 		});
 	}
-	async compact(actor: ActorContext, operationId: string): Promise<void> {
-		const key = JSON.stringify([actor.userId, operationId]);
-		const stored = this.receipts.get(key);
-		if (stored?.outcome.kind !== 'receipt') return;
-		const resource = stored.outcome.receipt.resource;
-		this.receipts.set(key, {
-			request: stored.request,
-			outcome: {
-				kind: 'compacted',
-				proof: {
-					operationId,
-					resourceKind: resource.kind,
-					etag: resource.kind === 'found' ? resource.snapshot.etag : resource.etag
-				}
-			}
-		});
-	}
 	async find(actor: ActorContext, operationId: string, request: string): Promise<ReceiptLookup> {
 		const stored = this.receipts.get(JSON.stringify([actor.userId, operationId]));
 		return !stored
@@ -50,7 +33,17 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 		if (this.writeFailure) throw new Error(this.writeFailure);
 		this.receipts.set(JSON.stringify([actor.userId, receipt.operationId]), {
 			request,
-			outcome: { kind: 'receipt', receipt }
+			outcome: {
+				kind: 'proven',
+				proof: {
+					operationId: receipt.operationId,
+					resourceKind: receipt.resource.kind,
+					etag:
+						receipt.resource.kind === 'found'
+							? receipt.resource.snapshot.etag
+							: receipt.resource.etag
+				}
+			}
 		});
 	}
 	snapshot() {
@@ -64,14 +57,6 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 /** Note revision changes in this fake supply monotonically increasing test versions. */
 export class InMemoryWorkspaceNoteReads implements SyncObjectReader {
 	constructor(private readonly content: InMemoryNoteContent) {}
-	readMany(actor: ActorContext, requests: readonly { identity: WorkspaceResourceIdentity }[]) {
-		return Promise.all(
-			requests.map(async ({ identity }) => ({
-				key: JSON.stringify([identity.type, ...identity.id]),
-				result: await this.read(actor, identity)
-			}))
-		);
-	}
 	async read(actor: ActorContext, identity: WorkspaceResourceIdentity) {
 		const note = this.content.notes.find(
 			(note) =>

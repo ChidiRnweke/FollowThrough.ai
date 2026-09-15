@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount, untrack } from 'svelte';
+	import { diagramEtag } from '$lib/models/diagrams';
 	import type {
-		Diagram,
 		DiagramId,
 		DiagramRevisionId,
 		DiagramRevisionSummary,
@@ -9,7 +10,7 @@
 	} from '$lib/models/diagrams';
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
 	import { workspaceResourceKey } from '$lib/models/workspace-sync';
-	import type { DateTime } from '$lib/models/workspace';
+
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -17,7 +18,11 @@
 	import { FtClose as X } from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { userFacingMessage } from '$lib/errors';
-	import { listDiagramRevisions, getDiagramRevision } from '$lib/remote/diagrams/diagrams.remote';
+	import {
+		listDiagramRevisions,
+		getDiagramRevision,
+		restoreDiagramRevision
+	} from '$lib/remote/diagrams/diagrams.remote';
 	import type { DrawioExport } from '$lib/client/diagrams/drawio/embed-adapter';
 	import DrawioEmbed, { type DrawioControl, type DrawioStatus } from '../drawio-embed.svelte';
 	import DiagramPreview from '../diagram-preview.svelte';
@@ -32,7 +37,7 @@
 	const resources = session.resources;
 	const draft = untrack(() => resources.draft({ type: 'diagrams', id: [diagramId] }));
 	let opened = $state(false);
-	let displayedVersion = $state<string | null>(null);
+	const editorSession = new EditorSession(() => resources.active);
 	let control = $state<DrawioControl>();
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
 	let renaming = $state(false);
@@ -81,13 +86,12 @@
 	);
 
 	async function load(): Promise<void> {
-		const result = await draft.read();
+		const result = await draft.read(editorSession.checkpoint());
 		opened = result.kind === 'ready';
-		if (opened)
-			displayedVersion = resources.snapshot({ type: 'diagrams', id: [diagramId] })?.etag ?? null;
 	}
 	onMount(() => {
 		void load();
+		return () => editorSession.close();
 	});
 
 	$effect(() => {
@@ -104,7 +108,7 @@
 			!opened ||
 			!control ||
 			!snapshot ||
-			snapshot.etag === displayedVersion ||
+			snapshot.etag === draft.observedEtag ||
 			draft.status !== 'synced' ||
 			editor.modified ||
 			busy ||
@@ -117,7 +121,7 @@
 			const changedSource = draft.value?.source.trim() !== value.value.source.trim();
 			draft.capture();
 			if (changedSource) control?.replace(value.value.source);
-			displayedVersion = snapshot.etag;
+			editorSession.accept();
 		});
 	});
 
@@ -156,17 +160,8 @@
 			throw new Error('This diagram is not available for editing');
 		return value;
 	}
-	async function stage(
-		command: DiagramMutationRequest['command'],
-		value: Diagram,
-		coalesce: string | null = null
-	): Promise<void> {
-		const result = await draft.stage({
-			command,
-			local: { type: 'diagrams', value },
-			coalesce,
-			references: []
-		});
+	async function stage(command: DiagramMutationRequest['command']): Promise<void> {
+		const result = await draft.stage(command);
 		if (result.kind === 'failure') throw new Error(result.message);
 		reviewSource = null;
 	}
@@ -174,13 +169,7 @@
 		renaming = true;
 		try {
 			if (!renameDraft?.value) throw new Error('Open the title before changing it');
-			const value = renameDraft.value;
-			const result = await renameDraft.stage({
-				command: { kind: 'renameDiagram', diagramId, title },
-				local: { type: 'diagrams', value: { ...value, title } },
-				coalesce: null,
-				references: []
-			});
+			const result = await renameDraft.stage({ kind: 'renameDiagram', diagramId, title });
 			if (result.kind === 'failure') throw new Error(result.message);
 			renameDraft = null;
 		} finally {
@@ -188,33 +177,13 @@
 		}
 	}
 	async function autosave(source: string): Promise<void> {
-		const value = editable();
-		await stage(
-			{ kind: 'saveDiagram', diagramId, source },
-			{
-				...value,
-				source,
-				currentRevision: value.currentRevision + (value.source === source ? 0 : 1)
-			},
-			'document'
-		);
+		await stage({ kind: 'saveDiagram', diagramId, source });
 	}
 	async function publish(output: DrawioExport): Promise<void> {
-		const value = editable();
-		const revision = value.currentRevision + (value.source === output.xml ? 0 : 1);
-		await stage(
-			{ kind: 'publishDiagram', diagramId, source: output.xml, renderedSvg: output.svg },
-			{
-				...value,
-				source: output.xml,
-				renderedSvg: output.svg,
-				currentRevision: revision,
-				publishedRevision: revision,
-				publishedAt: new Date().toISOString() as DateTime
-			}
-		);
+		await stage({ kind: 'publishDiagram', diagramId, source: output.xml, renderedSvg: output.svg });
 		toast.success('Publication saved on this device');
 	}
+
 	async function retry(): Promise<void> {
 		await draft.retry();
 		if (draft.status === 'error' || draft.status === 'conflict')
@@ -239,24 +208,31 @@
 		restoring = true;
 		try {
 			const value = editable();
-			await stage(
-				{ kind: 'restoreDiagramRevision', diagramId, revisionId },
-				{
-					...value,
-					source: revision.source,
-					title: revision.title,
-					searchableText: revision.searchableText,
-					currentRevision: value.currentRevision + 1
-				}
-			);
-			control?.replace(revision.source);
+			if (!resources.online || draft.status !== 'synced' || editor.modified)
+				throw new Error('Save the diagram and connect before restoring a version');
+			const isCurrent = editorSession.checkpoint();
+			const result = await restoreDiagramRevision({
+				diagramId,
+				revisionId,
+				baseEtag: diagramEtag(value)
+			});
+			if (result.outcome !== 'saved')
+				throw new Error('The diagram changed. Review it before restoring a version');
+			await resources.synchronize();
+			const opened = await draft.read(() => isCurrent() && !editor.modified);
+			if (opened.kind === 'ready') control?.replace(opened.value.source);
+			else if (opened.kind === 'superseded')
+				toast.info('Your later edits are retained for review.');
+			else throw new Error('The restored diagram could not be opened');
 			historyOpen = false;
 		} finally {
 			restoring = false;
 		}
 	}
 	async function useRemote(): Promise<void> {
-		const result = await draft.discard();
+		const isCurrent = editorSession.checkpoint();
+		const result = await draft.discard(isCurrent);
+		if (result.kind === 'superseded') return;
 		if (result.kind === 'ready') control?.replace(result.value.source);
 		else if (result.kind !== 'deleted') throw new Error('The server copy could not be opened');
 		conflictOpen = false;
@@ -373,7 +349,10 @@
 				onautosave={autosave}
 				onreview={(output) => (reviewSource = output.xml)}
 				onmodifiedchange={(modified) => {
-					if (modified) reviewSource = null;
+					if (modified) {
+						editorSession.changed();
+						reviewSource = null;
+					}
 				}}
 				oncontrol={(value) => (control = value)}
 				onstatus={(value) => (editor = value)}

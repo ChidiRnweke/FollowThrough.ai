@@ -10,7 +10,7 @@ import {
 } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-import { noteWrite } from '$lib/models/workspace-mutations';
+import { noteCommand } from '$lib/models/workspace-mutations';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -113,7 +113,7 @@ export class GlobalSearchStore {
 			for (const { draft, note, result } of edits) {
 				if (!result) continue;
 				const saved = await draft.stage(
-					noteWrite({ ...note, document: result.document, plainText: result.plainText })
+					noteCommand({ ...note, document: result.document, plainText: result.plainText })
 				);
 				if (saved.kind === 'failure') throw new Error(saved.message);
 				replacedNotes += 1;

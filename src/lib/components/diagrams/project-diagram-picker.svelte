@@ -29,7 +29,7 @@
 	let failure = $state<string | null>(null);
 	async function prepare(): Promise<void | { kind: 'failure' }> {
 		try {
-			await resources.prepare(['diagrams']);
+			await resources.prepare();
 			ready = true;
 			failure = null;
 		} catch (error) {

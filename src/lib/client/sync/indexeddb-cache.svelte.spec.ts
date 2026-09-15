@@ -1,5 +1,5 @@
 import { cacheRepositoryContract } from '$lib/testing/sync/contracts/cache-contract';
-import { initialCacheGeneration } from '$lib/models/sync';
+import { WorkspaceDatabase } from './database';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
@@ -12,19 +12,17 @@ import { IndexedDbSyncCache } from './indexeddb-cache';
 
 const databases: string[] = [];
 const openRepositories: IndexedDbSyncCache<string>[] = [];
-const setup = (name = `workspace-sync-test-${crypto.randomUUID()}`) => {
-	if (!databases.includes(name)) databases.push(name);
-	const repository = new IndexedDbSyncCache(z.string(), name);
+const setup = (name = `workspace-sync-test-${crypto.randomUUID()}`, accountId = 'user-a') => {
+	const database = new WorkspaceDatabase(accountId, name);
+	if (!databases.includes(database.name)) databases.push(database.name);
+	const repository = new IndexedDbSyncCache(z.string(), database);
 	openRepositories.push(repository);
 	return { name, repository };
 };
 
 const entry: ResourceState<string> = {
 	kind: 'present',
-	cache: {
-		kind: 'cached',
-		snapshot: { etag: syncEtag(1n), value: 'My note' }
-	}
+	snapshot: { etag: syncEtag(1n), value: 'My note' }
 };
 
 afterEach(async () => {
@@ -44,7 +42,7 @@ describe('durable workspace cache', () => {
 		const other = setup(name).repository;
 		const newer: ResourceState<string> = {
 			kind: 'present',
-			cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Newer' } }
+			snapshot: { etag: syncEtag(2n), value: 'Newer' }
 		};
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry: newer }], remove: [] });
 		await other.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
@@ -71,11 +69,11 @@ describe('durable workspace cache', () => {
 		await repository.commit('user-a', {
 			put: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			remove: [],
-			cursor: initialSyncCursor
+			cursor: initialSyncCursor,
+			inventoryComplete: true
 		});
 		await repository.close();
 		expect(await setup(name).repository.load('user-a')).toEqual({
-			generation: initialCacheGeneration,
 			inventoryComplete: true,
 			records: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			cursor: initialSyncCursor
@@ -86,7 +84,6 @@ describe('durable workspace cache', () => {
 		expect(await repository.load('user-a')).toEqual({
 			records: [],
 			cursor: null,
-			generation: initialCacheGeneration,
 			inventoryComplete: false
 		});
 	});
@@ -94,9 +91,13 @@ describe('durable workspace cache', () => {
 	it('persists the complete cursor together with its cache entries', async () => {
 		const { repository } = setup();
 		const cursor = initialSyncCursor;
-		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [], cursor });
+		await repository.commit('user-a', {
+			put: [{ key: 'note:1', entry }],
+			remove: [],
+			cursor,
+			inventoryComplete: true
+		});
 		expect(await repository.load('user-a')).toEqual({
-			generation: initialCacheGeneration,
 			inventoryComplete: true,
 			records: [{ key: 'note:1', entry }],
 			cursor
@@ -112,57 +113,49 @@ describe('durable workspace cache', () => {
 	});
 
 	it('isolates both content and cursor between accounts', async () => {
-		const { repository } = setup();
+		const { name, repository } = setup();
 		await repository.commit('user-a', {
 			put: [{ key: 'note:1', entry }],
 			remove: [],
 			cursor: initialSyncCursor
 		});
-		expect(await repository.load('user-b')).toEqual({
+		expect(await setup(name, 'user-b').repository.load('user-b')).toEqual({
 			records: [],
 			cursor: null,
-			generation: initialCacheGeneration,
 			inventoryComplete: false
 		});
 	});
 
 	it('deletes only the requested account’s record', async () => {
-		const { repository } = setup();
-		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
-		await repository.commit('user-b', { put: [{ key: 'note:1', entry }], remove: [] });
-		await repository.commit('user-a', { put: [], remove: [{ key: 'note:1', etag: syncEtag(1n) }] });
-		expect((await repository.load('user-b')).records).toEqual([{ key: 'note:1', entry }]);
-	});
-
-	it('recovers incompatible cached payloads as explicit queued downloads', async () => {
 		const { name, repository } = setup();
+		const other = setup(name, 'user-b').repository;
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
-		await repository.close();
-		const incompatible = new IndexedDbSyncCache(z.number(), name);
-		try {
-			expect(await incompatible.load('user-a')).toEqual({
-				generation: expect.any(String),
-				inventoryComplete: false,
-				cursor: null,
-				records: [
-					{
-						key: 'note:1',
-						entry: {
-							kind: 'present',
-							cache: {
-								kind: 'updating',
-								previous: null,
-								target: null,
-								transfer: { kind: 'queued' }
-							}
-						}
-					}
-				]
-			});
-		} finally {
-			await incompatible.close();
-		}
+		await other.commit('user-b', { put: [{ key: 'note:1', entry }], remove: [] });
+		await repository.commit('user-a', { put: [], remove: [{ key: 'note:1', etag: syncEtag(1n) }] });
+		expect((await other.load('user-b')).records).toEqual([{ key: 'note:1', entry }]);
 	});
 });
 
-cacheRepositoryContract(() => setup().repository);
+cacheRepositoryContract(() => setup(undefined, 'alice').repository);
+
+it('commits a full rich-content page and its checkpoint together', async () => {
+	const { repository } = setup();
+	const put = Array.from({ length: 32 }, (_, index) => ({
+		key: `note:${index}`,
+		entry: {
+			kind: 'present' as const,
+			snapshot: { etag: syncEtag(1n), value: 'Rich content paragraph. '.repeat(150) }
+		}
+	}));
+	await repository.commit('user-a', {
+		put,
+		remove: [],
+		cursor: syncCursorSchema.parse('32'),
+		inventoryComplete: true
+	});
+	expect(await repository.load('user-a')).toEqual({
+		records: [...put].sort((a, b) => a.key.localeCompare(b.key)),
+		cursor: '32',
+		inventoryComplete: true
+	});
+});

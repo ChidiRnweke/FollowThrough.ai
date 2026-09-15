@@ -1,297 +1,124 @@
-import { initialCacheGeneration } from '$lib/models/sync';
-import { afterEach, describe, expect, it } from 'vitest';
+import { ResourceCache } from './resource-cache';
+import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
+import { afterEach, expect, it } from 'vitest';
+import { Dexie } from 'dexie';
 import { z } from 'zod';
-import { syncCursorSchema, syncEtag } from '$lib/models/sync';
-import { completed, WorkspaceDatabase } from './database';
-import { IndexedDbSyncCache } from './indexeddb-cache';
-import { IndexedDbOutbox } from './indexeddb-outbox';
+import { WorkspaceDatabase } from './database';
+import { DexieWorkspaceRepository } from './workspace-local-repository';
 import { IndexedDbStorageRecovery } from './storage-recovery';
-import type { WriteDraft } from '$lib/models/outbox';
-const names: string[] = [];
-const repositories: { close(): Promise<void> }[] = [];
-const setup = () => {
-	const name = `sync-recovery-${crypto.randomUUID()}`;
-	names.push(name);
-	const cache = new IndexedDbSyncCache(z.string(), name);
-	const outbox = new IndexedDbOutbox(z.string(), z.string(), name);
-	repositories.push(cache, outbox);
-	return { name, cache, outbox, recovery: new IndexedDbStorageRecovery(name) };
-};
-const draft = (operationId = crypto.randomUUID()): WriteDraft<string, string> => ({
-	operationId,
-	key: 'note:1',
-	command: 'save',
-	base: null,
-	basedOn: null,
-	local: 'My work',
-	coalesce: null,
-	references: []
-});
-const damage = async (name: string, store: string, row: object) => {
-	const database = new WorkspaceDatabase(name);
-	await database.open();
-	try {
-		const transaction = database.backendDB().transaction(store, 'readwrite');
-		const done = completed(transaction);
-		transaction.objectStore(store).put(row);
-		await done;
-	} finally {
-		database.close();
-	}
+import { receiveResource, syncEtag } from '$lib/models/sync';
+
+const databases: WorkspaceDatabase[] = [];
+const setup = (account = 'alice', prefix = `recovery-${crypto.randomUUID()}`) => {
+	const repository = new DexieWorkspaceRepository(account, z.string(), z.string(), prefix);
+	databases.push(repository.database);
+	return { repository, recovery: new IndexedDbStorageRecovery(prefix), prefix };
 };
 afterEach(async () => {
-	for (const repository of repositories.splice(0)) await repository.close();
-	for (const name of names.splice(0))
-		await new Promise<void>((resolve, reject) => {
-			const request = indexedDB.deleteDatabase(name);
-			request.onsuccess = () => resolve();
-			request.onerror = () => reject(request.error);
-		});
+	for (const db of databases.splice(0)) {
+		db.close();
+		await Dexie.delete(db.name);
+	}
 });
-describe('damaged workspace storage recovery', () => {
-	it('preserves healthy bodies and resets the inventory when one body is damaged', async () => {
-		const { name, cache } = setup();
-		await cache.commit('account', {
-			put: [
-				{
-					key: 'note:2',
-					entry: {
-						kind: 'present',
-						cache: { kind: 'cached', snapshot: { etag: syncEtag(1n), value: 'Healthy' } }
-					}
-				}
-			],
-			remove: [],
-			cursor: syncCursorSchema.parse('10')
-		});
-		await damage(name, 'records', {
-			accountId: 'account',
-			key: 'note:1',
-			schemaVersion: 2,
-			entry: 'broken'
-		});
-		const loaded = await cache.load('account');
-		expect({
-			cursor: loaded.cursor,
-			complete: loaded.inventoryComplete,
-			keys: loaded.records.map((row) => row.key),
-			generation: loaded.generation
-		}).toEqual({
-			cursor: null,
-			complete: false,
-			keys: ['note:1', 'note:2'],
-			generation: expect.any(String)
-		});
-	});
-	it('rejects an old tab checkpoint after another tab repairs storage', async () => {
-		const { name, cache } = setup();
-		await damage(name, 'records', {
-			accountId: 'account',
-			key: 'note:1',
-			schemaVersion: 2,
-			entry: 'broken'
-		});
-		await cache.load('account');
-		await expect(
-			cache.commit('account', {
-				put: [],
-				remove: [],
-				generation: initialCacheGeneration,
-				cursor: syncCursorSchema.parse('99')
-			})
-		).rejects.toThrow('recovered in another tab');
-	});
-	it('exports the original damaged body', async () => {
-		const { name, cache, recovery } = setup();
-		await damage(name, 'records', {
-			accountId: 'account',
-			key: 'note:1',
-			schemaVersion: 2,
-			entry: 'irreplaceable raw bytes'
-		});
-		await cache.load('account');
-		const blob = await recovery.download('account', 'records', 'note:1');
-		expect(await blob.text()).toContain('irreplaceable raw bytes');
-	});
-	it('does not hide healthy edits because one queued row is malformed', async () => {
-		const { name, outbox, recovery } = setup();
-		await outbox.append('account', draft());
-		await damage(name, 'outbox', {
-			accountId: 'account',
-			entry: { sequence: 2, intent: { operationId: crypto.randomUUID() }, delivery: 'broken' }
-		});
-		expect({
-			retained: (await outbox.list('account')).length,
-			quarantined: (await recovery.list('account')).filter((item) => item.impact.kind === 'write')
-				.length
-		}).toEqual({ retained: 1, quarantined: 1 });
-	});
-	it('preserves a damaged legacy marker instead of reimporting a possibly settled edit', async () => {
-		const { name, outbox, recovery } = setup();
-		await damage(name, 'imports', {
-			accountId: 'account',
-			source: 'legacy',
-			operationId: 'broken'
-		});
-		const result = await outbox.importOnce('account', 'legacy', draft(), null);
-		expect({
-			kind: result.kind,
-			pending: (await outbox.list('account')).length,
-			quarantined: (await recovery.list('account')).map((item) => item.source)
-		}).toEqual({ kind: 'failure', pending: 0, quarantined: ['imports'] });
-	});
+const damage = async (repository: DexieWorkspaceRepository<string, string>) => {
+	await repository.database.ready();
+	await repository.database
+		.table('records')
+		.put({ key: 'note', entry: { kind: 'present', snapshot: 'Damaged original text' } });
+};
+it('blocks the account when persisted content is malformed', async () => {
+	const { repository } = setup();
+	await damage(repository);
+	await expect(repository.read('alice')).rejects.toThrow('Export a copy');
 });
-
-it('exports only the selected account edits without needing bootstrap metadata', async () => {
-	const { outbox, recovery } = setup();
-	const own = draft();
-	const other = draft();
-	await outbox.append('account', own);
-	await outbox.append('other', other);
-	const content = await (await recovery.downloadAccount('account')).text();
+it('preserves raw malformed content in an account export after startup fails', async () => {
+	const { repository, recovery } = setup();
+	await damage(repository);
+	await repository.read('alice').catch(() => ({ kind: 'failure' }));
+	expect(await (await recovery.downloadAccount('alice')).text()).toContain('Damaged original text');
+});
+it('rejects later writes through a storage instance stopped by corruption', async () => {
+	const { repository } = setup();
+	await damage(repository);
+	await repository.read('alice').catch(() => ({ kind: 'failure' }));
+	await expect(repository.cache.commit('alice', { put: [], remove: [] })).rejects.toThrow(
+		'Export a copy'
+	);
+});
+it('exports only the selected account database', async () => {
+	const { repository, recovery, prefix } = setup();
+	const other = setup('bob', prefix).repository;
+	await repository.cache.commit('alice', {
+		put: [
+			{
+				key: 'note',
+				entry: receiveResource(undefined, { etag: syncEtag(1n), value: 'Alice private draft' })
+			}
+		],
+		remove: []
+	});
+	await other.cache.commit('bob', {
+		put: [
+			{
+				key: 'note',
+				entry: receiveResource(undefined, { etag: syncEtag(1n), value: 'Bob private draft' })
+			}
+		],
+		remove: []
+	});
+	const text = await (await recovery.downloadAccount('alice')).text();
 	expect({
-		own: content.includes(own.operationId),
-		other: content.includes(other.operationId)
+		own: text.includes('Alice private draft'),
+		other: text.includes('Bob private draft')
 	}).toEqual({ own: true, other: false });
 });
-
-it('repairs damaged recovery metadata without hiding healthy recovery entries', async () => {
-	const { name, recovery } = setup();
-	await recovery.save(
-		{
-			accountId: 'account',
-			source: 'records',
-			key: 'healthy',
-			message: 'Saved recovery',
-			impact: { kind: 'cache' }
-		},
-		'preserved'
-	);
-	await damage(name, 'quarantine', {
-		accountId: 'account',
-		source: 'records',
-		key: 'broken',
-		impact: 'unreadable',
-		raw: 'damaged metadata'
-	});
-	const items = await recovery.list('account');
-	expect(items.map((item) => item.source).sort()).toEqual(['records', 'recovery-metadata']);
+it('cannot reopen an old instance after another tab resets the account', async () => {
+	const { repository, recovery, prefix } = setup();
+	const other = setup('alice', prefix).repository;
+	await Promise.all([repository.read('alice'), other.read('alice')]);
+	await recovery.resetAccount('alice');
+	await expect(other.cache.commit('alice', { put: [], remove: [] })).rejects.toThrow('another tab');
 });
-it('rebuilds inventory under a fresh token when its recovery marker is damaged', async () => {
-	const { name, cache } = setup();
-	await cache.commit('account', { put: [], remove: [], cursor: syncCursorSchema.parse('42') });
-	await damage(name, 'recovery-heads', { accountId: 'account', generation: 'broken' });
-	const loaded = await cache.load('account');
-	expect({
-		cursor: loaded.cursor,
-		complete: loaded.inventoryComplete,
-		changed: loaded.generation !== initialCacheGeneration
-	}).toEqual({ cursor: null, complete: false, changed: true });
-});
-
-// SYNC-RECOVERY: removal is a durable decision, including repeated legacy discovery.
-it('can submit healthy work after explicitly removing an exported unknown legacy blocker', async () => {
-	const { name, recovery, outbox } = setup();
-	const item = {
-		accountId: 'account',
-		source: 'legacy-note',
-		key: 'account:old-note',
-		message: 'Unreadable old edit',
-		impact: { kind: 'write' as const, operationId: null }
-	};
-	await recovery.save(item, 'Original damaged content');
-	await recovery.download('account', item.source, item.key);
-	await recovery.remove('account', item.source, item.key);
-	const reopened = new IndexedDbStorageRecovery(name);
-	await reopened.save(item, 'Original damaged content');
-	const edit = draft();
-	await outbox.append('account', edit);
-	const sent = await outbox.take('account');
-	expect({ pending: sent?.intent.operationId, recovery: await reopened.list('account') }).toEqual({
-		pending: edit.operationId,
-		recovery: []
+it('starts a clean instance only after reset has completed', async () => {
+	const { repository, recovery, prefix } = setup();
+	await damage(repository);
+	await recovery.resetAccount('alice');
+	expect(await setup('alice', prefix).repository.read('alice')).toEqual({
+		cache: { records: [], cursor: null, inventoryComplete: false },
+		writes: { entries: [], receipts: new Map() }
 	});
 });
-
-it('submits a provably independent edit while a known resource is quarantined', async () => {
-	const { outbox, recovery } = setup();
-	await recovery.save(
-		{
-			accountId: 'account',
-			source: 'legacy-note',
-			key: 'account:old',
-			message: 'Unreadable older note',
-			impact: { kind: 'resource', key: 'note:1', operationId: null }
-		},
-		'preserved'
-	);
-	await outbox.append('account', draft());
-	const independent = { ...draft(), key: 'note:2' };
-	await outbox.append('account', independent);
-	expect((await outbox.take('account'))?.intent.operationId).toBe(independent.operationId);
+it('leaves another account intact when resetting this account', async () => {
+	const { repository, recovery, prefix } = setup();
+	const other = setup('bob', prefix).repository;
+	await repository.read('alice');
+	await other.cache.commit('bob', {
+		put: [
+			{ key: 'note', entry: receiveResource(undefined, { etag: syncEtag(1n), value: 'Keep me' }) }
+		],
+		remove: []
+	});
+	await recovery.resetAccount('alice');
+	expect((await other.read('bob')).cache.records).toHaveLength(1);
 });
 
-it('preserves a new damaged cache copy after an earlier recovery was removed', async () => {
-	const { recovery } = setup();
-	const item = {
-		accountId: 'account',
-		source: 'records',
-		key: 'note:1',
-		message: 'Damaged cached copy',
-		impact: { kind: 'cache' as const }
-	};
-	await recovery.save(item, 'Old damaged copy');
-	await recovery.remove('account', item.source, item.key);
-	await recovery.save(item, 'New damaged copy');
-	expect(await (await recovery.download('account', item.source, item.key)).text()).toContain(
-		'New damaged copy'
-	);
-});
-
-it.each([true, false])(
-	'keeps descendants visible after recovery removal when ancestor identity is readable: %s',
-	async (identityReadable) => {
-		const { name, outbox, recovery } = setup();
-		const parent = draft();
-		const child = draft();
-		await outbox.append('account', parent);
-		await outbox.append('account', { ...child, basedOn: parent.operationId });
-		const [entry] = await outbox.list('account');
-		await damage(name, 'outbox', {
-			accountId: 'account',
-			entry: {
-				...entry,
-				intent: {
-					...entry.intent,
-					command: 42,
-					operationId: identityReadable ? entry.intent.operationId : null
-				}
-			}
-		});
-		await outbox.list('account');
-		const [item] = await recovery.list('account');
-		await recovery.download('account', item.source, item.key);
-		await recovery.remove('account', item.source, item.key);
-		expect(
-			(await outbox.list('account')).map((entry) => ({
-				delivery: entry.delivery.kind,
-				basedOn: entry.intent.basedOn
-			}))
-		).toEqual([{ delivery: 'rejected', basedOn: parent.operationId }]);
-	}
-);
-
-it('can finish recovery removal again after its durable removal marker exists', async () => {
-	const { recovery } = setup();
-	const item = {
-		accountId: 'account',
-		source: 'imports',
-		key: 'damaged',
-		message: 'Damaged',
-		impact: { kind: 'write' as const, operationId: null }
-	};
-	await recovery.save(item, 'Original');
-	await recovery.remove('account', item.source, item.key);
-	await recovery.remove('account', item.source, item.key);
-	expect(await recovery.list('account')).toEqual([]);
+it('cannot restore a reset account from an earlier network response', async () => {
+	const { repository, recovery, prefix } = setup();
+	const transport = new InMemorySyncTransport<string>();
+	transport.records.set('note', { etag: syncEtag(1n), value: 'Old network response' });
+	const cache = new ResourceCache('alice', { repository: repository.cache, transport });
+	await cache.initialize();
+	const paused = transport.pause('changes');
+	const pending = cache.refresh();
+	await paused.started;
+	await recovery.resetAccount('alice');
+	const fresh = setup('alice', prefix).repository;
+	await fresh.read('alice');
+	paused.release();
+	await pending;
+	expect((await fresh.read('alice')).cache).toEqual({
+		records: [],
+		cursor: null,
+		inventoryComplete: false
+	});
 });

@@ -12,11 +12,12 @@ const repositories: DexieWorkspaceRepository<string, string>[] = [];
 const subscriptions: (() => void)[] = [];
 const setup = () => {
 	const name = `workspace-observation-${crypto.randomUUID()}`;
-	names.add(name);
-	const writer = new DexieWorkspaceRepository(z.string(), z.string(), name);
-	const follower = new DexieWorkspaceRepository(z.string(), z.string(), name);
+
+	const writer = new DexieWorkspaceRepository('alice', z.string(), z.string(), name);
+	const follower = new DexieWorkspaceRepository('alice', z.string(), z.string(), name);
+	names.add(writer.database.name);
 	repositories.push(writer, follower);
-	return { writer, follower };
+	return { writer, follower, name };
 };
 afterEach(async () => {
 	for (const stop of subscriptions.splice(0)) stop();
@@ -27,7 +28,7 @@ afterEach(async () => {
 
 const body = (projection: WorkspaceLocalProjection<string, string>) => {
 	const record = projection.cache.records.find((row) => row.key === 'note:1');
-	return record?.entry.kind === 'present' ? cachedSnapshot(record.entry.cache)?.value : undefined;
+	return record?.entry.kind === 'present' ? cachedSnapshot(record.entry)?.value : undefined;
 };
 const saveBody = (
 	repository: DexieWorkspaceRepository<string, string>,
@@ -40,7 +41,7 @@ const saveBody = (
 				key: 'note:1',
 				entry: {
 					kind: 'present',
-					cache: { kind: 'cached', snapshot: { etag: syncEtag(version), value } }
+					snapshot: { etag: syncEtag(version), value }
 				}
 			}
 		],
@@ -154,15 +155,18 @@ it('leaves a healthy observed projection idle until durable data changes', async
 });
 
 it('never publishes another account’s projection to an existing account observer', async () => {
-	const { writer, follower } = setup();
+	const { writer, follower, name } = setup();
+	const bob = new DexieWorkspaceRepository('bob', z.string(), z.string(), name);
+	repositories.push(bob);
+	names.add(bob.database.name);
 	await saveBody(writer, 1n, 'Alice private note');
-	await writer.cache.commit('bob', {
+	await bob.cache.commit('bob', {
 		put: [
 			{
 				key: 'note:1',
 				entry: {
 					kind: 'present',
-					cache: { kind: 'cached', snapshot: { etag: syncEtag(2n), value: 'Bob private note' } }
+					snapshot: { etag: syncEtag(2n), value: 'Bob private note' }
 				}
 			}
 		],
@@ -182,8 +186,37 @@ it('never publishes another account’s projection to an existing account observ
 		)
 	);
 	await ready.promise;
-	await follower.read('bob');
+	await bob.read('bob');
 	// Bob's head initialization must also leave Alice's live query unchanged.
 	await new Promise((resolve) => setTimeout(resolve, 30));
 	expect(observed).toEqual(['Alice private note']);
+});
+
+it('reads a complete rich-content page while its live projection is active', async () => {
+	const { writer, follower } = setup();
+	const observed = Promise.withResolvers<number>();
+	subscriptions.push(
+		follower.observe(
+			'alice',
+			(projection) => {
+				if (projection.cache.records.length === 32)
+					observed.resolve(projection.cache.records.length);
+			},
+			observed.reject
+		)
+	);
+	await writer.cache.commit('alice', {
+		put: Array.from({ length: 32 }, (_, index) => ({
+			key: `note:${index}`,
+			entry: {
+				kind: 'present' as const,
+				snapshot: { etag: syncEtag(1n), value: 'Rich content paragraph. '.repeat(150) }
+			}
+		})),
+		remove: []
+	});
+	expect({
+		observed: await observed.promise,
+		stored: (await follower.read('alice')).cache.records.length
+	}).toEqual({ observed: 32, stored: 32 });
 });

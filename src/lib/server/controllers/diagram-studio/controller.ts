@@ -259,9 +259,6 @@ export class DiagramStudio implements DiagramStudioController {
 				case 'publishDiagram':
 					result = await this.publishProjectDiagram(actor, { ...command, baseEtag });
 					break;
-				case 'restoreDiagramRevision':
-					result = await this.restoreDiagramRevision(actor, { ...command, baseEtag });
-					break;
 			}
 			if (result.outcome !== 'saved')
 				throw new StaleRevisionError('The diagram changed during the guarded write');
