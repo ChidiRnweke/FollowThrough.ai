@@ -451,18 +451,12 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row;
 	}
 
-	async recoverInterrupted(failureMessage: string): Promise<number> {
+	async listInterrupted(): Promise<readonly AgentRun[]> {
 		const rows = await this.database
-			.update(schema.agentRuns)
-			.set({
-				status: 'failed',
-				failure: failureMessage,
-				finishedAt: new Date(),
-				updatedAt: new Date()
-			})
-			.where(inArray(schema.agentRuns.status, ['running', 'cancelling']))
-			.returning({ id: schema.agentRuns.id });
-		return rows.length;
+			.select()
+			.from(schema.agentRuns)
+			.where(inArray(schema.agentRuns.status, ['running', 'cancelling']));
+		return rows.map(toRun);
 	}
 }
 

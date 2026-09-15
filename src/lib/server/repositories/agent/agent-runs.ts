@@ -47,7 +47,7 @@ export interface AgentRunRepository {
 	): Promise<ResolvedAgentRun | undefined>;
 	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
-	recoverInterrupted(failureMessage: string): Promise<number>;
+	listInterrupted(): Promise<readonly AgentRun[]>;
 }
 
 /** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */

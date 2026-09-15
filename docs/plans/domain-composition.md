@@ -6,7 +6,7 @@
 - [x] Shared placement, lifecycle and task decisions and incomplete-inventory checks: PR #47; required CI checks passed.
 - [x] Shared skill document writes and import drafts: PR #48; required CI checks passed.
 - [x] Resolve selection origins once: PR #50 merged; required CI checks passed.
-- [ ] Persist proposal application effects and reverse them under version checks; require recorded changes for undo.
+- [x] Persist proposal changes and check them before undo: PR #54 merged; required CI checks passed.
 - [ ] Share agent/workflow settlement and browser event consumption; test cancellation races.
 - [ ] Share indexing plans; recover queued attachment work with PostgreSQL advisory claims.
 - [ ] Share export preparation and replace the named-entity decoder with `entities`.

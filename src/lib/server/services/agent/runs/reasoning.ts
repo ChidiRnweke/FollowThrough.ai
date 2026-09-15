@@ -640,15 +640,7 @@ export class AgentReasoning {
 					};
 					return;
 				}
-				yield {
-					type: 'event',
-					event: {
-						type: 'completed',
-						conversationId: run.conversationId,
-						runId: run.id,
-						model: run.model
-					}
-				};
+
 				yield { type: 'completed', sessionItems: await session.snapshot() };
 			};
 			yield* this.observeTurn(

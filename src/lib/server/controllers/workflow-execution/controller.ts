@@ -1,3 +1,5 @@
+import type { RunSettlement } from '$lib/server/services/agent/runs/execution-contracts';
+import type { AtomicOperation } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
@@ -5,13 +7,15 @@ import type {
 	AgentRunId,
 	AgentRunReceipt,
 	Conversation,
-	ConversationId,
-	NoteActionKind
+	ConversationId
 } from '$lib/models/agent';
 import { readAgentPayload } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import type { AgentRunEventRepository, AgentRunRepository } from '$lib/server/repositories/agent';
+import type {
+	AgentRunEventRepository,
+	AgentRunRepository
+} from '$lib/server/services/agent/runs/execution-contracts';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -34,6 +38,8 @@ export interface ActiveRunRegistry {
 
 export interface WorkflowRunnerDependencies {
 	readonly runs: AgentRunRepository;
+	readonly settlements: RunSettlement;
+	readonly transactions: AtomicOperation;
 	readonly events: AgentRunEventRepository;
 	readonly conversations: WorkflowConversationRecorder;
 	readonly eventBus: AgentEventBus;
@@ -42,34 +48,10 @@ export interface WorkflowRunnerDependencies {
 	readonly defaultModel: string;
 }
 
-/**
- * `Result` stays unconstrained, and the reading happens in {@link
- * WorkflowRunner.execute} instead.
- *
- * Constraining it to `AgentPayload` is what this looks like it wants, because
- * the result is appended to the event log and replayed to a client that
- * reconnects. But the tasks return domain outputs — `FindReferencesOutput`,
- * `GenerateMermaidDiagramOutput` — which are JSON-shaped and still not
- * assignable to an index signature. Satisfying the constraint would mean
- * putting one on each of those domain types, which is the open-keyed indexing
- * this effort removes, in the layer furthest from the wire.
- */
-export interface WorkflowRunTask<Result> {
-	readonly action: NoteActionKind;
-	readonly noteId: NoteId;
-	/** Names the run in the conversation list, e.g. "Convert Mermaid to draw.io". */
-	readonly title: string;
-	readonly model?: string;
-	run(signal: AbortSignal): Promise<Result>;
-}
-
-/**
- * The seam controllers depend on: starting a note action without knowing how runs
- * are stored or streamed, so a controller test can drive one without a database.
- */
-export interface WorkflowRunStarter {
-	start<Result>(actor: ActorContext, task: WorkflowRunTask<Result>): Promise<AgentRunReceipt>;
-}
+import type {
+	WorkflowRunTask,
+	WorkflowRunStarter
+} from '$lib/server/services/agent/runs/execution-contracts';
 
 /**
  * Runs one note action as a first-class agent run.
@@ -95,36 +77,42 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		actor: ActorContext,
 		task: WorkflowRunTask<Result>
 	): Promise<AgentRunReceipt> {
-		const conversation = await this.dependencies.conversations.createWorkflow(actor, {
-			title: task.title,
-			contextNoteId: task.noteId
-		});
-		const timestamp = now();
-		const model = task.model ?? this.dependencies.defaultModel;
-		const run: AgentRun = {
-			kind: 'workflow',
-			id: crypto.randomUUID() as AgentRunId,
-			userId: actor.userId,
-			conversationId: conversation.id,
-			model,
-			executionMode: 'auto_accept',
-			status: 'running',
-			requestId: crypto.randomUUID(),
-			pendingDecisions: [],
-			// `noteId` is what a client that lost its session storage searches by.
-			contextSnapshot: { kind: 'note_action', action: task.action, noteId: task.noteId },
-			startedAt: timestamp,
-			definitionVersion: 2,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		};
-		const inserted = await this.dependencies.runs.insert(actor, run);
-		const queued = await this.append(inserted.id, {
-			type: 'run_queued',
-			runId: inserted.id,
-			attempt: 1,
-			reason: 'submitted'
-		});
+		const { inserted, conversation, model, queued } = await this.dependencies.transactions.run(
+			async () => {
+				const conversation = await this.dependencies.conversations.createWorkflow(actor, {
+					title: task.title,
+					contextNoteId: task.noteId
+				});
+				const timestamp = now();
+				const model = task.model ?? this.dependencies.defaultModel;
+				const run: AgentRun = {
+					kind: 'workflow',
+					id: crypto.randomUUID() as AgentRunId,
+					userId: actor.userId,
+					conversationId: conversation.id,
+					model,
+					executionMode: 'auto_accept',
+					status: 'running',
+					requestId: crypto.randomUUID(),
+					pendingDecisions: [],
+					// `noteId` is what a client that lost its session storage searches by.
+					contextSnapshot: { kind: 'note_action', action: task.action, noteId: task.noteId },
+					startedAt: timestamp,
+					definitionVersion: 2,
+					createdAt: timestamp,
+					updatedAt: timestamp
+				};
+				const inserted = await this.dependencies.runs.insert(actor, run);
+				const queued = await this.dependencies.events.append(inserted.id, 1, {
+					type: 'run_queued',
+					runId: inserted.id,
+					attempt: 1,
+					reason: 'submitted'
+				});
+				return { inserted, conversation, model, queued };
+			}
+		);
+		this.dependencies.eventBus.notify(inserted.id);
 		// audit-allow: silent-catch — detached workflow execution persists its own terminal state; settlement failure is emitted for operational repair.
 		void this.execute(inserted.id, conversation.id, model, task).catch((error) =>
 			console.error(
@@ -159,51 +147,51 @@ export class WorkflowRunner implements WorkflowRunStarter {
 				throw new Error(
 					`The ${task.action} result could not be represented as JSON: ${carried.message}`
 				);
-			await this.append(runId, {
-				type: 'workflow_result',
-				action: task.action,
-				result: carried.value
-			});
-			await this.dependencies.runs.transition(runId, 'running', 'completed', {
-				finishedAt: now()
-			});
-			await this.append(runId, { type: 'completed', conversationId, runId, model });
+			const settled = await this.dependencies.settlements.settle(
+				runId,
+				{
+					kind: 'workflow_completed',
+					conversationId,
+					model,
+					action: task.action,
+					result: carried.value
+				},
+				async () => {}
+			);
+			if (settled.kind === 'settled') this.dependencies.eventBus.notify(runId);
+			else await this.settleCancelled(runId);
+
 			// audit-allow: silent-catch — execution failure is converted to a durable cancelled or failed run before this detached task returns.
 		} catch (error) {
 			// `cancel` commits `cancelling` before it aborts, so an aborted signal
 			// always has a row waiting in that state to settle.
 			if (controller.signal.aborted) await this.settleCancelled(runId);
-			else await this.settleFailed(runId, error);
+			else
+				await this.settleFailed(runId, error instanceof Error ? error : new Error(String(error)));
 		} finally {
 			this.dependencies.activeRuns.release(runId);
 		}
 	}
 
 	private async settleCancelled(runId: AgentRunId): Promise<void> {
-		const settled = await this.dependencies.runs.transition(runId, 'cancelling', 'cancelled', {
-			finishedAt: now(),
-			failure: 'The request was cancelled'
-		});
-		if (!settled) return;
-		await this.append(runId, { type: 'cancelled', runId, message: 'Generation stopped' });
+		const settled = await this.dependencies.settlements.settle(
+			runId,
+			{ kind: 'cancelled', message: 'Generation stopped' },
+			async () => {}
+		);
+		if (settled.kind === 'settled') this.dependencies.eventBus.notify(runId);
 	}
 
-	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this settles a workflow run from one.
-	private async settleFailed(runId: AgentRunId, error: unknown): Promise<void> {
-		const message = error instanceof Error ? error.message : String(error);
+	private async settleFailed(runId: AgentRunId, error: Error): Promise<void> {
+		const message = error.message;
 		try {
-			const settled = await this.dependencies.runs.transition(runId, 'running', 'failed', {
-				finishedAt: now(),
-				failure: message
-			});
-			if (!settled) return;
-			await this.append(runId, {
-				type: 'failed',
+			const settled = await this.dependencies.settlements.settle(
 				runId,
-				code: 'WORKFLOW_FAILED',
-				message,
-				retryable: true
-			});
+				{ kind: 'failed', code: 'WORKFLOW_FAILED', message, retryable: true },
+				async () => {}
+			);
+			if (settled.kind === 'settled') this.dependencies.eventBus.notify(runId);
+			else await this.settleCancelled(runId);
 		} catch (settlementError) {
 			throw new AggregateError(
 				[error, settlementError],

@@ -1,10 +1,6 @@
+import { RunEventSubscription } from '$lib/client/agent/runs/subscription';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-import {
-	readAgentRunEventRecord,
-	type AgentRunEventRecord,
-	type AgentRunId,
-	type NoteActionKind
-} from '$lib/models/agent';
+import { type AgentRunEventRecord, type AgentRunId, type NoteActionKind } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import { z } from 'zod';
 import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
@@ -75,41 +71,34 @@ interface NoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void,
+		onEvent: (record: AgentRunEventRecord) => void | Promise<void>,
 		onError: () => void
 	): EventStream;
-	cancel(runId: AgentRunId): Promise<unknown>;
+	cancel(runId: AgentRunId): Promise<void>;
 }
 
 class BrowserTransport implements NoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void,
+		onEvent: (record: AgentRunEventRecord) => void | Promise<void>,
 		onError: () => void
 	): EventStream {
-		const source = new EventSource(
-			`/api/agent/runs/${runId}/events?after=${encodeURIComponent(after)}`
-		);
-		source.addEventListener('agent', (event) => {
-			// The server serialized a record it had already parsed, but what arrives
-			// here is text off a socket and nothing between the two is checked. A
-			// frame this client cannot read is dropped rather than delivered as a
-			// record the store would then have to guess at.
-			const frame: unknown = JSON.parse(event.data);
-			const record = readAgentRunEventRecord(frame);
-			if (record.kind === 'readable') {
-				onEvent(record);
+		return new RunEventSubscription({
+			runId,
+			after,
+			onOpen: () => {},
+			onError,
+			onEvent: async (record) => {
 				if (record.event.type === 'workflow_result' || record.event.type === 'resources_stale')
-					void workspaceSession.synchronize();
-			} else console.warn(`[agent] dropped an unreadable event frame: ${record.reason}`);
+					await workspaceSession.synchronize();
+				await onEvent(record);
+			}
 		});
-		source.onerror = onError;
-		return { close: () => source.close() };
 	}
 
-	async cancel(runId: AgentRunId): Promise<unknown> {
-		return cancelAgentRun({ runId });
+	async cancel(runId: AgentRunId): Promise<void> {
+		await cancelAgentRun({ runId });
 	}
 }
 
@@ -255,7 +244,7 @@ export class NoteActionRunsStore {
 		const stream = this.transport.open(
 			entry.runId,
 			entry.cursor,
-			(record) => void this.consume(entry.runId, record),
+			(record) => this.consume(entry.runId, record),
 			() => {
 				// EventSource reconnects on its own; a closed stream on a settled run is
 				// expected, and an unsettled one resumes from the persisted cursor.
@@ -265,15 +254,17 @@ export class NoteActionRunsStore {
 	}
 
 	private async consume(runId: AgentRunId, record: AgentRunEventRecord): Promise<void> {
-		this.advance(runId, record.cursor);
 		const event = record.event;
 		if (event.type === 'workflow_result') {
 			const entry = this.entries.find((candidate) => candidate.runId === runId);
 			const handler = this.handlers.get(event.action);
-			if (handler) await handler(event.result, entry?.context ?? {}, entry?.runId ?? runId);
+			if (!entry || !handler) throw new Error(`No handler is registered for ${event.action}`);
+			await handler(event.result, entry.context, runId);
+			this.advance(runId, record.cursor);
 			this.settle(runId, { status: 'completed', result: event.result });
 			return;
 		}
+		this.advance(runId, record.cursor);
 		if (event.type === 'cancelled') this.settle(runId, { status: 'cancelled' });
 		if (event.type === 'failed') this.settle(runId, { status: 'failed', message: event.message });
 	}

@@ -1,3 +1,4 @@
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { describe, expect, it } from 'vitest';
 import { AgentProviderFailure } from '$lib/models/agent';
 import type {
@@ -9,14 +10,14 @@ import type {
 	ToolActivity
 } from '$lib/models/agent';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
-import type { AgentToolExecutor } from './contracts';
+import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentRunLifecycle } from './lifecycle';
+import { AgentRunLifecycle } from './controller';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
@@ -82,12 +83,14 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		updatedAt: testTime
 	};
 	runs.runs.push(run);
+	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new AgentRunLifecycle({
 		runs,
 		events: runs,
 		decisions: runs,
 		sessions,
-		transactions: new InMemoryTransactionRunner([runs, sessions]),
+		transactions,
+		settlements: new RunSettlements(runs, runs, transactions),
 		contextBuilder: options?.contextBuilder ?? { build: async () => resolvedContext },
 		provenance: {
 			record: async () => {
@@ -341,7 +344,10 @@ describe('settling a run whose execution threw', () => {
 	const crash = async (error: unknown) => {
 		const context = setup(throwingRunner(error));
 		await context.lifecycle.execute(testRunId, new AbortController().signal).catch(() => undefined);
-		await context.lifecycle.failRun(testRunId, error);
+		await context.lifecycle.failRun(
+			testRunId,
+			error instanceof Error ? error : new Error(String(error))
+		);
 		return context;
 	};
 
@@ -401,7 +407,10 @@ describe('settling a run whose execution threw', () => {
 			]
 		});
 		await context.runs.transition(testRunId, 'queued', 'running');
-		await context.lifecycle.failRun(testRunId, error);
+		await context.lifecycle.failRun(
+			testRunId,
+			error instanceof Error ? error : new Error(String(error))
+		);
 		return context;
 	};
 
@@ -416,15 +425,7 @@ describe('settling a run whose execution threw', () => {
 	});
 });
 
-/**
- * A turn that mutates twice through the executor, with the call ids the test
- * supplies, and settles the calls the provider identified.
- *
- * The id-less case is the one that mattered: every call used to reach the
- * executor as `String(details?.toolCall?.callId ?? '')`, so two mutations
- * without an id shared the key `''`. The second overwrote the first, and only
- * one of the two resources was ever reported stale.
- */
+/** Each successful mutation requests workspace synchronization. */
 const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[]) => ({
 	execute: async function* (input: {
 		readonly toolExecutor: AgentToolExecutor;
@@ -458,12 +459,12 @@ describe('telling the client what a mutation left stale', () => {
 	it('reports each mutation the provider gave no call id for', async () => {
 		expect(
 			await staleResources([{ toolName: 'save_note' }, { toolName: 'archive_project' }])
-		).toEqual(['save_note', 'archive_project']);
+		).toEqual(['workspace', 'workspace']);
 	});
 
-	it('reports an identified mutation once its call settles', async () => {
+	it('reports a committed mutation regardless of its provider call id', async () => {
 		expect(await staleResources([{ toolName: 'save_note', callId: 'call-1' }])).toEqual([
-			'save_note'
+			'workspace'
 		]);
 	});
 });

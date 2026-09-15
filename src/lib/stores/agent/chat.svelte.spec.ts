@@ -75,17 +75,20 @@ class FakeAgentRunTransport implements AgentRunTransport {
 			const events: AgentEvent[] = [
 				{ type: 'run_started', runId, attempt: 1 },
 				...this.events,
-				{ type: 'completed', runId, conversationId }
+				...(this.events.at(-1)?.type === 'approval_required'
+					? []
+					: [{ type: 'completed' as const, runId, conversationId }])
 			];
-			events.forEach((event, index) =>
+			events.forEach((event, index) => {
+				if (BigInt(index + 1) <= BigInt(input.after)) return;
 				input.onEvent({
 					cursor: String(index + 1),
 					runId,
 					attempt: 1,
 					event,
 					createdAt: new Date()
-				} satisfies AgentRunEventRecord)
-			);
+				} satisfies AgentRunEventRecord);
+			});
 		});
 		return { close() {} };
 	}
@@ -113,7 +116,7 @@ class DecidingTransport extends FakeAgentRunTransport {
  */
 class StoppableTransport implements AgentRunTransport {
 	cancelled: AgentRunId[] = [];
-	private emit?: (event: AgentEvent, cursor: number) => void;
+	private emit?: (event: AgentEvent, cursor: number) => void | Promise<void>;
 	async submit() {
 		return { runId, conversationId, status: 'queued' as const, latestCursor: '0' };
 	}
@@ -133,8 +136,8 @@ class StoppableTransport implements AgentRunTransport {
 	async retry(): Promise<Awaited<ReturnType<AgentRunTransport['retry']>>> {
 		throw new Error('Unexpected retry');
 	}
-	deliver(event: AgentEvent): void {
-		this.emit?.(event, 9);
+	async deliver(event: AgentEvent): Promise<void> {
+		await this.emit?.(event, 9);
 	}
 	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {
 		this.emit = (event, cursor) =>
@@ -399,14 +402,14 @@ describe('stopping a streaming turn', () => {
 	it('settles the turn when the cancelled event arrives', async () => {
 		const { transport, store, reply } = await streaming();
 		await store.stop();
-		transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
+		await transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
 		expect(reply.status).toBe('cancelled');
 	});
 
 	it('keeps the partial output the turn had already streamed', async () => {
 		const { transport, store, reply } = await streaming();
 		await store.stop();
-		transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
+		await transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
 		expect(entryText(reply)).toBe('Working on it');
 	});
 });
