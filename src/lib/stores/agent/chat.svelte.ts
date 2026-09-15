@@ -1001,6 +1001,7 @@ export class ChatStore {
 		this.connection = 'reconnecting';
 		this.storage.save({ runId, cursor, attempt });
 		const generation = this.connectionGeneration;
+		let appliedCursor = cursor;
 		this.eventConnection = this.transport.openEvents({
 			runId,
 			after: cursor,
@@ -1009,16 +1010,24 @@ export class ChatStore {
 			},
 			onEvent: async (record) => {
 				if (generation !== this.connectionGeneration) return;
-				const event = record.event;
+				const event = record.kind === 'readable' ? record.event : undefined;
 				const terminal =
-					event.type === 'completed' ||
-					event.type === 'cancelled' ||
-					(event.type === 'failed' && !event.retryable);
-				if (event.type === 'resources_stale' || terminal) await this.resources?.synchronize();
+					event?.type === 'completed' ||
+					event?.type === 'cancelled' ||
+					(event?.type === 'failed' && !event.retryable);
+				if (event?.type === 'resources_stale' || terminal) await this.resources?.synchronize();
 				if (generation !== this.connectionGeneration) return;
-				this.apply(reply, event);
+				if (BigInt(record.cursor) > BigInt(appliedCursor)) {
+					if (event) this.apply(reply, event);
+					else
+						reply.parts.push({
+							kind: 'unreadable',
+							reason: 'Some saved agent activity could not be restored.'
+						});
+					appliedCursor = record.cursor;
+				}
+				this.storage.save({ runId, cursor: record.cursor, attempt: record.attempt });
 				this.cursor = record.cursor;
-				this.storage.save({ runId, cursor: this.cursor, attempt: record.attempt });
 				if (terminal) this.detach();
 			},
 			onError: () => {

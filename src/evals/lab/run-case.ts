@@ -114,7 +114,14 @@ export async function runCase(
 		if (deadline) clearTimeout(deadline);
 	}
 	const snapshot = await agent.getRun(actor, receipt.runId);
-	const events = await agent.listRunEvents(actor, receipt.runId, '');
+	const stored = await agent.listRunEvents(actor, receipt.runId, '0');
+	const events = stored.map((record) => {
+		if (record.kind === 'unreadable')
+			throw new Error(
+				`Cannot evaluate run ${receipt.runId}, event ${record.cursor}: ${record.reason}`
+			);
+		return record;
+	});
 
 	return {
 		runId: receipt.runId,

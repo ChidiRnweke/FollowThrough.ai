@@ -24,6 +24,23 @@ const start = (store: NoteActionRunsStore, action: 'convert' | 'promises' = 'con
 	store.track({ runId, latestCursor: '000000' }, { action, context: { source: 'graph TD' } });
 
 describe('NoteActionRunsStore', () => {
+	it('reports an unreadable saved action instead of leaving its waiter pending', async () => {
+		const { store, transport } = setup();
+		const outcome = start(store);
+		await transport.streams[0].deliver({
+			kind: 'unreadable',
+			runId,
+			cursor: '1',
+			attempt: 1,
+			createdAt: new Date(0),
+			reason: 'Unknown event'
+		});
+		expect(await outcome).toEqual({
+			status: 'failed',
+			message:
+				'Saved note action activity could not be restored. Reload the note to check its saved result.'
+		});
+	});
 	it('reports a tracked run as in flight', () => {
 		const { store } = setup();
 		void start(store);

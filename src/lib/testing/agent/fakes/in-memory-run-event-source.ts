@@ -1,5 +1,5 @@
 import type { OpenRunEventSource } from '$lib/client/agent/runs/subscription';
-import type { AgentRunEventRecord } from '$lib/models/agent';
+import type { StoredAgentRunEventRecord } from '$lib/models/agent';
 
 export class InMemoryRunEventSource {
 	readonly connections: { input: Parameters<OpenRunEventSource>[0]; closed: boolean }[] = [];
@@ -12,7 +12,7 @@ export class InMemoryRunEventSource {
 			}
 		};
 	};
-	emit(record: AgentRunEventRecord): void {
+	emit(record: StoredAgentRunEventRecord): void {
 		for (const connection of this.connections)
 			if (!connection.closed) connection.input.onFrame(JSON.stringify(record));
 	}
