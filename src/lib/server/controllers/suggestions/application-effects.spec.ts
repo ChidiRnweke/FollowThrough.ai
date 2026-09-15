@@ -20,6 +20,11 @@ import {
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
+	DrawioXmlValidator,
+	DrawioSvgSanitizer,
+	DrawioDiagramTextExtractor
+} from '$lib/server/services/diagrams/drawio';
+import {
 	InMemorySearchRepository,
 	InMemoryEmbeddingClient
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
@@ -48,9 +53,12 @@ describe('Proposal effect coordination', () => {
 		suggestions.suggestions = [proposal];
 		const reviewed = {
 			...generated,
+			source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Reviewed'),
 			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Reviewed</text></svg>',
 			searchableText: 'Reviewed'
 		};
+		const diagrams = new InMemoryDiagrams();
+		diagrams.diagrams = [generated];
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionFinder: suggestions,
@@ -62,8 +70,12 @@ describe('Proposal effect coordination', () => {
 						changes: [{ kind: 'created', after: { type: 'diagrams', value: generated } }]
 					})
 				},
-				drawioWrites: { write: async () => reviewed },
-				diagramIndexer: new InMemoryDiagrams(),
+				diagramWriter: diagrams,
+				drawioXmlValidator: new DrawioXmlValidator(),
+				drawioSvgSanitizer: new DrawioSvgSanitizer(),
+				drawioTextExtractor: new DrawioDiagramTextExtractor(),
+				now: () => testNow,
+				diagramIndexer: diagrams,
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects])
 			})
 		);

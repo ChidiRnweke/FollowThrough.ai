@@ -1,4 +1,9 @@
-import type { DrawioWriter } from '$lib/server/services/diagrams/contracts';
+import type {
+	DiagramWriter,
+	DrawioXmlContentValidator,
+	DrawioSvgPreviewSanitizer,
+	DiagramTextExtractor
+} from '$lib/server/services/diagrams/contracts';
 import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import type {
@@ -24,7 +29,7 @@ import type {
 	ListPendingMemoryOutput,
 	MemorySuggestionView
 } from '$lib/models/memory';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import { InvalidTransitionError, ValidationError } from '$lib/errors';
 import type {
 	SuggestionEffectService,
@@ -113,7 +118,11 @@ export interface SuggestionsDependencies {
 	suggestionEffects: SuggestionEffectService;
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: { index(actor: ActorContext, diagram: Diagram): Promise<void> };
-	drawioWrites: DrawioWriter;
+	diagramWriter: DiagramWriter;
+	drawioXmlValidator: DrawioXmlContentValidator;
+	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
+	drawioTextExtractor: DiagramTextExtractor;
+	now: () => DateTime;
 	transactionRunner: TransactionRunner;
 }
 export class Suggestions implements SuggestionsController {
@@ -192,11 +201,21 @@ export class Suggestions implements SuggestionsController {
 					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
 				if (created.after.value.sourceNoteId !== input.drawioReview.noteId)
 					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
-				const diagram = await this.dependencies.drawioWrites.write(
-					actor,
-					created.after.value,
-					input.drawioReview
+				const source = this.dependencies.drawioXmlValidator.validate(input.drawioReview.source);
+				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(
+					input.drawioReview.renderedSvg
 				);
+				const searchableText = await this.dependencies.drawioTextExtractor.extract({
+					...created.after.value,
+					source
+				});
+				const diagram = await this.dependencies.diagramWriter.update(actor, {
+					...created.after.value,
+					source,
+					renderedSvg,
+					searchableText,
+					updatedAt: this.dependencies.now()
+				});
 				artifact = diagram;
 				changes = [{ kind: 'created', after: { type: 'diagrams', value: diagram } }];
 			}
