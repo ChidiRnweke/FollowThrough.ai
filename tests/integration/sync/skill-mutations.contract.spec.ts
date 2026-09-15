@@ -4,20 +4,26 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
-	const seeded = await seedNote(suffix);
+	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
+	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
+	const note = await notes.catalog.create(source.owner, {
+		projectId: source.note.projectId,
+		title: 'Writing',
+		documentKind: 'skill'
+	});
+	const seeded = { ...source, note };
 	const sync = createSyncCapability({ db: database, transactionRunner });
 	const { library } = createSkillsCapability({
 		db: database,
 		projects: new ProjectRecords(database),
-		notes: new NoteRecords(database),
-		provenance: new ProvenanceRecords(database)
+		notes: notes.repository,
+		provenance: notes.provenanceRepository
 	});
 	await library.create(seeded.owner, seeded.note, {
 		name: 'Writing',

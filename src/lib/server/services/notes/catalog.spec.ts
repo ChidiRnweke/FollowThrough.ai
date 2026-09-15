@@ -35,6 +35,18 @@ describe('Note management invariants', () => {
 		});
 		expect(note.id).toBe(id);
 	});
+
+	it('keeps the command discriminator separate from the created document kind', async () => {
+		const { service } = setup();
+		const command = {
+			kind: 'createNote',
+			id: testNoteId(502),
+			projectId: projectBuilder().id,
+			title: 'Offline note'
+		};
+		const note = await service.create(testActor(), command);
+		expect(note.kind).toBe('note');
+	});
 	it('rejects a stale save without replacing the note', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder({ currentRevision: 2 })];

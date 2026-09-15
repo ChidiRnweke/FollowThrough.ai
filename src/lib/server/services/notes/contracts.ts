@@ -14,7 +14,10 @@ import type {
 import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
 export interface NoteCreator {
-	create(actor: ActorContext, input: CreateNoteInput & { kind?: 'note' | 'skill' }): Promise<Note>;
+	create(
+		actor: ActorContext,
+		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
+	): Promise<Note>;
 }
 export interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;

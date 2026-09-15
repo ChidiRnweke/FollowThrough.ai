@@ -61,12 +61,12 @@ export class NoteCatalog {
 
 	async create(
 		actor: ActorContext,
-		input: CreateNoteInput & { kind?: 'note' | 'skill' }
+		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
 	): Promise<Note>;
 	async create(actor: ActorContext, input: TextSelection): Promise<SourceAnchor>;
 	async create(
 		actor: ActorContext,
-		input: (CreateNoteInput & { kind?: 'note' | 'skill' }) | TextSelection
+		input: (CreateNoteInput & { documentKind?: 'note' | 'skill' }) | TextSelection
 	): Promise<Note | SourceAnchor> {
 		return 'text' in input ? this.createAnchor(actor, input) : this.createNote(actor, input);
 	}
@@ -337,12 +337,16 @@ export class NoteCatalog {
 
 	private async createNote(
 		actor: ActorContext,
-		input: CreateNoteInput & { kind?: 'note' | 'skill' }
+		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
 	): Promise<Note> {
 		const project = await this.resolveProject(actor, input.projectId);
 		const parent = input.parentId ? await this.notes.findById(actor, input.parentId) : undefined;
 		const decision = decideNoteCreation(
-			{ ...input, id: input.id ?? (crypto.randomUUID() as NoteId), kind: input.kind ?? 'note' },
+			{
+				...input,
+				id: input.id ?? (crypto.randomUUID() as NoteId),
+				kind: input.documentKind ?? 'note'
+			},
 			{
 				project,
 				parent: parent ?? null,

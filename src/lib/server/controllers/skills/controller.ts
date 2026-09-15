@@ -152,7 +152,7 @@ export class Skills implements SkillsController {
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteCreator.create(actor, {
-				kind: 'skill',
+				documentKind: 'skill',
 				id: input.id,
 				title: input.name,
 				projectId: input.projectId,
@@ -180,7 +180,7 @@ export class Skills implements SkillsController {
 			});
 			const source = await this.dependencies.noteReader.get(actor, input.selection.noteId);
 			const created = await this.dependencies.noteCreator.create(actor, {
-				kind: 'skill',
+				documentKind: 'skill',
 				title: input.name,
 				projectId: source.projectId,
 				parentId: source.parentId
