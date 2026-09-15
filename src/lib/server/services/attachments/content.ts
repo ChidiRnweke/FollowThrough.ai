@@ -24,8 +24,8 @@ const DESCRIPTION_CONCURRENCY = 4;
  * Runs OCR over a document and returns one enriched markdown string: the
  * engine's markdown parts in order, with each embedded image replaced by an
  * inlined description at the image's position. Image description failures are
- * non-fatal (a placeholder is kept); OCR engine failures propagate so callers
- * can fall back to a plain text parser. Tables arrive as markdown from the
+ * non-fatal (a placeholder is kept); OCR engine failures propagate so processing
+ * records a failure that the user can retry. Tables arrive as markdown from the
  * engine and are passed through untouched.
  */
 export class AttachmentContent implements DocumentOcr {
