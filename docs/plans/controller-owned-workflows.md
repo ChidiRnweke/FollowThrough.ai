@@ -115,12 +115,19 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
 - P05/A13: all preparation now falls within provider cleanup; image requests honor cancellation
   and reject blank descriptions. Unfinished sibling requests are aborted on exit. Native vision
   retains original images. Ninety-four focused tests and the full 3,539-test suite passed.
+- P06/S01: sign-in coordinates OAuth, account resolution, and the same session registry used
+  by requests. Creation, expiry, renewal, logout, and storage failures have behavior tests.
+  The full 3,562-test suite passed; provider/account-linking policy remains unchanged.
+- P07/A01/A10: verified merged #54/#59 against current code. Acceptance records effects in
+  the transaction; undo locks and checks all changed record versions before restoring anything.
+  Missing historical effects refuse undo. Lifecycle schemas require decision and artifact facts.
+  All seven PostgreSQL effect contracts passed, including stale replacement, rollback, and races.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.
-- P05–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
+- P08–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
