@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
-import { trace } from '@opentelemetry/api';
-import {
-	BasicTracerProvider,
-	InMemorySpanExporter,
-	SimpleSpanProcessor
-} from '@opentelemetry/sdk-trace-base';
+import { context, trace } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
 import { ValidationError } from '$lib/errors';
-import { instrumentedController } from '$lib/server/controllers/instrumentation';
+import {
+	instrumentedController,
+	type ControllerSurface
+} from '$lib/server/controllers/instrumentation';
 import { traceOperation } from '$lib/server/services/telemetry';
 
 type RecordedEntry = { readonly level: string; readonly args: readonly unknown[] };
@@ -20,10 +20,22 @@ interface FakeControllerContract {
 }
 
 class FakeController implements FakeControllerContract {
-	constructor(private readonly greeting: string) {}
+	constructor(
+		private readonly greeting: string,
+		private readonly enter: () => void = () => {}
+	) {}
 
 	async get(actor: { readonly userId: string }, id: string): Promise<{ readonly id: string }> {
+		this.enter();
 		return { id: `${this.greeting}:${id}` };
+	}
+
+	async nested(): Promise<{ readonly id: string }> {
+		return this.get({ userId: 'u1' }, 'n1');
+	}
+
+	declaredAsyncFailure(): Promise<never> {
+		throw new ValidationError('failed before returning a promise');
 	}
 
 	async domainFailure(): Promise<never> {
@@ -52,6 +64,17 @@ class FakeController implements FakeControllerContract {
 		throw new ValidationError('sync domain failure');
 	}
 }
+
+const fakeSurface = {
+	get: true,
+	domainFailure: true,
+	bug: true,
+	_helper: false,
+	submitLike: true,
+	syncThrower: false,
+	nested: true,
+	declaredAsyncFailure: true
+} satisfies ControllerSurface<FakeController>;
 
 const recordingLogger = (entries: RecordedEntry[]) => ({
 	info: (...args: unknown[]) => {
@@ -83,8 +106,10 @@ describe('instrumentedController', () => {
 
 	test('logs info before the method body runs', async () => {
 		const sequence: string[] = [];
-		const controller = new FakeController('hello');
-		const wrapped = instrumentedController('fake', controller, {
+		const controller = new FakeController('hello', () => {
+			sequence.push('body');
+		});
+		const wrapped = instrumentedController('fake', controller, fakeSurface, {
 			...recordingLogger([]),
 			info: () => {
 				sequence.push('info');
@@ -94,7 +119,7 @@ describe('instrumentedController', () => {
 
 		await wrapped.get({ userId: 'u1' }, 'n1').then(() => sequence.push('after'));
 
-		expect(sequence[0]).toBe('info');
+		expect(sequence).toEqual(['info', 'body', 'after']);
 	});
 
 	test('logs debug with a duration on success', async () => {
@@ -102,6 +127,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger(entries)
 		);
 
@@ -112,10 +138,37 @@ describe('instrumentedController', () => {
 		);
 	});
 
+	test('does not add another boundary for an internal public-method call', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+		await wrapped.nested();
+		expect(entries.filter((entry) => entry.level === 'info').map((entry) => entry.args[0])).toEqual(
+			['[fake] nested']
+		);
+	});
+
+	test('logs a synchronous throw from a declared asynchronous capability', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+		await wrapped.declaredAsyncFailure().catch(() => undefined);
+		expect(entries.map((entry) => entry.level)).toEqual(['info', 'warn']);
+	});
+
 	test('keeps the instance binding so methods see constructor state', async () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger([])
 		);
 
@@ -128,6 +181,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger([])
 		);
 
@@ -139,6 +193,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger(entries)
 		);
 
@@ -152,6 +207,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger(entries)
 		);
 
@@ -167,6 +223,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger(entries)
 		);
 
@@ -179,6 +236,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger([])
 		);
 
@@ -191,6 +249,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger([])
 		);
 
@@ -202,6 +261,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger(entries)
 		);
 
@@ -214,6 +274,7 @@ describe('instrumentedController', () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger([])
 		);
 
@@ -223,12 +284,17 @@ describe('instrumentedController', () => {
 
 describe('controller-boundary span routing', () => {
 	let exporter: InMemorySpanExporter;
-	let provider: BasicTracerProvider;
+	let provider: NodeSDK;
 
 	beforeAll(() => {
 		exporter = new InMemorySpanExporter();
-		provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
-		trace.setGlobalTracerProvider(provider);
+		provider = new NodeSDK({
+			autoDetectResources: false,
+			spanProcessors: [new SimpleSpanProcessor(exporter)],
+			logRecordProcessors: [],
+			instrumentations: []
+		});
+		provider.start();
 	});
 
 	beforeEach(() => {
@@ -238,12 +304,14 @@ describe('controller-boundary span routing', () => {
 	afterAll(async () => {
 		await provider.shutdown();
 		trace.disable();
+		context.disable();
 	});
 
 	test('does not stamp openinference.span.kind on controller-boundary spans', async () => {
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
+			fakeSurface,
 			recordingLogger([])
 		);
 
@@ -258,5 +326,18 @@ describe('controller-boundary span routing', () => {
 
 		const span = exporter.getFinishedSpans().find((candidate) => candidate.name === 'workflow.op');
 		expect(span?.attributes[SemanticConventions.OPENINFERENCE_SPAN_KIND]).toBe('CHAIN');
+	});
+
+	test('parents work started before the first await under the controller span', async () => {
+		const controller = new FakeController('hello', () => {
+			trace.getTracer('test').startSpan('before-await').end();
+		});
+		const wrapped = instrumentedController('fake', controller, fakeSurface, recordingLogger([]));
+		await wrapped.get({ userId: 'u1' }, 'n1');
+		const spans = exporter.getFinishedSpans();
+		const boundary = spans.find((span) => span.name === 'fake.get');
+		const child = spans.find((span) => span.name === 'before-await');
+		if (!boundary || !child) throw new Error('Expected controller and child spans');
+		expect(child.parentSpanContext?.spanId).toBe(boundary.spanContext().spanId);
 	});
 });

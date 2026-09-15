@@ -1,3 +1,4 @@
+import { controllerSurfaces } from './controller-surfaces';
 import { Agent, type AgentDependencies } from '../controllers/agent/controller';
 import { AgentFiles, type AgentFilesDependencies } from '../controllers/agent-files/controller';
 import {
@@ -80,96 +81,174 @@ export class ProductionControllerFactory implements ControllerFactory {
 	// Every controller is wrapped at construction: one `domain.method` span plus
 	// info/debug/error logs per call, covering UI, MCP and agent-tool callers.
 	agentFiles() {
-		return instrumentedController('agentFiles', new AgentFiles(this.dependencies.agentFiles));
+		return instrumentedController(
+			'agentFiles',
+			new AgentFiles(this.dependencies.agentFiles),
+			controllerSurfaces.agentFiles
+		);
 	}
 	workspace() {
-		return instrumentedController('workspace', new Workspace(this.dependencies.workspace));
+		return instrumentedController(
+			'workspace',
+			new Workspace(this.dependencies.workspace),
+			controllerSurfaces.workspace
+		);
 	}
 	projects() {
-		return instrumentedController('projects', new Projects(this.dependencies.projects));
+		return instrumentedController(
+			'projects',
+			new Projects(this.dependencies.projects),
+			controllerSurfaces.projects
+		);
 	}
 	notes() {
-		return instrumentedController('notes', new Notes(this.dependencies.notes));
+		return instrumentedController(
+			'notes',
+			new Notes(this.dependencies.notes),
+			controllerSurfaces.notes
+		);
 	}
 	todos() {
-		return instrumentedController('todos', new Todos(this.dependencies.todos));
+		return instrumentedController(
+			'todos',
+			new Todos(this.dependencies.todos),
+			controllerSurfaces.todos
+		);
 	}
 	relationships() {
 		return instrumentedController(
 			'relationships',
-			new Relationships(this.dependencies.relationships)
+			new Relationships(this.dependencies.relationships),
+			controllerSurfaces.relationships
 		);
 	}
 	references() {
-		return instrumentedController('references', new References(this.dependencies.references));
+		return instrumentedController(
+			'references',
+			new References(this.dependencies.references),
+			controllerSurfaces.references
+		);
 	}
 	diagrams() {
-		return instrumentedController('diagrams', new Diagrams(this.dependencies.diagrams));
+		return instrumentedController(
+			'diagrams',
+			new Diagrams(this.dependencies.diagrams),
+			controllerSurfaces.diagrams
+		);
 	}
 	diagramStudio() {
 		return instrumentedController(
 			'diagramStudio',
-			new DiagramStudio(this.dependencies.diagramStudio)
+			new DiagramStudio(this.dependencies.diagramStudio),
+			controllerSurfaces.diagramStudio
 		);
 	}
 	suggestions() {
-		return instrumentedController('suggestions', new Suggestions(this.dependencies.suggestions));
+		return instrumentedController(
+			'suggestions',
+			new Suggestions(this.dependencies.suggestions),
+			controllerSurfaces.suggestions
+		);
 	}
 	skills() {
-		return instrumentedController('skills', new Skills(this.dependencies.skills));
+		return instrumentedController(
+			'skills',
+			new Skills(this.dependencies.skills),
+			controllerSurfaces.skills
+		);
 	}
 	agent() {
-		return instrumentedController('agent', new Agent(this.dependencies.agent));
+		return instrumentedController(
+			'agent',
+			new Agent(this.dependencies.agent),
+			controllerSurfaces.agent
+		);
 	}
 	agentSettings() {
 		return instrumentedController(
 			'agentSettings',
-			new AgentSettings(this.dependencies.agentSettings)
+			new AgentSettings(this.dependencies.agentSettings),
+			controllerSurfaces.agentSettings
 		);
 	}
 	userSettings() {
-		return instrumentedController('userSettings', new UserSettings(this.dependencies.userSettings));
+		return instrumentedController(
+			'userSettings',
+			new UserSettings(this.dependencies.userSettings),
+			controllerSurfaces.userSettings
+		);
 	}
 	apiTokens() {
-		return instrumentedController('apiTokens', new ApiTokens(this.dependencies.apiTokens));
+		return instrumentedController(
+			'apiTokens',
+			new ApiTokens(this.dependencies.apiTokens),
+			controllerSurfaces.apiTokens
+		);
 	}
 	toolPreferences() {
 		return instrumentedController(
 			'toolPreferences',
-			new ToolPreferences(this.dependencies.toolPreferences)
+			new ToolPreferences(this.dependencies.toolPreferences),
+			controllerSurfaces.toolPreferences
 		);
 	}
 	attachments() {
-		return instrumentedController('attachments', new Attachments(this.dependencies.attachments));
+		return instrumentedController(
+			'attachments',
+			new Attachments(this.dependencies.attachments),
+			controllerSurfaces.attachments
+		);
 	}
 	deliverables() {
-		return instrumentedController('deliverables', new Deliverables(this.dependencies.deliverables));
+		return instrumentedController(
+			'deliverables',
+			new Deliverables(this.dependencies.deliverables),
+			controllerSurfaces.deliverables
+		);
 	}
 	trustPolicies() {
 		return instrumentedController(
 			'trustPolicies',
-			new TrustPolicies(this.dependencies.trustPolicies)
+			new TrustPolicies(this.dependencies.trustPolicies),
+			controllerSurfaces.trustPolicies
 		);
 	}
 	memory() {
-		return instrumentedController('memory', new Memory(this.dependencies.memory));
+		return instrumentedController(
+			'memory',
+			new Memory(this.dependencies.memory),
+			controllerSurfaces.memory
+		);
 	}
 	retrieval() {
-		return instrumentedController('retrieval', new Retrieval(this.dependencies.retrieval));
+		return instrumentedController(
+			'retrieval',
+			new Retrieval(this.dependencies.retrieval),
+			controllerSurfaces.retrieval
+		);
 	}
 	inlineSuggestions() {
 		return instrumentedController(
 			'inlineSuggestions',
-			new InlineSuggestions(this.dependencies.inlineSuggestions)
+			new InlineSuggestions(this.dependencies.inlineSuggestions),
+			controllerSurfaces.inlineSuggestions
 		);
 	}
 	feedback() {
-		return instrumentedController('feedback', new Feedback(this.dependencies.feedback));
+		return instrumentedController(
+			'feedback',
+			new Feedback(this.dependencies.feedback),
+			controllerSurfaces.feedback
+		);
 	}
 	// Composes the notes and projects controllers rather than taking repositories of its
 	// own: an import is a batch of ordinary creates, and going through the controllers
 	// keeps indexing and anchor repair on the same path a hand-made note takes.
 	imports() {
-		return new NoteImportsController({ notes: this.notes(), projects: this.projects() });
+		return instrumentedController(
+			'imports',
+			new NoteImportsController({ notes: this.notes(), projects: this.projects() }),
+			controllerSurfaces.imports
+		);
 	}
 }

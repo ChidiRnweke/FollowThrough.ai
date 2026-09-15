@@ -518,7 +518,7 @@ export class Agent implements AgentController {
 		}
 	}
 
-	executeInBackground(runId: AgentRunId): void {
+	private executeInBackground(runId: AgentRunId): void {
 		const controller = registerActiveRun(runId);
 		const cleanup = () => releaseActiveRun(runId);
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
