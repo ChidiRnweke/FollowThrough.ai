@@ -8,7 +8,8 @@ import type { ToolRetriever } from './services/agent/tools/tool-retriever';
 import type { ITextRecognition } from './services/attachments/mistral-ocr';
 import type { IImageDescription } from './services/attachments/image-description';
 import type { AttachmentClaims } from './services/attachments/contracts';
-import type { Condenser, EmbeddingClient } from './services/knowledge-search/contracts';
+import type { EmbeddingClient } from './services/knowledge-search/contracts';
+import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
 import type { Reranker } from './services/knowledge-search/semantic';
 import type { ReferenceFinder } from './services/references/contracts';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
@@ -44,7 +45,7 @@ import { createAgentFilesCapability } from './factories/capabilities/agent-files
 export interface ApplicationOverrides {
 	readonly embeddingClient?: EmbeddingClient;
 	readonly reranker?: Reranker;
-	readonly condenser?: Condenser;
+	readonly queryGenerator?: ISearchQueryGeneration;
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceFinder?: ReferenceFinder;
 	readonly modelCatalog?: AgentModelCatalog;
@@ -172,11 +173,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		appURL,
 		embeddingClient: overrides.embeddingClient,
 		reranker: overrides.reranker,
-		condenser: overrides.condenser,
+		queryGenerator: overrides.queryGenerator,
 		deferEmbedding
 	});
 	const {
-		condenser,
+		queryGenerator,
 		noteIndexer,
 		diagramIndexer,
 		memoryIndexer,
@@ -532,7 +533,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		retrieval: {
 			knowledgeSearcher,
-			condenser,
+			queryGenerator,
 			conversations: conversationJournal
 		},
 		inlineSuggestions: {

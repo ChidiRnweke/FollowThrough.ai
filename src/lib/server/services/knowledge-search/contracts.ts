@@ -32,6 +32,3 @@ export interface Reranker {
 		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]>;
 }
-export interface Condenser {
-	condense(text: string): Promise<string>;
-}

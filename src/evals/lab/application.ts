@@ -3,11 +3,15 @@ import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
-import { ConversationSummary } from '$lib/server/services/agent/conversations/summary';
+import { SearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
-import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
+import {
+	CachedSearchQueryGeneration,
+	CachedEmbeddingClient,
+	CachedReranker
+} from './cache/cached-clients';
 import type { Database } from '$lib/server/db';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
@@ -92,8 +96,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		overrides: {
 			embeddingClient,
 			reranker: new CachedReranker(new SearchRanking(openRouterApiKey, clientOptions), cache),
-			condenser: new CachedCondenser(
-				new ConversationSummary(openRouterApiKey, clientOptions),
+			queryGenerator: new CachedSearchQueryGeneration(
+				new SearchQueryGeneration(openRouterApiKey, clientOptions),
 				cache
 			),
 			attachmentStorage: new InMemoryAttachmentStorage(),

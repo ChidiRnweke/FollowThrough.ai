@@ -3,7 +3,8 @@ import type { ActorContext, UserId } from '$lib/models/identity';
 import type { ConversationId, Message } from '$lib/models/agent';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocument, SearchMatch } from '$lib/models/knowledge-search';
-import type { Condenser, KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
+import type { KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
+import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import type { SearchFilter } from '$lib/server/repositories/knowledge-search';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 import { Retrieval } from './controller';
@@ -48,7 +49,7 @@ class RecordingSearcher implements KnowledgeSearcher {
 	}
 }
 
-const condenser: Condenser = { condense: async () => 'CONDENSED' };
+const queryGenerator: ISearchQueryGeneration = { generate: async () => 'CONDENSED' };
 const journalOf = (messages: readonly Message[]): ConversationJournal =>
 	({ listMessages: async () => messages }) as unknown as ConversationJournal;
 
@@ -57,7 +58,7 @@ describe('Retrieval', () => {
 		const searcher = new RecordingSearcher();
 		await new Retrieval({
 			knowledgeSearcher: searcher,
-			condenser,
+			queryGenerator,
 			conversations: journalOf([])
 		}).search(actor, { query: 'raw query' });
 		expect(searcher.query).toBe('raw query');
@@ -67,7 +68,7 @@ describe('Retrieval', () => {
 		const searcher = new RecordingSearcher();
 		await new Retrieval({
 			knowledgeSearcher: searcher,
-			condenser,
+			queryGenerator,
 			conversations: journalOf([message('user', 'first')])
 		}).search(actor, { query: 'raw query', conversationId: 'conv-1' as ConversationId });
 		expect(searcher.query).toBe('raw query');
@@ -77,7 +78,7 @@ describe('Retrieval', () => {
 		const searcher = new RecordingSearcher();
 		await new Retrieval({
 			knowledgeSearcher: searcher,
-			condenser,
+			queryGenerator,
 			conversations: journalOf([message('user', 'a'), message('assistant', 'b')])
 		}).search(actor, { query: 'follow up', conversationId: 'conv-1' as ConversationId });
 		expect(searcher.query).toBe('CONDENSED');
@@ -87,7 +88,7 @@ describe('Retrieval', () => {
 		const searcher = new RecordingSearcher([searchMatch('x'.repeat(2000))]);
 		const results = await new Retrieval({
 			knowledgeSearcher: searcher,
-			condenser,
+			queryGenerator,
 			conversations: journalOf([])
 		}).search(actor, { query: 'q' });
 		expect(results[0]!.content.length).toBe(2000);
@@ -97,7 +98,7 @@ describe('Retrieval', () => {
 		const searcher = new RecordingSearcher();
 		await new Retrieval({
 			knowledgeSearcher: searcher,
-			condenser,
+			queryGenerator,
 			conversations: journalOf([])
 		}).search(actor, { query: 'q', noteId: 'note-9' as never });
 		expect(searcher.filter).toEqual({ noteId: 'note-9' });
