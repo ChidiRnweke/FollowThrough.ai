@@ -149,14 +149,3 @@ export class ProjectCatalog {
 		return entry;
 	}
 }
-
-export type ProjectCreator = Pick<ProjectCatalog, 'create'>;
-export type ProjectReader = Pick<ProjectCatalog, 'get'>;
-export type ProjectLister = Pick<ProjectCatalog, 'list'>;
-export type ProjectEditor = Pick<
-	ProjectCatalog,
-	'rename' | 'archive' | 'setSectionNumberingDefault'
->;
-export type ProjectTreeReader = Pick<ProjectCatalog, 'read'>;
-export type FolderCreator = Pick<ProjectCatalog, 'createFolder'>;
-export type ProjectEntryMover = Pick<ProjectCatalog, 'move'>;

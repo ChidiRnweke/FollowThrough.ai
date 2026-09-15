@@ -115,9 +115,3 @@ export class RelationshipGraph {
 		);
 	}
 }
-
-export type RelationshipCreator = Pick<RelationshipGraph, 'create'>;
-export type RelationshipDeleter = Pick<RelationshipGraph, 'delete'>;
-export type RelationshipFinder = Pick<RelationshipGraph, 'findForNote'>;
-export type NoteLinkReconciler = Pick<RelationshipGraph, 'reconcile'>;
-export type BacklinkViewAssembler = Pick<RelationshipGraph, 'assemble'>;

@@ -35,18 +35,6 @@ type Url = Brand<string, 'Url'>;
 
 type Confidence = Brand<number, 'Confidence'>;
 
-interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-interface ProseMirrorNodeView {
-	readonly type: string;
-	readonly text?: string;
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-
-type NoteKind = 'folder' | 'note' | 'skill';
-
 type TodoStatus = 'backlog' | 'open' | 'in_progress' | 'done' | 'cancelled';
 
 type TodoResponsibility = 'mine' | 'waiting_on';
@@ -64,26 +52,6 @@ type DiagramKind = 'mermaid' | 'drawio';
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
 
 export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
-
-interface Note {
-	readonly id: NoteId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly parentId?: NoteId;
-	readonly kind: NoteKind;
-	readonly position: number;
-	readonly title: string;
-	readonly builtInKey?: string;
-	readonly document: ProseMirrorDocument;
-	readonly plainText: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly isPinned: boolean;
-	readonly publishedAt?: DateTime;
-	readonly archivedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
 
 interface SourceAnchor {
 	readonly id: SourceAnchorId;
@@ -546,7 +514,11 @@ export interface RevertSuggestionInput {
 	readonly suggestionId: SuggestionId;
 }
 
-type NoteRef = Pick<Note, 'id' | 'title'>;
+/** The identity and label needed to navigate to a note. */
+interface NoteRef {
+	readonly id: NoteId;
+	readonly title: string;
+}
 
 /** A suggestion with everything a review UI needs to render a decision: the source note, the quoted anchor, and who or what proposed it. */
 export interface SuggestionView {

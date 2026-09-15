@@ -47,7 +47,7 @@ export interface ImportsDependencies {
 		save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput>;
 	};
 	readonly projects: {
-		createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput>;
+		createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput<Note>>;
 	};
 }
 

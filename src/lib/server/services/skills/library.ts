@@ -302,10 +302,3 @@ export class SkillLibrary {
 		return this.skills.setPinned(actor, noteId, projectId, pinned);
 	}
 }
-
-export type SkillCreator = Pick<SkillLibrary, 'create' | 'createFromSelection'>;
-export type SkillEditor = Pick<SkillLibrary, 'update' | 'serialize' | 'setPinned'>;
-export type SkillFinder = Pick<SkillLibrary, 'listEnabled' | 'listAll' | 'load'>;
-export type SkillUsageLister = Pick<SkillLibrary, 'list'>;
-export type SkillUsageRecorder = Pick<SkillLibrary, 'record'>;
-export type SkillVersionManager = Pick<SkillLibrary, 'listVersions' | 'restoreVersion'>;

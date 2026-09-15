@@ -201,12 +201,3 @@ export class SuggestionInbox {
 		}
 	}
 }
-
-export type SuggestionCreator = Pick<SuggestionInbox, 'create'>;
-export type SuggestionFinder = Pick<SuggestionInbox, 'get'>;
-export type SuggestionLister = Pick<SuggestionInbox, 'listByStatus' | 'countByStatus'>;
-export type SuggestionViewAssembler = Pick<SuggestionInbox, 'assemble'>;
-export type SuggestionAccepter = Pick<SuggestionInbox, 'accept'>;
-export type SuggestionRejecter = Pick<SuggestionInbox, 'reject'>;
-export type SuggestionReverter = Pick<SuggestionInbox, 'revert'>;
-export type SuggestionExpirer = Pick<SuggestionInbox, 'expire'>;

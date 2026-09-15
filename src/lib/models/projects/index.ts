@@ -10,16 +10,6 @@ type TemplateId = Brand<string, 'TemplateId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
 
-interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-interface ProseMirrorNodeView {
-	readonly type: string;
-	readonly text?: string;
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-
 type NoteKind = 'folder' | 'note' | 'skill';
 
 /**
@@ -59,40 +49,20 @@ export interface Project {
 	readonly updatedAt: DateTime;
 }
 
-interface Note {
+/** The fields displayed by the project tree; document content belongs to notes. */
+export interface ProjectEntryReference {
 	readonly id: NoteId;
-	readonly userId: UserId;
 	readonly projectId: ProjectId;
 	readonly parentId?: NoteId;
 	readonly kind: NoteKind;
 	readonly position: number;
 	readonly title: string;
-	readonly builtInKey?: string;
-	readonly document: ProseMirrorDocument;
-	readonly plainText: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
 	readonly isPinned: boolean;
-	readonly publishedAt?: DateTime;
 	readonly archivedAt?: DateTime;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+	readonly currentRevision: number;
 }
-
-type NoteSummary = Pick<
-	Note,
-	| 'id'
-	| 'projectId'
-	| 'parentId'
-	| 'kind'
-	| 'position'
-	| 'title'
-	| 'isPinned'
-	| 'archivedAt'
-	| 'createdAt'
-	| 'updatedAt'
-	| 'currentRevision'
->;
 
 export const projectTemplateStylesSchema = z
 	.object({
@@ -139,7 +109,7 @@ export interface ProjectTemplate {
 
 /** One entry in the project's document tree; folders nest children, notes never do. */
 export interface ProjectTreeNode {
-	readonly entry: NoteSummary;
+	readonly entry: ProjectEntryReference;
 	readonly children: readonly ProjectTreeNode[];
 }
 
@@ -223,8 +193,8 @@ export interface CreateFolderInput {
 	readonly parentId?: NoteId;
 }
 
-export interface CreateFolderOutput {
-	readonly folder: Note;
+export interface CreateFolderOutput<Document> {
+	readonly folder: Document;
 }
 
 export interface MoveProjectEntryInput {
@@ -234,8 +204,8 @@ export interface MoveProjectEntryInput {
 	readonly position: number;
 }
 
-export interface MoveProjectEntryOutput {
-	readonly entry: Note;
+export interface MoveProjectEntryOutput<Document> {
+	readonly entry: Document;
 }
 
 export interface RenameProjectInput {

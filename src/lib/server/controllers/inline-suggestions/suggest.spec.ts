@@ -9,7 +9,7 @@ import type {
 	InlineSuggestionThrottle
 } from '$lib/server/services/agent/runs/contracts';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
-import type { NoteReader } from '$lib/server/services/notes/catalog';
+import type { NoteReader } from '$lib/server/services/notes/contracts';
 import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InlineSuggestions, type InlineSuggestionsDependencies } from './controller';
 

@@ -24,16 +24,6 @@ type Url = Brand<string, 'Url'>;
 
 type Confidence = Brand<number, 'Confidence'>;
 
-interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-interface ProseMirrorNodeView {
-	readonly type: string;
-	readonly text?: string;
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-
 interface TextSelection {
 	readonly noteId: NoteId;
 	readonly revision: number;
@@ -41,8 +31,6 @@ interface TextSelection {
 	readonly to: number;
 	readonly text: string;
 }
-
-type NoteKind = 'folder' | 'note' | 'skill';
 
 type TodoResponsibility = 'mine' | 'waiting_on';
 
@@ -55,26 +43,6 @@ type DiagramKind = 'mermaid' | 'drawio';
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
 
 type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
-
-interface Note {
-	readonly id: NoteId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly parentId?: NoteId;
-	readonly kind: NoteKind;
-	readonly position: number;
-	readonly title: string;
-	readonly builtInKey?: string;
-	readonly document: ProseMirrorDocument;
-	readonly plainText: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly isPinned: boolean;
-	readonly publishedAt?: DateTime;
-	readonly archivedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
 
 interface NoteRelationship {
 	readonly id: RelationshipId;
@@ -190,7 +158,11 @@ export interface RelateSelectionOutput {
 	readonly suggestions: readonly Suggestion[];
 }
 
-type NoteRef = Pick<Note, 'id' | 'title'>;
+/** The identity and label needed to navigate to a note. */
+interface NoteRef {
+	readonly id: NoteId;
+	readonly title: string;
+}
 
 /** A relationship plus both endpoint notes, resolved for display without a second round trip. */
 export interface BacklinkView {

@@ -211,10 +211,3 @@ export class MemoryLibrary {
 			throw new NotFoundError('Memory project was not found');
 	}
 }
-
-export type MemoryEntryReader = Pick<MemoryLibrary, 'get'>;
-export type MemoryEntryLister = Pick<MemoryLibrary, 'list'>;
-export type MemoryEntryCreator = Pick<MemoryLibrary, 'create'>;
-export type MemoryEntryEditor = Pick<MemoryLibrary, 'update'>;
-export type MemoryEntryDeleter = Pick<MemoryLibrary, 'remove'>;
-export type MemoryChangeApplier = Pick<MemoryLibrary, 'apply' | 'revert'>;

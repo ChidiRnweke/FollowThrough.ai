@@ -1,3 +1,4 @@
+import type { Note } from '$lib/models/notes';
 import type {
 	ProjectMutationRequest,
 	WorkspaceMutationResult
@@ -55,9 +56,9 @@ export interface ProjectsController {
 		input: SetProjectSectionNumberingInput
 	): Promise<SetProjectSectionNumberingOutput>;
 	/** Create a folder inside a project. */
-	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput>;
+	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput<Note>>;
 	/** Move a note or folder to a new parent and position, atomically. */
-	move(actor: ActorContext, input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput>;
+	move(actor: ActorContext, input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput<Note>>;
 }
 
 export interface ProjectsDependencies {
@@ -135,11 +136,17 @@ export class Projects implements ProjectsController {
 		};
 	}
 
-	async createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput> {
+	async createFolder(
+		actor: ActorContext,
+		input: CreateFolderInput
+	): Promise<CreateFolderOutput<Note>> {
 		return { folder: await this.dependencies.folderCreator.createFolder(actor, input) };
 	}
 
-	async move(actor: ActorContext, input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput> {
+	async move(
+		actor: ActorContext,
+		input: MoveProjectEntryInput
+	): Promise<MoveProjectEntryOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => ({
 			entry: await this.dependencies.entryMover.move(actor, input)
 		}));

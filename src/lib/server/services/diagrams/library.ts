@@ -304,16 +304,3 @@ export class DiagramLibrary {
 		});
 	}
 }
-
-export type DiagramFinder = Pick<DiagramLibrary, 'get'>;
-export type DiagramLister = Pick<
-	DiagramLibrary,
-	'listForNote' | 'listForProject' | 'countForProject'
->;
-export type DiagramWriter = Pick<DiagramLibrary, 'create' | 'update'>;
-export type DiagramDeleter = Pick<DiagramLibrary, 'delete'>;
-export type DiagramDraftWriter = Pick<
-	DiagramLibrary,
-	'saveDraftSource' | 'rename' | 'publish' | 'recordRevision' | 'restore'
->;
-export type DiagramRevisionReader = Pick<DiagramLibrary, 'revisions' | 'revision'>;

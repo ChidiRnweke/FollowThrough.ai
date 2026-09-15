@@ -406,19 +406,3 @@ export class NoteCatalog {
 		);
 	}
 }
-
-export type NoteCreator = Pick<NoteCatalog, 'create'>;
-export type NoteReader = Pick<NoteCatalog, 'get'>;
-export type NoteTreeReader = Pick<NoteCatalog, 'list'>;
-export type NoteTextSearcher = Pick<NoteCatalog, 'listSearchable'>;
-export type NoteEditor = Pick<NoteCatalog, 'save'>;
-export type NoteArchiver = Pick<NoteCatalog, 'archive' | 'restore'>;
-export type NotePublisher = Pick<NoteCatalog, 'markPublished'>;
-export type NoteRevisionRecorder = Pick<NoteCatalog, 'record'>;
-export type NoteRevisionReader = Pick<NoteCatalog, 'latestRevision' | 'revisions' | 'revisionById'>;
-export type NoteTrashReader = Pick<NoteCatalog, 'listTrashed'>;
-export type NoteAttachmentRestorer = Pick<NoteCatalog, 'restoreAttachments'>;
-export interface SelectionAnchorCreator {
-	create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor>;
-}
-export type SourceAnchorRepairer = Pick<NoteCatalog, 'repairForNote'>;

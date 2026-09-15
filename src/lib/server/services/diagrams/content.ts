@@ -60,8 +60,3 @@ export class DiagramContent {
 			.trim();
 	}
 }
-
-export type MermaidDiagramCreator = Pick<DiagramContent, 'create'>;
-export type MermaidDiagramReviser = Pick<DiagramContent, 'revise'>;
-export type MermaidDiagramRenderer = Pick<DiagramContent, 'render'>;
-export type DiagramTextExtractor = Pick<DiagramContent, 'extract'>;
