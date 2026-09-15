@@ -21,8 +21,7 @@ const setup = () => {
 			diagrams,
 			new DrawioXmlValidator(),
 			new DrawioSvgSanitizer(),
-			new DrawioDiagramTextExtractor(),
-			diagrams
+			new DrawioDiagramTextExtractor()
 		)
 	};
 };
@@ -49,12 +48,6 @@ describe('Writing a new version of a draw.io diagram', () => {
 		const { writes, current } = setup();
 		const diagram = await writes.write(testActor(), current, revision);
 		expect(diagram.searchableText).not.toBe(current.searchableText);
-	});
-
-	it('re-indexes the diagram it wrote', async () => {
-		const { writes, current, diagrams } = setup();
-		const diagram = await writes.write(testActor(), current, revision);
-		expect(diagrams.indexedIds).toEqual([diagram.id]);
 	});
 
 	it('refuses source that is not valid draw.io XML', async () => {

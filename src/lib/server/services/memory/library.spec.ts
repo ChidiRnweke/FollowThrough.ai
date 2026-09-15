@@ -3,14 +3,9 @@ import type { MemoryChangePayload } from '$lib/models/memory';
 import type { Provenance } from '$lib/models/provenance';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { MemoryLibrary } from './library';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
 	projectBuilder,
 	testActor,
@@ -23,7 +18,6 @@ const setup = async () => {
 	const entries = new InMemoryMemoryEntryRepository();
 	const projects = new InMemoryProjectRepository();
 	const provenance = new InMemoryProvenanceRepository();
-	const search = new InMemorySearchRepository();
 	projects.projects = [projectBuilder()];
 	const record: Provenance = {
 		id: testProvenanceId(),
@@ -35,13 +29,8 @@ const setup = async () => {
 		createdAt: testNow
 	};
 	await provenance.insert(testActor(), record);
-	const service = new MemoryLibrary(
-		entries,
-		projects,
-		provenance,
-		new ContentIndex(search, new InMemoryEmbeddingClient()).memories
-	);
-	return { entries, projects, provenance, search, service };
+	const service = new MemoryLibrary(entries, projects, provenance);
+	return { entries, projects, provenance, service };
 };
 
 const addPayload = (overrides: Partial<MemoryChangePayload> = {}): MemoryChangePayload => ({
@@ -66,51 +55,6 @@ describe('Memory entry management invariants', () => {
 		).rejects.toBeInstanceOf(ValidationError);
 	});
 
-	it('indexes a shared entry into search chunks', async () => {
-		const { search, service } = await setup();
-		await service.create(testActor(), { projectId: testProjectId(), content: 'Fact' });
-		expect(search.documents).toHaveLength(1);
-	});
-
-	it('marks memory-sourced chunks with the entry id', async () => {
-		const { search, service } = await setup();
-		const entry = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact'
-		});
-		expect(search.documents[0]?.document.memoryEntryId).toBe(entry.id);
-	});
-
-	it('does not index an entry withheld from agents', async () => {
-		const { search, service } = await setup();
-		await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact',
-			shareWithAgents: false
-		});
-		expect(search.documents).toEqual([]);
-	});
-
-	it('removes chunks when sharing is switched off', async () => {
-		const { search, service } = await setup();
-		const entry = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact'
-		});
-		await service.update(testActor(), { memoryEntryId: entry.id, shareWithAgents: false });
-		expect(search.documents).toEqual([]);
-	});
-
-	it('reindexes edited content', async () => {
-		const { search, service } = await setup();
-		const entry = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Old fact'
-		});
-		await service.update(testActor(), { memoryEntryId: entry.id, content: 'New fact' });
-		expect(search.documents[0]?.document.content).toBe('New fact');
-	});
-
 	it('hides a removed entry from the project list', async () => {
 		const { service } = await setup();
 		const entry = await service.create(testActor(), {
@@ -120,16 +64,6 @@ describe('Memory entry management invariants', () => {
 		await service.remove(testActor(), entry.id);
 		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
 	});
-
-	it('removes chunks when an entry is removed', async () => {
-		const { search, service } = await setup();
-		const entry = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact'
-		});
-		await service.remove(testActor(), entry.id);
-		expect(search.documents).toEqual([]);
-	});
 });
 
 describe('User profile memory invariants', () => {
@@ -137,12 +71,6 @@ describe('User profile memory invariants', () => {
 		const { service } = await setup();
 		const entry = await service.create(testActor(), { content: 'I lead the platform team.' });
 		expect(entry.projectId).toBeUndefined();
-	});
-
-	it('keeps profile entries out of the retrieval index', async () => {
-		const { search, service } = await setup();
-		await service.create(testActor(), { content: 'I lead the platform team.' });
-		expect(search.documents).toEqual([]);
 	});
 
 	it('lists profile entries without project entries', async () => {
@@ -209,17 +137,6 @@ describe('Memory change application invariants', () => {
 			testProvenanceId()
 		);
 		expect((await service.get(testActor(), original.id)).deletedAt).toBeDefined();
-	});
-
-	it('keeps only the replacement chunks after an update', async () => {
-		const { search, service } = await setup();
-		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const { entry: replacement } = await service.apply(
-			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
-			testProvenanceId()
-		);
-		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([replacement.id]);
 	});
 
 	it('rejects an update against a superseded entry', async () => {

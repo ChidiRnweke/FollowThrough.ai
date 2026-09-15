@@ -18,18 +18,13 @@ import type { ProjectRepository } from '$lib/server/repositories/projects/projec
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
 
-interface MemoryIndexer {
-	index(actor: ActorContext, entry: MemoryEntry): Promise<void>;
-}
-
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class MemoryLibrary {
 	constructor(
 		private readonly entries: MemoryEntryRepository,
 		private readonly projects: ProjectRepository,
-		private readonly provenance: ProvenanceRepository,
-		private readonly indexer: MemoryIndexer
+		private readonly provenance: ProvenanceRepository
 	) {}
 
 	async get(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
@@ -52,7 +47,6 @@ export class MemoryLibrary {
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		if (input.projectId) await this.requireProject(actor, input.projectId);
 		const entry = await this.entries.insert(actor, decision.entry);
-		await this.indexer.index(actor, entry);
 		return entry;
 	}
 
@@ -61,18 +55,17 @@ export class MemoryLibrary {
 		const decision = decideMemoryEdit(current, input, now());
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		const entry = await this.entries.update(actor, decision.entry);
-		await this.indexer.index(actor, entry);
 		return entry;
 	}
 
-	async remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void> {
+	async remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
 		const current = await this.getActive(actor, memoryEntryId);
 		const entry = await this.entries.update(actor, {
 			...current,
 			deletedAt: now(),
 			updatedAt: now()
 		});
-		await this.indexer.index(actor, entry);
+		return entry;
 	}
 
 	async apply(
@@ -111,7 +104,6 @@ export class MemoryLibrary {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
-		await this.indexer.index(actor, entry);
 		return { entry, changes: [{ kind: 'created', after: entry }] };
 	}
 
@@ -137,7 +129,6 @@ export class MemoryLibrary {
 			updatedAt: timestamp
 		});
 		const deleted = await this.softDelete(actor, target);
-		await this.indexer.index(actor, replacement);
 		return {
 			entry: replacement,
 			changes: [
@@ -179,7 +170,6 @@ export class MemoryLibrary {
 			deletedAt: now(),
 			updatedAt: now()
 		});
-		await this.indexer.index(actor, deleted);
 		return deleted;
 	}
 

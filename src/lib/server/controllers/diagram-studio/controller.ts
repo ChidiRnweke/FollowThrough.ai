@@ -61,7 +61,7 @@ import type {
 	DrawioXmlContentValidator
 } from '$lib/server/services/diagrams/contracts';
 import type { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
-import type { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
+import type { DrawioWriter } from '$lib/server/services/diagrams/contracts';
 
 /**
  * Application boundary for the project diagram studio: the canvas beside a
@@ -210,7 +210,7 @@ export interface DiagramStudioDependencies {
 	diagramArchiver: DiagramArchiver;
 	diagramWriter: DiagramWriter;
 	diagramIndexer: DiagramIndexer;
-	drawioWrites: DrawioWrites;
+	drawioWrites: DrawioWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	drawioTextExtractor: DiagramTextExtractor;
@@ -417,7 +417,9 @@ export class DiagramStudio implements DiagramStudioController {
 			const current = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 			if (current.kind !== 'drawio')
 				throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
-			return { diagram: await this.dependencies.drawioWrites.write(actor, current, input) };
+			const diagram = await this.dependencies.drawioWrites.write(actor, current, input);
+			await this.dependencies.diagramIndexer.index(actor, diagram);
+			return { diagram };
 		});
 	}
 

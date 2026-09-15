@@ -29,9 +29,7 @@ import {
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { IconifyIconSearch } from '$lib/server/services/diagrams/icons';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import { DrawioReview } from '$lib/server/services/diagrams/review';
 import { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkills } from '$lib/server/services/skills/built-ins';
@@ -52,7 +50,6 @@ export interface DiagramsCapabilityInput {
 	readonly builtInSkills: BuiltInSkills;
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
-	readonly indexer: ReturnType<ContentIndex['diagrams']>;
 	readonly sessions: AgentSessionRepository;
 	readonly projects: ProjectReader;
 }
@@ -61,7 +58,6 @@ export interface DiagramsCapability {
 	readonly library: DiagramLibrary;
 	readonly transforms: DiagramContent;
 	readonly authoring: DiagramAuthoring;
-	readonly review: DrawioReview;
 	readonly drawioWrites: DrawioWrites;
 	readonly suggestionValidator: DrawioXmlValidator;
 	readonly suggestionLabels: DrawioLabelExtractor;
@@ -87,8 +83,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		library,
 		new DrawioXmlValidator(),
 		new DrawioSvgSanitizer(),
-		new DrawioDiagramTextExtractor(),
-		input.indexer
+		new DrawioDiagramTextExtractor()
 	);
 	return {
 		library,
@@ -117,13 +112,6 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			observeWorkflow: traceWorkflow,
 			drawioValidator: new DrawioXmlValidator()
 		}),
-		drawioWrites,
-		review: new DrawioReview(
-			library,
-			new DrawioXmlValidator(),
-			new DrawioSvgSanitizer(),
-			new DrawioDiagramTextExtractor(),
-			input.indexer
-		)
+		drawioWrites
 	};
 };

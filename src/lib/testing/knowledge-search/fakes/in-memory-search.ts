@@ -1,4 +1,8 @@
 import type { ActorContext, UserId } from '$lib/models/identity';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -59,8 +63,15 @@ const sourceKey = (source: IndexSource): string =>
 					: source.attachmentId
 	}`;
 
-export class InMemorySearchRepository implements RetrievalIndexRepository {
+export class InMemorySearchRepository implements RetrievalIndexRepository, SnapshotParticipant {
 	documents: OwnedSearchDocument[] = [];
+
+	snapshot(): RestoreSnapshot {
+		const documents = structuredClone(this.documents);
+		return () => {
+			this.documents = documents;
+		};
+	}
 
 	async listForAttachment(
 		actor: ActorContext,

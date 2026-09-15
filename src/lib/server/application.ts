@@ -195,8 +195,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
-		provenance: provenanceRepository,
-		indexer: memoryIndexer
+		provenance: provenanceRepository
 	}).library;
 	const agentCapability = createAgentCapability({
 		db,
@@ -289,7 +288,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		builtInSkills: skillCapability.builtIns,
 		defaultModel: defaultAgentModel,
 		defaultVisionModel,
-		indexer: diagramIndexer,
 		projects
 	});
 	const diagrams = diagramCapability.library;
@@ -304,7 +302,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		drawioValidator: diagramCapability.suggestionValidator,
 		drawioLabels: diagramCapability.suggestionLabels
 	});
-	const drawioReview = diagramCapability.review;
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
@@ -394,7 +391,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			artifactApplier,
 			memoryIndexer,
 			diagramIndexer,
-			drawioReviewSaver: drawioReview,
+			drawioWrites: diagramCapability.drawioWrites,
 			transactionRunner,
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions
@@ -507,6 +504,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		trustPolicies: { trustPolicyStore: trust, syncMutations: synchronization.mutations },
 		memory: {
+			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			memoryLister: memory,
 			memoryCreator: memory,

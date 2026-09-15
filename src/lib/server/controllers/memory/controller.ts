@@ -1,3 +1,4 @@
+import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import { mapAppliedChange } from '$lib/models/proposal-effects';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { Suggestion } from '$lib/models/suggestions';
@@ -72,6 +73,7 @@ export interface MemoryController {
 }
 
 export interface MemoryDependencies {
+	memoryIndexer: MemoryIndexer;
 	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	memoryLister: MemoryEntryLister;
 	memoryCreator: MemoryEntryCreator;
@@ -118,18 +120,29 @@ export class Memory implements MemoryController {
 		actor: ActorContext,
 		input: CreateMemoryEntryInput
 	): Promise<{ entry: MemoryEntry }> {
-		return { entry: await this.dependencies.memoryCreator.create(actor, input) };
+		return this.dependencies.transactionRunner.run(async () => {
+			const entry = await this.dependencies.memoryCreator.create(actor, input);
+			await this.dependencies.memoryIndexer.index(actor, entry);
+			return { entry };
+		});
 	}
 
 	async update(
 		actor: ActorContext,
 		input: UpdateMemoryEntryInput
 	): Promise<{ entry: MemoryEntry }> {
-		return { entry: await this.dependencies.memoryEditor.update(actor, input) };
+		return this.dependencies.transactionRunner.run(async () => {
+			const entry = await this.dependencies.memoryEditor.update(actor, input);
+			await this.dependencies.memoryIndexer.index(actor, entry);
+			return { entry };
+		});
 	}
 
 	async remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void> {
-		await this.dependencies.memoryDeleter.remove(actor, input.memoryEntryId);
+		await this.dependencies.transactionRunner.run(async () => {
+			const entry = await this.dependencies.memoryDeleter.remove(actor, input.memoryEntryId);
+			await this.dependencies.memoryIndexer.index(actor, entry);
+		});
 	}
 
 	async propose(
@@ -159,6 +172,8 @@ export class Memory implements MemoryController {
 					suggestion.payload,
 					suggestion.provenanceId
 				);
+				for (const change of applied.changes)
+					await this.dependencies.memoryIndexer.index(actor, change.after);
 				const entry = applied.entry;
 				await this.dependencies.suggestionEffects.record(
 					actor,

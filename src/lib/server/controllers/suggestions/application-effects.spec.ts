@@ -1,3 +1,4 @@
+import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
@@ -61,7 +62,8 @@ describe('Proposal effect coordination', () => {
 						changes: [{ kind: 'created', after: { type: 'diagrams', value: generated } }]
 					})
 				},
-				drawioReviewSaver: { save: async () => reviewed },
+				drawioWrites: { write: async () => reviewed },
+				diagramIndexer: new InMemoryDiagrams(),
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects])
 			})
 		);

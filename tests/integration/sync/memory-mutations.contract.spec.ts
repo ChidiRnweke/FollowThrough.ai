@@ -21,16 +21,17 @@ const setup = async (suffix: string) => {
 	const { library } = createMemoryCapability({
 		db: database,
 		projects: new ProjectRecords(database),
-		provenance: new ProvenanceRecords(database),
-		indexer: new ContentIndex(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
-			.memories
+		provenance: new ProvenanceRecords(database)
 	});
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			syncMutations: sync.mutations,
 			memoryCreator: library,
 			memoryEditor: library,
-			memoryDeleter: library
+			memoryDeleter: library,
+			transactionRunner,
+			memoryIndexer: new ContentIndex(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
+				.memories
 		})
 	);
 	return { ...seeded, controller, sync };
