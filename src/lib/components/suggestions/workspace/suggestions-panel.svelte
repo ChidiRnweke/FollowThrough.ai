@@ -6,6 +6,7 @@
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import SuggestionCard from '../suggestion-card.svelte';
 	import AcceptedSuggestion from './accepted-suggestion.svelte';
+	import * as Collapsible from '$lib/components/ui/collapsible';
 
 	const projection = $derived(
 		workbench.focusedNoteId
@@ -58,12 +59,12 @@
 {/if}
 
 {#if accepted.length > 0}
-	<details class="mt-4">
-		<summary class="cursor-pointer text-sm font-medium"
-			>Accepted suggestions ({accepted.length})</summary
-		>
-		<div class="mt-3 flex flex-col gap-3">
+	<Collapsible.Root class="mt-4">
+		<Collapsible.Trigger class="cursor-pointer text-sm font-medium">
+			Accepted suggestions ({accepted.length})
+		</Collapsible.Trigger>
+		<Collapsible.Content class="mt-3 flex flex-col gap-3">
 			{#each accepted as view (view.suggestion.id)}<AcceptedSuggestion {view} />{/each}
-		</div>
-	</details>
+		</Collapsible.Content>
+	</Collapsible.Root>
 {/if}
