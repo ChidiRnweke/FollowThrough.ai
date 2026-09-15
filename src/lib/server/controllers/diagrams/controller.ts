@@ -18,7 +18,7 @@ import type {
 	ReviseInlineMermaidOutput
 } from '$lib/models/diagrams';
 import { NotFoundError, UnsupportedDiagramOperationError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramFinder,
 	DiagramIndexer,
@@ -34,7 +34,6 @@ import type {
 	DrawioXmlContentValidator,
 	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/contracts';
-import type { DrawioWriter } from '$lib/server/services/diagrams/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
@@ -142,7 +141,7 @@ export interface DiagramsDependencies {
 	mermaidReviser: MermaidDiagramReviser;
 	inlineMermaidReviser: InlineMermaidReviser;
 	inlineMermaidToDrawioConverter: InlineMermaidToDrawioConverter;
-	drawioWrites: DrawioWriter;
+	now: () => DateTime;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	mermaidRenderer: MermaidDiagramRenderer;
@@ -285,7 +284,21 @@ export class Diagrams implements DiagramsController {
 		current: DrawioDiagram,
 		input: { readonly source: string; readonly renderedSvg: string }
 	): Promise<SaveDrawioDiagramOutput> {
-		const diagram = await this.dependencies.drawioWrites.write(actor, current, input);
+		const source = this.dependencies.drawioXmlValidator.validate(input.source);
+		const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
+		const searchableText = await this.dependencies.drawioTextExtractor.extract({
+			...current,
+			source
+		});
+		const diagram = await this.dependencies.diagramWriter.update(actor, {
+			...current,
+			source,
+			renderedSvg,
+			searchableText,
+			updatedAt: this.dependencies.now()
+		});
+		if (diagram.kind !== 'drawio')
+			throw new UnsupportedDiagramOperationError('Expected a draw.io diagram after saving');
 		await this.dependencies.diagramIndexer.index(actor, diagram);
 		return { diagram };
 	}

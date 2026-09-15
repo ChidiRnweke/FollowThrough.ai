@@ -6,7 +6,7 @@ import {
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import {
 	DrawioDiagramTextExtractor,
@@ -14,7 +14,6 @@ import {
 	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
 
 const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg"><text>API</text></svg>';
 
@@ -27,13 +26,12 @@ const setup = (kind: 'drawio' | 'mermaid' = 'drawio') => {
 		capabilityDependencies<DiagramsDependencies>({
 			diagramFinder: diagrams,
 			diagramIndexer: diagrams,
-			drawioWrites: new DrawioWrites(
-				diagrams,
-				new DrawioXmlValidator(),
-				new DrawioSvgSanitizer(),
-				new DrawioDiagramTextExtractor()
-			),
-			transactionRunner: new InMemoryTransactionRunner([])
+			diagramWriter: diagrams,
+			drawioXmlValidator: new DrawioXmlValidator(),
+			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			drawioTextExtractor: new DrawioDiagramTextExtractor(),
+			now: () => testNow,
+			transactionRunner: new InMemoryTransactionRunner([diagrams])
 		})
 	);
 	return { controller, diagrams, diagram };
@@ -71,6 +69,16 @@ describe('Draw.io editor ownership invariants', () => {
 });
 
 describe('Last-save-wins draw.io persistence invariants', () => {
+	it('rejects a revision without a preview', async () => {
+		const { controller } = setup();
+		await expect(controller.saveDrawio(testActor(), input({ renderedSvg: '' }))).rejects.toThrow();
+	});
+	it('restores the previous diagram when indexing fails', async () => {
+		const { controller, diagrams, diagram } = setup();
+		diagrams.failIndex = true;
+		await controller.saveDrawio(testActor(), input()).catch(() => undefined);
+		expect(diagrams.diagrams).toEqual([diagram]);
+	});
 	it('rejects invalid XML without replacing current state', async () => {
 		const { controller, diagrams } = setup();
 		await controller

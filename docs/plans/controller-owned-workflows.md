@@ -69,7 +69,7 @@ Move behavior out of every model domain. Keep schemas and their inferred types b
 
 - [x] Trace the user's exact attachment revision and inspect concrete factory wiring.
 - [x] Inspect cross-domain service composition and all model behavior families.
-- [ ] Remove diagram write/review orchestration services; preserve guards and atomic indexing
+- [x] Remove diagram write/review orchestration services; preserve guards and atomic indexing
       in all three controller entry paths. Verify controller state and rollback tests.
 - [ ] Move attachment processing and OCR/image enrichment orchestration into controllers;
       preserve claims, partial results, retries and provider failure behavior.
@@ -88,6 +88,22 @@ Move behavior out of every model domain. Keep schemas and their inferred types b
       record each unresolved concern rather than declaring the global correction complete.
 - [ ] Run lint, type checks, architecture audits, full node/browser tests, contracts, docs and
       production PWA checks. Publish a self-contained PR and wait for required CI.
+
+## Full PR #57 scope
+
+The architectural inventory above does not replace PR #57's P01–P23 implementation list.
+All 23 slices remain in scope, including behavior corrections, client workflows, recovery,
+and test dispositions. The user reaffirmed this scope on 2026-09-16. Reconcile each slice
+with merged work and record verified results before marking it complete. Apply the user's
+model/service/controller rule to every slice. Do not stop when the layer moves are done.
+
+- P01 and the note portion of P12: implemented in merged PR #66; skill policy still needs review.
+- P14: durable claims and recovery landed in #64; controller ownership remains in progress.
+- P15: export preparation landed in #65; verify the other export findings separately.
+- P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
+  diagram findings remain to be checked.
+- P02–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
+  complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
 
