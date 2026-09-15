@@ -4,12 +4,14 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type {
 	Suggestion,
+	SelectionProposal,
+	ProposalSelectionOrigin,
 	SuggestionId,
 	SuggestionProposal,
 	SuggestionStatus,
 	SuggestionView
 } from '$lib/models/suggestions';
-import { materializeSuggestion } from '$lib/models/suggestions';
+import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
 import { ExpiredSuggestionError, InvalidTransitionError, NotFoundError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
@@ -37,6 +39,10 @@ export class SuggestionInbox {
 		private readonly clock: Clock = new SystemClock()
 	) {}
 
+	async create<P extends SuggestionProposal>(
+		actor: ActorContext,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
 		const [note, provenance, anchor] = await Promise.all([
 			proposal.noteId ? this.notes.findById(actor, proposal.noteId) : undefined,
@@ -51,15 +57,28 @@ export class SuggestionInbox {
 			throw new InvalidTransitionError('Suggestion anchor must belong to its note');
 		if (note && !this.payloadBelongsToNote(proposal, note.id, note.projectId))
 			throw new InvalidTransitionError('Suggestion payload must belong to its source note');
-		const timestamp = this.clock.now();
-		return this.suggestions.insert(
-			actor,
-			materializeSuggestion(proposal, {
-				id: crypto.randomUUID() as SuggestionId,
-				userId: actor.userId,
-				now: timestamp
-			})
-		);
+		return this.persist(actor, proposal);
+	}
+	async createFromSelection<P extends SelectionProposal>(
+		actor: ActorContext,
+		origin: ProposalSelectionOrigin,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
+	async createFromSelection(
+		actor: ActorContext,
+		origin: ProposalSelectionOrigin,
+		proposal: SelectionProposal
+	): Promise<Suggestion> {
+		return this.persist(actor, proposalFromSelection(origin, proposal));
+	}
+	private async persist(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
+		const suggestion = materializeSuggestion(proposal, {
+			id: crypto.randomUUID() as SuggestionId,
+			userId: actor.userId,
+			now: this.clock.now()
+		});
+		await this.suggestions.insert(actor, suggestion);
+		return suggestion;
 	}
 
 	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {

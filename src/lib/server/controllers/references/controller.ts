@@ -1,14 +1,13 @@
-import type { Suggestion } from '$lib/models/suggestions';
+import type { ReferenceSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { FindReferencesInput, FindReferencesOutput } from '$lib/models/references';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
 	ReferenceFinder,
 	ReferenceRanker,
 	ReferenceSearchOptions
 } from '$lib/server/services/references/contracts';
-import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
@@ -23,7 +22,7 @@ export interface ReferencesController {
 		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
-	): Promise<FindReferencesOutput<Suggestion>>;
+	): Promise<FindReferencesOutput<ReferenceSuggestion>>;
 	/**
 	 * Start {@link suggestFromSelection} as a cancellable run, returning once the run
 	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
@@ -36,10 +35,9 @@ export interface ReferencesController {
 }
 
 export interface ReferencesDependencies {
-	anchorCreator: SelectionAnchorCreator;
+	selectionOrigins: SelectionOriginService;
 	referenceFinder: ReferenceFinder;
 	referenceRanker: ReferenceRanker;
-	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
 	workflowRunner: WorkflowRunStarter;
@@ -64,35 +62,29 @@ export class References implements ReferencesController {
 		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
-	): Promise<FindReferencesOutput<Suggestion>> {
+	): Promise<FindReferencesOutput<ReferenceSuggestion>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
+			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+			const { anchor } = source;
 			const found = await this.dependencies.referenceFinder.find(actor, input.selection, options);
 			const ranked = await this.dependencies.referenceRanker.rank(actor, input.selection, found);
 			if (ranked.length === 0) return { outcome: 'nothing_relevant', anchorId: anchor.id };
-			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
+			const origin = await this.dependencies.selectionOrigins.record(actor, source, {
 				producerKind: 'pipeline',
 				producerName: 'Reference',
 				pipeline: 'reference',
-				sourceAnchorId: anchor.id,
 				metadata: {}
 			});
 			const suggestions = await Promise.all(
 				ranked.map((candidate) =>
-					this.dependencies.suggestionCreator.create(actor, {
+					this.dependencies.suggestionCreator.createFromSelection(actor, origin, {
 						kind: 'reference',
-						noteId: input.selection.noteId,
 						confidence: candidate.confidence,
-						provenanceId: provenance.id,
-						sourceAnchorId: anchor.id,
 						payload: {
-							noteId: input.selection.noteId,
 							url: candidate.url,
 							title: candidate.title,
 							tier: candidate.tier,
-							relevanceNote: candidate.relevanceNote,
-							sourceAnchorId: anchor.id,
-							provenanceId: provenance.id
+							relevanceNote: candidate.relevanceNote
 						}
 					})
 				)

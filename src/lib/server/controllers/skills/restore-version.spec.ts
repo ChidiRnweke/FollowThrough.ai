@@ -38,7 +38,6 @@ const setup = () => {
 			skillEditor: service,
 			skillUsageLister: service,
 			noteEditor: catalog,
-			noteReader: catalog,
 			revisionReader: catalog,
 			revisionRecorder: catalog,
 			attachmentRestorer: catalog,

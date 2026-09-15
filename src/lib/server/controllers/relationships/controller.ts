@@ -1,10 +1,9 @@
-import type { Suggestion } from '$lib/models/suggestions';
+import type { BacklinkSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { RelateSelectionInput, RelateSelectionOutput } from '$lib/models/relationships';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { LinkFinder } from '$lib/server/services/relationships/contracts';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
@@ -19,7 +18,7 @@ export interface RelationshipsController {
 		actor: ActorContext,
 		input: RelateSelectionInput,
 		signal?: AbortSignal
-	): Promise<RelateSelectionOutput<Suggestion>>;
+	): Promise<RelateSelectionOutput<BacklinkSuggestion>>;
 	/**
 	 * Start {@link suggestFromSelection} as a cancellable run, returning once the run
 	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
@@ -32,9 +31,8 @@ export interface RelationshipsController {
 }
 
 export interface RelationshipsDependencies {
-	anchorCreator: SelectionAnchorCreator;
+	selectionOrigins: SelectionOriginService;
 	linkFinder: LinkFinder;
-	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
 	workflowRunner: WorkflowRunStarter;
@@ -59,32 +57,26 @@ export class Relationships implements RelationshipsController {
 		actor: ActorContext,
 		input: RelateSelectionInput,
 		signal?: AbortSignal
-	): Promise<RelateSelectionOutput<Suggestion>> {
+	): Promise<RelateSelectionOutput<BacklinkSuggestion>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
+			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+			const { anchor } = source;
 			const candidates = await this.dependencies.linkFinder.find(actor, input.selection, signal);
-			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
+			const origin = await this.dependencies.selectionOrigins.record(actor, source, {
 				producerKind: 'pipeline',
 				producerName: 'Relate',
 				pipeline: 'relate',
-				sourceAnchorId: anchor.id,
 				metadata: {}
 			});
 			const suggestions = await Promise.all(
 				candidates.map((candidate) =>
-					this.dependencies.suggestionCreator.create(actor, {
+					this.dependencies.suggestionCreator.createFromSelection(actor, origin, {
 						kind: 'backlink',
-						noteId: input.selection.noteId,
 						confidence: candidate.confidence,
-						provenanceId: provenance.id,
-						sourceAnchorId: anchor.id,
 						payload: {
-							sourceNoteId: input.selection.noteId,
 							targetNoteId: candidate.targetNoteId,
 							kind: candidate.kind,
-							justification: candidate.justification,
-							sourceAnchorId: anchor.id,
-							provenanceId: provenance.id
+							justification: candidate.justification
 						}
 					})
 				)

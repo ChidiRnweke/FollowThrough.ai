@@ -2,6 +2,8 @@ import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type {
 	Suggestion,
+	SelectionProposal,
+	ProposalSelectionOrigin,
 	SuggestionId,
 	SuggestionProposal,
 	SuggestionStatus,
@@ -11,7 +13,15 @@ import type {
 export type { SuggestionProposal } from '$lib/models/suggestions';
 
 export interface SuggestionCreator {
-	create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion>;
+	create<P extends SuggestionProposal>(
+		actor: ActorContext,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
+	createFromSelection<P extends SelectionProposal>(
+		actor: ActorContext,
+		origin: ProposalSelectionOrigin,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 }
 export interface SuggestionFinder {
 	get(actor: ActorContext, id: SuggestionId): Promise<Suggestion>;

@@ -1,3 +1,4 @@
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import {
@@ -30,15 +31,13 @@ const setup = () => {
 	const provenance = new InMemoryProvenanceRecorder();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
-			anchorCreator: notes,
-			noteReader: catalog,
+			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			noteCreator: catalog,
 			noteEditor: catalog,
 			anchorRepairer: catalog,
 			noteLinkReconciler: notes,
 			noteIndexer: notes,
 			skillCreator: skills,
-			provenanceRecorder: provenance,
 			transactionRunner: new InMemoryTransactionRunner([notes, provenance, skills])
 		})
 	);

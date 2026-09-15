@@ -4,7 +4,7 @@
 
 - [x] Generic aggregate participants: PR #44 merged; required CI checks passed.
 - [x] Shared placement, lifecycle and task decisions and incomplete-inventory checks: PR #47; required CI checks passed.
-- [ ] Route skill document writes through note services; make imports drafts and publication snapshots.
+- [x] Shared skill document writes and import drafts: PR #48; required CI checks passed.
 - [ ] Resolve selection origins once in the reference, relationship, task and skill controllers.
 - [ ] Persist proposal application effects and reverse them under version checks; refuse legacy undo.
 - [ ] Share agent/workflow settlement and browser event consumption; test cancellation races.
