@@ -7,8 +7,10 @@ import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/
 import type { ProvenanceRecorder } from '../services/notes/provenance';
 import type { ToolRetriever } from '../services/agent/tools/tool-retriever';
 import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
-import { SignIn } from '$lib/server/services/identity/sign-in';
-import type { IOSessionRegistry } from '$lib/server/services/identity/sign-in';
+import { SignIn, type ISignIn } from '$lib/server/controllers/identity/controller';
+import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
+import { ProviderAccounts } from '$lib/server/services/identity/provider-accounts';
+import { AuthentikClient } from '$lib/server/repositories/identity/authentik';
 import { SessionRecords } from '../repositories/identity/postgres/sessions';
 import { UserRecords } from '../repositories/identity/postgres/users';
 import { db } from '../db';
@@ -27,9 +29,14 @@ class DeferredValue<T> {
 const application = new DeferredValue(createProductionFactory);
 const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
 const accessTokens = new DeferredValue(() => new AccessTokens(new ApiTokenRecords(db)));
-const signIn = new DeferredValue(
-	() => new SignIn(new UserRecords(db), new SessionRecords(db), authentikConfiguration())
-);
+const signIn = new DeferredValue(() => {
+	const config = authentikConfiguration();
+	return new SignIn({
+		authorization: new OAuthAuthorization(new AuthentikClient(config), config),
+		accounts: new ProviderAccounts(new UserRecords(db)),
+		sessions: sessions.get()
+	});
+});
 
 export class AppFactory {
 	private static application(): ProductionApplication {
@@ -68,7 +75,7 @@ export class AppFactory {
 		return accessTokens.get();
 	}
 
-	static signIn(): IOSessionRegistry {
+	static signIn(): ISignIn {
 		return signIn.get();
 	}
 
