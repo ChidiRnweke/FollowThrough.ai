@@ -195,8 +195,11 @@ export class AttachmentStorage implements IAttachmentStorage {
 	}
 }
 
-import type { AttachmentParser } from '$lib/server/repositories/attachments/processing';
-export type { AttachmentParser } from '$lib/server/repositories/attachments/processing';
+export interface AttachmentParser {
+	readonly kind: string;
+	supports(mediaType: string, path: string): boolean;
+	parse(bytes: Uint8Array): Promise<string>;
+}
 
 const TEXT_EXTENSIONS = new Set([
 	'md',

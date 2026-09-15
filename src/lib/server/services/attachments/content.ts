@@ -1,115 +1,40 @@
-import type {
-	OcrContentPart,
-	OcrEngineClient,
-	ImageDescriber,
-	OcrParseInput,
-	DocumentOcr
-} from '$lib/server/repositories/attachments/processing';
-export type {
-	OcrContentPart,
-	OcrEngineClient,
-	ImageDescriber,
-	OcrParseInput,
-	DocumentOcr
-} from '$lib/server/repositories/attachments/processing';
-/**
- * A document can now come back with far more images than the old per-request
- * budget allowed, and each description is its own round trip, so they are
- * described in parallel rather than one after another. Output order still
- * follows the document.
- */
-const DESCRIPTION_CONCURRENCY = 4;
+import type { RecognizedContent } from '$lib/models/attachments/ocr';
+import type { DocumentImageDescription, DocumentContentSlot } from '$lib/models/attachments/ocr';
+import { ValidationError } from '$lib/errors';
 
-/**
- * Runs OCR over a document and returns one enriched markdown string: the
- * engine's markdown parts in order, with each embedded image replaced by an
- * inlined description at the image's position. Image description failures are
- * non-fatal (a placeholder is kept); OCR engine failures propagate so processing
- * records a failure that the user can retry. Tables arrive as markdown from the
- * engine and are passed through untouched.
- */
-export class AttachmentContent implements DocumentOcr {
-	constructor(
-		private readonly engine: OcrEngineClient,
-		private readonly describer: ImageDescriber
-	) {}
-
-	async parse(input: OcrParseInput): Promise<string> {
-		const content = await this.engine.ocr({
-			documentUrl: input.documentUrl,
-			kind: input.kind,
-			fileName: input.fileName,
-			...(input.maxPages === undefined ? {} : { maxPages: input.maxPages })
-		});
-		return this.render(content.parts, input.visionModel);
-	}
-
-	private async render(parts: readonly OcrContentPart[], model: string): Promise<string> {
-		// Resolve every slot's text first so descriptions can run concurrently
-		// without disturbing the document's reading order.
-		const rendered: string[] = new Array(parts.length).fill('');
-		const images: { slot: number; dataUrl: string; index: number; context?: string }[] = [];
-		let imageIndex = 0;
+/** Reading order and Markdown presentation; provider calls belong to the controller. */
+export class AttachmentContent {
+	plan(parts: readonly RecognizedContent[]): readonly DocumentContentSlot[] {
+		let index = 0;
 		let precedingMarkdown: string | undefined;
-
-		parts.forEach((part, slot) => {
+		return parts.map((part) => {
 			if (part.kind === 'markdown') {
 				const text = part.text.trim();
-				rendered[slot] = text;
 				if (text) precedingMarkdown = text;
-				return;
+				return { kind: 'markdown', text };
 			}
-			imageIndex += 1;
-			images.push({
-				slot,
-				dataUrl: part.dataUrl,
-				index: imageIndex,
+			return {
+				kind: 'image',
+				imageDataUrl: part.dataUrl,
+				index: ++index,
 				...(precedingMarkdown ? { context: precedingMarkdown.slice(-1000) } : {})
-			});
+			};
 		});
-
-		let next = 0;
-		const worker = async () => {
-			while (next < images.length) {
-				const image = images[next++];
-				rendered[image.slot] = await this.describeImage(image, model);
-			}
-		};
-		await Promise.all(
-			Array.from({ length: Math.min(DESCRIPTION_CONCURRENCY, images.length) }, worker)
-		);
-
-		return rendered.filter(Boolean).join('\n\n');
 	}
 
-	/**
-	 * One image's line, described if the vision model could and marked if it could not.
-	 *
-	 * A failure used to escape here and take the whole parse with it, so one
-	 * unreadable image cost the reader every other image in the document and the
-	 * text around them. The image is still in the document either way; what is in
-	 * doubt is only whether anything can be said about it.
-	 *
-	 * The placeholder is not a default dressed as a success — it says, in the text
-	 * the agent goes on to read, that this image was not described. Silently
-	 * dropping the line would have been the dishonest fix: the agent would have
-	 * answered about a document it could not see all of, and never known.
-	 */
-	private async describeImage(
-		image: { dataUrl: string; index: number; context?: string },
-		model: string
-	): Promise<string> {
-		try {
-			const description = await this.describer.describe({
-				imageDataUrl: image.dataUrl,
-				...(image.context ? { context: image.context } : {}),
-				model
-			});
-			return `> **Image ${image.index}:** ${description}`;
-			// audit-allow: silent-catch — the returned placeholder states the failure in the rendered document, and the warn names it for an operator.
-		} catch (error) {
-			console.warn(`[attachments] Image ${image.index} could not be described.`, error);
-			return `> **Image ${image.index}:** (description unavailable)`;
-		}
+	render(
+		slots: readonly DocumentContentSlot[],
+		descriptions: ReadonlyMap<number, DocumentImageDescription>
+	): string {
+		return slots
+			.map((slot) => {
+				if (slot.kind === 'markdown') return slot.text;
+				const result = descriptions.get(slot.index);
+				if (!result)
+					throw new ValidationError(`Missing description result for image ${slot.index}`);
+				return `> **Image ${slot.index}:** ${result.kind === 'described' ? result.text : '(description unavailable)'}`;
+			})
+			.filter(Boolean)
+			.join('\n\n');
 	}
 }
