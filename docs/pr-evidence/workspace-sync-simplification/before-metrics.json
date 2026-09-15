@@ -1,0 +1,29 @@
+{
+	"label": "before",
+	"error": "Today did not render within 300000 ms",
+	"elapsedMs": 301989.47667199996,
+	"firstUsableMs": null,
+	"fullSyncMs": null,
+	"remoteRequests": 59,
+	"decodedRemoteBytes": 1401402,
+	"source": "98194989d91f59d14db24845267734a4f1baf2fc plus baseline-prerequisite.patch",
+	"longTasks": {
+		"count": 117,
+		"totalMs": 278756,
+		"maxMs": 3681
+	},
+	"grouped": {
+		"pullWorkspaceChangePage": {
+			"requests": 28,
+			"bytes": 892678
+		},
+		"readWorkspaceBootstrap": {
+			"requests": 1,
+			"bytes": 100102
+		},
+		"readWorkspaceResources": {
+			"requests": 31,
+			"bytes": 422644
+		}
+	}
+}

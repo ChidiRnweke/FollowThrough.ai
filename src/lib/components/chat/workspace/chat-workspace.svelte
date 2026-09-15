@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { ShellContext } from '$lib/models/workspace';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
@@ -20,7 +20,7 @@
 		shell: ShellContext;
 		sessions: readonly Conversation[];
 		conversation?: Conversation;
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;

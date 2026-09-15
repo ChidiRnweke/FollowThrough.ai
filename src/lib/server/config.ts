@@ -478,8 +478,48 @@ export const setSessionCookie = (
 	secure: boolean
 ): void => cookies.set('session', sessionId, cookieOptions(secure, 60 * 60 * 24 * 30));
 
-export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void =>
+// Public cookie protocol, also named by the browser's bootstrap model.
+// Configuration must remain independent of application imports.
+const workspaceAccountCookieName = 'workspace_account';
+
+const workspaceAccountRenewalCookieName = 'workspace_account_renewed';
+const workspaceAccountLifetime = 60 * 60 * 24 * 30;
+
+export const setWorkspaceAccountCookie = (
+	cookies: Pick<CookieJar, 'get' | 'set'>,
+	accountId: string,
+	secure: boolean,
+	now = Date.now()
+): void => {
+	const renewed = Number(cookies.get(workspaceAccountRenewalCookieName));
+	if (
+		cookies.get(workspaceAccountCookieName) === accountId &&
+		Number.isFinite(renewed) &&
+		renewed > 0 &&
+		renewed <= now &&
+		now - renewed < workspaceAccountLifetime * 500
+	)
+		return;
+	cookies.set(workspaceAccountCookieName, accountId, {
+		...cookieOptions(secure, workspaceAccountLifetime),
+		httpOnly: false
+	});
+	cookies.set(
+		workspaceAccountRenewalCookieName,
+		String(now),
+		cookieOptions(secure, workspaceAccountLifetime)
+	);
+};
+
+export const clearWorkspaceAccountCookie = (cookies: Pick<CookieJar, 'delete'>): void => {
+	cookies.delete(workspaceAccountCookieName, { path: '/' });
+	cookies.delete(workspaceAccountRenewalCookieName, { path: '/' });
+};
+
+export const deleteSessionCookie = (cookies: Pick<CookieJar, 'delete'>): void => {
 	cookies.delete('session', { path: '/' });
+	clearWorkspaceAccountCookie(cookies);
+};
 
 const pkceCookieSchema = z
 	.object({ codeVerifier: z.string().min(1), state: z.string().min(1) })

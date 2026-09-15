@@ -5,9 +5,14 @@ import DiagramConflictDialog from './diagram-conflict-dialog.svelte';
 
 const props = () => ({
 	open: true,
-	base: drawioBuilder({ title: 'Base', source: '<mxfile/>' }),
-	local: drawioBuilder({ title: 'Local', source: '<mxfile/>' }),
-	remote: drawioBuilder({ title: 'Remote', source: '<mxfile/>', currentRevision: 2 }),
+	record: {
+		base: drawioBuilder({ title: 'Base', source: '<mxfile/>' }),
+		local: drawioBuilder({ title: 'Local', source: '<mxfile/>' }),
+		remote: {
+			kind: 'found' as const,
+			value: drawioBuilder({ title: 'Remote', source: '<mxfile/>', currentRevision: 2 })
+		}
+	},
 	onUseRemote: async () => undefined,
 	onKeepLocal: async () => undefined
 });
@@ -38,4 +43,14 @@ describe('Diagram conflict review', () => {
 		await screen.getByRole('button', { name: 'Review later' }).click();
 		await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
 	});
+});
+
+it('keeps deleted server content distinct from an unavailable read', async () => {
+	const input = props();
+	const screen = render(DiagramConflictDialog, {
+		...input,
+		record: { ...input.record, remote: { kind: 'deleted' } }
+	});
+	await expect.element(screen.getByRole('button', { name: 'Keep mine' })).toBeDisabled();
+	await screen.getByRole('button', { name: 'Review later' }).click();
 });

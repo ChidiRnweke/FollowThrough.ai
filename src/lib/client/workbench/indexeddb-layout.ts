@@ -1,0 +1,124 @@
+import type { TabId } from '$lib/stores/workbench/tab-ref';
+
+/** Persists tab layout only. Resource bodies and writes live in the shared synchronization database. */
+export interface WorkbenchLayoutRecord {
+	readonly id: 'current';
+	/**
+	 * Tab ids, which a note tab spells as its bare uuid and a chat tab prefixes
+	 * with `chat:`. Records written before chat tabs existed hold plain uuids and
+	 * read back unchanged, so no version bump is needed.
+	 */
+	readonly openTabs: readonly TabId[];
+	readonly focusedNoteId: TabId | null;
+	readonly pinnedTabs: readonly TabId[];
+	/** LRU ordering of recently-focused tabs, most-recent first. */
+	readonly recentlyUsed: readonly TabId[];
+	/** Whether the user has collapsed the global tab strip.  Display preference. */
+	readonly stripHidden: boolean;
+	/**
+	 * Width of the secondary (split) pane as a fraction of 1, used only when
+	 * `splitNoteId` is active in the URL.  Display preference — the URL's
+	 * `?split=` carries which note is split, while this number carries the
+	 * ratio the user last preferred.  Missing on older records; treated as
+	 * 0.5 (default) on read.
+	 */
+	readonly splitRatio: number;
+}
+
+const STORE_NAME = 'workspace';
+const RECORD_KEY = 'current';
+
+/**
+ * IndexedDB structured-clones values at `put`. Workbench arrays originate in
+ * Svelte `$state`, whose proxies are not cloneable; copying the three arrays is
+ * the complete protocol adaptation because every member is a primitive tab id.
+ */
+const storedRecord = (record: WorkbenchLayoutRecord): WorkbenchLayoutRecord => ({
+	...record,
+	openTabs: [...record.openTabs],
+	pinnedTabs: [...record.pinnedTabs],
+	recentlyUsed: [...record.recentlyUsed]
+});
+
+const requestResult = <T>(request: IDBRequest<T>): Promise<T> =>
+	new Promise((resolve, reject) => {
+		request.onsuccess = () => resolve(request.result);
+		request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
+	});
+
+const transactionDone = (transaction: IDBTransaction): Promise<void> =>
+	new Promise((resolve, reject) => {
+		transaction.oncomplete = () => resolve();
+		transaction.onerror = () =>
+			reject(transaction.error ?? new Error('IndexedDB transaction failed'));
+		transaction.onabort = () =>
+			reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
+	});
+
+export class IndexedDbWorkbenchLayout {
+	private database?: Promise<IDBDatabase>;
+
+	constructor(private readonly databaseName = 'followthrough-note-sync') {}
+
+	async get(): Promise<WorkbenchLayoutRecord | undefined> {
+		const database = await this.open();
+		const transaction = database.transaction(STORE_NAME, 'readonly');
+		const stored = await requestResult<WorkbenchLayoutRecord | undefined>(
+			transaction.objectStore(STORE_NAME).get(RECORD_KEY)
+		);
+		await transactionDone(transaction);
+		return stored;
+	}
+
+	async put(record: WorkbenchLayoutRecord): Promise<void> {
+		const database = await this.open();
+		const transaction = database.transaction(STORE_NAME, 'readwrite');
+		transaction.objectStore(STORE_NAME).put(storedRecord(record));
+		await transactionDone(transaction);
+	}
+
+	async clear(): Promise<void> {
+		const database = await this.open();
+		const transaction = database.transaction(STORE_NAME, 'readwrite');
+		transaction.objectStore(STORE_NAME).delete(RECORD_KEY);
+		await transactionDone(transaction);
+	}
+
+	close(): void {
+		void this.database?.then((database) => database.close());
+		this.database = undefined;
+	}
+
+	private open(): Promise<IDBDatabase> {
+		this.database ??= new Promise((resolve, reject) => {
+			if (typeof indexedDB === 'undefined') {
+				reject(new Error('Device storage is unavailable'));
+				return;
+			}
+			// Version three retains shell layout while excluding the retired note writer.
+			const request = indexedDB.open(this.databaseName, 3);
+			request.onupgradeneeded = () => {
+				const database = request.result;
+				// Whichever repo triggers the v1→v2 upgrade owns the full
+				// schema.  Keep both stores in sync so that opening either
+				// repository first produces the same database layout.
+				if (!database.objectStoreNames.contains(STORE_NAME)) {
+					database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+				}
+				if (!database.objectStoreNames.contains('note-sync-records')) {
+					database.createObjectStore('note-sync-records', { keyPath: 'key' });
+				}
+			};
+			request.onsuccess = () => {
+				request.result.onversionchange = () => {
+					request.result.close();
+					this.database = undefined;
+				};
+				resolve(request.result);
+			};
+			request.onerror = () => reject(request.error ?? new Error('Could not open device storage'));
+			request.onblocked = () => reject(new Error('Device storage upgrade is blocked'));
+		});
+		return this.database;
+	}
+}

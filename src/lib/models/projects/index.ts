@@ -149,6 +149,7 @@ export interface ProjectView {
 }
 
 export interface CreateProjectInput {
+	readonly id?: ProjectId;
 	readonly name: string;
 	/** Omitted means `workspace`; only provisioning creates the single `inbox`. */
 	readonly role?: ProjectRole;
@@ -216,6 +217,7 @@ export const importMarkdownArchiveOutputSchema = z.object({
 });
 
 export interface CreateFolderInput {
+	readonly id?: NoteId;
 	readonly projectId: ProjectId;
 	readonly name: string;
 	readonly parentId?: NoteId;

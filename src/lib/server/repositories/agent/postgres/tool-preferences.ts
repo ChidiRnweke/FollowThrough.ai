@@ -1,3 +1,5 @@
+import { NotFoundError } from '$lib/errors';
+import { projects } from '$lib/server/db/schema/notes';
 import { and, eq } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
@@ -65,6 +67,11 @@ export class ToolPreferenceRecords implements ToolPreferenceRepository {
 		projectId: ProjectId,
 		preference: StoredToolPreference
 	): Promise<void> {
+		const [project] = await this.database
+			.select({ id: projects.id })
+			.from(projects)
+			.where(and(eq(projects.id, projectId), eq(projects.userId, actor.userId)));
+		if (!project) throw new NotFoundError('Project was not found');
 		await this.database
 			.insert(schema.projectToolOverrides)
 			.values({

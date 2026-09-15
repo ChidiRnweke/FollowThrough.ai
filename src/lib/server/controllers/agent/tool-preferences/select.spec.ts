@@ -1,9 +1,10 @@
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '$lib/errors';
 import { ToolAccess, type ToolCatalog } from '$lib/server/services/agent/tools/preferences';
 import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
 import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { ToolPreferences } from './controller';
+import { ToolPreferences, type ToolPreferencesDependencies } from './controller';
 
 const catalog: ToolCatalog = {
 	entries: () => [
@@ -18,9 +19,11 @@ const catalog: ToolCatalog = {
 };
 
 const controller = () =>
-	new ToolPreferences({
-		preferences: new ToolAccess(new InMemoryToolPreferenceRepository(), catalog)
-	});
+	new ToolPreferences(
+		capabilityDependencies<ToolPreferencesDependencies>({
+			preferences: new ToolAccess(new InMemoryToolPreferenceRepository(), catalog)
+		})
+	);
 
 const stateOf = (view: readonly { name: string; enabled: boolean }[], name: string) =>
 	view.find((preference) => preference.name === name)!;

@@ -4,4 +4,6 @@
 	let { data } = $props();
 </script>
 
-<SkillCatalog {data} />
+<SkillCatalog
+	data={{ inboxProjectId: data.inboxProjectId, skills: data.session.resources.views.skills() }}
+/>

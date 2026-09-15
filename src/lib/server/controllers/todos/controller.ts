@@ -1,3 +1,6 @@
+import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import { applyTodoEdit } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	BoardPdfExportResult,
@@ -41,6 +44,7 @@ import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflo
  * pipeline that turns commitments in text into reviewable todo suggestions.
  */
 export interface TodosController {
+	synchronize(actor: ActorContext, input: TodoMutationRequest): Promise<WorkspaceMutationResult>;
 	/** Load a single todo as a view with its resolved display fields. */
 	get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView>;
 	/** List todos by filter, each assembled into a view. */
@@ -84,6 +88,7 @@ export interface TodosController {
 	startExtractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<AgentRunReceipt>;
 }
 export interface TodosDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	todoLister: TodoLister;
 	todoViewAssembler: TodoViewAssembler;
 	todoReader: TodoReader;
@@ -103,6 +108,29 @@ export interface TodosDependencies {
 	workflowRunner: WorkflowRunStarter;
 }
 export class Todos implements TodosController {
+	synchronize(actor: ActorContext, input: TodoMutationRequest): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async (current) => {
+			const command = input.command;
+			void current;
+			switch (command.kind) {
+				case 'createTodo':
+					await this.create(actor, command);
+					if (command.status && command.status !== 'open')
+						await this.update(actor, { todoId: command.id, status: command.status });
+					break;
+				case 'updateTodo': {
+					const { kind, ...edits } = command;
+					void kind;
+					await this.update(actor, edits);
+					break;
+				}
+				case 'deleteTodo':
+					await this.remove(actor, command.todoId);
+					break;
+			}
+		});
+	}
+
 	constructor(private readonly dependencies: TodosDependencies) {}
 	async get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView> {
 		const todo = await this.dependencies.todoReader.get(actor, input.todoId);
@@ -131,30 +159,13 @@ export class Todos implements TodosController {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
 		let todo = await this.dependencies.todoReader.get(actor, input.todoId);
-		const edits: Partial<
-			Pick<
-				Todo,
-				| 'title'
-				| 'description'
-				| 'dueDate'
-				| 'responsibility'
-				| 'priority'
-				| 'category'
-				| 'waitingOn'
-				| 'linkedNoteId'
-			>
-		> = {
-			...(input.title !== undefined ? { title: input.title } : {}),
-			...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
-			...(input.dueDate !== undefined ? { dueDate: input.dueDate ?? undefined } : {}),
-			...(input.responsibility !== undefined ? { responsibility: input.responsibility } : {}),
-			...(input.priority !== undefined ? { priority: input.priority ?? undefined } : {}),
-			...(input.category !== undefined ? { category: input.category?.trim() || undefined } : {}),
-			...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn ?? undefined } : {}),
-			...(input.linkedNoteId !== undefined ? { linkedNoteId: input.linkedNoteId ?? undefined } : {})
-		};
-		if (Object.keys(edits).length > 0) {
-			todo = await this.dependencies.todoEditor.update(actor, { ...todo, ...edits });
+		if (Object.keys(input).some((key) => key !== 'todoId' && key !== 'status')) {
+			const { status, ...fields } = input;
+			void status;
+			todo = await this.dependencies.todoEditor.update(
+				actor,
+				applyTodoEdit(todo, fields, todo.updatedAt)
+			);
 		}
 		if (input.status !== undefined && input.status !== todo.status) {
 			todo = await this.dependencies.todoStatusChanger.change(actor, input.todoId, input.status);

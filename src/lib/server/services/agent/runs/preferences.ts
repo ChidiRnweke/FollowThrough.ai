@@ -2,6 +2,7 @@ import { OpenRouter } from '@openrouter/sdk';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	normalizeLanguageModelId,
+	applyAgentPreferenceUpdate,
 	resolveAttachmentVisionModel,
 	type AgentExecutionMode,
 	type AgentModel,
@@ -16,7 +17,7 @@ import type { WebResearchOptions } from '$lib/models/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export { normalizeLanguageModelId, resolveAttachmentVisionModel };
+export { normalizeLanguageModelId, applyAgentPreferenceUpdate, resolveAttachmentVisionModel };
 
 export interface AgentPreferencesStore {
 	get(actor: ActorContext): Promise<AgentPreferences>;
@@ -36,22 +37,6 @@ export interface AgentModelCatalog {
 	assertGenerationSelectable?(modelId: string): Promise<void>;
 }
 
-/**
- * One field of a partial edit. The three cases are distinct and all three are
- * used: `null` clears the setting back to the deployment default, a value sets
- * it, and `undefined` leaves whatever is stored alone — which is what lets the
- * agent change one setting without having to send the rest.
- */
-const edit = <K extends string, V>(
-	key: K,
-	value: V | null | undefined
-): Partial<Record<K, V | undefined>> => {
-	if (value === undefined) return {};
-	const result: Partial<Record<K, V | undefined>> = {};
-	result[key] = value === null ? undefined : value;
-	return result;
-};
-
 export class AgentPreferenceCatalog implements AgentPreferencesStore {
 	constructor(private readonly repository: AgentPreferencesRepository) {}
 
@@ -70,19 +55,7 @@ export class AgentPreferenceCatalog implements AgentPreferencesStore {
 	async update(actor: ActorContext, input: UpdateAgentPreferencesInput): Promise<AgentPreferences> {
 		const current = await this.get(actor);
 		return this.repository.upsert(actor, {
-			...current,
-			...edit('defaultModel', input.defaultModel),
-			...edit('defaultVisionModel', input.defaultVisionModel),
-			...edit('inlineModel', input.inlineModel),
-			...edit('attachmentVisionModel', input.attachmentVisionModel),
-			...edit('webSearchEngine', input.webSearchEngine),
-			...edit('webSearchMaxResults', input.webSearchMaxResults),
-			...edit('webSearchMaxTotalResults', input.webSearchMaxTotalResults),
-			...edit('agentMaxTurns', input.agentMaxTurns),
-			...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
-			...(input.inlineSuggestionsEnabled !== undefined
-				? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
-				: {}),
+			...applyAgentPreferenceUpdate(current, input),
 			updatedAt: now()
 		});
 	}

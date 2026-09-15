@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
@@ -28,7 +30,7 @@
 
 	type InlineEdit =
 		| { mode: 'create'; kind: 'note' | 'folder' | 'skill'; projectId: ProjectId; parentId?: NoteId }
-		| { mode: 'rename'; entryId: NoteId; current: string };
+		| { mode: 'rename'; entryId: NoteId; current: string; draft: WorkspaceDraft<'notes'> };
 
 	let {
 		projects,
@@ -136,7 +138,13 @@
 		<Menu.Separator />
 	{/if}
 	<Menu.Item
-		onclick={() => (inlineEdit = { mode: 'rename', entryId: entry.id, current: entry.title })}
+		onclick={() =>
+			(inlineEdit = {
+				mode: 'rename',
+				entryId: entry.id,
+				current: entry.title,
+				draft: projectActions.editor('notes', entry.id)
+			})}
 	>
 		Rename
 	</Menu.Item>

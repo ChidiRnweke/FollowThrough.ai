@@ -1,3 +1,5 @@
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import type { MemoryDependencies } from './controller';
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
@@ -63,18 +65,20 @@ const setup = () => {
 		provenanceRepository,
 		new EmbeddedMemoryIndexer(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
 	);
-	const controller = new Memory({
-		memoryLister: memory,
-		memoryCreator: memory,
-		memoryEditor: memory,
-		memoryDeleter: memory,
-		memoryChangeApplier: memory,
-		provenanceRecorder: provenance,
-		suggestionCreator: suggestions,
-		suggestionAccepter: suggestions,
-		trustPolicyEvaluator: trust,
-		transactionRunner: new InMemoryTransactionRunner([entries, suggestions])
-	});
+	const controller = new Memory(
+		capabilityDependencies<MemoryDependencies>({
+			memoryLister: memory,
+			memoryCreator: memory,
+			memoryEditor: memory,
+			memoryDeleter: memory,
+			memoryChangeApplier: memory,
+			provenanceRecorder: provenance,
+			suggestionCreator: suggestions,
+			suggestionAccepter: suggestions,
+			trustPolicyEvaluator: trust,
+			transactionRunner: new InMemoryTransactionRunner([entries, suggestions])
+		})
+	);
 	return { entries, provenance, suggestions, trust, controller };
 };
 

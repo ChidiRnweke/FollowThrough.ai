@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteView } from '$lib/models/notes';
 	import type { ShellContext } from '$lib/models/workspace';
@@ -24,7 +24,7 @@
 		tabId: TabId;
 		shell: ShellContext;
 		sessions: readonly Conversation[];
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;

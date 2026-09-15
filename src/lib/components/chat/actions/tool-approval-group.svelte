@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AgentPreferences } from '$lib/models/agent';
+	import type { AgentPreferenceValues } from '$lib/models/agent';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { Button } from '$lib/components/ui/button';
@@ -15,7 +15,7 @@
 	}: {
 		tools: readonly ChatToolActivity[];
 		shell?: ShellContext;
-		preferences?: AgentPreferences;
+		preferences?: AgentPreferenceValues;
 		busy?: boolean;
 		onapprove: () => void;
 		onreject: () => void;

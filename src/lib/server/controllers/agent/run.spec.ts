@@ -1,3 +1,5 @@
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import type { AgentDependencies } from './controller';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentRunId, ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -63,30 +65,32 @@ const setup = (
 		runs.runs.some((run) => run.id === runId)
 	);
 	const sessions = new InMemoryAgentSessionRepository();
-	const controller = new Agent({
-		conversationJournal: new ConversationArchive(conversations),
-		preferences: {
-			get: async (actor) => ({
-				userId: actor.userId,
-				executionMode: 'approval_required',
-				inlineSuggestionsEnabled: true,
-				createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
-				updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
-			}),
-			update: async () => {
-				throw new Error('Unexpected preference update');
-			}
-		},
-		models: { list: async () => [], assertSelectable: async () => undefined },
-		runs,
-		events: runs,
-		decisions: runs,
-		sessions,
-		transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
-		defaultModel: 'openai/test-model',
-		defaultVisionModel: 'openai/test-vision-model',
-		executor: makeExecutor(runs)
-	});
+	const controller = new Agent(
+		capabilityDependencies<AgentDependencies>({
+			conversationJournal: new ConversationArchive(conversations),
+			preferences: {
+				get: async (actor) => ({
+					userId: actor.userId,
+					executionMode: 'approval_required',
+					inlineSuggestionsEnabled: true,
+					createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
+					updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
+				}),
+				update: async () => {
+					throw new Error('Unexpected preference update');
+				}
+			},
+			models: { list: async () => [], assertSelectable: async () => undefined },
+			runs,
+			events: runs,
+			decisions: runs,
+			sessions,
+			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
+			defaultModel: 'openai/test-model',
+			defaultVisionModel: 'openai/test-vision-model',
+			executor: makeExecutor(runs)
+		})
+	);
 	return { controller, conversations, runs, sessions };
 };
 

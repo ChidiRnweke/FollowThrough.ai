@@ -1,25 +1,9 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type {
-	CreateProjectInput,
-	RenameProjectInput,
-	ArchiveProjectInput,
-	CreateFolderInput,
-	MoveProjectEntryInput,
-	ProjectId,
-	SetProjectSectionNumberingInput
-} from '$lib/models/projects';
-import type {
-	RenameNoteInput,
-	ArchiveNoteInput,
-	DeleteNoteForeverInput,
-	EmptyNoteTrashInput,
-	ListNoteTrashInput,
-	NoteId,
-	RestoreNoteInput
-} from '$lib/models/notes';
+import type { MoveProjectEntryInput, ProjectId } from '$lib/models/projects';
+import type { DeleteNoteForeverInput, EmptyNoteTrashInput, NoteId } from '$lib/models/notes';
 
 /**
  * Parsed, branded ids — the schema establishes the type instead of a cast
@@ -36,53 +20,6 @@ const noteIdSchema = z
 	.uuid()
 	.transform((value) => value as NoteId);
 
-export const createProject = command(z.object({ name: z.string().min(1) }), async (input) => {
-	return AppFactory.controllers()
-		.projects()
-		.create(requestActor(), input as CreateProjectInput);
-});
-
-export const renameProject = command(
-	z.object({ projectId: z.string().uuid(), name: z.string().min(1) }),
-	async (input) => {
-		return AppFactory.controllers()
-			.projects()
-			.rename(requestActor(), input as RenameProjectInput);
-	}
-);
-
-export const archiveProject = command(z.object({ projectId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllers()
-		.projects()
-		.archive(requestActor(), input as ArchiveProjectInput);
-});
-
-export const setProjectSectionNumberingDefault = command(
-	z.object({
-		projectId: z.string().uuid(),
-		// Omitted (not false) clears the project default so it inherits the app default.
-		enabled: z.boolean().optional()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.projects()
-			.setSectionNumberingDefault(requestActor(), input as SetProjectSectionNumberingInput);
-	}
-);
-
-export const createFolder = command(
-	z.object({
-		projectId: z.string().uuid(),
-		name: z.string().min(1),
-		parentId: z.string().uuid().optional()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.projects()
-			.createFolder(requestActor(), input as CreateFolderInput);
-	}
-);
-
 export const moveEntry = command(
 	z.object({
 		projectId: z.string().uuid(),
@@ -94,56 +31,6 @@ export const moveEntry = command(
 		return AppFactory.controllers()
 			.projects()
 			.move(requestActor(), input as MoveProjectEntryInput);
-	}
-);
-
-export const createNote = command(
-	z.object({
-		title: z.string().min(1),
-		// Required, and parsed into the id type rather than asserted into it. While
-		// this was optional the `as CreateNoteInput` below silenced the compiler:
-		// `projectId` became required on the input type and nothing here failed,
-		// because a cast answers the question instead of asking it.
-		projectId: projectIdSchema,
-		parentId: noteIdSchema.optional()
-	}),
-	async (input) =>
-		AppFactory.controllers()
-			.notes()
-			.create(requestActor(), {
-				title: input.title,
-				projectId: input.projectId,
-				...(input.parentId === undefined ? {} : { parentId: input.parentId })
-			})
-);
-
-export const renameNote = command(
-	z.object({ noteId: z.string().uuid(), title: z.string().min(1) }),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.rename(requestActor(), input as RenameNoteInput);
-	}
-);
-
-export const archiveNote = command(z.object({ noteId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllers()
-		.notes()
-		.archive(requestActor(), input as ArchiveNoteInput);
-});
-
-export const restoreNote = command(z.object({ noteId: z.string().uuid() }), async (input) => {
-	return AppFactory.controllers()
-		.notes()
-		.restore(requestActor(), input as RestoreNoteInput);
-});
-
-export const listNoteTrash = query(
-	z.object({ projectId: z.string().uuid().optional() }),
-	async (input) => {
-		return AppFactory.controllers()
-			.notes()
-			.listTrash(requestActor(), input as ListNoteTrashInput);
 	}
 );
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { MAX_BUNDLE_ENTRIES } from '$lib/models/deliverables';
@@ -32,10 +32,6 @@ export const completeTemplateUpload = command(
 	z.object({ templateId: templateIdSchema }),
 	async (input) =>
 		AppFactory.controllers().deliverables().completeTemplateUpload(requestActor(), input.templateId)
-);
-
-export const listTemplates = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers().deliverables().listTemplates(requestActor(), projectId)
 );
 
 export const deleteTemplate = command(z.object({ templateId: templateIdSchema }), async (input) =>
@@ -101,22 +97,6 @@ export const previewDocument = command(
 		AppFactory.controllers()
 			.deliverables()
 			.previewDocument(requestActor(), input as PreviewDocumentInput)
-);
-
-export const getExportSettings = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers().deliverables().getExportSettings(requestActor(), projectId)
-);
-
-export const updateExportSettings = command(
-	z.object({ projectId: projectIdSchema, settings: exportSettingsSchema }),
-	async (input) =>
-		AppFactory.controllers()
-			.deliverables()
-			.updateExportSettings(requestActor(), input.projectId, input.settings)
-);
-
-export const listArtifacts = query(projectIdSchema, async (projectId) =>
-	AppFactory.controllers().deliverables().listArtifacts(requestActor(), projectId)
 );
 
 export const downloadArtifact = command(z.object({ artifactId: artifactIdSchema }), async (input) =>

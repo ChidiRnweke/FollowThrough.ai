@@ -1,15 +1,13 @@
 import {
 	readAgentRunEventRecord,
 	submitAgentRunInputSchema,
-	type AgentRunId,
-	type ConversationId
+	type AgentRunId
 } from '$lib/models/agent';
 import type { AgentRunTransport } from './contracts';
 import {
 	cancelAgentRun,
 	decideAgentRunBatch,
 	getAgentRun,
-	getSession,
 	retryAgentRun,
 	submitAgentRun
 } from '$lib/remote/agent/chat.remote';
@@ -33,10 +31,6 @@ export class RemoteAgentRunTransport implements AgentRunTransport {
 
 	async retry(runId: AgentRunId, requestId: string) {
 		return retryAgentRun({ runId, requestId });
-	}
-
-	async getSession(conversationId: ConversationId) {
-		return getSession(conversationId);
 	}
 
 	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {

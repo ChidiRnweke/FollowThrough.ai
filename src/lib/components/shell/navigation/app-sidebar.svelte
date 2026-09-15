@@ -30,6 +30,8 @@
 	import BrandMark from '../../shared/brand-mark.svelte';
 	import ProjectTree from '../../projects/project-tree.svelte';
 	import MemoryNotificationMenu from '../../memory/memory-notification-menu.svelte';
+	import SyncStatusMenu from '../sync/sync-status-menu.svelte';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import FeedbackDialog from '../../feedback/feedback-dialog.svelte';
 
 	let {
@@ -272,6 +274,10 @@
 				</Tip>
 				<Separator orientation="vertical" class="h-3.5! group-data-[collapsible=icon]:hidden" />
 				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} class="size-7" />
+				{#if workspaceSession.current}<SyncStatusMenu
+						resources={workspaceSession.current.resources}
+						startupFailure={workspaceSession.current.startupError}
+					/>{/if}
 				<Separator orientation="vertical" class="h-3.5! group-data-[collapsible=icon]:hidden" />
 				<Tip text="Toggle chat panel">
 					{#snippet children({ props })}

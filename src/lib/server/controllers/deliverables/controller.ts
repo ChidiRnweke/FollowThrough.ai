@@ -1,3 +1,9 @@
+import { ValidationError } from '$lib/errors';
+import type {
+	DeliverableMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Artifact,
@@ -42,6 +48,10 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
  * artifact is never observable half-written.
  */
 export interface DeliverablesController {
+	synchronize(
+		actor: ActorContext,
+		input: DeliverableMutationRequest
+	): Promise<WorkspaceMutationResult>;
 	/**
 	 * Begin a template upload: reserve a template record and return a presigned URL the
 	 * client writes the file to. The template becomes visible only after
@@ -122,6 +132,7 @@ export interface DeliverablesController {
 
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
 export interface DeliverablesDependencies {
+	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	templateUploader: TemplateUploader;
 	templateLister: TemplateLister;
 	templateDeleter: TemplateDeleter;
@@ -138,6 +149,17 @@ export interface DeliverablesDependencies {
 }
 
 export class Deliverables implements DeliverablesController {
+	synchronize(
+		actor: ActorContext,
+		input: DeliverableMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		return this.dependencies.syncMutations.run(actor, input, async () => {
+			const command = input.command;
+			if (command.userId !== actor.userId)
+				throw new ValidationError('The export settings belong to another account');
+			await this.updateExportSettings(actor, command.projectId, command.settings);
+		});
+	}
 	constructor(private readonly dependencies: DeliverablesDependencies) {}
 
 	async initiateTemplateUpload(

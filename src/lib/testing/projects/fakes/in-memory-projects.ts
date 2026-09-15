@@ -56,7 +56,7 @@ export class InMemoryProjects
 		)
 			throw new ConflictError('An active project with this name already exists');
 		const project = projectBuilder({
-			id: testProjectId(this.nextProject++),
+			id: input.id ?? testProjectId(this.nextProject++),
 			userId: actor.userId,
 			name,
 			...(input.description?.trim() ? { description: input.description.trim() } : {})
@@ -145,7 +145,7 @@ export class InMemoryProjects
 			(entry) => entry.projectId === input.projectId && entry.parentId === input.parentId
 		).length;
 		const folder = noteBuilder({
-			id: testNoteId(this.nextEntry++),
+			id: input.id ?? testNoteId(this.nextEntry++),
 			userId: actor.userId,
 			projectId: input.projectId,
 			kind: 'folder',

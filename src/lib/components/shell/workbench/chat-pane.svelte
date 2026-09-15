@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import type { AgentModel, AgentPreferences, Conversation } from '$lib/models/agent';
+	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { ShellContext } from '$lib/models/workspace';
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
@@ -30,7 +30,7 @@
 		sessionKey: ChatSessionKey;
 		shell: ShellContext;
 		sessions: readonly Conversation[];
-		agentPreferences: AgentPreferences;
+		agentPreferences: AgentPreferenceValues;
 		agentModels: readonly AgentModel[];
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;

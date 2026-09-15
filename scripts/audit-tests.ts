@@ -86,7 +86,8 @@ for (const file of files) {
 						if (
 							ts.isCallExpression(child) &&
 							(callName(child.expression) === 'expect' ||
-								callName(child.expression) === 'expect.element')
+								callName(child.expression) === 'expect.element' ||
+								callName(child.expression) === 'expect.poll')
 						)
 							assertions += 1;
 						ts.forEachChild(child, count);

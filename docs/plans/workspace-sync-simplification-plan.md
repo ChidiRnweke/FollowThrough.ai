@@ -1,0 +1,69 @@
+# Workspace sync simplification
+
+## Executor instructions
+
+Work only in the owned linked worktree on refactor/sync-authority. Complete the unchecked concerns in order, verify behavior before checking them off, and commit conventionally. Keep this file current across context compaction. Publish through PR 39; do not merge. Failures remain unchecked. Prepend /home/chidi/.nvm/versions/node/v22.22.0/bin to PATH for pnpm.
+
+## Accepted decisions
+
+The feature is unreleased. No backward compatibility or legacy import machinery. Cached records open immediately; targeted reads remain for uncached records. Keep offline edits, account isolation, guarded mutations, explicit conflicts, independent retries and cancellation safety. Malformed local storage blocks the account: raw export and confirmed reset replace granular repair. Server keeps permanent small operation proofs, not receipt bodies/acknowledgements; dependent edits enter review when original application evidence is unavailable. Libraries only; add lazily loaded dexie-export-import. Keep compound operations, binary transfers, historical retrieval and agent execution online.
+
+## Baseline and audit
+
+Baseline 98194989d91f59d14db24845267734a4f1baf2fc against origin/master: 7,432 net application lines, 9,004 test/fake lines, 304 migration lines, 1,507 documentation lines. Nine client stores, three runtime lanes, separate journal/body protocols. Five CI gates pass; PWA last failed with Chromium SIGSEGV during context creation. Earlier held-write interception fix passed five local repetitions; full CI remains required.
+
+Audit found duplicate version/body authorities, full-queue editing and repair during reads, count-only observation plus repairing publication, caller-authored optimistic bodies and queue metadata, independent editor reconciliation loops, duplicated SQL/TS ownership rules, and migration text surgery. Today quick capture bypasses the outbox. Compound online operations are intentional: remove their unused outbox variants, do not generalize optimistic multi-record operations. Keep domain sync adapters: central controller dispatch would duplicate established workflows or violate controller chaining rules. Keep existing version/journal tables and commit-ordering triggers.
+
+## Implementation
+
+- [x] Save accepted plan, baseline and audit evidence.
+- [x] Full-record delta pages: one readonly repeatable-read PostgreSQL transaction reads head, selected changes and exact versioned bodies. Missing/malformed records fail the page. Start with 32 records (existing measured body batch); no inventory cap. Client atomically commits page and checkpoint. Keep targeted read, which never advances inventory. Remove notice/body downloader machinery and body runtime lane. Verify concurrent page reads, atomic rollback, stale targeted response, partial inventory and cached immediate reads.
+- [x] Account store: one Dexie database/account; records, outbox (++sequence, unique operation identity), receipts, meta. Direct readonly liveQuery. Explicit narrow stage/claim/settle/discard/apply-page operations. No legacy, import, quarantine, queue-head, recovery-head or acknowledgement stores. Storage parser failure blocks account and leaves raw data untouched. Account-owned export/reset works without normal startup. Permanent lifetime: autoOpen:false, explicit open, abort/close on versionchange and return false; never reuse closed instances; await deletion before replacement. Verify stale responses/reset/other tabs, account isolation, raw malformed export and storage rollback.
+- [x] Proof-only writes: immutable attempted input and canonical hash; applied/cancelled permanent proof. Normal response includes authoritative body. Replay never invents original body from a newer resource; missing original evidence retains dependent edits for review. Remove acknowledgement/compaction protocol. Keep operation/resource locks and race-safe cancellation. Verify concurrent replay, hash mismatch, lost-response descendants and cancel/send races.
+- [x] One runtime: pull/send lanes, one account lifetime and wakeup owner, per-operation retry eligibility, Web Lock submission. Busy writer does not block startup and retries. Pull after accepted mutations. Remove manual publication/reload and duplicate cache/queue execution state. Verify independent work, failure deadlines and follower takeover.
+- [x] Command preparation: exhaustive command-oriented UI boundary derives primary identity, optimistic value, references and coalescing. Stable IDs/time once. Remove caller-authored queue bookkeeping. Queue Today capture, preserve intentional compound online actions and remove unused queued variants. Draft discard requires loaded published body; history stays online. Verify command/optimistic/server behavior and offline capture.
+- [x] Shared editor session: per-pane observed base, dirty generation, serialized local persistence and conditional adoption. Migrate notes/skills/diagrams/todo fields/preferences; retain editor serialization and selection behavior. Preserve text during save/refresh, honest defaults, no queue on form open, explicit conflicts and live chat authority. Derived per-type record partition and keyed identity reads.
+- [x] Server registration/setup: reuse SQL owner resolver in selected live reads and locks; retain persisted tombstone owners and explicit missing metadata failure. Consolidate repeated identity registrations without losing public allowlist. One explicit idempotent installation definition shared by dev setup and initial feature migration; no migration text surgery. Preserve pre-feature migration history. Verify ownership, cascades, metadata defects and repeated install.
+- [x] Evidence and delivery: real PostgreSQL/PWA benchmark (5,000 messages/2,000 provenance, representative rich content), compare first usable view/full sync/requests/bytes/long tasks. UI before/after captures for changed startup/freshness/recovery. Update ADRs, remove obsolete handoffs, report production reduction separately. All lint/check/architecture/unit/browser/contracts/PWA/docs gates and required CI pass, update PR39 title/body with observed evidence.
+
+## Execution evidence
+
+Execution order adjustment: implement proof-only writes before the account-store rewrite, so the acknowledgement store and transport contract can be removed together.
+
+Complete-page replication: 3,219 node tests, 29 workspace browser tests, 23 affected PostgreSQL contracts, Svelte check and architecture checks pass. The backend unpaged journal API and batch body API are removed.
+
+Proof-only writes: focused node tests and all 80 sync PostgreSQL contracts pass (the changed cancellation contract passed on rerun). Svelte check and architecture pass. Added dependent-edit review and ledger-content assertions.
+
+Account-store preparation: removed legacy note import code, migration lock/markers and unresolved-base submission. Converted editor tests to current durable drafts. 137 focused node tests and 59 browser tests pass. Storage topology/repair replacement is complete.
+
+Account store: four tables per account, readonly live projections, native sequence allocation and permanent connection lifetimes replace repair/import/head machinery. 91 affected browser tests, 3 reset-confirmation tests, 8 storage/reset tests and 135 focused node tests pass. Type and architecture checks pass. Raw export uses the lazy dexie-export-import dependency. UI evidence still needs full-app capture in final delivery.
+
+## Dependency decisions
+
+Dexie owns transaction and observation mechanics. dexie-export-import owns chunked raw database export (https://dexie.org/docs/ExportImport/dexie-export-import). TanStack offline transactions currently bypass durable offline execution in nonleader tabs; RxDB lacks the multi-record ACID transactions this design uses. No extra scheduler/query/state-machine framework or sync service. Existing small service worker and SvelteKit offline shell remain.
+
+## Completion criteria
+
+Four client stores, two runtime lanes, atomic complete-page replication, no background body downloader, compatibility, granular repair, queue heads or acknowledgement machinery. Shared command preparation and editor session. Measured net production reduction. All required CI green. No merge.
+
+Runtime: queue execution and per-operation retry deadlines now belong to the same pull/send runtime. Removed the scheduler bridge and duplicate queue lifecycle/single-flight state. 44 browser tests and 26 focused runtime/queue tests pass, including expired-operation deadlines during storage failure. Type and architecture checks pass.
+
+Command preparation: UI stages commands; the shared boundary derives local records, references and coalescing inside serialized draft saves. Today capture now creates through the durable outbox. Removed queued move/delete-note/create-skill and diagram-history variants; historical diagram restore stays online with its version guard. Published-note discard requires the loaded published body. 65 affected node tests (creation regression passed on rerun), 39 browser tests, type and architecture checks pass. Full-app capture evidence remains outstanding.
+
+Editor session: shared dirty generations, serialized persistence, failure state and guarded adoption now serve notes, skills, todo text/description/category and account preferences. Diagram adoption shares lifetime guards and the draft’s observed version while retaining draw.io’s own save state. Cached collection preparation no longer awaits full inventory; startup can use a cached shell. Resource views partition records by type once. 52 focused node tests plus the sixth editor regression pass; 45 browser tests pass after the explicit-full-inventory test updates. Type and architecture checks pass. Full PWA/UI verification remains outstanding.
+
+Server setup: selected reads and locks reuse the trigger’s SQL ownership resolver. The unreleased migrations now create the final schema and share one verbatim idempotent installer with development setup. Removed migration-string rewriting and the intermediate recovery/deferred-trigger migrations. All 80 sync PostgreSQL contracts pass; the 3 setup contracts also pass with new missing-metadata and tombstone/cancellation-preservation cases. Type and architecture checks pass.
+
+Full workflow verification exposed an intermediate UI projection race: settling the queue before publishing its cached record made a newly created note disappear. Resources now publish one coherent repository snapshot. The deterministic projection regression and all 26 production PWA tests pass. The complete-page contract also removes impossible partial-body readiness and caller-supplied collection lists. Full browser verification caught an old test waiting for a removed body-download request; it now holds the actual inventory page, and the memory action remains usable.
+
+The large-data benchmark exposed an existing provenance timestamp boundary defect. The parser now accepts PostgreSQL offsets and normalizes UTC. A real PostgreSQL complete-page regression passes. All 198 PostgreSQL contracts pass after fixing an isolated fixture-ID collision.
+
+The production 7,004-record run exposed premature completion of the combined IndexedDB read. Read helpers now compose inside the existing transaction, with native async transaction/observation callbacks. Complete pages use bulk version reads/upserts. All 7,004 bodies now download; the initial unindexed run measured 123.8 seconds to Today and 1.7 seconds for a cached offline editor (220 RPCs, 14.5 MB decoded, shared machine). PostgreSQL EXPLAIN then exposed JSON identity filters scanning 5,000 messages: direct primary-key predicates changed that lookup from 6.221 ms/477 buffers to 0.190 ms/5 buffers. Final measurements use the indexed predicate.
+
+Indexed lookups reduced the 32-record-page run to 73.8 seconds, with 175 long tasks totaling 14.0 seconds. The next measured configuration uses 128 records per page to amortize full projection and request costs (55 pages instead of 219), without an inventory limit.
+
+Final 128-record-page measurement: 7,004 bodies, 31.3 seconds to Today/full sync, 56 RPCs, 14,534,922 decoded bytes; cached offline editor 1.69 seconds. Long tasks: 46, totaling 3,966 ms, maximum 164 ms. The baseline (with only the provenance timestamp prerequisite) remained blank after five minutes; incomplete transfer counts are not compared as completed work. Full-app offline Today capture, raw damaged-data export and confirmed reset/re-download pass. Captures, reproducible harness, query plans and source footprint are in docs/pr-evidence/workspace-sync-simplification/. Net application code falls from 7,432 to 6,224 lines (16.3%); gross additions and tests remain reported separately. All required CI passed on f37e84c43cf915f2d3cbc5b6eaf2d2f2777ae996 (GitHub Actions run 34903924377).
+
+Delivery validation on the final application source: 3,380 unit tests, all 26 production PWA scenarios, all 198 PostgreSQL contracts (plus 13 pagination contracts after page tuning), type check, lint and architecture pass. Docs check has zero errors/warnings and one existing hint. All 526 full browser tests and all required published CI checks also pass. PR 39 is updated, its pinned evidence links return HTTP 200, and it remains open against PR 37. Execution is complete; no merge was performed.
+
+The documentation-only final push reproduced the original CI browser infrastructure failure: Chromium headless-shell received SIGSEGV during context creation, before the service-worker test ran (run 34904311903). The PWA configuration now selects regular Chromium's headless mode (`channel: 'chromium'`). Application code is unchanged. All 26 local PWA scenarios pass on that browser, as do the affected lint and architecture checks. The final CI result is recorded on PR 39.

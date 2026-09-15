@@ -146,6 +146,12 @@ importers:
       adm-zip:
         specifier: ^0.6.0
         version: 0.6.0
+      dexie:
+        specifier: ^4.4.6
+        version: 4.4.6
+      dexie-export-import:
+        specifier: ^4.4.1
+        version: 4.4.1(dexie@4.4.6)
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -4348,6 +4354,14 @@ packages:
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
+
+  dexie-export-import@4.4.1:
+    resolution: {integrity: sha512-B84UhmfGaImK47OKRW+uw8EleHtlUk8WbaeqAvPX/bwv3pl2W+l3/v8jJNpPUjwS8Dn/U/5kHAyXda9T6NofOQ==}
+    peerDependencies:
+      dexie: ^4.4.5
+
+  dexie@4.4.6:
+    resolution: {integrity: sha512-hJP/BO6mjB+tX6hToIO1kmxYLNmun90wYbfcoAoLpKEyDYal/k33dg0TAfoUe2TDsbbLoVIzljJ3BN2UbR5EOg==}
 
   dfa@1.2.0:
     resolution: {integrity: sha512-ED3jP8saaweFTjeGX8HQPjeC1YYyZs98jGNZx6IiBvxW7JG5v492kamAQB3m2wop07CvU/RQmzcKr6bgcC5D/Q==}
@@ -11945,6 +11959,12 @@ snapshots:
   devlop@1.1.0:
     dependencies:
       dequal: 2.0.3
+
+  dexie-export-import@4.4.1(dexie@4.4.6):
+    dependencies:
+      dexie: 4.4.6
+
+  dexie@4.4.6: {}
 
   dfa@1.2.0: {}
 

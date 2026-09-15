@@ -25,13 +25,16 @@ import {
 	McpTools,
 	agentToolCoverage,
 	agentToolRegistry,
-	LOCKED_TOOL_NAMES,
 	type ToolAccessPolicy,
 	type AgentToolDefinition
 } from './agent-tool-factory';
 import type { AgentToolContractBinding } from '$lib/models/agent';
 import type { ToolClassification } from '$lib/models/agent';
-import { TOOL_DESCRIPTIONS, type ToolName } from '$lib/models/agent/tool-catalog';
+import {
+	TOOL_DESCRIPTIONS,
+	LOCKED_TOOL_NAMES,
+	type ToolName
+} from '$lib/models/agent/tool-catalog';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 
 const executeDirectly: AgentToolExecutor = {

@@ -3,7 +3,10 @@ export type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 /** Capability-neutral contract for work that must commit or roll back as one unit. */
 export interface AtomicOperation {
-	run<T>(work: () => Promise<T>): Promise<T>;
+	run<T>(
+		work: () => Promise<T>,
+		options?: { readonly retry: 'database-only' | 'never' }
+	): Promise<T>;
 }
 
 type UserId = Brand<string, 'UserId'>;

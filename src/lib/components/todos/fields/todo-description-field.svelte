@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId } from '$lib/models/todos';
 	import { renderMarkdown } from '$lib/models/markdown';
@@ -22,6 +24,14 @@
 		id
 	}: { todoId: TodoId; projectId: ProjectId; value?: string; id?: string } = $props();
 
+	const resourceDraft = untrack(() => {
+		const editor = todoUpdates.editor(todoId);
+		editor.capture();
+		return editor;
+	});
+
+	const editorSession = new EditorSession(() => resourceDraft.active);
+	$effect(() => () => editorSession.close());
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());
 	let draft = $state(initialValue());
@@ -38,18 +48,42 @@
 		if (editing) textarea?.focus();
 	});
 
+	$effect(() => {
+		const next = value;
+		if (untrack(() => !editorSession.dirty && !editorSession.saving)) {
+			untrack(() => {
+				resourceDraft.capture();
+				editorSession.accept();
+			});
+			saved = next;
+			draft = next;
+		}
+	});
+
 	async function commit(): Promise<void> {
 		editing = false;
-		if (draft === saved) return;
-		if (await todoUpdates.updateTodo(todoId, { description: draft.trim() || null })) saved = draft;
-		else {
-			draft = saved;
-			toast.error('Could not update the description.');
+		if (!editorSession.dirty) return;
+		await editorSession.save(
+			async () => {
+				const submitted = draft;
+				const patch = { description: submitted.trim() || null };
+				return (await todoUpdates.save(resourceDraft, patch))
+					? { kind: 'saved', value: submitted }
+					: { kind: 'failure', message: todoUpdates.lastError ?? 'The edit could not be saved' };
+			},
+			(value) => {
+				saved = value;
+			}
+		);
+		if (editorSession.failure) {
+			editing = true;
+			toast.error(todoUpdates.lastError ?? 'Could not update the description.');
 		}
 	}
 
 	function edit(): void {
 		draft = saved;
+		editorSession.accept();
 		editing = true;
 	}
 
@@ -59,6 +93,7 @@
 		// paragraph break a save.
 		if (event.key === 'Escape') {
 			draft = saved;
+			editorSession.accept();
 			editing = false;
 		}
 		if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -90,6 +125,7 @@
 					screenshotMarkdown(file.name || 'screenshot', url)
 				);
 				draft = next.text;
+				editorSession.changed();
 				textarea?.setSelectionRange(next.caret, next.caret);
 			}
 			await commit();
@@ -137,6 +173,7 @@
 		aria-label="Todo description"
 		class="field-sizing-content min-h-24"
 		bind:value={draft}
+		oninput={() => editorSession.changed()}
 		onblur={() => void commit()}
 		onkeydown={keydown}
 		onpaste={paste}

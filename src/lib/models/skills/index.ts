@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stringify } from 'yaml';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -129,6 +130,7 @@ export interface CreateSkillFromSelectionOutput {
 }
 
 export interface CreateSkillInput {
+	readonly id?: NoteId;
 	readonly name: string;
 	readonly description?: string;
 	readonly triggerHints?: readonly string[];
@@ -160,3 +162,23 @@ export interface ListSkillsOutput {
 export interface GetSkillViewInput {
 	readonly noteId: NoteId;
 }
+
+/** Portable text is derived from the current instruction body and metadata, on either side. */
+export const serializeSkillManifest = (manifest: SkillManifest): string => {
+	const header = stringify(
+		{
+			name: manifest.slug,
+			description: manifest.description,
+			...(manifest.license ? { license: manifest.license } : {}),
+			...(manifest.compatibility ? { compatibility: manifest.compatibility } : {}),
+			metadata: {
+				...manifest.metadata,
+				...(manifest.allowImplicitInvocation
+					? {}
+					: { 'followthrough.allow-implicit-invocation': 'false' })
+			}
+		},
+		{ lineWidth: 0 }
+	).trimEnd();
+	return `---\n${header}\n---\n\n${manifest.instructions.trimEnd()}\n`;
+};

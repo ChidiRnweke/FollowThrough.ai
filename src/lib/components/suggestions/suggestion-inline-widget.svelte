@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DiagramSuggestion } from '$lib/models/diagrams';
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import type { NodeViewProps } from '@tiptap/core';
 	import { Button } from '$lib/components/ui/button';
@@ -15,23 +15,21 @@
 		$props();
 
 	const perNote = $derived(editor.perNote);
-	const view = $derived(
-		perNote?.suggestions.items.find((item) => item.suggestion.id === suggestionId)
-	);
-	const busy = $derived(perNote?.suggestions.busyIds.includes(suggestionId) ?? false);
+	const view = $derived(perNote?.suggestions.find((item) => item.suggestion.id === suggestionId));
+	const busy = $derived(suggestionActions.busyIds.includes(suggestionId) ?? false);
 	const isDrawio = $derived(
 		view?.suggestion.kind === 'diagram' && view.suggestion.payload.kind === 'drawio'
 	);
 
 	async function decide(decision: 'accept' | 'reject'): Promise<void> {
 		if (!perNote) return;
-		const ok = await perNote.suggestions.decide(suggestionId, decision);
+		const ok = await suggestionActions.decide(suggestionId, decision);
 		if (!ok) toast.error('Could not apply the decision. Try again.');
 	}
 
 	function openReview(): void {
 		if (view?.suggestion.kind === 'diagram' && view.suggestion.payload.kind === 'drawio') {
-			perNote?.suggestions.requestReview(view.suggestion as DiagramSuggestion);
+			suggestionActions.requestReview(view.suggestion.id);
 		}
 	}
 </script>

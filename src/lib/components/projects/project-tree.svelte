@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { goto } from '$app/navigation';
@@ -186,7 +187,7 @@
 
 	type InlineEdit =
 		| { mode: 'create'; kind: 'note' | 'folder' | 'skill'; projectId: ProjectId; parentId?: NoteId }
-		| { mode: 'rename'; entryId: NoteId; current: string };
+		| { mode: 'rename'; entryId: NoteId; current: string; draft: WorkspaceDraft<'notes'> };
 
 	let inlineEdit = $state<InlineEdit | null>(null);
 	let inlineCreateValue = $state('');
@@ -232,7 +233,7 @@
 		if (!inlineEdit) return;
 		const pending = inlineEdit;
 		if (pending.mode === 'rename') {
-			const output = await projectActions.renameNote(pending.entryId, value);
+			const output = await projectActions.renameNote(pending.draft, value);
 			if (!output) {
 				toast.error(failureMessage('Could not rename it. Try again.'));
 				return;
@@ -269,7 +270,8 @@
 	// --- Project-level dialog (create / rename projects only) ---
 
 	type ProjectDialog =
-		{ kind: 'new-project' } | { kind: 'rename-project'; projectId: ProjectId; current: string };
+		| { kind: 'new-project' }
+		| { kind: 'rename-project'; draft: WorkspaceDraft<'projects'>; current: string };
 
 	let dialog = $state<ProjectDialog | null>(null);
 
@@ -287,7 +289,7 @@
 			await goto(`/projects/${output.project.id}`);
 			return true;
 		}
-		const output = await projectActions.renameProject(pending.projectId, value);
+		const output = await projectActions.renameProject(pending.draft, value);
 		if (!output) {
 			toast.error(failureMessage('Could not rename the project. Try again.'));
 			return false;
@@ -368,7 +370,11 @@
 	onopenbackground={(noteId) => void workbench.openTabInBackground(noteId)}
 	onopensplit={openSideBySide}
 	onrenameproject={(project) =>
-		(dialog = { kind: 'rename-project', projectId: project.id, current: project.name })}
+		(dialog = {
+			kind: 'rename-project',
+			draft: projectActions.editor('projects', project.id),
+			current: project.name
+		})}
 />
 
 <NameDialog

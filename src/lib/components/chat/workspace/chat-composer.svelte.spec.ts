@@ -321,3 +321,18 @@ describe('ChatComposer send affordance', () => {
 		);
 	});
 });
+
+it('shows the offline state even when no run is streaming', async () => {
+	const screen = render(ChatComposer, { ...base, connection: 'offline' });
+	await expect.element(screen.getByText('Offline', { exact: true })).toBeVisible();
+});
+it('explains the reconnect requirement at the message input', async () => {
+	const screen = render(ChatComposer, { ...base, connection: 'offline' });
+	await expect.element(screen.getByPlaceholder('Reconnect to send')).toBeVisible();
+});
+it('does not offer to send a prepared message while offline', async () => {
+	const screen = render(ChatComposer, { ...base, connection: 'offline', prompt: 'Ready to send' });
+	await expect
+		.element(screen.getByRole('button', { name: 'Send message', exact: true }))
+		.toBeDisabled();
+});

@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import { toast } from 'svelte-sonner';
-	import { suggestionTray } from '$lib/stores/suggestions/suggestion-tray.svelte';
+	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { referenceTierLabels } from '../shared/labels';
 	import type { ResolvedReferenceLinkGroup } from './reference-link-plugin';
 
@@ -41,7 +41,7 @@
 	}
 
 	async function decide(suggestionId: SuggestionId, decision: 'accept' | 'reject'): Promise<void> {
-		const ok = await suggestionTray.decide(suggestionId, decision);
+		const ok = await suggestionActions.decide(suggestionId, decision);
 		if (!ok) {
 			toast.error('Could not apply the decision. Try again.');
 			return;
@@ -96,7 +96,7 @@
 						<Button
 							size="sm"
 							class="min-h-11"
-							disabled={suggestionTray.busyIds.includes(source.id)}
+							disabled={suggestionActions.busyIds.includes(source.id)}
 							onclick={() => void decide(source.id, 'accept')}
 						>
 							Accept
@@ -105,7 +105,7 @@
 							size="sm"
 							variant="ghost"
 							class="min-h-11"
-							disabled={suggestionTray.busyIds.includes(source.id)}
+							disabled={suggestionActions.busyIds.includes(source.id)}
 							onclick={() => void decide(source.id, 'reject')}
 						>
 							Dismiss

@@ -1,9 +1,8 @@
 import type { AgentRunReceipt } from '$lib/models/agent';
 import type { DrawioDiagram } from '$lib/models/diagrams';
 import type { SuggestionId } from '$lib/models/suggestions';
-import type { Note, SaveNoteOutput, TextSelection } from '$lib/models/notes';
+import type { Note, TextSelection } from '$lib/models/notes';
 import {
-	saveNote,
 	extractPromises,
 	relateNote,
 	findReferences,
@@ -15,15 +14,13 @@ import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/sugg
 
 class NoteActionsStore {
 	running = $state(false);
-	saving = $state(false);
 	lastError = $state<string | undefined>(undefined);
 
 	private async call<T>(
 		fn: () => Promise<T>,
-		{ save = false, run = false }: { save?: boolean; run?: boolean } = {}
+		{ run = false }: { run?: boolean } = {}
 	): Promise<T | undefined> {
 		this.lastError = undefined;
-		if (save) this.saving = true;
 		if (run) this.running = true;
 		try {
 			return await fn();
@@ -32,7 +29,6 @@ class NoteActionsStore {
 			this.lastError = error instanceof Error ? error.message : 'The request failed.';
 			return undefined;
 		} finally {
-			if (save) this.saving = false;
 			if (run) this.running = false;
 		}
 	}
@@ -96,10 +92,6 @@ class NoteActionsStore {
 
 	rejectDrawio(suggestionId: SuggestionId): Promise<unknown | undefined> {
 		return this.call(() => rejectSuggestion({ suggestionId }), { run: true });
-	}
-
-	async save(note: Note): Promise<SaveNoteOutput | undefined> {
-		return this.call<SaveNoteOutput>(() => saveNote({ note }), { save: true });
 	}
 }
 

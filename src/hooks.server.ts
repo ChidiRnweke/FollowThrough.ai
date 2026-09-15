@@ -1,7 +1,12 @@
 import type { HandleServerError, ServerInit } from '@sveltejs/kit';
 import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
-import { getSessionCookie, hydrateEnvironment } from '$lib/server/config';
+import {
+	getSessionCookie,
+	hydrateEnvironment,
+	setWorkspaceAccountCookie,
+	clearWorkspaceAccountCookie
+} from '$lib/server/config';
 
 import { redirect, type Handle } from '@sveltejs/kit';
 import { DOMAIN_ERROR_STATUS, DomainError } from '$lib/errors';
@@ -58,6 +63,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 
 		const user = event.locals.user;
+		if (user) setWorkspaceAccountCookie(event.cookies, user.id, event.url.protocol === 'https:');
+		else clearWorkspaceAccountCookie(event.cookies);
 		const path = event.url.pathname;
 
 		// Public surface: the auth flow, and the landing page at the root.
@@ -90,6 +97,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	} else {
 		// Auth disabled — single-user mode (dev)
 		// No session validation, actor() handles the local user
+		setWorkspaceAccountCookie(
+			event.cookies,
+			AppFactory.actor(event.locals).userId,
+			event.url.protocol === 'https:'
+		);
 	}
 
 	return resolve(event);

@@ -1,4 +1,12 @@
+import type { WorkspaceWriteCancellation } from '$lib/models/workspace-mutations';
 import type { ActorContext } from '$lib/models/identity';
+import type { SyncPage } from '$lib/models/sync';
+import type { WorkspaceWriteRecovery } from '$lib/models/workspace-mutations';
+import type { SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
+import type { SyncCursor, SyncEtag, SyncObjectRead } from '$lib/models/sync';
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { SyncChangeReader, SyncObjectReader } from '$lib/server/services/workspace/contracts';
 import type { GetTodayViewInput, ShellContext, TodayView } from '$lib/models/workspace';
 import type { PendingMemoryNotification } from '$lib/models/memory';
 import type { Project } from '$lib/models/projects';
@@ -20,12 +28,25 @@ import type { UserReader } from '$lib/server/services/identity/users';
  * parallel because none depends on another's result.
  */
 export interface WorkspaceController {
+	pullChangePage(actor: ActorContext, since: SyncCursor): Promise<SyncPage<WorkspaceRecord>>;
+	cancelMutation(
+		actor: ActorContext,
+		input: WorkspaceWriteCancellation
+	): Promise<WorkspaceWriteRecovery>;
+	readResource(
+		actor: ActorContext,
+		identity: WorkspaceResourceIdentity,
+		etag: SyncEtag | null
+	): Promise<SyncObjectRead<WorkspaceRecord>>;
 	/** Load the shell context for the signed-in user. */
 	getShellContext(actor: ActorContext): Promise<ShellContext>;
 	/** Assemble the today view: overdue/due-today todos, waiting-on items, pending suggestion count, and notes. */
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
+	writeRecovery: SyncWriteRecovery;
+	syncChanges: SyncChangeReader;
+	syncObjects: SyncObjectReader;
 	userReader: UserReader;
 	noteTreeReader: NoteTreeReader;
 	projectLister: ProjectLister;
@@ -73,6 +94,16 @@ export const toPendingMemoryNotifications = (
 
 export class Workspace implements WorkspaceController {
 	constructor(private readonly dependencies: WorkspaceDependencies) {}
+	pullChangePage(actor: ActorContext, since: SyncCursor) {
+		return this.dependencies.syncChanges.pullPage(actor, since);
+	}
+	cancelMutation(actor: ActorContext, input: WorkspaceWriteCancellation) {
+		return this.dependencies.writeRecovery.cancel(actor, input);
+	}
+
+	readResource(actor: ActorContext, identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {
+		return this.dependencies.syncObjects.read(actor, identity, etag);
+	}
 	async getShellContext(actor: ActorContext): Promise<ShellContext> {
 		const [user, projects, noteTree, skills, pendingSuggestions] = await Promise.all([
 			this.dependencies.userReader.get(actor),

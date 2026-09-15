@@ -1,6 +1,6 @@
-import { parse, stringify } from 'yaml';
+import { parse } from 'yaml';
 import { z } from 'zod';
-import type { SkillManifest } from '$lib/models/skills';
+import { serializeSkillManifest, type SkillManifest } from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
 
 const slug = z
@@ -55,8 +55,12 @@ export class SkillManifestCodec {
 				...(manifest.allowImplicitInvocation ? {} : { [IMPLICIT_KEY]: 'false' })
 			}
 		});
-		const header = stringify(validated, { lineWidth: 0 }).trimEnd();
-		return `---\n${header}\n---\n\n${manifest.instructions.trimEnd()}\n`;
+		return serializeSkillManifest({
+			...manifest,
+			description: validated.description,
+			license: validated.license,
+			compatibility: validated.compatibility
+		});
 	}
 }
 

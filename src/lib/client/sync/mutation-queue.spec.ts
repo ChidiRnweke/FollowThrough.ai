@@ -1,0 +1,377 @@
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { describe, expect, it } from 'vitest';
+import { syncEtag } from '$lib/models/sync';
+import type { WriteDraft } from '$lib/models/outbox';
+import {
+	InMemoryOutbox,
+	InMemoryAccountWriterLock
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import type { OutboxTransport } from './outbox-contracts';
+import { MutationQueue } from './mutation-queue';
+import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
+
+const firstId = 'a0000000-0000-4000-8000-000000000001';
+const secondId = 'a0000000-0000-4000-8000-000000000002';
+const thirdId = 'a0000000-0000-4000-8000-000000000003';
+const draft = (operationId: string, command = 'Edited'): WriteDraft<string, string> => ({
+	operationId,
+	command,
+	key: 'note:1',
+	base: null,
+	basedOn: null,
+	local: command,
+	coalesce: null,
+	references: []
+});
+const applied = (operationId: string, value: string) => ({
+	kind: 'applied' as const,
+	receipt: {
+		operationId,
+		resource: { kind: 'found' as const, snapshot: { etag: syncEtag(1n), value } }
+	}
+});
+const setup = (transport: OutboxTransport<string, string>) => {
+	const cache = new InMemorySyncCache<string>();
+	const repository = new InMemoryOutbox<string, string>(cache);
+	const writerLock = new InMemoryAccountWriterLock();
+	const dependencies = {
+		repository,
+		scheduler: new InMemorySyncScheduler(),
+		writerLock,
+		transport,
+		pull: async () => ({ kind: 'complete' as const })
+	};
+	return { repository, dependencies, cache, queue: new MutationQueue('alice', dependencies) };
+};
+
+describe('shared mutation submission', () => {
+	it('discards an uncertain edit only after durable server cancellation', async () => {
+		const { queue } = setup({
+			send: async () => {
+				throw new Error('Response lost');
+			},
+			recovery: {
+				observe: async () => ({ kind: 'unavailable' }),
+				cancel: async () => ({ kind: 'cancelled' })
+			}
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		await queue.discard([firstId]);
+		expect(queue.pending).toEqual([]);
+	});
+	it('sends independent work after a transport failure while preserving its descendants', async () => {
+		const { queue } = setup({
+			send: async (input) => {
+				if (input.operationId === firstId) throw new Error('Connection lost');
+				return applied(input.operationId, input.command);
+			}
+		});
+		await queue.append(draft(firstId));
+		await queue.append({ ...draft(secondId), basedOn: firstId });
+		await queue.append({ ...draft(thirdId), key: 'note:2' });
+		await queue.flush();
+		await queue.flush();
+		expect(queue.pending.map((entry) => [entry.intent.operationId, entry.delivery.kind])).toEqual([
+			[firstId, 'retry'],
+			[secondId, 'queued']
+		]);
+	});
+	it('keeps offline writes durable without starting submission', async () => {
+		const { queue, repository } = setup({
+			send: async () => {
+				throw new Error('Offline transport used');
+			}
+		});
+		queue.setOnline(false);
+		await queue.append(draft(firstId));
+		expect({
+			result: await queue.flush(),
+			local: (await repository.list('alice'))[0].intent.local
+		}).toEqual({ result: { kind: 'offline' }, local: 'Edited' });
+	});
+	it('retries an interrupted request with the same identity and input', async () => {
+		const requests: { operationId: string; command: string }[] = [];
+		const { queue } = setup({
+			send: async (input) => {
+				requests.push({ operationId: input.operationId, command: input.command });
+				if (requests.length === 1) throw new Error('Connection lost');
+				return applied(input.operationId, input.command);
+			}
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		await queue.append(draft(secondId, 'Later typing'));
+		await queue.flush(true);
+		expect(requests).toEqual([
+			{ operationId: firstId, command: 'Edited' },
+			{ operationId: firstId, command: 'Edited' },
+			{ operationId: secondId, command: 'Later typing' }
+		]);
+	});
+	it('publishes receipts only after their queue acknowledgement is durable', async () => {
+		const { queue, repository } = setup({
+			send: async (input) => applied(input.operationId, input.command)
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		expect(await repository.read('alice')).toMatchObject({
+			writes: { entries: [], receipts: new Map([['note:1', applied(firstId, 'Edited').receipt]]) },
+			cache: {
+				records: [
+					{
+						key: 'note:1',
+						entry: {
+							kind: 'present',
+							snapshot: { etag: syncEtag(1n), value: 'Edited' }
+						}
+					}
+				]
+			}
+		});
+	});
+	it('continues unrelated writes after a conflict without discarding the conflicting edit', async () => {
+		const { queue } = setup({
+			send: async (input) =>
+				input.operationId === firstId
+					? { kind: 'conflict', remote: { kind: 'deleted', etag: syncEtag(2n) } }
+					: applied(input.operationId, input.command)
+		});
+		await queue.append(draft(firstId));
+		await queue.append(draft(secondId, 'Further typing'));
+		await queue.append({ ...draft(thirdId), key: 'note:2' });
+		await queue.flush();
+		expect(
+			queue.pending.map((entry) => ({
+				operationId: entry.intent.operationId,
+				status: entry.delivery.kind
+			}))
+		).toEqual([
+			{ operationId: firstId, status: 'conflict' },
+			{ operationId: secondId, status: 'queued' }
+		]);
+	});
+	it('does not recover another tab’s active submission', async () => {
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const requests: string[] = [];
+		const { queue, dependencies } = setup({
+			send: async (input) => {
+				requests.push(input.operationId);
+				started.resolve();
+				await release.promise;
+				return applied(input.operationId, input.command);
+			}
+		});
+		const other = new MutationQueue('alice', dependencies);
+		await queue.append(draft(firstId));
+		const first = queue.flush();
+		await started.promise;
+		const second = other.flush();
+		release.resolve();
+		await Promise.all([first, second]);
+		expect(requests).toEqual([firstId]);
+	});
+	it('does not submit after logout while loading a queued write', async () => {
+		const requests: string[] = [];
+		const { queue } = setup({
+			send: async (input) => {
+				requests.push(input.operationId);
+				return applied(input.operationId, input.command);
+			}
+		});
+		await queue.append(draft(firstId));
+		queue.subscribe(() => {
+			if (queue.pending.some((entry) => entry.delivery.kind === 'sending')) queue.stop();
+		});
+		await queue.flush();
+		expect(requests).toEqual([]);
+	});
+
+	it('finishes durable acknowledgement after logout without exposing the old account receipt', async () => {
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		const { queue, repository, cache } = setup({
+			send: async (input) => {
+				started.resolve();
+				await release.promise;
+				return applied(input.operationId, input.command);
+			}
+		});
+		await queue.append(draft(firstId));
+		const flushing = queue.flush();
+		await started.promise;
+		queue.stop();
+		release.resolve();
+		await flushing;
+		expect({
+			durable: await repository.list('alice'),
+			exposed: queue.pending,
+			acknowledged: queue.acknowledged('note:1', firstId),
+			stored: (await cache.load('alice')).records
+		}).toEqual({
+			durable: [],
+			exposed: [],
+			acknowledged: false,
+			stored: [
+				{
+					key: 'note:1',
+					entry: {
+						kind: 'present',
+						snapshot: { etag: syncEtag(1n), value: 'Edited' }
+					}
+				}
+			]
+		});
+	});
+});
+
+describe('conflict cache publication', () => {
+	it('publishes the server version while keeping the local conflict queued', async () => {
+		const snapshot = { etag: syncEtag(2n), value: 'Other client' };
+		const { queue, cache } = setup({
+			send: async () => ({ kind: 'conflict', remote: { kind: 'found', snapshot } })
+		});
+		await queue.append(draft(firstId));
+		await queue.flush();
+		expect({
+			stored: (await cache.load('alice')).records,
+			local: queue.pending[0].intent.local
+		}).toEqual({
+			stored: [{ key: 'note:1', entry: { kind: 'present', snapshot: snapshot } }],
+			local: 'Edited'
+		});
+	});
+});
+
+describe('shared offline queue reload', () => {
+	it('shows another tab’s durable edit without requiring a network connection', async () => {
+		const { queue, dependencies } = setup({
+			send: async () => {
+				throw new Error('Offline transport used');
+			}
+		});
+		queue.setOnline(false);
+		await queue.reload();
+		const other = new MutationQueue('alice', dependencies);
+		other.setOnline(false);
+		await other.append(draft(firstId));
+		await queue.reload();
+		expect(queue.pending.map((entry) => entry.intent.local)).toEqual(['Edited']);
+	});
+	it('removes another tab’s discarded edit from the offline projection', async () => {
+		const { queue, dependencies } = setup({
+			send: async () => {
+				throw new Error('Offline transport used');
+			}
+		});
+		queue.setOnline(false);
+		await queue.append(draft(firstId));
+		const other = new MutationQueue('alice', dependencies);
+		other.setOnline(false);
+		await other.discard([firstId]);
+		await queue.reload();
+		expect(queue.pending).toEqual([]);
+	});
+});
+
+it('recognizes an exact acknowledgement committed by another writer', async () => {
+	const { queue, repository } = setup({
+		send: async () => {
+			throw new Error('Another writer submits this operation');
+		}
+	});
+	await queue.append(draft(firstId));
+	const sent = await repository.take('alice');
+	if (!sent) throw new Error('The queued edit must exist');
+	await repository.settle('alice', sent, applied(firstId, 'Edited'));
+	await queue.reload();
+	expect(queue.acknowledged('note:1', firstId)).toBe(true);
+});
+
+it('does not treat disappearance from another writer’s discard as acknowledgement', async () => {
+	const { queue, repository } = setup({
+		send: async () => {
+			throw new Error('This edit is discarded before submission');
+		}
+	});
+	await queue.append(draft(firstId));
+	await repository.discard('alice', [firstId]);
+	await queue.reload();
+	expect(queue.acknowledged('note:1', firstId)).toBe(false);
+});
+
+it('settles a failed edit at its retry deadline without another user action', async () => {
+	let reachable = false;
+	const { dependencies } = setup({
+		send: async (input) => {
+			if (!reachable) throw new Error('Connection lost');
+			return applied(input.operationId, input.command);
+		}
+	});
+	const scheduler = new InMemorySyncScheduler();
+	const queue = new MutationQueue('alice', { ...dependencies, scheduler });
+	await queue.append(draft(firstId));
+	await queue.flush();
+	reachable = true;
+	await scheduler.advance(1000);
+	queue.stop();
+	expect(await dependencies.repository.list('alice')).toEqual([]);
+});
+
+it('leaves a stopped account unchanged when a retry deadline arrives', async () => {
+	let reachable = false;
+	const { dependencies } = setup({
+		send: async (input) => {
+			if (!reachable) throw new Error('Connection lost');
+			return applied(input.operationId, input.command);
+		}
+	});
+	const scheduler = new InMemorySyncScheduler();
+	const queue = new MutationQueue('alice', { ...dependencies, scheduler });
+	await queue.append(draft(firstId));
+	await queue.flush();
+	const before = await dependencies.repository.list('alice');
+	queue.stop();
+	reachable = true;
+	await scheduler.advance(60_000);
+	expect(await dependencies.repository.list('alice')).toEqual(before);
+});
+
+// SYNC-PROGRESS: a follower does not wait for the active writer's remote request.
+it('returns a waiting state without recovering another tab’s unresolved submission', async () => {
+	const started = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const { queue, dependencies } = setup({
+		send: async (input) => {
+			started.resolve();
+			await release.promise;
+			return applied(input.operationId, input.command);
+		}
+	});
+	await queue.append(draft(firstId));
+	const sending = queue.flush();
+	await started.promise;
+	const other = new MutationQueue('alice', dependencies);
+	const result = await Promise.race([
+		other.flush(),
+		new Promise((resolve) => setTimeout(() => resolve({ kind: 'blocked' }), 30))
+	]);
+	release.resolve();
+	await sending;
+	queue.stop();
+	other.stop();
+	expect(result).toEqual({ kind: 'waiting' });
+});
+
+it('automatically retries the first storage failure before any operation is submitted', async () => {
+	const { queue, repository, dependencies } = setup({
+		send: async (input) => applied(input.operationId, input.command)
+	});
+	await queue.append(draft(firstId));
+	repository.snapshotFailure = 'Device storage unavailable';
+	await queue.flush();
+	repository.snapshotFailure = null;
+	await dependencies.scheduler.advance(1000);
+	expect(await repository.receipt('alice', 'note:1')).toEqual(applied(firstId, 'Edited').receipt);
+});

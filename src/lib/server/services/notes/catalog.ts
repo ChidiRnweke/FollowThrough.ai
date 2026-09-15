@@ -329,7 +329,7 @@ export class NoteCatalog {
 		}
 		const timestamp = now();
 		return this.notes.insert(actor, {
-			id: crypto.randomUUID() as NoteId,
+			id: input.id ?? (crypto.randomUUID() as NoteId),
 			userId: actor.userId,
 			projectId: project.id,
 			kind: 'note',

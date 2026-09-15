@@ -54,7 +54,7 @@ export class InMemoryTodos
 		if (!input.projectId) throw new ValidationError('Todo project is required');
 		if (!input.title.trim()) throw new ValidationError('Todo title is required');
 		const todo = todoBuilder({
-			id: testTodoId(this.todos.length + 1),
+			id: input.id ?? testTodoId(this.todos.length + 1),
 			userId: actor.userId,
 			projectId: input.projectId,
 			title: input.title.trim(),

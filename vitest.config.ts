@@ -13,7 +13,12 @@ const lib = fileURLToPath(new URL('./src/lib', import.meta.url));
  * Named rather than written inline because the topology audit checks that every
  * `include:` array in this file matches real spec files, and these are packages.
  */
-const browserPrebundled = ['harper.js', 'harper.js/binary', '@floating-ui/dom'];
+const browserPrebundled = [
+	'dexie-export-import',
+	'harper.js',
+	'harper.js/binary',
+	'@floating-ui/dom'
+];
 const common = {
 	expect: { requireAssertions: true },
 	pool: 'forks' as const
@@ -115,8 +120,14 @@ export default defineConfig({
 						'src/lib/components/notes/note-conflict-dialog.svelte.spec.ts',
 						'src/lib/components/shared/safe-svg-preview.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
-						'src/lib/client/notes/sync/indexeddb-note-sync-repository.svelte.spec.ts',
-						'src/lib/client/notes/sync/indexeddb-workspace-repository.svelte.spec.ts',
+						'src/lib/client/sync/database.svelte.spec.ts',
+						'src/lib/client/sync/workspace-local-repository.svelte.spec.ts',
+						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',
+						'src/lib/client/sync/storage-recovery.svelte.spec.ts',
+						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
+						'src/lib/stores/workspace/resources.svelte.spec.ts',
+						'src/lib/stores/workspace/drafts.svelte.spec.ts',
+						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',
 						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts',
 						'src/lib/components/notes/proofread-menu.svelte.spec.ts'
 					],

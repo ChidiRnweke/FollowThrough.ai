@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-node';
+import type { Adapter } from '@sveltejs/kit';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { hydrateEnvironment, mergePlatformEnvironment } from './src/lib/server/config';
@@ -18,6 +19,18 @@ const managedConfiguration = (): Plugin => ({
 		await import('./scripts/otel-instrumentation.js');
 	}
 });
+
+/** Public, data-free SPA entry for offline navigation; private records live only in IndexedDB. */
+const applicationAdapter = (): Adapter => {
+	const node = adapter();
+	return {
+		...node,
+		async adapt(builder) {
+			await builder.generateFallback(`${builder.getClientDirectory()}/offline-shell.html`);
+			await node.adapt(builder);
+		}
+	};
+};
 
 export default defineConfig({
 	build: {
@@ -51,7 +64,7 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
 				experimental: { async: true }
 			},
-			adapter: adapter(),
+			adapter: applicationAdapter(),
 			experimental: {
 				remoteFunctions: true,
 				handleRenderingErrors: true

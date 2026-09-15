@@ -30,6 +30,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 			const [row] = await this.database
 				.insert(schema.projects)
 				.values({
+					...(input.id !== undefined ? { id: input.id } : {}),
 					userId: actor.userId,
 					name: input.name,
 					role: input.role ?? 'workspace',
@@ -175,6 +176,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		const [row] = await this.database
 			.insert(schema.notes)
 			.values({
+				...(input.id !== undefined ? { id: input.id } : {}),
 				userId: actor.userId,
 				projectId: input.projectId,
 				parentId: input.parentId,

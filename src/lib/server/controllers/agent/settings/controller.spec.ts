@@ -6,7 +6,8 @@ import type {
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentSettings } from './controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { AgentSettings, type AgentSettingsDependencies } from './controller';
 
 class FakeAgentPreferencesStore implements AgentPreferencesStore {
 	preferences: AgentPreferences = {
@@ -75,12 +76,14 @@ const setup = () => {
 	return {
 		preferences,
 		models,
-		controller: new AgentSettings({
-			preferences,
-			models,
-			defaultModel: DEPLOYMENT_CHAT_MODEL,
-			defaultVisionModel: DEPLOYMENT_VISION_MODEL
-		})
+		controller: new AgentSettings(
+			capabilityDependencies<AgentSettingsDependencies>({
+				preferences,
+				models,
+				defaultModel: DEPLOYMENT_CHAT_MODEL,
+				defaultVisionModel: DEPLOYMENT_VISION_MODEL
+			})
+		)
 	};
 };
 
@@ -133,5 +136,16 @@ describe('agent settings model defaults', () => {
 		expect((await controller.resolveDefaults(testActor())).visionModelId).toBe(
 			DEPLOYMENT_VISION_MODEL
 		);
+	});
+});
+
+describe('offline bootstrap deployment defaults', () => {
+	it('keeps deployment models independent of the users current overrides', async () => {
+		const { controller } = setup();
+		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
+		expect(await controller.deploymentDefaults(testActor())).toEqual({
+			chatModelId: DEPLOYMENT_CHAT_MODEL,
+			visionModelId: DEPLOYMENT_VISION_MODEL
+		});
 	});
 });

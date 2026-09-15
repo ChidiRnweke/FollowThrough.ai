@@ -11,6 +11,6 @@
 				>Files and images the project agent can search.</Dialog.Description
 			></Dialog.Header
 		>
-		<AttachmentList {projectId} />
+		<AttachmentList owner={{ kind: 'project', id: projectId }} />
 	</Dialog.Content>
 </Dialog.Root>

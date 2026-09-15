@@ -152,6 +152,7 @@ export interface ListMemoryOutput {
 }
 
 export interface CreateMemoryEntryInput {
+	readonly id?: MemoryEntryId;
 	/** Omit projectId to create a user-profile entry. */
 	readonly projectId?: ProjectId;
 	readonly content: string;

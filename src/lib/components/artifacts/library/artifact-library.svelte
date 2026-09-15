@@ -31,7 +31,8 @@
 	import * as Pagination from '$lib/components/ui/pagination';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { AgentAction, agentActions } from '$lib/components/agent';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	export interface ArtifactLibraryData {
@@ -46,7 +47,7 @@
 
 	let { data }: { data: ArtifactLibraryData } = $props();
 
-	let artifacts = $derived<ArtifactView[]>([...data.artifacts]);
+	const artifacts = $derived<readonly ArtifactView[]>(data.artifacts);
 	let busyId = $state<ArtifactId | undefined>(undefined);
 	let searchValue = $derived(data.query);
 
@@ -68,6 +69,7 @@
 		try {
 			const output = await regenerateArtifact({ artifactId: id });
 			window.location.assign(output.downloadUrl);
+			await workspaceSession.synchronize();
 			toast.success('Document regenerated');
 			// audit-allow: silent-catch — the toast reports regeneration failure and the artifact remains unchanged.
 		} catch {
@@ -78,18 +80,11 @@
 	}
 
 	async function remove(id: ArtifactId): Promise<void> {
-		const previous = artifacts;
-		artifacts = artifacts.filter((artifact) => artifact.id !== id);
 		try {
 			await deleteArtifact({ artifactId: id });
-			if (previous.length === 1 && data.page > 1) {
-				await navigate(data.page - 1);
-			} else {
-				await invalidateAll();
-			}
-			// audit-allow: silent-catch — the optimistic deletion is rolled back and its failure is shown to the user.
+			await workspaceSession.synchronize();
+			// audit-allow: silent-catch — the toast reports the failed deletion; the shared record remains available.
 		} catch {
-			artifacts = previous;
 			toast.error('Could not delete the artifact.');
 		}
 	}

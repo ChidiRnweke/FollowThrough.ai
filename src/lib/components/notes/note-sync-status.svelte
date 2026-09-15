@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DateTime } from '$lib/models/workspace';
-	import type { NoteSyncStatus } from '$lib/models/notes';
+	import type { DraftStatus } from '$lib/models/outbox';
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -14,7 +14,7 @@
 		onRetry,
 		onReview
 	}: {
-		status: NoteSyncStatus;
+		status: DraftStatus;
 		updatedAt: DateTime;
 		/** Why the last sync attempt failed, surfaced on hover so "retry" is not a bare guess. */
 		reason?: string;

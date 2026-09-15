@@ -3,7 +3,7 @@
 	import type { ImportMarkdownArchiveOutput, ProjectId } from '$lib/models/projects';
 	import { importMarkdownArchiveOutputSchema } from '$lib/models/projects';
 	import type { NoteId } from '$lib/models/notes';
-	import { invalidateAll } from '$app/navigation';
+	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import FileDropzone from '../attachments/file-dropzone.svelte';
@@ -57,7 +57,7 @@
 				return;
 			}
 			report = parsed.data;
-			await invalidateAll();
+			await workspaceSession.synchronize();
 			// audit-allow: silent-catch — submission failure is rendered and the selected files remain available for retry.
 		} catch {
 			error = 'The import could not be sent. Check your connection and try again.';

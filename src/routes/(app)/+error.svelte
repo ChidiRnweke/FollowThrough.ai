@@ -1,4 +1,5 @@
 <script lang="ts">
+	import WorkspaceRecoveryDownload from '$lib/components/shared/workspace-recovery-download.svelte';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { FtRetry as Retry } from '$lib/components/icons';
@@ -23,6 +24,7 @@
 		</Button>
 		<Button href="/today" variant="ghost">Go to today</Button>
 	</div>
+	<WorkspaceRecoveryDownload />
 	{#if error.code}
 		<!-- audit-allow: no-raw-font-family — The error code is a diagnostic identifier. -->
 		<p class="font-mono text-xs text-muted-foreground">{error.code}</p>

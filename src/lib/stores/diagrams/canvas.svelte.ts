@@ -27,11 +27,7 @@ export const canvasFor = (sessionKey: ChatSessionKey): SessionCanvas | undefined
 /**
  * The most recent diagram this conversation wrote, named by the call that wrote it.
  *
- * A diagram pane renders `getProjectDiagram`, a cached query that every *client*
- * write refreshes by pairing itself with `.updates(...)`. The agent writes
- * server-side inside a tool, so nothing invalidates that cache and the pane goes
- * on showing the source from before the change — the diagram moves in the
- * database and not on screen.
+ * Agent writes trigger the shared journal pull so an open clean canvas sees the saved version.
  *
  * Identified by `callId` rather than by the diagram: two edits to one diagram
  * share an id, so comparing ids would refresh the first and ignore every one after.
