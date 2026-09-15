@@ -1171,3 +1171,26 @@ export function drawioReferencesIn(
 		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
 	return ids;
 }
+
+/** Facts needed to archive a note; document content does not affect this decision. */
+export function decideNoteArchive(
+	note: Pick<Note, 'kind' | 'archivedAt'>,
+	hasActiveChildren: boolean
+): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
+	if (note.archivedAt) return { kind: 'invalid', message: 'The note is already archived' };
+	if (note.kind === 'folder' && hasActiveChildren)
+		return { kind: 'invalid', message: 'A folder with active contents cannot be archived' };
+	return { kind: 'allowed' };
+}
+
+/** A missing or archived parent sends a restored note to the end of its project root. */
+export function decideNoteRestore(
+	note: Pick<Note, 'parentId' | 'position' | 'archivedAt'>,
+	parent: Pick<Note, 'archivedAt'> | null
+): { kind: 'invalid'; message: string } | { kind: 'restore'; placement: 'keep' | 'root' } {
+	if (!note.archivedAt) return { kind: 'invalid', message: 'The note is not archived' };
+	return {
+		kind: 'restore',
+		placement: note.parentId && (!parent || parent.archivedAt) ? 'root' : 'keep'
+	};
+}

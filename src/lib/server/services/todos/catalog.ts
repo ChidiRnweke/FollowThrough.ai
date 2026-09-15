@@ -1,3 +1,4 @@
+import { applyTodoEdit, assembleTodoView } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateTodoInput,
@@ -83,14 +84,7 @@ export class TodoCatalog {
 
 	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {
 		const todo = await this.get(actor, todoId);
-		const { completedAt: _completedAt, ...withoutCompletion } = todo;
-		void _completedAt;
-		return this.todos.update(actor, {
-			...withoutCompletion,
-			status,
-			...(status === 'done' ? { completedAt: now() } : {}),
-			updatedAt: now()
-		});
+		return this.todos.update(actor, applyTodoEdit(todo, { status }, now()));
 	}
 
 	async softDelete(actor: ActorContext, todoId: TodoId): Promise<void> {
@@ -124,17 +118,15 @@ export class TodoCatalog {
 				const linked = todo.linkedNoteId
 					? await this.notes.findById(actor, todo.linkedNoteId)
 					: undefined;
-				const source = linked ?? origin;
 				const provenance = todo.provenanceId
 					? await this.provenance.findById(actor, todo.provenanceId)
 					: undefined;
-				return {
-					todo,
-					...(source ? { sourceNote: { id: source.id, title: source.title } } : {}),
-					...(origin ? { originNote: { id: origin.id, title: origin.title } } : {}),
-					...(anchor ? { anchor } : {}),
-					...(provenance ? { provenance } : {})
-				};
+				return assembleTodoView(todo, {
+					anchor: anchor ?? null,
+					origin: origin ?? null,
+					linked: linked ?? null,
+					provenance: provenance ?? null
+				});
 			})
 		);
 	}

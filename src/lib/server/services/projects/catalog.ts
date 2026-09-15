@@ -1,3 +1,4 @@
+import { assembleProjectTree } from '$lib/models/projects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateFolderInput,
@@ -67,17 +68,7 @@ export class ProjectCatalog {
 
 	async read(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTreeNode[]> {
 		await this.get(actor, projectId);
-		const entries = (await this.tree.list(actor, projectId)).filter(
-			(entry) => entry.kind !== 'skill'
-		);
-		const children = new Map<NoteId | undefined, Note[]>();
-		for (const entry of entries) {
-			const siblings = children.get(entry.parentId) ?? [];
-			children.set(entry.parentId, [...siblings, entry]);
-		}
-		const build = (parentId?: NoteId): ProjectTreeNode[] =>
-			(children.get(parentId) ?? []).map((entry) => ({ entry, children: build(entry.id) }));
-		return build();
+		return assembleProjectTree(await this.tree.list(actor, projectId));
 	}
 
 	async createFolder(actor: ActorContext, input: CreateFolderInput): Promise<Note> {

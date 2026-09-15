@@ -108,9 +108,9 @@ export interface ProjectTemplate {
 }
 
 /** One entry in the project's document tree; folders nest children, notes never do. */
-export interface ProjectTreeNode {
-	readonly entry: ProjectEntryReference;
-	readonly children: readonly ProjectTreeNode[];
+export interface ProjectTreeNode<Entry = ProjectEntryReference> {
+	readonly entry: Entry;
+	readonly children: readonly ProjectTreeNode<Entry>[];
 }
 
 export interface ProjectView {
@@ -238,3 +238,19 @@ export interface ArchiveProjectOutput {
 
 export * from './export-entries';
 import { z } from 'zod';
+
+/** Preserve the adapter's sibling order while assembling the same tree on both sides. */
+export function assembleProjectTree<
+	Entry extends Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind'>
+>(entries: readonly Entry[]): readonly ProjectTreeNode<Entry>[] {
+	const children = new Map<NoteId | undefined, Entry[]>();
+	for (const entry of entries) {
+		if (entry.kind === 'skill') continue;
+		const siblings = children.get(entry.parentId) ?? [];
+		siblings.push(entry);
+		children.set(entry.parentId, siblings);
+	}
+	const build = (parentId: NoteId | undefined): ProjectTreeNode<Entry>[] =>
+		(children.get(parentId) ?? []).map((entry) => ({ entry, children: build(entry.id) }));
+	return build(undefined);
+}

@@ -19,8 +19,8 @@ import {
 	type WorkspaceRecordOf
 } from '$lib/models/workspace-records';
 import type { LocalDate } from '$lib/models/workspace';
-import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
-import type { ProjectId, ProjectTreeNode, ProjectView } from '$lib/models/projects';
+import { assembleTodoView, type Todo, type TodoListFilter, type TodoView } from '$lib/models/todos';
+import { assembleProjectTree, type ProjectId, type ProjectView } from '$lib/models/projects';
 import { noteEtag, sectionNumberingView, type NoteId } from '$lib/models/notes';
 import { provenanceOrigin } from '$lib/models/provenance';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
@@ -340,12 +340,7 @@ export class WorkspaceViews {
 		const entries = this.notes
 			.filter((note) => note.projectId === projectId && note.kind !== 'skill')
 			.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
-		const children = new Map<NoteId | undefined, typeof entries>();
-		for (const entry of entries)
-			children.set(entry.parentId, [...(children.get(entry.parentId) ?? []), entry]);
-		const build = (parentId: NoteId | undefined): ProjectTreeNode[] =>
-			(children.get(parentId) ?? []).map((entry) => ({ entry, children: build(entry.id) }));
-		return { project, tree: build(undefined) };
+		return { project, tree: assembleProjectTree(entries) };
 	}
 	note(noteId: NoteId) {
 		const note = this.get('notes', noteId);
@@ -433,15 +428,13 @@ export class WorkspaceViews {
 			: undefined;
 		const origin = anchor ? this.get('notes', anchor.noteId) : undefined;
 		const linked = todo.linkedNoteId ? this.get('notes', todo.linkedNoteId) : undefined;
-		const source = linked ?? origin;
 		const provenance = todo.provenanceId ? this.get('provenance', todo.provenanceId) : undefined;
-		return {
-			todo,
-			...(source ? { sourceNote: { id: source.id, title: source.title } } : {}),
-			...(origin ? { originNote: { id: origin.id, title: origin.title } } : {}),
-			...(anchor ? { anchor } : {}),
-			...(provenance ? { provenance } : {})
-		};
+		return assembleTodoView(todo, {
+			anchor: anchor ?? null,
+			origin: origin ?? null,
+			linked: linked ?? null,
+			provenance: provenance ?? null
+		});
 	}
 	todos(filter: TodoListFilter = {}): readonly TodoView[] {
 		const projects = new Set(this.projects.map((project) => project.id));

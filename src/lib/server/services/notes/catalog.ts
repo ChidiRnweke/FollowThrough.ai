@@ -1,3 +1,4 @@
+import { decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -106,26 +107,24 @@ export class NoteCatalog {
 
 	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {
 		const note = await this.get(actor, noteId);
-		if (note.archivedAt) throw new ValidationError('The note is already archived');
-		if (note.kind === 'folder') {
-			const active = await this.notes.listActive(actor, note.projectId);
-			if (active.some((entry) => entry.parentId === noteId))
-				throw new ValidationError('A folder with active contents cannot be archived');
-		}
+		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
+		const decision = decideNoteArchive(
+			note,
+			active.some((entry) => entry.parentId === noteId)
+		);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		return this.notes.update(actor, { ...note, archivedAt: now(), updatedAt: now() });
 	}
 
 	async restore(actor: ActorContext, noteId: NoteId): Promise<Note> {
 		const note = await this.get(actor, noteId);
-		if (!note.archivedAt) throw new ValidationError('The note is not archived');
+		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
+		const decision = decideNoteRestore(note, parent ?? null);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		const { archivedAt, ...rest } = note;
 		void archivedAt;
-		// A note trashed inside a folder that was trashed after it would come back
-		// parented to something invisible, so it would restore into nowhere. Reattach it
-		// to the project root instead of leaving it stranded.
-		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
-		const orphaned = Boolean(note.parentId) && (!parent || Boolean(parent.archivedAt));
-		if (!orphaned) return this.notes.update(actor, { ...rest, updatedAt: now() });
+		if (decision.placement === 'keep')
+			return this.notes.update(actor, { ...rest, updatedAt: now() });
 		const { parentId, ...detached } = rest;
 		void parentId;
 		return this.notes.update(actor, {

@@ -13,7 +13,7 @@ import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todo
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import { type Note, type NoteId } from '$lib/models/notes';
+import { decideNoteArchive, decideNoteRestore, type Note, type NoteId } from '$lib/models/notes';
 import type { WriteContent, WriteDraft } from '$lib/models/outbox';
 import { syncEtagSchema } from '$lib/models/sync';
 import {
@@ -446,12 +446,11 @@ export const noteTrashWrite = (
 	timestamp: DateTime
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
 	if (action === 'archive') {
-		if (note.archivedAt) throw new Error('The note is already archived');
-		if (
-			note.kind === 'folder' &&
+		const decision = decideNoteArchive(
+			note,
 			notes.some((entry) => entry.parentId === note.id && !entry.archivedAt)
-		)
-			throw new Error('A folder with active contents cannot be archived');
+		);
+		if (decision.kind === 'invalid') throw new Error(decision.message);
 		return {
 			command: { kind: 'archiveNote', noteId: note.id },
 			local: { type: 'notes', value: { ...note, archivedAt: timestamp, updatedAt: timestamp } },
@@ -459,21 +458,22 @@ export const noteTrashWrite = (
 			references: []
 		};
 	}
-	if (!note.archivedAt) throw new Error('The note is not archived');
+	const parent = notes.find((entry) => entry.id === note.parentId);
+	const decision = decideNoteRestore(note, parent ?? null);
+	if (decision.kind === 'invalid') throw new Error(decision.message);
 	const { archivedAt, ...rest } = note;
 	void archivedAt;
-	const parent = notes.find((entry) => entry.id === note.parentId);
-	const orphaned = Boolean(note.parentId) && (!parent || Boolean(parent.archivedAt));
 	const { parentId, ...detached } = rest;
 	void parentId;
-	const local: Note = orphaned
-		? {
-				...detached,
-				position: notes.filter((entry) => entry.projectId === note.projectId && !entry.parentId)
-					.length,
-				updatedAt: timestamp
-			}
-		: { ...rest, updatedAt: timestamp };
+	const local: Note =
+		decision.placement === 'root'
+			? {
+					...detached,
+					position: notes.filter((entry) => entry.projectId === note.projectId && !entry.parentId)
+						.length,
+					updatedAt: timestamp
+				}
+			: { ...rest, updatedAt: timestamp };
 	return {
 		command: { kind: 'restoreNote', noteId: note.id },
 		local: { type: 'notes', value: local },
