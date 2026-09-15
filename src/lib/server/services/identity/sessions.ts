@@ -16,7 +16,10 @@ function generateSessionId(): string {
 }
 
 export class SessionRegistry implements ISessionRegistry {
-	constructor(private sessionRepo: SessionRepository) {}
+	constructor(
+		private readonly sessionRepo: SessionRepository,
+		private readonly now: () => number = Date.now
+	) {}
 
 	async logout(sessionId: string): Promise<void> {
 		await this.sessionRepo.delete(sessionId as SessionId);
@@ -29,16 +32,16 @@ export class SessionRegistry implements ISessionRegistry {
 			return null;
 		}
 
-		// Check expiration
-		if (Date.now() >= result.session.expiresAt.getTime()) {
+		const now = this.now();
+		if (now >= result.session.expiresAt.getTime()) {
 			await this.sessionRepo.delete(sessionId as SessionId);
 			return null;
 		}
 
 		// Extend session if close to expiring (within 15 days)
 		const fifteenDays = 1000 * 60 * 60 * 24 * 15;
-		if (Date.now() >= result.session.expiresAt.getTime() - fifteenDays) {
-			const newExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
+		if (now >= result.session.expiresAt.getTime() - fifteenDays) {
+			const newExpiresAt = new Date(now + 1000 * 60 * 60 * 24 * 30); // 30 days
 			await this.sessionRepo.updateExpiresAt(sessionId as SessionId, newExpiresAt);
 			result.session = { ...result.session, expiresAt: newExpiresAt };
 		}
@@ -48,7 +51,7 @@ export class SessionRegistry implements ISessionRegistry {
 
 	async createSession(userId: UserId): Promise<Session> {
 		const sessionId = generateSessionId() as SessionId;
-		const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
+		const expiresAt = new Date(this.now() + 1000 * 60 * 60 * 24 * 30); // 30 days
 
 		return await this.sessionRepo.create({
 			id: sessionId,
