@@ -8,6 +8,7 @@ const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;
 	readonly appURL?: string;
+	readonly fetch?: typeof globalThis.fetch;
 }
 
 const createLanguageModelClient = (
@@ -16,6 +17,7 @@ const createLanguageModelClient = (
 ): OpenAI =>
 	new OpenAI({
 		apiKey,
+		fetch: options.fetch,
 		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
 		timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000),
 		defaultHeaders: {
@@ -24,8 +26,8 @@ const createLanguageModelClient = (
 		}
 	});
 
-export interface IConversationSummary {
-	condense(text: string): Promise<string>;
+export interface ISearchQueryGeneration {
+	generate(text: string): Promise<string>;
 }
 
 /**
@@ -38,26 +40,26 @@ const CONDENSE_PROMPT =
 	'Rewrite the following conversation into a single, focused search-query statement that captures ' +
 	'what the user is currently trying to find or accomplish. Return only the statement — no preamble, no quotes.';
 
-export interface ConversationCondenserOptions extends LanguageModelClientOptions {
+export interface SearchQueryGenerationOptions extends LanguageModelClientOptions {
 	readonly model?: string;
 	readonly observer?: OperationObserver;
 }
 
-export class ConversationSummary implements IConversationSummary {
+export class SearchQueryGeneration implements ISearchQueryGeneration {
 	private readonly client;
 	private readonly model: string;
 	private readonly observer: OperationObserver;
 
-	constructor(apiKey: string, options: ConversationCondenserOptions = {}) {
+	constructor(apiKey: string, options: SearchQueryGenerationOptions = {}) {
 		this.model = options.model ?? DEFAULT_GENERATION_MODEL;
 		this.client = createLanguageModelClient(apiKey, options);
 		this.observer = options.observer ?? directObserver;
 	}
 
-	async condense(text: string): Promise<string> {
+	async generate(text: string): Promise<string> {
 		try {
 			return await this.observer.run(
-				'conversation.condense',
+				'knowledge_search.generate_query',
 				{ input: text, metadata: { model: this.model } },
 				async () => {
 					const completion = await this.client.chat.completions.create({
@@ -67,12 +69,15 @@ export class ConversationSummary implements IConversationSummary {
 							{ role: 'user', content: text }
 						]
 					});
-					return completion.choices[0]?.message.content?.trim() || text;
+					const query = completion.choices[0]?.message.content?.trim();
+					if (!query)
+						throw new ExternalServiceError('Search query generation returned no usable text');
+					return query;
 				},
 				(result) => result
 			);
 		} catch (error) {
-			throw new ExternalServiceError('Conversation condensation failed', {
+			throw new ExternalServiceError('Search query generation failed', {
 				cause: error instanceof Error ? error.message : String(error)
 			});
 		}

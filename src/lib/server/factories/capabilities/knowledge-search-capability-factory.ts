@@ -14,13 +14,16 @@ import {
 	RerankingKnowledgeSearcher,
 	type Reranker
 } from '$lib/server/services/knowledge-search/semantic';
-import type { Condenser, EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
+import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { operationObserver } from '$lib/server/services/telemetry';
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
-import { ConversationSummary } from '$lib/server/services/agent/conversations/summary';
+import {
+	SearchQueryGeneration,
+	type ISearchQueryGeneration
+} from '$lib/server/services/knowledge-search/query-generation';
 import {
 	PgToolRetriever,
 	type ToolRetriever
@@ -41,7 +44,7 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly appURL: string;
 	readonly embeddingClient?: EmbeddingClient;
 	readonly reranker?: Reranker;
-	readonly condenser?: Condenser;
+	readonly queryGenerator?: ISearchQueryGeneration;
 	readonly deferEmbedding: boolean;
 }
 
@@ -49,7 +52,7 @@ export interface KnowledgeSearchCapability {
 	readonly repository: KnowledgeIndexRecords;
 	readonly embeddingClient: EmbeddingClient;
 	readonly reranker: Reranker;
-	readonly condenser: Condenser;
+	readonly queryGenerator: ISearchQueryGeneration;
 	readonly attachmentIndexer: ContentIndex['attachments'];
 	readonly noteIndexer: ContentIndex['notes'];
 	readonly diagramIndexer: ReturnType<ContentIndex['diagrams']>;
@@ -94,9 +97,9 @@ export const createKnowledgeSearchCapability = (
 		});
 	const chunker = retrievalChunkerFromEnv();
 	const embeddedSearcher = new EmbeddedKnowledgeSearcher(repository, embeddingClient);
-	const condenser =
-		input.condenser ??
-		new ConversationSummary(input.openRouterApiKey, {
+	const queryGenerator =
+		input.queryGenerator ??
+		new SearchQueryGeneration(input.openRouterApiKey, {
 			baseURL: input.openRouterBaseURL,
 			appURL: input.appURL,
 			observer: operationObserver
@@ -123,7 +126,7 @@ export const createKnowledgeSearchCapability = (
 			inlineAdmission: new InlineSuggestionAdmission()
 		}),
 		reranker,
-		condenser,
+		queryGenerator,
 		attachmentIndexer: index.attachments,
 		noteIndexer: index.notes,
 		diagramIndexer: index.diagrams(new NoteRecords(input.db)),
