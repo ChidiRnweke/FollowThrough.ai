@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.0...v0.5.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **build:** keep code-split stylesheets beside their bundled fonts ([#42](https://github.com/ChidiRnweke/FollowThrough.ai/issues/42)) ([5173616](https://github.com/ChidiRnweke/FollowThrough.ai/commit/51736167cc19ab848f62d314d63d2aa15fd9ac4d))
+
 ## [0.5.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.4.2...v0.5.0) (2026-09-15)
 
 
