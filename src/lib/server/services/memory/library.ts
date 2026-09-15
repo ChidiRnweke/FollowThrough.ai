@@ -85,12 +85,25 @@ export class MemoryLibrary {
 		}
 	}
 
+	async validate(actor: ActorContext, payload: MemoryChangePayload): Promise<void> {
+		if (payload.scope === 'project') await this.requireProject(actor, payload.projectId);
+		if (payload.operation !== 'add') {
+			const target = await this.getActive(actor, payload.memoryEntryId);
+			this.requireScope(target, payload);
+		}
+	}
+
+	private requireScope(target: MemoryEntry, payload: MemoryChangePayload): void {
+		if (target.projectId !== payload.projectId)
+			throw new ValidationError('Memory target does not belong to the requested scope');
+	}
+
 	private async applyAdd(
 		actor: ActorContext,
-		payload: MemoryChangePayload,
+		payload: Extract<MemoryChangePayload, { operation: 'add' }>,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		const content = payload.content?.trim();
+		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
 		if (payload.projectId) await this.requireProject(actor, payload.projectId);
 		const timestamp = now();
@@ -109,13 +122,13 @@ export class MemoryLibrary {
 
 	private async applyUpdate(
 		actor: ActorContext,
-		payload: MemoryChangePayload,
+		payload: Extract<MemoryChangePayload, { operation: 'update' }>,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		if (!payload.memoryEntryId) throw new ValidationError('Memory updates require a target entry');
-		const content = payload.content?.trim();
+		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
 		const target = await this.getActiveForUpdate(actor, payload.memoryEntryId);
+		this.requireScope(target, payload);
 		const timestamp = now();
 		const replacement = await this.entries.insert(actor, {
 			id: crypto.randomUUID() as MemoryEntryId,
@@ -140,10 +153,10 @@ export class MemoryLibrary {
 
 	private async applyRemove(
 		actor: ActorContext,
-		payload: MemoryChangePayload
+		payload: Extract<MemoryChangePayload, { operation: 'remove' }>
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		if (!payload.memoryEntryId) throw new ValidationError('Memory removals require a target entry');
 		const target = await this.getActiveForUpdate(actor, payload.memoryEntryId);
+		this.requireScope(target, payload);
 		const entry = await this.softDelete(actor, target);
 		return { entry, changes: [{ kind: 'modified', before: target, after: entry }] };
 	}

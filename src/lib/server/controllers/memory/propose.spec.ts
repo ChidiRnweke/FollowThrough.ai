@@ -43,7 +43,8 @@ class RecordingProvenanceRecorder implements ProvenanceRecorder {
 	}
 }
 
-const addInput = (overrides: Partial<ProposeMemoryChangeInput> = {}): ProposeMemoryChangeInput => ({
+type ProjectAddition = Extract<ProposeMemoryChangeInput, { scope: 'project'; operation: 'add' }>;
+const addInput = (overrides: Partial<ProjectAddition> = {}): ProjectAddition => ({
 	scope: 'project',
 	projectId: testProjectId(),
 	operation: 'add',
@@ -71,7 +72,7 @@ const setup = () => {
 			memoryCreator: memory,
 			memoryEditor: memory,
 			memoryDeleter: memory,
-			memoryChangeApplier: memory,
+			memoryChanges: memory,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
@@ -80,7 +81,7 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([entries, search, suggestions, effects])
 		})
 	);
-	return { entries, provenance, suggestions, trust, controller, search };
+	return { entries, provenance, suggestions, trust, controller, search, memory, projects };
 };
 
 describe('Memory proposal orchestration invariants', () => {
@@ -125,10 +126,11 @@ describe('Memory proposal orchestration invariants', () => {
 
 	it('keeps a user-scoped proposal free of any project', async () => {
 		const { controller } = setup();
-		const result = await controller.propose(
-			testActor(),
-			addInput({ scope: 'user', projectId: undefined, content: 'I lead the platform team.' })
-		);
+		const result = await controller.propose(testActor(), {
+			scope: 'user',
+			operation: 'add',
+			content: 'I lead the platform team.'
+		});
 		expect(
 			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
 		).toBeUndefined();
@@ -137,39 +139,46 @@ describe('Memory proposal orchestration invariants', () => {
 	it('creates a profile entry when a trusted user-scoped proposal is applied', async () => {
 		const { entries, trust, controller } = setup();
 		trust.autoAccept = true;
-		await controller.propose(
-			testActor(),
-			addInput({ scope: 'user', projectId: undefined, content: 'I lead the platform team.' })
-		);
+		await controller.propose(testActor(), {
+			scope: 'user',
+			operation: 'add',
+			content: 'I lead the platform team.'
+		});
 		expect(entries.entries[0]?.projectId).toBeUndefined();
 	});
 
-	it('drops the project from a user-scoped proposal that carries one', async () => {
-		const { controller } = setup();
-		const result = await controller.propose(testActor(), addInput({ scope: 'user' }));
-		expect(
-			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
-		).toBeUndefined();
+	it('rejects a profile proposal targeting project memory before recording a suggestion', async () => {
+		const { controller, memory, suggestions } = setup();
+		const target = await memory.create(testActor(), {
+			projectId: testProjectId(),
+			content: 'Existing fact'
+		});
+		const outcome = await controller
+			.propose(testActor(), { scope: 'user', operation: 'remove', memoryEntryId: target.id })
+			.then(
+				() => ({ kind: 'success' }),
+				() => ({ kind: 'failure' })
+			);
+		expect({ outcome, suggestions: suggestions.suggestions }).toEqual({
+			outcome: { kind: 'failure' },
+			suggestions: []
+		});
 	});
-
-	it('rejects a project-scoped proposal without a project', async () => {
-		const { controller } = setup();
+	it('rejects a project proposal targeting another project', async () => {
+		const { controller, memory, projects } = setup();
+		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
+		const target = await memory.create(testActor(), {
+			projectId: testProjectId(2),
+			content: 'Existing fact'
+		});
 		await expect(
-			controller.propose(testActor(), addInput({ projectId: undefined }))
-		).rejects.toBeInstanceOf(ValidationError);
-	});
-
-	it('rejects an update proposal without a target entry', async () => {
-		const { controller } = setup();
-		await expect(
-			controller.propose(testActor(), addInput({ operation: 'update' }))
-		).rejects.toBeInstanceOf(ValidationError);
-	});
-
-	it('rejects an add proposal without content', async () => {
-		const { controller } = setup();
-		await expect(
-			controller.propose(testActor(), addInput({ content: '  ' }))
+			controller.propose(testActor(), {
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: target.id,
+				content: 'Wrong scope'
+			})
 		).rejects.toBeInstanceOf(ValidationError);
 	});
 });
@@ -194,14 +203,12 @@ describe('Memory proposal search updates', () => {
 		trust.autoAccept = true;
 		const original = await controller.propose(testActor(), addInput());
 		if (!original.appliedEntry) throw new Error('Trusted addition must produce a memory');
-		const replacement = await controller.propose(
-			testActor(),
-			addInput({
-				operation: 'update',
-				memoryEntryId: original.appliedEntry.id,
-				content: 'Revised fact'
-			})
-		);
+		const replacement = await controller.propose(testActor(), {
+			...addInput(),
+			operation: 'update',
+			memoryEntryId: original.appliedEntry.id,
+			content: 'Revised fact'
+		});
 		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([
 			replacement.appliedEntry?.id
 		]);

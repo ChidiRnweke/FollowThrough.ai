@@ -13,16 +13,14 @@ import type {
 	DeleteMemoryEntryInput,
 	ListMemoryInput,
 	ListMemoryOutput,
-	MemoryChangePayload,
 	MemoryEntry,
 	ProposeMemoryChangeInput,
 	ProposeMemoryChangeOutput,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
-import { ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
-	MemoryChangeApplier,
+	MemoryChanges,
 	MemoryEntryCreator,
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
@@ -79,7 +77,7 @@ export interface MemoryDependencies {
 	memoryCreator: MemoryEntryCreator;
 	memoryEditor: MemoryEntryEditor;
 	memoryDeleter: MemoryEntryDeleter;
-	memoryChangeApplier: MemoryChangeApplier;
+	memoryChanges: MemoryChanges;
 	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	suggestionAccepter: SuggestionAccepter;
@@ -149,8 +147,9 @@ export class Memory implements MemoryController {
 		actor: ActorContext,
 		input: ProposeMemoryChangeInput
 	): Promise<ProposeMemoryChangeOutput<Suggestion>> {
-		const payload = this.toPayload(input);
+		const { confidence, ...payload } = input;
 		return this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.memoryChanges.validate(actor, payload);
 			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
 				producerKind: 'agent',
 				producerName: 'Agent memory',
@@ -159,7 +158,7 @@ export class Memory implements MemoryController {
 			});
 			const suggestion = await this.dependencies.suggestionCreator.create(actor, {
 				kind: 'memory',
-				...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
+				...(confidence !== undefined ? { confidence } : {}),
 				provenanceId: provenance.id,
 				payload
 			});
@@ -167,7 +166,7 @@ export class Memory implements MemoryController {
 			if (
 				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)
 			) {
-				const applied = await this.dependencies.memoryChangeApplier.apply(
+				const applied = await this.dependencies.memoryChanges.apply(
 					actor,
 					suggestion.payload,
 					suggestion.provenanceId
@@ -192,22 +191,5 @@ export class Memory implements MemoryController {
 			}
 			return { suggestion };
 		});
-	}
-
-	private toPayload(input: ProposeMemoryChangeInput): MemoryChangePayload {
-		if (input.scope === 'project' && input.projectId === undefined)
-			throw new ValidationError('Project memory proposals require a project');
-		if (input.operation !== 'add' && input.memoryEntryId === undefined)
-			throw new ValidationError('Memory updates and removals require a target entry');
-		if (input.operation !== 'remove' && !input.content?.trim())
-			throw new ValidationError('Memory additions and updates require content');
-		return {
-			...(input.scope === 'project' ? { projectId: input.projectId } : {}),
-			operation: input.operation,
-			...(input.memoryEntryId !== undefined ? { memoryEntryId: input.memoryEntryId } : {}),
-			...(input.content !== undefined ? { content: input.content } : {}),
-			...(input.shareWithAgents !== undefined ? { shareWithAgents: input.shareWithAgents } : {}),
-			...(input.justification !== undefined ? { justification: input.justification } : {})
-		};
 	}
 }

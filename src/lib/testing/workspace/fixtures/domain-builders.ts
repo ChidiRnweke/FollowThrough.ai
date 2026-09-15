@@ -1,8 +1,12 @@
-import type { TodoSuggestion, SuggestionLifecycle } from '$lib/models/suggestions';
+import type {
+	TodoSuggestion,
+	SuggestionLifecycle,
+	MemorySuggestion
+} from '$lib/models/suggestions';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
-import type { MemoryEntry, MemoryEntryId, MemorySuggestion } from '$lib/models/memory';
+import type { MemoryEntry, MemoryEntryId } from '$lib/models/memory';
 import type { Note, NoteId, NoteRevision, NoteRevisionId } from '$lib/models/notes';
 import type { DiagramId, MermaidDiagram } from '$lib/models/diagrams';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -144,6 +148,7 @@ export const memorySuggestionBuilder = (
 		userId: testActor().userId,
 		kind: 'memory',
 		payload: {
+			scope: 'user',
 			operation: 'add',
 			content: 'Always answer in English.'
 		},

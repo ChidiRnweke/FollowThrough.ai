@@ -18,7 +18,12 @@ describe('Pending memory notification invariants', () => {
 				memorySuggestionBuilder({ id: testSuggestionId(2) }),
 				memorySuggestionBuilder({
 					id: testSuggestionId(3),
-					payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+					payload: {
+						scope: 'project',
+						operation: 'add',
+						content: 'Project rule',
+						projectId: testProjectId()
+					}
 				})
 			]
 		);

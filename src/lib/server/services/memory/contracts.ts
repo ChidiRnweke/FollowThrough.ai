@@ -26,7 +26,8 @@ export interface MemoryEntryEditor {
 export interface MemoryEntryDeleter {
 	remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;
 }
-export interface MemoryChangeApplier {
+export interface MemoryChanges {
+	validate(actor: ActorContext, payload: MemoryChangePayload): Promise<void>;
 	apply(
 		actor: ActorContext,
 		payload: MemoryChangePayload,

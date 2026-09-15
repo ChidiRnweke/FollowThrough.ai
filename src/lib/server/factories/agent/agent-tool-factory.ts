@@ -1,6 +1,7 @@
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
+import { memoryChangePayloadSchema } from '$lib/models/memory';
 import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
@@ -2116,7 +2117,13 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 					.optional()
 					.describe('Optional integer percentage from 0 to 100; use 90, never 0.9.')
 			}),
-			(input) => factory.memory().propose(actor, input)
+			(input) => {
+				const { confidence, ...payload } = input;
+				return factory.memory().propose(actor, {
+					...memoryChangePayloadSchema.parse(payload),
+					...(confidence !== undefined ? { confidence } : {})
+				});
+			}
 		),
 		list_trust_policies: define(
 			'list_trust_policies',
