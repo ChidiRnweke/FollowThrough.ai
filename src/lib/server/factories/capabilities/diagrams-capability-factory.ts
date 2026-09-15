@@ -29,7 +29,6 @@ import {
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { IconifyIconSearch } from '$lib/server/services/diagrams/icons';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkills } from '$lib/server/services/skills/built-ins';
@@ -58,7 +57,6 @@ export interface DiagramsCapability {
 	readonly library: DiagramLibrary;
 	readonly transforms: DiagramContent;
 	readonly authoring: DiagramAuthoring;
-	readonly drawioWrites: DrawioWrites;
 	readonly suggestionValidator: DrawioXmlValidator;
 	readonly suggestionLabels: DrawioLabelExtractor;
 	readonly xmlValidator: DrawioXmlValidator;
@@ -78,12 +76,6 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		input.anchors,
 		input.provenanceRepository,
 		input.projects
-	);
-	const drawioWrites = new DrawioWrites(
-		library,
-		new DrawioXmlValidator(),
-		new DrawioSvgSanitizer(),
-		new DrawioDiagramTextExtractor()
 	);
 	return {
 		library,
@@ -111,7 +103,6 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			createToolEventMapper: () => new AgentToolEventMapper(),
 			observeWorkflow: traceWorkflow,
 			drawioValidator: new DrawioXmlValidator()
-		}),
-		drawioWrites
+		})
 	};
 };

@@ -70,10 +70,21 @@ export class InMemoryDiagrams
 		DiagramPromoter,
 		DiagramTextExtractor,
 		DiagramWriter,
-		DiagramIndexer
+		DiagramIndexer,
+		SnapshotParticipant
 {
 	diagrams: Diagram[] = [];
 	indexedIds: DiagramId[] = [];
+	failIndex = false;
+
+	snapshot(): RestoreSnapshot {
+		const diagrams = structuredClone(this.diagrams);
+		const indexedIds = [...this.indexedIds];
+		return () => {
+			this.diagrams = diagrams;
+			this.indexedIds = indexedIds;
+		};
+	}
 
 	async get(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
 		const diagram = this.diagrams.find(
@@ -142,6 +153,7 @@ export class InMemoryDiagrams
 	}
 
 	async index(_actor: ActorContext, diagram: Diagram): Promise<void> {
+		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
 		void _actor;
 		this.indexedIds.push(diagram.id);
 	}
