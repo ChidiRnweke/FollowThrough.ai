@@ -232,7 +232,7 @@
 				toast.error('Save the latest edits before importing.');
 				return;
 			}
-			await importSkillMarkdown({ noteId: note.id, raw });
+			await importSkillMarkdown({ noteId: note.id, raw, baseRevision: note.currentRevision });
 			await workspaceSession.synchronize();
 			const [opened, details] = await Promise.all([
 				draft.read(isCurrent),

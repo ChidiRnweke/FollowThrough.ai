@@ -2,8 +2,8 @@
 
 ## Remaining work
 
-- [ ] Finish generic aggregate participants and validate the stage 1 PR.
-- [ ] Extract placement, lifecycle and task decisions; replace both callers; test incomplete inventory.
+- [x] Generic aggregate participants: PR #44 merged; required CI checks passed.
+- [x] Shared placement, lifecycle and task decisions and incomplete-inventory checks: PR #47; required CI checks passed.
 - [ ] Route skill document writes through note services; make imports drafts and publication snapshots.
 - [ ] Resolve selection origins once in the reference, relationship, task and skill controllers.
 - [ ] Persist proposal application effects and reverse them under version checks; refuse legacy undo.

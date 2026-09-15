@@ -1,18 +1,20 @@
+import { sameNoteDraft } from '$lib/models/notes';
 import { applySkillMetadataEdit } from '$lib/models/skills';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import type { Note, NoteId, NoteRevision, NoteRevisionId, TextSelection } from '$lib/models/notes';
+import type { Note, NoteId } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
 import type {
 	Skill,
+	PreparedSkillEdit,
 	SkillSummary,
 	SkillManifest,
 	SkillUsage,
 	SkillUsageId,
 	SkillUsageView
 } from '$lib/models/skills';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
@@ -43,7 +45,7 @@ export class SkillLibrary {
 	): Promise<Skill<Note>> {
 		const owned = await this.notes.findById(actor, note.id);
 		if (!owned) throw new NotFoundError('Skill note was not found');
-		if (owned.kind === 'folder') throw new ValidationError('A folder cannot become a skill');
+		if (owned.kind !== 'skill') throw new ValidationError('Skill metadata requires a skill note');
 		const name = input.name.trim();
 		if (!name) throw new ValidationError('Skill name is required');
 		const skillSlug = slug(name);
@@ -51,14 +53,8 @@ export class SkillLibrary {
 			throw new ValidationError('A skill with this portable name already exists');
 		const description = input.description.trim() || `Reusable instructions for ${name}.`;
 		if (description.length > 1024) throw new ValidationError('Skill description is too long');
-		const skillNote = await this.notes.update(actor, {
-			...owned,
-			kind: 'skill',
-			title: name,
-			updatedAt: now()
-		});
 		return this.skills.insert(actor, {
-			note: skillNote,
+			note: owned,
 			name,
 			slug: skillSlug,
 			description,
@@ -67,53 +63,6 @@ export class SkillLibrary {
 			allowImplicitInvocation: true,
 			isEnabled: true
 		});
-	}
-	async createFromSelection(
-		actor: ActorContext,
-		selection: TextSelection,
-		input: {
-			name: string;
-			description: string;
-			triggerHints: readonly string[];
-			provenanceId: ProvenanceId;
-		}
-	): Promise<Skill<Note>> {
-		const name = input.name.trim();
-		if (!name) throw new ValidationError('Skill name is required');
-		const source = await this.notes.findById(actor, selection.noteId);
-		if (!source) throw new NotFoundError('Selection note was not found');
-		if (
-			selection.revision !== source.currentRevision ||
-			selection.from < 0 ||
-			selection.to < selection.from ||
-			selection.to > source.plainText.length ||
-			source.plainText.slice(selection.from, selection.to) !== selection.text
-		)
-			throw new ValidationError('Skill selection does not match the current note');
-		if (!(await this.provenance.findById(actor, input.provenanceId)))
-			throw new NotFoundError('Skill provenance was not found');
-		if (!selection.text.trim()) throw new ValidationError('Skill source text is required');
-		const timestamp = now();
-		const note = await this.notes.insert(actor, {
-			id: crypto.randomUUID() as NoteId,
-			userId: actor.userId,
-			projectId: source.projectId,
-			parentId: source.parentId,
-			kind: 'skill',
-			position: await this.notes.countSiblings(actor, source.projectId, source.parentId),
-			title: name,
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: selection.text }] }]
-			},
-			plainText: selection.text,
-			currentRevision: 1,
-			publishedRevision: 0,
-			isPinned: false,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		});
-		return this.create(actor, note, input);
 	}
 	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills.listEnabled(actor, projectId);
@@ -159,69 +108,49 @@ export class SkillLibrary {
 		);
 	}
 
-	async listVersions(actor: ActorContext, skillNoteId: NoteId): Promise<readonly NoteRevision[]> {
-		await this.load(actor, skillNoteId);
-		return this.notes.listRevisions(actor, skillNoteId);
-	}
-
-	async restoreVersion(
-		actor: ActorContext,
-		skillNoteId: NoteId,
-		revision: number
-	): Promise<Skill<Note>> {
-		const skill = await this.load(actor, skillNoteId);
-		const snapshot = (await this.notes.listRevisions(actor, skillNoteId)).find(
-			(candidate) => candidate.revision === revision
-		);
-		if (!snapshot) throw new NotFoundError('Skill version was not found');
-		const timestamp = now();
-		const note = await this.notes.update(actor, {
-			...skill.note,
-			title: snapshot.title,
-			document: snapshot.document,
-			plainText: snapshot.plainText,
-			currentRevision: skill.note.currentRevision + 1,
-			updatedAt: timestamp
-		});
-		await this.notes.restoreAttachmentSnapshot(actor, snapshot.id, skillNoteId);
-		await this.notes.insertRevision(actor, {
-			id: crypto.randomUUID() as NoteRevisionId,
-			noteId: note.id,
-			revision: note.currentRevision,
-			title: note.title,
-			document: note.document,
-			plainText: note.plainText,
-			createdAt: timestamp
-		});
-		return this.skills.update(actor, { ...skill, note, name: note.title });
-	}
-
-	async update(
+	async prepareEdit(
 		actor: ActorContext,
 		input: {
 			noteId: NoteId;
 			displayName?: string;
 			description?: string;
 			raw?: string;
+			instructions?: string;
+			baseRevision?: number;
 			manifest?: SkillManifest;
 			triggerHints?: readonly string[];
 			isEnabled?: boolean;
 		}
-	): Promise<Skill<Note>> {
+	): Promise<PreparedSkillEdit<Note>> {
 		const current = await this.load(actor, input.noteId);
-		if (input.raw !== undefined && input.manifest !== undefined)
+		if (
+			[input.raw, input.manifest, input.instructions].filter((value) => value !== undefined)
+				.length > 1
+		)
 			throw new ValidationError('Provide raw SKILL.md or structured fields, not both');
-		if (input.raw === undefined && input.manifest === undefined) {
+		if (
+			input.raw === undefined &&
+			input.manifest === undefined &&
+			input.instructions === undefined
+		) {
 			// Metadata-only update: the note — its document, revision, and revision
 			// history — belongs to the note sync path and must not be touched here.
-			return this.skills.update(actor, { ...current, ...applySkillMetadataEdit(current, input) });
+			return { skill: { ...current, ...applySkillMetadataEdit(current, input) }, document: null };
 		}
 		const manifest =
-			input.raw !== undefined
-				? this.manifests.parse(input.raw)
-				: input.manifest
-					? this.manifests.parse(this.manifests.serialize(input.manifest))
-					: undefined;
+			input.instructions !== undefined
+				? this.manifests.parse(
+						this.manifests.serialize({
+							...this.portable(current),
+							description: input.description?.trim() || current.description,
+							instructions: input.instructions
+						})
+					)
+				: input.raw !== undefined
+					? this.manifests.parse(input.raw)
+					: input.manifest
+						? this.manifests.parse(this.manifests.serialize(input.manifest))
+						: undefined;
 		if (
 			manifest &&
 			(await this.skills.listAll(actor)).some(
@@ -229,10 +158,9 @@ export class SkillLibrary {
 			)
 		)
 			throw new ValidationError('A skill with this portable name already exists');
-		const timestamp = now();
 		const displayName = input.displayName?.trim() || current.name;
 		const instructions = manifest?.instructions ?? current.note.plainText;
-		const note = await this.notes.update(actor, {
+		const note: Note = {
 			...current.note,
 			title: displayName,
 			document: {
@@ -241,43 +169,45 @@ export class SkillLibrary {
 					? [{ type: 'paragraph', content: [{ type: 'text', text: instructions }] }]
 					: [{ type: 'paragraph' }]
 			},
-			plainText: instructions,
-			currentRevision: current.note.currentRevision + 1,
-			updatedAt: timestamp
-		});
-		await this.notes.insertRevision(actor, {
-			id: crypto.randomUUID() as NoteRevisionId,
-			noteId: note.id,
-			revision: note.currentRevision,
-			title: note.title,
-			document: note.document,
-			plainText: note.plainText,
-			createdAt: timestamp
-		});
-		return this.skills.update(actor, {
-			...current,
-			note,
-			name: displayName,
-			...(manifest
-				? {
-						slug: manifest.slug,
-						description: manifest.description,
-						license: manifest.license,
-						compatibility: manifest.compatibility,
-						metadata: manifest.metadata,
-						allowImplicitInvocation: manifest.allowImplicitInvocation
-					}
-				: {}),
-			...(input.triggerHints
-				? { triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean) }
-				: {}),
-			...(input.isEnabled !== undefined ? { isEnabled: input.isEnabled } : {})
-		});
+			plainText: instructions
+		};
+		if (input.baseRevision !== current.note.currentRevision && !sameNoteDraft(current.note, note))
+			throw new StaleRevisionError('The skill document has changed since it was loaded');
+		return {
+			document: note,
+			skill: {
+				...current,
+				note,
+				name: displayName,
+				...(manifest
+					? {
+							slug: manifest.slug,
+							description: manifest.description,
+							license: manifest.license,
+							compatibility: manifest.compatibility,
+							metadata: manifest.metadata,
+							allowImplicitInvocation: manifest.allowImplicitInvocation
+						}
+					: {}),
+				...(input.triggerHints
+					? { triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean) }
+					: {}),
+				...(input.isEnabled !== undefined ? { isEnabled: input.isEnabled } : {})
+			}
+		};
+	}
+
+	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
+		return this.skills.update(actor, skill);
 	}
 
 	async serialize(actor: ActorContext, noteId: NoteId): Promise<string> {
 		const skill = await this.load(actor, noteId);
-		return this.manifests.serialize({
+		return this.manifests.serialize(this.portable(skill));
+	}
+
+	private portable(skill: Skill<Note>): SkillManifest {
+		return {
 			slug: skill.slug ?? slug(skill.name),
 			description: skill.description,
 			...(skill.license ? { license: skill.license } : {}),
@@ -285,7 +215,7 @@ export class SkillLibrary {
 			metadata: skill.metadata ?? {},
 			allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
 			instructions: skill.note.plainText
-		});
+		};
 	}
 
 	setPinned(

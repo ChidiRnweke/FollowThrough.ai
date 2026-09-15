@@ -38,6 +38,8 @@ import type {
 import { anchorBuilder, testAnchorId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 interface ContentSnapshot {
+	restoredAttachmentRevisionIds: NoteRevision['id'][];
+	noteLinkTargets: Map<NoteId, readonly NoteId[]>;
 	notes: Note[];
 	recordedRevisions: NoteRevision[];
 	anchors: SourceAnchor[];
@@ -243,12 +245,16 @@ export class InMemoryNoteContent
 	snapshot(): RestoreSnapshot {
 		const state = structuredClone({
 			notes: this.notes,
+			restoredAttachmentRevisionIds: this.restoredAttachmentRevisionIds,
+			noteLinkTargets: this.noteLinkTargets,
 			recordedRevisions: this.recordedRevisions,
 			anchors: this.anchors,
 			indexedNoteIds: this.indexedNoteIds
 		} satisfies ContentSnapshot);
 		return () => {
 			this.notes = state.notes;
+			this.restoredAttachmentRevisionIds = state.restoredAttachmentRevisionIds;
+			this.noteLinkTargets = state.noteLinkTargets;
 			this.recordedRevisions = state.recordedRevisions;
 			this.anchors = state.anchors;
 			this.indexedNoteIds = state.indexedNoteIds;

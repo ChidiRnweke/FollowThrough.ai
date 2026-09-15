@@ -1,24 +1,20 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, TextSelection } from '$lib/models/notes';
+import type { Note, NoteId } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
-import type { Skill, SkillSummary, SkillUsageView, SkillManifest } from '$lib/models/skills';
+import type {
+	Skill,
+	SkillSummary,
+	SkillUsageView,
+	SkillManifest,
+	PreparedSkillEdit
+} from '$lib/models/skills';
 
 export interface SkillCreator {
 	create(
 		actor: ActorContext,
 		note: Note,
 		input: { name: string; description: string; triggerHints: readonly string[] }
-	): Promise<Skill<Note>>;
-	createFromSelection(
-		actor: ActorContext,
-		selection: TextSelection,
-		input: {
-			name: string;
-			description: string;
-			triggerHints: readonly string[];
-			provenanceId: ProvenanceId;
-		}
 	): Promise<Skill<Note>>;
 }
 export interface SkillFinder {
@@ -28,18 +24,21 @@ export interface SkillFinder {
 }
 
 export interface SkillEditor {
-	update(
+	prepareEdit(
 		actor: ActorContext,
 		input: {
 			noteId: NoteId;
 			displayName?: string;
 			description?: string;
 			raw?: string;
+			instructions?: string;
+			baseRevision?: number;
 			manifest?: SkillManifest;
 			triggerHints?: readonly string[];
 			isEnabled?: boolean;
 		}
-	): Promise<Skill<Note>>;
+	): Promise<PreparedSkillEdit<Note>>;
+	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
 	serialize(actor: ActorContext, noteId: NoteId): Promise<string>;
 	setPinned(
 		actor: ActorContext,
@@ -56,10 +55,6 @@ export interface SkillUsageRecorder {
 }
 export interface SkillUsageLister {
 	list(actor: ActorContext, skillNoteId: NoteId): Promise<readonly SkillUsageView[]>;
-}
-export interface SkillVersionManager {
-	listVersions(actor: ActorContext, skillNoteId: NoteId): Promise<readonly NoteRevision[]>;
-	restoreVersion(actor: ActorContext, skillNoteId: NoteId, revision: number): Promise<Skill<Note>>;
 }
 export interface BuiltInSkillProvisioner {
 	ensure(actor: ActorContext): Promise<void>;

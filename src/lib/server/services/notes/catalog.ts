@@ -1,4 +1,10 @@
-import { decideNoteCreation, decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
+import { decideRevisionWrite } from '$lib/models/revisions';
+import {
+	sameNoteDraft,
+	decideNoteCreation,
+	decideNoteArchive,
+	decideNoteRestore
+} from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -53,11 +59,14 @@ export class NoteCatalog {
 		return this.notes.listSearchable(actor, projectId);
 	}
 
-	async create(actor: ActorContext, input: CreateNoteInput): Promise<Note>;
+	async create(
+		actor: ActorContext,
+		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
+	): Promise<Note>;
 	async create(actor: ActorContext, input: TextSelection): Promise<SourceAnchor>;
 	async create(
 		actor: ActorContext,
-		input: CreateNoteInput | TextSelection
+		input: (CreateNoteInput & { documentKind?: 'note' | 'skill' }) | TextSelection
 	): Promise<Note | SourceAnchor> {
 		return 'text' in input ? this.createAnchor(actor, input) : this.createNote(actor, input);
 	}
@@ -80,15 +89,24 @@ export class NoteCatalog {
 			(candidate.plainText.trim() || candidate.document.content?.length)
 		)
 			throw new ValidationError('Folders cannot contain authored document content');
-		if (candidate.currentRevision !== current.currentRevision)
+		const decision = decideRevisionWrite(
+			{
+				kind: 'save',
+				baseMatches: candidate.currentRevision === current.currentRevision,
+				contentChanged: !sameNoteDraft(current, candidate)
+			},
+			current,
+			{ acceptUnchangedRetry: false }
+		);
+		if (decision.kind === 'conflict')
 			throw new StaleRevisionError('The note has changed since it was loaded');
-		if (this.isUnchanged(current, candidate)) return current;
+		if (decision.kind === 'unchanged') return current;
 		const updated = await this.notes.updateIfRevision(
 			actor,
 			{
 				...candidate,
 				title: candidate.title.trim(),
-				currentRevision: current.currentRevision + 1,
+				currentRevision: decision.currentRevision,
 				updatedAt: now()
 			},
 			current.currentRevision
@@ -317,11 +335,18 @@ export class NoteCatalog {
 		return repaired;
 	}
 
-	private async createNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
+	private async createNote(
+		actor: ActorContext,
+		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
+	): Promise<Note> {
 		const project = await this.resolveProject(actor, input.projectId);
 		const parent = input.parentId ? await this.notes.findById(actor, input.parentId) : undefined;
 		const decision = decideNoteCreation(
-			{ ...input, id: input.id ?? (crypto.randomUUID() as NoteId), kind: 'note' },
+			{
+				...input,
+				id: input.id ?? (crypto.randomUUID() as NoteId),
+				kind: input.documentKind ?? 'note'
+			},
 			{
 				project,
 				parent: parent ?? null,
@@ -385,14 +410,5 @@ export class NoteCatalog {
 		const project = await this.projects.findById(actor, projectId);
 		if (!project) throw new NotFoundError('Project was not found', { projectId });
 		return project;
-	}
-
-	private isUnchanged(current: Note, candidate: Note): boolean {
-		return (
-			current.title === candidate.title &&
-			current.plainText === candidate.plainText &&
-			JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-			current.isPinned === candidate.isPinned
-		);
 	}
 }

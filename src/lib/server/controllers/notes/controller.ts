@@ -472,7 +472,9 @@ export class Notes implements NotesController {
 	): Promise<DiscardNoteDraftOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteReader.get(actor, input.noteId);
-			const revision = await this.dependencies.revisionReader.latestRevision(actor, input.noteId);
+			const revision = (await this.dependencies.revisionReader.revisions(actor, input.noteId)).find(
+				(candidate) => candidate.revision === note.publishedRevision
+			);
 			if (!revision)
 				throw new NotFoundError('No published version exists for this note', {
 					noteId: input.noteId
@@ -483,6 +485,18 @@ export class Notes implements NotesController {
 				document: revision.document,
 				plainText: revision.plainText
 			});
+			await this.dependencies.attachmentRestorer.restoreAttachments(
+				actor,
+				input.noteId,
+				revision.id
+			);
+			await this.dependencies.anchorRepairer.repairForNote(actor, restored);
+			await this.dependencies.noteLinkReconciler.reconcile(
+				actor,
+				restored,
+				collectNoteLinkTargets(restored.document)
+			);
+			await this.dependencies.noteIndexer.index(actor, restored);
 			return { note: restored, etag: noteEtag(restored) };
 		});
 	}
@@ -685,6 +699,12 @@ export class Notes implements NotesController {
 				actor,
 				input.noteId,
 				input.revisionId
+			);
+			await this.dependencies.anchorRepairer.repairForNote(actor, restored);
+			await this.dependencies.noteLinkReconciler.reconcile(
+				actor,
+				restored,
+				collectNoteLinkTargets(restored.document)
 			);
 			await this.dependencies.noteIndexer.index(actor, restored);
 			return { note: restored, etag: noteEtag(restored) };

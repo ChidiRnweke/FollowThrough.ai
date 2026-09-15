@@ -171,3 +171,9 @@ export function applySkillMetadataEdit(
 		isEnabled: input.isEnabled ?? current.isEnabled
 	};
 }
+
+/** Metadata and an optional document edit prepared from the same observed skill. */
+export interface PreparedSkillEdit<Document> {
+	readonly skill: Skill<Document>;
+	readonly document: Document | null;
+}

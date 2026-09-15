@@ -1200,7 +1200,7 @@ export function decideNoteCreation(
 	input: {
 		readonly id: NoteId;
 		readonly title: string;
-		readonly kind: 'note' | 'folder';
+		readonly kind: 'note' | 'folder' | 'skill';
 		readonly parentId?: NoteId;
 	},
 	facts: {
@@ -1276,4 +1276,13 @@ export function applyNoteDraftEdit(
 		...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
 		updatedAt: timestamp
 	};
+}
+
+export function sameNoteDraft(current: Note, candidate: Note): boolean {
+	return (
+		current.title === candidate.title &&
+		current.plainText === candidate.plainText &&
+		JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
+		current.isPinned === candidate.isPinned
+	);
 }
