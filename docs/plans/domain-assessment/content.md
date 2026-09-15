@@ -5,6 +5,10 @@ Snapshot: `74215c9acf3e0461dfa41b598338fa168a0754b4`. Covers workflow families
 not a reproduced user journey. **Reproduced** means the input/output was executed locally.
 Tests named below were inspected; fresh execution results live in `validation.md`.
 
+Implementation follow-up: [reviewed note changes](../reviewed-note-changes.md) records the
+C01–C02 fixes and the note-body portion of C03, with workflow and test dispositions.
+The snapshot findings below remain the historical input; skill-specific policy stays deferred.
+
 ## Semantic map
 
 | Concept                   | Meaning and guarantees                                                                 | Existing ownership                                                                                 |

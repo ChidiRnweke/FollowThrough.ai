@@ -12,8 +12,8 @@
  * offset. A non-unique or absent anchor still fails loudly with the nearest text, so the
  * model can correct itself.
  *
- * Pure and isomorphic — the agent tool applies these on the server, and the approval
- * card previews the same result in the browser before anyone accepts it.
+ * Pure domain logic. The server prepares replacements once; the approval card renders
+ * that saved result without repeating the transformation.
  */
 
 export interface NoteEdit {
@@ -50,14 +50,29 @@ export type NotePatchResult =
 	  }
 	| { readonly ok: false; readonly failures: readonly NotePatchFailure[] };
 
-const countOccurrences = (haystack: string, needle: string): number => {
-	let count = 0;
-	let index = haystack.indexOf(needle);
-	while (index !== -1) {
-		count += 1;
-		index = haystack.indexOf(needle, index + needle.length);
+/** Compare line endings without rewriting any source or replacement bytes. */
+const exactMatches = (
+	source: string,
+	anchor: string
+): readonly { index: number; text: string }[] => {
+	const positions: number[] = [];
+	let comparison = '';
+	for (let index = 0; index < source.length; index += 1) {
+		if (source[index] === '\r' && source[index + 1] === '\n') continue;
+		positions.push(index);
+		comparison += source[index];
 	}
-	return count;
+	const target = anchor.replace(/\r\n/g, '\n');
+	const matches: { index: number; text: string }[] = [];
+	let at = comparison.indexOf(target);
+	while (at !== -1) {
+		let from = positions[at];
+		if (source[from] === '\n' && source[from - 1] === '\r') from -= 1;
+		const to = positions[at + target.length - 1] + 1;
+		matches.push({ index: from, text: source.slice(from, to) });
+		at = comparison.indexOf(target, at + target.length);
+	}
+	return matches;
 };
 
 /** Fold typographic punctuation to the plain form a model is likely to reproduce. */
@@ -172,11 +187,11 @@ const nearestText = (markdown: string, oldText: string): string | undefined => {
 export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): NotePatchResult => {
 	const failures: NotePatchFailure[] = [];
 	const matchedTexts: string[] = [];
-	let working = markdown.replace(/\r\n/g, '\n');
+	let working = markdown;
 
 	edits.forEach((edit, editIndex) => {
-		const oldText = edit.oldText.replace(/\r\n/g, '\n');
-		const newText = edit.newText.replace(/\r\n/g, '\n');
+		const oldText = edit.oldText;
+		const newText = edit.newText;
 
 		if (oldText === '') {
 			failures.push({ reason: 'empty_anchor', editIndex });
@@ -187,7 +202,8 @@ export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): No
 			return;
 		}
 
-		const occurrences = countOccurrences(working, oldText);
+		const exact = exactMatches(working, oldText);
+		const occurrences = exact.length;
 		if (occurrences === 0) {
 			// The anchor was not found verbatim; fall back to a whitespace- and
 			// punctuation-tolerant match, applied only when it is unique.
@@ -220,10 +236,10 @@ export const applyNotePatch = (markdown: string, edits: readonly NoteEdit[]): No
 			return;
 		}
 
-		matchedTexts.push(oldText);
-		working = edit.replaceAll
-			? working.split(oldText).join(newText)
-			: working.replace(oldText, newText);
+		matchedTexts.push(exact[0].text);
+		for (const match of [...exact].reverse())
+			working =
+				working.slice(0, match.index) + newText + working.slice(match.index + match.text.length);
 	});
 
 	if (failures.length > 0) return { ok: false, failures };

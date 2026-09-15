@@ -1016,6 +1016,81 @@ export const proseMirrorDocumentSchema: z.ZodType<ProseMirrorDocument> = z
 	})
 	.strict();
 
+/** A proposed body change, before its authoritative base has been resolved. */
+export const noteChangeRequestSchema = z.discriminatedUnion('kind', [
+	z
+		.object({
+			kind: z.literal('replace'),
+			noteId: z
+				.string()
+				.uuid()
+				.transform((id) => id as NoteId),
+			markdown: z.string()
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('patch'),
+			noteId: z
+				.string()
+				.uuid()
+				.transform((id) => id as NoteId),
+			edits: z
+				.array(
+					z
+						.object({
+							oldText: z.string(),
+							newText: z.string(),
+							replaceAll: z.boolean().optional()
+						})
+						.strict()
+				)
+				.min(1)
+		})
+		.strict()
+]);
+export type NoteChangeRequest = z.infer<typeof noteChangeRequestSchema>;
+
+/** The content the user reviewed, independent of subsequent browser/server reads. */
+export const preparedNoteChangeSchema = z
+	.object({
+		noteId: z
+			.string()
+			.uuid()
+			.transform((id) => id as NoteId),
+		base: z
+			.object({
+				revision: z.number().int().positive(),
+				title: z.string(),
+				document: proseMirrorDocumentSchema
+			})
+			.strict(),
+		result: z.object({ document: proseMirrorDocumentSchema, plainText: z.string() }).strict(),
+		operation: z.discriminatedUnion('kind', [
+			z.object({ kind: z.literal('replace') }).strict(),
+			z
+				.object({
+					kind: z.literal('patch'),
+					appliedEdits: z.number().int().positive(),
+					matchedTexts: z.array(z.string()).readonly()
+				})
+				.strict()
+		])
+	})
+	.strict();
+export type PreparedNoteChange = z.infer<typeof preparedNoteChangeSchema>;
+
+export const noteChangeReviewSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('prepared'), change: preparedNoteChangeSchema }).strict(),
+	z.object({ kind: z.literal('failure'), problems: z.array(z.string()).min(1).readonly() }).strict()
+]);
+export type NoteChangeReview = z.infer<typeof noteChangeReviewSchema>;
+
+/** The result describes current state, not proof that this call wrote it earlier. */
+export type ApplyReviewedNoteChangeOutput =
+	| { readonly kind: 'saved' | 'unchanged'; readonly note: Note }
+	| { readonly kind: 'failure'; readonly code: 'STALE_REVIEW'; readonly message: string };
+
 /**
  * The read tree: strict, with a fallback at top level only.
  *

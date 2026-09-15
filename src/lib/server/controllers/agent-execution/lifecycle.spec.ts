@@ -1,4 +1,5 @@
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import { AgentProviderFailure } from '$lib/models/agent';
 import type {
@@ -63,6 +64,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 	const runs = new InMemoryAgentRunPersistence();
 	const sessions = new InMemoryAgentSessionRepository();
 	const notified: AgentRunId[] = [];
+	const approvalVisibility: boolean[] = [];
 	const journalled: { kind: 'text' | 'reasoning'; text: string; cursor?: string }[] = [];
 	const toolRows: ToolActivity[] = [];
 	const run: AgentRun = {
@@ -109,9 +111,20 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 			}
 		},
 		runner: runner as never,
-		eventBus: { notify: (runId) => notified.push(runId) }
+		eventBus: {
+			notify: (runId) => {
+				notified.push(runId);
+				if (runs.events.some((record) => record.event.type === 'approval_required')) {
+					const saved = runs.runs.find((row) => row.id === runId);
+					approvalVisibility.push(
+						saved?.status === 'awaiting_approval' &&
+							saved.pendingDecisions.some((pending) => pending.review !== undefined)
+					);
+				}
+			}
+		}
 	});
-	return { lifecycle, runs, notified, runner, journalled, toolRows };
+	return { lifecycle, runs, notified, runner, journalled, toolRows, approvalVisibility };
 };
 
 /** Runs a turn to the point where the provider is streaming, then stops it. */
@@ -516,5 +529,52 @@ describe('what a finished turn leaves behind to be reopened', () => {
 	it('does not collapse the turn onto one cursor, which put every word after every call', async () => {
 		const { journalled } = await completeTalkativeTurn();
 		expect(new Set(journalled.map((entry) => entry.cursor)).size).toBe(journalled.length);
+	});
+});
+
+describe('Durable note approval publication', () => {
+	const prepared = noteReviewBuilder();
+	const pending = {
+		callId: 'review-1',
+		toolName: 'save_note' as const,
+		arguments: { noteId: prepared.change.noteId, markdown: 'Tuesday' },
+		review: { kind: 'note_change' as const, content: JSON.stringify(prepared) }
+	};
+	const checkpoint = () =>
+		setup({
+			execute: async function* () {
+				yield {
+					type: 'approval_checkpoint' as const,
+					serializedState: 'provider-checkpoint',
+					pendingDecisions: [pending],
+					sessionItems: []
+				};
+			}
+		});
+	it('stores the domain review beside the resumable provider state', async () => {
+		const { lifecycle, runs } = checkpoint();
+		await lifecycle.execute(testRunId, new AbortController().signal);
+		expect(currentRun(runs)).toMatchObject({
+			status: 'awaiting_approval',
+			serializedState: 'provider-checkpoint',
+			pendingDecisions: [pending]
+		});
+	});
+	it('publishes approvals only once their checkpoint is visible', async () => {
+		const { lifecycle, approvalVisibility } = checkpoint();
+		await lifecycle.execute(testRunId, new AbortController().signal);
+		expect(approvalVisibility).toEqual([true]);
+	});
+	it('carries the same review into the replayable approval event', async () => {
+		const { lifecycle, runs } = checkpoint();
+		await lifecycle.execute(testRunId, new AbortController().signal);
+		expect(
+			runs.events.find((record) => record.event.type === 'approval_required')?.event
+		).toMatchObject({ review: pending.review });
+	});
+	it('journals the same review for a reopened conversation', async () => {
+		const { lifecycle, toolRows } = checkpoint();
+		await lifecycle.execute(testRunId, new AbortController().signal);
+		expect(toolRows).toMatchObject([{ status: 'approval_required', review: pending.review }]);
 	});
 });

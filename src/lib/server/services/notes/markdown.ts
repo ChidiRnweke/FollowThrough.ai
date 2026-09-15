@@ -1,8 +1,7 @@
-// chisel-ignore-file import-boundary:banned-layer-import -- Server patch application and browser preview must use the exact same editor-schema converter.
+// chisel-ignore-file import-boundary:banned-layer-import -- Server preparation must use the editor-schema converter to preserve rich note content.
 /**
- * The conversion itself is isomorphic and lives with the editor schema it depends on, so
- * the approval card can preview a patch in the browser exactly as the server will apply
- * it. This module keeps the import path the agent tooling already uses.
+ * Conversion lives with the editor schema it depends on. Server preparation uses this
+ * adapter to produce the document that review displays and conditional save applies.
  */
 import {
 	noteContentFromMarkdown as editorContentFromMarkdown,

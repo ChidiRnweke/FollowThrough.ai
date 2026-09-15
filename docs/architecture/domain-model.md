@@ -43,3 +43,15 @@ inventory online and retains the draft when it is unavailable offline.
 For replayed agent results, inspect `client/agent/runs/subscription.ts`. It reconnects from the last
 successfully handled cursor. Chat and note-action handlers must finish their work before returning;
 starting an unawaited promise there would acknowledge an event before applying it.
+
+## Reviewed note changes
+
+`PreparedNoteChange` owns the target, reviewed base, prepared content, and operation result.
+`Notes.prepareChange` resolves the authoritative note and uses the editor conversion adapter.
+`Notes.applyReviewedChange` checks that review against current state and coordinates the
+existing save consequences. Patch matching remains a pure function in the notes domain.
+
+Agent checkpoints carry the serialized domain review with the tool call identity. The agent
+transport does not interpret note content. The tool boundary and client reader use the notes
+schema to recover the same value. Preview rendering reads this value, not a newer cached note.
+This preserves the self-contained model namespaces and the parsing boundary in ADR 0037.

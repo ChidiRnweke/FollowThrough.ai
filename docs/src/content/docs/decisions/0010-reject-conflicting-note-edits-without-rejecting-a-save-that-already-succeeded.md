@@ -39,6 +39,10 @@ This is about concurrency and publication state only. Whether an agent's proposa
 data at all is a separate question, decided by ADR 0003. A base version says "nobody moved this
 under me"; it never says "the user agreed to this".
 
+Reviewed note-body tools retain the base from their saved approval rather than loading a
+new base at execution. ADR 0003 defines that approval contract. A requested result already
+present in the note is unchanged; a different result against a stale base requires new review.
+
 ## Consequences
 
 - One tab cannot silently overwrite a different edit from another tab.

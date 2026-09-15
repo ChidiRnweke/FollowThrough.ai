@@ -1,3 +1,8 @@
+import {
+	noteContentFromMarkdown,
+	noteMarkdownFromContent
+} from '$lib/server/services/notes/markdown';
+import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
@@ -14,6 +19,7 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly markdown: NoteMarkdown;
 	readonly repository: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
 	readonly catalog: NoteCatalog;
@@ -27,6 +33,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const anchors = new SourceAnchorRecords(input.db);
 	const provenanceRepository = new ProvenanceRecords(input.db);
 	return {
+		markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
 		repository,
 		anchors,
 		catalog: new NoteCatalog(repository, anchors, input.projects),

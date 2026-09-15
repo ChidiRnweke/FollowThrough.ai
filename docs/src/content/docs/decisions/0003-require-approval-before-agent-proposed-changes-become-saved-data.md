@@ -33,6 +33,25 @@ We apply a proposal and mark it accepted in one transaction. We also undo a prop
 reverted in one transaction. This prevents the approval history from disagreeing with the saved
 data.
 
+### Reviewed note content
+
+A note can change while its approval prompt is open. We chose to bind approval of
+`edit_note` and `save_note` to the reviewed base revision and the prepared result. This
+preserves the change the user inspected. The prompt, checkpoint, and resumed execution
+carry the same preparation. The browser does not rebuild it from its current cache.
+
+If a different edit changes the base, applying the review returns a stale-review failure.
+The agent must read the note and submit a new call for review. An already satisfied result
+returns unchanged without another write, as described in ADR 0010. This does not prove
+which call produced that result. We do not promise exactly-once tool execution.
+
+The checkpoint and its approval event commit together before the user can act on the
+prompt. Older note approvals without a saved preparation remain rejectable but cannot
+write. Automatic acceptance uses the same preparation and conditional write.
+
+This decision covers the two note-body tools. Skill-specific approval and history policy
+remain separate workflows.
+
 ## How a tool is classified
 
 A tool that writes asks at the approval prompt. A tool that writes nothing does
@@ -80,3 +99,10 @@ anyone else yet.
   approval boundary that reads it.
 - `src/lib/components/chat/actions/tool-approval-preview.ts` builds what the prompt shows, so a
   diagram is approved by its labels rather than by its XML.
+
+- `src/lib/server/controllers/notes/reviewed-changes.spec.ts` checks prepared results,
+  stale reviews, unchanged retries, ownership, and transactional consequences.
+- `src/lib/server/factories/agent/reviewed-note-tools.spec.ts` checks checkpoint resume,
+  partial approvals, legacy calls, and automatic acceptance.
+- `src/lib/server/controllers/agent-execution/lifecycle.spec.ts` checks that actionable review
+  events carry the committed checkpoint.

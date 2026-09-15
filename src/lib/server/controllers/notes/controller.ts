@@ -1,4 +1,13 @@
-import { assembleNoteView } from '$lib/models/notes';
+import {
+	assembleNoteView,
+	applyNotePatch,
+	describeNotePatchFailure,
+	type NoteChangeRequest,
+	type NoteChangeReview,
+	type PreparedNoteChange,
+	type ApplyReviewedNoteChangeOutput
+} from '$lib/models/notes';
+import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
 import { applyNoteDraftEdit } from '$lib/models/notes';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
@@ -112,6 +121,11 @@ import type {
  * runner so a save and its link/index side effects commit atomically.
  */
 export interface NotesController {
+	prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview>;
+	applyReviewedChange(
+		actor: ActorContext,
+		change: PreparedNoteChange
+	): Promise<ApplyReviewedNoteChangeOutput>;
 	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
 	 * Load the full read model for one note: the document, its ETag, backlinks,
@@ -275,6 +289,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	markdown: NoteMarkdown;
 	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
@@ -440,6 +455,84 @@ export class Notes implements NotesController {
 	async create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput> {
 		return { note: await this.dependencies.noteCreator.create(actor, input) };
 	}
+	/** Resolve a body proposal once; later approval never reruns the requested patch. */
+	async prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview> {
+		const note = await this.dependencies.noteReader.get(actor, input.noteId);
+		if (note.archivedAt || note.kind === 'folder')
+			return {
+				kind: 'failure',
+				problems: ['Only active authored content can receive a reviewed note change.']
+			};
+		const base = { revision: note.currentRevision, title: note.title, document: note.document };
+		if (input.kind === 'replace')
+			return {
+				kind: 'prepared',
+				change: {
+					noteId: note.id,
+					base,
+					result: this.dependencies.markdown.read(input.markdown),
+					operation: { kind: 'replace' }
+				}
+			};
+		const patch = applyNotePatch(this.dependencies.markdown.write(note.document), input.edits);
+		if (!patch.ok)
+			return { kind: 'failure', problems: patch.failures.map(describeNotePatchFailure) };
+		return {
+			kind: 'prepared',
+			change: {
+				noteId: note.id,
+				base,
+				result: this.dependencies.markdown.read(patch.markdown),
+				operation: {
+					kind: 'patch',
+					appliedEdits: patch.appliedEdits,
+					matchedTexts: patch.matchedTexts
+				}
+			}
+		};
+	}
+
+	async applyReviewedChange(
+		actor: ActorContext,
+		change: PreparedNoteChange
+	): Promise<ApplyReviewedNoteChangeOutput> {
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async (): Promise<ApplyReviewedNoteChangeOutput> => {
+					const current = await this.dependencies.noteReader.get(actor, change.noteId);
+					if (current.archivedAt || current.kind === 'folder')
+						throw new ValidationError(
+							'Only active authored content can receive a reviewed note change'
+						);
+					if (
+						current.title === change.base.title &&
+						current.plainText === change.result.plainText &&
+						JSON.stringify(current.document) === JSON.stringify(change.result.document)
+					)
+						return { kind: 'unchanged', note: current };
+					if (current.currentRevision !== change.base.revision)
+						return {
+							kind: 'failure',
+							code: 'STALE_REVIEW',
+							message:
+								'The note changed after this review was prepared. Read the note and request a new review.'
+						};
+					const saved = await this.save(actor, { note: { ...current, ...change.result } });
+					return { kind: 'saved', note: saved.note };
+				}
+			);
+		} catch (error) {
+			if (error instanceof StaleRevisionError)
+				return {
+					kind: 'failure',
+					code: 'STALE_REVIEW',
+					message:
+						'The note changed while this review was being saved. Read the note and request a new review.'
+				};
+			throw error;
+		}
+	}
+
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteEditor.save(actor, input.note);

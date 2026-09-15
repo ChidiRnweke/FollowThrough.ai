@@ -39,9 +39,9 @@ describe('Applying a note patch', () => {
 		expect(result.ok && result.markdown).toContain('Draft the plan.');
 	});
 
-	it('normalises Windows line endings before matching', () => {
+	it('matches Windows line endings without changing untouched endings', () => {
 		const result = patch('a\r\nb\r\n', { oldText: 'a\nb', newText: 'c' });
-		expect(result).toMatchObject({ ok: true, markdown: 'c\n' });
+		expect(result).toMatchObject({ ok: true, markdown: 'c\r\n' });
 	});
 });
 
@@ -153,5 +153,36 @@ describe('Tolerating a near-exact anchor', () => {
 	it('does not fuzzy-match a similar but different anchor', () => {
 		const result = patch(body, { oldText: 'Ships the thing', newText: 'x' });
 		expect(result.ok === false && result.failures[0]).toMatchObject({ reason: 'not_found' });
+	});
+});
+
+describe('Literal text and source preservation', () => {
+	it.each(['$&', '$$', '$`', "$'"])('inserts %s literally in an exact replacement', (newText) => {
+		expect(patch('before old after', { oldText: 'old', newText })).toMatchObject({
+			ok: true,
+			markdown: `before ${newText} after`
+		});
+	});
+	it('preserves mixed endings and replacement bytes', () => {
+		expect(patch('A\r\nold\nZ\r\n', { oldText: 'old', newText: 'new\r\nline' })).toMatchObject({
+			ok: true,
+			markdown: 'A\r\nnew\r\nline\nZ\r\n'
+		});
+	});
+	it('counts anchors with different line endings as ambiguous', () => {
+		expect(patch('a\nb / a\r\nb', { oldText: 'a\nb', newText: 'c' })).toMatchObject({
+			ok: false,
+			failures: [{ reason: 'ambiguous', occurrences: 2 }]
+		});
+	});
+	it('replaces every line-ending equivalent span literally', () => {
+		expect(
+			patch('a\nb / a\r\nb\r\n', { oldText: 'a\nb', newText: '$&', replaceAll: true })
+		).toMatchObject({ ok: true, markdown: '$& / $&\r\n' });
+	});
+	it('preserves surrounding bytes in a tolerant match', () => {
+		expect(
+			patch('A\r\nsmart “quote”\r\nZ', { oldText: 'smart "quote"', newText: '$$' })
+		).toMatchObject({ ok: true, markdown: 'A\r\n$$\r\nZ' });
 	});
 });

@@ -25,6 +25,7 @@ import type { ControllerFactory } from '$lib/server/factories/controller-factory
 import type { ActorContext, ApiTokenId } from '$lib/models/identity';
 import type {
 	AgentExecutionMode,
+	PendingAgentDecision,
 	AgentRun,
 	AgentToolContractMap,
 	RunAgentInput,
@@ -44,7 +45,7 @@ import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { DomainError, NotFoundError, ValidationError } from '$lib/errors';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -57,7 +58,14 @@ import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
 } from '$lib/server/services/notes/markdown';
-import { applyNotePatch, describeNotePatchFailure } from '$lib/models/notes';
+import {
+	noteChangeRequestSchema,
+	noteChangeReviewSchema,
+	type NoteChangeReview,
+	type NoteChangeRequest,
+	applyNotePatch,
+	describeNotePatchFailure
+} from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import {
@@ -198,7 +206,12 @@ export const agentToolCoverage = {
 			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
 		},
 		create: { kind: 'mutation', tools: ['create_note'] },
-		save: { kind: 'mutation', tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill'] },
+		save: { kind: 'mutation', tools: ['save_skill', 'edit_skill'] },
+		prepareChange: {
+			kind: 'excluded',
+			reason: 'Prepares the domain review carried by note write tools; does not write.'
+		},
+		applyReviewedChange: { kind: 'mutation', tools: ['save_note', 'edit_note'] },
 
 		publish: { kind: 'mutation', tools: ['publish_note'] },
 		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
@@ -810,9 +823,10 @@ interface AgentToolOutputMap {
 	readonly move_project_entry: ControllerResult<ProjectsController['move']>;
 	readonly get_note: NoteViewProjection;
 	readonly create_note: NoteWriteProjection;
-	readonly save_note: NoteWriteProjection;
+	readonly save_note: NoteWriteProjection | ToolFailure;
 	readonly edit_note:
 		| ToolFailure
+		| NoteWriteProjection
 		| (NoteWriteProjection & {
 				readonly appliedEdits: number;
 				readonly matchedTexts: readonly string[];
@@ -1052,6 +1066,55 @@ const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
 	};
 };
 
+const isReviewedNoteTool = (name: string): boolean => name === 'save_note' || name === 'edit_note';
+
+const readStoredNoteReview = (content: string): NoteChangeReview => {
+	try {
+		return noteChangeReviewSchema.parse(JSON.parse(content));
+	} catch {
+		return {
+			kind: 'failure',
+			problems: ['The saved note review is unreadable. Reject it and submit a new tool call.']
+		};
+	}
+};
+
+const prepareNoteReview = async (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	input: NoteChangeRequest
+): Promise<NoteChangeReview> => {
+	try {
+		return await factory.notes().prepareChange(actor, input);
+	} catch (error) {
+		if (error instanceof DomainError) return { kind: 'failure', problems: [error.message] };
+		throw error;
+	}
+};
+
+const applyNoteReview = async (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	review: NoteChangeReview
+) => {
+	if (review.kind === 'failure')
+		return toolFailure('No changes were applied.', { problems: review.problems });
+	const result = await factory.notes().applyReviewedChange(actor, review.change);
+	if (result.kind === 'failure')
+		return toolFailure(result.message, {
+			code: result.code,
+			recovery: 'Read the note and submit a new tool call for review.'
+		});
+	const projection = projectNoteWrite(result.note);
+	return review.change.operation.kind === 'patch'
+		? {
+				...projection,
+				appliedEdits: review.change.operation.appliedEdits,
+				matchedTexts: review.change.operation.matchedTexts
+			}
+		: projection;
+};
+
 export class AgentTools {
 	private readonly controllers: ControllerFactory;
 	private readonly actor: ActorContext;
@@ -1060,6 +1123,7 @@ export class AgentTools {
 	private readonly toolExecutor: AgentToolExecutor;
 	private readonly toolRetriever: ToolRetriever;
 	private readonly toolAccess: ToolAccessPolicy;
+	private readonly noteReviews = new Map<string, NoteChangeReview>();
 
 	constructor(
 		controllers: ControllerFactory,
@@ -1068,7 +1132,8 @@ export class AgentTools {
 		context: AgentToolContext,
 		toolExecutor: AgentToolExecutor,
 		toolRetriever: ToolRetriever,
-		toolAccess: ToolAccessPolicy
+		toolAccess: ToolAccessPolicy,
+		pendingDecisions: readonly PendingAgentDecision[] = []
 	) {
 		this.controllers = controllers;
 		this.actor = actor;
@@ -1077,6 +1142,42 @@ export class AgentTools {
 		this.toolExecutor = toolExecutor;
 		this.toolRetriever = toolRetriever;
 		this.toolAccess = toolAccess;
+		for (const pending of pendingDecisions) {
+			if (!isReviewedNoteTool(pending.toolName)) continue;
+			const review: NoteChangeReview = pending.review
+				? readStoredNoteReview(pending.review.content)
+				: {
+						kind: 'failure',
+						problems: [
+							'This older approval has no saved review. Read the note and submit a new tool call.'
+						]
+					};
+			this.noteReviews.set(pending.callId, review);
+		}
+	}
+
+	/** Carry the exact preparation used by the approval gate into the durable checkpoint. */
+	reviewDecision(pending: PendingAgentDecision): PendingAgentDecision {
+		if (!isReviewedNoteTool(pending.toolName)) return pending;
+		const review = this.noteReviews.get(pending.callId);
+		if (!review) throw new Error('A note approval has no prepared review');
+		return { ...pending, review: { kind: 'note_change', content: JSON.stringify(review) } };
+	}
+
+	private async prepareNoteCall(
+		name: string,
+		args: AgentPayloadObject,
+		callId: string
+	): Promise<NoteChangeReview> {
+		const prepared = this.noteReviews.get(callId);
+		if (prepared) return prepared;
+		const request = noteChangeRequestSchema.parse({
+			...args,
+			kind: name === 'save_note' ? 'replace' : 'patch'
+		});
+		const review = await prepareNoteReview(this.controllers, this.actor, request);
+		this.noteReviews.set(callId, review);
+		return review;
 	}
 
 	tools(
@@ -1244,12 +1345,23 @@ export class AgentTools {
 			// a mutation that can only fail is not paused for the user — it executes
 			// in-turn and returns its failure to the model instead. See
 			// `AgentToolDefinition.preflight` for the rules implementers must follow.
-			needsApproval: gate
-				? async (_context, input) =>
-						definition.classification === 'mutation' &&
-						this.mode === 'approval_required' &&
-						(await gate(parseArguments(definition.parameters, input)))
-				: definition.classification === 'mutation' && this.mode === 'approval_required',
+			needsApproval: async (_context, input, callId) => {
+				if (isReviewedNoteTool(definition.name)) {
+					if (this.mode === 'auto_accept') return false;
+					if (!callId) throw new Error('A note change requires a tool call identity');
+					const review = await this.prepareNoteCall(
+						definition.name,
+						parseArguments(definition.parameters, input),
+						callId
+					);
+					return this.mode === 'approval_required' && review.kind === 'prepared';
+				}
+				return (
+					definition.classification === 'mutation' &&
+					this.mode === 'approval_required' &&
+					(!gate || (await gate(parseArguments(definition.parameters, input))))
+				);
+			},
 			// `failure` first, and always: `ConversationBuffer` recognises the envelope
 			// by that prefix to decide which calls the model still needs to re-read.
 			// `recovery` because a bare message left the model guessing — it re-sent
@@ -1275,7 +1387,24 @@ export class AgentTools {
 						arguments: args,
 						classification: definition.classification
 					},
-					() => definition.execute(args)
+					async () => {
+						if (!isReviewedNoteTool(definition.name)) return definition.execute(args);
+						if (!callId) throw new Error('A note change requires a tool call identity');
+						const review = this.noteReviews.get(callId);
+						// Approved resumes must carry the checkpoint; never prepare a replacement for it.
+						if (!review && this.mode === 'approval_required')
+							throw new ValidationError(
+								'The saved note review is unavailable. Read the note and submit a new tool call.'
+							);
+						const result = await applyNoteReview(
+							this.controllers,
+							this.actor,
+							review ?? (await this.prepareNoteCall(definition.name, args, callId))
+						);
+						const payload = readAgentPayload(result);
+						if (payload.kind === 'corrupt') throw new Error(payload.message);
+						return payload.value;
+					}
 				);
 			}
 		});
@@ -1510,49 +1639,32 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 				noteId: noteId,
 				markdown: z.string()
 			}),
-			async (input) => {
-				const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-				const content = noteContentFromMarkdown(input.markdown);
-				const saved = await factory.notes().save(actor, {
-					note: { ...current.note, ...content }
-				});
-				return projectNoteWrite(saved.note);
-			}
+			async (input) =>
+				applyNoteReview(
+					factory,
+					actor,
+					await prepareNoteReview(factory, actor, {
+						kind: 'replace',
+						noteId: input.noteId as NoteId,
+						markdown: input.markdown
+					})
+				)
 		),
 		edit_note: define(
 			'edit_note',
 			toolDescription('edit_note'),
 			'mutation',
 			noteEdits,
-			async (input) => {
-				const current = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-				const before = noteMarkdownFromContent(current.note.document);
-				const patched = applyNotePatch(before, input.edits);
-				// A failure is returned rather than thrown: thrown errors are stringified
-				// into a bare message, which would strip the occurrence counts and nearest
-				// matches the model needs to correct itself on the next turn.
-				if (!patched.ok)
-					return toolFailure('No edits were applied.', {
-						problems: patched.failures.map(describeNotePatchFailure)
-					});
-				const content = noteContentFromMarkdown(patched.markdown);
-				const saved = await factory.notes().save(actor, {
-					note: { ...current.note, ...content }
-				});
-				return {
-					...projectNoteWrite(saved.note),
-					appliedEdits: patched.appliedEdits,
-					matchedTexts: patched.matchedTexts
-				};
-			},
-			async (input) => {
-				const parsed = noteEdits.safeParse(input);
-				if (!parsed.success) return false;
-				const current = await factory.notes().get(actor, {
-					noteId: parsed.data.noteId as NoteId
-				});
-				return applyNotePatch(noteMarkdownFromContent(current.note.document), parsed.data.edits).ok;
-			}
+			async (input) =>
+				applyNoteReview(
+					factory,
+					actor,
+					await prepareNoteReview(factory, actor, {
+						kind: 'patch',
+						noteId: input.noteId as NoteId,
+						edits: input.edits
+					})
+				)
 		),
 		rename_note: define(
 			'rename_note',
@@ -2463,6 +2575,7 @@ export const agentToolRegistry =
 			},
 			executor,
 			toolRetriever,
-			{ isEnabled: (toolName) => !disabled.has(toolName) }
+			{ isEnabled: (toolName) => !disabled.has(toolName) },
+			run.pendingDecisions
 		);
 	};

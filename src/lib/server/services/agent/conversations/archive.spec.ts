@@ -1,3 +1,4 @@
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import {
 	testActor,
@@ -157,5 +158,23 @@ describe('journaling tool outcomes', () => {
 		});
 		const [message] = await journal.listMessages(testActor(), conversation.id);
 		expect(contentOf(message).output).toEqual({ noteId: 'note-1' });
+	});
+});
+
+describe('Journalled note review', () => {
+	it('retains the domain review when saving the approval transcript', async () => {
+		const journal = new ConversationArchive(new InMemoryConversationRepository());
+		const conversation = await journal.getOrCreate(testActor(), { prompt: 'Change launch day' });
+		const noteReview = noteReviewBuilder();
+		const review = { kind: 'note_change' as const, content: JSON.stringify(noteReview) };
+		await journal.recordToolActivity(testActor(), conversation.id, {
+			callId: 'review-1',
+			name: 'save_note',
+			input: { noteId: noteReview.change.noteId, markdown: 'Tuesday' },
+			status: 'approval_required',
+			review
+		});
+		const [message] = await journal.listMessages(testActor(), conversation.id);
+		expect(contentOf(message).review).toEqual(review);
 	});
 });

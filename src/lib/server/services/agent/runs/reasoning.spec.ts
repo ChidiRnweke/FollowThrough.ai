@@ -1,3 +1,4 @@
+import type { PendingAgentDecision } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import {
 	Agent,
@@ -873,6 +874,7 @@ describe('Agent turn span lifecycle', () => {
 		async () => ({
 			agentTools: () => [approvalTool],
 			offeredToolNames: () => [],
+			reviewDecision: (pending: PendingAgentDecision) => pending,
 			catalog: () => []
 		}),
 		sessions,
@@ -930,6 +932,7 @@ describe('Agent turn span lifecycle', () => {
 					return [approvalTool];
 				},
 				offeredToolNames: () => [],
+				reviewDecision: (pending: PendingAgentDecision) => pending,
 				catalog: () => [{ name: 'save_note' }]
 			}),
 			sessions,

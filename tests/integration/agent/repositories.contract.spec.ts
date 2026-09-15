@@ -1,3 +1,4 @@
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import type {
 	Conversation,
@@ -314,6 +315,45 @@ describe('Postgres durable agent run repository invariants', () => {
 			updatedAt: now
 		});
 	};
+
+	it('preserves a reviewed note change in PostgreSQL checkpoints and event replay', async () => {
+		const run = await seedQueuedRun('97106');
+		const owner = actor('97106');
+		const review = { kind: 'note_change' as const, content: JSON.stringify(noteReviewBuilder()) };
+		const pending = {
+			callId: 'reviewed-save',
+			toolName: 'save_note' as const,
+			arguments: { noteId: noteReviewBuilder().change.noteId, markdown: 'Tuesday' },
+			review
+		};
+		const runs = new AgentRunRecords(context.db);
+		await runs.transition(run.id, 'queued', 'running');
+		await runs.update(owner, {
+			...run,
+			status: 'awaiting_approval',
+			serializedState: 'checkpoint',
+			pendingDecisions: [pending]
+		});
+		const events = new AgentRunEventRecords(context.db);
+		await events.append(run.id, 1, {
+			type: 'approval_required',
+			runId: run.id,
+			callId: pending.callId,
+			name: pending.toolName,
+			arguments: pending.arguments,
+			review
+		});
+		const reread = await runs.findById(owner, run.id);
+		const replay = await events.replay(owner, run.id, '0');
+		expect({
+			pending: reread?.pendingDecisions,
+			replay: replay.map((row) =>
+				row.kind === 'readable' && row.event.type === 'approval_required'
+					? row.event.review
+					: undefined
+			)
+		}).toEqual({ pending: [pending], replay: [review] });
+	});
 	it('orders replayed events by their global cursor', async () => {
 		const run = await seedQueuedRun('93');
 		const events = new AgentRunEventRecords(context.db);

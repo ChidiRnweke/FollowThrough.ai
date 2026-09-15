@@ -26,6 +26,13 @@
 	// A single call keeps its own card exactly as before — the bundle is what changes, not
 	// the ordinary case.
 	const bundled = $derived(tools.length > 1);
+	const unavailable = $derived(
+		tools.some(
+			(tool) =>
+				(tool.name === 'save_note' || tool.name === 'edit_note') &&
+				(tool.status !== 'approval_required' || tool.noteReview?.kind !== 'prepared')
+		)
+	);
 </script>
 
 {#if bundled}
@@ -45,12 +52,15 @@
 				{preferences}
 				showFooter={false}
 				framed={false}
+				busy={busy || unavailable}
 				{onapprove}
 				{onreject}
 			/>
 		{/each}
 		<div class="flex gap-2">
-			<Button size="sm" disabled={busy} onclick={onapprove}>Approve all ({tools.length})</Button>
+			<Button size="sm" disabled={busy || unavailable} onclick={onapprove}
+				>Approve all ({tools.length})</Button
+			>
 			<Button size="sm" variant="ghost" disabled={busy} onclick={onreject}>Reject all</Button>
 		</div>
 	</div>

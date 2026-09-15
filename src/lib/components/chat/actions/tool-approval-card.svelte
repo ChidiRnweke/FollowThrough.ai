@@ -4,7 +4,7 @@
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 
-	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+	import { legacyNoteReview, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -15,12 +15,7 @@
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import RecordFields from './disclosure/record-fields.svelte';
 	import { approvalConsequence, friendlyToolLabel } from '../../agent/actions/tool-presentation';
-	import {
-		approvalPreview,
-		isNoteBodyTool,
-		targetNoteId,
-		type ApprovalBaseline
-	} from './tool-approval-preview';
+	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
 
 	let {
@@ -46,7 +41,6 @@
 		busy?: boolean;
 	} = $props();
 
-	const noteId = $derived(targetNoteId(tool.name, tool.arguments));
 	/** An edit_diagram call names the diagram it changes; its labels are the before-image. */
 	const editedDiagramId = $derived(
 		tool.name === 'edit_diagram' && typeof tool.arguments.diagramId === 'string'
@@ -61,7 +55,7 @@
 			? tool.arguments.todoId
 			: undefined
 	);
-	// The previews compare against what this device holds now; a missing record previews without a baseline.
+	// Notes carry their saved review; other subjects still use local workspace records.
 	const resources = $derived(workspaceSession.current?.resources);
 	const todoSubject = $derived(
 		todoSubjectId ? resources?.view({ type: 'todos', id: [todoSubjectId] }) : undefined
@@ -73,8 +67,6 @@
 				? todoSubject.state.value.title
 				: 'Todo title unavailable'
 	);
-	const note = $derived(noteId ? resources?.view({ type: 'notes', id: [noteId] }) : undefined);
-	const baseline = $derived(note?.state.kind === 'ready' ? note.state.value : undefined);
 	const diagram = $derived(
 		editedDiagramId ? resources?.view({ type: 'diagrams', id: [editedDiagramId] }) : undefined
 	);
@@ -98,16 +90,28 @@
 		if (tool.name === 'update_agent_preferences')
 			return preferences ? { kind: 'preferences', preferences } : { kind: 'none' };
 		if (editedDiagramId) return diagramBaseline;
-		return baseline ? { kind: 'note', note: baseline } : { kind: 'none' };
+		if (isNoteBodyTool(tool.name))
+			return {
+				kind: 'note_review',
+				review:
+					tool.status === 'approval_required' && tool.noteReview
+						? tool.noteReview
+						: legacyNoteReview
+			};
+		return { kind: 'none' };
 	});
 
 	const preview = $derived(approvalPreview(tool.name, tool.arguments, approvalBaseline));
-	const loadingNote = $derived(note?.state.kind === 'wait');
+	const approvalUnavailable = $derived(
+		preview.kind === 'note' && preview.change.kind === 'failure'
+	);
 	const loadingDiagram = $derived(diagram?.state.kind === 'wait');
 	const fields = $derived(approvalFields(tool.arguments, shell));
 	const subject = $derived(
 		preview.kind === 'note'
-			? preview.change.title
+			? preview.change.kind === 'prepared'
+				? preview.change.title
+				: 'Note'
 			: preview.kind === 'diagram'
 				? preview.change.title
 				: preview.kind === 'settings'
@@ -128,7 +132,7 @@
 	 */
 	const expandable = $derived(
 		preview.kind === 'note'
-			? Boolean(preview.change.body)
+			? preview.change.kind === 'prepared'
 			: preview.kind === 'arguments' && (fields.items?.length ?? 0) > COMPACT_ITEM_CAP
 	);
 	const consequence = $derived(approvalConsequence(tool.name));
@@ -202,31 +206,23 @@
 			{/if}
 		{/if}
 	{:else if preview.kind === 'note'}
-		{#if preview.change.titleChange}
-			<p class="text-sm">
-				<span class="text-muted-foreground">Title:</span>
-				{preview.change.titleChange.from} → {preview.change.titleChange.to}
-			</p>
-		{/if}
-		{#each preview.change.problems as problem (problem)}
-			<p class="text-sm text-destructive">{problem}</p>
-		{/each}
-		{#if preview.change.body}
+		{#if preview.change.kind === 'failure'}
+			{#each preview.change.problems as problem (problem)}
+				<p class="text-sm text-destructive">{problem}</p>
+			{/each}
+		{:else}
 			<NoteVersionDiff
 				base={preview.change.body.base}
 				candidate={preview.change.body.candidate}
-				baseLabel="Current note"
+				baseLabel="Reviewed note"
 				candidateLabel="Proposed change"
-				layout={compact ? (preview.change.comparable ? 'stacked' : 'candidate') : 'split'}
+				layout={compact ? 'stacked' : 'split'}
 				frame={compact ? 'bare' : 'box'}
 				{compact}
 			/>
-		{/if}
-		{#each preview.change.notices as notice (notice)}
-			<p class="text-sm text-muted-foreground">{notice}</p>
-		{/each}
-		{#if !preview.change.body && preview.change.problems.length === 0 && preview.change.notices.length === 0}
-			<p class="text-sm text-muted-foreground">No visible note changes.</p>
+			<p class="text-sm text-muted-foreground">
+				Reviewed revision {preview.change.revision}. If the note changes, a new review is required.
+			</p>
 		{/if}
 	{:else if preview.kind === 'settings'}
 		<!-- The same `from → to` renderer the settled row uses, so the question asked before the
@@ -324,14 +320,10 @@
 		<!-- Bound to the subject as one unit, so the pair reads before the change does. -->
 		<p class="-mt-1 text-sm text-muted-foreground">{caption}</p>
 	{/if}
-	{#if loadingNote}
-		<p class="text-sm text-muted-foreground">Loading the current note…</p>
-	{:else if loadingDiagram}
+	{#if loadingDiagram}
 		<p class="text-sm text-muted-foreground">Loading the current diagram…</p>
 	{:else}
-		<!-- A baseline that failed to load is not a reason to show nothing: the preview falls
-		     back to the body that would be written, and says so. Approve/Reject live outside
-		     this, so a preview that fails cannot strand a pending call with no way to answer. -->
+		<!-- Unreadable saved reviews remain rejectable and cannot be approved. -->
 		<ErrorBoundary label="this change preview" {fallback}>
 			<div class="flex flex-col gap-2">
 				{@render changeBody(true)}
@@ -340,7 +332,7 @@
 	{/if}
 	{#if showFooter}
 		<div class="mt-4 flex gap-2">
-			<Button size="sm" disabled={busy} onclick={onapprove}>Approve</Button>
+			<Button size="sm" disabled={busy || approvalUnavailable} onclick={onapprove}>Approve</Button>
 			<Button size="sm" variant="ghost" disabled={busy} onclick={onreject}>Reject</Button>
 		</div>
 	{/if}
@@ -365,6 +357,7 @@
 			<Dialog.Footer>
 				<Button
 					size="sm"
+					disabled={busy || approvalUnavailable}
 					onclick={() => {
 						expanded = false;
 						onapprove();

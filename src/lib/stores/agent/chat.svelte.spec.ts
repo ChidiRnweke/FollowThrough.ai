@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { flushSync } from 'svelte';
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import type {
 	AgentEvent,
 	AgentRunEventRecord,
@@ -313,6 +314,21 @@ describe('chat event projection', () => {
 				status: 'failed'
 			}
 		]);
+	});
+
+	it('retains the saved comparison when replaying a note approval', async () => {
+		const review = noteReviewBuilder();
+		const { reply } = await sendWith([
+			{
+				type: 'approval_required',
+				runId,
+				callId: 'reviewed-note',
+				name: 'save_note',
+				arguments: { noteId: review.change.noteId, markdown: 'Launch on Tuesday.' },
+				review: { kind: 'note_change', content: JSON.stringify(review) }
+			}
+		]);
+		expect(entryTools(reply)).toMatchObject([{ noteReview: review }]);
 	});
 
 	it('answers every parked call in one decision', async () => {

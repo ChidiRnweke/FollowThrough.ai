@@ -1,3 +1,4 @@
+import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { describe, expect, it } from 'vitest';
 import type { FunctionTool, Tool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
@@ -1207,11 +1208,14 @@ describe('Agent tool coverage invariants', () => {
 	// that is still doomed, such as an edit whose anchors match nothing — is held
 	// by `preflight` and covered by the edit_note approval tests below.
 	it('still parks an approval on a mutation whose payload is complete', async () => {
-		const selected = directToolFor('approval_required', 'save_note');
+		const current = noteBuilder();
+		const selected = directToolFor('approval_required', 'save_note', {
+			factory: reviewedNoteFixture(current).factory
+		});
 		expect(
 			await selected.needsApproval(
 				{} as never,
-				{ noteId: crypto.randomUUID(), markdown: '# Notes' } as never,
+				{ noteId: current.id, markdown: '# Notes' } as never,
 				'call-1'
 			)
 		).toBe(true);
@@ -1251,20 +1255,19 @@ describe('Agent tool coverage invariants', () => {
 
 	it('saves Markdown against the authoritative note and returns a compact receipt', async () => {
 		const current = noteBuilder({ id: crypto.randomUUID() as never, title: 'About me' });
-		const factory = {
-			notes: () => ({
-				get: async () => ({ note: current }),
-				save: async (_actor: unknown, input: { note: typeof current }) => ({
-					note: { ...input.note, currentRevision: 2 },
-					etag: 'note:unused:r2',
-					repairedAnchorIds: []
-				})
-			})
-		} as unknown as ControllerFactory;
+		const { factory } = reviewedNoteFixture(current);
 		const selected = directToolFor('auto_accept', 'save_note', { factory });
 		const result = await selected.invoke(
 			{} as never,
-			JSON.stringify({ noteId: current.id, markdown: '# Profile\n\n- Engineer' })
+			JSON.stringify({ noteId: current.id, markdown: '# Profile\n\n- Engineer' }),
+			{
+				toolCall: {
+					type: 'function_call',
+					callId: 'save-profile',
+					name: 'save_note',
+					arguments: '{}'
+				}
+			}
 		);
 		expect(result).toEqual({
 			noteId: current.id,
@@ -1280,28 +1283,27 @@ describe('Agent tool coverage invariants', () => {
 			position: 7,
 			kind: 'skill'
 		});
-		let saved: typeof current | undefined;
-		const factory = {
-			notes: () => ({
-				get: async () => ({ note: current }),
-				save: async (_actor: unknown, input: { note: typeof current }) => {
-					saved = input.note;
-					return { note: input.note, etag: 'note:unused:r1', repairedAnchorIds: [] };
-				}
-			})
-		} as unknown as ControllerFactory;
+		const { factory, content } = reviewedNoteFixture(current);
 		const selected = directToolFor('auto_accept', 'save_note', { factory });
 		await selected.invoke(
 			{} as never,
-			JSON.stringify({ noteId: current.id, markdown: 'New **body**' })
+			JSON.stringify({ noteId: current.id, markdown: 'New **body**' }),
+			{
+				toolCall: {
+					type: 'function_call',
+					callId: 'save-content',
+					name: 'save_note',
+					arguments: '{}'
+				}
+			}
 		);
 		expect({
-			id: saved?.id,
-			projectId: saved?.projectId,
-			kind: saved?.kind,
-			position: saved?.position,
-			title: saved?.title,
-			plainText: saved?.plainText
+			id: content.notes[0].id,
+			projectId: content.notes[0].projectId,
+			kind: content.notes[0].kind,
+			position: content.notes[0].position,
+			title: content.notes[0].title,
+			plainText: content.notes[0].plainText
 		}).toEqual({
 			id: current.id,
 			projectId: current.projectId,
@@ -1333,26 +1335,26 @@ describe('Agent tool coverage invariants', () => {
 				]
 			} as never
 		});
-		let saved: typeof current | undefined;
-		const factory = {
-			notes: () => ({
-				get: async () => ({ note: current }),
-				save: async (_actor: unknown, input: { note: typeof current }) => {
-					saved = input.note;
-					return {
-						note: { ...input.note, currentRevision: 2 },
-						etag: 'note:x:r2',
-						repairedAnchorIds: []
-					};
-				}
-			})
-		} as unknown as ControllerFactory;
+		const { factory, content } = reviewedNoteFixture(current);
 		const invoke = (edits: unknown) =>
 			directToolFor('auto_accept', 'edit_note', { factory }).invoke(
 				{} as never,
-				JSON.stringify({ noteId: current.id, edits })
+				JSON.stringify({ noteId: current.id, edits }),
+				{
+					toolCall: {
+						type: 'function_call',
+						callId: 'edit-content',
+						name: 'edit_note',
+						arguments: '{}'
+					}
+				}
 			);
-		return { current, invoke, saved: () => saved };
+		return {
+			current,
+			invoke,
+			saved: () =>
+				content.notes[0].currentRevision > current.currentRevision ? content.notes[0] : undefined
+		};
 	};
 
 	it('applies a targeted edit to the anchored text', async () => {
@@ -1388,7 +1390,7 @@ describe('Agent tool coverage invariants', () => {
 	it('explains a failed edit instead of throwing, so the model can correct it', async () => {
 		const fixture = editNoteFixture();
 		const result = await fixture.invoke([{ oldText: 'read-through', newText: 'x' }]);
-		expect(result).toMatchObject({ failure: 'No edits were applied.' });
+		expect(result).toMatchObject({ failure: 'No changes were applied.' });
 	});
 
 	const editSkillFixture = () => {
@@ -1795,12 +1797,7 @@ describe('Doomed note edits never reach the approval boundary', () => {
 			plainText: noteContentFromMarkdown(markdown).plainText
 		});
 
-	const notesFactory = (note: ReturnType<typeof noteBuilder>) =>
-		({
-			notes: () => ({
-				get: async () => ({ note })
-			})
-		}) as unknown as ControllerFactory;
+	const notesFactory = (note: ReturnType<typeof noteBuilder>) => reviewedNoteFixture(note).factory;
 
 	const skillsFactory = (note: ReturnType<typeof noteBuilder>) =>
 		({
