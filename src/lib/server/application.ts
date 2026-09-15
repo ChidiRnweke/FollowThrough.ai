@@ -290,15 +290,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const diagrams = diagramCapability.library;
 	const diagramTransforms = diagramCapability.transforms;
 	const diagramAgent = diagramCapability.authoring;
-	const artifactApplier = suggestionCapability.finalize({
-		todoCreator: todos,
-		relationshipCreator: relationships,
-		referenceCreator: references,
-		diagramWriter: diagrams,
-		memoryChangeApplier: memory,
-		drawioValidator: diagramCapability.suggestionValidator,
-		drawioLabels: diagramCapability.suggestionLabels
-	});
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
@@ -384,7 +375,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: suggestionCapability.effects,
-			artifactApplier,
+			todoCreator: todos,
+			relationshipCreator: relationships,
+			referenceCreator: references,
+			memoryChangeApplier: memory,
+			sourceNotes: notes,
+			drawioLabels: diagramCapability.suggestionLabels,
 			memoryIndexer,
 			diagramIndexer,
 			diagramWriter: diagrams,

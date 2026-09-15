@@ -6,7 +6,7 @@ import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-au
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	testActor,
 	testSuggestionId,
@@ -15,14 +15,16 @@ import {
 	testNow,
 	memoryEntryBuilder,
 	testMemoryEntryId,
-	memorySuggestionBuilder
+	memorySuggestionBuilder,
+	noteBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
-	DrawioDiagramTextExtractor
+	DrawioDiagramTextExtractor,
+	DrawioLabelExtractor
 } from '$lib/server/services/diagrams/drawio';
 import {
 	InMemorySearchRepository,
@@ -33,11 +35,6 @@ describe('Proposal effect coordination', () => {
 	it('records the final reviewed diagram instead of the generated preview', async () => {
 		const suggestions = new InMemorySuggestions();
 		const effects = new InMemorySuggestionEffects();
-		const generated = drawioBuilder({
-			source: VALID_DRAWIO_XML,
-			publishedRevision: 0,
-			publishedAt: undefined
-		});
 		const proposal: DiagramSuggestion = {
 			id: testSuggestionId(),
 			userId: testActor().userId,
@@ -52,31 +49,27 @@ describe('Proposal effect coordination', () => {
 		};
 		suggestions.suggestions = [proposal];
 		const reviewed = {
-			...generated,
 			source: VALID_DRAWIO_XML.replace('API &amp; worker', 'Reviewed'),
 			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Reviewed</text></svg>',
 			searchableText: 'Reviewed'
 		};
 		const diagrams = new InMemoryDiagrams();
-		diagrams.diagrams = [generated];
+		const notes = new InMemoryNoteContent();
+		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionFinder: suggestions,
 				suggestionAccepter: suggestions,
 				suggestionEffects: effects,
-				artifactApplier: {
-					apply: async () => ({
-						artifact: generated,
-						changes: [{ kind: 'created', after: { type: 'diagrams', value: generated } }]
-					})
-				},
+				sourceNotes: notes,
+				drawioLabels: new DrawioLabelExtractor(),
 				diagramWriter: diagrams,
 				drawioXmlValidator: new DrawioXmlValidator(),
 				drawioSvgSanitizer: new DrawioSvgSanitizer(),
 				drawioTextExtractor: new DrawioDiagramTextExtractor(),
 				now: () => testNow,
 				diagramIndexer: diagrams,
-				transactionRunner: new InMemoryTransactionRunner([suggestions, effects])
+				transactionRunner: new InMemoryTransactionRunner([suggestions, effects, diagrams])
 			})
 		);
 		await controller.acceptReviewed(testActor(), {
@@ -87,7 +80,7 @@ describe('Proposal effect coordination', () => {
 				renderedSvg: reviewed.renderedSvg
 			}
 		});
-		expect(effects.repository.effects.get(proposal.id)?.changes[0]?.after).toEqual({
+		expect(effects.repository.effects.get(proposal.id)?.changes[0]?.after).toMatchObject({
 			type: 'diagrams',
 			value: reviewed
 		});

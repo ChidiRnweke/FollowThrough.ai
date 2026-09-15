@@ -7,11 +7,8 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
-import { SuggestionApplication } from '$lib/server/services/suggestions/application';
 import { ExpiringSuggestionLister } from '$lib/server/services/suggestions/expiring-lister';
 import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
-
-type ApplicationArguments = ConstructorParameters<typeof SuggestionApplication>;
 
 export interface SuggestionsCapabilityInput {
 	readonly db: Database;
@@ -20,21 +17,10 @@ export interface SuggestionsCapabilityInput {
 	readonly anchors: SourceAnchorRepository;
 }
 
-export interface SuggestionsFinalizeInput {
-	readonly todoCreator: ApplicationArguments[0];
-	readonly relationshipCreator: ApplicationArguments[1];
-	readonly referenceCreator: ApplicationArguments[2];
-	readonly diagramWriter: ApplicationArguments[3];
-	readonly memoryChangeApplier: ApplicationArguments[4];
-	readonly drawioValidator: ApplicationArguments[5];
-	readonly drawioLabels: ApplicationArguments[6];
-}
-
 export interface SuggestionsCapability {
 	readonly inbox: SuggestionInbox;
 	readonly effects: SuggestionEffects;
 	readonly lister: ExpiringSuggestionLister;
-	readonly finalize: (input: SuggestionsFinalizeInput) => SuggestionApplication;
 }
 
 export const createSuggestionsCapability = (
@@ -49,17 +35,6 @@ export const createSuggestionsCapability = (
 	return {
 		inbox,
 		effects: new SuggestionEffects(new SuggestionEffectRecords(input.db)),
-		lister: new ExpiringSuggestionLister(inbox, inbox),
-		finalize: (dependencies) =>
-			new SuggestionApplication(
-				dependencies.todoCreator,
-				dependencies.relationshipCreator,
-				dependencies.referenceCreator,
-				dependencies.diagramWriter,
-				dependencies.memoryChangeApplier,
-				dependencies.drawioValidator,
-				dependencies.drawioLabels,
-				input.notes
-			)
+		lister: new ExpiringSuggestionLister(inbox, inbox)
 	};
 };
