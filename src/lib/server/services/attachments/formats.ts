@@ -1,5 +1,5 @@
 /**
- * Formats Mistral Document AI accepts. Kept as extensions rather than media
+ * Format routing for Mistral Document AI. Kept as extensions rather than media
  * types because browsers report office and ebook formats inconsistently (and
  * often as `application/octet-stream`), while the upload path always carries a
  * filename.

@@ -9,7 +9,14 @@ import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import { InMemoryAttachmentExtraction } from '$lib/testing/attachments/fakes/extraction';
+import {
+	InMemoryTextParser,
+	InMemoryStorage,
+	InMemoryOcrEngine,
+	InMemoryImageDescriber
+} from '$lib/testing/attachments/fakes/processing';
+import { AttachmentContent } from '$lib/server/services/attachments/content';
+import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import type {
 	AttachmentId,
@@ -57,14 +64,21 @@ const setup = async (suffix: string) => {
 			});
 		});
 	const view = await finalize();
-	const extraction = new InMemoryAttachmentExtraction();
+	const parser = new InMemoryTextParser();
+	parser.text = 'Extracted document';
 	const worker = new AttachmentProcessing({
 		records,
 		claims: new PostgresAttachmentClaims(
 			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
 			transaction.connectionScope
 		),
-		extraction,
+		storage: new InMemoryStorage(),
+		parsers: new AttachmentParserRegistry([parser]),
+		ocr: new InMemoryOcrEngine(),
+		imageDescriber: new InMemoryImageDescriber(),
+		content: new AttachmentContent(),
+		parseLimit: 1024,
+		maxPages: 100,
 		preferences: {
 			get: async () => ({
 				userId: owner.userId,
@@ -79,7 +93,7 @@ const setup = async (suffix: string) => {
 		visionModel: 'test/model',
 		logger: { error: () => {} }
 	});
-	return { owner, records, search, view, extraction, worker, finalize, transaction };
+	return { owner, records, search, view, parser, worker, finalize, transaction };
 };
 describe('attachment processing persistence', () => {
 	it('rescans interrupted versions and saves searchable text', async () => {
@@ -94,8 +108,8 @@ describe('attachment processing persistence', () => {
 		}).toEqual({ status: 'ready', text: ['Extracted document'] });
 	});
 	it('does not publish older text when another upload becomes current during extraction', async () => {
-		const { owner, records, search, view, extraction, worker, finalize } = await setup('9712');
-		extraction.beforeExtract = async () => {
+		const { owner, records, search, view, parser, worker, finalize } = await setup('9712');
+		parser.beforeParse = async () => {
 			await finalize();
 		};
 		await worker.process(owner, view.version.id);

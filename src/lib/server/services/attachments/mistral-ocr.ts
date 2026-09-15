@@ -3,6 +3,7 @@ import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic
 import { z } from 'zod';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import type { OperationObserver } from '$lib/models/telemetry';
+import type { RecognizedContent, RecognizedPage } from '$lib/models/attachments/ocr';
 
 const directObserver: OperationObserver = {
 	run: (_name, _context, body) => body()
@@ -16,15 +17,6 @@ const DEFAULT_OCR_MODEL = 'mistral-ocr-latest';
  * (Mistral allows up to 1000 pages) rather than a 10-page slice.
  */
 const OCR_TIMEOUT_MS = 300_000;
-
-export type RecognizedContent =
-	| { readonly kind: 'markdown'; readonly text: string }
-	| { readonly kind: 'image'; readonly dataUrl: string };
-
-export interface RecognizedPage {
-	readonly parts: readonly RecognizedContent[];
-	readonly pagesProcessed?: number;
-}
 
 export interface OcrRequest {
 	/** Presigned URL Mistral fetches the document from; must be publicly reachable. */

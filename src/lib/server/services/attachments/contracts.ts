@@ -9,14 +9,6 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 
-export type {
-	OcrContentPart,
-	OcrPageContent,
-	OcrEngineClient,
-	ImageDescriber,
-	DocumentOcr
-} from '$lib/server/repositories/attachments/processing';
-
 export interface AttachmentManager {
 	initiate(
 		actor: ActorContext,
@@ -57,10 +49,3 @@ export type {
 	AttachmentClaim
 } from '$lib/server/repositories/attachments/claims';
 export type { AttachmentRepository } from '$lib/server/repositories/attachments';
-
-export interface AttachmentTextExtractor {
-	extract(
-		view: AttachmentView,
-		visionModel: string
-	): Promise<{ text: string; parserKind: string; processingFailure?: string } | undefined>;
-}
