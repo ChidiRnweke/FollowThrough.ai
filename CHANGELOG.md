@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.9](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.8...v0.5.9) (2026-09-15)
+
+
+### Code Refactoring
+
+* **exports:** prepare document content and assets once ([#65](https://github.com/ChidiRnweke/FollowThrough.ai/issues/65)) ([848483a](https://github.com/ChidiRnweke/FollowThrough.ai/commit/848483af60ebb8d766bc09913fa824269cf22d6c))
+* **notes:** share note views between browser and server ([#67](https://github.com/ChidiRnweke/FollowThrough.ai/issues/67)) ([1cb8f21](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1cb8f21388b457b208d7b35ecf8556d3263e8f47))
+* **search:** reuse indexing and resume queued attachment processing ([#64](https://github.com/ChidiRnweke/FollowThrough.ai/issues/64)) ([f9efaad](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f9efaad7a57b3cd82ae660e374abbc844afbfba2))
+
 ## [0.5.8](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.7...v0.5.8) (2026-09-15)
 
 
