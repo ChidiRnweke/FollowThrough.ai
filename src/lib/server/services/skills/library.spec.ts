@@ -50,35 +50,6 @@ describe('Skill management invariants', () => {
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
-	it('does not create a skill note for an empty name', async () => {
-		const { service, notes } = setup();
-		try {
-			await service.createFromSelection(
-				testActor(),
-				{ noteId: testNoteId(), text: 'Instructions', from: 0, to: 12, revision: 1 },
-				{ name: ' ', description: '', triggerHints: [], provenanceId: testProvenanceId() }
-			);
-		} catch {
-			// Absence of a partially-created note is the invariant under test.
-		}
-		expect(notes.notes).toHaveLength(2);
-	});
-
-	it('creates a skill document in the source project', async () => {
-		const { service } = setup();
-		const skill = await service.createFromSelection(
-			testActor(),
-			{ noteId: testNoteId(), text: 'Write decisions clearly.', from: 0, to: 24, revision: 1 },
-			{
-				name: 'Decision writing',
-				description: 'Writes decisions',
-				triggerHints: ['decision'],
-				provenanceId: testProvenanceId()
-			}
-		);
-		expect(skill.note.projectId).toBe(noteBuilder().projectId);
-	});
-
 	it('records usage with its real provenance', async () => {
 		const { service, skills } = setup();
 		skills.skills = [
@@ -139,12 +110,12 @@ describe('Skill management invariants', () => {
 				isEnabled: true
 			}
 		];
-		const updated = await service.update(testActor(), {
+		const updated = await service.prepareEdit(testActor(), {
 			noteId: skillNote.id,
 			description: 'Use when writing or reviewing decisions',
 			isEnabled: false
 		});
-		expect(updated.description).toBe('Use when writing or reviewing decisions');
+		expect(updated.skill.description).toBe('Use when writing or reviewing decisions');
 	});
 
 	it('updates skill metadata without touching the note or its revision history (2/4)', async () => {
@@ -165,12 +136,12 @@ describe('Skill management invariants', () => {
 				isEnabled: true
 			}
 		];
-		const updated = await service.update(testActor(), {
+		const updated = await service.prepareEdit(testActor(), {
 			noteId: skillNote.id,
 			description: 'Use when writing or reviewing decisions',
 			isEnabled: false
 		});
-		expect(updated.isEnabled).toBe(false);
+		expect(updated.skill.isEnabled).toBe(false);
 	});
 
 	it('updates skill metadata without touching the note or its revision history (3/4)', async () => {
@@ -191,7 +162,7 @@ describe('Skill management invariants', () => {
 				isEnabled: true
 			}
 		];
-		const _updated = await service.update(testActor(), {
+		const _updated = await service.prepareEdit(testActor(), {
 			noteId: skillNote.id,
 			description: 'Use when writing or reviewing decisions',
 			isEnabled: false
@@ -217,56 +188,11 @@ describe('Skill management invariants', () => {
 				isEnabled: true
 			}
 		];
-		const _updated = await service.update(testActor(), {
+		const _updated = await service.prepareEdit(testActor(), {
 			noteId: skillNote.id,
 			description: 'Use when writing or reviewing decisions',
 			isEnabled: false
 		});
 		expect(notes.revisions).toHaveLength(0);
-	});
-
-	it('restores an immutable skill snapshot as a new current revision', async () => {
-		const { service, skills, notes } = setup();
-		const current = noteBuilder({
-			kind: 'skill',
-			title: 'Current instructions',
-			plainText: 'Current content',
-			currentRevision: 2
-		});
-		notes.notes[0] = current;
-		notes.revisions = [
-			{
-				id: '00000000-0000-4000-0008-000000000001' as never,
-				noteId: current.id,
-				revision: 1,
-				title: 'Original instructions',
-				document: { type: 'doc', content: [] },
-				plainText: 'Original content',
-				createdAt: testNow
-			}
-		];
-		skills.skills = [
-			{
-				note: current,
-				name: current.title,
-				description: 'Instructions',
-				triggerHints: ['instruction'],
-				isEnabled: true
-			}
-		];
-		const restored = await service.restoreVersion(testActor(), current.id, 1);
-		expect({
-			revision: restored.note.currentRevision,
-			title: restored.note.title,
-			plainText: restored.note.plainText,
-			versionCount: notes.revisions.length,
-			restoredAttachmentSnapshot: notes.restoredAttachmentSnapshots[0]
-		}).toEqual({
-			revision: 3,
-			title: 'Original instructions',
-			plainText: 'Original content',
-			versionCount: 2,
-			restoredAttachmentSnapshot: '00000000-0000-4000-0008-000000000001'
-		});
 	});
 });

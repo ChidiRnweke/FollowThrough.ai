@@ -52,7 +52,12 @@
 			const description = draftDescription.trim();
 			const instructions = draftInstructions.trim();
 			if (description || instructions) {
-				await saveSkillDraft({ noteId: skill.note.id, description, instructions });
+				await saveSkillDraft({
+					noteId: skill.note.id,
+					description,
+					instructions,
+					baseRevision: skill.note.currentRevision
+				});
 			}
 			createOpen = false;
 			resetWizard();

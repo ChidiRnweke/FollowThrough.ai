@@ -1200,7 +1200,7 @@ export function decideNoteCreation(
 	input: {
 		readonly id: NoteId;
 		readonly title: string;
-		readonly kind: 'note' | 'folder';
+		readonly kind: 'note' | 'folder' | 'skill';
 		readonly parentId?: NoteId;
 	},
 	facts: {

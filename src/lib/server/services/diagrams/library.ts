@@ -1,3 +1,4 @@
+import { decideRevisionWrite } from '$lib/models/revisions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
@@ -149,11 +150,6 @@ export class DiagramLibrary {
 		return current;
 	}
 
-	private requireBase(current: DrawioDiagram, baseEtag: DiagramEtag): void {
-		if (diagramEtag(current) !== baseEtag)
-			throw new StaleRevisionError('The diagram has changed since it was loaded');
-	}
-
 	private requireIdentity(diagramId: DiagramId, baseEtag: DiagramEtag): void {
 		if (!baseEtag.startsWith(`diagram:${diagramId}:r`))
 			throw new ValidationError('The base ETag does not describe this diagram');
@@ -162,13 +158,26 @@ export class DiagramLibrary {
 	private async writeDraft(
 		actor: ActorContext,
 		current: DrawioDiagram,
-		changed: Omit<DrawioDiagram, 'currentRevision'>
+		changed: Omit<DrawioDiagram, 'currentRevision'>,
+		baseEtag: DiagramEtag
 	): Promise<DrawioDiagram> {
+		const decision = decideRevisionWrite(
+			{
+				kind: 'save',
+				baseMatches: diagramEtag(current) === baseEtag,
+				contentChanged: current.source !== changed.source || current.title !== changed.title
+			},
+			current,
+			{ acceptUnchangedRetry: true }
+		);
+		if (decision.kind === 'unchanged') return current;
+		if (decision.kind === 'conflict')
+			throw new StaleRevisionError('The diagram has changed since it was loaded');
 		const updated = await this.diagrams.updateIfRevision(
 			actor,
 			{
 				...changed,
-				currentRevision: current.currentRevision + 1
+				currentRevision: decision.currentRevision
 			},
 			current.currentRevision,
 			current.publishedRevision
@@ -190,14 +199,17 @@ export class DiagramLibrary {
 	): Promise<DrawioDiagram> {
 		this.requireIdentity(diagramId, baseEtag);
 		const current = await this.editable(actor, diagramId);
-		if (current.source === source) return current;
-		this.requireBase(current, baseEtag);
-		return this.writeDraft(actor, current, {
-			...current,
-			source,
-			searchableText,
-			updatedAt: now()
-		});
+		return this.writeDraft(
+			actor,
+			current,
+			{
+				...current,
+				source,
+				searchableText,
+				updatedAt: now()
+			},
+			baseEtag
+		);
 	}
 
 	/** Retitle the working draft; publication remains where it was. */
@@ -211,9 +223,12 @@ export class DiagramLibrary {
 		const current = await this.editable(actor, diagramId);
 		const trimmed = title.trim();
 		if (!trimmed) throw new ValidationError('Diagram title is required');
-		if (current.title === trimmed) return current;
-		this.requireBase(current, baseEtag);
-		return this.writeDraft(actor, current, { ...current, title: trimmed, updatedAt: now() });
+		return this.writeDraft(
+			actor,
+			current,
+			{ ...current, title: trimmed, updatedAt: now() },
+			baseEtag
+		);
 	}
 
 	async publish(
@@ -226,11 +241,19 @@ export class DiagramLibrary {
 	): Promise<DrawioDiagram> {
 		this.requireIdentity(diagramId, baseEtag);
 		const current = await this.editable(actor, diagramId);
-		if (current.currentRevision === current.publishedRevision && current.source === source)
-			return current;
-		this.requireBase(current, baseEtag);
-		const revision =
-			current.source === source ? current.currentRevision : current.currentRevision + 1;
+		const decision = decideRevisionWrite(
+			{
+				kind: 'publish',
+				baseMatches: diagramEtag(current) === baseEtag,
+				contentChanged: current.source !== source
+			},
+			current,
+			{ acceptUnchangedRetry: true }
+		);
+		if (decision.kind === 'unchanged') return current;
+		if (decision.kind === 'conflict')
+			throw new StaleRevisionError('The diagram has changed since it was loaded');
+		const revision = decision.currentRevision;
 		const timestamp = now();
 		const published = await this.diagrams.updateIfRevision(
 			actor,
@@ -295,14 +318,17 @@ export class DiagramLibrary {
 			this.editable(actor, diagramId),
 			this.revision(actor, diagramId, revisionId)
 		]);
-		if (current.title === revision.title && current.source === revision.source) return current;
-		this.requireBase(current, baseEtag);
-		return this.writeDraft(actor, current, {
-			...current,
-			title: revision.title,
-			source: revision.source,
-			searchableText: revision.searchableText,
-			updatedAt: now()
-		});
+		return this.writeDraft(
+			actor,
+			current,
+			{
+				...current,
+				title: revision.title,
+				source: revision.source,
+				searchableText: revision.searchableText,
+				updatedAt: now()
+			},
+			baseEtag
+		);
 	}
 }

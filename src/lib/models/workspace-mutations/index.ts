@@ -1,3 +1,4 @@
+import { decideRevisionWrite } from '$lib/models/revisions';
 import { applySkillMetadataEdit } from '$lib/models/skills';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
 import type {
@@ -804,7 +805,18 @@ export const prepareWorkspaceCommand = (
 		case 'publishDiagram': {
 			const diagram = value('diagrams');
 			if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
-			const revision = diagram.currentRevision + (diagram.source === command.source ? 0 : 1);
+			const decision = decideRevisionWrite(
+				{
+					kind: command.kind === 'saveDiagram' ? 'save' : 'publish',
+					baseMatches: true,
+					contentChanged: diagram.source !== command.source
+				},
+				diagram,
+				{ acceptUnchangedRetry: true }
+			);
+			if (decision.kind === 'conflict') throw new Error('The diagram changed since it was loaded');
+			const revision =
+				decision.kind === 'write' ? decision.currentRevision : diagram.currentRevision;
 			return content(
 				{
 					type: 'diagrams',
