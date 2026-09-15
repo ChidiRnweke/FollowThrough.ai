@@ -31,7 +31,6 @@
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { sectionNumberingOverrideFor } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
-	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import { agentActions } from '$lib/components/agent';
@@ -84,7 +83,6 @@
 	};
 
 	let exportOpen = $state(false);
-	let conflictOpen = $state(false);
 	let historyOpen = $state(false);
 	let historyLoading = $state(false);
 	let historyRevisions = $state<readonly NoteRevisionSummary[]>([]);
@@ -100,7 +98,6 @@
 	let outline = $state<readonly OutlineHeading[]>([]);
 	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
-	let syncReady = $state(false);
 	const editorSession = untrack(() => new EditorSession(() => draft.active));
 	const dirty = $derived(editorSession.dirty);
 	const saveFailed = $derived(editorSession.failure !== null);
@@ -112,11 +109,11 @@
 	);
 	const cancellingAction = $derived(actionRuns.activeSelectionAction?.cancelling ?? false);
 	let publishing = $state(false);
-	let reconciling = false;
 	let lastSaveKeyTime = 0;
-	// Local copy so title edits and fresh revisions survive between loads;
-	// the page remounts this component per note via {#key}.
-	let note = $state(untrack(() => ({ ...view.note })));
+	// The editor buffer. The pane mounts this editor only once the note is on the
+	// device, so its base is captured here, before the first render.
+	let note = $state(untrack(() => ({ ...draft.adopt() })));
+	let conflictOpen = $state(untrack(() => draft.status === 'conflict'));
 	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
@@ -157,24 +154,11 @@
 	);
 
 	onMount(() => {
-		let cancelled = false;
 		// Registered before hydrating: a run that finished while the tab was away
 		// delivers its result the moment the stream reattaches.
 		registerActionHandlers();
 		actionRuns.hydrate();
-		void draft.read().then((opened) => {
-			if (opened.kind !== 'ready') {
-				syncReady = true;
-				return;
-			}
-			const local = opened.value;
-			if (cancelled) return;
-			note = { ...local };
-			conflictOpen = draft.status === 'conflict';
-			syncReady = true;
-		});
 		return () => {
-			cancelled = true;
 			editorSession.close();
 			actionRuns.detach();
 		};
@@ -188,39 +172,16 @@
 		)
 	);
 
-	// Pick up external revisions (e.g. AI-created todo nodes) through the same
-	// reconciliation path as a future service-worker-driven refresh.
+	// Adopt a revision made elsewhere (e.g. AI-created todo nodes) while the buffer is clean.
 	$effect(() => {
-		void view.etag;
-		if (
-			!syncReady ||
-			dirty ||
-			reconciling ||
-			draft.status !== 'synced' ||
-			view.note.currentRevision < note.currentRevision ||
-			(view.note.currentRevision === note.currentRevision && view.note.updatedAt <= note.updatedAt)
-		)
-			return;
-		reconciling = true;
-		const isCurrent = editorSession.checkpoint();
-		void draft
-			.read(() => isCurrent() && !dirty)
-			.then((opened) => {
-				if (opened.kind === 'superseded') return;
-				if (opened.kind !== 'ready') {
-					syncReady = true;
-					return;
-				}
-				const local = opened.value;
-				// The document being replaced, so the editor can shimmer exactly the
-				// blocks the external (agent) revision changed and leave the rest still.
-				const previous = note.document;
-				note = { ...local };
-				editorRef?.replaceDocument(local.document, previous);
-			})
-			.finally(() => {
-				reconciling = false;
-			});
+		if (!draft.newer || dirty) return;
+		untrack(() => {
+			// The document being replaced, so the editor can shimmer exactly the
+			// blocks the external (agent) revision changed and leave the rest still.
+			const previous = note.document;
+			note = { ...draft.adopt() };
+			editorRef?.replaceDocument(note.document, previous);
+		});
 	});
 
 	// Pick up parentId/position changes from sidebar reorders, which update the
@@ -841,63 +802,46 @@
 		</div>
 	{/if}
 
-	{#if syncReady}
-		<!-- `contents` keeps the wrapper boxless: it exists only to scope the
+	<!-- `contents` keeps the wrapper boxless: it exists only to scope the
 		     section-numbering counters to this editor, not to change layout. -->
-		<div class="contents" class:note-section-numbering={sectionNumbering.effective}>
-			<NoteEditor
-				bind:this={editorRef}
-				noteId={note.id}
-				projectId={note.projectId}
-				revision={note.currentRevision}
-				{inlineSuggestionsEnabled}
-				document={note.document}
-				references={view.references}
-				diagrams={view.diagrams}
-				skills={shell.skills}
-				{linkableNotes}
-				onOpenNote={(noteId, options) =>
-					options.background
-						? workbench.openTabInBackground(noteId)
-						: void workbench.openTab(noteId)}
-				{perNote}
-				onchange={markDirty}
-				onoutline={(headings) => (outline = headings)}
-				onactiveheading={(id) => (activeHeading = id)}
-				{activeAction}
-				actionCancelling={cancellingAction}
-				onInsertionPointMoved={(runId, position) =>
-					actionRuns.updateContext(runId, { insertAt: position })}
-				oncancelaction={() => {
-					const run = actionRuns.activeSelectionAction;
-					if (run) void actionRuns.cancel(run.runId);
-				}}
-				oncancelmermaid={(kind) => {
-					const run = actionRuns.find(kind);
-					if (run) void actionRuns.cancel(run.runId);
-				}}
-				onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
-				onskill={runSkill}
-				onask={(prompt) => askSelection(prompt)}
-				onreviseMermaid={reviseMermaid}
-				onconvertMermaid={convertMermaid}
-				onrejectDrawio={rejectDrawio}
-			/>
-		</div>
-	{:else}
-		<!-- Match the editor's eventual footprint (full viewport height minus the
-		     72px header row above) so IndexedDB init time doesn't cause
-		     vertical reflow between the short-skeleton and the hydrated editor. -->
-		<div class="flex min-h-96 flex-col gap-3" aria-label="Loading note from device">
-			<Skeleton class="h-5 w-full" />
-			<Skeleton class="h-5 w-11/12" />
-			<Skeleton class="h-5 w-4/5" />
-			<Skeleton class="mt-2 h-5 w-full" />
-			<Skeleton class="h-5 w-5/6" />
-			<Skeleton class="h-5 w-3/4" />
-			<Skeleton class="h-5 w-2/3" />
-		</div>
-	{/if}
+	<div class="contents" class:note-section-numbering={sectionNumbering.effective}>
+		<NoteEditor
+			bind:this={editorRef}
+			noteId={note.id}
+			projectId={note.projectId}
+			revision={note.currentRevision}
+			{inlineSuggestionsEnabled}
+			document={note.document}
+			references={view.references}
+			diagrams={view.diagrams}
+			skills={shell.skills}
+			{linkableNotes}
+			onOpenNote={(noteId, options) =>
+				options.background ? workbench.openTabInBackground(noteId) : void workbench.openTab(noteId)}
+			{perNote}
+			onchange={markDirty}
+			onoutline={(headings) => (outline = headings)}
+			onactiveheading={(id) => (activeHeading = id)}
+			{activeAction}
+			actionCancelling={cancellingAction}
+			onInsertionPointMoved={(runId, position) =>
+				actionRuns.updateContext(runId, { insertAt: position })}
+			oncancelaction={() => {
+				const run = actionRuns.activeSelectionAction;
+				if (run) void actionRuns.cancel(run.runId);
+			}}
+			oncancelmermaid={(kind) => {
+				const run = actionRuns.find(kind);
+				if (run) void actionRuns.cancel(run.runId);
+			}}
+			onaction={(action, selection, insertAt) => void runAction(action, selection, insertAt)}
+			onskill={runSkill}
+			onask={(prompt) => askSelection(prompt)}
+			onreviseMermaid={reviseMermaid}
+			onconvertMermaid={convertMermaid}
+			onrejectDrawio={rejectDrawio}
+		/>
+	</div>
 
 	<NoteWorkspaceDialogs
 		bind:exportOpen

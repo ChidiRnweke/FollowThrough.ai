@@ -1,11 +1,9 @@
 <script lang="ts">
 	import type { ShellContext } from '$lib/client/shell/views';
 
-	import type { NoteView } from '$lib/client/notes/view';
-
 	import { onMount, onDestroy, untrack } from 'svelte';
+	import { accessMessage } from '$lib/models/sync';
 	import type { NoteId } from '$lib/models/notes';
-
 	import { Button } from '$lib/components/ui/button';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
@@ -15,13 +13,11 @@
 	let {
 		noteId,
 		shell,
-		initialView,
 		inlineSuggestionsEnabled = true,
 		onCloseSplit
 	}: {
 		noteId: NoteId;
 		shell: ShellContext;
-		initialView?: NoteView;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
@@ -32,59 +28,34 @@
 	// props never change identity mid-life.
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before mounting an editor');
-	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
+	const resources = session.resources;
+	const note = untrack(() => resources.view({ type: 'notes', id: [noteId] }));
+	const draft = untrack(() => resources.draft({ type: 'notes', id: [noteId] }));
 	const editorSelection = untrack(() => editorSelectionRegistry.for(noteId));
 
-	let view = $state<NoteView | undefined>(untrack(() => initialView));
-	let loadingError = $state<string | undefined>(undefined);
-	let releaseContext: (() => void) | undefined;
-
-	let opened = $state(false);
-	const projection = $derived(workspaceSession.current?.resources.views.note(noteId));
-	const serverDeleted = $derived(
-		workspaceSession.current?.resources.state({ type: 'notes', id: [noteId] })?.kind === 'deleted'
-	);
-	async function refreshView(): Promise<void> {
-		try {
-			const session = await workspaceSession.start();
-			const loaded = await session.resources.openNote(noteId);
-			if (loaded.kind === 'ready') {
-				view = loaded.value;
-				opened = true;
-				loadingError = undefined;
-			} else
-				loadingError =
-					loaded.kind === 'failure'
-						? loaded.message
-						: loaded.kind === 'deleted'
-							? 'This note was deleted.'
-							: 'This note is not available on this device. Reconnect to download it.';
-			// audit-allow: silent-catch — the pane renders startup or storage failures as its load error.
-		} catch (error) {
-			loadingError = error instanceof Error ? error.message : 'Note could not be loaded.';
-		}
-	}
-	$effect(() => {
-		if (!opened) return;
+	const projection = $derived(resources.views.note(noteId));
+	// A server deletion removes the projection; the open document stays so its work can be kept.
+	let view = $state(untrack(() => projection?.view));
+	$effect.pre(() => {
 		if (projection) view = projection.view;
 	});
+	let releaseContext: (() => void) | undefined;
 
 	onMount(() => {
 		releaseContext = appContext.registerPane(noteId, () => {
-			const note = draft.value ?? view?.note;
-			if (!note) return undefined;
+			const current = draft.value ?? view?.note;
+			if (!current) return undefined;
 			const dirty = ['pending', 'saving', 'conflict', 'error'].includes(draft.status);
 			return {
-				id: note.id,
-				title: note.title,
-				projectId: note.projectId,
-				revision: note.currentRevision,
+				id: current.id,
+				title: current.title,
+				projectId: current.projectId,
+				revision: current.currentRevision,
 				syncStatus: draft.status,
 				dirty,
-				...(dirty ? { dirtyExcerpt: note.plainText.slice(0, 4000) } : {})
+				...(dirty ? { dirtyExcerpt: current.plainText.slice(0, 4000) } : {})
 			};
 		});
-		void refreshView();
 	});
 
 	onDestroy(() => {
@@ -95,7 +66,10 @@
 
 <div class="flex w-full min-w-0 flex-1 flex-col" data-note-pane={noteId}>
 	{#if view}
-		{#if serverDeleted}<p role="status" class="px-4 py-1 text-xs text-muted-foreground">
+		{#if resources.state(note.identity)?.kind === 'deleted'}<p
+				role="status"
+				class="px-4 py-1 text-xs text-muted-foreground"
+			>
 				This note was deleted on the server. This document remains open so you can preserve your
 				work.
 			</p>{/if}
@@ -113,20 +87,20 @@
 			{editorSelection}
 			{onCloseSplit}
 		/>
-	{:else if loadingError}
-		<div
-			class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-sm text-muted-foreground"
-		>
-			<p>{loadingError}</p>
-			<Button variant="outline" onclick={refreshView}>Retry</Button>
-		</div>
-	{:else}
+	{:else if note.state.kind === 'wait' || note.state.kind === 'ready'}
 		<div class="flex min-h-96 flex-1 flex-col gap-3 p-8" aria-label="Loading note">
 			<div class="bg-muted h-5 w-full animate-pulse rounded"></div>
 			<div class="bg-muted h-5 w-11/12 animate-pulse rounded"></div>
 			<div class="bg-muted h-5 w-4/5 animate-pulse rounded"></div>
 			<div class="bg-muted mt-2 h-5 w-full animate-pulse rounded"></div>
 			<div class="bg-muted h-5 w-5/6 animate-pulse rounded"></div>
+		</div>
+	{:else}
+		<div
+			class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-sm text-muted-foreground"
+		>
+			<p>{accessMessage(note.state, 'note')}</p>
+			<Button variant="outline" onclick={() => note.retry()}>Retry</Button>
 		</div>
 	{/if}
 </div>

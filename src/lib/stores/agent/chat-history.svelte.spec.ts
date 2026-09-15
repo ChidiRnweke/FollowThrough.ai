@@ -300,7 +300,7 @@ describe('shared cached chat history', () => {
 			etag: syncEtag(2n)
 		});
 		await store.hydrate(resources);
-		expect(store.historyError).toBe('This chat is not available on this device');
+		expect(store.historyError).toBe('This chat was deleted.');
 	});
 	it('orders neighboring large event cursors exactly', async () => {
 		const { store, resources } = await setup({
@@ -315,7 +315,7 @@ describe('shared cached chat history', () => {
 			{ kind: 'text', text: 'Second' }
 		]);
 	});
-	it('reports an unavailable conversation and stops loading', async () => {
+	it('reports a deleted conversation and stops loading', async () => {
 		const { store, resources, cache } = await setup();
 		await cache.accept(workspaceResourceKey({ type: 'conversations', id: [conversationId] }), {
 			kind: 'deleted',
@@ -324,7 +324,7 @@ describe('shared cached chat history', () => {
 		await store.hydrate(resources);
 		expect({ loading: store.loading, failure: store.historyError }).toEqual({
 			loading: false,
-			failure: 'This chat is not available on this device'
+			failure: 'This chat was deleted.'
 		});
 	});
 });

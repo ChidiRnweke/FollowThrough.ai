@@ -6,7 +6,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { Separator } from '$lib/components/ui/separator';
-	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import SkillEditor from '../skill-editor.svelte';
 	import { NoteConflictDialog, NoteSyncStatus, NoteTitleInlineInput } from '$lib/components/notes';
@@ -36,20 +35,21 @@
 	// conflict handling below are exactly the notes save path.
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before mounting an editor');
-	const resources = session.resources;
 	const draft = untrack(() => session.resources.draft({ type: 'notes', id: [noteId] }));
 	const metadata = untrack(() => session.resources.draft({ type: 'skills', id: [noteId] }));
+	// The page mounts this editor only while both records are projected, so the
+	// bases it renders are captured here, before the first render.
+	draft.adopt();
+	metadata.adopt();
 	let metadataReview = $state(false);
 
 	let describeRef: SkillEditor | undefined = $state();
 	let bodyRef: SkillEditor | undefined = $state();
 	let editorEpoch = $state(0);
-	let syncReady = $state(false);
-	let loadFailure = $state<string | null>(null);
 	const editorSession = untrack(() => new EditorSession(() => draft.active));
 	const dirty = $derived(editorSession.dirty);
 	const saveFailed = $derived(editorSession.failure !== null);
-	let conflictOpen = $state(false);
+	let conflictOpen = $state(draft.status === 'conflict');
 	let importing = $state(false);
 	let exporting = $state(false);
 	let editingTitle = $state(false);
@@ -70,34 +70,7 @@
 			draft
 	);
 
-	onMount(() => {
-		let cancelled = false;
-		void Promise.all([draft.read(), metadata.read()]).then(([opened, details]) => {
-			if (cancelled) return;
-			if (opened.kind !== 'ready' || details.kind !== 'ready') {
-				loadFailure = 'The skill could not be opened. Reconnect and reopen it to try again.';
-				return;
-			}
-			savedDescription = details.value.description;
-			const local = opened.value;
-			// Server-authoritative fields come from the load; content fields come
-			// from the device copy, which may hold unsynced edits.
-			note = {
-				...skill.note,
-				title: local.title,
-				document: local.document,
-				plainText: local.plainText,
-				currentRevision: local.currentRevision,
-				updatedAt: local.updatedAt
-			};
-			conflictOpen = draft.status === 'conflict';
-			syncReady = true;
-		});
-		return () => {
-			cancelled = true;
-			editorSession.close();
-		};
-	});
+	onMount(() => () => editorSession.close());
 
 	const AUTOSAVE_DELAY = 2000;
 
@@ -262,24 +235,17 @@
 			await importSkillMarkdown({ noteId: note.id, raw });
 			await workspaceSession.synchronize();
 			const [opened, details] = await Promise.all([
-				resources.open({ type: 'notes', id: [note.id] }),
-				resources.open({ type: 'skills', id: [note.id] })
+				draft.read(isCurrent),
+				metadata.read(isCurrent)
 			]);
-			if (!isCurrent()) {
+			if (opened.kind === 'superseded' || details.kind === 'superseded') {
 				toast.info('The import completed. Your later edits are retained for review.');
 				return;
 			}
-			if (
-				opened.kind !== 'ready' ||
-				opened.value.type !== 'notes' ||
-				details.kind !== 'ready' ||
-				details.value.type !== 'skills'
-			)
+			if (opened.kind !== 'ready' || details.kind !== 'ready')
 				throw new Error('The imported skill could not be reopened');
-			draft.capture();
-			metadata.capture();
-			note = { ...opened.value.value };
-			savedDescription = details.value.value.description;
+			note = { ...opened.value };
+			savedDescription = details.value.description;
 			editorSession.accept();
 			editorEpoch += 1;
 			toast.success('Skill imported');
@@ -423,55 +389,45 @@
 			</div>
 		</div>
 
-		{#if loadFailure}
-			<p role="alert" class="text-sm text-destructive">{loadFailure}</p>
-		{:else if syncReady}
-			{#key `${noteId}:${editorEpoch}`}
-				<div class="flex flex-1 flex-col">
-					<section class="flex flex-col p-4 md:p-6">
-						<div class="flex flex-col gap-1">
-							<h2 class="section-title">Describe your skill</h2>
-							<p class="text-sm text-muted-foreground">
-								When should your agent trigger it? This is what the agent reads to decide when to
-								load this skill.
-							</p>
-						</div>
-						<div class="mt-6 flex flex-col">
-							<SkillEditor
-								bind:this={describeRef}
-								compact
-								ariaLabel="Skill description"
-								initialMarkdown={savedDescription}
-								onchange={markDirty}
-							/>
-						</div>
-					</section>
-					<Separator />
-					<section class="flex flex-1 flex-col p-4 md:p-6">
-						<div class="flex flex-col gap-1">
-							<h2 class="section-title">What should the agent do?</h2>
-							<p class="text-sm text-muted-foreground">
-								Markdown instructions the agent follows when this skill loads.
-							</p>
-						</div>
-						<div class="mt-6 flex flex-1 flex-col">
-							<SkillEditor
-								bind:this={bodyRef}
-								ariaLabel="Skill instructions"
-								initialMarkdown={note.plainText}
-								onchange={markDirty}
-							/>
-						</div>
-					</section>
-				</div>
-			{/key}
-		{:else}
-			<div class="space-y-3 p-4 md:p-6">
-				<Skeleton class="h-5 w-3/4" />
-				<Skeleton class="h-5 w-full" />
-				<Skeleton class="h-5 w-2/3" />
+		{#key `${noteId}:${editorEpoch}`}
+			<div class="flex flex-1 flex-col">
+				<section class="flex flex-col p-4 md:p-6">
+					<div class="flex flex-col gap-1">
+						<h2 class="section-title">Describe your skill</h2>
+						<p class="text-sm text-muted-foreground">
+							When should your agent trigger it? This is what the agent reads to decide when to load
+							this skill.
+						</p>
+					</div>
+					<div class="mt-6 flex flex-col">
+						<SkillEditor
+							bind:this={describeRef}
+							compact
+							ariaLabel="Skill description"
+							initialMarkdown={savedDescription}
+							onchange={markDirty}
+						/>
+					</div>
+				</section>
+				<Separator />
+				<section class="flex flex-1 flex-col p-4 md:p-6">
+					<div class="flex flex-col gap-1">
+						<h2 class="section-title">What should the agent do?</h2>
+						<p class="text-sm text-muted-foreground">
+							Markdown instructions the agent follows when this skill loads.
+						</p>
+					</div>
+					<div class="mt-6 flex flex-1 flex-col">
+						<SkillEditor
+							bind:this={bodyRef}
+							ariaLabel="Skill instructions"
+							initialMarkdown={note.plainText}
+							onchange={markDirty}
+						/>
+					</div>
+				</section>
 			</div>
-		{/if}
+		{/key}
 	</div>
 </div>
 

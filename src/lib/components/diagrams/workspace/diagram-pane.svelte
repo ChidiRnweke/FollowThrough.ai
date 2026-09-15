@@ -2,6 +2,7 @@
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/models/diagrams';
+	import { accessMessage } from '$lib/models/sync';
 	import type {
 		DiagramId,
 		DiagramRevisionId,
@@ -36,7 +37,7 @@
 	if (!session) throw new Error('Open the workspace before opening a diagram');
 	const resources = session.resources;
 	const draft = untrack(() => resources.draft({ type: 'diagrams', id: [diagramId] }));
-	let opened = $state(false);
+	void draft.open();
 	const editorSession = new EditorSession(() => resources.active);
 	let control = $state<DrawioControl>();
 	let editor = $state<DrawioStatus>({ phase: 'loading', modified: false });
@@ -47,7 +48,9 @@
 	let conflictOpen = $state(false);
 	let reviewSource = $state<string | null>(null);
 	let selectedRevisionId = $state<DiagramRevisionId>();
-	const current = $derived(opened ? (resources.views.diagram(diagramId) ?? draft.value) : null);
+	const current = $derived(
+		draft.state.kind === 'ready' ? (resources.views.diagram(diagramId) ?? draft.state.value) : null
+	);
 	const local = $derived(draft.value);
 	const title = $derived(current?.title ?? 'Untitled diagram');
 	let history = $state<
@@ -85,14 +88,7 @@
 		current?.kind === 'drawio' && current.currentRevision > current.publishedRevision
 	);
 
-	async function load(): Promise<void> {
-		const result = await draft.read(editorSession.checkpoint());
-		opened = result.kind === 'ready';
-	}
-	onMount(() => {
-		void load();
-		return () => editorSession.close();
-	});
+	onMount(() => () => editorSession.close());
 
 	$effect(() => {
 		if (conflictId) {
@@ -103,24 +99,13 @@
 
 	// A clean canvas can adopt a downloaded version synchronously. Dirty canvases keep their observed base.
 	$effect(() => {
-		const snapshot = resources.snapshot({ type: 'diagrams', id: [diagramId] });
-		if (
-			!opened ||
-			!control ||
-			!snapshot ||
-			snapshot.etag === draft.observedEtag ||
-			draft.status !== 'synced' ||
-			editor.modified ||
-			busy ||
-			renaming
-		)
+		const incoming = draft.newer;
+		if (!incoming || incoming.kind !== 'drawio' || !control || editor.modified || busy || renaming)
 			return;
-		const value = snapshot.value;
-		if (value.type !== 'diagrams' || value.value.kind !== 'drawio') return;
 		untrack(() => {
-			const changedSource = draft.value?.source.trim() !== value.value.source.trim();
-			draft.capture();
-			if (changedSource) control?.replace(value.value.source);
+			const changedSource = draft.value?.source.trim() !== incoming.source.trim();
+			draft.adopt();
+			if (changedSource) control?.replace(incoming.source);
 			editorSession.accept();
 		});
 	});
@@ -334,11 +319,9 @@
 				The latest diagram could not be refreshed. Your current canvas is still available.
 			</p>
 		{/if}
-		{#if draft.status === 'error' && !current}
-			<p class="text-sm text-muted-foreground">
-				{draft.lastError ?? 'This diagram could not be loaded.'}
-			</p>
-			<Button variant="outline" onclick={() => void load()}>Retry</Button>
+		{#if draft.state.kind !== 'ready' && draft.state.kind !== 'wait'}
+			<p class="text-sm text-muted-foreground">{accessMessage(draft.state, 'diagram')}</p>
+			<Button variant="outline" onclick={() => void draft.open()}>Retry</Button>
 		{:else if !current}
 			<p class="text-sm text-muted-foreground">Loading the diagram.</p>
 		{:else if current.kind === 'drawio'}

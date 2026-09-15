@@ -18,6 +18,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { TodoId } from '$lib/models/todos';
+	import { accessMessage } from '$lib/models/sync';
 
 	let {
 		todoId,
@@ -25,43 +26,13 @@
 		ondeleted
 	}: { todoId?: TodoId; notes?: readonly NoteSummary[]; ondeleted?: () => void } = $props();
 
-	let openedId = $state<TodoId | null>(null);
-	let loadError = $state<string | null>(null);
 	const resources = $derived(workspaceSession.current?.resources);
-	const todo = $derived(
-		todoId && openedId === todoId ? resources?.views.get('todos', todoId) : undefined
+	const todo = $derived(todoId && resources?.view({ type: 'todos', id: [todoId] }));
+	const view = $derived(
+		todo?.state.kind === 'ready' && !todo.state.value.deletedAt
+			? resources?.views.todo(todo.state.value)
+			: undefined
 	);
-	const view = $derived(todo && !todo.deletedAt ? resources?.views.todo(todo) : undefined);
-	$effect(() => {
-		const id = todoId;
-		if (!id) return;
-		let active = true;
-		openedId = null;
-		loadError = null;
-		void workspaceSession
-			.start()
-			.then(async (session) => {
-				const result = await session.resources.open({ type: 'todos', id: [id] });
-				if (!active) return;
-				if (result.kind === 'ready') openedId = id;
-				else
-					loadError =
-						result.kind === 'failure'
-							? result.message
-							: result.kind === 'deleted'
-								? 'This todo was deleted.'
-								: 'This todo is not available on this device. Reconnect to download it.';
-				await session.resources.prepare();
-			})
-			.catch((error) => {
-				const message = error instanceof Error ? error.message : 'Could not open this todo';
-				if (active) loadError = message;
-				return { kind: 'failure', message };
-			});
-		return () => {
-			active = false;
-		};
-	});
 
 	async function remove(todoId: TodoId) {
 		const ok = await todoUpdates.remove(todoId);
@@ -81,10 +52,10 @@
 	);
 </script>
 
-{#if loadError}<p role="alert">{loadError}</p>{:else if todoId && openedId !== todoId}<p
-		role="status"
-	>
+{#if todo && todo.state.kind === 'wait'}<p role="status">
 		Loading todo…
+	</p>{:else if todo && todo.state.kind !== 'ready'}<p role="alert">
+		{accessMessage(todo.state, 'todo')}
 	</p>{:else if view}
 	<div class="flex flex-col gap-5 pb-6">
 		<Field.FieldGroup>

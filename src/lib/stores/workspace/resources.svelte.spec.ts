@@ -1,9 +1,14 @@
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
+import { flushSync } from 'svelte';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import {
+	workspaceResourceKey,
+	type WorkspaceResourceIdentity,
+	type WorkspaceResourceType
+} from '$lib/models/workspace-sync';
 import { syncEtag, initialSyncCursor } from '$lib/models/sync';
 import {
 	InMemorySyncCache,
@@ -16,7 +21,7 @@ import {
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
-import { WorkspaceResources } from './resources.svelte';
+import { WorkspaceResources, type ResourceView } from './resources.svelte';
 
 const project = workspaceRecordSchema.parse({
 	type: 'projects',
@@ -183,6 +188,88 @@ describe('shared workspace reads', () => {
 		await resources.initialize();
 		resources.stop();
 		expect([...resources.records]).toEqual([]);
+	});
+});
+
+describe('a surface observing one record', () => {
+	const cached = async () => {
+		const context = setup();
+		await context.repository.commit('alice', {
+			put: [{ key, entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: project } } }],
+			remove: []
+		});
+		await context.resources.initialize();
+		return context;
+	};
+	const observed = (view: ResourceView<WorkspaceResourceType>) =>
+		$effect.root(() => {
+			$effect(() => {
+				void view.state;
+			});
+		});
+	it('opens a cached record without reading device storage again', async () => {
+		const { resources, outbox } = await cached();
+		outbox.snapshotFailure = 'Device storage was read';
+		expect(await resources.open(identity)).toEqual({ kind: 'ready', value: project });
+	});
+	it('shows a cached record at once', async () => {
+		const { resources } = await cached();
+		expect(resources.view(identity).state).toEqual({ kind: 'ready', value: project.value });
+	});
+	it('downloads an uncached record once a surface observes it', async () => {
+		const { resources, transport } = setup();
+		transport.records.set(key, { etag: syncEtag(1n), value: project });
+		await resources.initialize();
+		const view = resources.view(identity);
+		const stop = observed(view);
+		flushSync();
+		await expect.poll(() => view.state).toEqual({ kind: 'ready', value: project.value });
+		stop();
+	});
+	it('reports an uncached record as unavailable offline', async () => {
+		const { resources } = setup();
+		await resources.initialize();
+		resources.setOnline(false);
+		expect(resources.view(identity).state).toEqual({ kind: 'unavailable' });
+	});
+	it('reports a record the server does not have as unavailable', async () => {
+		const { resources } = setup();
+		await resources.initialize();
+		const view = resources.view(identity);
+		const stop = observed(view);
+		flushSync();
+		await expect.poll(() => view.state).toEqual({ kind: 'unavailable' });
+		stop();
+	});
+	it('reports a failed download', async () => {
+		const { resources, transport } = setup();
+		transport.readFailure = 'Server down';
+		await resources.initialize();
+		const view = resources.view(identity);
+		const stop = observed(view);
+		flushSync();
+		await expect.poll(() => view.state).toEqual({ kind: 'failure', message: 'Server down' });
+		stop();
+	});
+	it('recovers a failed download on retry', async () => {
+		const { resources, transport } = setup();
+		transport.readFailure = 'Server down';
+		transport.records.set(key, { etag: syncEtag(1n), value: project });
+		await resources.initialize();
+		const view = resources.view(identity);
+		await view.retry();
+		transport.readFailure = null;
+		await view.retry();
+		expect(view.state).toEqual({ kind: 'ready', value: project.value });
+	});
+	it('reports a server deletion', async () => {
+		const { resources, repository } = setup();
+		await repository.commit('alice', {
+			put: [{ key, entry: { kind: 'deleted', etag: syncEtag(2n) } }],
+			remove: []
+		});
+		await resources.initialize();
+		expect(resources.view(identity).state).toEqual({ kind: 'deleted' });
 	});
 });
 

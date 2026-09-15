@@ -2,7 +2,6 @@
 	import type { ShellContext } from '$lib/client/shell/views';
 
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import type { Note } from '$lib/models/notes';
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
@@ -54,8 +53,6 @@
 			? tool.arguments.diagramId
 			: undefined
 	);
-	let baseline = $state<Note | undefined>(undefined);
-	let baselineError = $state(false);
 	let expanded = $state(false);
 
 	/** An update_todo call names its subject by id alone; resolve it to a title. */
@@ -64,87 +61,30 @@
 			? tool.arguments.todoId
 			: undefined
 	);
-	let todoTitle = $state<string | undefined>(undefined);
-
-	$effect(() => {
-		const id = todoSubjectId;
-		if (!id) return;
-		let cancelled = false;
-		// audit-allow: silent-catch — the approval card labels the missing preview as unavailable without changing the action payload.
-		void workspaceSession
-			.start()
-			.then((session) => session.resources.open({ type: 'todos', id: [id] }))
-			.then((opened) => {
-				if (opened.kind !== 'ready' || opened.value.type !== 'todos')
-					throw new Error('Todo unavailable');
-				if (!cancelled) todoTitle = opened.value.value.title;
-			})
-			.catch(() => {
-				if (!cancelled) todoTitle = 'Todo title unavailable';
-			});
-		return () => {
-			cancelled = true;
-		};
-	});
-
-	$effect(() => {
-		const id = noteId;
-		if (!id) return;
-		let cancelled = false;
-		// audit-allow: silent-catch — the approval card disables the note preview by setting its visible baseline-error state.
-		void workspaceSession
-			.start()
-			.then((session) => session.resources.open({ type: 'notes', id: [id] }))
-			.then((opened) => {
-				if (opened.kind !== 'ready' || opened.value.type !== 'notes')
-					throw new Error('Note unavailable');
-				if (!cancelled) baseline = opened.value.value;
-			})
-			.catch(() => {
-				if (!cancelled) baselineError = true;
-			});
-		return () => {
-			cancelled = true;
-		};
-	});
-
-	let diagramBaseline = $state<ApprovalBaseline>({ kind: 'none' });
-	let loadingDiagram = $state(false);
-	$effect(() => {
-		const id = editedDiagramId;
-		if (!id) {
-			diagramBaseline = { kind: 'none' };
-			loadingDiagram = false;
-			return;
-		}
-		let cancelled = false;
-		loadingDiagram = true;
-		void workspaceSession
-			.start()
-			.then((session) => session.resources.open({ type: 'diagrams', id: [id] }))
-			.then((opened) => {
-				if (cancelled) return;
-				if (opened.kind !== 'ready' || opened.value.type !== 'diagrams') {
-					diagramBaseline = { kind: 'none' };
-					return;
-				}
-				const diagram = opened.value.value;
-				const read = readDrawioLabels(diagram.source);
-				diagramBaseline =
-					read.kind === 'labels'
-						? { kind: 'diagram', labels: read.labels, title: diagram.title ?? 'Untitled diagram' }
-						: { kind: 'none' };
-			})
-			.catch(() => {
-				if (!cancelled) diagramBaseline = { kind: 'none' };
-				return { kind: 'failure' };
-			})
-			.finally(() => {
-				if (!cancelled) loadingDiagram = false;
-			});
-		return () => {
-			cancelled = true;
-		};
+	// The previews compare against what this device holds now; a missing record previews without a baseline.
+	const resources = $derived(workspaceSession.current?.resources);
+	const todoSubject = $derived(
+		todoSubjectId ? resources?.view({ type: 'todos', id: [todoSubjectId] }) : undefined
+	);
+	const todoTitle = $derived(
+		!todoSubject || todoSubject.state.kind === 'wait'
+			? undefined
+			: todoSubject.state.kind === 'ready'
+				? todoSubject.state.value.title
+				: 'Todo title unavailable'
+	);
+	const note = $derived(noteId ? resources?.view({ type: 'notes', id: [noteId] }) : undefined);
+	const baseline = $derived(note?.state.kind === 'ready' ? note.state.value : undefined);
+	const diagram = $derived(
+		editedDiagramId ? resources?.view({ type: 'diagrams', id: [editedDiagramId] }) : undefined
+	);
+	const diagramBaseline = $derived.by((): ApprovalBaseline => {
+		if (diagram?.state.kind !== 'ready') return { kind: 'none' };
+		const { source, title } = diagram.state.value;
+		const read = readDrawioLabels(source);
+		return read.kind === 'labels'
+			? { kind: 'diagram', labels: read.labels, title: title ?? 'Untitled diagram' }
+			: { kind: 'none' };
 	});
 
 	/**
@@ -162,7 +102,8 @@
 	});
 
 	const preview = $derived(approvalPreview(tool.name, tool.arguments, approvalBaseline));
-	const loadingNote = $derived(Boolean(noteId) && !baseline && !baselineError);
+	const loadingNote = $derived(note?.state.kind === 'wait');
+	const loadingDiagram = $derived(diagram?.state.kind === 'wait');
 	const fields = $derived(approvalFields(tool.arguments, shell));
 	const subject = $derived(
 		preview.kind === 'note'

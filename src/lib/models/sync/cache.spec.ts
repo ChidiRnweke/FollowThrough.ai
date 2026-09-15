@@ -22,4 +22,7 @@ describe('opening retained content', () => {
 			{ kind: 'failure', message: 'Server unavailable' }
 		);
 	});
+	it('reports a record the server does not have as unavailable online', () => {
+		expect(accessCache(undefined, true, { kind: 'missing' })).toEqual({ kind: 'unavailable' });
+	});
 });

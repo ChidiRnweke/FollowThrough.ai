@@ -147,7 +147,7 @@ export class ResourceCache<T> {
 	private entry(key: string): ResourceState<T> | undefined {
 		return this.entries.get(key);
 	}
-	private transfer(key: string): TransferState | undefined {
+	transfer(key: string): TransferState | undefined {
 		const attempt = this.attempts.get(key);
 		return !resourceCurrent(this.entry(key)) &&
 			this.entry(key)?.kind !== 'deleted' &&
@@ -255,7 +255,14 @@ export class ResourceCache<T> {
 			const response = await this.dependencies.transport.read(key, null);
 			if (this.stopped) return { kind: 'stopped' };
 			if (response.kind === 'unchanged') throw new Error('An uncached read returned no body');
-			if (response.kind === 'unavailable') return { kind: 'unavailable' };
+			if (response.kind === 'unavailable') {
+				this.attempts.set(key, {
+					target: resourceVersion(this.entry(key)),
+					transfer: { kind: 'missing' }
+				});
+				this.notify();
+				return { kind: 'unavailable' };
+			}
 			await this.commit(() => ({
 				put: [
 					{

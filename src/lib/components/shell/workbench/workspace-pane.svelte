@@ -1,11 +1,8 @@
 <script lang="ts">
 	import type { ShellContext } from '$lib/client/shell/views';
 
-	import type { NoteView } from '$lib/client/notes/view';
-
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-
 	import { parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import NotePane from './note-pane.svelte';
 	import ChatPane from './chat-pane.svelte';
@@ -20,7 +17,6 @@
 		agentModels,
 		agentDefaults,
 		agentAvailable,
-		initialView,
 		inlineSuggestionsEnabled = true,
 		onCloseSplit
 	}: {
@@ -31,7 +27,6 @@
 		agentModels: readonly AgentModel[];
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
-		initialView?: NoteView;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();
@@ -62,5 +57,5 @@
 		<GlobalSearchPanel projects={shell.projects} />
 	</div>
 {:else if ref?.kind === 'note'}
-	<NotePane noteId={ref.noteId} {shell} {inlineSuggestionsEnabled} {initialView} {onCloseSplit} />
+	<NotePane noteId={ref.noteId} {shell} {inlineSuggestionsEnabled} {onCloseSplit} />
 {/if}

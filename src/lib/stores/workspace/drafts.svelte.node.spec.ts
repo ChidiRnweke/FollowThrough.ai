@@ -385,3 +385,47 @@ it('creates an offline note and waits for its locally created project', async ()
 		dependencies: entries[1].intent.dependencies
 	}).toEqual({ title: 'Captured offline', dependencies: [entries[0].intent.operationId] });
 });
+
+describe('an open editor and versions made elsewhere', () => {
+	const elsewhere = (note: ReturnType<typeof noteBuilder>, etag: bigint) => ({
+		etag: syncEtag(etag),
+		value: { type: 'notes' as const, value: { ...note, plainText: 'Other client' } }
+	});
+	const savedOnline = async () => {
+		const context = await setup();
+		await context.store.open();
+		await context.store.stage(noteCommand({ ...context.note, plainText: 'My edit' }));
+		context.resources.setOnline(true);
+		await context.resources.synchronize();
+		return context;
+	};
+	it('captures a cached base before the first render', async () => {
+		const { note, store } = await setup();
+		void store.open();
+		expect(store.state).toEqual({ kind: 'ready', value: note });
+	});
+	it('does not report its own acknowledged save as newer', async () => {
+		const { store } = await savedOnline();
+		expect(store.newer).toBeNull();
+	});
+	it('reports a revision made elsewhere after its own save was acknowledged', async () => {
+		const { note, key, store, transport, cache } = await savedOnline();
+		transport.records.set(key, elsewhere(note, 3n));
+		await cache.refresh();
+		expect(store.newer).toEqual({ ...note, plainText: 'Other client' });
+	});
+	it('does not report a newer version while its own edit is unsent', async () => {
+		const { note, key, store, cache } = await setup();
+		await store.open();
+		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
+		await cache.accept(key, elsewhere(note, 2n));
+		expect(store.newer).toBeNull();
+	});
+	it('observes the newer version once it adopts it', async () => {
+		const { note, key, store, transport, cache } = await savedOnline();
+		transport.records.set(key, elsewhere(note, 3n));
+		await cache.refresh();
+		store.adopt();
+		expect(store.newer).toBeNull();
+	});
+});
