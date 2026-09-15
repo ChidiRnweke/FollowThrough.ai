@@ -1277,3 +1277,12 @@ export function applyNoteDraftEdit(
 		updatedAt: timestamp
 	};
 }
+
+export function sameNoteDraft(current: Note, candidate: Note): boolean {
+	return (
+		current.title === candidate.title &&
+		current.plainText === candidate.plainText &&
+		JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
+		current.isPinned === candidate.isPinned
+	);
+}

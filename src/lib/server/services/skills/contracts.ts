@@ -31,6 +31,7 @@ export interface SkillEditor {
 			displayName?: string;
 			description?: string;
 			raw?: string;
+			instructions?: string;
 			baseRevision?: number;
 			manifest?: SkillManifest;
 			triggerHints?: readonly string[];

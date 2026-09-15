@@ -1,5 +1,10 @@
 import { decideRevisionWrite } from '$lib/models/revisions';
-import { decideNoteCreation, decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
+import {
+	sameNoteDraft,
+	decideNoteCreation,
+	decideNoteArchive,
+	decideNoteRestore
+} from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -88,7 +93,7 @@ export class NoteCatalog {
 			{
 				kind: 'save',
 				baseMatches: candidate.currentRevision === current.currentRevision,
-				contentChanged: !this.isUnchanged(current, candidate)
+				contentChanged: !sameNoteDraft(current, candidate)
 			},
 			current,
 			{ acceptUnchangedRetry: false }
@@ -401,14 +406,5 @@ export class NoteCatalog {
 		const project = await this.projects.findById(actor, projectId);
 		if (!project) throw new NotFoundError('Project was not found', { projectId });
 		return project;
-	}
-
-	private isUnchanged(current: Note, candidate: Note): boolean {
-		return (
-			current.title === candidate.title &&
-			current.plainText === candidate.plainText &&
-			JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-			current.isPinned === candidate.isPinned
-		);
 	}
 }

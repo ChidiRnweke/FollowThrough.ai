@@ -17,7 +17,6 @@ import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
-	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 const setup = () => {

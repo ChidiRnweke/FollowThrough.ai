@@ -1,3 +1,4 @@
+import { sameNoteDraft } from '$lib/models/notes';
 import { applySkillMetadataEdit } from '$lib/models/skills';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
@@ -114,6 +115,7 @@ export class SkillLibrary {
 			displayName?: string;
 			description?: string;
 			raw?: string;
+			instructions?: string;
 			baseRevision?: number;
 			manifest?: SkillManifest;
 			triggerHints?: readonly string[];
@@ -121,21 +123,34 @@ export class SkillLibrary {
 		}
 	): Promise<PreparedSkillEdit<Note>> {
 		const current = await this.load(actor, input.noteId);
-		if (input.raw !== undefined && input.manifest !== undefined)
+		if (
+			[input.raw, input.manifest, input.instructions].filter((value) => value !== undefined)
+				.length > 1
+		)
 			throw new ValidationError('Provide raw SKILL.md or structured fields, not both');
-		if (input.raw === undefined && input.manifest === undefined) {
+		if (
+			input.raw === undefined &&
+			input.manifest === undefined &&
+			input.instructions === undefined
+		) {
 			// Metadata-only update: the note — its document, revision, and revision
 			// history — belongs to the note sync path and must not be touched here.
 			return { skill: { ...current, ...applySkillMetadataEdit(current, input) }, document: null };
 		}
-		if (input.baseRevision !== current.note.currentRevision)
-			throw new StaleRevisionError('The skill document has changed since it was loaded');
 		const manifest =
-			input.raw !== undefined
-				? this.manifests.parse(input.raw)
-				: input.manifest
-					? this.manifests.parse(this.manifests.serialize(input.manifest))
-					: undefined;
+			input.instructions !== undefined
+				? this.manifests.parse(
+						this.manifests.serialize({
+							...this.portable(current),
+							description: input.description?.trim() || current.description,
+							instructions: input.instructions
+						})
+					)
+				: input.raw !== undefined
+					? this.manifests.parse(input.raw)
+					: input.manifest
+						? this.manifests.parse(this.manifests.serialize(input.manifest))
+						: undefined;
 		if (
 			manifest &&
 			(await this.skills.listAll(actor)).some(
@@ -156,6 +171,8 @@ export class SkillLibrary {
 			},
 			plainText: instructions
 		};
+		if (input.baseRevision !== current.note.currentRevision && !sameNoteDraft(current.note, note))
+			throw new StaleRevisionError('The skill document has changed since it was loaded');
 		return {
 			document: note,
 			skill: {
@@ -186,7 +203,11 @@ export class SkillLibrary {
 
 	async serialize(actor: ActorContext, noteId: NoteId): Promise<string> {
 		const skill = await this.load(actor, noteId);
-		return this.manifests.serialize({
+		return this.manifests.serialize(this.portable(skill));
+	}
+
+	private portable(skill: Skill<Note>): SkillManifest {
+		return {
 			slug: skill.slug ?? slug(skill.name),
 			description: skill.description,
 			...(skill.license ? { license: skill.license } : {}),
@@ -194,7 +215,7 @@ export class SkillLibrary {
 			metadata: skill.metadata ?? {},
 			allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
 			instructions: skill.note.plainText
-		});
+		};
 	}
 
 	setPinned(

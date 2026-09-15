@@ -24,6 +24,7 @@ const setup = () => {
 			notePublisher: content,
 			revisionRecorder: content,
 			revisionReader: content,
+			attachmentRestorer: content,
 			anchorRepairer: content,
 			noteIndexer: content,
 			transactionRunner: new InMemoryTransactionRunner([content])
@@ -220,6 +221,42 @@ describe('Note discard draft invariants', () => {
 		expect(discarded.note.plainText).toBe('Original');
 	});
 
+	it('discards to the published snapshot when a later legacy snapshot exists', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder({ plainText: 'Published' });
+		content.notes = [note];
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		const { note: draft } = await controller.save(testActor(), {
+			note: { ...content.notes[0]!, plainText: 'Imported draft' }
+		});
+		await content.record(testActor(), draft);
+		const result = await controller.discardDraft(testActor(), { noteId: note.id });
+		expect(result.note.plainText).toBe('Published');
+	});
+	it('restores the published attachment snapshot when discarding a draft', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder({ plainText: 'Published' });
+		content.notes = [note];
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		await controller.save(testActor(), { note: { ...content.notes[0]!, plainText: 'Draft' } });
+		await controller.discardDraft(testActor(), { noteId: note.id });
+		expect(content.restoredAttachmentRevisionIds).toEqual([content.recordedRevisions[0]!.id]);
+	});
+	it('rolls back a discarded draft when its search update fails', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder({ plainText: 'Published' });
+		content.notes = [note];
+		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		const { note: draft } = await controller.save(testActor(), {
+			note: { ...content.notes[0]!, plainText: 'Draft' }
+		});
+		content.failIndex = true;
+		await controller.discardDraft(testActor(), { noteId: note.id }).catch(() => undefined);
+		expect({ note: content.notes[0], attachments: content.restoredAttachmentRevisionIds }).toEqual({
+			note: draft,
+			attachments: []
+		});
+	});
 	it('rejects discard when no published version exists', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();

@@ -198,8 +198,12 @@ export class Skills implements SkillsController {
 			return { skillNoteId: skill.note.id };
 		});
 	}
-	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]> {
-		return this.dependencies.revisionReader.revisions(actor, input.noteId);
+	async listVersions(
+		actor: ActorContext,
+		input: GetSkillViewInput
+	): Promise<readonly NoteRevision[]> {
+		await this.dependencies.skillFinder.load(actor, input.noteId);
+		return [...(await this.dependencies.revisionReader.revisions(actor, input.noteId))].reverse();
 	}
 	async restoreVersion(
 		actor: ActorContext,
@@ -243,7 +247,6 @@ export class Skills implements SkillsController {
 			const note = prepared.document
 				? await this.saveDocument(actor, prepared.document)
 				: prepared.skill.note;
-			if (prepared.document) await this.dependencies.revisionRecorder.record(actor, note);
 			return this.dependencies.skillEditor.commitEdit(actor, { ...prepared.skill, note });
 		});
 		return { skill, usages: await this.dependencies.skillUsageLister.list(actor, input.noteId) };
