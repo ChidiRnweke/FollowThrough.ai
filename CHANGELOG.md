@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.4...v0.5.5) (2026-09-15)
+
+
+### Code Refactoring
+
+* remove obsolete compatibility paths ([#53](https://github.com/ChidiRnweke/FollowThrough.ai/issues/53)) ([f7f7cba](https://github.com/ChidiRnweke/FollowThrough.ai/commit/f7f7cbafed98b3f0cdde4feb54fae88815c3ddc2))
+
 ## [0.5.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.3...v0.5.4) (2026-09-15)
 
 
