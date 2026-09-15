@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.7](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.6...v0.5.7) (2026-09-15)
+
+
+### Code Refactoring
+
+* **suggestions:** remove the added undo interface ([#59](https://github.com/ChidiRnweke/FollowThrough.ai/issues/59)) ([5cba0bf](https://github.com/ChidiRnweke/FollowThrough.ai/commit/5cba0bf7ac2e61a1153b3cd7a2df02ea0994880d))
+
 ## [0.5.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.5...v0.5.6) (2026-09-15)
 
 
