@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.2...v0.5.3) (2026-09-15)
+
+
+### Code Refactoring
+
+* **sync:** own resource open state in the workspace and drop per-pane loaders ([#46](https://github.com/ChidiRnweke/FollowThrough.ai/issues/46)) ([ad17b2b](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ad17b2bdd95de96973b2b8d74f6b28b9fc5d1e93))
+
 ## [0.5.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.1...v0.5.2) (2026-09-15)
 
 
