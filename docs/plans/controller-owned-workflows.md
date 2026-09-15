@@ -111,7 +111,10 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   tests verify detachment and checkpoint failures. Seeded chat captures show missing activity.
 - P05/A11: search-query generation now rejects missing or blank provider output. The provider
   belongs to knowledge search, and the evaluation cache uses a new namespace. Eleven focused
-  tests and the full 3,511-test suite passed. Vision preparation lifetime (A13) remains open.
+  tests and the full 3,511-test suite passed.
+- P05/A13: all preparation now falls within provider cleanup; image requests honor cancellation
+  and reject blank descriptions. Unfinished sibling requests are aborted on exit. Native vision
+  retains original images. Ninety-four focused tests and the full 3,539-test suite passed.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.
