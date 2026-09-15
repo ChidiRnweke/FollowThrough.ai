@@ -24,7 +24,7 @@ interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
 
-const skill = (project = testProjectId()): Skill => ({
+const skill = (project = testProjectId()): Skill<Note> => ({
 	note: noteBuilder({
 		id: testNoteId(3),
 		projectId: project,

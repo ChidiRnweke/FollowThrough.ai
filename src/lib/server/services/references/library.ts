@@ -72,8 +72,3 @@ export class ReferenceLibrary {
 		);
 	}
 }
-
-export type ReferenceCreator = Pick<ReferenceLibrary, 'create'>;
-export type ReferenceDeleter = Pick<ReferenceLibrary, 'delete'>;
-export type ReferenceLister = Pick<ReferenceLibrary, 'listForNote'>;
-export type ReferenceViewAssembler = Pick<ReferenceLibrary, 'assemble'>;

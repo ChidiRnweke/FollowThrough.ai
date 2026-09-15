@@ -1,7 +1,8 @@
+import type { DiagramSuggestion } from '$lib/models/suggestions';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
-import type { DiagramSuggestion } from '$lib/models/diagrams';
+
 import type { Note } from '$lib/models/notes';
 import type { WriteConflictView } from '$lib/models/outbox';
 

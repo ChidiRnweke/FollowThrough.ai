@@ -140,7 +140,7 @@ class ProjectActionsStore {
 		}));
 
 	createFolder = (projectId: ProjectId, name: string, parentId?: NoteId) =>
-		this.run<CreateFolderOutput>(async () => ({
+		this.run<CreateFolderOutput<Note>>(async () => ({
 			folder: await this.createEntry(name, projectId, 'folder', parentId)
 		}));
 
@@ -150,7 +150,7 @@ class ProjectActionsStore {
 		parentId: NoteId | undefined,
 		position: number
 	) =>
-		this.serverAction<MoveProjectEntryOutput>(() =>
+		this.serverAction<MoveProjectEntryOutput<Note>>(() =>
 			moveEntry({ projectId, entryId, parentId, position })
 		);
 	createNote = (title: string, projectId: ProjectId, parentId?: NoteId) =>
@@ -158,7 +158,7 @@ class ProjectActionsStore {
 			note: await this.createEntry(title, projectId, 'note', parentId)
 		}));
 	createSkill = (name: string, projectId: ProjectId, parentId?: NoteId) =>
-		this.serverAction<CreateSkillOutput>(() => createSkill({ name, projectId, parentId }));
+		this.serverAction<CreateSkillOutput<Note>>(() => createSkill({ name, projectId, parentId }));
 	renameNote = (draft: WorkspaceDraft<'notes'>, title: string) =>
 		this.run<RenameNoteOutput>(async () => {
 			const note = draft.value;

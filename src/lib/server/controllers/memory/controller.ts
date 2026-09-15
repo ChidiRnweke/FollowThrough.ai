@@ -1,3 +1,4 @@
+import type { Suggestion } from '$lib/models/suggestions';
 import type {
 	MemoryMutationRequest,
 	WorkspaceMutationResult
@@ -62,7 +63,10 @@ export interface MemoryController {
 	 * @throws ValidationError if the proposal is malformed (project scope without a
 	 * project, an update/removal without a target entry, or a non-removal without content).
 	 */
-	propose(actor: ActorContext, input: ProposeMemoryChangeInput): Promise<ProposeMemoryChangeOutput>;
+	propose(
+		actor: ActorContext,
+		input: ProposeMemoryChangeInput
+	): Promise<ProposeMemoryChangeOutput<Suggestion>>;
 }
 
 export interface MemoryDependencies {
@@ -128,7 +132,7 @@ export class Memory implements MemoryController {
 	async propose(
 		actor: ActorContext,
 		input: ProposeMemoryChangeInput
-	): Promise<ProposeMemoryChangeOutput> {
+	): Promise<ProposeMemoryChangeOutput<Suggestion>> {
 		const payload = this.toPayload(input);
 		return this.dependencies.transactionRunner.run(async () => {
 			const provenance = await this.dependencies.provenanceRecorder.record(actor, {

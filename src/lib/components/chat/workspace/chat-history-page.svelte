@@ -1,7 +1,9 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import { goto } from '$app/navigation';
 	import type { Conversation } from '$lib/models/agent';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Button } from '$lib/components/ui/button';
 	import * as Empty from '$lib/components/ui/empty';

@@ -18,10 +18,10 @@ import {
 	type WorkspaceValues,
 	type WorkspaceRecordOf
 } from '$lib/models/workspace-records';
-import type { ShellContext, TodayView, LocalDate } from '$lib/models/workspace';
+import type { LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectTreeNode, ProjectView } from '$lib/models/projects';
-import { noteEtag, sectionNumberingView, type NoteId, type NoteView } from '$lib/models/notes';
+import { noteEtag, sectionNumberingView, type NoteId } from '$lib/models/notes';
 import { provenanceOrigin } from '$lib/models/provenance';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
@@ -119,7 +119,7 @@ export class WorkspaceViews {
 			];
 		});
 	}
-	shell(userId: string): ShellContext | null {
+	shell(userId: string) {
 		const user = this.get('users', userId);
 		if (!user) return null;
 		const projects = this.projects;
@@ -347,7 +347,7 @@ export class WorkspaceViews {
 			(children.get(parentId) ?? []).map((entry) => ({ entry, children: build(entry.id) }));
 		return { project, tree: build(undefined) };
 	}
-	note(noteId: NoteId): { view: NoteView; missing: readonly WorkspaceResourceIdentity[] } | null {
+	note(noteId: NoteId) {
 		const note = this.get('notes', noteId);
 		if (!note) return null;
 		const missing: WorkspaceResourceIdentity[] = [];
@@ -478,7 +478,7 @@ export class WorkspaceViews {
 			...new Set(this.todos().flatMap(({ todo }) => (todo.category ? [todo.category] : [])))
 		].sort();
 	}
-	today(today: LocalDate): TodayView {
+	today(today: LocalDate) {
 		const due = this.todos({ dueBefore: today, responsibility: 'mine' });
 		const notes = this.notes.filter((note) => note.kind !== 'skill');
 		return {

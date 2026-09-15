@@ -1,6 +1,8 @@
 <script lang="ts">
+	import type { DiagramSuggestion } from '$lib/models/suggestions';
+
 	import type { WriteConflictView } from '$lib/models/outbox';
-	import type { Diagram, DiagramSuggestion } from '$lib/models/diagrams';
+	import type { Diagram } from '$lib/models/diagrams';
 	import type { Note, NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
 	import type { PerNoteEditorSlot } from '../editor-context';
 	import { DrawioReviewDialog } from '$lib/components/diagrams';

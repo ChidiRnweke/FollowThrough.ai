@@ -1,9 +1,11 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';

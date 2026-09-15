@@ -1,3 +1,8 @@
+import type { BacklinkView } from '$lib/models/relationships';
+import type { ReferenceView } from '$lib/models/references';
+import type { Diagram } from '$lib/models/diagrams';
+import type { TodoView } from '$lib/models/todos';
+import type { SuggestionView } from '$lib/models/suggestions';
 import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
@@ -112,7 +117,7 @@ export interface NotesController {
 	 *
 	 * The pieces are fetched in parallel because nothing depends on another's result.
 	 */
-	get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView>;
+	get(actor: ActorContext, input: GetNoteViewInput): Promise<ResolvedNoteView>;
 	/**
 	 * Pin or clear the note's own section-numbering choice, returning the resolved
 	 * cascade so the caller sees the effect of its write without a second read.
@@ -126,7 +131,7 @@ export interface NotesController {
 	 * than a note screen — the export dialog, which needs every selected note's content in
 	 * the browser to rasterize its diagrams.
 	 *
-	 * Only the title and document travel; assembling a full {@link NoteView} per note would
+	 * Only the title and document travel; assembling a full {@link ResolvedNoteView} per note would
 	 * fan out to six more readers each for nothing.
 	 *
 	 * @throws ValidationError if more notes are requested than one batch allows.
@@ -364,7 +369,7 @@ export class Notes implements NotesController {
 	}
 
 	constructor(private readonly dependencies: NotesDependencies) {}
-	async get(actor: ActorContext, input: GetNoteViewInput): Promise<NoteView> {
+	async get(actor: ActorContext, input: GetNoteViewInput): Promise<ResolvedNoteView> {
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
 			this.dependencies.noteReader.get(actor, input.noteId),
 			this.dependencies.relationshipFinder.findForNote(actor, input.noteId),
@@ -687,3 +692,5 @@ export class Notes implements NotesController {
 		});
 	}
 }
+
+type ResolvedNoteView = NoteView<BacklinkView, ReferenceView, Diagram, TodoView, SuggestionView>;

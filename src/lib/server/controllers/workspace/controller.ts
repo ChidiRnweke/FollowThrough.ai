@@ -1,3 +1,7 @@
+import type { TodoView } from '$lib/models/todos';
+import type { SkillSummary } from '$lib/models/skills';
+import type { NoteSummary } from '$lib/models/notes';
+import type { User } from '$lib/models/identity';
 import type { WorkspaceWriteCancellation } from '$lib/models/workspace-mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type { SyncPage } from '$lib/models/sync';
@@ -7,7 +11,11 @@ import type { SyncCursor, SyncEtag, SyncObjectRead } from '$lib/models/sync';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { SyncChangeReader, SyncObjectReader } from '$lib/server/services/workspace/contracts';
-import type { GetTodayViewInput, ShellContext, TodayView } from '$lib/models/workspace';
+import type {
+	GetTodayViewInput,
+	ShellContext as AggregateShellContext,
+	TodayView as AggregateTodayView
+} from '$lib/models/workspace';
 import type { PendingMemoryNotification } from '$lib/models/memory';
 import type { Project } from '$lib/models/projects';
 import type { Suggestion } from '$lib/models/suggestions';
@@ -144,3 +152,6 @@ export class Workspace implements WorkspaceController {
 		};
 	}
 }
+
+type ShellContext = AggregateShellContext<User, Project, NoteSummary, SkillSummary>;
+type TodayView = AggregateTodayView<TodoView, NoteSummary>;

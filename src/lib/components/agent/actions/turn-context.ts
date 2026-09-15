@@ -1,5 +1,6 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import type { EntityRef } from '$lib/models/tool-display';
-import type { ShellContext } from '$lib/models/workspace';
+
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
 import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';

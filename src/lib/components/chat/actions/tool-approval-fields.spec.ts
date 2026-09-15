@@ -1,8 +1,9 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
-import type { ShellContext } from '$lib/models/workspace';
+
 import { approvalFields } from './tool-approval-fields';
 
 const PROJECT_ID = 'e0d3f07c-460b-40c3-9b8c-a8dc00ddc565';

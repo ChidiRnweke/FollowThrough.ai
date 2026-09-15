@@ -1,3 +1,8 @@
+import type { BacklinkView } from '$lib/models/relationships';
+import type { ReferenceView } from '$lib/models/references';
+import type { Diagram } from '$lib/models/diagrams';
+import type { TodoView } from '$lib/models/todos';
+import type { SuggestionView } from '$lib/models/suggestions';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note, NoteRevision, NoteSummary, NoteView } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
@@ -226,11 +231,11 @@ export interface NoteViewProjection {
 	readonly body: { readonly kind: 'file'; readonly file: AgentFileMetadata };
 	/** Kept because publish_note requires the base ETag. */
 	readonly etag: string;
-	backlinks: NoteView['backlinks'];
-	references: NoteView['references'];
-	diagrams: NoteView['diagrams'];
-	todos: NoteView['todos'];
-	pendingSuggestions: NoteView['pendingSuggestions'];
+	backlinks: ResolvedNoteView['backlinks'];
+	references: ResolvedNoteView['references'];
+	diagrams: ResolvedNoteView['diagrams'];
+	todos: ResolvedNoteView['todos'];
+	pendingSuggestions: ResolvedNoteView['pendingSuggestions'];
 }
 
 /**
@@ -240,7 +245,10 @@ export interface NoteViewProjection {
  * wire. Constructed explicitly (see {@link projectNoteSummary}) so the
  * declared shape is true on the wire.
  */
-export const projectNoteView = (view: NoteView, file: AgentFileMetadata): NoteViewProjection => ({
+export const projectNoteView = (
+	view: ResolvedNoteView,
+	file: AgentFileMetadata
+): NoteViewProjection => ({
 	noteId: view.note.id,
 	title: view.note.title,
 	body: { kind: 'file', file },
@@ -267,10 +275,15 @@ export interface SkillViewProjection {
  * never returned. The underlying `note` (ProseMirror `document`, revisions)
  * and `usages` telemetry stay off the wire.
  */
-export const projectSkillView = (view: SkillView, instructions: string): SkillViewProjection => ({
+export const projectSkillView = (
+	view: SkillView<Note>,
+	instructions: string
+): SkillViewProjection => ({
 	noteId: view.skill.note.id,
 	name: view.skill.name,
 	description: view.skill.description,
 	triggerHints: view.skill.triggerHints,
 	instructions
 });
+
+type ResolvedNoteView = NoteView<BacklinkView, ReferenceView, Diagram, TodoView, SuggestionView>;

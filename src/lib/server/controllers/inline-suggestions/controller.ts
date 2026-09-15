@@ -8,7 +8,7 @@ import type {
 	InlineCompletionGenerator,
 	InlineSuggestionThrottle
 } from '$lib/server/services/agent/runs/contracts';
-import type { NoteReader } from '$lib/server/services/notes/catalog';
+import type { NoteReader } from '$lib/server/services/notes/contracts';
 import { traceWorkflow } from '$lib/server/services/telemetry';
 
 const MIN_PREFIX_LENGTH = 12;

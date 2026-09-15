@@ -1,3 +1,4 @@
+import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	DrawioDiagram,
@@ -56,7 +57,7 @@ export interface DiagramsController {
 		actor: ActorContext,
 		input: GenerateMermaidDiagramInput,
 		signal?: AbortSignal
-	): Promise<GenerateMermaidDiagramOutput>;
+	): Promise<GenerateMermaidDiagramOutput<Suggestion>>;
 	/**
 	 * Revise an existing Mermaid diagram by instruction: re-render its SVG, re-extract
 	 * searchable text, persist, and re-index.
@@ -82,7 +83,7 @@ export interface DiagramsController {
 		actor: ActorContext,
 		input: ConvertInlineMermaidInput,
 		signal?: AbortSignal
-	): Promise<ConvertInlineMermaidOutput>;
+	): Promise<ConvertInlineMermaidOutput<Suggestion>>;
 	/**
 	 * Fetch a draw.io diagram for editing.
 	 *
@@ -101,7 +102,10 @@ export interface DiagramsController {
 	 *
 	 * @throws UnsupportedDiagramOperationError if the source is not Mermaid.
 	 */
-	promote(actor: ActorContext, input: PromoteDiagramInput): Promise<PromoteDiagramOutput>;
+	promote(
+		actor: ActorContext,
+		input: PromoteDiagramInput
+	): Promise<PromoteDiagramOutput<Suggestion>>;
 	/**
 	 * Start {@link generateMermaid} as a cancellable run and return once the run is
 	 * durable, long before the diagram exists.
@@ -157,7 +161,7 @@ export class Diagrams implements DiagramsController {
 		actor: ActorContext,
 		input: GenerateMermaidDiagramInput,
 		signal?: AbortSignal
-	): Promise<GenerateMermaidDiagramOutput> {
+	): Promise<GenerateMermaidDiagramOutput<Suggestion>> {
 		return this.dependencies.mermaidCreator
 			.create(actor, input.selection, input.instruction, signal)
 			.then(({ provenanceId: agentProvenanceId, ...diagram }) =>
@@ -234,7 +238,7 @@ export class Diagrams implements DiagramsController {
 		actor: ActorContext,
 		input: ConvertInlineMermaidInput,
 		signal?: AbortSignal
-	): Promise<ConvertInlineMermaidOutput> {
+	): Promise<ConvertInlineMermaidOutput<Suggestion>> {
 		return this.dependencies.inlineMermaidToDrawioConverter
 			.convertInline(actor, input, signal)
 			.then(({ provenanceId: agentProvenanceId, ...draft }) =>
@@ -307,7 +311,10 @@ export class Diagrams implements DiagramsController {
 		return { diagram: saved };
 	}
 
-	async promote(actor: ActorContext, input: PromoteDiagramInput): Promise<PromoteDiagramOutput> {
+	async promote(
+		actor: ActorContext,
+		input: PromoteDiagramInput
+	): Promise<PromoteDiagramOutput<Suggestion>> {
 		const source = await this.dependencies.diagramFinder.get(actor, input.diagramId);
 		if (source.kind !== 'mermaid')
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be promoted');

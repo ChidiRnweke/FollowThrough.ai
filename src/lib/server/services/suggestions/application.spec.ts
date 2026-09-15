@@ -1,5 +1,6 @@
+import type { DiagramSuggestion } from '$lib/models/suggestions';
 import { describe, expect, it } from 'vitest';
-import type { DiagramSuggestion } from '$lib/models/diagrams';
+
 import { SuggestionApplication } from './application';
 import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import {

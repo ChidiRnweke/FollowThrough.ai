@@ -160,13 +160,3 @@ export class TodoCatalog {
 			throw new NotFoundError('Todo source anchor was not found');
 	}
 }
-
-export type TodoCreator = Pick<TodoCatalog, 'create'>;
-export type TodoDeleter = Pick<TodoCatalog, 'softDelete'>;
-export type TodoReader = Pick<TodoCatalog, 'get'>;
-export type TodoEditor = Pick<TodoCatalog, 'update'>;
-export type TodoStatusChanger = Pick<TodoCatalog, 'change'>;
-export type TodoLister = Pick<TodoCatalog, 'list' | 'count' | 'listCategories'>;
-export type DueTodoFinder = Pick<TodoCatalog, 'findDue'>;
-export type WaitingOnFinder = Pick<TodoCatalog, 'findWaitingOn'>;
-export type TodoViewAssembler = Pick<TodoCatalog, 'assemble'>;

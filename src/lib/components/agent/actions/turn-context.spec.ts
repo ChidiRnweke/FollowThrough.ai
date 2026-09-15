@@ -1,6 +1,7 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import { describe, expect, it } from 'vitest';
 import type { NoteSummary } from '$lib/models/notes';
-import type { ShellContext } from '$lib/models/workspace';
+
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import { readDoorLabel, runningSteps, turnContext } from './turn-context';

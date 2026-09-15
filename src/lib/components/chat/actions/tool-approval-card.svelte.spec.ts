@@ -1,3 +1,4 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
@@ -5,7 +6,7 @@ import { render } from 'vitest-browser-svelte';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
-import type { ShellContext } from '$lib/models/workspace';
+
 import ToolApprovalCard from './tool-approval-card.svelte';
 
 const PROJECT_ID = 'e0d3f07c-460b-40c3-9b8c-a8dc00ddc565';

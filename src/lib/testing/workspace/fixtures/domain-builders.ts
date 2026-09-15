@@ -1,3 +1,4 @@
+import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
@@ -7,7 +8,7 @@ import type { DiagramId, MermaidDiagram } from '$lib/models/diagrams';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { ProvenanceId, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { SuggestionId } from '$lib/models/suggestions';
-import type { Todo, TodoId, TodoSuggestion } from '$lib/models/todos';
+import type { Todo, TodoId } from '$lib/models/todos';
 
 const id = (kind: number, value: number): string =>
 	`00000000-0000-4000-8${String(kind).padStart(3, '0')}-${String(value).padStart(12, '0')}`;

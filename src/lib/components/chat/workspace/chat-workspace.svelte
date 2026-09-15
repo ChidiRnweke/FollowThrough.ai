@@ -1,7 +1,9 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import ChatPanel from './chat-panel.svelte';
 	import { onDestroy, untrack } from 'svelte';

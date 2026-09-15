@@ -1,3 +1,4 @@
+import type { Note } from '$lib/models/notes';
 import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
@@ -41,7 +42,7 @@ export interface SkillsController {
 	/** List the user's skills, optionally scoped to a project. */
 	list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput>;
 	/** Load a skill and its usage counts for the editor view. Read-only. */
-	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView>;
+	get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView<Note>>;
 	/**
 	 * Load a skill for the agent and record that it was used.
 	 *
@@ -49,9 +50,9 @@ export interface SkillsController {
 	 * a usage record linking the skill to the note it was applied against, which is what
 	 * makes "which skills actually get used" observable later.
 	 */
-	loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView>;
+	loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView<Note>>;
 	/** Create a new skill backed by a fresh note, in one transaction. */
-	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput>;
+	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput<Note>>;
 	/**
 	 * Create a skill distilled from a text selection.
 	 *
@@ -65,9 +66,12 @@ export interface SkillsController {
 	/** List the revision history of a skill's underlying note. */
 	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]>;
 	/** Restore a skill to an earlier revision, in one transaction. */
-	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView>;
+	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView<Note>>;
 	/** Edit a skill's content, returning the refreshed view with its usage counts. */
-	update(actor: ActorContext, input: Parameters<SkillEditor['update']>[1]): Promise<SkillView>;
+	update(
+		actor: ActorContext,
+		input: Parameters<SkillEditor['update']>[1]
+	): Promise<SkillView<Note>>;
 	/** Serialize a skill into the compact form the agent consumes. */
 	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string>;
 	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
@@ -107,14 +111,14 @@ export class Skills implements SkillsController {
 	async list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
 		return { skills: await this.dependencies.skillFinder.listAll(actor, input?.projectId) };
 	}
-	async get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView> {
+	async get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView<Note>> {
 		const [skill, usages] = await Promise.all([
 			this.dependencies.skillFinder.load(actor, input.noteId),
 			this.dependencies.skillUsageLister.list(actor, input.noteId)
 		]);
 		return { skill, usages };
 	}
-	async loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView> {
+	async loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.skillFinder.load(actor, input.noteId);
 		await this.dependencies.skillUsageRecorder.record(actor, {
 			skillNoteId: input.noteId,
@@ -126,7 +130,7 @@ export class Skills implements SkillsController {
 			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
 		};
 	}
-	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput> {
+	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteCreator.create(actor, {
 				id: input.id,
@@ -170,7 +174,10 @@ export class Skills implements SkillsController {
 	listVersions(actor: ActorContext, input: GetSkillViewInput): Promise<readonly NoteRevision[]> {
 		return this.dependencies.skillVersionManager.listVersions(actor, input.noteId);
 	}
-	async restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView> {
+	async restoreVersion(
+		actor: ActorContext,
+		input: RestoreSkillVersionInput
+	): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(() =>
 			this.dependencies.skillVersionManager.restoreVersion(actor, input.noteId, input.revision)
 		);
@@ -182,7 +189,7 @@ export class Skills implements SkillsController {
 	async update(
 		actor: ActorContext,
 		input: Parameters<SkillEditor['update']>[1]
-	): Promise<SkillView> {
+	): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(() =>
 			this.dependencies.skillEditor.update(actor, input)
 		);

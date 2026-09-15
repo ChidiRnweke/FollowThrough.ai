@@ -1,7 +1,9 @@
 <script lang="ts">
+	import type { TodayView } from '$lib/client/shell/views';
+
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project } from '$lib/models/projects';
-	import type { TodayView } from '$lib/models/workspace';
+
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { FtPin as Pin, FtDocument as FileText } from '$lib/components/icons';

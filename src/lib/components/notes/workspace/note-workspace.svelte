@@ -1,4 +1,10 @@
 <script lang="ts">
+	import type { DiagramSuggestion, Suggestion } from '$lib/models/suggestions';
+
+	import type { ShellContext } from '$lib/client/shell/views';
+
+	import type { NoteView } from '$lib/client/notes/view';
+
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { noteCommand, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -6,7 +12,6 @@
 	import { goto } from '$app/navigation';
 	import type {
 		ConvertInlineMermaidOutput,
-		DiagramSuggestion,
 		DrawioDiagram,
 		GenerateMermaidDiagramOutput,
 		ReviseInlineMermaidOutput
@@ -19,11 +24,10 @@
 		NoteRevision,
 		NoteRevisionId,
 		NoteRevisionSummary,
-		NoteView,
 		SectionNumberingLevel,
 		TextSelection
 	} from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { sectionNumberingOverrideFor } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
@@ -426,7 +430,7 @@
 	 */
 	function registerActionHandlers(): void {
 		actionRuns.on('promises', async (result) => {
-			const output = result as ExtractPromisesOutput;
+			const output = result as ExtractPromisesOutput<Suggestion>;
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
 				await workspaceSession.synchronize();
@@ -434,11 +438,11 @@
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('relate', (result) => {
-			const output = result as RelateSelectionOutput;
+			const output = result as RelateSelectionOutput<Suggestion>;
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('reference', async (result) => {
-			const output = result as FindReferencesOutput;
+			const output = result as FindReferencesOutput<Suggestion>;
 			if (output.outcome === 'nothing_relevant') {
 				toast.info('Nothing sufficiently relevant found.');
 				return;
@@ -447,7 +451,7 @@
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('diagram', async (result, context, runId) => {
-			const output = result as GenerateMermaidDiagramOutput;
+			const output = result as GenerateMermaidDiagramOutput<Suggestion>;
 			if (output.suggestion.kind !== 'diagram') return;
 			const live = editorRef?.consumeInsertionPoint(runId);
 			// The live mapped point wins; a refresh leaves no plugin state behind, so
@@ -468,7 +472,7 @@
 			toast.success('Diagram inserted — undo with Ctrl+Z');
 		});
 		actionRuns.on('convert', (result) => {
-			const output = result as ConvertInlineMermaidOutput;
+			const output = result as ConvertInlineMermaidOutput<Suggestion>;
 			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 				return;
 			toast.success('draw.io conversion ready to review');
@@ -527,7 +531,7 @@
 		if (outcome.status === 'cancelled') throw new Error('Diagram conversion cancelled.');
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram conversion failed. Try again.');
-		const output = outcome.result as ConvertInlineMermaidOutput;
+		const output = outcome.result as ConvertInlineMermaidOutput<Suggestion>;
 		if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 			throw new Error('Diagram conversion failed. Try again.');
 		return output.suggestion;

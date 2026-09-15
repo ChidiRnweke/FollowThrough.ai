@@ -1,6 +1,8 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { NoteId } from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import { Button } from '$lib/components/ui/button';
 	import { Kbd } from '$lib/components/ui/kbd';
 	import * as Sidebar from '$lib/components/ui/sidebar';

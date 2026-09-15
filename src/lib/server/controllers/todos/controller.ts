@@ -1,3 +1,4 @@
+import type { Suggestion } from '$lib/models/suggestions';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import { applyTodoEdit } from '$lib/models/todos';
@@ -79,7 +80,7 @@ export interface TodosController {
 		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
-	): Promise<ExtractPromisesOutput>;
+	): Promise<ExtractPromisesOutput<Suggestion>>;
 	/**
 	 * Start {@link extractPromises} as a cancellable run, returning once the run is
 	 * durable rather than once the extraction is done. Its result arrives as a
@@ -189,7 +190,7 @@ export class Todos implements TodosController {
 		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
-	): Promise<ExtractPromisesOutput> {
+	): Promise<ExtractPromisesOutput<Suggestion>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const [anchor, note] = await Promise.all([
 				this.dependencies.anchorCreator.create(actor, input.selection),

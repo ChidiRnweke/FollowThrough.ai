@@ -163,17 +163,17 @@ export class InMemoryMermaidCreator implements MermaidDiagramCreator {
 }
 
 export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
-	skills: Skill[] = [];
+	skills: Skill<Note>[] = [];
 	failCreation = false;
 
 	async create(
 		_actor: ActorContext,
 		note: Note,
 		input: { name: string; description: string; triggerHints: readonly string[] }
-	): Promise<Skill> {
+	): Promise<Skill<Note>> {
 		void _actor;
 		if (this.failCreation) throw new ExternalServiceError('Skill creation failed');
-		const skill: Skill = { note, isEnabled: true, ...input };
+		const skill: Skill<Note> = { note, isEnabled: true, ...input };
 		this.skills.push(skill);
 		return skill;
 	}
@@ -187,7 +187,7 @@ export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 			triggerHints: readonly string[];
 			provenanceId: ProvenanceId;
 		}
-	): Promise<Skill> {
+	): Promise<Skill<Note>> {
 		return this.create(
 			actor,
 			noteBuilder({

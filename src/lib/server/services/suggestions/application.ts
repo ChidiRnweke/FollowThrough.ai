@@ -1,4 +1,4 @@
-import type { AcceptSuggestionOutput, Suggestion } from '$lib/models/suggestions';
+import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { CreateReferenceInput, ExternalReference, ReferenceId } from '$lib/models/references';
 import type { CreateRelationshipInput, RelationshipId } from '$lib/models/relationships';
@@ -57,8 +57,11 @@ interface DrawioContent {
 	extract(source: string): string;
 }
 
+export type SuggestionArtifact =
+	Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
+
 export interface ISuggestionApplication {
-	apply(actor: ActorContext, suggestion: Suggestion): Promise<AcceptSuggestionOutput['artifact']>;
+	apply(actor: ActorContext, suggestion: Suggestion): Promise<SuggestionArtifact>;
 	revert(actor: ActorContext, suggestion: Suggestion): Promise<void>;
 }
 
@@ -78,10 +81,7 @@ export class SuggestionApplication implements ISuggestionApplication {
 		private readonly diagramProjects: DiagramProjectResolver
 	) {}
 
-	async apply(
-		actor: ActorContext,
-		suggestion: Suggestion
-	): Promise<AcceptSuggestionOutput['artifact']> {
+	async apply(actor: ActorContext, suggestion: Suggestion): Promise<SuggestionArtifact> {
 		switch (suggestion.kind) {
 			case 'todo':
 				return this.todoCreator.create(actor, suggestion.payload);

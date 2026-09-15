@@ -1,6 +1,8 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { NoteSummary } from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import * as Command from '$lib/components/ui/command';
 	import { FtDocument as FileText } from '$lib/components/icons';
 	import { commandRegistry } from '$lib/commands/registry';

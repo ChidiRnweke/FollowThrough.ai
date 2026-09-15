@@ -9,7 +9,7 @@ export interface SkillCreator {
 		actor: ActorContext,
 		note: Note,
 		input: { name: string; description: string; triggerHints: readonly string[] }
-	): Promise<Skill>;
+	): Promise<Skill<Note>>;
 	createFromSelection(
 		actor: ActorContext,
 		selection: TextSelection,
@@ -19,12 +19,12 @@ export interface SkillCreator {
 			triggerHints: readonly string[];
 			provenanceId: ProvenanceId;
 		}
-	): Promise<Skill>;
+	): Promise<Skill<Note>>;
 }
 export interface SkillFinder {
 	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
 	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill>;
+	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
 }
 
 export interface SkillEditor {
@@ -39,7 +39,7 @@ export interface SkillEditor {
 			triggerHints?: readonly string[];
 			isEnabled?: boolean;
 		}
-	): Promise<Skill>;
+	): Promise<Skill<Note>>;
 	serialize(actor: ActorContext, noteId: NoteId): Promise<string>;
 	setPinned(
 		actor: ActorContext,
@@ -59,9 +59,9 @@ export interface SkillUsageLister {
 }
 export interface SkillVersionManager {
 	listVersions(actor: ActorContext, skillNoteId: NoteId): Promise<readonly NoteRevision[]>;
-	restoreVersion(actor: ActorContext, skillNoteId: NoteId, revision: number): Promise<Skill>;
+	restoreVersion(actor: ActorContext, skillNoteId: NoteId, revision: number): Promise<Skill<Note>>;
 }
 export interface BuiltInSkillProvisioner {
 	ensure(actor: ActorContext): Promise<void>;
-	load(actor: ActorContext, key: string): Promise<Skill>;
+	load(actor: ActorContext, key: string): Promise<Skill<Note>>;
 }

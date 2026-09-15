@@ -10,7 +10,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import type { ShellContext } from '$lib/models/workspace';
+	import type { ShellContext } from '$lib/client/shell/views';
 	import {
 		todoBuilder,
 		noteBuilder,

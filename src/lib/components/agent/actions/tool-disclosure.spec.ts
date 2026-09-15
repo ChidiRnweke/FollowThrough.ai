@@ -1,9 +1,10 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import { describe, expect, it } from 'vitest';
 import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import type { NoteSummary } from '$lib/models/notes';
-import type { ShellContext } from '$lib/models/workspace';
+
 import { opensInPlace, toolDisclosure, toolFamily } from './tool-disclosure';
 
 const NOTE_ID = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';

@@ -1,5 +1,6 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
-import type { ShellContext } from '$lib/models/workspace';
+
 import {
 	normalizeLanguageModelId,
 	configuredAgentModels,

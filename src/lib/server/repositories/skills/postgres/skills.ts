@@ -1,3 +1,4 @@
+import type { Note } from '$lib/models/notes';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
@@ -11,7 +12,7 @@ import { toSkill } from '$lib/server/db/mappers';
 
 export class SkillRecords implements SkillRepository {
 	constructor(private readonly database: Database) {}
-	async findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill | undefined> {
+	async findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes, skill: schema.skills })
 			.from(schema.skills)
@@ -92,13 +93,13 @@ export class SkillRecords implements SkillRepository {
 				)
 			);
 	}
-	async insert(actor: ActorContext, skill: Skill): Promise<Skill> {
+	async insert(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
 		return this.persist(actor, skill);
 	}
-	async update(actor: ActorContext, skill: Skill): Promise<Skill> {
+	async update(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
 		return this.persist(actor, skill);
 	}
-	private async persist(actor: ActorContext, skill: Skill): Promise<Skill> {
+	private async persist(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
 		const [note] = await this.database
 			.select()
 			.from(schema.notes)

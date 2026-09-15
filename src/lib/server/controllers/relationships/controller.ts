@@ -1,3 +1,4 @@
+import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { RelateSelectionInput, RelateSelectionOutput } from '$lib/models/relationships';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
@@ -18,7 +19,7 @@ export interface RelationshipsController {
 		actor: ActorContext,
 		input: RelateSelectionInput,
 		signal?: AbortSignal
-	): Promise<RelateSelectionOutput>;
+	): Promise<RelateSelectionOutput<Suggestion>>;
 	/**
 	 * Start {@link suggestFromSelection} as a cancellable run, returning once the run
 	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
@@ -58,7 +59,7 @@ export class Relationships implements RelationshipsController {
 		actor: ActorContext,
 		input: RelateSelectionInput,
 		signal?: AbortSignal
-	): Promise<RelateSelectionOutput> {
+	): Promise<RelateSelectionOutput<Suggestion>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
 			const candidates = await this.dependencies.linkFinder.find(actor, input.selection, signal);

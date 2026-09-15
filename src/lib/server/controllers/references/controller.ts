@@ -1,3 +1,4 @@
+import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { FindReferencesInput, FindReferencesOutput } from '$lib/models/references';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
@@ -22,7 +23,7 @@ export interface ReferencesController {
 		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
-	): Promise<FindReferencesOutput>;
+	): Promise<FindReferencesOutput<Suggestion>>;
 	/**
 	 * Start {@link suggestFromSelection} as a cancellable run, returning once the run
 	 * is durable. Its result arrives as a `workflow_result` event, so a refresh mid-run
@@ -63,7 +64,7 @@ export class References implements ReferencesController {
 		actor: ActorContext,
 		input: FindReferencesInput,
 		options?: ReferenceSearchOptions
-	): Promise<FindReferencesOutput> {
+	): Promise<FindReferencesOutput<Suggestion>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
 			const found = await this.dependencies.referenceFinder.find(actor, input.selection, options);

@@ -251,7 +251,7 @@ export const toTrustPolicy = (row: typeof schema.trustPolicies.$inferSelect): Tr
 export const toSkill = (
 	note: typeof schema.notes.$inferSelect,
 	skill: typeof schema.skills.$inferSelect
-): Skill => ({
+): Skill<Note> => ({
 	note: toNote(note),
 	name: skill.name,
 	slug: skill.slug,

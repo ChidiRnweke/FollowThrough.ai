@@ -1,8 +1,10 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';

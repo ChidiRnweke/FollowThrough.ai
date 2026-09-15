@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { DiagramSuggestion } from '$lib/models/diagrams';
+	import type { DiagramSuggestion } from '$lib/models/suggestions';
+
 	import * as Dialog from '$lib/components/ui/dialog';
 	import DrawioEmbed, { type DrawioControl, type DrawioStatus } from './drawio-embed.svelte';
 	import DiagramStatus from './workspace/diagram-status.svelte';

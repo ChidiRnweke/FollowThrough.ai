@@ -1,4 +1,3 @@
-import type { Provenance } from '$lib/models/provenance';
 export type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 /** Capability-neutral contract for work that must commit or roll back as one unit. */
@@ -9,25 +8,11 @@ export interface AtomicOperation {
 	): Promise<T>;
 }
 
-type UserId = Brand<string, 'UserId'>;
-
 type ProjectId = Brand<string, 'ProjectId'>;
-
-type NoteId = Brand<string, 'NoteId'>;
-
-type TodoId = Brand<string, 'TodoId'>;
-
-type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
-
-type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
 export type DateTime = Brand<string, 'DateTime'>;
 
 export type LocalDate = Brand<string, 'LocalDate'>;
-
-type Url = Brand<string, 'Url'>;
-
-type UserRole = 'USER' | 'ADMIN' | 'WAITING';
 
 export interface PageRequest {
 	readonly cursor?: string;
@@ -39,169 +24,22 @@ export interface Page<T> {
 	readonly nextCursor?: string;
 }
 
-interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-interface ProseMirrorNodeView {
-	readonly type: string;
-	readonly text?: string;
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-
-type NoteKind = 'folder' | 'note' | 'skill';
-
-type TodoStatus = 'backlog' | 'open' | 'in_progress' | 'done' | 'cancelled';
-
-type TodoResponsibility = 'mine' | 'waiting_on';
-
-type TodoPriority = 'low' | 'medium' | 'high';
-
-type PromiseStrength = 'explicit' | 'implied' | 'tentative';
-
-interface User {
-	readonly id: UserId;
-	readonly email: string;
-	readonly displayName: string;
-	readonly avatarUrl?: Url;
-	readonly role: UserRole;
-	readonly authProvider?: string;
-	readonly authProviderId?: string;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface Project {
-	readonly id: ProjectId;
-	readonly userId: UserId;
-	readonly name: string;
-	/** Mirrors `ProjectRole`; a model domain is self-contained so it cannot import it. */
-	readonly role: 'inbox' | 'workspace';
-	readonly description?: string;
-	readonly archivedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface Note {
-	readonly id: NoteId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly parentId?: NoteId;
-	readonly kind: NoteKind;
-	readonly position: number;
-	readonly title: string;
-	readonly builtInKey?: string;
-	readonly document: ProseMirrorDocument;
-	readonly plainText: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly isPinned: boolean;
-	readonly publishedAt?: DateTime;
-	readonly archivedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-type NoteSummary = Pick<
-	Note,
-	| 'id'
-	| 'projectId'
-	| 'parentId'
-	| 'kind'
-	| 'position'
-	| 'title'
-	| 'isPinned'
-	| 'archivedAt'
-	| 'createdAt'
-	| 'updatedAt'
-	| 'currentRevision'
->;
-
-interface SourceAnchor {
-	readonly id: SourceAnchorId;
-	readonly noteId: NoteId;
-	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
-	readonly quote: string;
-	readonly prefix?: string;
-	readonly suffix?: string;
-	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Todo {
-	readonly id: TodoId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly description?: string;
-	readonly status: TodoStatus;
-	readonly responsibility: TodoResponsibility;
-	readonly priority?: TodoPriority;
-	readonly category?: string;
-	readonly waitingOn?: string;
-	readonly dueDate?: LocalDate;
-	readonly dueDateVerbatim?: string;
-	readonly promiseStrength?: PromiseStrength;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly linkedNoteId?: NoteId;
-	readonly provenanceId?: ProvenanceId;
-	readonly completedAt?: DateTime;
-	readonly deletedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface Skill {
-	readonly note: Note;
-	readonly name: string;
-	readonly slug?: string;
-	readonly description: string;
-	readonly triggerHints: readonly string[];
-	readonly license?: string;
-	readonly compatibility?: string;
-	readonly metadata?: Readonly<Record<string, string>>;
-	readonly allowImplicitInvocation?: boolean;
-	readonly isEnabled: boolean;
-}
-
-type SkillSummary = Pick<
-	Skill,
-	'name' | 'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
-> & {
-	readonly noteId: NoteId;
-	readonly projectId?: ProjectId;
-	readonly isPinned?: boolean;
-};
-
-type NoteRef = Pick<Note, 'id' | 'title'>;
-
-interface TodoView {
-	readonly todo: Todo;
-	readonly sourceNote?: NoteRef;
-	readonly originNote?: NoteRef;
-	readonly anchor?: SourceAnchor;
-	readonly provenance?: Provenance;
-}
-
 /** The Today triage aggregate: overdue, due-today, and waiting-on todos assembled in parallel, plus what else needs attention. */
-export interface TodayView {
-	readonly overdue: readonly TodoView[];
-	readonly dueToday: readonly TodoView[];
-	readonly waitingOn: readonly TodoView[];
+export interface TodayView<Task, Note> {
+	readonly overdue: readonly Task[];
+	readonly dueToday: readonly Task[];
+	readonly waitingOn: readonly Task[];
 	readonly pendingSuggestionCount: number;
-	readonly pinnedNotes: readonly NoteSummary[];
-	readonly recentNotes: readonly NoteSummary[];
+	readonly pinnedNotes: readonly Note[];
+	readonly recentNotes: readonly Note[];
 }
 
 /** Everything the app shell renders on every navigation: user, projects, note tree, skills, and pending review counts. */
-export interface ShellContext {
+export interface ShellContext<User, Project, Note, Skill> {
 	readonly user: User;
 	readonly projects: readonly Project[];
-	readonly noteTree: readonly NoteSummary[];
-	readonly skills: readonly SkillSummary[];
+	readonly noteTree: readonly Note[];
+	readonly skills: readonly Skill[];
 	readonly pendingSuggestionCount: number;
 	readonly pendingMemoryNotifications: readonly PendingMemoryNotification[];
 }

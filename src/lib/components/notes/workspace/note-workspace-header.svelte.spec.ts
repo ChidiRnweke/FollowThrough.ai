@@ -1,9 +1,9 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import NoteWorkspaceHeader from './note-workspace-header.svelte';
 import type { Note, NoteSummary } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { ShellContext } from '$lib/models/workspace';
 
 const noteId = '00000000-0000-4000-8000-000000000001' as Note['id'];
 const projectId = '10000000-0000-4000-8000-000000000001' as ProjectId;

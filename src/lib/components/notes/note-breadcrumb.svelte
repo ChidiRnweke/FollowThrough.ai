@@ -1,6 +1,8 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { Note, NoteSummary } from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
