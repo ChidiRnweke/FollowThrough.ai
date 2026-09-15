@@ -3,7 +3,6 @@ import type {
 	AttachmentId,
 	AttachmentUpload,
 	AttachmentUploadId,
-	AttachmentVersion,
 	AttachmentVersionId,
 	AttachmentView,
 	RemoveAttachmentResult

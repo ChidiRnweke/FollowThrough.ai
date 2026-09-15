@@ -252,7 +252,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		imageDescriber: overrides.imageDescriber,
 		documentOcr: overrides.documentOcr
 	});
-	const attachmentRepository = attachmentCapability.repository;
 	const attachmentStorage = attachmentCapability.storage;
 	const attachments = attachmentCapability.library;
 	const deliverables = createDeliverablesCapability({

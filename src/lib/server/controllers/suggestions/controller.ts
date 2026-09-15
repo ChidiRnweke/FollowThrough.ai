@@ -6,7 +6,7 @@ import type {
 	SuggestionArtifact
 } from '$lib/server/services/suggestions/application';
 import type { ActorContext } from '$lib/models/identity';
-import type { Diagram, DiagramId, DrawioDiagram } from '$lib/models/diagrams';
+import type { Diagram } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type {
 	AcceptSuggestionInput,
