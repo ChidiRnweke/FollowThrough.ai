@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.8](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.7...v0.5.8) (2026-09-15)
+
+
+### Bug Fixes
+
+* **agent:** commit run results only when completion wins ([#60](https://github.com/ChidiRnweke/FollowThrough.ai/issues/60)) ([8bf0d62](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8bf0d622eabdbaa5e4f15eadd77ac3787ef355bf))
+* **workspace:** show an opened note legibly on its first frame ([#62](https://github.com/ChidiRnweke/FollowThrough.ai/issues/62)) ([b9055b7](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b9055b725918e1e8315f8d53de9ddb8bce076ef6))
+
 ## [0.5.7](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.6...v0.5.7) (2026-09-15)
 
 
