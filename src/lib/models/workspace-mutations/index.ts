@@ -1,3 +1,5 @@
+import { applySkillMetadataEdit } from '$lib/models/skills';
+import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
 import type {
 	MemoryEntry,
 	MemoryEntryId,
@@ -8,12 +10,24 @@ import { z } from 'zod';
 import { appliedWriteProofSchema } from '$lib/models/outbox';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
 import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
-import type { DiagramId } from '$lib/models/diagrams';
-import { applyTodoEdit, type Todo, type UpdateTodoInput } from '$lib/models/todos';
-import type { Project, ProjectId } from '$lib/models/projects';
+import { decideDiagramTrash, type DiagramId } from '$lib/models/diagrams';
+import {
+	applyTodoEdit,
+	decideTodoCreation,
+	type Todo,
+	type UpdateTodoInput
+} from '$lib/models/todos';
+import { decideProjectDetails, type Project, type ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import { type Note, type NoteId } from '$lib/models/notes';
+import {
+	applyNoteDraftEdit,
+	decideNoteCreation,
+	decideNoteArchive,
+	decideNoteRestore,
+	type Note,
+	type NoteId
+} from '$lib/models/notes';
 import type { WriteContent, WriteDraft } from '$lib/models/outbox';
 import { syncEtagSchema } from '$lib/models/sync';
 import {
@@ -365,14 +379,18 @@ export const newProject = (
 	userId: UserId,
 	name: string,
 	timestamp: DateTime
-): Project => ({
-	id,
-	userId,
-	name: name.trim(),
-	role: 'workspace',
-	createdAt: timestamp,
-	updatedAt: timestamp
-});
+): Project => {
+	const decision = decideProjectDetails({ name });
+	if (decision.kind === 'invalid') throw new Error(decision.message);
+	return {
+		id,
+		userId,
+		name: decision.name,
+		role: 'workspace',
+		createdAt: timestamp,
+		updatedAt: timestamp
+	};
+};
 export const newNote = (
 	id: NoteId,
 	project: Project,
@@ -382,34 +400,23 @@ export const newNote = (
 	timestamp: DateTime,
 	parentId?: NoteId
 ): Note => {
-	if (project.archivedAt) throw new Error('An archived project cannot receive new notes');
-	if (parentId) {
-		const parent = entries.find((entry) => entry.id === parentId && entry.projectId === project.id);
-		if (!parent || parent.kind !== 'folder' || parent.archivedAt)
-			throw new Error('An active parent folder is required');
-	}
-	return {
-		id,
-		userId: project.userId,
-		projectId: project.id,
-		parentId,
-		kind,
-		title: title.trim(),
-		// Folder creation counts active tree entries; note creation counts all stored siblings.
-		position: entries.filter(
-			(entry) =>
-				entry.projectId === project.id &&
-				entry.parentId === parentId &&
-				(kind === 'note' || !entry.archivedAt)
-		).length,
-		document: { type: 'doc', content: [] },
-		plainText: '',
-		currentRevision: 1,
-		publishedRevision: 0,
-		isPinned: false,
-		createdAt: timestamp,
-		updatedAt: timestamp
-	};
+	const decision = decideNoteCreation(
+		{ id, title, kind, parentId },
+		{
+			project,
+			parent: entries.find((entry) => entry.id === parentId) ?? null,
+			// Folder repositories expose active entries; ordinary note creation counts all stored siblings.
+			siblingCount: entries.filter(
+				(entry) =>
+					entry.projectId === project.id &&
+					entry.parentId === parentId &&
+					(kind === 'note' || !entry.archivedAt)
+			).length
+		},
+		timestamp
+	);
+	if (decision.kind === 'invalid') throw new Error(decision.message);
+	return decision.note;
 };
 
 /** Validate identity once for every feature that appends to the shared outbox. */
@@ -446,12 +453,11 @@ export const noteTrashWrite = (
 	timestamp: DateTime
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
 	if (action === 'archive') {
-		if (note.archivedAt) throw new Error('The note is already archived');
-		if (
-			note.kind === 'folder' &&
+		const decision = decideNoteArchive(
+			note,
 			notes.some((entry) => entry.parentId === note.id && !entry.archivedAt)
-		)
-			throw new Error('A folder with active contents cannot be archived');
+		);
+		if (decision.kind === 'invalid') throw new Error(decision.message);
 		return {
 			command: { kind: 'archiveNote', noteId: note.id },
 			local: { type: 'notes', value: { ...note, archivedAt: timestamp, updatedAt: timestamp } },
@@ -459,21 +465,22 @@ export const noteTrashWrite = (
 			references: []
 		};
 	}
-	if (!note.archivedAt) throw new Error('The note is not archived');
+	const parent = notes.find((entry) => entry.id === note.parentId);
+	const decision = decideNoteRestore(note, parent ?? null);
+	if (decision.kind === 'invalid') throw new Error(decision.message);
 	const { archivedAt, ...rest } = note;
 	void archivedAt;
-	const parent = notes.find((entry) => entry.id === note.parentId);
-	const orphaned = Boolean(note.parentId) && (!parent || Boolean(parent.archivedAt));
 	const { parentId, ...detached } = rest;
 	void parentId;
-	const local: Note = orphaned
-		? {
-				...detached,
-				position: notes.filter((entry) => entry.projectId === note.projectId && !entry.parentId)
-					.length,
-				updatedAt: timestamp
-			}
-		: { ...rest, updatedAt: timestamp };
+	const local: Note =
+		decision.placement === 'root'
+			? {
+					...detached,
+					position: notes.filter((entry) => entry.projectId === note.projectId && !entry.parentId)
+						.length,
+					updatedAt: timestamp
+				}
+			: { ...rest, updatedAt: timestamp };
 	return {
 		command: { kind: 'restoreNote', noteId: note.id },
 		local: { type: 'notes', value: local },
@@ -489,34 +496,24 @@ export const newMemory = (
 	userId: UserId,
 	input: CreateMemoryEntryInput,
 	timestamp: DateTime
-): MemoryEntry => ({
-	id,
-	userId,
-	projectId: input.projectId,
-	content: input.content.trim(),
-	type: input.type,
-	shareWithAgents: input.shareWithAgents ?? true,
-	createdAt: timestamp,
-	updatedAt: timestamp
-});
+): MemoryEntry => {
+	const decision = decideMemoryCreation(input, { id, userId, timestamp });
+	if (decision.kind === 'invalid') throw new Error(decision.message);
+	return decision.entry;
+};
 export const memoryWrite = (
 	entry: MemoryEntry,
 	patch: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>
-): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
-	command: { kind: 'updateMemory', memoryEntryId: entry.id, ...patch },
-	local: {
-		type: 'memory_entries',
-		value: {
-			...entry,
-			...patch,
-			content: patch.content?.trim() ?? entry.content,
-			shareWithAgents: patch.shareWithAgents ?? entry.shareWithAgents,
-			type: patch.type === null ? undefined : (patch.type ?? entry.type)
-		}
-	},
-	coalesce: null,
-	references: []
-});
+): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
+	const decision = decideMemoryEdit(entry, patch, entry.updatedAt);
+	if (decision.kind === 'invalid') throw new Error(decision.message);
+	return {
+		command: { kind: 'updateMemory', memoryEntryId: entry.id, ...patch },
+		local: { type: 'memory_entries', value: decision.entry },
+		coalesce: null,
+		references: []
+	};
+};
 
 export const skillMetadataWrite = (
 	entry: WorkspaceValues['skills'],
@@ -525,12 +522,7 @@ export const skillMetadataWrite = (
 	command: { kind: 'updateSkill', noteId: entry.noteId, ...patch },
 	local: {
 		type: 'skills',
-		value: {
-			...entry,
-			name: patch.displayName?.trim() || entry.name,
-			description: patch.description?.trim() || entry.description,
-			isEnabled: patch.isEnabled ?? entry.isEnabled
-		}
+		value: { ...entry, ...applySkillMetadataEdit(entry, patch) }
 	},
 	coalesce: null,
 	references: []
@@ -554,10 +546,39 @@ export const workspaceWriteCancellationSchema = z.object({
 export type WorkspaceWriteCancellation = z.infer<typeof workspaceWriteCancellationSchema>;
 
 export type PreparedWorkspaceCommand = Exclude<WorkspaceCommand, { kind: 'discardNoteDraft' }>;
+/** Commands whose meaning depends on a complete collection rather than one loaded record. */
+export function workspaceCommandNeedsInventory(
+	command: PreparedWorkspaceCommand,
+	observed: WorkspaceRecord | null,
+	records: ReadonlyMap<string, WorkspaceRecord>
+): boolean {
+	switch (command.kind) {
+		case 'createNote':
+		case 'createFolder':
+			return true;
+		case 'archiveNote':
+			return observed?.type === 'notes' && observed.value.kind === 'folder';
+		case 'restoreNote': {
+			if (observed?.type !== 'notes') return false;
+			const parent = observed.value.parentId
+				? records.get(workspaceResourceKey({ type: 'notes', id: [observed.value.parentId] }))
+				: undefined;
+			const decision = decideNoteRestore(
+				observed.value,
+				parent?.type === 'notes' ? parent.value : null
+			);
+			return decision.kind === 'restore' && decision.placement === 'root';
+		}
+		default:
+			return false;
+	}
+}
+
 export interface WorkspaceCommandContext {
 	readonly userId: UserId;
 	readonly now: DateTime;
 	readonly records: ReadonlyMap<string, WorkspaceRecord>;
+	readonly inventory: 'complete' | 'partial';
 }
 
 /** Derive local effects from the command and the version this editor actually observed. */
@@ -566,6 +587,13 @@ export const prepareWorkspaceCommand = (
 	observed: WorkspaceRecord | null,
 	context: WorkspaceCommandContext
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
+	if (
+		workspaceCommandNeedsInventory(command, observed, context.records) &&
+		context.inventory !== 'complete'
+	)
+		throw new Error(
+			'Required workspace data is not available on this device. Reconnect and retry.'
+		);
 	const { userId, now, records } = context;
 	const value = <K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K] => {
 		if (!observed || !isWorkspaceRecord(observed, type))
@@ -606,11 +634,19 @@ export const prepareWorkspaceCommand = (
 					: [])
 			]);
 		}
-		case 'renameProject':
+		case 'renameProject': {
+			const decision = decideProjectDetails(command);
+			if (decision.kind === 'invalid') throw new Error(decision.message);
 			return content({
 				type: 'projects',
-				value: { ...value('projects'), name: command.name.trim(), updatedAt: now }
+				value: {
+					...value('projects'),
+					name: decision.name,
+					description: decision.description,
+					updatedAt: now
+				}
 			});
+		}
 		case 'archiveProject':
 			return content({
 				type: 'projects',
@@ -636,14 +672,7 @@ export const prepareWorkspaceCommand = (
 			return content(
 				{
 					type: 'notes',
-					value: {
-						...note,
-						document: command.document,
-						plainText: command.plainText,
-						...(command.title !== undefined ? { title: command.title.trim() } : {}),
-						...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {}),
-						updatedAt: now
-					}
+					value: applyNoteDraftEdit(note, command, now)
 				},
 				[],
 				'document'
@@ -664,24 +693,11 @@ export const prepareWorkspaceCommand = (
 				notes(),
 				now
 			);
-		case 'createTodo':
-			return content(
-				{
-					type: 'todos',
-					value: {
-						id: command.id,
-						userId,
-						projectId: command.projectId,
-						title: command.title.trim(),
-						responsibility: command.responsibility,
-						status: command.status ?? 'open',
-						createdAt: now,
-						updatedAt: now,
-						...(command.status === 'done' ? { completedAt: now } : {})
-					}
-				},
-				[projectKey(command.projectId)]
-			);
+		case 'createTodo': {
+			const decision = decideTodoCreation(command, { id: command.id, userId, timestamp: now });
+			if (decision.kind === 'invalid') throw new Error(decision.message);
+			return content({ type: 'todos', value: decision.todo }, [projectKey(command.projectId)]);
+		}
 		case 'updateTodo': {
 			const { kind, todoId, ...patch } = command;
 			void kind;
@@ -765,12 +781,14 @@ export const prepareWorkspaceCommand = (
 		case 'restoreDiagram':
 		case 'deleteDiagram': {
 			const diagram = value('diagrams');
-			if (command.kind === 'archiveDiagram' ? Boolean(diagram.archivedAt) : !diagram.archivedAt)
-				throw new Error(
-					command.kind === 'archiveDiagram'
-						? 'The diagram is already in the trash'
-						: 'The diagram is not in the trash'
-				);
+			const action =
+				command.kind === 'archiveDiagram'
+					? 'archive'
+					: command.kind === 'restoreDiagram'
+						? 'restore'
+						: 'delete';
+			const decision = decideDiagramTrash(action, diagram);
+			if (decision.kind === 'invalid') throw new Error(decision.message);
 			if (command.kind === 'deleteDiagram') return content(null);
 			const { archivedAt, ...restored } = diagram;
 			void archivedAt;

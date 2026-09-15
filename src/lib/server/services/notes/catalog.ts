@@ -1,3 +1,4 @@
+import { decideNoteCreation, decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -106,26 +107,24 @@ export class NoteCatalog {
 
 	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {
 		const note = await this.get(actor, noteId);
-		if (note.archivedAt) throw new ValidationError('The note is already archived');
-		if (note.kind === 'folder') {
-			const active = await this.notes.listActive(actor, note.projectId);
-			if (active.some((entry) => entry.parentId === noteId))
-				throw new ValidationError('A folder with active contents cannot be archived');
-		}
+		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
+		const decision = decideNoteArchive(
+			note,
+			active.some((entry) => entry.parentId === noteId)
+		);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		return this.notes.update(actor, { ...note, archivedAt: now(), updatedAt: now() });
 	}
 
 	async restore(actor: ActorContext, noteId: NoteId): Promise<Note> {
 		const note = await this.get(actor, noteId);
-		if (!note.archivedAt) throw new ValidationError('The note is not archived');
+		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
+		const decision = decideNoteRestore(note, parent ?? null);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		const { archivedAt, ...rest } = note;
 		void archivedAt;
-		// A note trashed inside a folder that was trashed after it would come back
-		// parented to something invisible, so it would restore into nowhere. Reattach it
-		// to the project root instead of leaving it stranded.
-		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
-		const orphaned = Boolean(note.parentId) && (!parent || Boolean(parent.archivedAt));
-		if (!orphaned) return this.notes.update(actor, { ...rest, updatedAt: now() });
+		if (decision.placement === 'keep')
+			return this.notes.update(actor, { ...rest, updatedAt: now() });
 		const { parentId, ...detached } = rest;
 		void parentId;
 		return this.notes.update(actor, {
@@ -319,31 +318,22 @@ export class NoteCatalog {
 	}
 
 	private async createNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
-		const title = input.title.trim();
-		if (!title) throw new ValidationError('Note title is required');
 		const project = await this.resolveProject(actor, input.projectId);
-		if (input.parentId) {
-			const parent = await this.get(actor, input.parentId);
-			if (parent.projectId !== project.id) throw new NotFoundError('Parent folder was not found');
-			if (parent.kind !== 'folder') throw new ValidationError('A parent must be a folder');
+		const parent = input.parentId ? await this.notes.findById(actor, input.parentId) : undefined;
+		const decision = decideNoteCreation(
+			{ ...input, id: input.id ?? (crypto.randomUUID() as NoteId), kind: 'note' },
+			{
+				project,
+				parent: parent ?? null,
+				siblingCount: await this.notes.countSiblings(actor, project.id, input.parentId)
+			},
+			now()
+		);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+			throw new ValidationError(decision.message);
 		}
-		const timestamp = now();
-		return this.notes.insert(actor, {
-			id: input.id ?? (crypto.randomUUID() as NoteId),
-			userId: actor.userId,
-			projectId: project.id,
-			kind: 'note',
-			parentId: input.parentId,
-			position: await this.notes.countSiblings(actor, project.id, input.parentId),
-			title,
-			document: { type: 'doc', content: [] },
-			plainText: '',
-			currentRevision: 1,
-			publishedRevision: 0,
-			isPinned: false,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		});
+		return this.notes.insert(actor, decision.note);
 	}
 
 	private async createAnchor(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {

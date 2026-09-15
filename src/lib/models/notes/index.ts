@@ -1171,3 +1171,109 @@ export function drawioReferencesIn(
 		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
 	return ids;
 }
+
+/** Facts needed to archive a note; document content does not affect this decision. */
+export function decideNoteArchive(
+	note: Pick<Note, 'kind' | 'archivedAt'>,
+	hasActiveChildren: boolean
+): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
+	if (note.archivedAt) return { kind: 'invalid', message: 'The note is already archived' };
+	if (note.kind === 'folder' && hasActiveChildren)
+		return { kind: 'invalid', message: 'A folder with active contents cannot be archived' };
+	return { kind: 'allowed' };
+}
+
+/** A missing or archived parent sends a restored note to the end of its project root. */
+export function decideNoteRestore(
+	note: Pick<Note, 'parentId' | 'position' | 'archivedAt'>,
+	parent: Pick<Note, 'archivedAt'> | null
+): { kind: 'invalid'; message: string } | { kind: 'restore'; placement: 'keep' | 'root' } {
+	if (!note.archivedAt) return { kind: 'invalid', message: 'The note is not archived' };
+	return {
+		kind: 'restore',
+		placement: note.parentId && (!parent || parent.archivedAt) ? 'root' : 'keep'
+	};
+}
+
+/** Resolve creation against a known project, parent and authoritative sibling count. */
+export function decideNoteCreation(
+	input: {
+		readonly id: NoteId;
+		readonly title: string;
+		readonly kind: 'note' | 'folder';
+		readonly parentId?: NoteId;
+	},
+	facts: {
+		readonly project: {
+			readonly id: ProjectId;
+			readonly userId: UserId;
+			readonly archivedAt?: DateTime;
+		};
+		readonly parent: Pick<Note, 'projectId' | 'kind' | 'archivedAt'> | null;
+		readonly siblingCount: number;
+	},
+	timestamp: DateTime
+):
+	| { kind: 'create'; note: Note }
+	| { kind: 'invalid'; code: 'VALIDATION' | 'NOT_FOUND'; message: string } {
+	const title = input.title.trim();
+	if (!title)
+		return {
+			kind: 'invalid',
+			code: 'VALIDATION',
+			message: input.kind === 'folder' ? 'Folder name is required' : 'Note title is required'
+		};
+	if (facts.project.archivedAt)
+		return {
+			kind: 'invalid',
+			code: 'VALIDATION',
+			message: 'An archived project cannot receive new notes'
+		};
+	if (input.parentId) {
+		if (!facts.parent || facts.parent.projectId !== facts.project.id)
+			return { kind: 'invalid', code: 'NOT_FOUND', message: 'An active parent folder is required' };
+		if (facts.parent.kind !== 'folder')
+			return { kind: 'invalid', code: 'VALIDATION', message: 'A parent must be a folder' };
+		if (facts.parent.archivedAt)
+			return {
+				kind: 'invalid',
+				code: 'VALIDATION',
+				message: 'An active parent folder is required'
+			};
+	}
+	return {
+		kind: 'create',
+		note: {
+			id: input.id,
+			userId: facts.project.userId,
+			projectId: facts.project.id,
+			parentId: input.parentId,
+			kind: input.kind,
+			title,
+			position: facts.siblingCount,
+			document: { type: 'doc', content: [] },
+			plainText: '',
+			currentRevision: 1,
+			publishedRevision: 0,
+			isPinned: false,
+			createdAt: timestamp,
+			updatedAt: timestamp
+		}
+	};
+}
+
+/** Apply authored fields while retaining the revision the editor actually observed. */
+export function applyNoteDraftEdit(
+	note: Note,
+	input: Pick<Note, 'document' | 'plainText'> & Partial<Pick<Note, 'title' | 'isPinned'>>,
+	timestamp: DateTime
+): Note {
+	return {
+		...note,
+		document: input.document,
+		plainText: input.plainText,
+		...(input.title !== undefined ? { title: input.title.trim() } : {}),
+		...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
+		updatedAt: timestamp
+	};
+}
