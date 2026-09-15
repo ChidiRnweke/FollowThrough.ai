@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, lt, sql, inArray, isNotNull } from 'drizzle-orm';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type {
 	Attachment,
@@ -42,7 +42,7 @@ const toView = (
 		projectId: attachment.projectId as ProjectId,
 		...(attachment.noteId ? { noteId: attachment.noteId as NoteId } : {}),
 		path: attachment.path,
-		currentVersionId: version.id as AttachmentVersion['id'],
+		currentVersionId: attachment.currentVersionId as AttachmentVersion['id'],
 		createdAt: instant(attachment.createdAt),
 		updatedAt: instant(attachment.updatedAt)
 	},
@@ -294,10 +294,10 @@ export class AttachmentRecords implements AttachmentRepository {
 		const [row] = await this.database
 			.update(schema.attachmentVersions)
 			.set({
-				parserKind: version.parserKind,
-				extractedText: version.extractedText,
+				parserKind: version.parserKind ?? null,
+				extractedText: version.extractedText ?? null,
 				processingStatus: version.processingStatus,
-				processingFailure: version.processingFailure,
+				processingFailure: version.processingFailure ?? null,
 				processedAt: version.processedAt ? new Date(version.processedAt) : null
 			})
 			.where(eq(schema.attachmentVersions.id, version.id))
@@ -307,16 +307,42 @@ export class AttachmentRecords implements AttachmentRepository {
 		return view;
 	}
 
-	async failInterrupted(): Promise<number> {
-		const rows = await this.database
-			.update(schema.attachmentVersions)
-			.set({
-				processingStatus: 'failed',
-				processingFailure: 'Processing was interrupted by a restart',
-				processedAt: new Date()
-			})
-			.where(eq(schema.attachmentVersions.processingStatus, 'processing'))
-			.returning({ id: schema.attachmentVersions.id });
-		return rows.length;
+	async listPendingVersions() {
+		return (
+			await this.database
+				.select({ userId: schema.attachments.userId, versionId: schema.attachmentVersions.id })
+				.from(schema.attachmentVersions)
+				.innerJoin(
+					schema.attachments,
+					eq(schema.attachments.id, schema.attachmentVersions.attachmentId)
+				)
+				.where(
+					and(
+						inArray(schema.attachmentVersions.processingStatus, ['queued', 'processing']),
+						isNotNull(schema.attachments.currentVersionId)
+					)
+				)
+		).map((row) => ({
+			userId: row.userId as UserId,
+			versionId: row.versionId as AttachmentVersion['id']
+		}));
+	}
+	async findVersionForUpdate(actor: ActorContext, versionId: AttachmentVersion['id']) {
+		const [row] = await this.database
+			.select({ attachment: schema.attachments, version: schema.attachmentVersions })
+			.from(schema.attachments)
+			.innerJoin(
+				schema.attachmentVersions,
+				eq(schema.attachmentVersions.attachmentId, schema.attachments.id)
+			)
+			.where(
+				and(
+					eq(schema.attachments.userId, actor.userId),
+					eq(schema.attachmentVersions.id, versionId),
+					isNotNull(schema.attachments.currentVersionId)
+				)
+			)
+			.for('update');
+		return row ? toView(row.attachment, row.version) : undefined;
 	}
 }

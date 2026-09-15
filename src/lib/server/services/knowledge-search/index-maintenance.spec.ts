@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EmbeddedNoteIndexer, TokenAwareChunker } from './indexing';
+import { ContentIndex, TokenAwareChunker } from './indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -21,7 +21,7 @@ class CountingEmbeddingClient extends InMemoryEmbeddingClient {
 }
 
 const deferredIndexer = (repository: InMemorySearchRepository, client: CountingEmbeddingClient) =>
-	new EmbeddedNoteIndexer(repository, client, new TokenAwareChunker(200, 0), true);
+	new ContentIndex(repository, client, new TokenAwareChunker(200, 0), true).notes;
 
 const backfill = (repository: InMemorySearchRepository, client: CountingEmbeddingClient) =>
 	new KnowledgeIndexMaintenance(repository, client, immediateTransactions, {

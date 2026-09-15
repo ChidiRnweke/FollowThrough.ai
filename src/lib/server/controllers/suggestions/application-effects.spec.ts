@@ -1,3 +1,4 @@
+import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
@@ -17,7 +18,7 @@ import {
 	memorySuggestionBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemorySearchRepository,
 	InMemoryEmbeddingClient
@@ -61,7 +62,8 @@ describe('Proposal effect coordination', () => {
 						changes: [{ kind: 'created', after: { type: 'diagrams', value: generated } }]
 					})
 				},
-				drawioReviewSaver: { save: async () => reviewed },
+				drawioWrites: { write: async () => reviewed },
+				diagramIndexer: new InMemoryDiagrams(),
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects])
 			})
 		);
@@ -82,7 +84,7 @@ describe('Proposal effect coordination', () => {
 		const suggestions = new InMemorySuggestions();
 		const effects = new InMemorySuggestionEffects();
 		const search = new InMemorySearchRepository();
-		const indexer = new EmbeddedMemoryIndexer(search, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(search, new InMemoryEmbeddingClient()).memories;
 		const before = memoryEntryBuilder();
 		const deleted = { ...before, deletedAt: testNow };
 		const replacement = memoryEntryBuilder({

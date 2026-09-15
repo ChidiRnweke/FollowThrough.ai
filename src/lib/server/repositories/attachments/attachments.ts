@@ -46,7 +46,11 @@ export interface AttachmentRepository {
 	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
 	removeById(actor: ActorContext, id: Attachment['id']): Promise<void>;
 	updateVersion(actor: ActorContext, version: AttachmentVersion): Promise<AttachmentView>;
-	failInterrupted(): Promise<number>;
+	listPendingVersions(): Promise<readonly { userId: UserId; versionId: AttachmentVersion['id'] }[]>;
+	findVersionForUpdate(
+		actor: ActorContext,
+		versionId: AttachmentVersion['id']
+	): Promise<AttachmentView | undefined>;
 	/**
 	 * Upload reservations that expired before `before` and were never finalized.
 	 * Their staged objects are still sitting in the bucket; the sweep worker uses

@@ -1,3 +1,4 @@
+export type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 import type { ActorContext } from '$lib/models/identity';

@@ -11,7 +11,7 @@ import type { AttachmentManager } from '$lib/server/services/attachments/contrac
  * retrieval of either the original file or its parsed text content.
  *
  * Every mutation commits through the transaction runner before any background work is
- * kicked off, so a half-persisted attachment is never observable.
+ * discovered by the worker, so a half-persisted attachment is never observable.
  */
 export interface AttachmentsController {
 	/**
@@ -28,10 +28,8 @@ export interface AttachmentsController {
 	/**
 	 * Finalize a completed upload and return the resulting attachment view.
 	 *
-	 * The record is committed in a transaction first, and only then is OCR/image
-	 * processing started in the background — processing begins only once the upload is
-	 * durably recorded, so a crash in between never leaves an unprocessed attachment that
-	 * the client thinks is ready.
+	 * The worker discovers the queued version after this transaction commits.
+	 * A restart between upload completion and extraction leaves that version queued.
 	 */
 	complete(
 		actor: ActorContext,
@@ -97,6 +95,7 @@ export interface AttachmentsController {
 /** Everything the {@link AttachmentsController} needs: the attachment manager and a transaction runner for atomic mutations. */
 export interface AttachmentsDependencies {
 	attachments: AttachmentManager;
+	attachmentIndexer: { remove(actor: ActorContext, attachmentId: AttachmentId): Promise<void> };
 	transactionRunner: TransactionRunner;
 }
 
@@ -106,30 +105,16 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.attachments.initiate(actor, input);
 	}
 	complete(actor: ActorContext, uploadId: AttachmentUploadId) {
-		return this.completeAndStart(actor, uploadId);
-	}
-	private async completeAndStart(actor: ActorContext, uploadId: AttachmentUploadId) {
-		const attachment = await this.dependencies.transactionRunner.run(() =>
+		return this.dependencies.transactionRunner.run(() =>
 			this.dependencies.attachments.complete(actor, uploadId)
 		);
-		this.dependencies.attachments.startProcessing(actor, attachment);
-		return attachment;
 	}
 	completeForTodo(actor: ActorContext, uploadId: AttachmentUploadId, todoId: TodoId) {
-		return this.completeForTodoAndStart(actor, uploadId, todoId);
-	}
-	private async completeForTodoAndStart(
-		actor: ActorContext,
-		uploadId: AttachmentUploadId,
-		todoId: TodoId
-	) {
-		const attachment = await this.dependencies.transactionRunner.run(async () => {
+		return this.dependencies.transactionRunner.run(async () => {
 			const completed = await this.dependencies.attachments.complete(actor, uploadId);
 			await this.dependencies.attachments.linkToTodo(actor, completed.attachment.id, todoId);
 			return completed;
 		});
-		this.dependencies.attachments.startProcessing(actor, attachment);
-		return attachment;
 	}
 	list(actor: ActorContext, noteId: NoteId) {
 		return this.dependencies.attachments.list(actor, noteId);
@@ -144,12 +129,17 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.attachments.downloadById(actor, attachmentId);
 	}
 	retry(actor: ActorContext, attachmentId: AttachmentId) {
-		return this.dependencies.attachments.retry(actor, attachmentId);
+		return this.dependencies.transactionRunner.run(() =>
+			this.dependencies.attachments.retry(actor, attachmentId)
+		);
 	}
 	removeById(actor: ActorContext, attachmentId: AttachmentId) {
-		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.attachments.removeById(actor, attachmentId)
-		);
+		return this.dependencies.transactionRunner.run(async () => {
+			const result = await this.dependencies.attachments.removeById(actor, attachmentId);
+			if (result.kind === 'removed')
+				await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
+			return result;
+		});
 	}
 	download(actor: ActorContext, noteId: NoteId, path: string) {
 		return this.dependencies.attachments.download(actor, noteId, path);
@@ -158,8 +148,9 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.attachments.read(actor, noteId, path, offset, limit);
 	}
 	remove(actor: ActorContext, noteId: NoteId, path: string) {
-		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.attachments.remove(actor, noteId, path)
-		);
+		return this.dependencies.transactionRunner.run(async () => {
+			const attachmentId = await this.dependencies.attachments.remove(actor, noteId, path);
+			if (attachmentId) await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
+		});
 	}
 }

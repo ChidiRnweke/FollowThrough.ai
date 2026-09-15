@@ -26,14 +26,10 @@ worktree changes.
 
 - **Attachment indexing stops after 50 chunks.** It indexes the head of a long file and silently
   makes the rest unavailable to retrieval.
-- **Attachment processing can stay queued after a crash.** Startup recovery handles `processing`
-  rows but may miss a row committed as `queued` before in-process work starts.
 - **Expired upload cleanup can orphan bytes.** Some storage deletion failures are caught before the
   database pointer is removed.
 - **Some exports omit images without a clear user message.** Partial output must state what it
   omitted.
-- **Attachment fallback comments are stale.** They describe behavior that no longer matches the
-  active pipeline.
 
 ## Hidden fallback and failure
 

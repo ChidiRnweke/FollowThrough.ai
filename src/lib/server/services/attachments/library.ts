@@ -1,10 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentPreferences } from '$lib/models/agent';
 import type {
 	AttachmentId,
 	AttachmentUpload,
 	AttachmentUploadId,
-	AttachmentVersion,
 	AttachmentVersionId,
 	AttachmentView,
 	RemoveAttachmentResult
@@ -16,54 +14,8 @@ import type { TodoId } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
-import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
-import { resolveAttachmentVisionModel } from '$lib/models/agent';
-import { isOcrImage, isOcrSupported } from '$lib/models/attachments/formats';
 
-interface AttachmentStorage {
-	createUploadUrl(input: {
-		objectKey: string;
-		mediaType: string;
-		byteSize: number;
-		checksumSha256: string;
-		expiresInSeconds: number;
-	}): Promise<string>;
-	createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
-	stat(objectKey: string): Promise<{ byteSize: number; checksumSha256?: string }>;
-	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
-	promote(sourceKey: string, destinationKey: string): Promise<void>;
-	remove(objectKey: string): Promise<void>;
-}
-interface AttachmentParser {
-	readonly kind: string;
-	parse(bytes: Uint8Array): Promise<string>;
-}
-interface AttachmentParsers {
-	select(mediaType: string, path: string): AttachmentParser | undefined;
-}
-
-interface AttachmentPreferencesStore {
-	get(actor: ActorContext): Promise<AgentPreferences>;
-}
-interface AttachmentIndexer {
-	index(
-		actor: ActorContext,
-		attachment: AttachmentView['attachment'],
-		text: string
-	): Promise<{ truncated: boolean }>;
-}
-interface DocumentOcr {
-	parse(input: {
-		documentUrl: string;
-		kind: 'document' | 'image';
-		fileName: string;
-		visionModel: string;
-		maxPages?: number;
-	}): Promise<string>;
-}
-interface ImageDescriber {
-	describe(input: { imageDataUrl: string; context?: string; model: string }): Promise<string>;
-}
+import type { IAttachmentStorage } from '$lib/server/repositories/attachments/storage';
 
 const validateAttachmentPath = (value: string): string => {
 	const path = value.trim().replaceAll('\\', '/');
@@ -80,14 +32,6 @@ const validateAttachmentPath = (value: string): string => {
 // module-load-time read would freeze whatever was set before the first hydration.
 const maxAttachmentBytes = (): number =>
 	Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
-const maxParseBytes = (): number =>
-	Number(process.env.ATTACHMENT_PARSE_MAX_BYTES ?? maxAttachmentBytes());
-/** The OpenRouter model that describes the images OCR extracts from a document. */
-const deploymentVisionModel = (): string =>
-	process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite';
-const ocrMaxPages = (): number => Number(process.env.ATTACHMENT_OCR_MAX_PAGES ?? 100);
-/** Long enough for the OCR service to fetch a large document, short enough to stay a capability. */
-const OCR_URL_TTL_SECONDS = 900;
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -95,25 +39,8 @@ export class AttachmentLibrary {
 	constructor(
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository,
-		private readonly storage: AttachmentStorage,
-		private readonly parsers: AttachmentParsers,
-		private readonly documentOcr: DocumentOcr,
-		private readonly imageDescriber: ImageDescriber,
-		private readonly retrieval?: RetrievalIndexRepository,
-		private readonly indexer?: AttachmentIndexer,
-		private readonly preferences?: AttachmentPreferencesStore
+		private readonly storage: IAttachmentStorage
 	) {}
-
-	/**
-	 * The model that reads this user's attachments. Processing runs off the
-	 * request path and must not fail because a preference could not be read, so a
-	 * lookup failure falls back to the environment rather than aborting the
-	 * attachment.
-	 */
-	private async visionModel(actor: ActorContext): Promise<string> {
-		if (!this.preferences) return deploymentVisionModel();
-		return resolveAttachmentVisionModel(await this.preferences.get(actor), deploymentVisionModel());
-	}
 
 	async initiate(
 		actor: ActorContext,
@@ -206,13 +133,6 @@ export class AttachmentLibrary {
 		return view;
 	}
 
-	startProcessing(actor: ActorContext, attachment: AttachmentView): void {
-		// audit-allow: silent-catch — process() persists ordinary failures on the attachment; this terminal handler reports failure of that persistence.
-		void this.process(actor, attachment).catch((error) =>
-			console.error('Could not persist attachment processing failure', error)
-		);
-	}
-
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {
 		return this.attachments.list(actor, noteId);
 	}
@@ -246,10 +166,6 @@ export class AttachmentLibrary {
 			processingFailure: undefined,
 			processedAt: undefined
 		});
-		// audit-allow: silent-catch — process() persists ordinary retry failures; this terminal handler reports failure of that persistence.
-		void this.process(actor, queued).catch((error) =>
-			console.error('Could not persist attachment retry failure', error)
-		);
 		return queued;
 	}
 
@@ -264,11 +180,9 @@ export class AttachmentLibrary {
 			if (!note) throw new NotFoundError('Containing note was not found');
 			if (documentReferencesAttachment(note.document, attachmentId))
 				return { kind: 'referenced-by-note', note: { id: note.id, title: note.title } };
-			if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
 			await this.attachments.remove(actor, note.id, found.attachment.path);
 			return { kind: 'removed' };
 		}
-		if (this.retrieval) await this.retrieval.deleteForAttachment(actor, attachmentId);
 		await this.attachments.removeById(actor, attachmentId);
 		await this.storage.remove(found.version.objectKey);
 		return { kind: 'removed' };
@@ -302,118 +216,15 @@ export class AttachmentLibrary {
 		};
 	}
 
-	async remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void> {
+	async remove(
+		actor: ActorContext,
+		noteId: NoteId,
+		path: string
+	): Promise<AttachmentId | undefined> {
 		const validatedPath = validateAttachmentPath(path);
 		const found = await this.attachments.findByPath(actor, noteId, validatedPath);
 		await this.attachments.remove(actor, noteId, validatedPath);
 		if (found) await this.storage.remove(found.version.objectKey);
-	}
-
-	private async process(actor: ActorContext, view: AttachmentView): Promise<void> {
-		await this.attachments.updateVersion(actor, {
-			...view.version,
-			processingStatus: 'processing'
-		});
-		try {
-			const extraction = await this.extractText(view, await this.visionModel(actor));
-			if (!extraction) {
-				await this.attachments.updateVersion(actor, {
-					...view.version,
-					processingStatus: 'unsupported',
-					processedAt: now()
-				});
-				return;
-			}
-			const extractedText = extraction.text;
-			let status: AttachmentVersion['processingStatus'] = extraction.processingFailure
-				? 'partial'
-				: 'ready';
-			if (this.indexer) {
-				const result = await this.indexer.index(actor, view.attachment, extractedText);
-				if (result.truncated) status = 'partial';
-			}
-			await this.attachments.updateVersion(actor, {
-				...view.version,
-				parserKind: extraction.parserKind,
-				extractedText,
-				processingStatus: status,
-				processingFailure: extraction.processingFailure,
-				processedAt: now()
-			});
-			// audit-allow: silent-catch — the attachment row records a typed failed status and message for the owning UI.
-		} catch (error) {
-			await this.attachments.updateVersion(actor, {
-				...view.version,
-				processingStatus: 'failed',
-				processingFailure: error instanceof Error ? error.message : 'Processing failed',
-				processedAt: now()
-			});
-		}
-	}
-
-	/**
-	 * Plain text is decoded in-process — that is free and lossless, so a markdown
-	 * or JSON attachment never costs an OCR call. Everything else the OCR engine
-	 * accepts goes to OCR, which is what captures tables and embedded images.
-	 *
-	 * Returns undefined for a format nothing can read; OCR failures propagate so
-	 * the attachment is recorded as failed and can be retried, rather than
-	 * silently storing weaker text.
-	 */
-	private async extractText(
-		view: AttachmentView,
-		visionModel: string
-	): Promise<
-		| { text: string; parserKind: string; processingFailure?: undefined }
-		| { text: string; parserKind: string; processingFailure: string }
-		| undefined
-	> {
-		const { mediaType, byteSize, objectKey } = view.version;
-		const path = view.attachment.path;
-		const parseLimit = maxParseBytes();
-
-		const parser = this.parsers.select(mediaType, path);
-		if (parser && byteSize <= parseLimit)
-			return {
-				text: (await parser.parse(await this.storage.read(objectKey, parseLimit))).slice(
-					0,
-					parseLimit
-				),
-				parserKind: parser.kind
-			};
-
-		if (!isOcrSupported(mediaType, path)) return undefined;
-
-		// OCR reads the object straight from a presigned URL, so no bytes pass
-		// through this process.
-		const image = isOcrImage(mediaType, path);
-		const documentUrl = await this.storage.createDownloadUrl(objectKey, OCR_URL_TTL_SECONDS);
-		const text = await this.documentOcr.parse({
-			documentUrl,
-			kind: image ? 'image' : 'document',
-			fileName: path,
-			visionModel,
-			maxPages: ocrMaxPages()
-		});
-		// A photo can carry very little text, so an image keeps a description of
-		// the image itself alongside whatever text OCR recovered.
-		if (!image) return { text, parserKind: 'ocr' };
-
-		try {
-			const description = await this.describeImage(view, visionModel);
-			return { text: [text.trim(), description].filter(Boolean).join('\n\n'), parserKind: 'ocr' };
-			// audit-allow: silent-catch — OCR text remains valid; the typed partial result persists this failure for the owning UI.
-		} catch (error) {
-			return {
-				text: text.trim(),
-				parserKind: 'ocr',
-				processingFailure: error instanceof Error ? error.message : 'Image description failed'
-			};
-		}
-	}
-
-	private async describeImage(view: AttachmentView, visionModel: string): Promise<string> {
-		const imageUrl = await this.storage.createDownloadUrl(view.version.objectKey, 300);
-		return `> **Image:** ${await this.imageDescriber.describe({ imageDataUrl: imageUrl, model: visionModel })}`;
+		return found?.attachment.id;
 	}
 }

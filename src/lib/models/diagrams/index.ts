@@ -399,3 +399,8 @@ export function decideDiagramTrash(
 		};
 	return { kind: 'allowed' };
 }
+
+export interface DrawioRevision {
+	readonly source: string;
+	readonly renderedSvg: string;
+}

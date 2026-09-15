@@ -19,7 +19,7 @@ import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
@@ -61,15 +61,13 @@ const setup = () => {
 	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
 	projects.projects = [projectBuilder()];
-	const memory = new MemoryLibrary(
-		entries,
-		projects,
-		provenanceRepository,
-		new EmbeddedMemoryIndexer(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
-	);
+	const search = new InMemorySearchRepository();
+	const memoryIndexer = new ContentIndex(search, new InMemoryEmbeddingClient()).memories;
+	const memory = new MemoryLibrary(entries, projects, provenanceRepository);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			memoryLister: memory,
+			memoryIndexer,
 			memoryCreator: memory,
 			memoryEditor: memory,
 			memoryDeleter: memory,
@@ -79,10 +77,10 @@ const setup = () => {
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
 			trustPolicyEvaluator: trust,
-			transactionRunner: new InMemoryTransactionRunner([entries, suggestions, effects])
+			transactionRunner: new InMemoryTransactionRunner([entries, search, suggestions, effects])
 		})
 	);
-	return { entries, provenance, suggestions, trust, controller };
+	return { entries, provenance, suggestions, trust, controller, search };
 };
 
 describe('Memory proposal orchestration invariants', () => {
@@ -187,5 +185,25 @@ describe('Memory proposal transaction invariants', () => {
 			// The restored entry collection is the invariant under test.
 		}
 		expect(entries.entries).toEqual([]);
+	});
+});
+
+describe('Memory proposal search updates', () => {
+	it('keeps only replacement chunks after a trusted update', async () => {
+		const { controller, trust, search } = setup();
+		trust.autoAccept = true;
+		const original = await controller.propose(testActor(), addInput());
+		if (!original.appliedEntry) throw new Error('Trusted addition must produce a memory');
+		const replacement = await controller.propose(
+			testActor(),
+			addInput({
+				operation: 'update',
+				memoryEntryId: original.appliedEntry.id,
+				content: 'Revised fact'
+			})
+		);
+		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([
+			replacement.appliedEntry?.id
+		]);
 	});
 });

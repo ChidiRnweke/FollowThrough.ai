@@ -643,7 +643,12 @@ export const attachmentVersions = pgTable(
 		processedAt: timestamp('processed_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [uniqueIndex('attachment_versions_object_key_unique').on(table.objectKey)]
+	(table) => [
+		uniqueIndex('attachment_versions_object_key_unique').on(table.objectKey),
+		index('attachment_versions_pending_idx')
+			.on(table.processingStatus, table.id)
+			.where(sql`${table.processingStatus} in ('queued', 'processing')`)
+	]
 );
 
 export const noteRevisionAttachments = pgTable(

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	EmbeddedDiagramIndexer,
-	EmbeddedMemoryIndexer,
-	EmbeddedNoteIndexer,
-	TokenAwareChunker
-} from './indexing';
+import { ContentIndex, TokenAwareChunker } from './indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -16,7 +11,7 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { retrievalEncoding } from './indexing';
 
 describe('Content chunking invariants', () => {
@@ -51,18 +46,18 @@ describe('Content chunking invariants', () => {
 describe('Search indexing invariants', () => {
 	it('stores every generated chunk', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedNoteIndexer(
+		const indexer = new ContentIndex(
 			repository,
 			new InMemoryEmbeddingClient(),
 			new TokenAwareChunker(2, 0)
-		);
+		).notes;
 		await indexer.index(testActor(), noteBuilder({ plainText: 'alpha beta gamma delta' }));
 		expect(repository.documents).toHaveLength(2);
 	});
 
 	it('uses a SHA-256 content hash', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedNoteIndexer(repository, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).notes;
 		await indexer.index(testActor(), noteBuilder({ plainText: 'architecture' }));
 		expect(repository.documents[0]?.document.contentHash).toHaveLength(64);
 	});
@@ -70,7 +65,7 @@ describe('Search indexing invariants', () => {
 	it('reuses an existing embedding for unchanged content', async () => {
 		const repository = new InMemorySearchRepository();
 		const embedding = new InMemoryEmbeddingClient();
-		const indexer = new EmbeddedNoteIndexer(repository, embedding);
+		const indexer = new ContentIndex(repository, embedding).notes;
 		const note = noteBuilder({ plainText: 'architecture' });
 		await indexer.index(testActor(), note);
 		const firstVector = repository.documents[0]?.document.embedding;
@@ -81,7 +76,7 @@ describe('Search indexing invariants', () => {
 	it('re-embeds unchanged content when the embedding model changes', async () => {
 		const repository = new InMemorySearchRepository();
 		const embedding = new InMemoryEmbeddingClient();
-		const indexer = new EmbeddedNoteIndexer(repository, embedding);
+		const indexer = new ContentIndex(repository, embedding).notes;
 		const note = noteBuilder({ plainText: 'architecture' });
 		await indexer.index(testActor(), note);
 		embedding.model = 'fake-embedding-v2';
@@ -91,7 +86,7 @@ describe('Search indexing invariants', () => {
 
 	it('replaces stale chunks after content changes', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedNoteIndexer(repository, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).notes;
 		const note = noteBuilder({ plainText: 'old content' });
 		await indexer.index(testActor(), note);
 		await indexer.index(testActor(), { ...note, plainText: 'new content', currentRevision: 2 });
@@ -100,7 +95,7 @@ describe('Search indexing invariants', () => {
 
 	it('removes stale chunks when a note becomes empty', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedNoteIndexer(repository, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).notes;
 		const note = noteBuilder({ plainText: 'old content' });
 		await indexer.index(testActor(), note);
 		await indexer.index(testActor(), { ...note, plainText: '', currentRevision: 2 });
@@ -111,7 +106,7 @@ describe('Search indexing invariants', () => {
 		const repository = new InMemorySearchRepository();
 		const embedding = new InMemoryEmbeddingClient();
 		embedding.returnWrongCount = true;
-		const indexer = new EmbeddedNoteIndexer(repository, embedding);
+		const indexer = new ContentIndex(repository, embedding).notes;
 		await expect(
 			indexer.index(testActor(), noteBuilder({ plainText: 'architecture' }))
 		).rejects.toMatchObject({ code: 'INVALID_GENERATED_CONTENT' });
@@ -121,13 +116,12 @@ describe('Search indexing invariants', () => {
 describe('Diagram indexing invariants', () => {
 	it('stores diagram text as a diagram-scoped search document', async () => {
 		const repository = new InMemorySearchRepository();
-		const notes = new InMemoryNoteContent();
+		const notes = new InMemoryNoteRepository();
 		notes.notes = [noteBuilder()];
 		const diagram = diagramBuilder();
-		await new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes).index(
-			testActor(),
-			diagram
-		);
+		await new ContentIndex(repository, new InMemoryEmbeddingClient())
+			.diagrams(notes)
+			.index(testActor(), diagram);
 		expect(repository.documents[0]?.document.diagramId).toBe(diagram.id);
 	});
 
@@ -135,9 +129,9 @@ describe('Diagram indexing invariants', () => {
 	// it would offer the user something they cannot open.
 	it('indexes no chunks for a diagram that is in the trash', async () => {
 		const repository = new InMemorySearchRepository();
-		const notes = new InMemoryNoteContent();
+		const notes = new InMemoryNoteRepository();
 		notes.notes = [noteBuilder()];
-		const indexer = new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes);
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).diagrams(notes);
 		const diagram = diagramBuilder();
 		await indexer.index(testActor(), diagram);
 		await indexer.index(testActor(), { ...diagram, archivedAt: testNow });
@@ -146,14 +140,14 @@ describe('Diagram indexing invariants', () => {
 
 	it('keeps note chunks when replacing diagram chunks', async () => {
 		const repository = new InMemorySearchRepository();
-		const notes = new InMemoryNoteContent();
+		const notes = new InMemoryNoteRepository();
 		const note = noteBuilder({ plainText: 'note content' });
 		notes.notes = [note];
-		await new EmbeddedNoteIndexer(repository, new InMemoryEmbeddingClient()).index(
+		await new ContentIndex(repository, new InMemoryEmbeddingClient()).notes.index(
 			testActor(),
 			note
 		);
-		const indexer = new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes);
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).diagrams(notes);
 		const diagram = diagramBuilder();
 		await indexer.index(testActor(), diagram);
 		await indexer.index(testActor(), { ...diagram, searchableText: 'revised diagram' });
@@ -162,14 +156,14 @@ describe('Diagram indexing invariants', () => {
 
 	it('removes only diagram chunks when searchable text becomes empty', async () => {
 		const repository = new InMemorySearchRepository();
-		const notes = new InMemoryNoteContent();
+		const notes = new InMemoryNoteRepository();
 		const note = noteBuilder({ plainText: 'note content' });
 		notes.notes = [note];
-		await new EmbeddedNoteIndexer(repository, new InMemoryEmbeddingClient()).index(
+		await new ContentIndex(repository, new InMemoryEmbeddingClient()).notes.index(
 			testActor(),
 			note
 		);
-		const indexer = new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes);
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).diagrams(notes);
 		const diagram = diagramBuilder();
 		await indexer.index(testActor(), diagram);
 		await indexer.index(testActor(), { ...diagram, searchableText: '' });
@@ -180,10 +174,8 @@ describe('Diagram indexing invariants', () => {
 	// must not go looking for one — the note reader would throw.
 	it('indexes a diagram that has no source note', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedDiagramIndexer(
-			repository,
-			new InMemoryEmbeddingClient(),
-			new InMemoryNoteContent()
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).diagrams(
+			new InMemoryNoteRepository()
 		);
 		const diagram = diagramBuilder({ sourceNoteId: undefined, title: 'Delivery pipeline' });
 		await indexer.index(testActor(), diagram);
@@ -195,10 +187,8 @@ describe('Diagram indexing invariants', () => {
 	// rank on labels alone and effectively disappear.
 	it('titles an untitled note-less diagram rather than indexing it blank', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedDiagramIndexer(
-			repository,
-			new InMemoryEmbeddingClient(),
-			new InMemoryNoteContent()
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).diagrams(
+			new InMemoryNoteRepository()
 		);
 		await indexer.index(testActor(), diagramBuilder({ sourceNoteId: undefined, title: undefined }));
 		expect(repository.documents[0]?.document.sourceTitle).toBe('Diagram: Untitled diagram');
@@ -208,9 +198,9 @@ describe('Diagram indexing invariants', () => {
 	// would violate the single-source constraint the database enforces.
 	it('leaves the note off a diagram chunk so it stands as its own source', async () => {
 		const repository = new InMemorySearchRepository();
-		const notes = new InMemoryNoteContent();
+		const notes = new InMemoryNoteRepository();
 		notes.notes = [noteBuilder()];
-		const indexer = new EmbeddedDiagramIndexer(repository, new InMemoryEmbeddingClient(), notes);
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).diagrams(notes);
 		await indexer.index(testActor(), diagramBuilder());
 		expect(repository.documents[0]?.document.noteId).toBeUndefined();
 	});
@@ -220,7 +210,7 @@ describe('Memory indexing invariants', () => {
 	it('stores memory content as a memory-scoped search document', async () => {
 		const repository = new InMemorySearchRepository();
 		const entry = memoryEntryBuilder();
-		await new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient()).index(
+		await new ContentIndex(repository, new InMemoryEmbeddingClient()).memories.index(
 			testActor(),
 			entry
 		);
@@ -229,7 +219,7 @@ describe('Memory indexing invariants', () => {
 
 	it('gives memory chunks no note source', async () => {
 		const repository = new InMemorySearchRepository();
-		await new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient()).index(
+		await new ContentIndex(repository, new InMemoryEmbeddingClient()).memories.index(
 			testActor(),
 			memoryEntryBuilder()
 		);
@@ -238,7 +228,7 @@ describe('Memory indexing invariants', () => {
 
 	it('reuses a chunk with an unchanged content hash', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).memories;
 		const entry = memoryEntryBuilder();
 		await indexer.index(testActor(), entry);
 		const firstId = repository.documents[0]?.document.id;
@@ -248,7 +238,7 @@ describe('Memory indexing invariants', () => {
 
 	it('removes chunks for an entry withheld from agents', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).memories;
 		const entry = memoryEntryBuilder();
 		await indexer.index(testActor(), entry);
 		await indexer.index(testActor(), { ...entry, shareWithAgents: false });
@@ -257,7 +247,7 @@ describe('Memory indexing invariants', () => {
 
 	it('removes chunks for a deleted entry', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new EmbeddedMemoryIndexer(repository, new InMemoryEmbeddingClient());
+		const indexer = new ContentIndex(repository, new InMemoryEmbeddingClient()).memories;
 		const entry = memoryEntryBuilder();
 		await indexer.index(testActor(), entry);
 		await indexer.index(testActor(), { ...entry, deletedAt: testNow });

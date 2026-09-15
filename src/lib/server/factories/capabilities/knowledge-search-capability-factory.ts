@@ -3,12 +3,10 @@ import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { KnowledgeIndexMaintenance } from '$lib/server/services/knowledge-search/index-maintenance';
 import {
-	EmbeddedAttachmentIndexer,
-	EmbeddedDiagramIndexer,
-	EmbeddedMemoryIndexer,
-	EmbeddedNoteIndexer,
+	ContentIndex,
 	retrievalChunkerFromEnv
 } from '$lib/server/services/knowledge-search/indexing';
+import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
 import {
 	EmbeddedKnowledgeSearcher,
@@ -52,10 +50,10 @@ export interface KnowledgeSearchCapability {
 	readonly embeddingClient: EmbeddingClient;
 	readonly reranker: Reranker;
 	readonly condenser: Condenser;
-	readonly attachmentIndexer: EmbeddedAttachmentIndexer;
-	readonly noteIndexer: EmbeddedNoteIndexer;
-	readonly diagramIndexer: EmbeddedDiagramIndexer;
-	readonly memoryIndexer: EmbeddedMemoryIndexer;
+	readonly attachmentIndexer: ContentIndex['attachments'];
+	readonly noteIndexer: ContentIndex['notes'];
+	readonly diagramIndexer: ReturnType<ContentIndex['diagrams']>;
+	readonly memoryIndexer: ContentIndex['memories'];
 	readonly embeddedSearcher: EmbeddedKnowledgeSearcher;
 	readonly searcher: RerankingKnowledgeSearcher;
 	readonly linkFinder: ProjectScopedLinkFinder;
@@ -103,6 +101,8 @@ export const createKnowledgeSearchCapability = (
 			appURL: input.appURL,
 			observer: operationObserver
 		});
+	const index = new ContentIndex(repository, embeddingClient, chunker, input.deferEmbedding);
+
 	return {
 		repository,
 		embeddingClient,
@@ -124,26 +124,10 @@ export const createKnowledgeSearchCapability = (
 		}),
 		reranker,
 		condenser,
-		attachmentIndexer: new EmbeddedAttachmentIndexer(repository, embeddingClient, chunker),
-		noteIndexer: new EmbeddedNoteIndexer(
-			repository,
-			embeddingClient,
-			chunker,
-			input.deferEmbedding
-		),
-		diagramIndexer: new EmbeddedDiagramIndexer(
-			repository,
-			embeddingClient,
-			input.notes,
-			chunker,
-			input.deferEmbedding
-		),
-		memoryIndexer: new EmbeddedMemoryIndexer(
-			repository,
-			embeddingClient,
-			chunker,
-			input.deferEmbedding
-		),
+		attachmentIndexer: index.attachments,
+		noteIndexer: index.notes,
+		diagramIndexer: index.diagrams(new NoteRecords(input.db)),
+		memoryIndexer: index.memories,
 		embeddedSearcher,
 		searcher: new RerankingKnowledgeSearcher(embeddedSearcher, reranker),
 		linkFinder: new ProjectScopedLinkFinder(

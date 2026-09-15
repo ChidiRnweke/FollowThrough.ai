@@ -40,13 +40,6 @@ describe('Completing a todo screenshot', () => {
 		expect(view.attachment.id).toBe(ATTACHMENT_ID);
 	});
 
-	it('starts processing once the link is committed', async () => {
-		const { attachments, controller } = setup();
-		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
-		expect(attachments.processed).toEqual([ATTACHMENT_ID]);
-	});
-
 	// The link and the attachment commit together, so a screenshot is never left
 	// as a project file that no todo claims.
 	it('rolls the finalized attachment back when the link fails', async () => {
@@ -55,14 +48,6 @@ describe('Completing a todo screenshot', () => {
 		attachments.linkFails = true;
 		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId()).catch(() => undefined);
 		expect(attachments.finalized).toEqual([]);
-	});
-
-	it('does not start processing for an attachment that failed to link', async () => {
-		const { attachments, controller } = setup();
-		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		attachments.linkFails = true;
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId()).catch(() => undefined);
-		expect(attachments.processed).toEqual([]);
 	});
 
 	it('lists the screenshots a todo references', async () => {

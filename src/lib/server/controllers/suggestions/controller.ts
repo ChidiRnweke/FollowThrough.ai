@@ -1,10 +1,12 @@
+import type { DrawioWriter } from '$lib/server/services/diagrams/contracts';
+import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import type {
 	ISuggestionApplication,
 	SuggestionArtifact
 } from '$lib/server/services/suggestions/application';
 import type { ActorContext } from '$lib/models/identity';
-import type { Diagram, DiagramId, DrawioDiagram } from '$lib/models/diagrams';
+import type { Diagram } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type {
 	AcceptSuggestionInput,
@@ -39,18 +41,6 @@ import type {
  * stay agnostic about what accepting a suggestion actually does to the document.
  */
 export type SuggestionArtifactApplier = ISuggestionApplication;
-
-interface DrawioReviewSaver {
-	save(
-		actor: ActorContext,
-		input: {
-			noteId: NoteId;
-			diagramId: DiagramId;
-			source: string;
-			renderedSvg: string;
-		}
-	): Promise<DrawioDiagram>;
-}
 
 /** {@link AcceptSuggestionInput} with an optional reviewed draw.io diagram to persist alongside the accepted suggestion. */
 export interface AcceptReviewedSuggestionInput extends AcceptSuggestionInput {
@@ -123,7 +113,7 @@ export interface SuggestionsDependencies {
 	suggestionEffects: SuggestionEffectService;
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: { index(actor: ActorContext, diagram: Diagram): Promise<void> };
-	drawioReviewSaver?: DrawioReviewSaver;
+	drawioWrites: DrawioWriter;
 	transactionRunner: TransactionRunner;
 }
 export class Suggestions implements SuggestionsController {
@@ -200,15 +190,20 @@ export class Suggestions implements SuggestionsController {
 				const created = changes.find((change) => change.after.type === 'diagrams');
 				if (!created || created.after.type !== 'diagrams' || created.after.value.kind !== 'drawio')
 					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
-				if (!this.dependencies.drawioReviewSaver)
-					throw new ValidationError('Draw.io suggestion review is unavailable.');
-				const diagram = await this.dependencies.drawioReviewSaver.save(actor, {
-					...input.drawioReview,
-					diagramId: created.after.value.id
-				});
+				if (created.after.value.sourceNoteId !== input.drawioReview.noteId)
+					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
+				const diagram = await this.dependencies.drawioWrites.write(
+					actor,
+					created.after.value,
+					input.drawioReview
+				);
 				artifact = diagram;
 				changes = [{ kind: 'created', after: { type: 'diagrams', value: diagram } }];
 			}
+			await this.indexRecords(
+				actor,
+				changes.map((change) => change.after)
+			);
 			await this.dependencies.suggestionEffects.record(actor, pending.id, changes);
 			const suggestion = await this.dependencies.suggestionAccepter.accept(
 				actor,
@@ -233,13 +228,19 @@ export class Suggestions implements SuggestionsController {
 			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
 			const accepted = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
 			const restored = await this.dependencies.suggestionEffects.restore(actor, accepted);
-			for (const record of restored) {
-				if (record.type === 'memory_entries')
-					await this.dependencies.memoryIndexer.index(actor, record.value);
-				if (record.type === 'diagrams')
-					await this.dependencies.diagramIndexer.index(actor, record.value);
-			}
+			await this.indexRecords(actor, restored);
 			return this.dependencies.suggestionReverter.revert(actor, accepted);
 		});
+	}
+	private async indexRecords(
+		actor: ActorContext,
+		records: readonly AppliedRecord[]
+	): Promise<void> {
+		for (const record of records) {
+			if (record.type === 'memory_entries')
+				await this.dependencies.memoryIndexer.index(actor, record.value);
+			if (record.type === 'diagrams')
+				await this.dependencies.diagramIndexer.index(actor, record.value);
+		}
 	}
 }

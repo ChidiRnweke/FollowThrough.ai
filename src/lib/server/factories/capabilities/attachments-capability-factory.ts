@@ -1,3 +1,7 @@
+import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
+import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
+import type { AttachmentClaims } from '$lib/server/services/attachments/contracts';
+import type { AtomicOperation } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
@@ -18,8 +22,7 @@ import {
 	type IAttachmentStorage,
 	type ObjectStorageConfig
 } from '$lib/server/services/attachments/storage';
-import type { EmbeddedAttachmentIndexer } from '$lib/server/services/knowledge-search/indexing';
-import type { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { operationObserver } from '$lib/server/services/telemetry';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
@@ -30,10 +33,12 @@ import {
 
 export interface AttachmentsCapabilityInput {
 	readonly db: Database;
+	readonly claims: AttachmentClaims;
+	readonly transactionRunner: AtomicOperation;
+	readonly visionModel: string;
 	readonly notes: NoteRepository;
 	readonly preferences: AgentPreferenceCatalog;
-	readonly searchRepository: KnowledgeIndexRecords;
-	readonly indexer: EmbeddedAttachmentIndexer;
+	readonly indexer: ContentIndex['attachments'];
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
@@ -52,6 +57,7 @@ export interface AttachmentsCapability {
 	readonly storage: IAttachmentStorage;
 	readonly library: AttachmentLibrary;
 	readonly retention: UploadRetention;
+	readonly processing: AttachmentProcessing;
 }
 
 export const createAttachmentsCapability = (
@@ -87,17 +93,22 @@ export const createAttachmentsCapability = (
 	return {
 		repository,
 		storage,
-		library: new AttachmentLibrary(
-			repository,
-			input.notes,
-			storage,
-			new AttachmentParserRegistry(),
-			documentOcr,
-			imageDescriber,
-			input.searchRepository,
-			input.indexer,
-			input.preferences
-		),
+		library: new AttachmentLibrary(repository, input.notes, storage),
+		processing: new AttachmentProcessing({
+			records: repository,
+			claims: input.claims,
+			extraction: new AttachmentExtraction(
+				storage,
+				new AttachmentParserRegistry(),
+				documentOcr,
+				imageDescriber
+			),
+			preferences: input.preferences,
+			indexer: input.indexer,
+			transactionRunner: input.transactionRunner,
+			visionModel: input.visionModel,
+			logger: console
+		}),
 		retention: new UploadRetention(repository, storage, {
 			...optionalProperty('intervalMs', positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')),
 			...optionalProperty('maxPerTick', positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK'))

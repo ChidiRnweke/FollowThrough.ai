@@ -34,7 +34,7 @@ import type {
 	DrawioXmlContentValidator,
 	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/contracts';
-import type { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
+import type { DrawioWriter } from '$lib/server/services/diagrams/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
@@ -142,7 +142,7 @@ export interface DiagramsDependencies {
 	mermaidReviser: MermaidDiagramReviser;
 	inlineMermaidReviser: InlineMermaidReviser;
 	inlineMermaidToDrawioConverter: InlineMermaidToDrawioConverter;
-	drawioWrites: DrawioWrites;
+	drawioWrites: DrawioWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	mermaidRenderer: MermaidDiagramRenderer;
@@ -285,7 +285,9 @@ export class Diagrams implements DiagramsController {
 		current: DrawioDiagram,
 		input: { readonly source: string; readonly renderedSvg: string }
 	): Promise<SaveDrawioDiagramOutput> {
-		return { diagram: await this.dependencies.drawioWrites.write(actor, current, input) };
+		const diagram = await this.dependencies.drawioWrites.write(actor, current, input);
+		await this.dependencies.diagramIndexer.index(actor, diagram);
+		return { diagram };
 	}
 
 	async reviseMermaid(

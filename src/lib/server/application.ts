@@ -6,7 +6,7 @@ import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { ToolRetriever } from './services/agent/tools/tool-retriever';
 import type { ImageDescriber, OcrEngineClient } from './services/attachments/content';
-import type { DocumentOcr } from './services/attachments/contracts';
+import type { AttachmentClaims, DocumentOcr } from './services/attachments/contracts';
 import type { Condenser, EmbeddingClient } from './services/knowledge-search/contracts';
 import type { Reranker } from './services/knowledge-search/semantic';
 import type { ReferenceFinder } from './services/references/contracts';
@@ -53,6 +53,7 @@ export interface ApplicationOverrides {
 }
 
 export interface ApplicationConfig {
+	readonly attachmentClaims: AttachmentClaims;
 	readonly db: Database;
 	readonly transactionRunner: TransactionRunner;
 	readonly openRouterApiKey: string;
@@ -112,9 +113,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		config.defaultVisionModel ??
 		process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ??
 		defaultAgentModel;
-	// Attachment indexing is deliberately left inline: it already runs off the
-	// request path, and deferring it would report an attachment "ready" before it
-	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
 	const identity = createIdentityCapability({ db });
 	const synchronization = createSyncCapability({ db, transactionRunner, deferEmbedding });
@@ -178,7 +176,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		deferEmbedding
 	});
 	const {
-		repository: searchRepository,
 		condenser,
 		noteIndexer,
 		diagramIndexer,
@@ -195,8 +192,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
-		provenance: provenanceRepository,
-		indexer: memoryIndexer
+		provenance: provenanceRepository
 	}).library;
 	const agentCapability = createAgentCapability({
 		db,
@@ -235,10 +231,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences, memory });
 	const feedback = createFeedbackCapability({ db });
 	const attachmentCapability = createAttachmentsCapability({
+		claims: config.attachmentClaims,
+		transactionRunner,
+		visionModel: defaultVisionModel,
 		db,
 		notes: noteRepository,
 		preferences,
-		searchRepository,
 		indexer: knowledgeSearch.attachmentIndexer,
 		openRouterApiKey,
 		openRouterBaseURL,
@@ -252,7 +250,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		imageDescriber: overrides.imageDescriber,
 		documentOcr: overrides.documentOcr
 	});
-	const attachmentRepository = attachmentCapability.repository;
 	const attachmentStorage = attachmentCapability.storage;
 	const attachments = attachmentCapability.library;
 	const deliverables = createDeliverablesCapability({
@@ -289,7 +286,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		builtInSkills: skillCapability.builtIns,
 		defaultModel: defaultAgentModel,
 		defaultVisionModel,
-		indexer: diagramIndexer,
 		projects
 	});
 	const diagrams = diagramCapability.library;
@@ -304,7 +300,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		drawioValidator: diagramCapability.suggestionValidator,
 		drawioLabels: diagramCapability.suggestionLabels
 	});
-	const drawioReview = diagramCapability.review;
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
@@ -394,7 +389,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			artifactApplier,
 			memoryIndexer,
 			diagramIndexer,
-			drawioReviewSaver: drawioReview,
+			drawioWrites: diagramCapability.drawioWrites,
 			transactionRunner,
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions
@@ -426,7 +421,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: { preferences: toolPreferences, syncMutations: synchronization.mutations },
-		attachments: { attachments, transactionRunner },
+		attachments: {
+			attachments,
+			transactionRunner,
+			attachmentIndexer: knowledgeSearch.attachmentIndexer
+		},
 		deliverables: {
 			syncMutations: synchronization.mutations,
 			templateUploader: templates,
@@ -507,6 +506,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		trustPolicies: { trustPolicyStore: trust, syncMutations: synchronization.mutations },
 		memory: {
+			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			memoryLister: memory,
 			memoryCreator: memory,
@@ -550,9 +550,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
 		controllers: controllerFactory,
-		recoverInterruptedRuns: async () =>
-			(await agentCapability.recovery.recover()) + (await attachmentRepository.failInterrupted()),
-		backgroundTasks: [knowledgeSearch.maintenance, attachmentCapability.retention],
+		recoverInterruptedRuns: () => agentCapability.recovery.recover(),
+		backgroundTasks: [
+			knowledgeSearch.maintenance,
+			attachmentCapability.retention,
+			attachmentCapability.processing
+		],
 		eventBus,
 		provenance,
 		toolRetriever

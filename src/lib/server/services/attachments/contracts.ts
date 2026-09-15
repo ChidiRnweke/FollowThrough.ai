@@ -9,46 +9,13 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 
-/** One ordered piece of OCR output, in the document's reading order. */
-export type OcrContentPart =
-	| { readonly kind: 'markdown'; readonly text: string }
-	| { readonly kind: 'image'; readonly dataUrl: string };
-
-export interface OcrPageContent {
-	readonly parts: readonly OcrContentPart[];
-	readonly pagesProcessed?: number;
-}
-
-/**
- * One OCR engine call for one document. The engine fetches the document from a
- * presigned URL and returns its content as ordered markdown and
- * embedded-image parts.
- */
-export interface OcrEngineClient {
-	ocr(input: {
-		documentUrl: string;
-		kind: 'document' | 'image';
-		fileName: string;
-		maxPages?: number;
-		signal?: AbortSignal;
-	}): Promise<OcrPageContent>;
-}
-
-/** Describes a single image for search; shared by standalone and embedded images. */
-export interface ImageDescriber {
-	describe(input: { imageDataUrl: string; context?: string; model: string }): Promise<string>;
-}
-
-/** Extracts one enriched markdown string from a document via an OCR engine. */
-export interface DocumentOcr {
-	parse(input: {
-		documentUrl: string;
-		kind: 'document' | 'image';
-		fileName: string;
-		visionModel: string;
-		maxPages?: number;
-	}): Promise<string>;
-}
+export type {
+	OcrContentPart,
+	OcrPageContent,
+	OcrEngineClient,
+	ImageDescriber,
+	DocumentOcr
+} from '$lib/server/repositories/attachments/processing';
 
 export interface AttachmentManager {
 	initiate(
@@ -67,7 +34,6 @@ export interface AttachmentManager {
 		requiredHeaders: Record<string, string>;
 	}>;
 	complete(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView>;
-	startProcessing(actor: ActorContext, attachment: AttachmentView): void;
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]>;
 	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
 	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void>;
@@ -83,5 +49,18 @@ export interface AttachmentManager {
 		offset?: number,
 		limit?: number
 	): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }>;
-	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
+	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentId | undefined>;
+}
+
+export type {
+	AttachmentClaims,
+	AttachmentClaim
+} from '$lib/server/repositories/attachments/claims';
+export type { AttachmentRepository } from '$lib/server/repositories/attachments';
+
+export interface AttachmentTextExtractor {
+	extract(
+		view: AttachmentView,
+		visionModel: string
+	): Promise<{ text: string; parserKind: string; processingFailure?: string } | undefined>;
 }

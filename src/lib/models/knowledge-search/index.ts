@@ -91,3 +91,31 @@ export function knowledgeSearchSource(document: SearchDocument): KnowledgeSearch
 	if (document.noteId) return { ...context, kind: 'note', id: document.noteId };
 	return { kind: 'unavailable', projectId: document.projectId };
 }
+
+export type IndexSource =
+	| { readonly kind: 'note'; readonly noteId: NoteId }
+	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
+	| { readonly kind: 'memory'; readonly memoryEntryId: MemoryEntryId }
+	| { readonly kind: 'attachment'; readonly attachmentId: AttachmentId };
+export interface IndexContent {
+	readonly source: IndexSource;
+	readonly contents: readonly string[];
+	readonly embedPrefix: string;
+	readonly base: Omit<
+		SearchDocument,
+		| 'id'
+		| 'content'
+		| 'contentHash'
+		| 'chunkIndex'
+		| 'embedding'
+		| 'embeddingModel'
+		| 'supersededAt'
+	>;
+}
+export type IndexPlan =
+	| { readonly kind: 'remove'; readonly source: IndexSource }
+	| ({ readonly kind: 'index' } & IndexContent);
+export const decideIndexPlan = (content: IndexContent): IndexPlan =>
+	content.contents.length
+		? { kind: 'index', ...content }
+		: { kind: 'remove', source: content.source };

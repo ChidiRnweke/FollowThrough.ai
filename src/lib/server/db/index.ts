@@ -4,9 +4,20 @@ import postgres from 'postgres';
 import * as schema from './schema';
 import { createTransactionContext } from './transaction-context';
 
-function createDatabase(databaseUrl: string) {
-	return drizzle(postgres(databaseUrl), { schema });
+let client: ReturnType<typeof postgres> | undefined;
+function runtimeClient() {
+	if (client) return client;
+	const databaseUrl = process.env.DATABASE_URL;
+	if (!databaseUrl) throw new Error('DATABASE_URL is not set');
+	return (client = postgres(databaseUrl));
 }
+export const postgresSessionConnections = {
+	open: () => {
+		const databaseUrl = process.env.DATABASE_URL;
+		if (!databaseUrl) throw new Error('DATABASE_URL is not set');
+		return postgres(databaseUrl, { max: 1, idle_timeout: 0, max_lifetime: 0 });
+	}
+};
 
 /** Query-builder surface shared by the postgres-js and PGlite drivers. */
 export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -15,9 +26,7 @@ let database: Database | undefined;
 
 function runtimeDatabase(): Database {
 	if (database) return database;
-	const databaseUrl = process.env.DATABASE_URL;
-	if (!databaseUrl) throw new Error('DATABASE_URL is not set');
-	database = createDatabase(databaseUrl);
+	database = drizzle(runtimeClient(), { schema });
 	return database;
 }
 
@@ -33,3 +42,5 @@ const transactions = createTransactionContext(lazyDatabase);
 
 export const db = transactions.database;
 export const postgresTransactionRunner = transactions.transactionRunner;
+
+export const postgresConnectionScope = transactions.connectionScope;

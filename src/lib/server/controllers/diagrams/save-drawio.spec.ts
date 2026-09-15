@@ -26,12 +26,12 @@ const setup = (kind: 'drawio' | 'mermaid' = 'drawio') => {
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
 			diagramFinder: diagrams,
+			diagramIndexer: diagrams,
 			drawioWrites: new DrawioWrites(
 				diagrams,
 				new DrawioXmlValidator(),
 				new DrawioSvgSanitizer(),
-				new DrawioDiagramTextExtractor(),
-				diagrams
+				new DrawioDiagramTextExtractor()
 			),
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
@@ -108,5 +108,13 @@ describe('Last-save-wins draw.io persistence invariants', () => {
 		const { controller, diagrams } = setup();
 		await controller.saveDrawio(testActor(), input());
 		expect(diagrams.indexedIds).toEqual([drawioBuilder().id]);
+	});
+});
+
+describe('Draw.io search updates', () => {
+	it('indexes the diagram saved by the controller', async () => {
+		const { controller, diagrams } = setup();
+		const { diagram } = await controller.saveDrawio(testActor(), input());
+		expect(diagrams.indexedIds).toEqual([diagram.id]);
 	});
 });

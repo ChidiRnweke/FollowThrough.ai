@@ -1,3 +1,4 @@
+import type { DrawioRevision } from '$lib/models/diagrams';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
@@ -185,4 +186,12 @@ export interface DrawioXmlContentValidator {
 }
 export interface DrawioSvgPreviewSanitizer {
 	sanitize(source: string): string;
+}
+
+export interface DrawioWriter {
+	write(
+		actor: ActorContext,
+		current: DrawioDiagram,
+		revision: DrawioRevision
+	): Promise<DrawioDiagram>;
 }
