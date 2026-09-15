@@ -848,31 +848,50 @@
 	   guard in @layer base already neutralises it — no separate opt-out.
 
 	   A cached note renders on its first frame, so no skeleton stands between
-	   the old pane and the new one. The fade is that missing step. It changes
-	   opacity only: the document is laid out and interactive from frame one. */
+	   the old pane and the new one. The settle is that missing step. It starts
+	   at partial opacity: from 0 the first frames are blank, and the open reads
+	   as input lag. The document is laid out and interactive from frame one. */
 	.workspace-pane-layer {
 		transition:
 			inset-inline-start var(--duration-panel) var(--ease-standard),
 			inset-inline-end var(--duration-panel) var(--ease-standard),
-			opacity var(--duration-disclosure) var(--ease-standard),
+			opacity var(--duration-micro) var(--ease-standard),
+			translate var(--duration-micro) var(--ease-standard),
 			display var(--duration-panel) allow-discrete;
 	}
 
 	@starting-style {
 		.workspace-pane-layer:not([data-pane-role='background']) {
-			opacity: 0;
+			opacity: 0.6;
+			translate: 0 0.25rem;
 		}
 	}
 
 	/* A note that had to download replaces its skeleton inside a layer that is
 	   already visible, so the layer's starting style never runs for it. */
 	.pane-reveal {
-		animation: pane-reveal var(--duration-disclosure) var(--ease-standard);
+		animation: pane-reveal var(--duration-micro) var(--ease-standard);
 	}
 
 	@keyframes pane-reveal {
 		from {
-			opacity: 0;
+			opacity: 0.6;
+			translate: 0 0.25rem;
+		}
+	}
+
+	/* The base guard only collapses durations, which turns the rise into a jump. */
+	@media (prefers-reduced-motion: reduce) {
+		@starting-style {
+			.workspace-pane-layer:not([data-pane-role='background']) {
+				translate: none;
+			}
+		}
+
+		@keyframes pane-reveal {
+			from {
+				opacity: 0.6;
+			}
 		}
 	}
 
