@@ -1,3 +1,4 @@
+import type { IndexSource } from '$lib/models/knowledge-search';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -11,12 +12,7 @@ import type { AttachmentId } from '$lib/models/attachments';
  * exactly one source, and staging, completion, and deletion are all scoped by it.
  * Diagram chunks also carry their note, so `note` deliberately excludes them.
  */
-export type IndexSource =
-	| { readonly kind: 'note'; readonly noteId: NoteId }
-	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
-	| { readonly kind: 'memory'; readonly memoryEntryId: MemoryEntryId }
-	| { readonly kind: 'attachment'; readonly attachmentId: AttachmentId };
-
+export type { IndexSource } from '$lib/models/knowledge-search';
 /** A source with chunks awaiting embeddings, as discovered by the backfill worker. */
 export interface PendingIndexSource {
 	readonly userId: UserId;

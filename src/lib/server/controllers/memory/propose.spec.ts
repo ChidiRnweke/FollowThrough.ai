@@ -19,7 +19,7 @@ import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
@@ -65,7 +65,7 @@ const setup = () => {
 		entries,
 		projects,
 		provenanceRepository,
-		new EmbeddedMemoryIndexer(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
+		new ContentIndex(new InMemorySearchRepository(), new InMemoryEmbeddingClient()).memories
 	);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({

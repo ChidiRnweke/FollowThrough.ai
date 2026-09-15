@@ -1,3 +1,5 @@
+import { decideIndexPlan, type IndexPlan } from '$lib/models/knowledge-search';
+import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { Attachment, ContentHash } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
@@ -15,17 +17,8 @@ import {
 } from '$lib/server/repositories/knowledge-search/embedding-batches';
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 
-interface DiagramIndexer {
-	index(actor: ActorContext, diagram: Diagram): Promise<void>;
-}
-interface MemoryIndexer {
-	index(actor: ActorContext, entry: MemoryEntry): Promise<void>;
-}
-interface NoteIndexer {
-	index(actor: ActorContext, note: Note): Promise<void>;
-}
 interface NoteReader {
-	get(actor: ActorContext, noteId: Note['id']): Promise<Note>;
+	findById(actor: ActorContext, noteId: Note['id']): Promise<Note | undefined>;
 }
 let sharedEncoding: Tiktoken | undefined;
 export const retrievalEncoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
@@ -133,21 +126,6 @@ export const retrievalContentHash = async (
 		.join('') as ContentHash;
 };
 
-/** Everything a chunk inherits from its source, before its own text is filled in. */
-type DocumentBase = Omit<
-	SearchDocument,
-	'id' | 'content' | 'contentHash' | 'chunkIndex' | 'embedding' | 'embeddingModel' | 'supersededAt'
->;
-
-interface IndexRequest {
-	readonly source: IndexSource;
-	readonly contents: readonly string[];
-	readonly metadata: { readonly sourceTitle?: string; readonly sectionPath?: string };
-	/** Prepended to each chunk before embedding so the vector carries its context. */
-	readonly embedPrefix: string;
-	readonly base: DocumentBase;
-}
-
 const listFor = (
 	repository: RetrievalIndexRepository,
 	actor: ActorContext,
@@ -197,13 +175,15 @@ const applyIndex = async (
 	embeddingClient: EmbeddingClient,
 	defer: boolean,
 	actor: ActorContext,
-	request: IndexRequest
+	plan: IndexPlan
 ): Promise<void> => {
-	const { source, contents, metadata, embedPrefix, base } = request;
-	if (!contents.length) {
-		await deleteFor(repository, actor, source);
+	if (plan.kind === 'remove') {
+		await deleteFor(repository, actor, plan.source);
 		return;
 	}
+
+	const { source, contents, embedPrefix, base } = plan;
+	const metadata = { sourceTitle: base.sourceTitle, sectionPath: base.sectionPath };
 
 	const hashes = await Promise.all(
 		contents.map((content) => retrievalContentHash(content, metadata))
@@ -252,40 +232,40 @@ const applyIndex = async (
 	await repository.stage(actor, source, documents);
 };
 
-export class EmbeddedNoteIndexer implements NoteIndexer {
+export class ContentIndex {
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingClient: EmbeddingClient,
 		private readonly chunker: ContentChunker = new TokenAwareChunker(),
 		private readonly defer = false
 	) {}
-
-	async index(actor: ActorContext, note: Note): Promise<void> {
-		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
-			source: { kind: 'note', noteId: note.id },
-			contents: note.archivedAt ? [] : this.chunker.chunk(note.plainText),
-			metadata: { sourceTitle: note.title },
-			embedPrefix: note.title,
-			base: {
-				projectId: note.projectId,
-				noteId: note.id,
-				sourceTitle: note.title,
-				sourceRevision: note.currentRevision,
-				sourceCreatedAt: note.createdAt
-			}
-		});
+	readonly notes = { index: this.indexNote.bind(this) };
+	readonly attachments = { index: this.indexAttachment.bind(this) };
+	readonly memories = { index: this.indexMemory.bind(this) };
+	diagrams(notes: NoteReader) {
+		return { index: this.indexDiagram.bind(this, notes) };
 	}
-}
-
-export class EmbeddedAttachmentIndexer {
-	constructor(
-		private readonly repository: RetrievalIndexRepository,
-		private readonly embeddingClient: EmbeddingClient,
-		private readonly chunker: ContentChunker = new TokenAwareChunker(),
-		private readonly defer = false
-	) {}
-
-	async index(
+	apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<void> {
+		return applyIndex(this.repository, this.embeddingClient, defer, actor, plan);
+	}
+	async indexNote(actor: ActorContext, note: Note): Promise<void> {
+		await this.apply(
+			actor,
+			decideIndexPlan({
+				source: { kind: 'note', noteId: note.id },
+				contents: note.archivedAt ? [] : this.chunker.chunk(note.plainText),
+				embedPrefix: note.title,
+				base: {
+					projectId: note.projectId,
+					noteId: note.id,
+					sourceTitle: note.title,
+					sourceRevision: note.currentRevision,
+					sourceCreatedAt: note.createdAt
+				}
+			})
+		);
+	}
+	async indexAttachment(
 		actor: ActorContext,
 		attachment: Attachment,
 		text: string
@@ -293,34 +273,27 @@ export class EmbeddedAttachmentIndexer {
 		const all = this.chunker.chunk(text);
 		const contents = all.slice(0, ATTACHMENT_CHUNK_LIMIT);
 		const sourceTitle = attachment.path.split('/').at(-1) ?? attachment.path;
-		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
-			source: { kind: 'attachment', attachmentId: attachment.id },
-			contents,
-			metadata: { sourceTitle, sectionPath: attachment.path },
-			embedPrefix: attachment.path,
-			base: {
-				projectId: attachment.projectId,
-				attachmentId: attachment.id,
-				attachmentPath: attachment.path,
-				sourceTitle,
-				sectionPath: attachment.path,
-				sourceRevision: 1,
-				sourceCreatedAt: attachment.createdAt
-			}
-		});
+		await this.apply(
+			actor,
+			decideIndexPlan({
+				source: { kind: 'attachment', attachmentId: attachment.id },
+				contents,
+				embedPrefix: attachment.path,
+				base: {
+					projectId: attachment.projectId,
+					attachmentId: attachment.id,
+					attachmentPath: attachment.path,
+					sourceTitle,
+					sectionPath: attachment.path,
+					sourceRevision: 1,
+					sourceCreatedAt: attachment.createdAt
+				}
+			}),
+			false
+		);
 		return { truncated: all.length > contents.length };
 	}
-}
-
-export class EmbeddedMemoryIndexer implements MemoryIndexer {
-	constructor(
-		private readonly repository: RetrievalIndexRepository,
-		private readonly embeddingClient: EmbeddingClient,
-		private readonly chunker: ContentChunker = new TokenAwareChunker(),
-		private readonly defer = false
-	) {}
-
-	async index(actor: ActorContext, entry: MemoryEntry): Promise<void> {
+	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<void> {
 		// User-profile entries (no project) are injected into agent context directly and
 		// never enter the retrieval index.
 		const projectId = entry.projectId;
@@ -329,42 +302,39 @@ export class EmbeddedMemoryIndexer implements MemoryIndexer {
 				? []
 				: this.chunker.chunk(entry.content);
 		if (!contents.length || !projectId) {
-			await this.repository.deleteForMemoryEntry(actor, entry.id);
+			await this.apply(actor, {
+				kind: 'remove',
+				source: { kind: 'memory', memoryEntryId: entry.id }
+			});
 			return;
 		}
-		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
-			source: { kind: 'memory', memoryEntryId: entry.id },
-			contents,
-			metadata: { sourceTitle: MEMORY_SOURCE_TITLE },
-			embedPrefix: MEMORY_SOURCE_TITLE,
-			base: {
-				projectId,
-				memoryEntryId: entry.id,
-				sourceTitle: MEMORY_SOURCE_TITLE,
-				sourceRevision: 1,
-				sourceCreatedAt: entry.createdAt
-			}
-		});
+		await this.apply(
+			actor,
+			decideIndexPlan({
+				source: { kind: 'memory', memoryEntryId: entry.id },
+				contents,
+				embedPrefix: MEMORY_SOURCE_TITLE,
+				base: {
+					projectId,
+					memoryEntryId: entry.id,
+					sourceTitle: MEMORY_SOURCE_TITLE,
+					sourceRevision: 1,
+					sourceCreatedAt: entry.createdAt
+				}
+			})
+		);
 	}
-}
-
-export class EmbeddedDiagramIndexer implements DiagramIndexer {
-	constructor(
-		private readonly repository: RetrievalIndexRepository,
-		private readonly embeddingClient: EmbeddingClient,
-		private readonly noteReader: NoteReader,
-		private readonly chunker: ContentChunker = new TokenAwareChunker(),
-		private readonly defer = false
-	) {}
-
-	async index(actor: ActorContext, diagram: Diagram): Promise<void> {
+	async indexDiagram(notes: NoteReader, actor: ActorContext, diagram: Diagram): Promise<void> {
 		const contents = this.chunker.chunk(diagram.searchableText);
 		// A diagram in the trash answers no searches, for the same reason one with no
 		// labels does not: the index describes what the project currently holds. Both
 		// conditions land here rather than in a second port, so "make the index agree
 		// with this row" stays one call whatever changed about the row.
 		if (diagram.archivedAt !== undefined || !contents.length) {
-			await this.repository.deleteForDiagram(actor, diagram.id);
+			await this.apply(actor, {
+				kind: 'remove',
+				source: { kind: 'diagram', diagramId: diagram.id }
+			});
 			return;
 		}
 		// A diagram chunk is a bare list of labels, so its title is the only context
@@ -377,22 +347,25 @@ export class EmbeddedDiagramIndexer implements DiagramIndexer {
 		const note =
 			diagram.sourceNoteId === undefined
 				? undefined
-				: await this.noteReader.get(actor, diagram.sourceNoteId);
+				: await notes.findById(actor, diagram.sourceNoteId);
+		if (diagram.sourceNoteId && !note) throw new NotFoundError('Diagram source note was not found');
 		const sectionPath = note?.title ?? diagram.title ?? 'Untitled diagram';
 		const sourceTitle = note ? `Diagram in ${sectionPath}` : `Diagram: ${sectionPath}`;
-		await applyIndex(this.repository, this.embeddingClient, this.defer, actor, {
-			source: { kind: 'diagram', diagramId: diagram.id },
-			contents,
-			metadata: { sourceTitle, sectionPath },
-			embedPrefix: sourceTitle,
-			base: {
-				projectId: diagram.projectId,
-				diagramId: diagram.id,
-				sourceTitle,
-				sectionPath,
-				sourceRevision: 0,
-				sourceCreatedAt: diagram.createdAt
-			}
-		});
+		await this.apply(
+			actor,
+			decideIndexPlan({
+				source: { kind: 'diagram', diagramId: diagram.id },
+				contents,
+				embedPrefix: sourceTitle,
+				base: {
+					projectId: diagram.projectId,
+					diagramId: diagram.id,
+					sourceTitle,
+					sectionPath,
+					sourceRevision: 0,
+					sourceCreatedAt: diagram.createdAt
+				}
+			})
+		);
 	}
 }

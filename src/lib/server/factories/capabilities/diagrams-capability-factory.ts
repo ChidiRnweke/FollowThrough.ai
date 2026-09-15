@@ -31,7 +31,7 @@ import { IconifyIconSearch } from '$lib/server/services/diagrams/icons';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { DrawioReview } from '$lib/server/services/diagrams/review';
 import { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
-import type { EmbeddedDiagramIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkills } from '$lib/server/services/skills/built-ins';
@@ -52,7 +52,7 @@ export interface DiagramsCapabilityInput {
 	readonly builtInSkills: BuiltInSkills;
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
-	readonly indexer: EmbeddedDiagramIndexer;
+	readonly indexer: ReturnType<ContentIndex['diagrams']>;
 	readonly sessions: AgentSessionRepository;
 	readonly projects: ProjectReader;
 }

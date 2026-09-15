@@ -3,7 +3,7 @@ import type { MemoryChangePayload } from '$lib/models/memory';
 import type { Provenance } from '$lib/models/provenance';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { MemoryLibrary } from './library';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -39,7 +39,7 @@ const setup = async () => {
 		entries,
 		projects,
 		provenance,
-		new EmbeddedMemoryIndexer(search, new InMemoryEmbeddingClient())
+		new ContentIndex(search, new InMemoryEmbeddingClient()).memories
 	);
 	return { entries, projects, provenance, search, service };
 };

@@ -6,7 +6,7 @@ import { createSyncCapability } from '$lib/server/factories/capabilities/sync-ca
 import { createMemoryCapability } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { EmbeddedMemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -22,10 +22,8 @@ const setup = async (suffix: string) => {
 		db: database,
 		projects: new ProjectRecords(database),
 		provenance: new ProvenanceRecords(database),
-		indexer: new EmbeddedMemoryIndexer(
-			new InMemorySearchRepository(),
-			new InMemoryEmbeddingClient()
-		)
+		indexer: new ContentIndex(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
+			.memories
 	});
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({

@@ -18,7 +18,7 @@ import {
 	type IAttachmentStorage,
 	type ObjectStorageConfig
 } from '$lib/server/services/attachments/storage';
-import type { EmbeddedAttachmentIndexer } from '$lib/server/services/knowledge-search/indexing';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { operationObserver } from '$lib/server/services/telemetry';
 import {
@@ -33,7 +33,7 @@ export interface AttachmentsCapabilityInput {
 	readonly notes: NoteRepository;
 	readonly preferences: AgentPreferenceCatalog;
 	readonly searchRepository: KnowledgeIndexRecords;
-	readonly indexer: EmbeddedAttachmentIndexer;
+	readonly indexer: ContentIndex['attachments'];
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
