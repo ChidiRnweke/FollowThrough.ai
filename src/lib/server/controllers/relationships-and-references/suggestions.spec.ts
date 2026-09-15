@@ -1,3 +1,4 @@
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import type { ReferenceCandidate, Url } from '$lib/models/references';
 import type { TextSelection } from '$lib/models/notes';
@@ -53,18 +54,16 @@ const setup = () => {
 		links,
 		references,
 		relate: new Relationships({
-			anchorCreator: content,
+			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 			linkFinder: links,
-			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			transactionRunner,
 			workflowRunner: new InMemoryWorkflowRunner()
 		}),
 		reference: new References({
-			anchorCreator: content,
+			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 			referenceFinder: references,
 			referenceRanker: references,
-			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			transactionRunner,
 			workflowRunner: new InMemoryWorkflowRunner()

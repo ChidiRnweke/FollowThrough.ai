@@ -1,4 +1,4 @@
-import type { ProvenanceOrigin } from '$lib/models/provenance';
+import type { ProvenanceOrigin, SourceAnchor, SelectionOrigin } from '$lib/models/provenance';
 import { z } from 'zod';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -36,19 +36,6 @@ type DiagramKind = 'mermaid' | 'drawio';
 type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
 
 export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' | 'reverted';
-
-interface SourceAnchor {
-	readonly id: SourceAnchorId;
-	readonly noteId: NoteId;
-	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
-	readonly quote: string;
-	readonly prefix?: string;
-	readonly suffix?: string;
-	readonly revision: number;
-	readonly createdAt: DateTime;
-}
 
 export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
 
@@ -350,10 +337,19 @@ export type SuggestionProposal =
 	  })
 	| (SuggestionProposalBase & { readonly kind: 'memory'; readonly payload: MemoryChangePayload });
 
-export const materializeSuggestion = (
+type SuggestionIdentity = {
+	readonly id: SuggestionId;
+	readonly userId: UserId;
+	readonly now: DateTime;
+};
+export function materializeSuggestion<P extends SuggestionProposal>(
+	proposal: P,
+	identity: SuggestionIdentity
+): Extract<Suggestion, { kind: P['kind'] }>;
+export function materializeSuggestion(
 	proposal: SuggestionProposal,
-	identity: { readonly id: SuggestionId; readonly userId: UserId; readonly now: DateTime }
-): Suggestion => {
+	identity: SuggestionIdentity
+): Suggestion {
 	const common = {
 		id: identity.id,
 		userId: identity.userId,
@@ -380,7 +376,7 @@ export const materializeSuggestion = (
 		case 'memory':
 			return { ...common, kind: 'memory', payload: proposal.payload };
 	}
-};
+}
 
 /** `autoAccepted` distinguishes a trust-policy auto-accept from a user's manual click, so the two are never conflated in the audit trail. */
 export interface AcceptSuggestionInput {
@@ -426,4 +422,52 @@ export interface SuggestionGroup {
 
 export interface ListSuggestionsOutput {
 	readonly groups: readonly SuggestionGroup[];
+}
+
+interface SelectionPayloads {
+	todo: Omit<CreateTodoInput, 'projectId' | 'sourceAnchorId' | 'provenanceId'>;
+	backlink: Omit<CreateRelationshipInput, 'sourceNoteId' | 'sourceAnchorId' | 'provenanceId'>;
+	reference: Omit<CreateReferenceInput, 'noteId' | 'sourceAnchorId' | 'provenanceId'>;
+}
+export type SelectionProposal = {
+	[K in keyof SelectionPayloads]: {
+		readonly kind: K;
+		readonly payload: SelectionPayloads[K];
+		readonly confidence?: number;
+	};
+}[keyof SelectionPayloads];
+export type ProposalSelectionOrigin = SelectionOrigin<{
+	readonly id: NoteId;
+	readonly projectId: ProjectId;
+}>;
+export function proposalFromSelection<P extends SelectionProposal>(
+	origin: ProposalSelectionOrigin,
+	proposal: P
+): Extract<SuggestionProposal, { kind: P['kind'] }>;
+export function proposalFromSelection(
+	origin: ProposalSelectionOrigin,
+	proposal: SelectionProposal
+): SuggestionProposal {
+	const source = { sourceAnchorId: origin.anchor.id, provenanceId: origin.provenance.id };
+	const common = { ...source, noteId: origin.note.id, confidence: proposal.confidence };
+	switch (proposal.kind) {
+		case 'todo':
+			return {
+				...common,
+				kind: 'todo',
+				payload: { ...proposal.payload, ...source, projectId: origin.note.projectId }
+			};
+		case 'backlink':
+			return {
+				...common,
+				kind: 'backlink',
+				payload: { ...proposal.payload, ...source, sourceNoteId: origin.note.id }
+			};
+		case 'reference':
+			return {
+				...common,
+				kind: 'reference',
+				payload: { ...proposal.payload, ...source, noteId: origin.note.id }
+			};
+	}
 }

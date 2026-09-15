@@ -1,6 +1,7 @@
 import { decideRevisionWrite } from '$lib/models/revisions';
 import {
 	sameNoteDraft,
+	decideSelection,
 	decideNoteCreation,
 	decideNoteArchive,
 	decideNoteRestore
@@ -362,20 +363,12 @@ export class NoteCatalog {
 	}
 
 	private async createAnchor(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {
-		if (!selection.text.trim()) throw new ValidationError('A non-empty selection is required');
 		const note = await this.get(actor, selection.noteId);
-		if (selection.revision !== note.currentRevision)
-			throw new StaleRevisionError('The selected note revision is stale');
-		if (
-			!Number.isInteger(selection.from) ||
-			!Number.isInteger(selection.to) ||
-			selection.from < 0 ||
-			selection.from > selection.to ||
-			selection.to > note.plainText.length
-		)
-			throw new ValidationError('Selection offsets are outside the note');
-		if (note.plainText.slice(selection.from, selection.to) !== selection.text)
-			throw new ValidationError('Selection text does not match the note at those offsets');
+		const decision = decideSelection(selection, note);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
+			throw new ValidationError(decision.message);
+		}
 		return this.anchors.insert(actor, {
 			id: crypto.randomUUID() as SourceAnchorId,
 			noteId: note.id,

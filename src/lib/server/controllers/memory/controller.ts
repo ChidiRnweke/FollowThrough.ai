@@ -16,7 +16,7 @@ import type {
 	ProposeMemoryChangeOutput,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
-import { InvalidGeneratedContentError, ValidationError } from '$lib/errors';
+import { ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	MemoryChangeApplier,
@@ -147,10 +147,7 @@ export class Memory implements MemoryController {
 				provenanceId: provenance.id,
 				payload
 			});
-			if (suggestion.kind !== 'memory')
-				throw new InvalidGeneratedContentError(
-					'Suggestion creator returned a non-memory suggestion for a memory proposal'
-				);
+
 			if (
 				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)
 			) {

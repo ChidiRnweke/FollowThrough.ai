@@ -24,16 +24,14 @@ import type { ProjectId } from '$lib/models/projects';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
 	NoteCreator,
-	NoteReader,
 	NoteEditor,
 	NoteRevisionReader,
 	NoteRevisionRecorder,
 	NoteAttachmentRestorer,
 	SourceAnchorRepairer,
 	NoteIndexer,
-	SelectionAnchorCreator
+	SelectionOriginService
 } from '$lib/server/services/notes/contracts';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
 	SkillCreator,
 	SkillFinder,
@@ -98,7 +96,6 @@ export interface SkillsDependencies {
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
 	skillUsageRecorder: SkillUsageRecorder;
-	noteReader: NoteReader;
 	noteEditor: NoteEditor;
 	revisionReader: NoteRevisionReader;
 	revisionRecorder: NoteRevisionRecorder;
@@ -107,10 +104,9 @@ export interface SkillsDependencies {
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;
-	anchorCreator: SelectionAnchorCreator;
+	selectionOrigins: SelectionOriginService;
 	skillCreator: SkillCreator;
 	noteCreator: NoteCreator;
-	provenanceRecorder: ProvenanceRecorder;
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {
@@ -171,19 +167,17 @@ export class Skills implements SkillsController {
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
-			await this.dependencies.provenanceRecorder.record(actor, {
+			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+			await this.dependencies.selectionOrigins.record(actor, source, {
 				producerKind: 'user',
 				producerName: 'Create Skill From Selection',
-				sourceAnchorId: anchor.id,
 				metadata: {}
 			});
-			const source = await this.dependencies.noteReader.get(actor, input.selection.noteId);
 			const created = await this.dependencies.noteCreator.create(actor, {
 				documentKind: 'skill',
 				title: input.name,
-				projectId: source.projectId,
-				parentId: source.parentId
+				projectId: source.note.projectId,
+				parentId: source.note.parentId
 			});
 			const note = await this.saveDocument(actor, {
 				...created,

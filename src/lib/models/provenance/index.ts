@@ -353,3 +353,13 @@ export const parseProvenance = (value: unknown): Provenance => provenanceSchema.
  */
 export const asProvenance = (request: ProvenanceRequest, identity: StoredIdentity): Provenance =>
 	parseProvenance({ ...request, ...identity });
+
+export interface SelectionSource<Document> {
+	readonly note: Document;
+	readonly anchor: SourceAnchor;
+}
+export interface SelectionOrigin<Document> extends SelectionSource<Document> {
+	readonly provenance: Provenance;
+}
+type WithoutSourceAnchor<T> = T extends ProvenanceRequest ? Omit<T, 'sourceAnchorId'> : never;
+export type SelectionProducer = WithoutSourceAnchor<ProvenanceRequest>;

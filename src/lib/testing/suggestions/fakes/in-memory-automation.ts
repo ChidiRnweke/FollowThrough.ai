@@ -1,6 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Suggestion,
+	SelectionProposal,
+	ProposalSelectionOrigin,
 	SuggestionId,
 	SuggestionStatus,
 	SuggestionView
@@ -26,7 +28,7 @@ import type {
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { materializeSuggestion } from '$lib/models/suggestions';
+import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
 
 export class InMemorySuggestionReader implements SuggestionLister, SuggestionViewAssembler {
 	suggestions: Suggestion[] = [];
@@ -69,6 +71,10 @@ export class InMemorySuggestions
 	failCreation = false;
 	failAcceptance = false;
 
+	async create<P extends SuggestionProposal>(
+		actor: ActorContext,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
 		if (this.failCreation) throw new ExternalServiceError('Suggestion creation failed');
 		const suggestion = materializeSuggestion(proposal, {
@@ -78,6 +84,19 @@ export class InMemorySuggestions
 		});
 		this.suggestions.push(suggestion);
 		return suggestion;
+	}
+
+	async createFromSelection<P extends SelectionProposal>(
+		actor: ActorContext,
+		origin: ProposalSelectionOrigin,
+		proposal: P
+	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
+	async createFromSelection(
+		actor: ActorContext,
+		origin: ProposalSelectionOrigin,
+		proposal: SelectionProposal
+	): Promise<Suggestion> {
+		return this.create(actor, proposalFromSelection(origin, proposal));
 	}
 
 	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {

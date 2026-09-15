@@ -1,4 +1,4 @@
-import type { Suggestion } from '$lib/models/suggestions';
+import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import { applyTodoEdit } from '$lib/models/todos';
@@ -19,9 +19,8 @@ import type {
 } from '$lib/models/todos';
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { NoteReader, SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
 	SuggestionAccepter,
 	SuggestionCreator
@@ -80,7 +79,7 @@ export interface TodosController {
 		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
-	): Promise<ExtractPromisesOutput<Suggestion>>;
+	): Promise<ExtractPromisesOutput<TodoSuggestion>>;
 	/**
 	 * Start {@link extractPromises} as a cancellable run, returning once the run is
 	 * durable rather than once the extraction is done. Its result arrives as a
@@ -96,14 +95,12 @@ export interface TodosDependencies {
 	todoEditor: TodoEditor;
 	todoDeleter: TodoDeleter;
 	todoStatusChanger: TodoStatusChanger;
-	anchorCreator: SelectionAnchorCreator;
+	selectionOrigins: SelectionOriginService;
 	promiseExtractor: PromiseExtractor;
-	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	trustPolicyEvaluator: TrustPolicyEvaluator;
 	todoCreator: TodoCreator;
 	suggestionAccepter: SuggestionAccepter;
-	noteReader: NoteReader;
 	transactionRunner: TransactionRunner;
 	boardPdfExporter: BoardPdfExporter;
 	workflowRunner: WorkflowRunStarter;
@@ -190,12 +187,10 @@ export class Todos implements TodosController {
 		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
-	): Promise<ExtractPromisesOutput<Suggestion>> {
+	): Promise<ExtractPromisesOutput<TodoSuggestion>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const [anchor, note] = await Promise.all([
-				this.dependencies.anchorCreator.create(actor, input.selection),
-				this.dependencies.noteReader.get(actor, input.selection.noteId)
-			]);
+			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+			const { anchor } = source;
 			const extracted = await this.dependencies.promiseExtractor.extract(
 				actor,
 				input.selection,
@@ -204,37 +199,31 @@ export class Todos implements TodosController {
 			const candidates = input.responsibility
 				? extracted.filter((candidate) => candidate.responsibility === input.responsibility)
 				: extracted;
-			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
+			const origin = await this.dependencies.selectionOrigins.record(actor, source, {
 				producerKind: 'pipeline',
 				producerName: 'Extract Promises',
 				pipeline: 'extract_promises',
-				sourceAnchorId: anchor.id,
 				metadata: {}
 			});
 			const suggestions = [];
 			const createdTodos: Todo[] = [];
 			for (const candidate of candidates) {
-				const suggestion = await this.dependencies.suggestionCreator.create(actor, {
-					kind: 'todo',
-					noteId: input.selection.noteId,
-					confidence: candidate.confidence,
-					provenanceId: provenance.id,
-					sourceAnchorId: anchor.id,
-					payload: {
-						projectId: note.projectId,
-						title: candidate.action,
-						responsibility: candidate.responsibility,
-						dueDateVerbatim: candidate.dueDateVerbatim,
-						dueDate: candidate.resolvedDueDate,
-						promiseStrength: candidate.strength,
-						sourceAnchorId: anchor.id,
-						provenanceId: provenance.id
+				const suggestion = await this.dependencies.suggestionCreator.createFromSelection(
+					actor,
+					origin,
+					{
+						kind: 'todo',
+						confidence: candidate.confidence,
+						payload: {
+							title: candidate.action,
+							responsibility: candidate.responsibility,
+							dueDateVerbatim: candidate.dueDateVerbatim,
+							dueDate: candidate.resolvedDueDate,
+							promiseStrength: candidate.strength
+						}
 					}
-				});
-				if (suggestion.kind !== 'todo')
-					throw new InvalidGeneratedContentError(
-						'Suggestion creator returned a non-todo suggestion for a todo proposal'
-					);
+				);
+
 				if (
 					await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(
 						actor,

@@ -1,3 +1,4 @@
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import type { PromiseCandidate } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';
@@ -48,14 +49,12 @@ const setup = () => {
 	content.notes = [noteBuilder({ plainText: selection.text })];
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			anchorCreator: content,
+			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 			promiseExtractor: extractor,
-			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			trustPolicyEvaluator: trust,
 			todoCreator: todos,
 			suggestionAccepter: suggestions,
-			noteReader: content,
 			transactionRunner: new InMemoryTransactionRunner([content, provenance, suggestions, todos])
 		})
 	);

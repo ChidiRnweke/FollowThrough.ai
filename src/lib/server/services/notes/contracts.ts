@@ -11,7 +11,13 @@ import type {
 	TextSelection,
 	TrashedNote
 } from '$lib/models/notes';
-import type { Provenance, SourceAnchor } from '$lib/models/provenance';
+import type {
+	Provenance,
+	SourceAnchor,
+	SelectionSource,
+	SelectionOrigin,
+	SelectionProducer
+} from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
 export interface NoteCreator {
 	create(
@@ -99,4 +105,13 @@ export interface SourceAnchorRepairer {
 }
 export interface NoteIndexer {
 	index(actor: ActorContext, note: Note): Promise<void>;
+}
+
+export interface SelectionOriginService {
+	resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>>;
+	record(
+		actor: ActorContext,
+		source: SelectionSource<Note>,
+		producer: SelectionProducer
+	): Promise<SelectionOrigin<Note>>;
 }

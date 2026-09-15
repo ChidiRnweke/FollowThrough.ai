@@ -1,3 +1,4 @@
+import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
@@ -16,6 +17,7 @@ export interface NotesCapability {
 	readonly repository: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
 	readonly catalog: NoteCatalog;
+	readonly selectionOrigins: SelectionOrigins;
 	readonly provenance: ProvenanceRecorder;
 	readonly provenanceRepository: ProvenanceRecords;
 }
@@ -28,6 +30,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 		repository,
 		anchors,
 		catalog: new NoteCatalog(repository, anchors, input.projects),
+		selectionOrigins: new SelectionOrigins(repository, anchors, provenanceRepository),
 		provenance: new NoteProvenance(provenanceRepository, anchors),
 		provenanceRepository
 	};
