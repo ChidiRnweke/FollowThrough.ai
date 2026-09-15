@@ -1,4 +1,5 @@
 import type { ProvenanceOrigin, SourceAnchor, SelectionOrigin } from '$lib/models/provenance';
+import { storedMemoryChangePayloadSchema, type MemoryChangePayload } from '$lib/models/memory';
 import { z } from 'zod';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -14,8 +15,6 @@ export type SuggestionId = Brand<string, 'SuggestionId'>;
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
-
-type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
 
@@ -85,6 +84,13 @@ export type DiagramSuggestion = SuggestionBase<
 
 export type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
 
+export interface MemorySuggestionView extends Omit<SuggestionView, 'suggestion'> {
+	readonly suggestion: MemorySuggestion;
+}
+export interface ListPendingMemoryOutput {
+	readonly suggestions: readonly MemorySuggestionView[];
+}
+
 export type Suggestion =
 	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
 
@@ -137,16 +143,7 @@ export const suggestionPayloadSchemas = {
 			source: z.string()
 		})
 		.strict(),
-	memory: z
-		.object({
-			projectId: persistedId<ProjectId>().optional(),
-			operation: z.enum(['add', 'update', 'remove']),
-			memoryEntryId: persistedId<MemoryEntryId>().optional(),
-			content: z.string().optional(),
-			shareWithAgents: z.boolean().optional(),
-			justification: z.string().optional()
-		})
-		.strict()
+	memory: storedMemoryChangePayloadSchema
 } satisfies {
 	readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']>;
 };
@@ -276,17 +273,6 @@ export type StoredSuggestion =
  * A durable remembered fact. Entries with a project hold project memory; entries
  * without one form the user's profile memory — who they are across all projects.
  */
-type MemoryChangeOperation = 'add' | 'update' | 'remove';
-
-interface MemoryChangePayload {
-	readonly projectId?: ProjectId;
-	readonly operation: MemoryChangeOperation;
-	readonly memoryEntryId?: MemoryEntryId;
-	readonly content?: string;
-	readonly shareWithAgents?: boolean;
-	readonly justification?: string;
-}
-
 interface CreateTodoInput {
 	readonly projectId: ProjectId;
 	readonly title: string;

@@ -1,14 +1,9 @@
 <script lang="ts">
 	import { Form } from '$lib/components/ui/form';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import type {
-		MemoryEntry,
-		MemoryEntryId,
-		MemoryEntryType,
-		MemorySuggestionView
-	} from '$lib/models/memory';
+	import type { MemoryEntry, MemoryEntryId, MemoryEntryType } from '$lib/models/memory';
 	import type { ProjectId } from '$lib/models/projects';
-	import type { SuggestionId } from '$lib/models/suggestions';
+	import type { SuggestionId, MemorySuggestionView } from '$lib/models/suggestions';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';

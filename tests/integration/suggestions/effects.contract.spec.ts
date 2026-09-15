@@ -24,7 +24,12 @@ const setup = async (suffix: string) => {
 		noteId: seeded.note.id,
 		kind: 'memory',
 		status: 'proposed',
-		payload: { operation: 'add', content: 'Original', projectId: seeded.project.id },
+		payload: {
+			scope: 'project',
+			operation: 'add',
+			content: 'Original',
+			projectId: seeded.project.id
+		},
 		provenanceId: provenance.id,
 		isAutoAccepted: false,
 		createdAt: now,
