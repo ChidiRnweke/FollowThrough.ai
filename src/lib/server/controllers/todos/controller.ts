@@ -18,7 +18,7 @@ import type {
 	UpdateTodoInput,
 	UpdateTodoOutput
 } from '$lib/models/todos';
-import { InvalidGeneratedContentError } from '$lib/errors';
+import { InvalidGeneratedContentError, InvalidTransitionError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
@@ -210,7 +210,7 @@ export class Todos implements TodosController {
 			const suggestions = [];
 			const createdTodos: Todo[] = [];
 			for (const candidate of candidates) {
-				const suggestion = await this.dependencies.suggestionCreator.createFromSelection(
+				let suggestion = await this.dependencies.suggestionCreator.createFromSelection(
 					actor,
 					origin,
 					{
@@ -238,7 +238,17 @@ export class Todos implements TodosController {
 						{ kind: 'created', after: { type: 'todos', value: todo } }
 					]);
 					createdTodos.push(todo);
-					await this.dependencies.suggestionAccepter.accept(actor, suggestion, todo.id, true);
+					const accepted = await this.dependencies.suggestionAccepter.accept(
+						actor,
+						suggestion,
+						todo.id,
+						true
+					);
+					if (accepted.kind !== 'todo')
+						throw new InvalidTransitionError(
+							'Task acceptance returned a different suggestion kind'
+						);
+					suggestion = accepted;
 				}
 				suggestions.push(suggestion);
 			}

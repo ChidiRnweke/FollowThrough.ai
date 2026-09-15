@@ -117,6 +117,33 @@ describe('Promise extraction orchestration invariants', () => {
 		expect(result.createdTodos).toEqual([]);
 	});
 
+	it('returns the persisted accepted proposal after automatic acceptance', async () => {
+		const { extractor, trust, controller, suggestions } = setup();
+		extractor.candidates = [candidate('Send it')];
+		trust.autoAccept = true;
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect(result.suggestions).toEqual(suggestions.suggestions);
+	});
+
+	it('returns accepted status and the created task identity', async () => {
+		const { extractor, trust, controller } = setup();
+		extractor.candidates = [candidate('Send it')];
+		trust.autoAccept = true;
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect(result.suggestions[0]).toMatchObject({
+			status: 'accepted',
+			appliedArtifactId: result.createdTodos[0].id,
+			isAutoAccepted: true
+		});
+	});
+
+	it('returns a proposed suggestion when review is required', async () => {
+		const { extractor, controller } = setup();
+		extractor.candidates = [candidate('Send it')];
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect(result.suggestions[0].status).toBe('proposed');
+	});
+
 	it('scopes an auto-created todo to the source note project', async () => {
 		const { extractor, trust, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
