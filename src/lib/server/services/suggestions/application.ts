@@ -42,7 +42,7 @@ interface DiagramProjectResolver {
 }
 
 interface MemoryChangeApplier {
-	applyWithChange(
+	apply(
 		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
@@ -140,7 +140,7 @@ export class SuggestionApplication implements ISuggestionApplication {
 				};
 			}
 			case 'memory': {
-				const result = await this.memoryChangeApplier.applyWithChange(
+				const result = await this.memoryChangeApplier.apply(
 					actor,
 					suggestion.payload,
 					suggestion.provenanceId

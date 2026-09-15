@@ -48,10 +48,9 @@ const replacement = async () => {
 describe('Recorded proposal undo', () => {
 	it('refuses automatic undo for an accepted proposal without a recorded effect', async () => {
 		const { service } = setup();
-		expect(await service.availability(testActor(), accepted())).toMatchObject({
-			kind: 'unavailable',
-			reason: 'unrecorded'
-		});
+		await expect(service.restore(testActor(), accepted())).rejects.toThrow(
+			'its changes were not recorded'
+		);
 	});
 	it('withdraws a newly created record', async () => {
 		const { service, repository } = setup();
@@ -95,10 +94,9 @@ describe('Recorded proposal undo', () => {
 	it('refuses to overwrite an intervening edit', async () => {
 		const { service, repository, created } = await replacement();
 		repository.put(created);
-		expect(await service.availability(testActor(), accepted())).toMatchObject({
-			kind: 'unavailable',
-			reason: 'changed'
-		});
+		await expect(service.restore(testActor(), accepted())).rejects.toThrow(
+			'its saved data has changed'
+		);
 	});
 	it('does not partially reverse a replacement when either record changed', async () => {
 		const { service, repository, created, deleted } = await replacement();

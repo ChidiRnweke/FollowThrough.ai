@@ -14,7 +14,7 @@
 Each item needs its own PR with the deleted implementations and observed verification results.
 Before marking a stage complete, run its focused tests and the lint, type, architecture, unit,
 PostgreSQL contract and docs checks. Command, storage and editor changes also require the production
-sync/PWA suite. Capture matched screenshots for skill-history and undo UI changes.
+sync/PWA suite. Capture matched screenshots for skill-history changes. Proposal undo retains the existing agent command; it adds no UI.
 
 Required behavior checks:
 

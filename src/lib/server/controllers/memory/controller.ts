@@ -154,7 +154,7 @@ export class Memory implements MemoryController {
 			if (
 				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)
 			) {
-				const applied = await this.dependencies.memoryChangeApplier.applyWithChange(
+				const applied = await this.dependencies.memoryChangeApplier.apply(
 					actor,
 					suggestion.payload,
 					suggestion.provenanceId

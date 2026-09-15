@@ -1,4 +1,4 @@
-import type { AppliedChange, UndoAvailability } from '$lib/models/proposal-effects';
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
@@ -67,6 +67,5 @@ export interface SuggestionEffectService {
 		id: SuggestionId,
 		changes: readonly AppliedChange<AppliedRecord>[]
 	): Promise<void>;
-	availability(actor: ActorContext, suggestion: Suggestion): Promise<UndoAvailability>;
 	restore(actor: ActorContext, suggestion: Suggestion): Promise<readonly AppliedRecord[]>;
 }

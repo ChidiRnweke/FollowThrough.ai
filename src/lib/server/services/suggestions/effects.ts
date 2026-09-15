@@ -1,10 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Suggestion, SuggestionId } from '$lib/models/suggestions';
-import type {
-	AppliedChange,
-	ApplicationEffect,
-	UndoAvailability
-} from '$lib/models/proposal-effects';
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type {
 	ApplicationEffectRepository,
 	AppliedRecord
@@ -22,33 +18,14 @@ export class SuggestionEffects {
 	): Promise<void> {
 		return this.effects.record(actor, id, changes);
 	}
-	async availability(actor: ActorContext, suggestion: Suggestion): Promise<UndoAvailability> {
-		const result = await this.resolve(actor, suggestion);
-		return result.kind === 'available' ? { kind: 'available' } : result;
-	}
-	private async resolve(
-		actor: ActorContext,
-		suggestion: Suggestion
-	): Promise<
-		| (Extract<UndoAvailability, { kind: 'available' }> & {
-				effect: ApplicationEffect<AppliedRecord>;
-		  })
-		| Extract<UndoAvailability, { kind: 'unavailable' }>
-	> {
+	async restore(actor: ActorContext, suggestion: Suggestion): Promise<readonly AppliedRecord[]> {
 		if (suggestion.status !== 'accepted')
-			return {
-				kind: 'unavailable',
-				reason: 'not-accepted',
-				message: 'Only an accepted proposal can be undone.'
-			};
+			throw new InvalidTransitionError('Only an accepted suggestion can be undone.');
 		const effect = await this.effects.find(actor, suggestion.id);
 		if (!effect)
-			return {
-				kind: 'unavailable',
-				reason: 'unrecorded',
-				message:
-					'Undo is unavailable because this suggestion has no recorded changes. Its saved data is unchanged.'
-			};
+			throw new InvalidTransitionError(
+				'Cannot undo this suggestion because its changes were not recorded.'
+			);
 		for (const change of [...effect.changes].sort((a, b) =>
 			(a.after.type + ':' + a.after.value.id).localeCompare(b.after.type + ':' + b.after.value.id)
 		)) {
@@ -56,19 +33,10 @@ export class SuggestionEffects {
 				change.kind !== 'unchanged' &&
 				(await this.effects.lockVersion(actor, change.after)) !== change.version
 			)
-				return {
-					kind: 'unavailable',
-					reason: 'changed',
-					message:
-						'The saved data changed after this proposal was accepted. Undo would overwrite those edits.'
-				};
+				throw new InvalidTransitionError(
+					'Cannot undo this suggestion because its saved data has changed.'
+				);
 		}
-		return { kind: 'available', effect };
-	}
-	async restore(actor: ActorContext, suggestion: Suggestion): Promise<readonly AppliedRecord[]> {
-		const availability = await this.resolve(actor, suggestion);
-		if (availability.kind === 'unavailable') throw new InvalidTransitionError(availability.message);
-		const effect = availability.effect;
 		const restored: AppliedRecord[] = [];
 		for (const change of [...effect.changes].reverse()) {
 			if (change.kind !== 'unchanged') restored.push(await this.effects.restore(actor, change));
