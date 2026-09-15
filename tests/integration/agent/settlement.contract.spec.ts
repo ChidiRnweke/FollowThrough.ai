@@ -58,21 +58,21 @@ describe('atomic execution settlement', () => {
 		]);
 		expect({
 			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) => record.event.type)
+			events: (await events.replay(owner, run.id, '0')).map((record) =>
+				record.kind === 'readable' ? record.event.type : record.kind
+			)
 		}).toEqual({ status: 'completed', events: ['completed'] });
 	});
-	it('publishes only cancellation after cancellation wins against workflow completion', async () => {
+	it('publishes only cancellation after cancellation wins against completion', async () => {
 		const { owner, runs, events, run, settlements } = await setup('9612');
 		await runs.requestCancellation(owner, run.id, now);
 		await Promise.all([
 			settlements.settle(
 				run.id,
 				{
-					kind: 'workflow_completed',
+					kind: 'completed',
 					conversationId: run.conversationId,
-					model: run.model,
-					action: 'diagram',
-					result: 'discard'
+					model: run.model
 				},
 				async () => {}
 			),
@@ -84,7 +84,9 @@ describe('atomic execution settlement', () => {
 		]);
 		expect({
 			status: (await runs.findById(owner, run.id))?.status,
-			events: (await events.replay(owner, run.id, '0')).map((record) => record.event.type)
+			events: (await events.replay(owner, run.id, '0')).map((record) =>
+				record.kind === 'readable' ? record.event.type : record.kind
+			)
 		}).toEqual({ status: 'cancelled', events: ['cancelled'] });
 	});
 	it('rolls back the state and journal if materialization fails', async () => {

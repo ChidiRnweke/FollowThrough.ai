@@ -1008,10 +1008,17 @@ export class ChatStore {
 			},
 			onEvent: async (record) => {
 				if (generation !== this.connectionGeneration) return;
-				if (BigInt(record.cursor) <= BigInt(this.cursor)) return;
-				await this.apply(reply, record.event, record.attempt);
+				const event = record.event;
+				const terminal =
+					event.type === 'completed' ||
+					event.type === 'cancelled' ||
+					(event.type === 'failed' && !event.retryable);
+				if (event.type === 'resources_stale' || terminal) await this.resources?.synchronize();
+				if (generation !== this.connectionGeneration) return;
+				this.apply(reply, event);
 				this.cursor = record.cursor;
-				this.storage.save({ runId, cursor: this.cursor, attempt: this.attempt });
+				this.storage.save({ runId, cursor: this.cursor, attempt: record.attempt });
+				if (terminal) this.detach();
 			},
 			onError: () => {
 				if (generation === this.connectionGeneration)
@@ -1027,7 +1034,13 @@ export class ChatStore {
 			const snapshot = await this.transport.get(runId);
 			if (generation !== this.connectionGeneration) return;
 			this.reconcileSnapshot(reply, snapshot);
-			if (!activeStatuses.includes(snapshot.run.status)) this.detach();
+			if (
+				!activeStatuses.includes(snapshot.run.status) &&
+				BigInt(this.cursor) >= BigInt(snapshot.latestCursor)
+			) {
+				await this.resources?.synchronize();
+				if (generation === this.connectionGeneration) this.detach();
+			}
 			// audit-allow: silent-catch — refresh failure moves the connection into its visible reconnecting/offline state.
 		} catch {
 			this.connection = navigator.onLine ? 'reconnecting' : 'offline';
@@ -1079,14 +1092,7 @@ export class ChatStore {
 		}
 	}
 
-	private async apply(reply: ChatEntry, event: AgentEvent, attempt: number): Promise<void> {
-		if (
-			event.type === 'resources_stale' ||
-			event.type === 'completed' ||
-			event.type === 'cancelled' ||
-			(event.type === 'failed' && !event.retryable)
-		)
-			await this.resources?.synchronize();
+	private apply(reply: ChatEntry, event: AgentEvent): void {
 		if (event.type === 'run_queued') {
 			this.runStatus = 'queued';
 			reply.status = 'queued';
@@ -1161,19 +1167,11 @@ export class ChatStore {
 			reply.status = 'cancelled';
 			this.runStatus = 'cancelled';
 			reply.error = event.message;
-			this.detach();
 		} else if (event.type === 'completed') {
 			reply.status = 'completed';
 			this.runStatus = 'completed';
 			this.conversationId = event.conversationId;
-			this.detach();
 		}
-
-		this.storage.save({
-			...(this.runId ? { runId: this.runId } : {}),
-			cursor: this.cursor,
-			attempt
-		});
 	}
 }
 import { z } from 'zod';

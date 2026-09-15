@@ -17,7 +17,10 @@ const setup = (status: 'running' | 'cancelling' = 'running') => {
 		executionMode: 'approval_required',
 		requestId: 'settlement-test',
 		pendingDecisions: [],
-		inputSnapshot: { prompt: 'Test' },
+		inputSnapshot: {
+			conversationId: '30000000-0000-4000-8000-000000000002' as ConversationId,
+			prompt: 'Test'
+		},
 		createdAt: testNow,
 		updatedAt: testNow
 	};

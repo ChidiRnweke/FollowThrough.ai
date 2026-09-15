@@ -425,15 +425,7 @@ describe('settling a run whose execution threw', () => {
 	});
 });
 
-/**
- * A turn that mutates twice through the executor, with the call ids the test
- * supplies, and settles the calls the provider identified.
- *
- * The id-less case is the one that mattered: every call used to reach the
- * executor as `String(details?.toolCall?.callId ?? '')`, so two mutations
- * without an id shared the key `''`. The second overwrote the first, and only
- * one of the two resources was ever reported stale.
- */
+/** Each successful mutation requests workspace synchronization. */
 const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[]) => ({
 	execute: async function* (input: {
 		readonly toolExecutor: AgentToolExecutor;

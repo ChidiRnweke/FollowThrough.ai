@@ -1,5 +1,12 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentRun, AgentRunId, AgentRunReceipt, NoteActionKind } from '$lib/models/agent';
+import type {
+	AgentRun,
+	AgentRunId,
+	AgentRunReceipt,
+	NoteActionKind,
+	RunSettlementOutcome,
+	RunSettlementResult
+} from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 export type {
 	AgentRunRepository,
@@ -13,18 +20,7 @@ export interface AgentRunExecutor {
 	finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined>;
 	failRun(runId: AgentRunId, error: Error): Promise<void>;
 }
-/**
- * `Result` stays unconstrained, and the reading happens in {@link
- * WorkflowRunner.execute} instead.
- *
- * Constraining it to `AgentPayload` is what this looks like it wants, because
- * the result is appended to the event log and replayed to a client that
- * reconnects. But the tasks return domain outputs — `FindReferencesOutput`,
- * `GenerateMermaidDiagramOutput` — which are JSON-shaped and still not
- * assignable to an index signature. Satisfying the constraint would mean
- * putting one on each of those domain types, which is the open-keyed indexing
- * this effort removes, in the layer furthest from the wire.
- */
+/** Domain results are validated as JSON when the workflow records its outcome. */
 export interface WorkflowRunTask<Result> {
 	readonly action: NoteActionKind;
 	readonly noteId: NoteId;
@@ -45,7 +41,7 @@ export interface WorkflowRunStarter {
 export interface RunSettlement {
 	settle(
 		runId: AgentRunId,
-		outcome: import('$lib/models/agent').RunSettlementOutcome,
+		outcome: RunSettlementOutcome,
 		materialize: (run: AgentRun) => Promise<void>
-	): Promise<import('$lib/models/agent').RunSettlementResult>;
+	): Promise<RunSettlementResult>;
 }
