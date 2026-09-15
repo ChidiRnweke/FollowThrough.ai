@@ -1,3 +1,4 @@
+import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentExecutionUpdate,
@@ -27,14 +28,20 @@ import type { ProvenanceId } from '$lib/models/provenance';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 
 export interface AgentWorkflowToolbox {
-	extractPromises(actor: ActorContext, selection: TextSelection): Promise<ExtractPromisesOutput>;
-	relate(actor: ActorContext, selection: TextSelection): Promise<RelateSelectionOutput>;
-	reference(actor: ActorContext, selection: TextSelection): Promise<FindReferencesOutput>;
+	extractPromises(
+		actor: ActorContext,
+		selection: TextSelection
+	): Promise<ExtractPromisesOutput<Suggestion>>;
+	relate(actor: ActorContext, selection: TextSelection): Promise<RelateSelectionOutput<Suggestion>>;
+	reference(
+		actor: ActorContext,
+		selection: TextSelection
+	): Promise<FindReferencesOutput<Suggestion>>;
 	generateDiagram(
 		actor: ActorContext,
 		selection: TextSelection,
 		instruction?: string
-	): Promise<GenerateMermaidDiagramOutput>;
+	): Promise<GenerateMermaidDiagramOutput<Suggestion>>;
 }
 export interface AgentContextBuilder {
 	build(

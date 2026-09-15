@@ -1,6 +1,7 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { describe, expect, it } from 'vitest';
-import type { ShellContext } from '$lib/models/workspace';
+
 import {
 	approvalConsequence,
 	isWriteTool,

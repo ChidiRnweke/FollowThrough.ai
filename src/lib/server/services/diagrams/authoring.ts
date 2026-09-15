@@ -1,3 +1,4 @@
+import type { Note } from '$lib/models/notes';
 import { Agent, OpenAIProvider, Runner, tool, type AgentInputItem } from '@openai/agents';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -273,7 +274,7 @@ export interface DiagramAgentDependencies {
 	readonly provenance: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 	};
-	readonly builtInSkills: { load(actor: ActorContext, key: string): Promise<Skill> };
+	readonly builtInSkills: { load(actor: ActorContext, key: string): Promise<Skill<Note>> };
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
 	readonly resolveModel: DiagramModelResolver;

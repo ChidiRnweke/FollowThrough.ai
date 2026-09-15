@@ -39,7 +39,7 @@ export class SkillLibrary {
 		actor: ActorContext,
 		note: Note,
 		input: { name: string; description: string; triggerHints: readonly string[] }
-	): Promise<Skill> {
+	): Promise<Skill<Note>> {
 		const owned = await this.notes.findById(actor, note.id);
 		if (!owned) throw new NotFoundError('Skill note was not found');
 		if (owned.kind === 'folder') throw new ValidationError('A folder cannot become a skill');
@@ -76,7 +76,7 @@ export class SkillLibrary {
 			triggerHints: readonly string[];
 			provenanceId: ProvenanceId;
 		}
-	): Promise<Skill> {
+	): Promise<Skill<Note>> {
 		const name = input.name.trim();
 		if (!name) throw new ValidationError('Skill name is required');
 		const source = await this.notes.findById(actor, selection.noteId);
@@ -120,7 +120,7 @@ export class SkillLibrary {
 	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills.listAll(actor, projectId);
 	}
-	async load(actor: ActorContext, noteId: NoteId): Promise<Skill> {
+	async load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
 		const skill = await this.skills.findByNoteId(actor, noteId);
 		if (!skill) throw new NotFoundError('Skill was not found');
 		return skill;
@@ -163,7 +163,11 @@ export class SkillLibrary {
 		return this.notes.listRevisions(actor, skillNoteId);
 	}
 
-	async restoreVersion(actor: ActorContext, skillNoteId: NoteId, revision: number): Promise<Skill> {
+	async restoreVersion(
+		actor: ActorContext,
+		skillNoteId: NoteId,
+		revision: number
+	): Promise<Skill<Note>> {
 		const skill = await this.load(actor, skillNoteId);
 		const snapshot = (await this.notes.listRevisions(actor, skillNoteId)).find(
 			(candidate) => candidate.revision === revision
@@ -202,7 +206,7 @@ export class SkillLibrary {
 			triggerHints?: readonly string[];
 			isEnabled?: boolean;
 		}
-	): Promise<Skill> {
+	): Promise<Skill<Note>> {
 		const current = await this.load(actor, input.noteId);
 		if (input.raw !== undefined && input.manifest !== undefined)
 			throw new ValidationError('Provide raw SKILL.md or structured fields, not both');

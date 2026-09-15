@@ -2,8 +2,6 @@ import { z } from 'zod';
 import { stringify } from 'yaml';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
-type UserId = Brand<string, 'UserId'>;
-
 type ProjectId = Brand<string, 'ProjectId'>;
 
 type NoteId = Brand<string, 'NoteId'>;
@@ -14,16 +12,6 @@ type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
 
-interface ProseMirrorDocument {
-	readonly type: 'doc';
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-interface ProseMirrorNodeView {
-	readonly type: string;
-	readonly text?: string;
-	readonly content?: readonly ProseMirrorNodeView[];
-}
-
 interface TextSelection {
 	readonly noteId: NoteId;
 	readonly revision: number;
@@ -32,31 +20,9 @@ interface TextSelection {
 	readonly text: string;
 }
 
-type NoteKind = 'folder' | 'note' | 'skill';
-
-interface Note {
-	readonly id: NoteId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly parentId?: NoteId;
-	readonly kind: NoteKind;
-	readonly position: number;
-	readonly title: string;
-	readonly builtInKey?: string;
-	readonly document: ProseMirrorDocument;
-	readonly plainText: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly isPinned: boolean;
-	readonly publishedAt?: DateTime;
-	readonly archivedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
 /** A skill is a note plus metadata: the instruction text lives in `note`, everything the agent uses to decide whether to load it lives alongside it. */
-export interface Skill {
-	readonly note: Note;
+export interface Skill<Document> {
+	readonly note: Document;
 	readonly name: string;
 	readonly slug?: string;
 	readonly description: string;
@@ -90,7 +56,7 @@ export interface SkillManifest {
 }
 
 export type SkillSummary = Pick<
-	Skill,
+	Skill<never>,
 	'name' | 'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
 > & {
 	readonly noteId: NoteId;
@@ -139,19 +105,22 @@ export interface CreateSkillInput {
 	readonly parentId?: NoteId;
 }
 
-export interface CreateSkillOutput {
-	readonly skill: Skill;
+export interface CreateSkillOutput<Document> {
+	readonly skill: Skill<Document>;
 }
 
-type NoteRef = Pick<Note, 'id' | 'title'>;
+interface NoteRef {
+	readonly id: NoteId;
+	readonly title: string;
+}
 
 export interface SkillUsageView {
 	readonly usage: SkillUsage;
 	readonly contextNote?: NoteRef;
 }
 
-export interface SkillView {
-	readonly skill: Skill;
+export interface SkillView<Document> {
+	readonly skill: Skill<Document>;
 	readonly usages: readonly SkillUsageView[];
 }
 

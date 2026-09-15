@@ -1,9 +1,11 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import { fly, slide } from 'svelte/transition';
 	import { page } from '$app/state';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import { starterSurface } from '../chat/chat-starters';
 	import * as HoverCard from '$lib/components/ui/hover-card';
 	import { Button } from '$lib/components/ui/button';

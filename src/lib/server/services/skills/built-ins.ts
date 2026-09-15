@@ -55,7 +55,7 @@ export class BuiltInSkills {
 		);
 	}
 
-	async load(actor: ActorContext, key: string): Promise<Skill> {
+	async load(actor: ActorContext, key: string): Promise<Skill<Note>> {
 		await this.ensure(actor);
 		const note = await this.notes.findByBuiltInKey(actor, key);
 		if (!note) throw new NotFoundError(`Built-in skill "${key}" was not found`);
@@ -151,7 +151,7 @@ export class BuiltInSkills {
 	 * actually protects an edit; whether the user pressed publish says nothing
 	 * about authorship.
 	 */
-	private isUntouched(note: Note, skill: Skill, released: BuiltInSkillDefinition): boolean {
+	private isUntouched(note: Note, skill: Skill<Note>, released: BuiltInSkillDefinition): boolean {
 		const metadata = skill.metadata ?? {};
 		const expected = this.metadata(released);
 		return (
@@ -174,7 +174,7 @@ export class BuiltInSkills {
 	private async upgradeBuiltIn(
 		actor: ActorContext,
 		note: Note,
-		skill: Skill,
+		skill: Skill<Note>,
 		definition: BuiltInSkillDefinition
 	): Promise<void> {
 		const timestamp = now();
@@ -246,7 +246,7 @@ export class BuiltInSkills {
 		return note;
 	}
 
-	private toSkill(note: Note, definition: BuiltInSkillDefinition): Skill {
+	private toSkill(note: Note, definition: BuiltInSkillDefinition): Skill<Note> {
 		return {
 			note,
 			name: definition.name,
@@ -271,7 +271,7 @@ export class BuiltInSkills {
 interface SkillCollection {
 	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
 	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill>;
+	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
 }
 
 export class BuiltInSkillLibrary {
@@ -290,7 +290,7 @@ export class BuiltInSkillLibrary {
 		return this.delegate.listAll(actor, projectId);
 	}
 
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill> {
+	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
 		return this.delegate.load(actor, noteId);
 	}
 }

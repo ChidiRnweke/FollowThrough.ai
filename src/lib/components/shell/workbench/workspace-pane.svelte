@@ -1,8 +1,11 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
+	import type { NoteView } from '$lib/client/notes/view';
+
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-	import type { NoteView } from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import { parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import NotePane from './note-pane.svelte';
 	import ChatPane from './chat-pane.svelte';

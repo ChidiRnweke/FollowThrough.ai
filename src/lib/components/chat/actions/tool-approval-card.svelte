@@ -1,8 +1,10 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { Note } from '$lib/models/notes';
 	import type { AgentPreferenceValues } from '$lib/models/agent';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
 	import { Button } from '$lib/components/ui/button';

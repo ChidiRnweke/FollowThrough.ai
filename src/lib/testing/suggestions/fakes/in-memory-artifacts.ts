@@ -1,4 +1,4 @@
-import type { AcceptSuggestionOutput, Suggestion } from '$lib/models/suggestions';
+import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { Todo } from '$lib/models/todos';
 import { ExternalServiceError } from '$lib/errors';
@@ -17,7 +17,7 @@ export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, S
 	async apply(
 		actor: ActorContext,
 		suggestion: Suggestion
-	): Promise<AcceptSuggestionOutput['artifact']> {
+	): Promise<Awaited<ReturnType<SuggestionArtifactApplier['apply']>>> {
 		if (this.failApply) throw new ExternalServiceError('Artifact application failed');
 		if (suggestion.kind !== 'todo') throw new ExternalServiceError('Unsupported test artifact');
 		const artifact = todoBuilder({

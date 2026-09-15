@@ -9,16 +9,6 @@ type ProjectId = Brand<string, 'ProjectId'>;
 
 type NoteId = Brand<string, 'NoteId'>;
 
-type ConversationId = Brand<string, 'ConversationId'>;
-
-type TodoId = Brand<string, 'TodoId'>;
-
-type RelationshipId = Brand<string, 'RelationshipId'>;
-
-type ReferenceId = Brand<string, 'ReferenceId'>;
-
-type DiagramId = Brand<string, 'DiagramId'>;
-
 export type SuggestionId = Brand<string, 'SuggestionId'>;
 
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
@@ -35,13 +25,7 @@ type Url = Brand<string, 'Url'>;
 
 type Confidence = Brand<number, 'Confidence'>;
 
-type TodoStatus = 'backlog' | 'open' | 'in_progress' | 'done' | 'cancelled';
-
 type TodoResponsibility = 'mine' | 'waiting_on';
-
-type TodoPriority = 'low' | 'medium' | 'high';
-
-type MemoryEntryType = 'fact' | 'decision' | 'constraint' | 'preference';
 
 type PromiseStrength = 'explicit' | 'implied' | 'tentative';
 
@@ -66,89 +50,6 @@ interface SourceAnchor {
 	readonly createdAt: DateTime;
 }
 
-interface Todo {
-	readonly id: TodoId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly description?: string;
-	readonly status: TodoStatus;
-	readonly responsibility: TodoResponsibility;
-	readonly priority?: TodoPriority;
-	readonly category?: string;
-	readonly waitingOn?: string;
-	readonly dueDate?: LocalDate;
-	readonly dueDateVerbatim?: string;
-	readonly promiseStrength?: PromiseStrength;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly linkedNoteId?: NoteId;
-	readonly provenanceId?: ProvenanceId;
-	readonly completedAt?: DateTime;
-	readonly deletedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface NoteRelationship {
-	readonly id: RelationshipId;
-	readonly userId: UserId;
-	readonly sourceNoteId: NoteId;
-	readonly targetNoteId: NoteId;
-	readonly kind: RelationshipKind;
-	readonly justification?: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface ExternalReference {
-	readonly id: ReferenceId;
-	readonly userId: UserId;
-	readonly noteId: NoteId;
-	readonly url: Url;
-	readonly title: string;
-	readonly tier: ReferenceTier;
-	readonly relevanceNote: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-	readonly createdAt: DateTime;
-}
-
-interface DiagramBase {
-	readonly id: DiagramId;
-	readonly userId: UserId;
-	/** Diagrams are owned by their project; a source note is optional context. */
-	readonly projectId: ProjectId;
-	/** Absent for a studio diagram, which belongs to the project rather than a note. */
-	readonly sourceNoteId?: NoteId;
-	/** The studio conversation that produced this diagram, for reopening it. */
-	readonly conversationId?: ConversationId;
-	readonly title?: string;
-	readonly renderedSvg?: string;
-	readonly searchableText: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface MermaidDiagram extends DiagramBase {
-	readonly kind: 'mermaid';
-	readonly source: string;
-}
-
-interface DrawioDiagram extends DiagramBase {
-	readonly kind: 'drawio';
-	readonly source: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly publishedAt?: DateTime;
-	readonly promotedFromId?: DiagramId;
-}
-
-type Diagram = MermaidDiagram | DrawioDiagram;
-
 export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
 
 interface SuggestionBase<Kind extends SuggestionKind, Payload> {
@@ -169,13 +70,13 @@ interface SuggestionBase<Kind extends SuggestionKind, Payload> {
 	readonly updatedAt: DateTime;
 }
 
-type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
+export type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
 
 export type BacklinkSuggestion = SuggestionBase<'backlink', CreateRelationshipInput>;
 
-type ReferenceSuggestion = SuggestionBase<'reference', CreateReferenceInput>;
+export type ReferenceSuggestion = SuggestionBase<'reference', CreateReferenceInput>;
 
-type DiagramSuggestion = SuggestionBase<
+export type DiagramSuggestion = SuggestionBase<
 	'diagram',
 	{
 		readonly noteId: NoteId;
@@ -185,7 +86,7 @@ type DiagramSuggestion = SuggestionBase<
 	}
 >;
 
-type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
+export type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
 
 export type Suggestion =
 	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
@@ -383,20 +284,6 @@ export const parseSuggestionPayload = (
  * A durable remembered fact. Entries with a project hold project memory; entries
  * without one form the user's profile memory — who they are across all projects.
  */
-export interface MemoryEntry {
-	readonly id: MemoryEntryId;
-	readonly userId: UserId;
-	readonly projectId?: ProjectId;
-	readonly content: string;
-	readonly type?: MemoryEntryType;
-	readonly shareWithAgents: boolean;
-	readonly provenanceId?: ProvenanceId;
-	readonly replacesEntryId?: MemoryEntryId;
-	readonly deletedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
 type MemoryChangeOperation = 'add' | 'update' | 'remove';
 
 interface MemoryChangePayload {
@@ -501,9 +388,9 @@ export interface AcceptSuggestionInput {
 	readonly autoAccepted?: boolean;
 }
 
-export interface AcceptSuggestionOutput {
+export interface AcceptSuggestionOutput<Artifact> {
 	readonly suggestion: Suggestion;
-	readonly artifact: Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
+	readonly artifact: Artifact;
 }
 
 export interface RejectSuggestionInput {

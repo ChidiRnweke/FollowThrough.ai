@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
 	import {
 		sectionNumberingLevelFor,
@@ -6,7 +8,7 @@
 		type SectionNumberingView
 	} from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';

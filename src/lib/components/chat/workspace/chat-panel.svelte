@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import { onMount, tick, untrack } from 'svelte';
 	import { z } from 'zod';
 	import type { SuggestionId } from '$lib/models/suggestions';
@@ -12,7 +14,7 @@
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import {
 		entryText,
 		type ChatEntry,

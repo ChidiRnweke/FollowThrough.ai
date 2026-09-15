@@ -1,7 +1,11 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
+	import type { NoteView } from '$lib/client/notes/view';
+
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import type { NoteId, NoteView } from '$lib/models/notes';
-	import type { ShellContext } from '$lib/models/workspace';
+	import type { NoteId } from '$lib/models/notes';
+
 	import { Button } from '$lib/components/ui/button';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';

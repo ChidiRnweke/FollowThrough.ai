@@ -1,3 +1,4 @@
+import type { Note } from '$lib/models/notes';
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
@@ -207,7 +208,7 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 }
 
 export class InMemorySkillRepository implements SkillRepository {
-	skills: Skill[] = [];
+	skills: Skill<Note>[] = [];
 	usages: SkillUsage[] = [];
 	async findByNoteId(actor: ActorContext, noteId: NoteId) {
 		return this.skills.find((item) => item.note.id === noteId && item.note.userId === actor.userId);
@@ -226,11 +227,11 @@ export class InMemorySkillRepository implements SkillRepository {
 				isEnabled: item.isEnabled
 			}));
 	}
-	async insert(_actor: ActorContext, skill: Skill) {
+	async insert(_actor: ActorContext, skill: Skill<Note>) {
 		this.skills.push(skill);
 		return skill;
 	}
-	async update(_actor: ActorContext, skill: Skill) {
+	async update(_actor: ActorContext, skill: Skill<Note>) {
 		this.skills = this.skills.map((item) => (item.note.id === skill.note.id ? skill : item));
 		return skill;
 	}

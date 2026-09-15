@@ -1,10 +1,11 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import {
 	agentPayloadItems,
 	isAgentPayloadObject,
 	type AgentPayload
 } from '$lib/models/agent/payload';
 import type { EntityKind, EntityRef } from '$lib/models/tool-display';
-import type { ShellContext } from '$lib/models/workspace';
+
 import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { entityFrom } from './tool-entities';
 import { friendlyToolLabel } from './tool-labels';

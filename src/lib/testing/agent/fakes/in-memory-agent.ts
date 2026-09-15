@@ -1,3 +1,4 @@
+import type { Note } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentEvent, AgentExecutionUpdate } from '$lib/models/agent';
 import type { NoteId, TextSelection } from '$lib/models/notes';
@@ -67,11 +68,11 @@ export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
 }
 
 export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
-	skills: Skill[] = [];
+	skills: Skill<Note>[] = [];
 	pinnedNoteIds: NoteId[] = [];
 	usages: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }[] = [];
 
-	private summarize(skill: Skill): SkillSummary {
+	private summarize(skill: Skill<Note>): SkillSummary {
 		return {
 			noteId: skill.note.id,
 			name: skill.name,
@@ -99,7 +100,7 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 		];
 	}
 
-	async load(_actor: ActorContext, noteId: NoteId): Promise<Skill> {
+	async load(_actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
 		void _actor;
 		const skill = this.skills.find((candidate) => candidate.note.id === noteId);
 		if (!skill) throw new NotFoundError('Skill was not found');

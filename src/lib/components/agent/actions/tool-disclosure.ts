@@ -1,7 +1,8 @@
+import type { ShellContext } from '$lib/client/shell/views';
 import type { EntityRef } from '$lib/models/tool-display';
 export type { EntityKind, EntityRef } from '$lib/models/tool-display';
 import { toolPresentationKind, type ToolFamily } from './tool-catalog-presentation';
-import type { ShellContext } from '$lib/models/workspace';
+
 import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 import { explainToolFailure } from './tool-result';

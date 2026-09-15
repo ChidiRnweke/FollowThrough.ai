@@ -1,7 +1,5 @@
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
-import type { SuggestionView } from '$lib/models/suggestions';
-import type { Provenance } from '$lib/models/provenance';
 import { z } from 'zod';
 import type { NoteRevisionDiff } from './revision-diff';
 import type { SectionNumberingView } from './section-numbering';
@@ -10,31 +8,19 @@ type UserId = Brand<string, 'UserId'>;
 
 type ProjectId = Brand<string, 'ProjectId'>;
 
-type ConversationId = Brand<string, 'ConversationId'>;
-
 export type NoteId = Brand<string, 'NoteId'>;
 
 export type NoteEtag = Brand<string, 'NoteEtag'>;
 
 export type NoteRevisionId = Brand<string, 'NoteRevisionId'>;
 
-type TodoId = Brand<string, 'TodoId'>;
-
 type RelationshipId = Brand<string, 'RelationshipId'>;
-
-type ReferenceId = Brand<string, 'ReferenceId'>;
-
-type DiagramId = Brand<string, 'DiagramId'>;
 
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
-
-type LocalDate = Brand<string, 'LocalDate'>;
-
-type Url = Brand<string, 'Url'>;
 
 export interface TextSelection {
 	readonly noteId: NoteId;
@@ -46,17 +32,7 @@ export interface TextSelection {
 
 export type NoteKind = 'folder' | 'note' | 'skill';
 
-type TodoStatus = 'backlog' | 'open' | 'in_progress' | 'done' | 'cancelled';
-
-type TodoResponsibility = 'mine' | 'waiting_on';
-
-type TodoPriority = 'low' | 'medium' | 'high';
-
-type PromiseStrength = 'explicit' | 'implied' | 'tentative';
-
 type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';
-
-type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
 
 /** A ProseMirror document plus a revision counter, the only concurrency token the sync protocol needs. */
 export interface Note {
@@ -113,42 +89,6 @@ export interface NoteRevision {
 	readonly createdAt: DateTime;
 }
 
-interface SourceAnchor {
-	readonly id: SourceAnchorId;
-	readonly noteId: NoteId;
-	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
-	readonly quote: string;
-	readonly prefix?: string;
-	readonly suffix?: string;
-	readonly revision: number;
-	readonly createdAt: DateTime;
-}
-
-interface Todo {
-	readonly id: TodoId;
-	readonly userId: UserId;
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly description?: string;
-	readonly status: TodoStatus;
-	readonly responsibility: TodoResponsibility;
-	readonly priority?: TodoPriority;
-	readonly category?: string;
-	readonly waitingOn?: string;
-	readonly dueDate?: LocalDate;
-	readonly dueDateVerbatim?: string;
-	readonly promiseStrength?: PromiseStrength;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly linkedNoteId?: NoteId;
-	readonly provenanceId?: ProvenanceId;
-	readonly completedAt?: DateTime;
-	readonly deletedAt?: DateTime;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
 export interface NoteRelationship {
 	readonly id: RelationshipId;
 	readonly userId: UserId;
@@ -161,53 +101,6 @@ export interface NoteRelationship {
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
-
-interface ExternalReference {
-	readonly id: ReferenceId;
-	readonly userId: UserId;
-	readonly noteId: NoteId;
-	readonly url: Url;
-	readonly title: string;
-	readonly tier: ReferenceTier;
-	readonly relevanceNote: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-	readonly createdAt: DateTime;
-}
-
-interface DiagramBase {
-	readonly id: DiagramId;
-	readonly userId: UserId;
-	/** Diagrams are owned by their project; a source note is optional context. */
-	readonly projectId: ProjectId;
-	/** Absent for a studio diagram, which belongs to the project rather than a note. */
-	readonly sourceNoteId?: NoteId;
-	/** The studio conversation that produced this diagram, for reopening it. */
-	readonly conversationId?: ConversationId;
-	readonly title?: string;
-	readonly renderedSvg?: string;
-	readonly searchableText: string;
-	readonly sourceAnchorId?: SourceAnchorId;
-	readonly provenanceId?: ProvenanceId;
-	readonly createdAt: DateTime;
-	readonly updatedAt: DateTime;
-}
-
-interface MermaidDiagram extends DiagramBase {
-	readonly kind: 'mermaid';
-	readonly source: string;
-}
-
-interface DrawioDiagram extends DiagramBase {
-	readonly kind: 'drawio';
-	readonly source: string;
-	readonly currentRevision: number;
-	readonly publishedRevision: number;
-	readonly publishedAt?: DateTime;
-	readonly promotedFromId?: DiagramId;
-}
-
-type Diagram = MermaidDiagram | DrawioDiagram;
 
 /** A note paired with the ETag a save must present to land without conflict. */
 export interface VersionedNote {
@@ -270,34 +163,15 @@ export interface DiscardNoteDraftOutput {
 
 export type NoteRef = Pick<Note, 'id' | 'title'>;
 
-interface TodoView {
-	readonly todo: Todo;
-	readonly sourceNote?: NoteRef;
-	readonly originNote?: NoteRef;
-	readonly anchor?: SourceAnchor;
-	readonly provenance?: Provenance;
-}
-
-interface BacklinkView {
-	readonly relationship: NoteRelationship;
-	readonly sourceNote: NoteRef;
-	readonly targetNote: NoteRef;
-}
-
-interface ReferenceView {
-	readonly reference: ExternalReference;
-	readonly anchor?: SourceAnchor;
-}
-
 /** Everything the editor renders for one note, assembled from parallel reads: the note itself plus its backlinks, references, diagrams, todos, and pending suggestions. */
-export interface NoteView {
+export interface NoteView<Backlink, Reference, Diagram, Task, Proposal> {
 	readonly note: Note;
 	readonly etag: NoteEtag;
-	readonly backlinks: readonly BacklinkView[];
-	readonly references: readonly ReferenceView[];
+	readonly backlinks: readonly Backlink[];
+	readonly references: readonly Reference[];
 	readonly diagrams: readonly Diagram[];
-	readonly todos: readonly TodoView[];
-	readonly pendingSuggestions: readonly SuggestionView[];
+	readonly todos: readonly Task[];
+	readonly pendingSuggestions: readonly Proposal[];
 	/** The note's section-numbering cascade, resolved by the controller across note, project and app. */
 	readonly sectionNumbering: SectionNumberingView;
 }

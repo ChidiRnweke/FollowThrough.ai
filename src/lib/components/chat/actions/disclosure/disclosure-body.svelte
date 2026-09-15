@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/models/workspace';
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import type { ToolDisclosure } from '$lib/components/agent';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';

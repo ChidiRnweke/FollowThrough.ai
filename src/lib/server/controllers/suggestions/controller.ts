@@ -1,3 +1,7 @@
+import type {
+	ISuggestionApplication,
+	SuggestionArtifact
+} from '$lib/server/services/suggestions/application';
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram, DiagramId, DrawioDiagram } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
@@ -32,10 +36,7 @@ import type {
  * Applies or reverts the concrete edit a suggestion represents, so the controller can
  * stay agnostic about what accepting a suggestion actually does to the document.
  */
-export interface SuggestionArtifactApplier {
-	apply(actor: ActorContext, suggestion: Suggestion): Promise<AcceptSuggestionOutput['artifact']>;
-	revert(actor: ActorContext, suggestion: Suggestion): Promise<void>;
-}
+export type SuggestionArtifactApplier = ISuggestionApplication;
 
 interface DrawioReviewSaver {
 	save(
@@ -85,7 +86,10 @@ export interface SuggestionsController {
 	 * records whether the user explicitly confirmed the suggestion or let it through
 	 * automatically.
 	 */
-	accept(actor: ActorContext, input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput>;
+	accept(
+		actor: ActorContext,
+		input: AcceptSuggestionInput
+	): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
 	/**
 	 * Accept a suggestion and, when the client submits a reviewed draw.io diagram, persist
 	 * that reviewed version over the generated one.
@@ -96,7 +100,7 @@ export interface SuggestionsController {
 	acceptReviewed(
 		actor: ActorContext,
 		input: AcceptReviewedSuggestionInput
-	): Promise<AcceptSuggestionOutput>;
+	): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
 	/** Reject a pending suggestion, marking it so it no longer appears in the proposed set. */
 	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion>;
 	/**
@@ -154,7 +158,10 @@ export class Suggestions implements SuggestionsController {
 				.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt))
 		};
 	}
-	accept(actor: ActorContext, input: AcceptSuggestionInput): Promise<AcceptSuggestionOutput> {
+	accept(
+		actor: ActorContext,
+		input: AcceptSuggestionInput
+	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const pending = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
 			const artifact = await this.dependencies.artifactApplier.apply(actor, pending);
@@ -170,7 +177,7 @@ export class Suggestions implements SuggestionsController {
 	acceptReviewed(
 		actor: ActorContext,
 		input: AcceptReviewedSuggestionInput
-	): Promise<AcceptSuggestionOutput> {
+	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
 		return this.dependencies.transactionRunner.run(async () => {
 			if (!input.drawioReview) {
 				// A draw.io diagram accepted without its review has no preview and can

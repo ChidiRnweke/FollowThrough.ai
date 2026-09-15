@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { DiagramSuggestion } from '$lib/models/suggestions';
+
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { getTextBetween, getTextSerializersFromSchema, isTextSelection } from '@tiptap/core';
@@ -10,7 +12,7 @@
 		type EditorState
 	} from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
-	import type { Diagram, DiagramId, DiagramSuggestion } from '$lib/models/diagrams';
+	import type { Diagram, DiagramId } from '$lib/models/diagrams';
 	import { inlineSuggestionSchema, type AgentRunId } from '$lib/models/agent';
 	import {
 		parseProseMirrorDocument,

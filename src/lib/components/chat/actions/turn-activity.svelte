@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/models/workspace';
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';

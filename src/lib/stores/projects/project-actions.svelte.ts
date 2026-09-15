@@ -158,7 +158,7 @@ class ProjectActionsStore {
 			note: await this.createEntry(title, projectId, 'note', parentId)
 		}));
 	createSkill = (name: string, projectId: ProjectId, parentId?: NoteId) =>
-		this.serverAction<CreateSkillOutput>(() => createSkill({ name, projectId, parentId }));
+		this.serverAction<CreateSkillOutput<Note>>(() => createSkill({ name, projectId, parentId }));
 	renameNote = (draft: WorkspaceDraft<'notes'>, title: string) =>
 		this.run<RenameNoteOutput>(async () => {
 			const note = draft.value;

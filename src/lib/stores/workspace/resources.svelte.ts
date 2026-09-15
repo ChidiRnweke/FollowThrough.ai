@@ -1,3 +1,4 @@
+import type { NoteView } from '$lib/client/notes/view';
 import { SvelteDate, SvelteMap } from 'svelte/reactivity';
 import {
 	DexieWorkspaceRepository,
@@ -8,7 +9,7 @@ import type { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import { type NoteId, type NoteView, type NoteRevision } from '$lib/models/notes';
+import { type NoteId, type NoteRevision } from '$lib/models/notes';
 import {
 	visibleResources,
 	localResource,

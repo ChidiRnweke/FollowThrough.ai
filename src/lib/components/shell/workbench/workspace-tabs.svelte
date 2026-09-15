@@ -1,6 +1,8 @@
 <script lang="ts">
+	import type { ShellContext } from '$lib/client/shell/views';
+
 	import type { ProjectId } from '$lib/models/projects';
-	import type { ShellContext } from '$lib/models/workspace';
+
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { Button } from '$lib/components/ui/button';

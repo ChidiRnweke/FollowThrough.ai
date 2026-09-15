@@ -1,9 +1,5 @@
-import type {
-	AppContextSnapshotV1,
-	PaneContext,
-	SemanticInteraction,
-	ShellContext
-} from '$lib/models/workspace';
+import type { ShellContext } from '$lib/client/shell/views';
+import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { workbench } from '../workbench/workbench.svelte';
