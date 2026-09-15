@@ -438,7 +438,10 @@ export class AgentReasoning {
 			throw new Error('Conversation sessions are not configured');
 		},
 		private readonly observeTurn: AgentTurnObserver = directTurnObserver,
-		private readonly webSearchDefaults: WebResearchOptions = {}
+		private readonly webSearchDefaults: WebResearchOptions = {},
+		private readonly createProvider: (
+			options: WebResearchOptions
+		) => Pick<OpenAIProvider, 'getModel' | 'close'> = (options) => this.provider(options)
 	) {}
 
 	async *execute(input: {
@@ -451,50 +454,63 @@ export class AgentReasoning {
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate> {
 		const { actor, run, request, context, decisions = [], signal, toolExecutor } = input;
+		signal.throwIfAborted();
 		if (!this.apiKey)
 			throw new AgentProviderFailure(
 				'Agent chat is disabled until OPENROUTER_API_KEY is configured',
 				'CONFIGURATION',
 				false
 			);
-		const provider = this.provider({ ...this.webSearchDefaults, ...request.webSearch });
-		const registry = await this.tools({
-			actor,
-			request,
-			context,
-			run,
-			executor: toolExecutor
-		});
-		const session = this.createSession(this.sessions, actor, run.conversationId);
-		let visionDescriptions: string[] | undefined;
-		// The app's own images are described too when the chat model cannot see: a
-		// render left out here would simply vanish on a text-only model.
-		const describable = allImages(request);
-		if (describable.length && request.visionModelOverride) {
-			const client = new OpenAI({
-				apiKey: this.apiKey,
-				baseURL: this.baseURL,
-				timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000)
-			});
-			visionDescriptions = await Promise.all(
-				describable.map(async (image) => {
-					const response = await client.chat.completions.create({
-						model: request.visionModelOverride!,
-						messages: [
-							{
-								role: 'user',
-								content: [
-									{ type: 'text', text: 'Describe this image precisely for another assistant.' },
-									{ type: 'image_url', image_url: { url: image.dataUrl } }
-								]
-							}
-						]
-					});
-					return response.choices[0]?.message.content ?? 'The image could not be described.';
-				})
-			);
-		}
+		const provider = this.createProvider({ ...this.webSearchDefaults, ...request.webSearch });
+		const preparation = new AbortController();
+		const preparationSignal = AbortSignal.any([signal, preparation.signal]);
 		try {
+			const registry = await this.tools({
+				actor,
+				request,
+				context,
+				run,
+				executor: toolExecutor
+			});
+			signal.throwIfAborted();
+			const session = this.createSession(this.sessions, actor, run.conversationId);
+			let visionDescriptions: string[] | undefined;
+			// The app's own images are described too when the chat model cannot see: a
+			// render left out here would simply vanish on a text-only model.
+			const describable = allImages(request);
+			if (describable.length && request.visionModelOverride) {
+				const client = new OpenAI({
+					apiKey: this.apiKey,
+					baseURL: this.baseURL,
+					fetch: this.providerFetch,
+					timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000)
+				});
+				visionDescriptions = await Promise.all(
+					describable.map(async (image) => {
+						const response = await client.chat.completions.create(
+							{
+								model: request.visionModelOverride!,
+								messages: [
+									{
+										role: 'user',
+										content: [
+											{
+												type: 'text',
+												text: 'Describe this image precisely for another assistant.'
+											},
+											{ type: 'image_url', image_url: { url: image.dataUrl } }
+										]
+									}
+								]
+							},
+							{ signal: preparationSignal }
+						);
+						const description = response.choices[0]?.message.content?.trim();
+						if (!description) throw new Error('Image description provider returned no usable text');
+						return description;
+					})
+				);
+			}
 			const catalogNames = registry.catalog().map((tool) => tool.name);
 			const catalog = new Set(catalogNames);
 			const promoted = [
@@ -657,6 +673,7 @@ export class AgentReasoning {
 				{ cause: error }
 			);
 		} finally {
+			preparation.abort();
 			await provider.close();
 		}
 	}
