@@ -130,7 +130,7 @@ export class InMemorySuggestions
 	}
 
 	async revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
-		if (suggestion.status !== 'accepted' || !suggestion.appliedArtifactId)
+		if (suggestion.status !== 'accepted')
 			throw new InvalidTransitionError('Only an applied suggestion can be reverted');
 		return this.replace(actor, { ...suggestion, status: 'reverted' });
 	}

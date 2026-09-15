@@ -108,8 +108,7 @@ export interface SuggestionsController {
 	/** Reject a pending suggestion, marking it so it no longer appears in the proposed set. */
 	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion>;
 	/**
-	 * Undo a previously accepted suggestion: revert its edit to the document and reopen
-	 * it, atomically. Reverting is only possible while the accepted artifact still matches
+	 * Undo a previously accepted suggestion and mark it reverted in one transaction. Reverting is only possible while the accepted artifact still matches
 	 * what was applied.
 	 */
 	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion>;
