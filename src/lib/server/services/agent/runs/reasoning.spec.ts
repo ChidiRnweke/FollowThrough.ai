@@ -671,12 +671,12 @@ describe('Agent tool event invariants', () => {
 		});
 	});
 
-	it('presents a dispatched long-tail call as its inner action', () => {
+	it('presents a direct long-tail call by its action name', () => {
 		const event = new AgentToolEventMapper().map(
 			toolCalled({
 				callId: 'call-3',
-				name: 'use_tool',
-				arguments: JSON.stringify({ name: 'create_note', payload: { title: 'Decision log' } })
+				name: 'create_note',
+				arguments: JSON.stringify({ title: 'Decision log' })
 			})
 		);
 		expect(event).toEqual({
@@ -687,16 +687,16 @@ describe('Agent tool event invariants', () => {
 		});
 	});
 
-	it('preserves the inner action name on dispatched tool output', () => {
+	it('preserves the action name on direct tool output', () => {
 		const mapper = new AgentToolEventMapper();
 		mapper.map(
 			toolCalled({
 				callId: 'call-4',
-				name: 'use_tool',
-				arguments: JSON.stringify({ name: 'save_note', payload: { note: {} } })
+				name: 'save_note',
+				arguments: JSON.stringify({ note: {} })
 			})
 		);
-		const event = mapper.map(toolOutput({ callId: 'call-4', name: 'use_tool' }));
+		const event = mapper.map(toolOutput({ callId: 'call-4', name: 'save_note' }));
 		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-4', name: 'save_note' });
 	});
 

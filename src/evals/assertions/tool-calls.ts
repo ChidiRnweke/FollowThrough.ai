@@ -3,11 +3,6 @@ import type { AgentRunResult, ToolCall } from '../lab/run-case';
 /**
  * Deterministic checks over the persisted tool-call log.
  *
- * Note on `use_tool`: the registry dispatches long-tail capabilities through a
- * `use_tool` wrapper, but `callDetails` in the agent runner unwraps it, so the
- * event log records the *inner* tool name. `use_tool` therefore never appears
- * in `calledToolNames` — assert on the capability you expected, not on the
- * wrapper.
  */
 
 export interface ToolVerdict {

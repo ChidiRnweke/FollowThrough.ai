@@ -75,15 +75,6 @@ export class BuiltInSkills {
 		activeProjectIds: ReadonlySet<ProjectId>
 	): Promise<void> {
 		let note = await this.notes.findByBuiltInKey(actor, definition.key);
-		let adoptedLegacy = false;
-		if (!note && definition.key === 'followthrough') {
-			const active = await this.notes.listActive(actor);
-			note = active.find(
-				(candidate) =>
-					candidate.kind === 'skill' && candidate.title.toLocaleLowerCase() === 'followthrough'
-			);
-			adoptedLegacy = note !== undefined;
-		}
 		if (!note) note = await this.createNote(actor, definition, defaultProjectId);
 		else {
 			const repaired: Note = {
@@ -104,31 +95,10 @@ export class BuiltInSkills {
 		}
 		const existing = await this.skills.findByNoteId(actor, note.id);
 		if (!existing) {
-			await this.skills.insert(
-				actor,
-				adoptedLegacy
-					? {
-							...this.toSkill(note, definition),
-							metadata: {
-								...this.metadata(definition),
-								'followthrough.adopted-legacy': 'true'
-							}
-						}
-					: this.toSkill(note, definition)
-			);
+			await this.skills.insert(actor, this.toSkill(note, definition));
 			return;
 		}
-		if (adoptedLegacy) {
-			await this.skills.update(actor, {
-				...existing,
-				note,
-				metadata: {
-					...(existing.metadata ?? {}),
-					'followthrough.adopted-legacy': 'true'
-				}
-			});
-			return;
-		}
+
 		if (
 			this.definitions.retired.some(
 				(retired) => retired.key === definition.key && this.isUntouched(note, existing, retired)

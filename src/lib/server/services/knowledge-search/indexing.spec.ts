@@ -3,7 +3,6 @@ import {
 	EmbeddedDiagramIndexer,
 	EmbeddedMemoryIndexer,
 	EmbeddedNoteIndexer,
-	ParagraphChunker,
 	TokenAwareChunker
 } from './indexing';
 import {
@@ -32,17 +31,17 @@ describe('Content chunking invariants', () => {
 	});
 
 	it('returns no chunks for empty content', () => {
-		expect(new ParagraphChunker(20).chunk('   ')).toEqual([]);
+		expect(new TokenAwareChunker(20, 0).chunk('   ')).toEqual([]);
 	});
 
 	it('preserves paragraph boundaries when they fit', () => {
-		expect(new ParagraphChunker(30).chunk('First paragraph.\n\nSecond.')).toEqual([
+		expect(new TokenAwareChunker(30, 0).chunk('First paragraph.\n\nSecond.')).toEqual([
 			'First paragraph.\n\nSecond.'
 		]);
 	});
 
 	it('splits content deterministically at the configured limit', () => {
-		expect(new ParagraphChunker(12).chunk('alpha beta gamma delta')).toEqual([
+		expect(new TokenAwareChunker(2, 0).chunk('alpha beta gamma delta')).toEqual([
 			'alpha beta',
 			'gamma delta'
 		]);
@@ -55,7 +54,7 @@ describe('Search indexing invariants', () => {
 		const indexer = new EmbeddedNoteIndexer(
 			repository,
 			new InMemoryEmbeddingClient(),
-			new ParagraphChunker(12)
+			new TokenAwareChunker(2, 0)
 		);
 		await indexer.index(testActor(), noteBuilder({ plainText: 'alpha beta gamma delta' }));
 		expect(repository.documents).toHaveLength(2);

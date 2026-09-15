@@ -21,12 +21,10 @@ import type { ToolName } from '$lib/models/agent/tool-catalog';
  * Calls that are the agent finding its footing rather than work on the workspace. A row
  * reading "Search tools" is not reassurance, and it is not something anyone can act on.
  *
- * `search_tools` and `use_tool` are the discovery mechanism rather than entries in what it
- * discovers, so they are the two names legitimately absent from the catalogue.
+ * `search_tools` discovers callable tools and is not itself a catalog entry.
  */
 export const mechanismToolNames = [
 	'search_tools',
-	'use_tool',
 	'get_workspace_context',
 	'load_skill',
 	'list_tool_preferences',

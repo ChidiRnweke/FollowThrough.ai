@@ -17,7 +17,7 @@ import {
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
 	parseSessionItem,
-	parseWorkflowRunContext,
+	workflowRunContextSchema,
 	readPendingDecisions,
 	toStoredSessionItem
 } from '$lib/models/agent';
@@ -106,7 +106,7 @@ const toResolvedRun = (row: typeof schema.agentRuns.$inferSelect): ResolvedAgent
 const toWorkflowRun = (row: typeof schema.agentRuns.$inferSelect): WorkflowAgentRun => ({
 	...toRunBase(row),
 	kind: 'workflow',
-	contextSnapshot: parseWorkflowRunContext(row.contextSnapshot)
+	contextSnapshot: workflowRunContextSchema.parse(row.contextSnapshot)
 });
 
 export const toRun = (row: typeof schema.agentRuns.$inferSelect): AgentRun =>
