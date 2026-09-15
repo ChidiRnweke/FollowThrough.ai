@@ -73,7 +73,9 @@ Move behavior out of every model domain. Keep schemas and their inferred types b
       in all three controller entry paths. Verify controller state and rollback tests.
 - [x] Move attachment processing and OCR/image enrichment orchestration into controllers;
       preserve claims, partial results, retries and provider failure behavior.
-- [ ] Move suggestion application and memory/index consequences into their controllers.
+- [x] Move suggestion application and memory/index consequences into their controllers.
+      Memory indexing was already moved in #64; suggestion application now dispatches in its
+      controller. Expiration hidden in suggestion listing remains part of the final wiring audit.
 - [ ] Move context, inline retrieval, relationship discovery and hidden provisioning into
       controllers; preserve source scope and explicit failures.
 - [ ] Move deliverable, board export and diagram authoring orchestration into controllers.

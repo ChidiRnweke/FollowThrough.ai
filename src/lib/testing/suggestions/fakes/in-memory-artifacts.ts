@@ -1,16 +1,15 @@
 import { InMemoryApplicationEffects } from './in-memory-application-effects';
-import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
-import type { Todo } from '$lib/models/todos';
+import type { Todo, CreateTodoInput } from '$lib/models/todos';
 import { ExternalServiceError } from '$lib/errors';
-import type { SuggestionArtifactApplier } from '$lib/server/controllers/suggestions/controller';
+import type { TodoCreator } from '$lib/server/services/todos/contracts';
 import { testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
-export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, SnapshotParticipant {
+export class InMemorySuggestionArtifacts implements TodoCreator, SnapshotParticipant {
 	constructor(readonly effects = new InMemoryApplicationEffects()) {}
 	get artifacts(): Todo[] {
 		return [...this.effects.records.values()].flatMap((record) =>
@@ -25,21 +24,17 @@ export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, S
 		this.effects.failRestore = value;
 	}
 
-	async apply(
-		actor: ActorContext,
-		suggestion: Suggestion
-	): Promise<Awaited<ReturnType<SuggestionArtifactApplier['apply']>>> {
+	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
 		if (this.failApply) throw new ExternalServiceError('Artifact application failed');
-		if (suggestion.kind !== 'todo') throw new ExternalServiceError('Unsupported test artifact');
 		const artifact = todoBuilder({
 			id: testTodoId(this.artifacts.length + 1),
 			userId: actor.userId,
-			projectId: suggestion.payload.projectId ?? todoBuilder().projectId,
-			title: suggestion.payload.title,
-			responsibility: suggestion.payload.responsibility
+			projectId: input.projectId ?? todoBuilder().projectId,
+			title: input.title,
+			responsibility: input.responsibility
 		});
 		this.effects.put({ type: 'todos', value: artifact });
-		return { artifact, changes: [{ kind: 'created', after: { type: 'todos', value: artifact } }] };
+		return artifact;
 	}
 
 	snapshot(): RestoreSnapshot {
