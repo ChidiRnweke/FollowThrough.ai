@@ -176,6 +176,13 @@ export interface NoteView<Backlink, Reference, Diagram, Task, Proposal> {
 	readonly sectionNumbering: SectionNumberingView;
 }
 
+/** Assemble the same note surface from server records or downloaded records. */
+export function assembleNoteView<Backlink, Reference, Diagram, Task, Proposal>(
+	facts: Omit<NoteView<Backlink, Reference, Diagram, Task, Proposal>, 'etag'>
+): NoteView<Backlink, Reference, Diagram, Task, Proposal> {
+	return { ...facts, etag: noteEtag(facts.note) };
+}
+
 export interface GetNoteViewInput {
 	readonly noteId: NoteId;
 }

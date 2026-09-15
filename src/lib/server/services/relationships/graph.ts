@@ -1,3 +1,4 @@
+import { assembleBacklinkView } from '$lib/models/relationships';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -113,11 +114,7 @@ export class RelationshipGraph {
 					this.notes.findById(actor, relationship.targetNoteId)
 				]);
 				if (!source || !target) throw new NotFoundError('Related note was not found');
-				return {
-					relationship,
-					sourceNote: { id: source.id, title: source.title },
-					targetNote: { id: target.id, title: target.title }
-				};
+				return assembleBacklinkView(relationship, source, target);
 			})
 		);
 	}

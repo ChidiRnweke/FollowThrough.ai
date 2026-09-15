@@ -1,3 +1,4 @@
+import { assembleReferenceView } from '$lib/models/references';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateReferenceInput,
@@ -57,7 +58,7 @@ export class ReferenceLibrary {
 				const anchor = reference.sourceAnchorId
 					? await this.anchors.findById(actor, reference.sourceAnchorId)
 					: undefined;
-				return { reference, ...(anchor ? { anchor } : {}) };
+				return assembleReferenceView(reference, { anchor });
 			})
 		);
 	}

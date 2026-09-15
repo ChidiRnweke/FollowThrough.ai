@@ -1,3 +1,4 @@
+import { assembleNoteView } from '$lib/models/notes';
 import { applyNoteDraftEdit } from '$lib/models/notes';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
@@ -385,16 +386,15 @@ export class Notes implements NotesController {
 				this.dependencies.suggestionViewAssembler.assemble(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
-		return {
+		return assembleNoteView({
 			note,
-			etag: noteEtag(note),
 			backlinks,
 			references: referenceViews,
 			diagrams,
 			todos: todoViews,
 			pendingSuggestions,
 			sectionNumbering
-		};
+		});
 	}
 
 	async setSectionNumbering(

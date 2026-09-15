@@ -14,7 +14,7 @@ shows each edit immediately and saves a command to a durable queue. When a conne
 the server checks the command against the current saved records and applies it. Agents and external
 clients can also change those records through the server.
 
-The browser and server currently implement some of the same rules separately. For example,
+Before this decision, the browser and server implemented some of the same rules separately. For example,
 restoring a note whose parent folder is unavailable requires a decision about where the note goes.
 If the two implementations differ, the browser can show a result that the server will never save.
 A change to one implementation also leaves the other paths with the old behavior.

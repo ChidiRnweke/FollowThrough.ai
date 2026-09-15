@@ -1,3 +1,4 @@
+import { assembleSuggestionView } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
@@ -133,12 +134,11 @@ export class SuggestionInbox {
 						: undefined
 				]);
 				if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
-				return {
-					suggestion,
-					...(note ? { note: { id: note.id, title: note.title } } : {}),
-					...(anchor ? { anchor } : {}),
+				return assembleSuggestionView(suggestion, {
+					note,
+					anchor,
 					origin: provenanceOrigin(provenance)
-				};
+				});
 			})
 		);
 	}

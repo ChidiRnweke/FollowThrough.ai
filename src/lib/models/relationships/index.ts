@@ -87,3 +87,15 @@ export function decideRelationshipWrite<
 		after: { ...current, justification: incoming.justification, updatedAt: incoming.updatedAt }
 	};
 }
+
+export function assembleBacklinkView(
+	relationship: NoteRelationship,
+	source: NoteRef,
+	target: NoteRef
+): BacklinkView {
+	return {
+		relationship,
+		sourceNote: { id: source.id, title: source.title },
+		targetNote: { id: target.id, title: target.title }
+	};
+}
