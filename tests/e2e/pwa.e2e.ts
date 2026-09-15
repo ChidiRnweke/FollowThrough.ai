@@ -43,6 +43,19 @@ test('registers a service worker for the workspace', async ({ page }) => {
 	).toBe(true);
 });
 
+// Only a production build nests or flattens CSS assets, so this lives in the suite that serves one.
+test('loads every font face its stylesheets declare', async ({ page }) => {
+	await page.goto('/today');
+	const failedFaces = await page.evaluate(async () => {
+		const faces = [...document.fonts];
+		await Promise.allSettled(faces.map((face) => face.load()));
+		return faces
+			.filter((face) => face.status === 'error')
+			.map((face) => `${face.family} ${face.unicodeRange}`);
+	});
+	expect(failedFaces).toEqual([]);
+});
+
 test('reopens a visited note from the cached workspace while offline', async ({
 	page,
 	context
