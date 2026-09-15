@@ -1,7 +1,8 @@
+import type { ExportInput } from '$lib/server/repositories/deliverables/export-preparation';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
-import { defaultExportSettings, type ExportSettings } from '$lib/models/deliverables';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	boardExportDate,
 	boardExportSlug,
@@ -12,10 +13,6 @@ import {
 	type TodoView
 } from '$lib/models/todos';
 
-/* Ports mirrored locally: chisel forbids a service importing any other service module —
-   even the contracts of its own capability — so this service declares the exact shapes
-   it consumes and the composition root wires the catalogs in structurally. The pdfmake
-   input mirrors GeneratePdfInput for the same reason — see deliverables/artifacts.ts. */
 export interface BoardExportTodoLister {
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
 }
@@ -32,13 +29,7 @@ export interface BoardExportProjectLister {
     layers into components/edra. */
 export type MarkdownToDocument = (source: string) => ProseMirrorDocument;
 
-interface BoardPdfInput {
-	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly title: string;
-	readonly settings?: ExportSettings;
-}
-
-export type BoardPdfGenerator = (input: BoardPdfInput) => Promise<Buffer>;
+export type BoardPdfGenerator = (input: ExportInput) => Promise<Buffer>;
 
 /**
  * Renders the kanban board matching a filter as a one-off PDF: the board's own Markdown

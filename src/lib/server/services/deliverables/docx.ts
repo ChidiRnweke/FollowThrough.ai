@@ -1,4 +1,15 @@
 import {
+	prepareExport,
+	exportImage,
+	type ExportInput,
+	type PreparedDiagram
+} from '$lib/server/repositories/deliverables/export-preparation';
+import {
+	documentNodeContent as nodeContent,
+	documentInlineText as collectText,
+	documentTextMarks
+} from '$lib/models/notes';
+import {
 	AlignmentType,
 	BorderStyle,
 	Document,
@@ -20,36 +31,14 @@ import {
 	type IHeaderOptions,
 	type ISectionOptions
 } from 'docx';
+import type { ExportSettings, ExtractedTemplateStyles } from '$lib/models/deliverables';
 import type {
-	DiagramRenders,
-	DiagramSize,
-	ExportSettings,
-	ExtractedTemplateStyles
-} from '$lib/models/deliverables';
-import type {
-	ProseMirrorDocument,
 	ProseMirrorMediaAttrs,
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares, defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
-import {
-	collectImageSources,
-	fetchImages,
-	mermaidSourceHash,
-	svgDimensions,
-	type ImageSourceResolver
-} from '$lib/server/repositories/deliverables/export-images';
-
-export interface GenerateDocxInput extends DiagramRenders {
-	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly title: string;
-	/** Template-extracted styles; when present they win over `settings` (explicit choice). */
-	readonly styles?: ExtractedTemplateStyles;
-	readonly settings?: ExportSettings;
-	/** Resolves app-owned attachment image URLs through the actor; absent sources degrade. */
-	readonly imageResolver?: ImageSourceResolver;
-}
+import { columnShares, headingSpacingPt } from '$lib/models/deliverables';
+import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 const HEADING_LEVELS = [
 	HeadingLevel.HEADING_1,
@@ -93,9 +82,7 @@ interface DocxContext {
 	readonly styles: ExtractedTemplateStyles;
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
-	readonly diagramSvgs: Readonly<Record<string, string>>;
-	readonly diagramPngs: Readonly<Record<string, string>>;
-	readonly diagramSizes: Readonly<Record<string, DiagramSize>>;
+	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
 	/** Printable width in CSS pixels, for image and diagram sizing. */
 	readonly contentWidthPx: number;
 	readonly blockquoteDepth: number;
@@ -156,22 +143,13 @@ function textRunFromNode(
 	forceBold: boolean = false
 ): InlineRun {
 	const text = node.text;
-	const marks = node.marks ?? [];
-	let bold = forceBold;
-	let italics = forceItalics;
-	let fontName = isCode ? 'Courier New' : (styles.fonts.body.name ?? 'Calibri');
-	let fontSize = isCode ? 18 : (styles.fonts.body.size ?? 11) * 2;
-	let href: string | undefined;
-
-	for (const mark of marks) {
-		if (mark.type === 'bold') bold = true;
-		if (mark.type === 'italic') italics = true;
-		if (mark.type === 'code') {
-			fontName = 'Courier New';
-			fontSize = 18;
-		}
-		if (mark.type === 'link' && typeof mark.attrs?.href === 'string') href = mark.attrs.href;
-	}
+	const marks = documentTextMarks(node);
+	const bold = forceBold || marks.bold;
+	const italics = forceItalics || marks.italic;
+	const code = isCode || marks.code;
+	const fontName = code ? 'Courier New' : (styles.fonts.body.name ?? 'Calibri');
+	const fontSize = code ? 18 : (styles.fonts.body.size ?? 11) * 2;
+	const href = marks.href;
 
 	if (href)
 		return new ExternalHyperlink({
@@ -184,14 +162,6 @@ function textRunFromNode(
 		});
 
 	return new TextRun({ text, bold, italics, font: fontName, size: fontSize });
-}
-
-const nodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
-	'content' in node ? (node.content ?? []) : [];
-
-function collectText(node: ProseMirrorNode): string {
-	if (node.type === 'text') return node.text;
-	return nodeContent(node).map(collectText).join('');
 }
 
 /** Runs for one paragraph's inline content, honouring blockquote/table-header context. */
@@ -400,13 +370,11 @@ function diagramImage(
 	// rather than applied to both so folding these together changed no output.
 	spacing?: { before: number; after: number }
 ): Paragraph | undefined {
-	const png = ctx.diagramPngs[key];
-	const parsed = png ? parseDataUrl(png) : undefined;
+	const asset = ctx.diagrams.get(key);
+	if (asset?.kind !== 'raster') return undefined;
+	const parsed = parseDataUrl(asset.data);
 	if (!parsed) return undefined;
-	const dimensions =
-		ctx.diagramSizes[key] ??
-		svgDimensions(ctx.diagramSvgs[key] ?? '') ??
-		rasterDimensions(parsed.buffer);
+	const dimensions = asset.size ?? rasterDimensions(parsed.buffer);
 	let width = dimensions?.width ?? ctx.contentWidthPx;
 	let height = dimensions?.height ?? width * 0.6;
 	if (width > ctx.contentWidthPx) {
@@ -569,7 +537,7 @@ function convertNode(
 		case 'image': {
 			const src = node.attrs?.src ?? undefined;
 			if (!src) break;
-			const data = src.startsWith('data:') ? src : ctx.images.get(src);
+			const data = exportImage(src, ctx.images);
 			if (!data) {
 				results.push(
 					new Paragraph({
@@ -597,21 +565,14 @@ function convertNode(
 	return results;
 }
 
-export async function generateDocx(input: GenerateDocxInput): Promise<Buffer> {
-	const { notes } = input;
-	const settings = input.settings ?? defaultExportSettings;
+export async function generateDocx(input: ExportInput): Promise<Buffer> {
+	const { notes, settings, images, diagrams } = await prepareExport(input);
 	const styles = resolveStyles(input.styles, settings);
-	const images = await fetchImages(
-		notes.flatMap((note) => collectImageSources(note.document)),
-		input.imageResolver
-	);
 	const ctx: DocxContext = {
 		styles,
 		settings,
 		images,
-		diagramSvgs: input.diagramSvgs ?? {},
-		diagramPngs: input.diagramPngs ?? {},
-		diagramSizes: input.diagramSizes ?? {},
+		diagrams,
 		contentWidthPx:
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
 			PX_PER_INCH,

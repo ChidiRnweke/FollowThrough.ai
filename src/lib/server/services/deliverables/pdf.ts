@@ -1,3 +1,14 @@
+import {
+	prepareExport,
+	exportImage,
+	type ExportInput,
+	type PreparedDiagram
+} from '$lib/server/repositories/deliverables/export-preparation';
+import {
+	documentNodeContent as nodeContent,
+	documentInlineText as collectText,
+	documentTextMarks
+} from '$lib/models/notes';
 import { resolve, sep } from 'node:path';
 import { openSync as openFontSync } from 'fontkit';
 import type { Font } from 'fontkit';
@@ -10,24 +21,15 @@ import type {
 	PdfSpannedCell,
 	PdfTableBlock
 } from 'pdfmake';
-import type {
-	DiagramRenders,
-	ExportSettings,
-	ExtractedTemplateStyles
-} from '$lib/models/deliverables';
+import type { ExportSettings } from '$lib/models/deliverables';
 import type {
 	ProseMirrorDocument,
 	ProseMirrorMediaAttrs,
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares, defaultExportSettings, headingSpacingPt } from '$lib/models/deliverables';
-import {
-	collectImageSources,
-	fetchImages,
-	mermaidSourceHash,
-	type ImageSourceResolver
-} from '$lib/server/repositories/deliverables/export-images';
+import { columnShares, headingSpacingPt } from '$lib/models/deliverables';
+import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
 export { mermaidSourceHash };
@@ -169,28 +171,6 @@ const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
 const LINK_COLOR = '#1d4ed8';
 
-/**
- * `diagramSizes` is accepted but unused: pdfmake's `fit` box already scales the raster to the
- * content width without upscaling, so the PDF never needs the intended display size the way
- * the DOCX export does.
- */
-export interface GeneratePdfInput extends DiagramRenders {
-	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly title: string;
-	readonly styles?: ExtractedTemplateStyles;
-	readonly settings?: ExportSettings;
-	/** Resolves app-owned attachment image URLs through the actor; absent sources degrade. */
-	readonly imageResolver?: ImageSourceResolver;
-}
-
-const nodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
-	'content' in node ? (node.content ?? []) : [];
-
-function collectText(node: ProseMirrorNode): string {
-	if (node.type === 'text') return node.text;
-	return nodeContent(node).map(collectText).join('');
-}
-
 interface InlineRun {
 	text: string;
 	bold?: boolean;
@@ -203,17 +183,16 @@ interface InlineRun {
 
 function textRunFromNode(node: ProseMirrorTextNode): InlineRun {
 	const text = node.text;
-	const marks = node.marks ?? [];
+	const marks = documentTextMarks(node);
 	const run: InlineRun = { text };
-	for (const mark of marks) {
-		if (mark.type === 'bold') run.bold = true;
-		if (mark.type === 'italic') run.italics = true;
-		if (mark.type === 'link' && typeof mark.attrs?.href === 'string') {
-			run.link = mark.attrs.href;
-			run.color = LINK_COLOR;
-			run.decoration = 'underline';
-		}
+	if (marks.bold) run.bold = true;
+	if (marks.italic) run.italics = true;
+	if (marks.href !== undefined) {
+		run.link = marks.href;
+		run.color = LINK_COLOR;
+		run.decoration = 'underline';
 	}
+
 	return run;
 }
 
@@ -221,8 +200,7 @@ interface ConversionContext {
 	readonly contentWidth: number;
 	readonly usableHeight: number;
 	readonly images: ReadonlyMap<string, string>;
-	readonly diagramSvgs: Readonly<Record<string, string>>;
-	readonly diagramPngs: Readonly<Record<string, string>>;
+	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
 	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
 	readonly bodyFont: string;
 }
@@ -233,7 +211,7 @@ function imageBlock(
 ): PdfContent | PdfContent[] {
 	const src = attrs.src ?? undefined;
 	if (!src) return [];
-	const data = src.startsWith('data:') ? src : context.images.get(src);
+	const data = exportImage(src, context.images);
 	if (!data) {
 		return { text: '[image unavailable]', italics: true, color: '#9ca3af', margin: [0, 4, 0, 4] };
 	}
@@ -401,10 +379,11 @@ function diagramContent(key: string, context: ConversionContext): PdfContent | u
 	// reaching the exact page body height sits on a knife's edge.
 	const fit = [context.contentWidth, context.usableHeight - 16];
 	const margin = [0, 8, 0, 8];
-	const png = context.diagramPngs[key];
-	if (png) return { image: png, fit, margin };
-	const svg = context.diagramSvgs[key];
-	return svg ? { svg, fit, margin } : undefined;
+	const asset = context.diagrams.get(key);
+	if (!asset) return undefined;
+	return asset.kind === 'raster'
+		? { image: asset.data, fit, margin }
+		: { svg: asset.data, fit, margin };
 }
 
 function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfContent | PdfContent[] {
@@ -536,9 +515,8 @@ function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): PdfCo
 	return result;
 }
 
-export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
-	const { notes } = input;
-	const settings = input.settings ?? defaultExportSettings;
+export async function generatePdf(input: ExportInput): Promise<Buffer> {
+	const { notes, settings, images, diagrams } = await prepareExport(input);
 	const printer = pdfmake;
 	// Embed the repo-shipped Noto fonts; the local-access policy permits only
 	// files inside assets/fonts, never arbitrary filesystem paths.
@@ -557,17 +535,12 @@ export async function generatePdf(input: GeneratePdfInput): Promise<Buffer> {
 	const margin = Math.min(Math.max(settings.margin, 18), 144);
 	const contentWidth = A4_WIDTH - margin * 2;
 	const usableHeight = A4_HEIGHT - margin * 2 - 16;
-	const images = await fetchImages(
-		notes.flatMap((note) => collectImageSources(note.document)),
-		input.imageResolver
-	);
 	const bodyFont = FONT_FAMILIES[settings.fontFamily];
 	const context: ConversionContext = {
 		contentWidth,
 		usableHeight,
 		images,
-		diagramSvgs: input.diagramSvgs ?? {},
-		diagramPngs: input.diagramPngs ?? {},
+		diagrams,
 		bodyFont
 	};
 

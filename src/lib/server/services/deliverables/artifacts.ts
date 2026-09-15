@@ -1,3 +1,4 @@
+import type { ExportInput } from '$lib/server/repositories/deliverables/export-preparation';
 import { randomUUID } from 'node:crypto';
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
@@ -50,20 +51,6 @@ interface ProvenanceRecorder {
 interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
-interface GenerateDocxInput extends DiagramRenders {
-	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly title: string;
-	readonly styles?: ExtractedTemplateStyles;
-	readonly settings?: ExportSettings;
-	readonly imageResolver?: ImageSourceResolver;
-}
-interface GeneratePdfInput extends DiagramRenders {
-	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
-	readonly title: string;
-	readonly styles?: ExtractedTemplateStyles;
-	readonly settings?: ExportSettings;
-	readonly imageResolver?: ImageSourceResolver;
-}
 interface BundleFile {
 	readonly path: string;
 	readonly bytes: Uint8Array;
@@ -114,8 +101,8 @@ export class ArtifactLibrary {
 	constructor(
 		private readonly artifactRepo: ArtifactRepository,
 		private readonly storage: ArtifactStorage,
-		private readonly docxGenerator: (input: GenerateDocxInput) => Promise<Buffer>,
-		private readonly pdfGenerator: (input: GeneratePdfInput) => Promise<Buffer>,
+		private readonly docxGenerator: (input: ExportInput) => Promise<Buffer>,
+		private readonly pdfGenerator: (input: ExportInput) => Promise<Buffer>,
 		private readonly provenanceRecorder: ProvenanceRecorder,
 		private readonly noteReader: NoteReader,
 		private readonly templateRepo: TemplateRepository,
@@ -194,7 +181,7 @@ export class ArtifactLibrary {
 
 	/** The one place a format picks its generator, so every export path renders alike. */
 	private async renderDocument(
-		input: (GenerateDocxInput | GeneratePdfInput) & { readonly format: 'docx' | 'pdf' }
+		input: ExportInput & { readonly format: 'docx' | 'pdf' }
 	): Promise<Buffer> {
 		const { format, ...rest } = input;
 		return format === 'docx' ? this.docxGenerator(rest) : this.pdfGenerator(rest);

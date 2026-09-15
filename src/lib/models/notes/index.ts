@@ -1323,3 +1323,30 @@ export function decideSelection(
 		};
 	return { kind: 'valid' };
 }
+
+/** Direct children and inline text use the editor's existing document representation. */
+export const documentNodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
+	'content' in node ? (node.content ?? []) : [];
+export function documentInlineText(node: ProseMirrorNode): string {
+	return node.type === 'text'
+		? node.text
+		: documentNodeContent(node).map(documentInlineText).join('');
+}
+export function documentTextMarks(node: ProseMirrorTextNode): {
+	bold: boolean;
+	italic: boolean;
+	code: boolean;
+	href?: string;
+} {
+	let bold = false,
+		italic = false,
+		code = false;
+	let href: string | undefined;
+	for (const mark of node.marks ?? []) {
+		if (mark.type === 'bold') bold = true;
+		if (mark.type === 'italic') italic = true;
+		if (mark.type === 'code') code = true;
+		if (mark.type === 'link' && typeof mark.attrs?.href === 'string') href = mark.attrs.href;
+	}
+	return { bold, italic, code, ...(href !== undefined ? { href } : {}) };
+}

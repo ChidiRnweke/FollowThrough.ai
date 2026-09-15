@@ -167,6 +167,7 @@
 		"dompurify": "3.4.11",
 		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",
+		"entities": "8.0.0",
 		"fontkit": "^2.0.4",
 		"harper.js": "^2.7.0",
 		"js-tiktoken": "^1.0.21",
