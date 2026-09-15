@@ -1,3 +1,4 @@
+import { applySkillMetadataEdit } from '$lib/models/skills';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId, NoteRevision, NoteRevisionId, TextSelection } from '$lib/models/notes';
@@ -213,17 +214,7 @@ export class SkillLibrary {
 		if (input.raw === undefined && input.manifest === undefined) {
 			// Metadata-only update: the note — its document, revision, and revision
 			// history — belongs to the note sync path and must not be touched here.
-			return this.skills.update(actor, {
-				...current,
-				...(input.displayName?.trim() ? { name: input.displayName.trim() } : {}),
-				...(input.description !== undefined
-					? { description: input.description.trim() || current.description }
-					: {}),
-				...(input.triggerHints
-					? { triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean) }
-					: {}),
-				...(input.isEnabled !== undefined ? { isEnabled: input.isEnabled } : {})
-			});
+			return this.skills.update(actor, { ...current, ...applySkillMetadataEdit(current, input) });
 		}
 		const manifest =
 			input.raw !== undefined

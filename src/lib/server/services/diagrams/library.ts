@@ -9,7 +9,7 @@ import type {
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams
 } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/models/diagrams';
+import { diagramEtag, decideDiagramTrash } from '$lib/models/diagrams';
 import type { ConversationId } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -113,14 +113,16 @@ export class DiagramLibrary {
 	/** Reversible removal. `delete` above stays what it says: permanent. */
 	async archive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
 		const current = await this.get(actor, diagramId);
-		if (current.archivedAt) throw new ValidationError('The diagram is already in the trash');
+		const decision = decideDiagramTrash('archive', current);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		return this.diagrams.setArchived(actor, diagramId, true);
 	}
 
 	/** Named `unarchive` because `restore` already means restoring a revision here. */
 	async unarchive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
 		const current = await this.get(actor, diagramId);
-		if (!current.archivedAt) throw new ValidationError('The diagram is not in the trash');
+		const decision = decideDiagramTrash('restore', current);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		return this.diagrams.setArchived(actor, diagramId, false);
 	}
 

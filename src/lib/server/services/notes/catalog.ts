@@ -1,4 +1,4 @@
-import { decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
+import { decideNoteCreation, decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -318,31 +318,22 @@ export class NoteCatalog {
 	}
 
 	private async createNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
-		const title = input.title.trim();
-		if (!title) throw new ValidationError('Note title is required');
 		const project = await this.resolveProject(actor, input.projectId);
-		if (input.parentId) {
-			const parent = await this.get(actor, input.parentId);
-			if (parent.projectId !== project.id) throw new NotFoundError('Parent folder was not found');
-			if (parent.kind !== 'folder') throw new ValidationError('A parent must be a folder');
+		const parent = input.parentId ? await this.notes.findById(actor, input.parentId) : undefined;
+		const decision = decideNoteCreation(
+			{ ...input, id: input.id ?? (crypto.randomUUID() as NoteId), kind: 'note' },
+			{
+				project,
+				parent: parent ?? null,
+				siblingCount: await this.notes.countSiblings(actor, project.id, input.parentId)
+			},
+			now()
+		);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+			throw new ValidationError(decision.message);
 		}
-		const timestamp = now();
-		return this.notes.insert(actor, {
-			id: input.id ?? (crypto.randomUUID() as NoteId),
-			userId: actor.userId,
-			projectId: project.id,
-			kind: 'note',
-			parentId: input.parentId,
-			position: await this.notes.countSiblings(actor, project.id, input.parentId),
-			title,
-			document: { type: 'doc', content: [] },
-			plainText: '',
-			currentRevision: 1,
-			publishedRevision: 0,
-			isPinned: false,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		});
+		return this.notes.insert(actor, decision.note);
 	}
 
 	private async createAnchor(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {

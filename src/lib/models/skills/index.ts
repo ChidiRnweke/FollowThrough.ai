@@ -151,3 +151,23 @@ export const serializeSkillManifest = (manifest: SkillManifest): string => {
 	).trimEnd();
 	return `---\n${header}\n---\n\n${manifest.instructions.trimEnd()}\n`;
 };
+
+/** Metadata edits do not change the instruction document or its revision. */
+export function applySkillMetadataEdit(
+	current: Pick<Skill<never>, 'name' | 'description' | 'triggerHints' | 'isEnabled'>,
+	input: {
+		readonly displayName?: string;
+		readonly description?: string;
+		readonly triggerHints?: readonly string[];
+		readonly isEnabled?: boolean;
+	}
+) {
+	return {
+		name: input.displayName?.trim() || current.name,
+		description: input.description?.trim() || current.description,
+		triggerHints: input.triggerHints
+			? input.triggerHints.map((hint) => hint.trim()).filter(Boolean)
+			: [...current.triggerHints],
+		isEnabled: input.isEnabled ?? current.isEnabled
+	};
+}

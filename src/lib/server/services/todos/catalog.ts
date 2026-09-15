@@ -1,4 +1,4 @@
-import { applyTodoEdit, assembleTodoView } from '$lib/models/todos';
+import { applyTodoEdit, assembleTodoView, decideTodoCreation } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateTodoInput,
@@ -29,32 +29,19 @@ export class TodoCatalog {
 	) {}
 
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		const title = input.title.trim();
-		if (!title) throw new ValidationError('Todo title is required');
+		const decision = decideTodoCreation(input, {
+			id: input.id ?? (crypto.randomUUID() as TodoId),
+			userId: actor.userId,
+			timestamp: now()
+		});
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		if (!(await this.projects.findById(actor, input.projectId)))
 			throw new NotFoundError('Todo project was not found');
 		if (input.sourceAnchorId)
 			await this.validateAnchor(actor, input.sourceAnchorId, input.projectId);
 		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
-		const timestamp = now();
-		return this.todos.insert(actor, {
-			id: input.id ?? (crypto.randomUUID() as TodoId),
-			userId: actor.userId,
-			projectId: input.projectId,
-			title,
-			...(input.description !== undefined ? { description: input.description } : {}),
-			status: 'open',
-			responsibility: input.responsibility,
-			...(input.waitingOn?.trim() ? { waitingOn: input.waitingOn.trim() } : {}),
-			...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
-			...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
-			...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
-			...(input.sourceAnchorId !== undefined ? { sourceAnchorId: input.sourceAnchorId } : {}),
-			...(input.provenanceId !== undefined ? { provenanceId: input.provenanceId } : {}),
-			createdAt: timestamp,
-			updatedAt: timestamp
-		});
+		return this.todos.insert(actor, decision.todo);
 	}
 
 	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
@@ -74,12 +61,10 @@ export class TodoCatalog {
 		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
-		return this.todos.update(actor, {
-			...todo,
-			title,
-			waitingOn: todo.responsibility === 'mine' ? undefined : todo.waitingOn?.trim() || undefined,
-			updatedAt: now()
-		});
+		return this.todos.update(
+			actor,
+			applyTodoEdit(todo, { title, waitingOn: todo.waitingOn ?? null }, now())
+		);
 	}
 
 	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {

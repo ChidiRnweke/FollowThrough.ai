@@ -297,3 +297,31 @@ export function assembleTodoView(
 		...(facts.provenance ? { provenance: facts.provenance } : {})
 	};
 }
+
+/** Produce the initial task state without generating identities or writing storage. */
+export function decideTodoCreation(
+	input: CreateTodoInput & { readonly status?: TodoStatus },
+	context: { readonly id: TodoId; readonly userId: UserId; readonly timestamp: DateTime }
+): { kind: 'invalid'; message: string } | { kind: 'create'; todo: Todo } {
+	const title = input.title.trim();
+	if (!title) return { kind: 'invalid', message: 'Todo title is required' };
+	const todo: Todo = {
+		id: context.id,
+		userId: context.userId,
+		projectId: input.projectId,
+		title,
+		...(input.description !== undefined ? { description: input.description } : {}),
+		status: input.status ?? 'open',
+		responsibility: input.responsibility,
+		...(input.waitingOn?.trim() ? { waitingOn: input.waitingOn.trim() } : {}),
+		...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
+		...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
+		...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
+		...(input.sourceAnchorId !== undefined ? { sourceAnchorId: input.sourceAnchorId } : {}),
+		...(input.provenanceId !== undefined ? { provenanceId: input.provenanceId } : {}),
+		...(input.status === 'done' ? { completedAt: context.timestamp } : {}),
+		createdAt: context.timestamp,
+		updatedAt: context.timestamp
+	};
+	return { kind: 'create', todo };
+}

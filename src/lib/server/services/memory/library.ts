@@ -1,3 +1,4 @@
+import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
@@ -42,35 +43,23 @@ export class MemoryLibrary {
 	}
 
 	async create(actor: ActorContext, input: CreateMemoryEntryInput): Promise<MemoryEntry> {
-		const content = input.content.trim();
-		if (!content) throw new ValidationError('Memory entry content is required');
-		if (input.projectId) await this.requireProject(actor, input.projectId);
-		const timestamp = now();
-		const entry = await this.entries.insert(actor, {
+		const decision = decideMemoryCreation(input, {
 			id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
 			userId: actor.userId,
-			...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
-			content,
-			...(input.type !== undefined ? { type: input.type } : {}),
-			shareWithAgents: input.shareWithAgents ?? true,
-			createdAt: timestamp,
-			updatedAt: timestamp
+			timestamp: now()
 		});
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+		if (input.projectId) await this.requireProject(actor, input.projectId);
+		const entry = await this.entries.insert(actor, decision.entry);
 		await this.indexer.index(actor, entry);
 		return entry;
 	}
 
 	async update(actor: ActorContext, input: UpdateMemoryEntryInput): Promise<MemoryEntry> {
 		const current = await this.getActive(actor, input.memoryEntryId);
-		const content = input.content?.trim() ?? current.content;
-		if (!content) throw new ValidationError('Memory entry content is required');
-		const entry = await this.entries.update(actor, {
-			...current,
-			content,
-			...(input.type !== undefined ? { type: input.type ?? undefined } : {}),
-			shareWithAgents: input.shareWithAgents ?? current.shareWithAgents,
-			updatedAt: now()
-		});
+		const decision = decideMemoryEdit(current, input, now());
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+		const entry = await this.entries.update(actor, decision.entry);
 		await this.indexer.index(actor, entry);
 		return entry;
 	}

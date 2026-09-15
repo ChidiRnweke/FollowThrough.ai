@@ -1,3 +1,4 @@
+import { applyNoteDraftEdit } from '$lib/models/notes';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
 import type { Diagram } from '$lib/models/diagrams';
@@ -349,13 +350,11 @@ export class Notes implements NotesController {
 					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
 						throw new ValidationError('The note no longer exists');
 					await this.save(actor, {
-						note: {
-							...current.snapshot.value.value,
-							document: command.document,
-							plainText: command.plainText,
-							...(command.title !== undefined ? { title: command.title } : {}),
-							...(command.isPinned !== undefined ? { isPinned: command.isPinned } : {})
-						}
+						note: applyNoteDraftEdit(
+							current.snapshot.value.value,
+							command,
+							current.snapshot.value.value.updatedAt
+						)
 					});
 					if (command.sectionNumbering !== undefined)
 						await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
