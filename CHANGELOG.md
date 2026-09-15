@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.4.2...v0.5.0) (2026-09-15)
+
+
+### Features
+
+* **sync:** replace route caches with shared offline resources ([#37](https://github.com/ChidiRnweke/FollowThrough.ai/issues/37)) ([bf87a83](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bf87a8318ed6f7f109b225c7c50734e20c3911c9))
+
 ## [0.4.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.4.1...v0.4.2) (2026-09-07)
 
 
