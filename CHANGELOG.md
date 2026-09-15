@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.3...v0.5.4) (2026-09-15)
+
+
+### Bug Fixes
+
+* **skills:** save imports through the note editor as drafts ([#48](https://github.com/ChidiRnweke/FollowThrough.ai/issues/48)) ([830ca5b](https://github.com/ChidiRnweke/FollowThrough.ai/commit/830ca5b0953d6ff251663c7dfefab706b3bdd8aa))
+
+
+### Code Refactoring
+
+* **proposals:** resolve selection origins once ([#50](https://github.com/ChidiRnweke/FollowThrough.ai/issues/50)) ([48f7f45](https://github.com/ChidiRnweke/FollowThrough.ai/commit/48f7f457d10f0d7662ff91bd42868b03b19acade))
+* **workspace:** share offline and server decisions ([#47](https://github.com/ChidiRnweke/FollowThrough.ai/issues/47)) ([1ce7afb](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1ce7afb0ac0a0e3ce86c98e9054eaa9fbba266d6))
+
 ## [0.5.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.2...v0.5.3) (2026-09-15)
 
 
