@@ -39,6 +39,8 @@
 	$effect.pre(() => {
 		if (projection) view = projection.view;
 	});
+	// A cached note fades in with its layer. Only a note that replaces the skeleton needs its own fade.
+	const replacesSkeleton = !untrack(() => view);
 	let releaseContext: (() => void) | undefined;
 
 	onMount(() => {
@@ -66,27 +68,29 @@
 
 <div class="flex w-full min-w-0 flex-1 flex-col" data-note-pane={noteId}>
 	{#if view}
-		{#if resources.state(note.identity)?.kind === 'deleted'}<p
-				role="status"
-				class="px-4 py-1 text-xs text-muted-foreground"
-			>
-				This note was deleted on the server. This document remains open so you can preserve your
-				work.
-			</p>{/if}
-		{#if projection?.missing.length}<p
-				role="status"
-				class="px-4 py-1 text-xs text-muted-foreground"
-			>
-				Some related items are not available on this device yet.
-			</p>{/if}
-		<NoteWorkspace
-			{view}
-			{shell}
-			{inlineSuggestionsEnabled}
-			{draft}
-			{editorSelection}
-			{onCloseSplit}
-		/>
+		<div class={['flex min-w-0 flex-1 flex-col', replacesSkeleton && 'pane-reveal']}>
+			{#if resources.state(note.identity)?.kind === 'deleted'}<p
+					role="status"
+					class="px-4 py-1 text-xs text-muted-foreground"
+				>
+					This note was deleted on the server. This document remains open so you can preserve your
+					work.
+				</p>{/if}
+			{#if projection?.missing.length}<p
+					role="status"
+					class="px-4 py-1 text-xs text-muted-foreground"
+				>
+					Some related items are not available on this device yet.
+				</p>{/if}
+			<NoteWorkspace
+				{view}
+				{shell}
+				{inlineSuggestionsEnabled}
+				{draft}
+				{editorSelection}
+				{onCloseSplit}
+			/>
+		</div>
 	{:else if note.state.kind === 'wait' || note.state.kind === 'ready'}
 		<div class="flex min-h-96 flex-1 flex-col gap-3 p-8" aria-label="Loading note">
 			<div class="bg-muted h-5 w-full animate-pulse rounded"></div>

@@ -840,12 +840,35 @@
 	   `allow-discrete` and @starting-style are what make the incoming pane
 	   animate at all: it arrives from `display: none`, and a transition has no
 	   start value to run from without them. This is CSS, so the reduced-motion
-	   guard in @layer base already neutralises it — no separate opt-out. */
+	   guard in @layer base already neutralises it — no separate opt-out.
+
+	   A cached note renders on its first frame, so no skeleton stands between
+	   the old pane and the new one. The fade is that missing step. It changes
+	   opacity only: the document is laid out and interactive from frame one. */
 	.workspace-pane-layer {
 		transition:
 			inset-inline-start var(--duration-panel) var(--ease-standard),
 			inset-inline-end var(--duration-panel) var(--ease-standard),
+			opacity var(--duration-disclosure) var(--ease-standard),
 			display var(--duration-panel) allow-discrete;
+	}
+
+	@starting-style {
+		.workspace-pane-layer:not([data-pane-role='background']) {
+			opacity: 0;
+		}
+	}
+
+	/* A note that had to download replaces its skeleton inside a layer that is
+	   already visible, so the layer's starting style never runs for it. */
+	.pane-reveal {
+		animation: pane-reveal var(--duration-disclosure) var(--ease-standard);
+	}
+
+	@keyframes pane-reveal {
+		from {
+			opacity: 0;
+		}
 	}
 
 	@starting-style {
