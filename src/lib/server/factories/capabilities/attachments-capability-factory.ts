@@ -1,20 +1,17 @@
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
 import type { AttachmentClaims } from '$lib/server/services/attachments/contracts';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import { AttachmentContent } from '$lib/server/services/attachments/content';
 import {
-	AttachmentContent,
-	type ImageDescriber,
-	type OcrEngineClient
-} from '$lib/server/services/attachments/content';
-import type { DocumentOcr } from '$lib/server/services/attachments/contracts';
-import { ImageDescription } from '$lib/server/services/attachments/image-description';
+	ImageDescription,
+	type IImageDescription
+} from '$lib/server/services/attachments/image-description';
 import { AttachmentLibrary } from '$lib/server/services/attachments/library';
-import { MistralOcr } from '$lib/server/services/attachments/mistral-ocr';
+import { MistralOcr, type ITextRecognition } from '$lib/server/services/attachments/mistral-ocr';
 import { UploadRetention } from '$lib/server/services/attachments/retention';
 import {
 	AttachmentParserRegistry,
@@ -47,9 +44,8 @@ export interface AttachmentsCapabilityInput {
 	readonly ocrModel?: string;
 	readonly s3?: ObjectStorageConfig;
 	readonly storage?: IAttachmentStorage;
-	readonly ocrEngine?: OcrEngineClient;
-	readonly imageDescriber?: ImageDescriber;
-	readonly documentOcr?: DocumentOcr;
+	readonly ocrEngine?: ITextRecognition;
+	readonly imageDescriber?: IImageDescription;
 }
 
 export interface AttachmentsCapability {
@@ -89,7 +85,6 @@ export const createAttachmentsCapability = (
 			baseURL: input.openRouterBaseURL,
 			appURL: input.appURL
 		});
-	const documentOcr = input.documentOcr ?? new AttachmentContent(ocrEngine, imageDescriber);
 	return {
 		repository,
 		storage,
@@ -97,12 +92,16 @@ export const createAttachmentsCapability = (
 		processing: new AttachmentProcessing({
 			records: repository,
 			claims: input.claims,
-			extraction: new AttachmentExtraction(
-				storage,
-				new AttachmentParserRegistry(),
-				documentOcr,
-				imageDescriber
-			),
+			storage,
+			parsers: new AttachmentParserRegistry(),
+			ocr: ocrEngine,
+			imageDescriber,
+			content: new AttachmentContent(),
+			parseLimit:
+				positiveNumberFromEnvironment('ATTACHMENT_PARSE_MAX_BYTES') ??
+				positiveNumberFromEnvironment('ATTACHMENT_MAX_BYTES') ??
+				50 * 1024 * 1024,
+			maxPages: positiveNumberFromEnvironment('ATTACHMENT_OCR_MAX_PAGES') ?? 100,
 			preferences: input.preferences,
 			indexer: input.indexer,
 			transactionRunner: input.transactionRunner,

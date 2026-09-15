@@ -19,11 +19,9 @@ import {
 	type StoredObjectInfo
 } from '$lib/server/services/attachments/storage';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import type {
-	DocumentOcr,
-	ImageDescriber,
-	OcrParseInput
-} from '$lib/server/services/attachments/content';
+import type { ITextRecognition as OcrEngineClient } from '$lib/server/services/attachments/mistral-ocr';
+import type { IImageDescription as ImageDescriber } from '$lib/server/services/attachments/image-description';
+import type { RecognizedContent as OcrContentPart } from '$lib/models/attachments/ocr';
 
 export const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
 const VERSION_ID = '00000000-0000-4000-8000-0000000000b1' as AttachmentVersionId;
@@ -169,6 +167,8 @@ export class InMemoryStorage implements IAttachmentStorage {
 }
 
 export class InMemoryTextParser implements AttachmentParser {
+	text = 'decoded text';
+	beforeParse: () => Promise<void> = async () => {};
 	readonly kind = 'text';
 	calls = 0;
 	supports(mediaType: string, path: string): boolean {
@@ -176,29 +176,35 @@ export class InMemoryTextParser implements AttachmentParser {
 	}
 	async parse(): Promise<string> {
 		this.calls += 1;
-		return 'decoded text';
+		await this.beforeParse();
+		return this.text;
 	}
 }
 
-export class InMemoryDocumentOcr implements DocumentOcr {
-	calls: OcrParseInput[] = [];
+export class InMemoryOcrEngine implements OcrEngineClient {
+	calls: Parameters<OcrEngineClient['ocr']>[0][] = [];
+	parts: readonly OcrContentPart[] = [{ kind: 'markdown', text: 'ocr text' }];
 	beforeParse: () => Promise<void> = async () => {};
 	failure?: Error;
-	async parse(input: OcrParseInput): Promise<string> {
+	async ocr(input: Parameters<OcrEngineClient['ocr']>[0]) {
 		this.calls.push(input);
 		await this.beforeParse();
 		if (this.failure) throw this.failure;
-		return 'ocr text';
+		return { parts: this.parts };
 	}
 }
 
 export class InMemoryImageDescriber implements ImageDescriber {
 	failure?: Error;
-	calls: { imageDataUrl: string; model: string }[] = [];
-	async describe(input: { imageDataUrl: string; model: string }): Promise<string> {
+	calls: Parameters<ImageDescriber['describe']>[0][] = [];
+	beforeDescribe: (input: Parameters<ImageDescriber['describe']>[0]) => Promise<void> =
+		async () => {};
+	descriptions = new Map<string, string>();
+	async describe(input: Parameters<ImageDescriber['describe']>[0]): Promise<string> {
 		this.calls.push(input);
+		await this.beforeDescribe(input);
 		if (this.failure) throw this.failure;
-		return 'a factual description';
+		return this.descriptions.get(input.imageDataUrl) ?? 'a factual description';
 	}
 }
 

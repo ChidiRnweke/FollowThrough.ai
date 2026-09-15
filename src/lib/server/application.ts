@@ -5,8 +5,9 @@ import {
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { ToolRetriever } from './services/agent/tools/tool-retriever';
-import type { ImageDescriber, OcrEngineClient } from './services/attachments/content';
-import type { AttachmentClaims, DocumentOcr } from './services/attachments/contracts';
+import type { ITextRecognition } from './services/attachments/mistral-ocr';
+import type { IImageDescription } from './services/attachments/image-description';
+import type { AttachmentClaims } from './services/attachments/contracts';
 import type { Condenser, EmbeddingClient } from './services/knowledge-search/contracts';
 import type { Reranker } from './services/knowledge-search/semantic';
 import type { ReferenceFinder } from './services/references/contracts';
@@ -47,9 +48,8 @@ export interface ApplicationOverrides {
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceFinder?: ReferenceFinder;
 	readonly modelCatalog?: AgentModelCatalog;
-	readonly ocrEngine?: OcrEngineClient;
-	readonly imageDescriber?: ImageDescriber;
-	readonly documentOcr?: DocumentOcr;
+	readonly ocrEngine?: ITextRecognition;
+	readonly imageDescriber?: IImageDescription;
 }
 
 export interface ApplicationConfig {
@@ -247,8 +247,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		s3: config.s3,
 		storage: overrides.attachmentStorage,
 		ocrEngine: overrides.ocrEngine,
-		imageDescriber: overrides.imageDescriber,
-		documentOcr: overrides.documentOcr
+		imageDescriber: overrides.imageDescriber
 	});
 	const attachmentStorage = attachmentCapability.storage;
 	const attachments = attachmentCapability.library;
