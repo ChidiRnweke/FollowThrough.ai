@@ -6,10 +6,17 @@ import type {
 } from '$lib/server/services/diagrams/contracts';
 import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
-import type {
-	ISuggestionApplication,
-	SuggestionArtifact
-} from '$lib/server/services/suggestions/application';
+import { mapAppliedChange, type AppliedChange } from '$lib/models/proposal-effects';
+import type { Todo } from '$lib/models/todos';
+import type { ExternalReference } from '$lib/models/references';
+import type { NoteRelationship } from '$lib/models/notes';
+import type { MemoryEntry } from '$lib/models/memory';
+import type { TodoCreator } from '$lib/server/services/todos/contracts';
+import type { RelationshipCreator } from '$lib/server/services/relationships/contracts';
+import type { ReferenceCreator } from '$lib/server/services/references/contracts';
+import type { MemoryChangeApplier } from '$lib/server/services/memory/contracts';
+import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { DrawioLabelExtractor } from '$lib/server/services/diagrams/drawio';
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
@@ -41,11 +48,11 @@ import type {
 	SuggestionViewAssembler
 } from '$lib/server/services/suggestions/contracts';
 
-/**
- * Applies or reverts the concrete edit a suggestion represents, so the controller can
- * stay agnostic about what accepting a suggestion actually does to the document.
- */
-export type SuggestionArtifactApplier = ISuggestionApplication;
+type SuggestionArtifact = Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
+interface SuggestionApplicationResult {
+	readonly artifact: SuggestionArtifact;
+	readonly changes: readonly AppliedChange<AppliedRecord>[];
+}
 
 /** {@link AcceptSuggestionInput} with an optional reviewed draw.io diagram to persist alongside the accepted suggestion. */
 export interface AcceptReviewedSuggestionInput extends AcceptSuggestionInput {
@@ -114,7 +121,12 @@ export interface SuggestionsDependencies {
 	suggestionAccepter: SuggestionAccepter;
 	suggestionRejecter: SuggestionRejecter;
 	suggestionReverter: SuggestionReverter;
-	artifactApplier: SuggestionArtifactApplier;
+	todoCreator: TodoCreator;
+	relationshipCreator: Pick<RelationshipCreator, 'createWithChange'>;
+	referenceCreator: ReferenceCreator;
+	memoryChangeApplier: MemoryChangeApplier;
+	sourceNotes: NoteReader;
+	drawioLabels: Pick<DrawioLabelExtractor, 'extract'>;
 	suggestionEffects: SuggestionEffectService;
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: { index(actor: ActorContext, diagram: Diagram): Promise<void> };
@@ -192,7 +204,7 @@ export class Suggestions implements SuggestionsController {
 				throw new ValidationError('A draw.io diagram must be accepted through its review.');
 			if (input.drawioReview && (pending.kind !== 'diagram' || pending.payload.kind !== 'drawio'))
 				throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
-			const applied = await this.dependencies.artifactApplier.apply(actor, pending);
+			const applied = await this.applySuggestion(actor, pending);
 			let artifact = applied.artifact;
 			let changes = applied.changes;
 			if (input.drawioReview) {
@@ -250,6 +262,90 @@ export class Suggestions implements SuggestionsController {
 			await this.indexRecords(actor, restored);
 			return this.dependencies.suggestionReverter.revert(actor, accepted);
 		});
+	}
+	private async applySuggestion(
+		actor: ActorContext,
+		suggestion: Suggestion
+	): Promise<SuggestionApplicationResult> {
+		switch (suggestion.kind) {
+			case 'todo': {
+				const artifact = await this.dependencies.todoCreator.create(actor, suggestion.payload);
+				return {
+					artifact,
+					changes: [{ kind: 'created', after: { type: 'todos', value: artifact } }]
+				};
+			}
+			case 'backlink': {
+				const change = await this.dependencies.relationshipCreator.createWithChange(
+					actor,
+					suggestion.payload
+				);
+				return {
+					artifact: change.after,
+					changes: [
+						mapAppliedChange(change, (value) => ({ type: 'note_relationships' as const, value }))
+					]
+				};
+			}
+			case 'reference': {
+				const artifact = await this.dependencies.referenceCreator.create(actor, suggestion.payload);
+				return {
+					artifact,
+					changes: [{ kind: 'created', after: { type: 'references', value: artifact } }]
+				};
+			}
+			case 'diagram':
+				return this.applyDiagram(actor, suggestion);
+			case 'memory': {
+				const result = await this.dependencies.memoryChangeApplier.apply(
+					actor,
+					suggestion.payload,
+					suggestion.provenanceId
+				);
+				return {
+					artifact: result.entry,
+					changes: result.changes.map((change) =>
+						mapAppliedChange(change, (value) => ({ type: 'memory_entries' as const, value }))
+					)
+				};
+			}
+		}
+	}
+	private async applyDiagram(
+		actor: ActorContext,
+		suggestion: Extract<Suggestion, { kind: 'diagram' }>
+	): Promise<SuggestionApplicationResult> {
+		const source =
+			suggestion.payload.kind === 'drawio'
+				? this.dependencies.drawioXmlValidator.validate(suggestion.payload.source)
+				: suggestion.payload.source;
+		const note = await this.dependencies.sourceNotes.get(actor, suggestion.payload.noteId);
+		const now = this.dependencies.now();
+		const base = {
+			id: crypto.randomUUID() as Diagram['id'],
+			userId: actor.userId,
+			projectId: note.projectId,
+			sourceNoteId: suggestion.payload.noteId,
+			title: suggestion.payload.title,
+			source,
+			searchableText:
+				suggestion.payload.kind === 'drawio'
+					? this.dependencies.drawioLabels.extract(source)
+					: source,
+			sourceAnchorId: suggestion.sourceAnchorId,
+			provenanceId: suggestion.provenanceId,
+			createdAt: now,
+			updatedAt: now
+		};
+		const diagram: Diagram =
+			suggestion.payload.kind === 'mermaid'
+				? { ...base, kind: 'mermaid' }
+				: { ...base, kind: 'drawio', currentRevision: 1, publishedRevision: 0 };
+		const artifact = await this.dependencies.diagramWriter.create(actor, diagram);
+		return {
+			artifact,
+			changes: [{ kind: 'created', after: { type: 'diagrams', value: artifact } }]
+		};
 	}
 	private async indexRecords(
 		actor: ActorContext,

@@ -74,7 +74,7 @@ const setup = () => {
 			suggestionAccepter: suggestions,
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions,
-			artifactApplier: artifacts,
+			todoCreator: artifacts,
 			suggestionEffects: new SuggestionEffects(artifacts.effects),
 			transactionRunner
 		})
