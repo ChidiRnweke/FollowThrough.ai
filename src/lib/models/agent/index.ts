@@ -870,12 +870,11 @@ export type StoredAgentRunEventRecord =
 	| (AgentRunEventIdentity & { readonly kind: 'unreadable'; readonly reason: string });
 
 /**
- * The same, off the wire, where a frame that does not parse has no identity to
- * report either — the cursor was part of what failed to read.
+ * A frame with an invalid identity cannot provide a trusted resume point.
+ * Unknown event payloads retain their valid identity as unreadable records.
  */
 export type ReadAgentRunEventRecord =
-	| ({ readonly kind: 'readable' } & AgentRunEventRecord)
-	| { readonly kind: 'unreadable'; readonly reason: string };
+	StoredAgentRunEventRecord | { readonly kind: 'invalid'; readonly reason: string };
 
 /**
  * A stored event row, read.
@@ -883,9 +882,8 @@ export type ReadAgentRunEventRecord =
  * A read-boundary union rather than a sixth `unrecognised` arm on `AgentEvent`,
  * for the reason `StoredSuggestion` is one: `AgentEvent` is the *write* type as
  * well, and an arm nothing can produce is a state a producer could nonetheless
- * say. The disjunction stops at the caller that can act on it — the controller
- * drops the unreadable rows and warns with their cursors — so no consumer of a
- * replayed event sees a case it cannot render.
+ * say. The replay retains the row identity so consumers can report the missing
+ * activity and advance their checkpoints.
  */
 export type StoredAgentEvent =
 	| { readonly kind: 'readable'; readonly event: AgentEvent }
@@ -1115,9 +1113,8 @@ export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefin
  * took `/today` down whole (TN-14). A replay is the same shape of read.
  *
  * There is no mapping for the retired `tool_completed` shape. The rows written
- * under it read as `unreadable` and are dropped from replay with a warning
- * naming their cursors: replay only drives a run still in flight, and a reopened
- * conversation reads the journal instead.
+ * under it read as `unreadable` with a reason. Replay preserves their cursors;
+ * a reopened conversation reads the journal instead.
  */
 // audit-allow: no-unknown-type — The stored event row, at the boundary that turns it into a StoredAgentEvent.
 export const readAgentEvent = (value: unknown): StoredAgentEvent => {
@@ -1127,30 +1124,25 @@ export const readAgentEvent = (value: unknown): StoredAgentEvent => {
 		: { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
 };
 
-const agentRunEventFrameSchema = z.object({
-	cursor: z.string(),
+export const agentRunCursorSchema = z.string().regex(/^\d+$/);
+
+export const agentRunEventIdentitySchema = z.object({
+	cursor: agentRunCursorSchema,
 	runId: runIdSchema,
 	attempt: z.number().int(),
-	event: agentEventSchema,
 	createdAt: z.iso.datetime().transform((value) => new Date(value))
 });
 
-/**
- * One frame off the run's event stream.
- *
- * The server serialized a record it had parsed, but the client receives text
- * from a socket and the two ends are versioned separately: a tab left open
- * across a deploy is served by the new stream and reads it with the old union,
- * or the reverse. The `createdAt` conversion is the visible half of that — JSON
- * has no date — and the rest of the record was riding on the same assertion.
- */
-// audit-allow: no-unknown-type — The SSE frame as it arrives; this function is the frame reader.
-export const readAgentRunEventRecord = (value: unknown): ReadAgentRunEventRecord => {
-	const parsed = agentRunEventFrameSchema.safeParse(value);
-	return parsed.success
-		? { kind: 'readable', ...parsed.data }
-		: { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
-};
+export const agentRunEventFrameSchema = z.union([
+	agentRunEventIdentitySchema.extend({
+		kind: z.literal('readable').default('readable'),
+		event: agentEventSchema
+	}),
+	agentRunEventIdentitySchema.extend({
+		kind: z.literal('unreadable'),
+		reason: z.string().min(1)
+	})
+]);
 
 /**
  * What the provider streamed, as this application acts on it.

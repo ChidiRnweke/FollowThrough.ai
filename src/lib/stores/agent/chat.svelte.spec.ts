@@ -3,7 +3,7 @@ import { flushSync } from 'svelte';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import type {
 	AgentEvent,
-	AgentRunEventRecord,
+	StoredAgentRunEventRecord,
 	AgentRunId,
 	AgentRunSnapshot,
 	ConversationId,
@@ -83,12 +83,13 @@ class FakeAgentRunTransport implements AgentRunTransport {
 			events.forEach((event, index) => {
 				if (BigInt(index + 1) <= BigInt(input.after)) return;
 				input.onEvent({
+					kind: 'readable',
 					cursor: String(index + 1),
 					runId,
 					attempt: 1,
 					event,
 					createdAt: new Date()
-				} satisfies AgentRunEventRecord);
+				} satisfies StoredAgentRunEventRecord);
 			});
 		});
 		return { close() {} };
@@ -143,12 +144,13 @@ class StoppableTransport implements AgentRunTransport {
 	openEvents(input: Parameters<AgentRunTransport['openEvents']>[0]) {
 		this.emit = (event, cursor) =>
 			input.onEvent({
+				kind: 'readable',
 				cursor: String(cursor),
 				runId,
 				attempt: 1,
 				event,
 				createdAt: new Date()
-			} satisfies AgentRunEventRecord);
+			} satisfies StoredAgentRunEventRecord);
 		queueMicrotask(() => {
 			input.onOpen();
 			this.emit!({ type: 'run_started', runId, attempt: 1 }, 1);

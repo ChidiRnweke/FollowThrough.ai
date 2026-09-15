@@ -1,6 +1,11 @@
 import { RunEventSubscription } from '$lib/client/agent/runs/subscription';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-import { type AgentRunEventRecord, type AgentRunId, type NoteActionKind } from '$lib/models/agent';
+import {
+	agentRunCursorSchema,
+	type StoredAgentRunEventRecord,
+	type AgentRunId,
+	type NoteActionKind
+} from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import { z } from 'zod';
 import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
@@ -27,7 +32,7 @@ const storedRunSchema = z
 		runId: z.string().min(1),
 		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
 		noteId: z.string().min(1),
-		cursor: z.string(),
+		cursor: agentRunCursorSchema,
 		context: z
 			.object({ source: z.string().optional(), insertAt: z.number().int().optional() })
 			.strict()
@@ -71,7 +76,7 @@ interface NoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void | Promise<void>,
+		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>,
 		onError: () => void
 	): EventStream;
 	cancel(runId: AgentRunId): Promise<void>;
@@ -81,7 +86,7 @@ class BrowserTransport implements NoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void | Promise<void>,
+		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>,
 		onError: () => void
 	): EventStream {
 		return new RunEventSubscription({
@@ -90,7 +95,11 @@ class BrowserTransport implements NoteActionRunTransport {
 			onOpen: () => {},
 			onError,
 			onEvent: async (record) => {
-				if (record.event.type === 'workflow_result' || record.event.type === 'resources_stale')
+				if (
+					record.kind === 'unreadable' ||
+					record.event.type === 'workflow_result' ||
+					record.event.type === 'resources_stale'
+				)
 					await workspaceSession.synchronize();
 				await onEvent(record);
 			}
@@ -253,7 +262,15 @@ export class NoteActionRunsStore {
 		this.streams.set(entry.runId, stream);
 	}
 
-	private async consume(runId: AgentRunId, record: AgentRunEventRecord): Promise<void> {
+	private async consume(runId: AgentRunId, record: StoredAgentRunEventRecord): Promise<void> {
+		if (record.kind === 'unreadable') {
+			this.settle(runId, {
+				status: 'failed',
+				message:
+					'Saved note action activity could not be restored. Reload the note to check its saved result.'
+			});
+			return;
+		}
 		const event = record.event;
 		if (event.type === 'workflow_result') {
 			const entry = this.entries.find((candidate) => candidate.runId === runId);

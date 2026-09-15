@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentEvent, AgentRunId } from '$lib/models/agent';
-import { readAgentEvent, readAgentRunEventRecord, toolActivityFromEvent } from '$lib/models/agent';
-
-const runId = '00000000-0000-4000-8000-000000000001' as AgentRunId;
+import type { AgentEvent } from '$lib/models/agent';
+import { readAgentEvent, toolActivityFromEvent } from '$lib/models/agent';
 
 const read = (event: unknown) => readAgentEvent(event);
 
@@ -105,47 +103,5 @@ describe('Turning an event into the journal row it calls for', () => {
 
 	it('has no row for an event that is not about a tool call', () => {
 		expect(toolActivityFromEvent({ type: 'text_delta', text: 'Done.' })).toBeUndefined();
-	});
-});
-
-/**
- * The stream frame is text off a socket, and the two ends are versioned
- * separately — a tab left open across a deploy reads the new stream with the old
- * union, or the reverse. It used to be one assertion covering the whole record,
- * with the `createdAt` string quietly retyped as a `Date`.
- */
-describe('Reading one frame off the run event stream', () => {
-	const frame = {
-		cursor: '12',
-		runId,
-		attempt: 1,
-		event: { type: 'text_delta', text: 'Found two.' },
-		createdAt: '2026-08-31T10:00:00.000Z'
-	};
-
-	it('turns the serialized timestamp back into a date', () => {
-		const result = readAgentRunEventRecord(frame);
-		expect(result.kind === 'readable' && result.createdAt.toISOString()).toBe(
-			'2026-08-31T10:00:00.000Z'
-		);
-	});
-
-	it('reads the event the frame carries', () => {
-		const result = readAgentRunEventRecord(frame);
-		expect(result.kind === 'readable' && result.event).toEqual({
-			type: 'text_delta',
-			text: 'Found two.'
-		});
-	});
-
-	it('drops a frame whose event this client does not model', () => {
-		expect(readAgentRunEventRecord({ ...frame, event: { type: 'tool_completed' } }).kind).toBe(
-			'unreadable'
-		);
-	});
-
-	it('drops a frame with no timestamp rather than inventing one', () => {
-		const { createdAt: _omitted, ...withoutTimestamp } = frame;
-		expect(readAgentRunEventRecord(withoutTimestamp).kind).toBe('unreadable');
 	});
 });

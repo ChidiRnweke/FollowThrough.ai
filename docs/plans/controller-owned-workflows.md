@@ -105,6 +105,10 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
 - P03: start logging and tracing before public capability execution. The explicit, typed
   surface excludes helpers; internal calls retain one boundary. Sixteen instrumentation tests
   and the full 3,506-test suite passed, including pre-await child span parentage.
+- P04/A07/A12: replay retains unreadable event identities; numeric cursor schemas protect
+  browser state and stream boundaries. Chat checkpoints after successful storage and applies
+  each retried event once. PostgreSQL contracts verify an unreadable terminal tail; browser
+  tests verify detachment and checkpoint failures. Seeded chat captures show missing activity.
 - P05/A11: search-query generation now rejects missing or blank provider output. The provider
   belongs to knowledge search, and the evaluation cache uses a new namespace. Eleven focused
   tests and the full 3,511-test suite passed. Vision preparation lifetime (A13) remains open.
@@ -113,7 +117,7 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
 - P15: export preparation landed in #65; verify the other export findings separately.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.
-- P04–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
+- P05–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles

@@ -3,13 +3,13 @@ import type {
 	StoredAgentRunClientState,
 	StoredAgentRunClientStateResult
 } from './contracts';
-import type { AgentRunId } from '$lib/models/agent';
+import { agentRunCursorSchema, type AgentRunId } from '$lib/models/agent';
 import { z } from 'zod';
 
 const KEY_PREFIX = 'followthrough.agent.active-run';
 const storedAgentRunClientStateSchema = z.object({
 	runId: z.string().min(1).optional(),
-	cursor: z.string(),
+	cursor: agentRunCursorSchema,
 	attempt: z.number().int().nonnegative(),
 	pendingRequestId: z.string().min(1).optional()
 });

@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { readStoredAgentRunState } from './session-storage';
 
 describe('stored agent run state', () => {
+	it.each(['', '-1', '1.5', 'NaN', 'abc'])('rejects invalid saved cursor %s', (cursor) => {
+		expect(readStoredAgentRunState(JSON.stringify({ cursor, attempt: 1 })).kind).toBe('corrupt');
+	});
 	it('distinguishes missing state', () => {
 		expect(readStoredAgentRunState(null)).toEqual({ kind: 'missing' });
 	});

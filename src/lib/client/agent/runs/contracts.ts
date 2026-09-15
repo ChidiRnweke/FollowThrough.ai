@@ -1,5 +1,5 @@
 import type {
-	AgentRunEventRecord,
+	StoredAgentRunEventRecord,
 	AgentRunId,
 	AgentRunReceipt,
 	AgentRunSnapshot,
@@ -26,7 +26,7 @@ export interface AgentRunTransport {
 		runId: AgentRunId;
 		after: string;
 		onOpen: () => void;
-		onEvent: (record: AgentRunEventRecord) => void | Promise<void>;
+		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>;
 		onError: () => void;
 	}): AgentRunEventConnection;
 }

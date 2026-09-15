@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentRunEventRecord, AgentRunId } from '$lib/models/agent';
+import type { AgentEvent, StoredAgentRunEventRecord, AgentRunId } from '$lib/models/agent';
 
 interface EventStream {
 	close(): void;
@@ -7,7 +7,7 @@ interface EventStream {
 interface OpenStream {
 	readonly runId: AgentRunId;
 	readonly after: string;
-	readonly deliver: (record: AgentRunEventRecord) => void;
+	readonly deliver: (record: StoredAgentRunEventRecord) => void | Promise<void>;
 	closed: boolean;
 }
 
@@ -21,13 +21,13 @@ interface OpenStream {
 export class InMemoryNoteActionRunTransport {
 	readonly cancelled: AgentRunId[] = [];
 	readonly streams: OpenStream[] = [];
-	private readonly log = new Map<AgentRunId, AgentRunEventRecord[]>();
+	private readonly log = new Map<AgentRunId, StoredAgentRunEventRecord[]>();
 	private sequence = 0;
 
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void,
+		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>,
 		_onError: () => void
 	): EventStream {
 		const stream: OpenStream = { runId, after, deliver: onEvent, closed: false };
@@ -48,9 +48,10 @@ export class InMemoryNoteActionRunTransport {
 	}
 
 	/** Records an event and pushes it to every stream still open on that run. */
-	emit(runId: AgentRunId, event: AgentEvent): AgentRunEventRecord {
+	emit(runId: AgentRunId, event: AgentEvent): StoredAgentRunEventRecord {
 		this.sequence += 1;
-		const record: AgentRunEventRecord = {
+		const record: StoredAgentRunEventRecord = {
+			kind: 'readable',
 			cursor: String(this.sequence).padStart(6, '0'),
 			runId,
 			attempt: 1,

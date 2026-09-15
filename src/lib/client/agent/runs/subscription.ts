@@ -1,4 +1,4 @@
-import { readAgentRunEventRecord } from '$lib/models/agent';
+import { readAgentRunEventRecord } from './event-reader';
 import type { AgentRunTransport } from './contracts';
 
 type SubscriptionInput = Parameters<AgentRunTransport['openEvents']>[0];
@@ -64,7 +64,7 @@ export class RunEventSubscription {
 		try {
 			const value: unknown = JSON.parse(frame);
 			const record = readAgentRunEventRecord(value);
-			if (record.kind === 'unreadable') throw new Error(record.reason);
+			if (record.kind === 'invalid') throw new Error(record.reason);
 			if (record.runId !== this.input.runId) throw new Error('Event belongs to a different run');
 			if (BigInt(record.cursor) <= BigInt(this.cursor)) return { kind: 'consumed' } as const;
 			await this.input.onEvent(record);
