@@ -1,3 +1,4 @@
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	BacklinkView,
@@ -23,6 +24,12 @@ export class RelationshipGraph {
 		private readonly provenance: ProvenanceRepository
 	) {}
 	async create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship> {
+		return (await this.createWithChange(actor, input)).after;
+	}
+	async createWithChange(
+		actor: ActorContext,
+		input: CreateRelationshipInput
+	): Promise<AppliedChange<NoteRelationship>> {
 		if (input.sourceNoteId === input.targetNoteId)
 			throw new ValidationError('A note cannot relate to itself');
 		const [source, target] = await Promise.all([
@@ -40,7 +47,7 @@ export class RelationshipGraph {
 		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
 		const timestamp = now();
-		return this.relationships.insert(actor, {
+		return this.relationships.insertWithChange(actor, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: actor.userId,
 			...input,

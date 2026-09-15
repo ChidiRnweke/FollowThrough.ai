@@ -152,3 +152,8 @@ export function decideMemoryEdit(
 		}
 	};
 }
+
+export interface MemoryApplication<Change> {
+	readonly entry: MemoryEntry;
+	readonly changes: readonly Change[];
+}

@@ -36,10 +36,6 @@ const setup = () => {
 		unused,
 		diagrams,
 		unused,
-		unused,
-		unused,
-		unused,
-		unused,
 		new DrawioXmlValidator(),
 		new DrawioLabelExtractor(),
 		// A diagram is owned by its project, and the note it was suggested on is what
@@ -59,13 +55,13 @@ describe('Draw.io suggestion application invariants', () => {
 
 	it('persists validated draw.io XML through the ordinary artifact applier', async () => {
 		const { applier } = setup();
-		const artifact = await applier.apply(testActor(), suggestion(VALID_DRAWIO_XML));
+		const { artifact } = await applier.apply(testActor(), suggestion(VALID_DRAWIO_XML));
 		expect('kind' in artifact ? artifact.kind : undefined).toBe('drawio');
 	});
 
 	it('extracts labels while applying the accepted suggestion', async () => {
 		const { applier } = setup();
-		const artifact = await applier.apply(testActor(), suggestion(VALID_DRAWIO_XML));
+		const { artifact } = await applier.apply(testActor(), suggestion(VALID_DRAWIO_XML));
 		expect('searchableText' in artifact ? artifact.searchableText : undefined).toBe('API & worker');
 	});
 });

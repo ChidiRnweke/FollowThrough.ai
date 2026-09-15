@@ -1,3 +1,4 @@
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	BacklinkView,
@@ -36,6 +37,10 @@ export interface StructuredRelationshipClient {
 }
 export interface RelationshipCreator {
 	create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship>;
+	createWithChange(
+		actor: ActorContext,
+		input: CreateRelationshipInput
+	): Promise<AppliedChange<NoteRelationship>>;
 }
 export interface RelationshipDeleter {
 	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void>;

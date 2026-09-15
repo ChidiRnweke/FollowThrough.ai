@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MemoryChangePayload, MemorySuggestion } from '$lib/models/memory';
+import type { MemoryChangePayload } from '$lib/models/memory';
 import type { Provenance } from '$lib/models/provenance';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { MemoryLibrary } from './library';
@@ -16,8 +16,7 @@ import {
 	testActor,
 	testNow,
 	testProjectId,
-	testProvenanceId,
-	testSuggestionId
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = async () => {
@@ -50,22 +49,6 @@ const addPayload = (overrides: Partial<MemoryChangePayload> = {}): MemoryChangeP
 	operation: 'add',
 	content: 'Deploys go out on Tuesdays.',
 	...overrides
-});
-
-const memorySuggestion = (
-	payload: MemoryChangePayload,
-	appliedArtifactId: string
-): MemorySuggestion => ({
-	id: testSuggestionId(),
-	userId: testActor().userId,
-	kind: 'memory',
-	status: 'accepted',
-	payload,
-	provenanceId: testProvenanceId(),
-	appliedArtifactId,
-	isAutoAccepted: false,
-	createdAt: testNow,
-	updatedAt: testNow
 });
 
 describe('Memory entry management invariants', () => {
@@ -268,54 +251,32 @@ describe('Memory change application invariants', () => {
 	});
 });
 
-describe('Memory change revert invariants', () => {
-	it('withdraws an added entry on revert', async () => {
-		const { service } = await setup();
-		const entry = await service.apply(testActor(), addPayload(), testProvenanceId());
-		await service.revert(testActor(), memorySuggestion(addPayload(), entry.id));
-		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
-	});
-
-	it('restores the superseded entry when an update is reverted', async () => {
+describe('Memory application effects', () => {
+	it('records both sides of a memory replacement', async () => {
 		const { service } = await setup();
 		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const updatePayload = addPayload({
-			operation: 'update',
-			memoryEntryId: original.id,
-			content: 'Revised fact'
-		});
-		const replacement = await service.apply(testActor(), updatePayload, testProvenanceId());
-		await service.revert(testActor(), memorySuggestion(updatePayload, replacement.id));
-		expect(
-			(await service.list(testActor(), { projectId: testProjectId() })).map((item) => item.id)
-		).toEqual([original.id]);
+		const result = await service.applyWithChange(
+			testActor(),
+			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			testProvenanceId()
+		);
+		expect(result.changes).toEqual([
+			{
+				kind: 'modified',
+				before: original,
+				after: expect.objectContaining({ id: original.id, deletedAt: expect.any(String) })
+			},
+			{ kind: 'created', after: result.entry }
+		]);
 	});
-
-	it('reindexes the restored entry when an update is reverted', async () => {
-		const { search, service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const updatePayload = addPayload({
-			operation: 'update',
-			memoryEntryId: original.id,
-			content: 'Revised fact'
-		});
-		const replacement = await service.apply(testActor(), updatePayload, testProvenanceId());
-		await service.revert(testActor(), memorySuggestion(updatePayload, replacement.id));
-		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([original.id]);
-	});
-
-	it('restores a removed entry on revert', async () => {
+	it('records the original entry before removing it', async () => {
 		const { service } = await setup();
 		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const removePayload = addPayload({
-			operation: 'remove',
-			memoryEntryId: original.id,
-			content: undefined
-		});
-		await service.apply(testActor(), removePayload, testProvenanceId());
-		await service.revert(testActor(), memorySuggestion(removePayload, original.id));
-		expect(
-			(await service.list(testActor(), { projectId: testProjectId() })).map((item) => item.id)
-		).toEqual([original.id]);
+		const result = await service.applyWithChange(
+			testActor(),
+			addPayload({ operation: 'remove', memoryEntryId: original.id }),
+			testProvenanceId()
+		);
+		expect(result.changes).toEqual([{ kind: 'modified', before: original, after: result.entry }]);
 	});
 });

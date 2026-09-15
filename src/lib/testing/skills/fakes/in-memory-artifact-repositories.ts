@@ -1,3 +1,5 @@
+import { decideRelationshipWrite } from '$lib/models/relationships';
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { Note } from '$lib/models/notes';
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
@@ -32,10 +34,29 @@ export class InMemoryRelationshipRepository implements NoteRelationshipRepositor
 				(item.sourceNoteId === noteId || item.targetNoteId === noteId)
 		);
 	}
-	async insert(_actor: ActorContext, relationship: NoteRelationship) {
-		this.relationships.push(relationship);
-		return relationship;
+
+	async insert(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
+		return (await this.insertWithChange(actor, relationship)).after;
 	}
+	async insertWithChange(
+		_actor: ActorContext,
+		relationship: NoteRelationship
+	): Promise<AppliedChange<NoteRelationship>> {
+		const current =
+			this.relationships.find(
+				(item) =>
+					item.sourceNoteId === relationship.sourceNoteId &&
+					item.targetNoteId === relationship.targetNoteId &&
+					item.kind === relationship.kind
+			) ?? null;
+		const change = decideRelationshipWrite(relationship, current);
+		this.relationships = [
+			...this.relationships.filter((item) => item.id !== change.after.id),
+			change.after
+		];
+		return change;
+	}
+
 	async delete(actor: ActorContext, id: RelationshipId) {
 		this.relationships = this.relationships.filter(
 			(item) => item.id !== id || item.userId !== actor.userId

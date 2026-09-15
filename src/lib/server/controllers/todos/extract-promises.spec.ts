@@ -1,3 +1,4 @@
+import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import type { PromiseCandidate } from '$lib/models/todos';
@@ -44,6 +45,7 @@ const setup = () => {
 	const extractor = new InMemoryPromiseExtractor();
 	const provenance = new InMemoryProvenanceRecorder();
 	const suggestions = new InMemorySuggestions();
+	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
 	const todos = new InMemoryTodos();
 	content.notes = [noteBuilder({ plainText: selection.text })];
@@ -55,7 +57,14 @@ const setup = () => {
 			trustPolicyEvaluator: trust,
 			todoCreator: todos,
 			suggestionAccepter: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([content, provenance, suggestions, todos])
+			suggestionEffects: effects,
+			transactionRunner: new InMemoryTransactionRunner([
+				content,
+				provenance,
+				suggestions,
+				todos,
+				effects
+			])
 		})
 	);
 	return { content, extractor, provenance, suggestions, trust, todos, controller };

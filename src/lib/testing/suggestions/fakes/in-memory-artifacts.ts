@@ -1,3 +1,4 @@
+import { InMemoryApplicationEffects } from './in-memory-application-effects';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { Todo } from '$lib/models/todos';
@@ -10,9 +11,19 @@ import type {
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
 export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, SnapshotParticipant {
-	artifacts: Todo[] = [];
+	constructor(readonly effects = new InMemoryApplicationEffects()) {}
+	get artifacts(): Todo[] {
+		return [...this.effects.records.values()].flatMap((record) =>
+			record.type === 'todos' && !record.value.deletedAt ? [record.value] : []
+		);
+	}
+	set artifacts(artifacts: Todo[]) {
+		for (const artifact of artifacts) this.effects.put({ type: 'todos', value: artifact });
+	}
 	failApply = false;
-	failRevert = false;
+	set failRevert(value: boolean) {
+		this.effects.failRestore = value;
+	}
 
 	async apply(
 		actor: ActorContext,
@@ -27,21 +38,11 @@ export class InMemorySuggestionArtifacts implements SuggestionArtifactApplier, S
 			title: suggestion.payload.title,
 			responsibility: suggestion.payload.responsibility
 		});
-		this.artifacts.push(artifact);
-		return artifact;
-	}
-
-	async revert(_actor: ActorContext, suggestion: Suggestion): Promise<void> {
-		if (this.failRevert) throw new ExternalServiceError('Artifact revert failed');
-		this.artifacts = this.artifacts.filter(
-			(artifact) => artifact.id !== suggestion.appliedArtifactId
-		);
+		this.effects.put({ type: 'todos', value: artifact });
+		return { artifact, changes: [{ kind: 'created', after: { type: 'todos', value: artifact } }] };
 	}
 
 	snapshot(): RestoreSnapshot {
-		const artifacts = structuredClone(this.artifacts);
-		return () => {
-			this.artifacts = artifacts;
-		};
+		return this.effects.snapshot();
 	}
 }

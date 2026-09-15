@@ -13,6 +13,13 @@ export class InMemoryMemoryEntryRepository implements MemoryEntryRepository, Sna
 		return this.entries.find((entry) => entry.id === id && entry.userId === actor.userId);
 	}
 
+	async findByIdForUpdate(
+		actor: ActorContext,
+		id: MemoryEntryId
+	): Promise<MemoryEntry | undefined> {
+		return this.findById(actor, id);
+	}
+
 	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
 		// An undefined filter.projectId matches only user-profile entries, which carry no projectId.
 		return this.entries.filter(

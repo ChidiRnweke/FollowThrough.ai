@@ -1,33 +1,32 @@
+import { mapAppliedChange, type AppliedChange } from '$lib/models/proposal-effects';
+import type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
-import type { CreateReferenceInput, ExternalReference, ReferenceId } from '$lib/models/references';
-import type { CreateRelationshipInput, RelationshipId } from '$lib/models/relationships';
-import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { CreateReferenceInput, ExternalReference } from '$lib/models/references';
+import type { CreateRelationshipInput } from '$lib/models/relationships';
+import type { CreateTodoInput, Todo } from '$lib/models/todos';
+import type { Diagram } from '$lib/models/diagrams';
 import type { NoteId, NoteRelationship } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { MemoryChangePayload, MemoryEntry, MemorySuggestion } from '$lib/models/memory';
+import type { MemoryChangePayload, MemoryEntry, MemoryApplication } from '$lib/models/memory';
 import type { ProvenanceId } from '$lib/models/provenance';
-import { InvalidTransitionError, NotFoundError } from '$lib/errors';
+import { NotFoundError } from '$lib/errors';
 
 interface TodoCreator {
 	create(actor: ActorContext, input: CreateTodoInput): Promise<Todo>;
 }
-interface TodoDeleter {
-	softDelete(actor: ActorContext, todoId: TodoId): Promise<void>;
-}
+
 interface RelationshipCreator {
-	create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship>;
+	createWithChange(
+		actor: ActorContext,
+		input: CreateRelationshipInput
+	): Promise<AppliedChange<NoteRelationship>>;
 }
-interface RelationshipDeleter {
-	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void>;
-}
+
 interface ReferenceCreator {
 	create(actor: ActorContext, input: CreateReferenceInput): Promise<ExternalReference>;
 }
-interface ReferenceDeleter {
-	delete(actor: ActorContext, referenceId: ReferenceId): Promise<void>;
-}
+
 interface DiagramWriter {
 	create(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
 }
@@ -41,16 +40,13 @@ interface DiagramProjectResolver {
 		noteId: NoteId
 	): Promise<{ readonly projectId: ProjectId } | undefined>;
 }
-interface DiagramDeleter {
-	delete(actor: ActorContext, diagramId: DiagramId): Promise<void>;
-}
+
 interface MemoryChangeApplier {
-	apply(
+	applyWithChange(
 		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
-	): Promise<MemoryEntry>;
-	revert(actor: ActorContext, suggestion: MemorySuggestion): Promise<void>;
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
 }
 interface DrawioContent {
 	validate(source: string): string;
@@ -60,9 +56,13 @@ interface DrawioContent {
 export type SuggestionArtifact =
 	Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
 
+export interface SuggestionApplicationResult {
+	readonly artifact: SuggestionArtifact;
+	readonly changes: readonly AppliedChange<AppliedRecord>[];
+}
+
 export interface ISuggestionApplication {
-	apply(actor: ActorContext, suggestion: Suggestion): Promise<SuggestionArtifact>;
-	revert(actor: ActorContext, suggestion: Suggestion): Promise<void>;
+	apply(actor: ActorContext, suggestion: Suggestion): Promise<SuggestionApplicationResult>;
 }
 
 export class SuggestionApplication implements ISuggestionApplication {
@@ -71,24 +71,37 @@ export class SuggestionApplication implements ISuggestionApplication {
 		private readonly relationshipCreator: RelationshipCreator,
 		private readonly referenceCreator: ReferenceCreator,
 		private readonly diagramWriter: DiagramWriter,
-		private readonly todoDeleter: TodoDeleter,
-		private readonly relationshipDeleter: RelationshipDeleter,
-		private readonly referenceDeleter: ReferenceDeleter,
-		private readonly diagramDeleter: DiagramDeleter,
 		private readonly memoryChangeApplier: MemoryChangeApplier,
 		private readonly drawioValidator: Pick<DrawioContent, 'validate'>,
 		private readonly drawioLabels: Pick<DrawioContent, 'extract'>,
 		private readonly diagramProjects: DiagramProjectResolver
 	) {}
 
-	async apply(actor: ActorContext, suggestion: Suggestion): Promise<SuggestionArtifact> {
+	async apply(actor: ActorContext, suggestion: Suggestion): Promise<SuggestionApplicationResult> {
 		switch (suggestion.kind) {
-			case 'todo':
-				return this.todoCreator.create(actor, suggestion.payload);
-			case 'backlink':
-				return this.relationshipCreator.create(actor, suggestion.payload);
-			case 'reference':
-				return this.referenceCreator.create(actor, suggestion.payload);
+			case 'todo': {
+				const artifact = await this.todoCreator.create(actor, suggestion.payload);
+				return {
+					artifact,
+					changes: [{ kind: 'created', after: { type: 'todos', value: artifact } }]
+				};
+			}
+			case 'backlink': {
+				const change = await this.relationshipCreator.createWithChange(actor, suggestion.payload);
+				return {
+					artifact: change.after,
+					changes: [
+						mapAppliedChange(change, (value) => ({ type: 'note_relationships' as const, value }))
+					]
+				};
+			}
+			case 'reference': {
+				const artifact = await this.referenceCreator.create(actor, suggestion.payload);
+				return {
+					artifact,
+					changes: [{ kind: 'created', after: { type: 'references', value: artifact } }]
+				};
+			}
 			case 'diagram': {
 				const source =
 					suggestion.payload.kind === 'drawio'
@@ -120,35 +133,25 @@ export class SuggestionApplication implements ISuggestionApplication {
 								currentRevision: 1,
 								publishedRevision: 0
 							};
-				return this.diagramWriter.create(actor, diagram);
+				const artifact = await this.diagramWriter.create(actor, diagram);
+				return {
+					artifact,
+					changes: [{ kind: 'created', after: { type: 'diagrams', value: artifact } }]
+				};
 			}
-			case 'memory':
-				return this.memoryChangeApplier.apply(actor, suggestion.payload, suggestion.provenanceId);
-		}
-	}
-
-	async revert(actor: ActorContext, suggestion: Suggestion): Promise<void> {
-		if (!suggestion.appliedArtifactId)
-			throw new InvalidTransitionError('Suggestion has no applied artifact');
-		switch (suggestion.kind) {
-			case 'todo':
-				await this.todoDeleter.softDelete(actor, suggestion.appliedArtifactId as TodoId);
-				break;
-			case 'backlink':
-				await this.relationshipDeleter.delete(
+			case 'memory': {
+				const result = await this.memoryChangeApplier.applyWithChange(
 					actor,
-					suggestion.appliedArtifactId as RelationshipId
+					suggestion.payload,
+					suggestion.provenanceId
 				);
-				break;
-			case 'reference':
-				await this.referenceDeleter.delete(actor, suggestion.appliedArtifactId as ReferenceId);
-				break;
-			case 'diagram':
-				await this.diagramDeleter.delete(actor, suggestion.appliedArtifactId as DiagramId);
-				break;
-			case 'memory':
-				await this.memoryChangeApplier.revert(actor, suggestion);
-				break;
+				return {
+					artifact: result.entry,
+					changes: result.changes.map((change) =>
+						mapAppliedChange(change, (value) => ({ type: 'memory_entries' as const, value }))
+					)
+				};
+			}
 		}
 	}
 }

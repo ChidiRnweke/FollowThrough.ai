@@ -21,8 +21,14 @@ describe('Postgres suggestion repository invariants', () => {
 			updatedAt: now
 		});
 		const results = await Promise.all([
-			repository.transition(owner, suggestion.id, 'proposed', { status: 'rejected' }),
-			repository.transition(owner, suggestion.id, 'proposed', { status: 'rejected' })
+			repository.transition(owner, suggestion.id, 'proposed', {
+				status: 'rejected',
+				decidedAt: now
+			}),
+			repository.transition(owner, suggestion.id, 'proposed', {
+				status: 'rejected',
+				decidedAt: now
+			})
 		]);
 		expect(results.filter(Boolean)).toHaveLength(1);
 	});

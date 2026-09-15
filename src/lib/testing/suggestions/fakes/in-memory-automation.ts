@@ -118,6 +118,7 @@ export class InMemorySuggestions
 		return this.replace(actor, {
 			...suggestion,
 			status: 'accepted',
+			decidedAt: testNow,
 			appliedArtifactId,
 			isAutoAccepted: autoAccepted
 		});
@@ -125,11 +126,11 @@ export class InMemorySuggestions
 
 	async reject(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
 		this.assertPending(suggestion);
-		return this.replace(actor, { ...suggestion, status: 'rejected' });
+		return this.replace(actor, { ...suggestion, status: 'rejected', decidedAt: testNow });
 	}
 
 	async revert(actor: ActorContext, suggestion: Suggestion): Promise<Suggestion> {
-		if (suggestion.status !== 'accepted' || !suggestion.appliedArtifactId)
+		if (suggestion.status !== 'accepted')
 			throw new InvalidTransitionError('Only an applied suggestion can be reverted');
 		return this.replace(actor, { ...suggestion, status: 'reverted' });
 	}
@@ -141,7 +142,9 @@ export class InMemorySuggestions
 		};
 	}
 
-	private assertPending(suggestion: Suggestion): void {
+	private assertPending(
+		suggestion: Suggestion
+	): asserts suggestion is Extract<Suggestion, { status: 'proposed' }> {
 		if (suggestion.expiresAt && suggestion.expiresAt < new Date().toISOString())
 			throw new ExpiredSuggestionError('Suggestion has expired');
 		if (suggestion.status !== 'proposed')

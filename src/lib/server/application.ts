@@ -300,10 +300,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		relationshipCreator: relationships,
 		referenceCreator: references,
 		diagramWriter: diagrams,
-		todoDeleter: todos,
-		relationshipDeleter: relationships,
-		referenceDeleter: references,
-		diagramDeleter: diagrams,
 		memoryChangeApplier: memory,
 		drawioValidator: diagramCapability.suggestionValidator,
 		drawioLabels: diagramCapability.suggestionLabels
@@ -325,6 +321,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			trustPolicyEvaluator: trust,
 			todoCreator: todos,
 			suggestionAccepter: suggestions,
+			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
 			boardPdfExporter: deliverables.boardPdfExporter,
 			workflowRunner: agentCapability.workflowRunner
@@ -393,7 +390,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionViewAssembler: suggestions,
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,
+			suggestionEffects: suggestionCapability.effects,
 			artifactApplier,
+			memoryIndexer,
+			diagramIndexer,
 			drawioReviewSaver: drawioReview,
 			transactionRunner,
 			suggestionRejecter: suggestions,
@@ -516,6 +516,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
+			suggestionEffects: suggestionCapability.effects,
 			trustPolicyEvaluator: trust,
 			transactionRunner
 		},

@@ -1,3 +1,4 @@
+import { suggestionSchema } from '$lib/models/suggestions';
 import type { ApiToken, Session, User } from '$lib/models/identity';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
@@ -13,12 +14,7 @@ import { parseProvenance, type Provenance, type SourceAnchor } from '$lib/models
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
 import { skillMetadataSchema } from '$lib/models/skills';
-import {
-	parseSuggestionPayload,
-	readSuggestionPayload,
-	type StoredSuggestion,
-	type Suggestion
-} from '$lib/models/suggestions';
+import { type StoredSuggestion, type Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
 import type { TrustPolicy } from '$lib/models/agent';
 import type * as schema from '$lib/server/db/schema';
@@ -199,19 +195,21 @@ export const toDiagramRevision = (
 		createdAt: instant(row.createdAt)
 	});
 
+const suggestionRecord = (row: typeof schema.suggestions.$inferSelect) => ({
+	...row,
+	noteId: row.noteId ?? undefined,
+	payload: row.payload,
+	confidence: row.confidence === null ? undefined : (row.confidence as Suggestion['confidence']),
+	sourceAnchorId: row.sourceAnchorId ?? undefined,
+	decidedAt: row.decidedAt ? instant(row.decidedAt) : undefined,
+	expiresAt: row.expiresAt ? instant(row.expiresAt) : undefined,
+	appliedArtifactId: row.appliedArtifactId ?? undefined,
+	createdAt: instant(row.createdAt),
+	updatedAt: instant(row.updatedAt)
+});
+
 export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Suggestion =>
-	domain<Suggestion>({
-		...row,
-		noteId: row.noteId ?? undefined,
-		payload: parseSuggestionPayload(row.kind, row.payload),
-		confidence: row.confidence === null ? undefined : (row.confidence as Suggestion['confidence']),
-		sourceAnchorId: row.sourceAnchorId ?? undefined,
-		decidedAt: row.decidedAt ? instant(row.decidedAt) : undefined,
-		expiresAt: row.expiresAt ? instant(row.expiresAt) : undefined,
-		appliedArtifactId: row.appliedArtifactId ?? undefined,
-		createdAt: instant(row.createdAt),
-		updatedAt: instant(row.updatedAt)
-	});
+	suggestionSchema.parse(suggestionRecord(row));
 
 /**
  * The read counterpart of {@link toSuggestion}, for the list path.
@@ -224,15 +222,15 @@ export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Sugge
 export const toStoredSuggestion = (
 	row: typeof schema.suggestions.$inferSelect
 ): StoredSuggestion => {
-	const payload = readSuggestionPayload(row.kind, row.payload);
-	if (payload.status === 'unreadable')
+	const parsed = suggestionSchema.safeParse(suggestionRecord(row));
+	if (!parsed.success)
 		return {
 			status: 'unreadable',
 			id: row.id as Suggestion['id'],
 			kind: row.kind,
-			reason: payload.reason
+			reason: parsed.error.message
 		};
-	return { status: 'readable', suggestion: toSuggestion(row) };
+	return { status: 'readable', suggestion: parsed.data };
 };
 
 export const toTrustPolicy = (row: typeof schema.trustPolicies.$inferSelect): TrustPolicy =>

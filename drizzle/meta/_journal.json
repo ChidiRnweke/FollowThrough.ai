@@ -372,6 +372,13 @@
       "when": 1787620089645,
       "tag": "0052_workspace_sync_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1789501494388,
+      "tag": "0053_suggestion_application_effects",
+      "breakpoints": true
     }
   ]
 }

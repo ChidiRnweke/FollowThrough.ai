@@ -41,10 +41,6 @@ describe('createSuggestionsCapability wiring', () => {
 			relationshipCreator: {} as never,
 			referenceCreator: {} as never,
 			diagramWriter: {} as never,
-			todoDeleter: {} as never,
-			relationshipDeleter: {} as never,
-			referenceDeleter: {} as never,
-			diagramDeleter: {} as never,
 			memoryChangeApplier: {} as never,
 			drawioValidator: { validate: () => '' },
 			drawioLabels: { extract: () => '' }

@@ -1,3 +1,5 @@
+import { mapAppliedChange } from '$lib/models/proposal-effects';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { Suggestion } from '$lib/models/suggestions';
 import type {
 	MemoryMutationRequest,
@@ -79,6 +81,7 @@ export interface MemoryDependencies {
 	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	suggestionAccepter: SuggestionAccepter;
+	suggestionEffects: SuggestionEffectService;
 	trustPolicyEvaluator: TrustPolicyEvaluator;
 	transactionRunner: TransactionRunner;
 }
@@ -151,10 +154,18 @@ export class Memory implements MemoryController {
 			if (
 				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(actor, 'memory', suggestion)
 			) {
-				const entry = await this.dependencies.memoryChangeApplier.apply(
+				const applied = await this.dependencies.memoryChangeApplier.applyWithChange(
 					actor,
 					suggestion.payload,
 					suggestion.provenanceId
+				);
+				const entry = applied.entry;
+				await this.dependencies.suggestionEffects.record(
+					actor,
+					suggestion.id,
+					applied.changes.map((change) =>
+						mapAppliedChange(change, (value) => ({ type: 'memory_entries' as const, value }))
+					)
 				);
 				const accepted = await this.dependencies.suggestionAccepter.accept(
 					actor,

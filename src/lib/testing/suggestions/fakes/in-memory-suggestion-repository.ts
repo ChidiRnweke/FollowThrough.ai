@@ -1,3 +1,4 @@
+import { suggestionSchema } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type {
@@ -51,7 +52,7 @@ export class InMemorySuggestionRepository implements SuggestionRepository {
 			(item) => item.id === id && item.userId === actor.userId && item.status === expectedStatus
 		);
 		if (!current) return undefined;
-		const updated: Suggestion = { ...current, ...patch };
+		const updated = suggestionSchema.parse({ ...current, ...patch });
 		this.suggestions = this.suggestions.map((item) => (item.id === id ? updated : item));
 		return updated;
 	}
@@ -65,10 +66,10 @@ export class InMemorySuggestionRepository implements SuggestionRepository {
 		);
 		const ids = new Set(eligible.map((item) => item.id));
 		this.suggestions = this.suggestions.map((item) =>
-			ids.has(item.id)
+			ids.has(item.id) && item.status === 'proposed'
 				? { ...item, status: 'expired', decidedAt: through, updatedAt: through }
 				: item
-		) as Suggestion[];
+		);
 		return eligible.length;
 	}
 }

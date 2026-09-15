@@ -1,3 +1,4 @@
+import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import {
@@ -74,6 +75,7 @@ const setup = () => {
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions,
 			artifactApplier: artifacts,
+			suggestionEffects: new SuggestionEffects(artifacts.effects),
 			transactionRunner
 		})
 	);
@@ -134,6 +136,9 @@ describe('Suggestion lifecycle invariants', () => {
 			})
 		];
 		artifacts.artifacts = [todoBuilder()];
+		await artifacts.effects.record(testActor(), testSuggestionId(), [
+			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
+		]);
 		const result = await revert.revert(testActor(), { suggestionId: testSuggestionId() });
 		expect(result.status).toBe('reverted');
 	});
@@ -147,6 +152,9 @@ describe('Suggestion lifecycle invariants', () => {
 			})
 		];
 		artifacts.artifacts = [todoBuilder()];
+		await artifacts.effects.record(testActor(), testSuggestionId(), [
+			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
+		]);
 		await revert.revert(testActor(), { suggestionId: testSuggestionId() });
 		expect(artifacts.artifacts).toEqual([]);
 	});
@@ -183,6 +191,9 @@ describe('Suggestion transaction invariants', () => {
 			})
 		];
 		artifacts.artifacts = [todoBuilder()];
+		await artifacts.effects.record(testActor(), testSuggestionId(), [
+			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
+		]);
 		artifacts.failRevert = true;
 		try {
 			await revert.revert(testActor(), { suggestionId: testSuggestionId() });

@@ -1,3 +1,4 @@
+import { suggestionRecordKeys } from '$lib/models/suggestions';
 import { sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '$lib/server/db';
@@ -52,7 +53,7 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	attachment_versions: Object.keys(resourceDataSchemas.attachment_versions.shape),
 	todo_attachments: Object.keys(resourceDataSchemas.todo_attachments.shape),
 	skill_usages: Object.keys(resourceDataSchemas.skill_usages.shape),
-	suggestions: Object.keys(resourceDataSchemas.suggestions.options[0].shape),
+	suggestions: suggestionRecordKeys,
 	conversations: Object.keys(resourceDataSchemas.conversations.shape),
 	messages: Object.keys(resourceDataSchemas.messages.options[0].shape).filter(
 		(field) => field !== 'kind' && field !== 'content'

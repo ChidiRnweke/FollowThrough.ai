@@ -39,23 +39,33 @@ export type SuggestionStatus = 'proposed' | 'accepted' | 'rejected' | 'expired' 
 
 export type SuggestionKind = 'todo' | 'backlink' | 'reference' | 'diagram' | 'memory';
 
-interface SuggestionBase<Kind extends SuggestionKind, Payload> {
+export type SuggestionLifecycle =
+	| { readonly status: 'proposed'; readonly decidedAt?: never; readonly appliedArtifactId?: never }
+	| {
+			readonly status: 'accepted' | 'reverted';
+			readonly decidedAt: DateTime;
+			readonly appliedArtifactId: string;
+	  }
+	| {
+			readonly status: 'rejected' | 'expired';
+			readonly decidedAt: DateTime;
+			readonly appliedArtifactId?: never;
+	  };
+
+type SuggestionBase<Kind extends SuggestionKind, Payload> = SuggestionLifecycle & {
 	readonly id: SuggestionId;
 	readonly userId: UserId;
 	readonly noteId?: NoteId;
 	readonly kind: Kind;
-	readonly status: SuggestionStatus;
 	readonly payload: Payload;
 	readonly confidence?: Confidence;
 	readonly provenanceId: ProvenanceId;
 	readonly sourceAnchorId?: SourceAnchorId;
-	readonly decidedAt?: DateTime;
 	readonly expiresAt?: DateTime;
-	readonly appliedArtifactId?: string;
 	readonly isAutoAccepted: boolean;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
-}
+};
 
 export type TodoSuggestion = SuggestionBase<'todo', CreateTodoInput>;
 
@@ -83,7 +93,7 @@ const optionalSuggestionProvenance = {
 	sourceAnchorId: persistedId<SourceAnchorId>().optional(),
 	provenanceId: persistedId<ProvenanceId>().optional()
 };
-const suggestionPayloadSchemas = {
+export const suggestionPayloadSchemas = {
 	todo: z
 		.object({
 			projectId: persistedId<ProjectId>(),
@@ -175,7 +185,7 @@ const suggestionFields = {
 };
 
 /** The cached representation uses the same payload contract as the existing database reader. */
-export const suggestionSchema = z.discriminatedUnion('kind', [
+const suggestionKindSchema = z.discriminatedUnion('kind', [
 	z.object({
 		...suggestionFields,
 		kind: z.literal('todo'),
@@ -201,7 +211,43 @@ export const suggestionSchema = z.discriminatedUnion('kind', [
 		kind: z.literal('memory'),
 		payload: suggestionPayloadSchemas.memory
 	})
-]) satisfies z.ZodType<Suggestion>;
+]);
+export const suggestionRecordKeys = Object.keys(suggestionFields).concat('kind', 'payload');
+const decidedAtSchema = z
+	.string()
+	.datetime({ offset: true })
+	.transform((value) => value as DateTime);
+const suggestionLifecycleSchema = z.discriminatedUnion('status', [
+	z.object({
+		status: z.literal('proposed'),
+		decidedAt: z.never().optional(),
+		appliedArtifactId: z.never().optional()
+	}),
+	z.object({
+		status: z.literal('accepted'),
+		decidedAt: decidedAtSchema,
+		appliedArtifactId: z.string().min(1)
+	}),
+	z.object({
+		status: z.literal('reverted'),
+		decidedAt: decidedAtSchema,
+		appliedArtifactId: z.string().min(1)
+	}),
+	z.object({
+		status: z.literal('rejected'),
+		decidedAt: decidedAtSchema,
+		appliedArtifactId: z.never().optional()
+	}),
+	z.object({
+		status: z.literal('expired'),
+		decidedAt: decidedAtSchema,
+		appliedArtifactId: z.never().optional()
+	})
+]);
+export const suggestionSchema = z.intersection(
+	suggestionKindSchema,
+	suggestionLifecycleSchema
+) satisfies z.ZodType<Suggestion>;
 
 /**
  * A stored suggestion, which may have a payload that no longer matches its kind.
@@ -225,47 +271,6 @@ export type StoredSuggestion =
 			readonly kind: SuggestionKind;
 			readonly reason: string;
 	  };
-
-/**
- * Read a stored payload, reporting a mismatch rather than throwing.
- *
- * {@link parseSuggestionPayload} stays strict beside this and is what every
- * write uses: a proposal with a bad payload is input its producer can fix.
- */
-export const readSuggestionPayload = (
-	kind: SuggestionKind,
-	// audit-allow: no-unknown-type — A stored suggestion payload, read into the arm its kind names.
-	value: unknown
-):
-	| { readonly status: 'readable'; readonly payload: Suggestion['payload'] }
-	| { readonly status: 'unreadable'; readonly reason: string } => {
-	const parsed = suggestionPayloadSchemas[kind].safeParse(value);
-	return parsed.success
-		? { status: 'readable', payload: parsed.data }
-		: {
-				status: 'unreadable',
-				reason: parsed.error.issues[0]?.message ?? 'the stored payload did not parse'
-			};
-};
-
-export const parseSuggestionPayload = (
-	kind: SuggestionKind,
-	// audit-allow: no-unknown-type — The same row on the strict path, where an unreadable payload has to raise.
-	value: unknown
-): Suggestion['payload'] => {
-	switch (kind) {
-		case 'todo':
-			return suggestionPayloadSchemas.todo.parse(value);
-		case 'backlink':
-			return suggestionPayloadSchemas.backlink.parse(value);
-		case 'reference':
-			return suggestionPayloadSchemas.reference.parse(value);
-		case 'diagram':
-			return suggestionPayloadSchemas.diagram.parse(value);
-		case 'memory':
-			return suggestionPayloadSchemas.memory.parse(value);
-	}
-};
 
 /**
  * A durable remembered fact. Entries with a project hold project memory; entries

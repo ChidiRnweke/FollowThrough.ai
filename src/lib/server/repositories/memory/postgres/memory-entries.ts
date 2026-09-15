@@ -18,6 +18,18 @@ export class MemoryRecords implements MemoryEntryRepository {
 		return row ? toMemoryEntry(row) : undefined;
 	}
 
+	async findByIdForUpdate(
+		actor: ActorContext,
+		id: MemoryEntryId
+	): Promise<MemoryEntry | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.memoryEntries)
+			.where(and(eq(schema.memoryEntries.id, id), eq(schema.memoryEntries.userId, actor.userId)))
+			.for('update');
+		return row ? toMemoryEntry(row) : undefined;
+	}
+
 	async list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]> {
 		const conditions = [
 			eq(schema.memoryEntries.userId, actor.userId),
