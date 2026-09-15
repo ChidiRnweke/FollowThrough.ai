@@ -14,7 +14,7 @@ import type { MemoryEntry } from '$lib/models/memory';
 import type { TodoCreator } from '$lib/server/services/todos/contracts';
 import type { RelationshipCreator } from '$lib/server/services/relationships/contracts';
 import type { ReferenceCreator } from '$lib/server/services/references/contracts';
-import type { MemoryChangeApplier } from '$lib/server/services/memory/contracts';
+import type { MemoryChanges } from '$lib/server/services/memory/contracts';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DrawioLabelExtractor } from '$lib/server/services/diagrams/drawio';
 import type { ActorContext } from '$lib/models/identity';
@@ -31,11 +31,8 @@ import type {
 	RevertSuggestionInput,
 	Suggestion
 } from '$lib/models/suggestions';
-import type {
-	ListPendingMemoryInput,
-	ListPendingMemoryOutput,
-	MemorySuggestionView
-} from '$lib/models/memory';
+import type { ListPendingMemoryInput } from '$lib/models/memory';
+import type { ListPendingMemoryOutput, MemorySuggestionView } from '$lib/models/suggestions';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import { InvalidTransitionError, ValidationError } from '$lib/errors';
 import type {
@@ -124,7 +121,7 @@ export interface SuggestionsDependencies {
 	todoCreator: TodoCreator;
 	relationshipCreator: Pick<RelationshipCreator, 'createWithChange'>;
 	referenceCreator: ReferenceCreator;
-	memoryChangeApplier: MemoryChangeApplier;
+	memoryChanges: MemoryChanges;
 	sourceNotes: NoteReader;
 	drawioLabels: Pick<DrawioLabelExtractor, 'extract'>;
 	suggestionEffects: SuggestionEffectService;
@@ -297,7 +294,7 @@ export class Suggestions implements SuggestionsController {
 			case 'diagram':
 				return this.applyDiagram(actor, suggestion);
 			case 'memory': {
-				const result = await this.dependencies.memoryChangeApplier.apply(
+				const result = await this.dependencies.memoryChanges.apply(
 					actor,
 					suggestion.payload,
 					suggestion.provenanceId

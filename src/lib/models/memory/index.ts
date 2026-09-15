@@ -1,4 +1,4 @@
-import type { SuggestionView } from '$lib/models/suggestions';
+import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -12,8 +12,6 @@ export type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 type DateTime = Brand<string, 'DateTime'>;
 
 export type MemoryEntryType = 'fact' | 'decision' | 'constraint' | 'preference';
-
-export type MemorySuggestion = Extract<SuggestionView['suggestion'], { kind: 'memory' }>;
 
 /**
  * A durable remembered fact. Entries with a project hold project memory; entries
@@ -37,14 +35,66 @@ export type MemoryChangeOperation = 'add' | 'update' | 'remove';
 
 export type MemoryScope = 'project' | 'user';
 
-export interface MemoryChangePayload {
-	readonly projectId?: ProjectId;
-	readonly operation: MemoryChangeOperation;
-	readonly memoryEntryId?: MemoryEntryId;
-	readonly content?: string;
-	readonly shareWithAgents?: boolean;
-	readonly justification?: string;
-}
+const projectIdSchema = z.uuid().transform((value) => value as ProjectId);
+const memoryEntryIdSchema = z.uuid().transform((value) => value as MemoryEntryId);
+const projectScope = { scope: z.literal('project'), projectId: projectIdSchema };
+const userScope = { scope: z.literal('user'), projectId: z.never().optional() };
+const commonChange = { justification: z.string().optional() };
+const addChange = {
+	...commonChange,
+	operation: z.literal('add'),
+	content: z.string().trim().min(1),
+	shareWithAgents: z.boolean().optional(),
+	memoryEntryId: z.never().optional()
+};
+const updateChange = {
+	...commonChange,
+	operation: z.literal('update'),
+	memoryEntryId: memoryEntryIdSchema,
+	content: z.string().trim().min(1),
+	shareWithAgents: z.boolean().optional()
+};
+const removeChange = {
+	...commonChange,
+	operation: z.literal('remove'),
+	memoryEntryId: memoryEntryIdSchema,
+	content: z.never().optional(),
+	shareWithAgents: z.never().optional()
+};
+
+export const memoryChangePayloadSchema = z.union([
+	z.object({ ...projectScope, ...addChange }).strict(),
+	z.object({ ...userScope, ...addChange }).strict(),
+	z.object({ ...projectScope, ...updateChange }).strict(),
+	z.object({ ...userScope, ...updateChange }).strict(),
+	z.object({ ...projectScope, ...removeChange }).strict(),
+	z.object({ ...userScope, ...removeChange }).strict()
+]);
+export type MemoryChangePayload = z.infer<typeof memoryChangePayloadSchema>;
+
+/** Older stored proposals express scope by the presence of projectId. */
+const legacyMemoryScopeSchema = z.union([
+	z
+		.object({ scope: z.never().optional(), projectId: projectIdSchema })
+		.transform(({ projectId }) => ({ scope: 'project' as const, projectId })),
+	z
+		.object({ scope: z.never().optional(), projectId: z.never().optional() })
+		.transform(() => ({ scope: 'user' as const }))
+]);
+const legacyMemoryOperationSchema = z.discriminatedUnion('operation', [
+	z.object({
+		...commonChange,
+		operation: z.literal('add'),
+		content: z.string().trim().min(1),
+		shareWithAgents: z.boolean().optional()
+	}),
+	z.object(updateChange),
+	z.object({ ...commonChange, operation: z.literal('remove'), memoryEntryId: memoryEntryIdSchema })
+]);
+export const storedMemoryChangePayloadSchema: z.ZodType<MemoryChangePayload> = z.union([
+	memoryChangePayloadSchema,
+	z.intersection(legacyMemoryScopeSchema, legacyMemoryOperationSchema)
+]);
 
 export interface ListMemoryInput {
 	/** Omit projectId to list the user's profile memory. */
@@ -76,25 +126,14 @@ export interface DeleteMemoryEntryInput {
 	readonly memoryEntryId: MemoryEntryId;
 }
 
-export interface ProposeMemoryChangeInput {
-	readonly scope: MemoryScope;
-	readonly projectId?: ProjectId;
-	readonly operation: MemoryChangeOperation;
-	readonly memoryEntryId?: MemoryEntryId;
-	readonly content?: string;
-	readonly shareWithAgents?: boolean;
-	readonly justification?: string;
+export type ProposeMemoryChangeInput = MemoryChangePayload & {
 	readonly confidence?: number;
-}
+};
 
 /** `appliedEntry` is present only when the trust policy auto-accepted the change; otherwise the suggestion alone is returned, pending review. */
 export interface ProposeMemoryChangeOutput<Proposal> {
 	readonly suggestion: Proposal;
 	readonly appliedEntry?: MemoryEntry;
-}
-
-export interface MemorySuggestionView extends Omit<SuggestionView, 'suggestion'> {
-	readonly suggestion: MemorySuggestion;
 }
 
 /** One row in the bell menu: a project's pending-review count, or the single profile-memory row when `projectId` is absent. */
@@ -107,10 +146,6 @@ export interface PendingMemoryNotification {
 
 export interface ListPendingMemoryInput {
 	readonly projectId?: ProjectId;
-}
-
-export interface ListPendingMemoryOutput {
-	readonly suggestions: readonly MemorySuggestionView[];
 }
 
 export function decideMemoryCreation(

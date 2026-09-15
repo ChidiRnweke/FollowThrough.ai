@@ -33,11 +33,11 @@ const setup = async () => {
 	return { entries, projects, provenance, service };
 };
 
-const addPayload = (overrides: Partial<MemoryChangePayload> = {}): MemoryChangePayload => ({
+const addPayload = (): Extract<MemoryChangePayload, { scope: 'project'; operation: 'add' }> => ({
+	scope: 'project',
 	projectId: testProjectId(),
 	operation: 'add',
-	content: 'Deploys go out on Tuesdays.',
-	...overrides
+	content: 'Deploys go out on Tuesdays.'
 });
 
 describe('Memory entry management invariants', () => {
@@ -96,7 +96,7 @@ describe('User profile memory invariants', () => {
 		const { service } = await setup();
 		const { entry } = await service.apply(
 			testActor(),
-			{ operation: 'add', content: 'I am the founder.' },
+			{ scope: 'user', operation: 'add', content: 'I am the founder.' },
 			testProvenanceId()
 		);
 		expect(entry.projectId).toBeUndefined();
@@ -104,6 +104,42 @@ describe('User profile memory invariants', () => {
 });
 
 describe('Memory change application invariants', () => {
+	it.each(['update', 'remove'] as const)(
+		'rejects a profile %s against project memory before writing',
+		async (operation) => {
+			const { service, entries } = await setup();
+			const { entry } = await service.apply(testActor(), addPayload(), testProvenanceId());
+			const payload: MemoryChangePayload =
+				operation === 'update'
+					? { scope: 'user', operation, memoryEntryId: entry.id, content: 'Replacement' }
+					: { scope: 'user', operation, memoryEntryId: entry.id };
+			const outcome = await service.apply(testActor(), payload, testProvenanceId()).then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
+			expect({ outcome, entries: entries.entries }).toEqual({
+				outcome: 'Memory target does not belong to the requested scope',
+				entries: [entry]
+			});
+		}
+	);
+	it('rejects a project replacement targeting profile memory', async () => {
+		const { service } = await setup();
+		const target = await service.create(testActor(), { content: 'Profile fact' });
+		await expect(
+			service.apply(
+				testActor(),
+				{
+					scope: 'project',
+					projectId: testProjectId(),
+					operation: 'update',
+					memoryEntryId: target.id,
+					content: 'Replacement'
+				},
+				testProvenanceId()
+			)
+		).rejects.toThrow('Memory target does not belong to the requested scope');
+	});
 	it('rejects an apply with unknown provenance', async () => {
 		const { service } = await setup();
 		await expect(
@@ -122,7 +158,13 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		const { entry: replacement } = await service.apply(
 			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: original.id,
+				content: 'Revised fact'
+			},
 			testProvenanceId()
 		);
 		expect(replacement.replacesEntryId).toBe(original.id);
@@ -133,7 +175,13 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: original.id,
+				content: 'Revised fact'
+			},
 			testProvenanceId()
 		);
 		expect((await service.get(testActor(), original.id)).deletedAt).toBeDefined();
@@ -144,13 +192,24 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
-			addPayload({ operation: 'remove', memoryEntryId: original.id, content: undefined }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'remove',
+				memoryEntryId: original.id
+			},
 			testProvenanceId()
 		);
 		await expect(
 			service.apply(
 				testActor(),
-				addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Too late' }),
+				{
+					scope: 'project',
+					projectId: testProjectId(),
+					operation: 'update',
+					memoryEntryId: original.id,
+					content: 'Too late'
+				},
 				testProvenanceId()
 			)
 		).rejects.toBeInstanceOf(NotFoundError);
@@ -161,7 +220,12 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
-			addPayload({ operation: 'remove', memoryEntryId: original.id, content: undefined }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'remove',
+				memoryEntryId: original.id
+			},
 			testProvenanceId()
 		);
 		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
@@ -174,7 +238,13 @@ describe('Memory application effects', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		const result = await service.apply(
 			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: original.id,
+				content: 'Revised fact'
+			},
 			testProvenanceId()
 		);
 		expect(result.changes).toEqual([
@@ -191,7 +261,12 @@ describe('Memory application effects', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		const result = await service.apply(
 			testActor(),
-			addPayload({ operation: 'remove', memoryEntryId: original.id }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'remove',
+				memoryEntryId: original.id
+			},
 			testProvenanceId()
 		);
 		expect(result.changes).toEqual([{ kind: 'modified', before: original, after: result.entry }]);

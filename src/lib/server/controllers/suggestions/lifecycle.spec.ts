@@ -26,7 +26,12 @@ describe('Pending memory review invariants', () => {
 			memorySuggestionBuilder(),
 			memorySuggestionBuilder({
 				id: testSuggestionId(2),
-				payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+				payload: {
+					scope: 'project',
+					operation: 'add',
+					content: 'Project rule',
+					projectId: testProjectId()
+				}
 			}),
 			suggestionBuilder({ id: testSuggestionId(3) })
 		];
@@ -46,11 +51,21 @@ describe('Pending memory review invariants', () => {
 			memorySuggestionBuilder(),
 			memorySuggestionBuilder({
 				id: testSuggestionId(2),
-				payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+				payload: {
+					scope: 'project',
+					operation: 'add',
+					content: 'Project rule',
+					projectId: testProjectId()
+				}
 			}),
 			memorySuggestionBuilder({
 				id: testSuggestionId(3),
-				payload: { operation: 'add', content: 'Other project', projectId: testProjectId(2) }
+				payload: {
+					scope: 'project',
+					operation: 'add',
+					content: 'Other project',
+					projectId: testProjectId(2)
+				}
 			})
 		];
 		const controller = new Suggestions(

@@ -14,7 +14,8 @@ import type { ArtifactView } from '$lib/models/deliverables';
 import type { Diagram } from '$lib/models/diagrams';
 import type { TrashedNote } from '$lib/models/notes';
 import type { AttachmentView } from '$lib/models/attachments';
-import type { MemoryEntry, MemorySuggestionView } from '$lib/models/memory';
+import type { MemoryEntry } from '$lib/models/memory';
+import type { MemorySuggestionView } from '$lib/models/suggestions';
 import {
 	isWorkspaceRecord,
 	type WorkspaceRecord,

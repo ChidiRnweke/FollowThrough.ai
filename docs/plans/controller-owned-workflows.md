@@ -122,12 +122,16 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   the transaction; undo locks and checks all changed record versions before restoring anything.
   Missing historical effects refuse undo. Lifecycle schemas require decision and artifact facts.
   All seven PostgreSQL effect contracts passed, including stale replacement, rollback, and races.
+- P08/A05: memory proposals now encode scope and operation at the boundary. Target scope is
+  checked before proposal creation and again under the application lock. Valid historical rows
+  normalize on read; incomplete historical updates remain unreadable. The full 3,576-test suite
+  and 20 PostgreSQL memory/suggestion contracts passed.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.
-- P08–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
+- P09–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles

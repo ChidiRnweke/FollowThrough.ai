@@ -45,7 +45,12 @@ describe('shared memory lists', () => {
 	});
 	it('shows only proposed memory changes in the selected scope', () => {
 		const suggestion = memorySuggestionBuilder({
-			payload: { operation: 'add', projectId: testProjectId(), content: 'Project fact' }
+			payload: {
+				scope: 'project',
+				operation: 'add',
+				projectId: testProjectId(),
+				content: 'Project fact'
+			}
 		});
 		expect(
 			views(

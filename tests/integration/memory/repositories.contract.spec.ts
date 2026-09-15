@@ -5,7 +5,9 @@ import * as schema from '$lib/server/db/schema';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { actor, context, now } from '../database-harness';
+import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { actor, context, now, seedProvenance } from '../database-harness';
 describe('Postgres memory-entry repository invariants', () => {
 	const seedEntry = async (suffix: string) => {
 		const owner = actor(suffix);
@@ -27,6 +29,29 @@ describe('Postgres memory-entry repository invariants', () => {
 	it('round-trips an inserted entry', async () => {
 		const { owner, repository, entry } = await seedEntry('60');
 		expect(await repository.findById(owner, entry.id)).toEqual(entry);
+	});
+	it('preserves project memory when a profile replacement names its id', async () => {
+		const { owner, repository, entry } = await seedEntry('9813');
+		const provenance = await seedProvenance(owner, '9813');
+		const service = new MemoryLibrary(
+			repository,
+			new ProjectRecords(context.db),
+			new ProvenanceRecords(context.db)
+		);
+		const outcome = await service
+			.apply(
+				owner,
+				{ scope: 'user', operation: 'update', memoryEntryId: entry.id, content: 'Wrong scope' },
+				provenance.id
+			)
+			.then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
+		expect({ outcome, entry: await repository.findById(owner, entry.id) }).toEqual({
+			outcome: 'Memory target does not belong to the requested scope',
+			entry
+		});
 	});
 	// Profile/project separation (round-trip without a project, profile-only list,
 	// project-only list) is proven at the unit layer by
