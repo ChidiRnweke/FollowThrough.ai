@@ -1,5 +1,8 @@
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type {
 	Conversation,
 	ConversationId,
@@ -315,6 +318,32 @@ describe('Postgres durable agent run repository invariants', () => {
 			updatedAt: now
 		});
 	};
+
+	it('lets a consumer advance past an unreadable terminal event', async () => {
+		const run = await seedQueuedRun('97107');
+		const owner = actor('97107');
+		const events = new AgentRunEventRecords(context.db);
+		const terminal = await events.append(run.id, 1, {
+			type: 'completed',
+			conversationId: run.conversationId
+		});
+		await context.db.execute(
+			sql`update agent_run_events set event = '{"type":"future_completion"}'::jsonb where cursor = ${terminal.cursor}`
+		);
+		const runs = new AgentRunRecords(context.db);
+		await runs.transition(run.id, 'queued', 'running');
+		await runs.transition(run.id, 'running', 'completed');
+		const controller = new Agent(capabilityDependencies<AgentDependencies>({ events }));
+		const replay = await controller.listRunEvents(owner, run.id, '0');
+		const tail = replay.at(-1);
+		if (!tail) throw new Error('Replay dropped its terminal cursor');
+		expect({
+			kind: tail.kind,
+			cursor: tail.cursor,
+			latest: await events.latestCursor(owner, run.id),
+			next: await controller.listRunEvents(owner, run.id, tail.cursor)
+		}).toEqual({ kind: 'unreadable', cursor: terminal.cursor, latest: terminal.cursor, next: [] });
+	});
 
 	it('preserves a reviewed note change in PostgreSQL checkpoints and event replay', async () => {
 		const run = await seedQueuedRun('97106');

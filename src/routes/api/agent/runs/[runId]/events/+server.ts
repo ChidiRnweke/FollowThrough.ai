@@ -1,5 +1,7 @@
 import type { AgentRunId } from '$lib/models/agent';
 import { isTerminalAgentRunStatus } from '$lib/models/agent';
+import { agentRunCursorSchema } from '$lib/models/agent';
+import { error } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
 
@@ -7,7 +9,9 @@ const encoder = new TextEncoder();
 
 const cursorAfter = (request: Request, url: URL): string => {
 	const value = request.headers.get('last-event-id') ?? url.searchParams.get('after') ?? '0';
-	return /^\d+$/.test(value) ? value : '0';
+	const parsed = agentRunCursorSchema.safeParse(value);
+	if (!parsed.success) error(400, 'Invalid agent event cursor');
+	return parsed.data;
 };
 
 export const GET: RequestHandler = async ({ params, request, url, locals }) => {
