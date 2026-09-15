@@ -16,6 +16,15 @@ Use this map to find the code and tests for a change. Paths in the table are rel
 | Process or retry an uploaded file       | `server/controllers/attachment-processing/controller.ts`: `run`, `process`; `server/services/attachments/extraction.ts`: `extract`                                                         | `server/controllers/attachment-processing/recovery.spec.ts`; `tests/integration/attachments/processing.contract.spec.ts` |
 | Change exported content                 | `server/repositories/deliverables/export-preparation.ts`: `prepareExport`; `models/notes/index.ts`: `documentTextMarks`; format layout in `server/services/deliverables/docx.ts`, `pdf.ts` | `server/services/deliverables/docx.spec.ts`; `server/services/deliverables/pdf.spec.ts`                                  |
 
+## Note views
+
+`assembleNoteView` in `models/notes/index.ts` assembles the note surface. The Notes controller and
+`WorkspaceViews.note` both use it. Backlinks, references, and suggestions use the corresponding
+`assembleBacklinkView`, `assembleReferenceView`, and `assembleSuggestionView` functions in their
+owning models. Keep record loading and missing-download reporting in the adapters.
+
+`server/controllers/notes/view.spec.ts` compares server and downloaded views from the same records.
+
 ## Record types and wiring
 
 - The owning record types are `Note` in `models/notes`, `Todo` in `models/todos`, `Diagram` in
