@@ -828,8 +828,13 @@
 		inset-inline-end: 0;
 	}
 
+	/* `display` is transitioned below, so a layer that leaves the screen keeps
+	   `display: block` for --duration-panel. With no insets it shrinks to zero
+	   width and its text spills over the incoming pane. `visibility` is not
+	   transitioned, so it hides the layer on the first frame. */
 	.workspace-pane-layer[data-pane-role='background'] {
 		display: none;
+		visibility: hidden;
 	}
 
 	/* Opening a split is a whole surface moving, which is what --duration-panel
