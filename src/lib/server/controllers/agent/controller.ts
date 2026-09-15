@@ -40,7 +40,7 @@ import {
 	resolveAgentModel,
 	resolveVisionModel
 } from '$lib/server/services/agent/runs/preferences';
-import type { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
+import type { AgentRunExecutor } from '$lib/server/services/agent/runs/execution-contracts';
 import {
 	abortActiveRun,
 	registerActiveRun,
@@ -237,7 +237,7 @@ export interface AgentDependencies {
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
 	/** Executes queued runs in the background and reports their lifecycle. */
-	executor: AgentRunLifecycle;
+	executor: AgentRunExecutor;
 }
 
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
@@ -528,7 +528,10 @@ export class Agent implements AgentController {
 				cleanup();
 				// Without this the run stays `running` forever, holding the
 				// conversation's single active-run slot and its open event stream.
-				await this.dependencies.executor.failRun(runId, error);
+				await this.dependencies.executor.failRun(
+					runId,
+					error instanceof Error ? error : new Error(String(error))
+				);
 			})
 			.catch((error) =>
 				console.error(`[agent-run] Background execution could not be settled for ${runId}:`, error)

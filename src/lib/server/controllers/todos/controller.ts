@@ -38,7 +38,7 @@ import type {
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { AgentRunReceipt } from '$lib/models/agent';
-import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
 
 /**
  * Application boundary for todos: tracking, filtering, and the promise-extraction

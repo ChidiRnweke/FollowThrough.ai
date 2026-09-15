@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentRunId, AgentEvent, Conversation, ConversationId } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
-import { WorkflowRunner, type WorkflowRunTask } from './workflow';
+import { WorkflowRunner } from './controller';
+import type { WorkflowRunTask } from '$lib/server/services/agent/runs/execution-contracts';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 

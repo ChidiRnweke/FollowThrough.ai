@@ -23,9 +23,9 @@ import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
 	AgentRunRepository
-} from '$lib/server/repositories/agent';
-import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
+} from '$lib/server/services/agent/runs/execution-contracts';
+import type { AgentSessionRepository } from '$lib/server/services/agent/runs/execution-contracts';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 interface AgentContextBuilder {
 	build(
 		actor: ActorContext,
@@ -85,7 +85,7 @@ interface AgentEventBus {
 	notify(runId: AgentRunId): void;
 }
 
-export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
+import type { AgentRunExecutionOutcome } from '$lib/server/services/agent/runs/execution-contracts';
 
 export interface AgentRunExecutorDependencies {
 	readonly runs: AgentRunRepository;
@@ -252,8 +252,7 @@ export class AgentRunLifecycle {
 	 * stays `running` forever, holding the conversation's single active-run slot
 	 * and keeping its event stream open.
 	 */
-	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this settles a run from one.
-	async failRun(runId: AgentRunId, error: unknown): Promise<void> {
+	async failRun(runId: AgentRunId, error: Error): Promise<void> {
 		try {
 			const code = error instanceof AgentProviderFailure ? error.providerCode : 'INTERNAL';
 			const message = error instanceof Error ? error.message : String(error);

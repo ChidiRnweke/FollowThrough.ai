@@ -5,13 +5,15 @@ import type {
 	AgentRunId,
 	AgentRunReceipt,
 	Conversation,
-	ConversationId,
-	NoteActionKind
+	ConversationId
 } from '$lib/models/agent';
 import { readAgentPayload } from '$lib/models/agent/payload';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import type { AgentRunEventRepository, AgentRunRepository } from '$lib/server/repositories/agent';
+import type {
+	AgentRunEventRepository,
+	AgentRunRepository
+} from '$lib/server/services/agent/runs/execution-contracts';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -42,34 +44,10 @@ export interface WorkflowRunnerDependencies {
 	readonly defaultModel: string;
 }
 
-/**
- * `Result` stays unconstrained, and the reading happens in {@link
- * WorkflowRunner.execute} instead.
- *
- * Constraining it to `AgentPayload` is what this looks like it wants, because
- * the result is appended to the event log and replayed to a client that
- * reconnects. But the tasks return domain outputs — `FindReferencesOutput`,
- * `GenerateMermaidDiagramOutput` — which are JSON-shaped and still not
- * assignable to an index signature. Satisfying the constraint would mean
- * putting one on each of those domain types, which is the open-keyed indexing
- * this effort removes, in the layer furthest from the wire.
- */
-export interface WorkflowRunTask<Result> {
-	readonly action: NoteActionKind;
-	readonly noteId: NoteId;
-	/** Names the run in the conversation list, e.g. "Convert Mermaid to draw.io". */
-	readonly title: string;
-	readonly model?: string;
-	run(signal: AbortSignal): Promise<Result>;
-}
-
-/**
- * The seam controllers depend on: starting a note action without knowing how runs
- * are stored or streamed, so a controller test can drive one without a database.
- */
-export interface WorkflowRunStarter {
-	start<Result>(actor: ActorContext, task: WorkflowRunTask<Result>): Promise<AgentRunReceipt>;
-}
+import type {
+	WorkflowRunTask,
+	WorkflowRunStarter
+} from '$lib/server/services/agent/runs/execution-contracts';
 
 /**
  * Runs one note action as a first-class agent run.
@@ -173,7 +151,8 @@ export class WorkflowRunner implements WorkflowRunStarter {
 			// `cancel` commits `cancelling` before it aborts, so an aborted signal
 			// always has a row waiting in that state to settle.
 			if (controller.signal.aborted) await this.settleCancelled(runId);
-			else await this.settleFailed(runId, error);
+			else
+				await this.settleFailed(runId, error instanceof Error ? error : new Error(String(error)));
 		} finally {
 			this.dependencies.activeRuns.release(runId);
 		}
@@ -188,8 +167,7 @@ export class WorkflowRunner implements WorkflowRunStarter {
 		await this.append(runId, { type: 'cancelled', runId, message: 'Generation stopped' });
 	}
 
-	// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this settles a workflow run from one.
-	private async settleFailed(runId: AgentRunId, error: unknown): Promise<void> {
+	private async settleFailed(runId: AgentRunId, error: Error): Promise<void> {
 		const message = error instanceof Error ? error.message : String(error);
 		try {
 			const settled = await this.dependencies.runs.transition(runId, 'running', 'failed', {

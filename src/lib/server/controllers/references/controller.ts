@@ -10,7 +10,7 @@ import type {
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
-import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
 
 /**
  * Application boundary for reference suggestions: given a text selection, find and rank

@@ -9,14 +9,14 @@ import type {
 	ToolActivity
 } from '$lib/models/agent';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
-import type { AgentToolExecutor } from './contracts';
+import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentRunLifecycle } from './lifecycle';
+import { AgentRunLifecycle } from './controller';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;

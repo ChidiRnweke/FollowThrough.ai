@@ -6,7 +6,7 @@ import type { LinkFinder } from '$lib/server/services/relationships/contracts';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
-import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
 
 /**
  * Application boundary for relationship (backlink) suggestions between notes: find notes

@@ -36,7 +36,7 @@ import type {
 } from '$lib/server/services/diagrams/contracts';
 import type { DrawioWrites } from '$lib/server/services/diagrams/drawio-writes';
 import type { AgentRunReceipt } from '$lib/models/agent';
-import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/workflow';
+import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';

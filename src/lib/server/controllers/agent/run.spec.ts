@@ -16,12 +16,12 @@ import {
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Agent } from './controller';
-import type { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
+import type { AgentRunExecutor } from '$lib/server/services/agent/runs/execution-contracts';
 
-const noopExecutor: AgentRunLifecycle = {
+const noopExecutor = capabilityDependencies<AgentRunExecutor>({
 	execute: async () => 'completed',
 	finishCancellation: async () => undefined
-} as unknown as AgentRunLifecycle;
+});
 
 /**
  * Keeps its run registered as in-flight — `execute` never settles — so a cancel
@@ -35,7 +35,7 @@ const streamingExecutor = () => {
 		signals,
 		running,
 		make: (runs: InMemoryAgentRunPersistence) =>
-			({
+			capabilityDependencies<AgentRunExecutor>({
 				execute: async (runId: AgentRunId, signal: AbortSignal) => {
 					signals.push(signal);
 					await runs.transition(runId, 'queued', 'running');
@@ -43,7 +43,7 @@ const streamingExecutor = () => {
 					return new Promise<never>(() => {});
 				},
 				finishCancellation: async () => undefined
-			}) as unknown as AgentRunLifecycle
+			})
 	};
 };
 
@@ -51,14 +51,14 @@ const streamingExecutor = () => {
  * Parks its run on an approval and then settles it the way the real lifecycle
  * does, for a cancel that finds nothing in flight to abort.
  */
-const parkedExecutor = (runs: InMemoryAgentRunPersistence): AgentRunLifecycle =>
-	({
+const parkedExecutor = (runs: InMemoryAgentRunPersistence): AgentRunExecutor =>
+	capabilityDependencies<AgentRunExecutor>({
 		execute: async () => 'awaiting_approval',
 		finishCancellation: (runId: AgentRunId) => runs.transition(runId, 'cancelling', 'cancelled')
-	}) as unknown as AgentRunLifecycle;
+	});
 
 const setup = (
-	makeExecutor: (runs: InMemoryAgentRunPersistence) => AgentRunLifecycle = () => noopExecutor
+	makeExecutor: (runs: InMemoryAgentRunPersistence) => AgentRunExecutor = () => noopExecutor
 ) => {
 	const runs = new InMemoryAgentRunPersistence();
 	const conversations = new InMemoryConversationRepository((runId) =>
@@ -398,6 +398,7 @@ describe('durable agent lifecycle commands', () => {
 			const settled = await runs.transition(runId, 'cancelling', 'cancelled');
 			if (settled)
 				await runs.append(runId, 1, { type: 'cancelled', runId, message: 'Generation stopped' });
+			return settled;
 		};
 
 		/**
@@ -410,14 +411,14 @@ describe('durable agent lifecycle commands', () => {
 			return {
 				running,
 				make: (runs: InMemoryAgentRunPersistence) =>
-					({
+					capabilityDependencies<AgentRunExecutor>({
 						execute: async (runId: AgentRunId) => {
 							await runs.transition(runId, 'queued', 'running');
 							started();
 							return new Promise<never>(() => {});
 						},
 						finishCancellation: (runId: AgentRunId) => settle(runs, runId)
-					}) as unknown as AgentRunLifecycle
+					})
 			};
 		};
 
@@ -428,7 +429,7 @@ describe('durable agent lifecycle commands', () => {
 			return {
 				running,
 				make: (runs: InMemoryAgentRunPersistence) =>
-					({
+					capabilityDependencies<AgentRunExecutor>({
 						execute: async (runId: AgentRunId, signal: AbortSignal) => {
 							await runs.transition(runId, 'queued', 'running');
 							started();
@@ -439,7 +440,7 @@ describe('durable agent lifecycle commands', () => {
 							return 'cancelled';
 						},
 						finishCancellation: (runId: AgentRunId) => settle(runs, runId)
-					}) as unknown as AgentRunLifecycle
+					})
 			};
 		};
 

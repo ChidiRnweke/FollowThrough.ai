@@ -20,7 +20,7 @@ import { BaseAgentContext } from '$lib/server/services/agent/runs/base-context';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
-import { AgentRunLifecycle } from '$lib/server/services/agent/runs/lifecycle';
+import { AgentRunLifecycle } from '$lib/server/controllers/agent-execution/controller';
 import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
 import {
 	AgentModels,
@@ -29,7 +29,7 @@ import {
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { WorkflowRunner } from '$lib/server/services/agent/runs/workflow';
+import { WorkflowRunner } from '$lib/server/controllers/workflow-execution/controller';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
