@@ -22,6 +22,7 @@ import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
 import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
+import { accessMessage } from '$lib/models/sync';
 import {
 	matchToolActivity,
 	mergeToolActivity,
@@ -529,10 +530,7 @@ export class ChatStore {
 		this.loading = true;
 		try {
 			const opened = await resources.open({ type: 'conversations', id: [conversationId] });
-			if (opened.kind !== 'ready')
-				throw new Error(
-					opened.kind === 'failure' ? opened.message : 'This chat is not available on this device'
-				);
+			if (opened.kind !== 'ready') throw new Error(accessMessage(opened, 'chat'));
 			if (generation !== this.generation || !resources.active) return;
 			if (this.hydratedConversationId === conversationId && this.eventConnection) {
 				this.loading = false;

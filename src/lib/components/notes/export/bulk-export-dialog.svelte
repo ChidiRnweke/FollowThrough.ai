@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { loadExportSettings } from './load-settings';
+	import { accessMessage } from '$lib/models/sync';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';
@@ -88,12 +89,7 @@
 		return Promise.all(
 			selectedEntries.map(async (entry) => {
 				const result = await session.resources.open({ type: 'notes', id: [entry.id] });
-				if (result.kind !== 'ready')
-					throw new Error(
-						result.kind === 'failure'
-							? result.message
-							: 'A selected note is not available on this device.'
-					);
+				if (result.kind !== 'ready') throw new Error(accessMessage(result, 'note'));
 				if (result.value.type !== 'notes') throw new Error('The selected resource is not a note');
 				return result.value.value;
 			})

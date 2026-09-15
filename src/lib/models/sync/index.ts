@@ -155,10 +155,9 @@ export type SyncObjectRead<T> =
 	| ResourceDeletion
 	| { readonly kind: 'unavailable' };
 
+/** What the last targeted read of an uncached record learned. Never persisted. */
 export type TransferState =
-	| { readonly kind: 'queued' }
-	| { readonly kind: 'fetching' }
-	| { readonly kind: 'failed'; readonly message: string };
+	{ readonly kind: 'missing' } | { readonly kind: 'failed'; readonly message: string };
 
 /** Complete versioned records or tombstones. Network attempts are not persisted. */
 export type ResourceState<T> =
@@ -209,7 +208,17 @@ export const accessCache = <T>(
 	if (state?.kind === 'deleted') return { kind: 'deleted' };
 	const snapshot = cachedSnapshot(state);
 	if (snapshot) return { kind: 'ready', value: snapshot.value };
-	if (!online) return { kind: 'unavailable' };
+	if (!online || transfer?.kind === 'missing') return { kind: 'unavailable' };
 	if (transfer?.kind === 'failed') return { kind: 'failure', message: transfer.message };
 	return { kind: 'wait' };
+};
+
+/** One wording for each state a surface cannot render, named for the resource it concerns. */
+export const accessMessage = <T>(
+	access: Exclude<CacheAccess<T>, { kind: 'ready' }>,
+	name: string
+): string => {
+	if (access.kind === 'failure') return access.message;
+	if (access.kind === 'deleted') return `This ${name} was deleted.`;
+	return `This ${name} is not available on this device. Reconnect to download it.`;
 };

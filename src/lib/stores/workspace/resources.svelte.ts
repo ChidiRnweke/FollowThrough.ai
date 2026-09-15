@@ -1,5 +1,4 @@
-import type { NoteView } from '$lib/client/notes/view';
-import { SvelteDate, SvelteMap } from 'svelte/reactivity';
+import { SvelteDate, SvelteMap, createSubscriber } from 'svelte/reactivity';
 import {
 	DexieWorkspaceRepository,
 	type WorkspaceLocalProjection,
@@ -9,7 +8,7 @@ import type { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import { type NoteId, type NoteRevision } from '$lib/models/notes';
+import type { NoteRevision } from '$lib/models/notes';
 import {
 	visibleResources,
 	localResource,
@@ -40,9 +39,12 @@ import {
 } from '$lib/models/workspace-sync';
 import { WorkspaceViews } from '$lib/models/workspace-views';
 import {
+	accessCache,
+	accessMessage,
 	cachedSnapshot,
 	compareSyncEtags,
 	type CacheAccess,
+	type SyncEtag,
 	type SyncSnapshot
 } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
@@ -197,14 +199,31 @@ export class WorkspaceResources {
 				'Required workspace data is not available on this device. Reconnect and retry.'
 			);
 	}
+	/** What a surface may show now. Cached and locally edited records never wait. */
+	access(identity: WorkspaceResourceIdentity): CacheAccess<WorkspaceRecord> {
+		void this.revision;
+		if (this.failure) return this.failure;
+		if (this.stopped) return { kind: 'unavailable' };
+		const key = workspaceResourceKey(identity);
+		return (
+			localResource(this.pending, key) ??
+			accessCache(this.cached.get(key), this.online, this.dependencies.cache.transfer(key))
+		);
+	}
+	view<K extends WorkspaceResourceType>(
+		identity: WorkspaceResourceIdentity & { type: K }
+	): ResourceView<K> {
+		return new ResourceView<K>(this, identity);
+	}
+	/** Downloads an uncached record. Storage is re-read only when this tab stored something. */
 	async open(identity: WorkspaceResourceIdentity): Promise<CacheAccess<WorkspaceRecord>> {
 		await this.initialize();
-		const key = workspaceResourceKey(identity);
-		const local = localResource(this.pending, key);
-		if (local) return local;
-		const result = await this.dependencies.cache.open(key);
+		const known = this.access(identity);
+		if (known.kind === 'ready' || known.kind === 'deleted') return known;
+		const result = await this.dependencies.cache.open(workspaceResourceKey(identity));
+		if (result.kind !== 'ready' && result.kind !== 'deleted') return result;
 		await this.readLocal();
-		return localResource(this.pending, key) ?? result;
+		return this.access(identity);
 	}
 	/** Optional records may use defaults only after the journal proves their absence. */
 	async lookup(
@@ -220,15 +239,8 @@ export class WorkspaceResources {
 			if (this.dependencies.cache.availability === 'unknown') return { kind: 'unavailable' };
 		}
 		if (this.stopped) return { kind: 'unavailable' };
-		return localResource(this.pending, key) || this.cached.has(key)
-			? this.open(identity)
-			: { kind: 'absent' };
-	}
-	async openNote(noteId: NoteId): Promise<CacheAccess<NoteView>> {
-		const opened = await this.open({ type: 'notes', id: [noteId] });
-		if (opened.kind !== 'ready') return opened;
-		const projected = this.views.note(noteId);
-		return projected ? { kind: 'ready', value: projected.view } : { kind: 'unavailable' };
+		const access = this.access(identity);
+		return access.kind === 'ready' || access.kind === 'deleted' ? access : { kind: 'absent' };
 	}
 
 	/** Capture the version the editor actually sees, before its first change. */
@@ -269,6 +281,15 @@ export class WorkspaceResources {
 		const replacement = await this.dependencies.writes.keepLocal(operationId);
 		await this.readLocal();
 		return replacement;
+	}
+	/** The version the server recorded for this tab's write, once its receipt is stored. */
+	acknowledgedVersion(key: string, operationId: string): SyncEtag | null {
+		void this.revision;
+		const receipt = this.local?.writes.receipts.get(key);
+		if (receipt?.operationId !== operationId) return null;
+		return receipt.resource.kind === 'found'
+			? receipt.resource.snapshot.etag
+			: receipt.resource.etag;
 	}
 	uncertainWrite(key: string, operationId: string | null): boolean {
 		void this.revision;
@@ -382,6 +403,46 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 	return resources;
 };
 
+const valueOf = <K extends WorkspaceResourceType>(
+	record: WorkspaceRecord,
+	type: K
+): WorkspaceValues[K] => {
+	if (!isWorkspaceRecord(record, type))
+		throw new Error('The surface received another resource type');
+	return record.value;
+};
+
+/** A rendered surface's handle on one record. Observing a missing record starts its download. */
+export class ResourceView<K extends WorkspaceResourceType> {
+	private readonly observe: () => void;
+	private failure = $state<{ kind: 'failure'; message: string } | null>(null);
+	constructor(
+		private readonly resources: WorkspaceResources,
+		readonly identity: WorkspaceResourceIdentity & { type: K }
+	) {
+		this.observe = createSubscriber(() => {
+			void this.retry();
+		});
+	}
+	get state(): CacheAccess<WorkspaceValues[K]> {
+		this.observe();
+		const access = this.resources.access(this.identity);
+		if (access.kind === 'ready')
+			return { kind: 'ready', value: valueOf(access.value, this.identity.type) };
+		return this.failure ?? access;
+	}
+	async retry(): Promise<CacheAccess<WorkspaceRecord>> {
+		this.failure = null;
+		try {
+			return await this.resources.open(this.identity);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'Device storage is unavailable';
+			this.failure = { kind: 'failure', message };
+			return { kind: 'failure', message };
+		}
+	}
+}
+
 type DraftCommand = PreparedWorkspaceCommand | { kind: 'discardPublished'; revision: NoteRevision };
 type EditContext = ReturnType<WorkspaceResources['editBase']>;
 /** An editor's observed base, not another resource cache. All persistence and delivery use its workspace. */
@@ -400,17 +461,44 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 	get active(): boolean {
 		return this.resources.active;
 	}
-	get observedEtag(): string | null {
-		return this.current?.base?.etag ?? null;
-	}
 
 	private get entries() {
 		return this.resources.pending.filter((entry) => entry.intent.key === this.key);
 	}
 	private valueOf(record: WorkspaceRecord): WorkspaceValues[K] {
-		if (!isWorkspaceRecord(record, this.identity.type))
-			throw new Error('The editor received another resource type');
-		return record.value;
+		return valueOf(record, this.identity.type);
+	}
+	/** Ready once the editor has a captured base; until then, what the workspace knows. */
+	get state(): CacheAccess<WorkspaceValues[K]> {
+		const value = this.value;
+		if (this.current && value) return { kind: 'ready', value };
+		const access = this.resources.access(this.identity);
+		if (access.kind !== 'ready') return access;
+		return this.error ? { kind: 'failure', message: this.error } : { kind: 'wait' };
+	}
+	/** Capture the base an editor renders: at once when cached, after its download otherwise. */
+	open(): Promise<CacheAccess<WorkspaceValues[K]>> {
+		if (this.resources.access(this.identity).kind !== 'ready') return this.read();
+		this.error = null;
+		return Promise.resolve({ kind: 'ready', value: this.adopt() });
+	}
+	/** A cached server version this editor has not seen, when adopting it cannot lose a local write. */
+	get newer(): WorkspaceValues[K] | null {
+		const current = this.current;
+		const snapshot = this.resources.snapshot(this.identity);
+		if (!current || !snapshot || this.entries.length) return null;
+		const observed =
+			current.basedOn === null
+				? (current.base?.etag ?? null)
+				: this.resources.acknowledgedVersion(this.key, current.basedOn);
+		return observed !== null && compareSyncEtags(snapshot.etag, observed) > 0
+			? this.valueOf(snapshot.value)
+			: null;
+	}
+	/** Move the observed base to what the workspace holds now. Performs no read. */
+	adopt(): WorkspaceValues[K] {
+		this.current = this.resources.editBase(this.identity);
+		return this.valueOf(this.current.local);
 	}
 	get value(): WorkspaceValues[K] | null {
 		if (!this.resources.active) return null;
@@ -491,14 +579,10 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			const opened = await this.resources.open(this.identity);
 			if (!isCurrent()) return { kind: 'superseded' };
 			if (opened.kind !== 'ready') {
-				this.error =
-					opened.kind === 'failure'
-						? opened.message
-						: 'This resource is not available on this device';
+				this.error = accessMessage(opened, 'item');
 				return opened;
 			}
-			this.current = this.resources.editBase(this.identity);
-			return { kind: 'ready', value: this.valueOf(this.current.local) };
+			return { kind: 'ready', value: this.adopt() };
 		} catch (error) {
 			if (!isCurrent()) return { kind: 'superseded' };
 			this.error = error instanceof Error ? error.message : 'Device storage is unavailable';
@@ -517,10 +601,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			} else if (opened.kind === 'absent' || opened.kind === 'deleted') {
 				this.current = { base: null, basedOn: null, local: initial };
 			} else {
-				this.error =
-					opened.kind === 'failure'
-						? opened.message
-						: 'This resource is not available on this device';
+				this.error = accessMessage(opened, 'item');
 				return opened;
 			}
 			return { kind: 'ready', value: this.valueOf(this.current.local) };

@@ -105,4 +105,9 @@ describe('complete resource replication', () => {
 		await cache.refresh();
 		expect(await repository.load('user-a')).toMatchObject({ cursor: null, records: [] });
 	});
+	it('remembers that the server has no such record until the next read', async () => {
+		const { cache } = setup();
+		await cache.open('note:1');
+		expect(cache.access('note:1')).toEqual({ kind: 'unavailable' });
+	});
 });
