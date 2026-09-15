@@ -1,4 +1,34 @@
-# Domain composition baseline
+# Domain composition implementation checklist
+
+## Remaining work
+
+- [ ] Finish generic aggregate participants and validate the stage 1 PR.
+- [ ] Extract placement, lifecycle and task decisions; replace both callers; test incomplete inventory.
+- [ ] Route skill document writes through note services; make imports drafts and publication snapshots.
+- [ ] Resolve selection origins once in the reference, relationship, task and skill controllers.
+- [ ] Persist proposal application effects and reverse them under version checks; refuse legacy undo.
+- [ ] Share agent/workflow settlement and browser event consumption; test cancellation races.
+- [ ] Share indexing plans; recover queued attachment work with PostgreSQL advisory claims.
+- [ ] Share export preparation and replace the named-entity decoder with `entities`.
+
+Each item needs its own PR with the deleted implementations and observed verification results.
+Before marking a stage complete, run its focused tests and the lint, type, architecture, unit,
+PostgreSQL contract and docs checks. Command, storage and editor changes also require the production
+sync/PWA suite. Capture matched screenshots for skill-history and undo UI changes.
+
+Required behavior checks:
+
+- Browser and server callers produce equivalent decisions from equivalent facts.
+- Partial inventory cannot prove a missing parent or empty folder.
+- Domain writes and sync proofs commit or roll back together.
+- Skill metadata-only edits leave history untouched; concurrent document edits conflict.
+- Imports stay drafts; publication creates snapshots; restoration preserves attachments and links.
+- Proposal undo reverses all recorded effects atomically and refuses stale or legacy effects.
+- Cancellation and settlement races produce one terminal outcome and its required events.
+- Restarted attachment workers resume queued work; competing workers cannot publish conflicting results.
+- Shared projections and exports preserve displayed records, content and asset availability.
+
+## Baseline measurements
 
 Baseline commit: `285bfa51`. Counts include non-test TypeScript and Svelte source lines, including
 comments and blank lines. Each row uses the paths below. Rows overlap and must not be summed.
@@ -6,7 +36,7 @@ These are extraction boundaries, not a claim that all lines or files are duplica
 
 | Stage                             | Files | Lines |
 | --------------------------------- | ----: | ----: |
-| 2 — decisions and views           |     5 | 2,064 |
+| 2 — decisions and views           |    20 | 3,575 |
 | 3 — skill documents and revisions |     4 | 1,328 |
 | 4 — origins                       |     4 |   654 |
 | 5 — proposal application and undo |     6 | 1,236 |
@@ -20,7 +50,7 @@ These are extraction boundaries, not a claim that all lines or files are duplica
 
 - `src/lib/models/workspace-mutations/index.ts`
 - `src/lib/models/workspace-views/index.ts`
-- `src/lib/client/workspace`
+- `src/lib/client/sync`
 - `src/lib/server/services/projects/catalog.ts`
 - `src/lib/server/services/todos/catalog.ts`
 - `src/lib/server/services/notes/catalog.ts`
@@ -75,5 +105,7 @@ These are extraction boundaries, not a claim that all lines or files are duplica
 The first contract extraction removes 67 duplicate implementation-exported `Pick` aliases and one
 selection-anchor interface. `BuiltInSkillProvisioner` remains local because the built-in library
 uses it internally; importing a service contract there would violate the existing import audit.
-Four copied full-note declarations become three identity/title references and a project-entry
-reference plus generic create/move outputs. No runtime business branches are removed in this slice.
+Six copied full-note declarations become identity/title references, project-entry references and
+generic document participants. Note and workspace aggregates accept their foreign record types.
+Proposal results accept the owning suggestion type, removing five duplicated proposal envelopes and
+their unrelated payload copies. No runtime business branches are removed in this stage.
