@@ -6,7 +6,7 @@ import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { ToolRetriever } from './services/agent/tools/tool-retriever';
 import type { ImageDescriber, OcrEngineClient } from './services/attachments/content';
-import type { DocumentOcr } from './services/attachments/contracts';
+import type { AttachmentClaims, DocumentOcr } from './services/attachments/contracts';
 import type { Condenser, EmbeddingClient } from './services/knowledge-search/contracts';
 import type { Reranker } from './services/knowledge-search/semantic';
 import type { ReferenceFinder } from './services/references/contracts';
@@ -53,6 +53,7 @@ export interface ApplicationOverrides {
 }
 
 export interface ApplicationConfig {
+	readonly attachmentClaims: AttachmentClaims;
 	readonly db: Database;
 	readonly transactionRunner: TransactionRunner;
 	readonly openRouterApiKey: string;
@@ -112,9 +113,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		config.defaultVisionModel ??
 		process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ??
 		defaultAgentModel;
-	// Attachment indexing is deliberately left inline: it already runs off the
-	// request path, and deferring it would report an attachment "ready" before it
-	// was actually retrievable.
 	const deferEmbedding = config.deferEmbedding ?? false;
 	const identity = createIdentityCapability({ db });
 	const synchronization = createSyncCapability({ db, transactionRunner, deferEmbedding });
@@ -234,6 +232,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences, memory });
 	const feedback = createFeedbackCapability({ db });
 	const attachmentCapability = createAttachmentsCapability({
+		claims: config.attachmentClaims,
+		transactionRunner,
+		visionModel: defaultVisionModel,
 		db,
 		notes: noteRepository,
 		preferences,
@@ -548,9 +549,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
 		controllers: controllerFactory,
-		recoverInterruptedRuns: async () =>
-			(await agentCapability.recovery.recover()) + (await attachmentRepository.failInterrupted()),
-		backgroundTasks: [knowledgeSearch.maintenance, attachmentCapability.retention],
+		recoverInterruptedRuns: () => agentCapability.recovery.recover(),
+		backgroundTasks: [
+			knowledgeSearch.maintenance,
+			attachmentCapability.retention,
+			attachmentCapability.processing
+		],
 		eventBus,
 		provenance,
 		toolRetriever

@@ -289,7 +289,7 @@ export class ContentIndex {
 					sourceCreatedAt: attachment.createdAt
 				}
 			}),
-			false
+			true
 		);
 		return { truncated: all.length > contents.length };
 	}

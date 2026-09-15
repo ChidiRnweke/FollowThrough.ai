@@ -12,32 +12,14 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ExternalServiceError, ValidationError } from '$lib/errors';
 
-export interface StoredObjectInfo {
-	readonly byteSize: number;
-	readonly mediaType?: string;
-	readonly checksumSha256?: string;
-}
-
-export interface IAttachmentStorage {
-	createUploadUrl(input: {
-		objectKey: string;
-		mediaType: string;
-		byteSize: number;
-		checksumSha256: string;
-		expiresInSeconds: number;
-	}): Promise<string>;
-	createDownloadUrl(
-		objectKey: string,
-		expiresInSeconds: number,
-		downloadFilename?: string
-	): Promise<string>;
-	put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void>;
-	stat(objectKey: string): Promise<StoredObjectInfo>;
-	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
-	promote(sourceKey: string, destinationKey: string): Promise<void>;
-	remove(objectKey: string): Promise<void>;
-}
-
+import type {
+	StoredObjectInfo,
+	IAttachmentStorage
+} from '$lib/server/repositories/attachments/storage';
+export type {
+	StoredObjectInfo,
+	IAttachmentStorage
+} from '$lib/server/repositories/attachments/storage';
 export interface ObjectStorageConfig {
 	readonly endpoint: string;
 	readonly region: string;
@@ -213,11 +195,8 @@ export class AttachmentStorage implements IAttachmentStorage {
 	}
 }
 
-export interface AttachmentParser {
-	readonly kind: string;
-	supports(mediaType: string, path: string): boolean;
-	parse(bytes: Uint8Array): Promise<string>;
-}
+import type { AttachmentParser } from '$lib/server/repositories/attachments/processing';
+export type { AttachmentParser } from '$lib/server/repositories/attachments/processing';
 
 const TEXT_EXTENSIONS = new Set([
 	'md',

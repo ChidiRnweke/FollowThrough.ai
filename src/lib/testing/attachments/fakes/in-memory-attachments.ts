@@ -58,7 +58,6 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 	finalized: AttachmentView[] = [];
 	todoLinks: TodoAttachmentLink[] = [];
 	/** Attachments handed to background processing, in call order. */
-	processed: AttachmentId[] = [];
 	/** Set to make `linkToTodo` fail the way a foreign attachment would. */
 	linkFails = false;
 
@@ -83,9 +82,6 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		this.finalized = [...this.finalized, reserved];
 		return reserved;
-	}
-	startProcessing(_actor: ActorContext, attachment: AttachmentView): void {
-		this.processed.push(attachment.attachment.id);
 	}
 	list(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');

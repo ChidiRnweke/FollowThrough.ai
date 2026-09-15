@@ -1,4 +1,10 @@
-import { db, postgresTransactionRunner } from '$lib/server/db';
+import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/postgres/claims';
+import {
+	db,
+	postgresTransactionRunner,
+	postgresConnections,
+	postgresConnectionScope
+} from '$lib/server/db';
 import {
 	DEFAULT_GENERATION_MODEL,
 	DEFAULT_LANGUAGE_MODEL_BASE_URL,
@@ -19,6 +25,7 @@ export type { ProductionApplication } from '../application';
  */
 export function createProductionFactory(): ProductionApplication {
 	return createApplication({
+		attachmentClaims: new PostgresAttachmentClaims(postgresConnections, postgresConnectionScope),
 		db,
 		transactionRunner: postgresTransactionRunner,
 		openRouterApiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),

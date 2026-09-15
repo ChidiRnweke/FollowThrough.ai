@@ -1,0 +1,1 @@
+CREATE INDEX "attachment_versions_pending_idx" ON "attachment_versions" USING btree ("processing_status","id") WHERE "attachment_versions"."processing_status" in ('queued', 'processing');

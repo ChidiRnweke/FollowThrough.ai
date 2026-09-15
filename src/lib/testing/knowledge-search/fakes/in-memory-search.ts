@@ -65,6 +65,7 @@ const sourceKey = (source: IndexSource): string =>
 
 export class InMemorySearchRepository implements RetrievalIndexRepository, SnapshotParticipant {
 	documents: OwnedSearchDocument[] = [];
+	stageFailure?: Error;
 
 	snapshot(): RestoreSnapshot {
 		const documents = structuredClone(this.documents);
@@ -241,6 +242,7 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		source: IndexSource,
 		documents: readonly SearchDocument[]
 	): Promise<void> {
+		if (this.stageFailure) throw this.stageFailure;
 		const scoped = inScope(actor, source);
 		const existing = this.documents.filter(scoped);
 		const desired = new Set(documents.map((document) => document.id));

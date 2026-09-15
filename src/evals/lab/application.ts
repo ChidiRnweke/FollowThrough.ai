@@ -1,3 +1,4 @@
+import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -79,6 +80,7 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	);
 
 	const application = createApplication({
+		attachmentClaims: new InMemoryAttachmentClaims(),
 		db: database,
 		transactionRunner,
 		openRouterApiKey,

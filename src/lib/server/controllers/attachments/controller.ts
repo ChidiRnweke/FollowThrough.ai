@@ -11,7 +11,7 @@ import type { AttachmentManager } from '$lib/server/services/attachments/contrac
  * retrieval of either the original file or its parsed text content.
  *
  * Every mutation commits through the transaction runner before any background work is
- * kicked off, so a half-persisted attachment is never observable.
+ * discovered by the worker, so a half-persisted attachment is never observable.
  */
 export interface AttachmentsController {
 	/**
@@ -28,10 +28,8 @@ export interface AttachmentsController {
 	/**
 	 * Finalize a completed upload and return the resulting attachment view.
 	 *
-	 * The record is committed in a transaction first, and only then is OCR/image
-	 * processing started in the background — processing begins only once the upload is
-	 * durably recorded, so a crash in between never leaves an unprocessed attachment that
-	 * the client thinks is ready.
+	 * The worker discovers the queued version after this transaction commits.
+	 * A restart between upload completion and extraction leaves that version queued.
 	 */
 	complete(
 		actor: ActorContext,
@@ -106,30 +104,16 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.attachments.initiate(actor, input);
 	}
 	complete(actor: ActorContext, uploadId: AttachmentUploadId) {
-		return this.completeAndStart(actor, uploadId);
-	}
-	private async completeAndStart(actor: ActorContext, uploadId: AttachmentUploadId) {
-		const attachment = await this.dependencies.transactionRunner.run(() =>
+		return this.dependencies.transactionRunner.run(() =>
 			this.dependencies.attachments.complete(actor, uploadId)
 		);
-		this.dependencies.attachments.startProcessing(actor, attachment);
-		return attachment;
 	}
 	completeForTodo(actor: ActorContext, uploadId: AttachmentUploadId, todoId: TodoId) {
-		return this.completeForTodoAndStart(actor, uploadId, todoId);
-	}
-	private async completeForTodoAndStart(
-		actor: ActorContext,
-		uploadId: AttachmentUploadId,
-		todoId: TodoId
-	) {
-		const attachment = await this.dependencies.transactionRunner.run(async () => {
+		return this.dependencies.transactionRunner.run(async () => {
 			const completed = await this.dependencies.attachments.complete(actor, uploadId);
 			await this.dependencies.attachments.linkToTodo(actor, completed.attachment.id, todoId);
 			return completed;
 		});
-		this.dependencies.attachments.startProcessing(actor, attachment);
-		return attachment;
 	}
 	list(actor: ActorContext, noteId: NoteId) {
 		return this.dependencies.attachments.list(actor, noteId);
@@ -144,7 +128,9 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.attachments.downloadById(actor, attachmentId);
 	}
 	retry(actor: ActorContext, attachmentId: AttachmentId) {
-		return this.dependencies.attachments.retry(actor, attachmentId);
+		return this.dependencies.transactionRunner.run(() =>
+			this.dependencies.attachments.retry(actor, attachmentId)
+		);
 	}
 	removeById(actor: ActorContext, attachmentId: AttachmentId) {
 		return this.dependencies.transactionRunner.run(() =>

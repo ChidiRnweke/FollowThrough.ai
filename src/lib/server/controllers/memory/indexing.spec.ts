@@ -31,7 +31,7 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([entries, search])
 		})
 	);
-	return { controller, search };
+	return { controller, search, entries };
 };
 describe('Memory persistence and search', () => {
 	it('indexes a shared entry into search chunks', async () => {
@@ -87,5 +87,18 @@ describe('Memory persistence and search', () => {
 		const { search, controller } = await setup();
 		await controller.create(testActor(), { content: 'I lead the platform team.' });
 		expect(search.documents).toEqual([]);
+	});
+	it('rolls back a memory write when its search update fails', async () => {
+		const { controller, search, entries } = setup();
+		search.stageFailure = new Error('Search unavailable');
+		await controller.create(testActor(), { projectId: testProjectId(), content: 'Fact' }).then(
+			() => {
+				throw new Error('Expected failure');
+			},
+			(error) => {
+				if (!(error instanceof Error) || error.message !== 'Search unavailable') throw error;
+			}
+		);
+		expect(entries.entries).toEqual([]);
 	});
 });

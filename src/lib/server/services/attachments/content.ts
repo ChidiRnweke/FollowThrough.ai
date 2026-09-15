@@ -1,29 +1,17 @@
-export type OcrContentPart =
-	| { readonly kind: 'markdown'; readonly text: string }
-	| { readonly kind: 'image'; readonly dataUrl: string };
-export interface OcrEngineClient {
-	ocr(input: {
-		documentUrl: string;
-		kind: 'document' | 'image';
-		fileName: string;
-		maxPages?: number;
-		signal?: AbortSignal;
-	}): Promise<{ readonly parts: readonly OcrContentPart[] }>;
-}
-export interface ImageDescriber {
-	describe(input: { imageDataUrl: string; context?: string; model: string }): Promise<string>;
-}
-export interface OcrParseInput {
-	readonly documentUrl: string;
-	readonly kind: 'document' | 'image';
-	readonly fileName: string;
-	readonly visionModel: string;
-	readonly maxPages?: number;
-}
-export interface DocumentOcr {
-	parse(input: OcrParseInput): Promise<string>;
-}
-
+import type {
+	OcrContentPart,
+	OcrEngineClient,
+	ImageDescriber,
+	OcrParseInput,
+	DocumentOcr
+} from '$lib/server/repositories/attachments/processing';
+export type {
+	OcrContentPart,
+	OcrEngineClient,
+	ImageDescriber,
+	OcrParseInput,
+	DocumentOcr
+} from '$lib/server/repositories/attachments/processing';
 /**
  * A document can now come back with far more images than the old per-request
  * budget allowed, and each description is its own round trip, so they are
