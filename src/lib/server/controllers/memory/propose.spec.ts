@@ -1,3 +1,4 @@
+import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { MemoryDependencies } from './controller';
 import { describe, expect, it } from 'vitest';
@@ -57,6 +58,7 @@ const setup = () => {
 	const provenanceRepository = new InMemoryProvenanceRepository();
 	const provenance = new RecordingProvenanceRecorder(provenanceRepository);
 	const suggestions = new InMemorySuggestions();
+	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
 	projects.projects = [projectBuilder()];
 	const memory = new MemoryLibrary(
@@ -75,8 +77,9 @@ const setup = () => {
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
+			suggestionEffects: effects,
 			trustPolicyEvaluator: trust,
-			transactionRunner: new InMemoryTransactionRunner([entries, suggestions])
+			transactionRunner: new InMemoryTransactionRunner([entries, suggestions, effects])
 		})
 	);
 	return { entries, provenance, suggestions, trust, controller };

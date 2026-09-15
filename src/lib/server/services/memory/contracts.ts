@@ -1,10 +1,11 @@
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
 	MemoryChangePayload,
 	MemoryEntry,
 	MemoryEntryId,
-	MemorySuggestion,
+	MemoryApplication,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import type { ProvenanceId } from '$lib/models/provenance';
@@ -31,7 +32,11 @@ export interface MemoryChangeApplier {
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryEntry>;
-	revert(actor: ActorContext, suggestion: MemorySuggestion): Promise<void>;
+	applyWithChange(
+		actor: ActorContext,
+		payload: MemoryChangePayload,
+		provenanceId: ProvenanceId
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
 }
 export interface MemoryIndexer {
 	index(actor: ActorContext, entry: MemoryEntry): Promise<void>;

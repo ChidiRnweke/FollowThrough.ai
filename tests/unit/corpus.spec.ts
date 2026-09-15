@@ -12,7 +12,7 @@ import { readAgentToolName } from '$lib/models/agent/tool-catalog';
 import { readAgentPayloadObject } from '$lib/models/agent/payload';
 import { readJournalledTool } from '$lib/stores/agent/chat-tools';
 import { parseProvenance } from '$lib/models/provenance';
-import { parseSuggestionPayload, readSuggestionPayload } from '$lib/models/suggestions';
+import { suggestionPayloadSchemas, type SuggestionKind } from '$lib/models/suggestions';
 
 let runEvents: readonly unknown[];
 let noteRevisionDocuments: readonly unknown[];
@@ -175,14 +175,14 @@ describe('the tool names in both stored journals', () => {
  */
 describe('the stored suggestion payloads', () => {
 	const rows: readonly {
-		readonly kind: Parameters<typeof parseSuggestionPayload>[0];
+		readonly kind: SuggestionKind;
 		readonly payload: unknown;
 	}[] = suggestionPayloads;
 
 	it('are all readable, so none is dropped from the inbox', () => {
 		const unreadable = rows.flatMap((row) => {
-			const read = readSuggestionPayload(row.kind, row.payload);
-			return read.status === 'unreadable' ? [`${row.kind}: ${read.reason}`] : [];
+			const read = suggestionPayloadSchemas[row.kind].safeParse(row.payload);
+			return !read.success ? [`${row.kind}: ${read.error.message}`] : [];
 		});
 		expect(unreadable).toEqual([]);
 	});
@@ -190,7 +190,7 @@ describe('the stored suggestion payloads', () => {
 	it('also satisfy the strict parser the write path uses', () => {
 		const failures = rows.flatMap((row) => {
 			try {
-				parseSuggestionPayload(row.kind, row.payload);
+				suggestionPayloadSchemas[row.kind].parse(row.payload);
 				return [];
 			} catch (error) {
 				return [error instanceof Error ? error.message : String(error)];

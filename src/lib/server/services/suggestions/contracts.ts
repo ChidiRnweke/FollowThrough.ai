@@ -1,3 +1,5 @@
+import type { AppliedChange, UndoAvailability } from '$lib/models/proposal-effects';
+import type { AppliedRecord } from '$lib/server/repositories/suggestions/application-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type {
@@ -56,4 +58,15 @@ export interface SuggestionReverter {
 }
 export interface SuggestionExpirer {
 	expire(actor: ActorContext): Promise<number>;
+}
+
+export interface SuggestionEffectService {
+	lock(actor: ActorContext, id: SuggestionId): Promise<void>;
+	record(
+		actor: ActorContext,
+		id: SuggestionId,
+		changes: readonly AppliedChange<AppliedRecord>[]
+	): Promise<void>;
+	availability(actor: ActorContext, suggestion: Suggestion): Promise<UndoAvailability>;
+	restore(actor: ActorContext, suggestion: Suggestion): Promise<readonly AppliedRecord[]>;
 }

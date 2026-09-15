@@ -394,6 +394,11 @@ export const agentToolCoverage = {
 				'Acceptance goes through acceptReviewed, which refuses a draw.io diagram that has no review to draw its preview.'
 		},
 		reject: { kind: 'mutation', tools: ['reject_suggestion'] },
+		undoAvailability: {
+			kind: 'excluded',
+			reason:
+				'The review UI checks availability; revert_suggestion validates the recorded effect before undo.'
+		},
 		revert: { kind: 'mutation', tools: ['revert_suggestion'] }
 	},
 	skills: {

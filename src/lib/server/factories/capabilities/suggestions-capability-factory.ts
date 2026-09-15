@@ -1,3 +1,5 @@
+import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type {
@@ -23,17 +25,14 @@ export interface SuggestionsFinalizeInput {
 	readonly relationshipCreator: ApplicationArguments[1];
 	readonly referenceCreator: ApplicationArguments[2];
 	readonly diagramWriter: ApplicationArguments[3];
-	readonly todoDeleter: ApplicationArguments[4];
-	readonly relationshipDeleter: ApplicationArguments[5];
-	readonly referenceDeleter: ApplicationArguments[6];
-	readonly diagramDeleter: ApplicationArguments[7];
-	readonly memoryChangeApplier: ApplicationArguments[8];
-	readonly drawioValidator: ApplicationArguments[9];
-	readonly drawioLabels: ApplicationArguments[10];
+	readonly memoryChangeApplier: ApplicationArguments[4];
+	readonly drawioValidator: ApplicationArguments[5];
+	readonly drawioLabels: ApplicationArguments[6];
 }
 
 export interface SuggestionsCapability {
 	readonly inbox: SuggestionInbox;
+	readonly effects: SuggestionEffects;
 	readonly lister: ExpiringSuggestionLister;
 	readonly finalize: (input: SuggestionsFinalizeInput) => SuggestionApplication;
 }
@@ -49,6 +48,7 @@ export const createSuggestionsCapability = (
 	);
 	return {
 		inbox,
+		effects: new SuggestionEffects(new SuggestionEffectRecords(input.db)),
 		lister: new ExpiringSuggestionLister(inbox, inbox),
 		finalize: (dependencies) =>
 			new SuggestionApplication(
@@ -56,10 +56,6 @@ export const createSuggestionsCapability = (
 				dependencies.relationshipCreator,
 				dependencies.referenceCreator,
 				dependencies.diagramWriter,
-				dependencies.todoDeleter,
-				dependencies.relationshipDeleter,
-				dependencies.referenceDeleter,
-				dependencies.diagramDeleter,
 				dependencies.memoryChangeApplier,
 				dependencies.drawioValidator,
 				dependencies.drawioLabels,

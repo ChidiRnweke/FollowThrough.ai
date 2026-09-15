@@ -1,3 +1,4 @@
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
@@ -101,6 +102,7 @@ export interface TodosDependencies {
 	trustPolicyEvaluator: TrustPolicyEvaluator;
 	todoCreator: TodoCreator;
 	suggestionAccepter: SuggestionAccepter;
+	suggestionEffects: SuggestionEffectService;
 	transactionRunner: TransactionRunner;
 	boardPdfExporter: BoardPdfExporter;
 	workflowRunner: WorkflowRunStarter;
@@ -232,6 +234,9 @@ export class Todos implements TodosController {
 					)
 				) {
 					const todo = await this.dependencies.todoCreator.create(actor, suggestion.payload);
+					await this.dependencies.suggestionEffects.record(actor, suggestion.id, [
+						{ kind: 'created', after: { type: 'todos', value: todo } }
+					]);
 					createdTodos.push(todo);
 					await this.dependencies.suggestionAccepter.accept(actor, suggestion, todo.id, true);
 				}

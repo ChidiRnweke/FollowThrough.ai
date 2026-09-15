@@ -754,6 +754,17 @@ export const suggestions = pgTable(
 	]
 );
 
+export const suggestionApplicationEffects = pgTable('suggestion_application_effects', {
+	suggestionId: uuid('suggestion_id')
+		.primaryKey()
+		.references(() => suggestions.id, { onDelete: 'cascade' }),
+	userId: uuid('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	effect: jsonb('effect').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const trustPolicies = pgTable(
 	'trust_policies',
 	{

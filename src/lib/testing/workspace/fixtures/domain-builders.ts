@@ -1,4 +1,4 @@
-import type { TodoSuggestion } from '$lib/models/suggestions';
+import type { TodoSuggestion, SuggestionLifecycle } from '$lib/models/suggestions';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
@@ -86,42 +86,75 @@ export const todoBuilder = (overrides: Partial<Todo> = {}): Todo => ({
 	...overrides
 });
 
-export const suggestionBuilder = (overrides: Partial<TodoSuggestion> = {}): TodoSuggestion => ({
-	id: testSuggestionId(),
-	userId: testActor().userId,
-	noteId: testNoteId(),
-	kind: 'todo',
-	status: 'proposed',
-	payload: {
-		projectId: testProjectId(),
-		title: 'Send the design',
-		responsibility: 'mine'
-	},
-	provenanceId: testProvenanceId(),
-	sourceAnchorId: testAnchorId(),
-	isAutoAccepted: false,
-	createdAt: testNow,
-	updatedAt: testNow,
-	...overrides
-});
+const suggestionLifecycle = (
+	overrides: Partial<SuggestionLifecycle>,
+	artifactId: string
+): SuggestionLifecycle => {
+	const status = overrides.status ?? 'proposed';
+	switch (status) {
+		case 'proposed':
+			return { status };
+		case 'accepted':
+		case 'reverted':
+			return {
+				status,
+				decidedAt: overrides.decidedAt ?? testNow,
+				appliedArtifactId: overrides.appliedArtifactId ?? artifactId
+			};
+		case 'rejected':
+		case 'expired':
+			return { status, decidedAt: overrides.decidedAt ?? testNow };
+	}
+};
+
+export const suggestionBuilder = (overrides: Partial<TodoSuggestion> = {}): TodoSuggestion => {
+	const { status, decidedAt, appliedArtifactId, ...fields } = overrides;
+	void status;
+	void decidedAt;
+	void appliedArtifactId;
+	return {
+		id: testSuggestionId(),
+		userId: testActor().userId,
+		noteId: testNoteId(),
+		kind: 'todo',
+		payload: {
+			projectId: testProjectId(),
+			title: 'Send the design',
+			responsibility: 'mine'
+		},
+		provenanceId: testProvenanceId(),
+		sourceAnchorId: testAnchorId(),
+		isAutoAccepted: false,
+		createdAt: testNow,
+		updatedAt: testNow,
+		...fields,
+		...suggestionLifecycle(overrides, testTodoId())
+	};
+};
 
 export const memorySuggestionBuilder = (
 	overrides: Partial<MemorySuggestion> = {}
-): MemorySuggestion => ({
-	id: testSuggestionId(),
-	userId: testActor().userId,
-	kind: 'memory',
-	status: 'proposed',
-	payload: {
-		operation: 'add',
-		content: 'Always answer in English.'
-	},
-	provenanceId: testProvenanceId(),
-	isAutoAccepted: false,
-	createdAt: testNow,
-	updatedAt: testNow,
-	...overrides
-});
+): MemorySuggestion => {
+	const { status, decidedAt, appliedArtifactId, ...fields } = overrides;
+	void status;
+	void decidedAt;
+	void appliedArtifactId;
+	return {
+		id: testSuggestionId(),
+		userId: testActor().userId,
+		kind: 'memory',
+		payload: {
+			operation: 'add',
+			content: 'Always answer in English.'
+		},
+		provenanceId: testProvenanceId(),
+		isAutoAccepted: false,
+		createdAt: testNow,
+		updatedAt: testNow,
+		...fields,
+		...suggestionLifecycle(overrides, testMemoryEntryId())
+	};
+};
 
 export const memoryEntryBuilder = (overrides: Partial<MemoryEntry> = {}): MemoryEntry => ({
 	id: testMemoryEntryId(),

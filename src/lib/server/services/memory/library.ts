@@ -1,3 +1,4 @@
+import type { AppliedChange } from '$lib/models/proposal-effects';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -5,13 +6,13 @@ import type {
 	MemoryChangePayload,
 	MemoryEntry,
 	MemoryEntryId,
-	MemorySuggestion,
+	MemoryApplication,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import type { DateTime } from '$lib/models/workspace';
 import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
-import { InvalidTransitionError, NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { MemoryEntryRepository } from '$lib/server/repositories/memory';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
@@ -79,6 +80,14 @@ export class MemoryLibrary {
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryEntry> {
+		return (await this.applyWithChange(actor, payload, provenanceId)).entry;
+	}
+
+	async applyWithChange(
+		actor: ActorContext,
+		payload: MemoryChangePayload,
+		provenanceId: ProvenanceId
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		if (!(await this.provenance.findById(actor, provenanceId)))
 			throw new NotFoundError('Memory change provenance was not found');
 		switch (payload.operation) {
@@ -91,33 +100,11 @@ export class MemoryLibrary {
 		}
 	}
 
-	async revert(actor: ActorContext, suggestion: MemorySuggestion): Promise<void> {
-		if (!suggestion.appliedArtifactId)
-			throw new InvalidTransitionError('Memory suggestion has no applied artifact');
-		const applied = await this.get(actor, suggestion.appliedArtifactId as MemoryEntryId);
-		switch (suggestion.payload.operation) {
-			case 'add': {
-				await this.softDelete(actor, applied);
-				return;
-			}
-			case 'update': {
-				await this.softDelete(actor, applied);
-				if (applied.replacesEntryId)
-					await this.restore(actor, await this.get(actor, applied.replacesEntryId));
-				return;
-			}
-			case 'remove': {
-				await this.restore(actor, applied);
-				return;
-			}
-		}
-	}
-
 	private async applyAdd(
 		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
-	): Promise<MemoryEntry> {
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		const content = payload.content?.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
 		if (payload.projectId) await this.requireProject(actor, payload.projectId);
@@ -133,18 +120,18 @@ export class MemoryLibrary {
 			updatedAt: timestamp
 		});
 		await this.indexer.index(actor, entry);
-		return entry;
+		return { entry, changes: [{ kind: 'created', after: entry }] };
 	}
 
 	private async applyUpdate(
 		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
-	): Promise<MemoryEntry> {
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		if (!payload.memoryEntryId) throw new ValidationError('Memory updates require a target entry');
 		const content = payload.content?.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
-		const target = await this.getActive(actor, payload.memoryEntryId);
+		const target = await this.getActiveForUpdate(actor, payload.memoryEntryId);
 		const timestamp = now();
 		const replacement = await this.entries.insert(actor, {
 			id: crypto.randomUUID() as MemoryEntryId,
@@ -157,18 +144,35 @@ export class MemoryLibrary {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
-		await this.softDelete(actor, target);
+		const deleted = await this.softDelete(actor, target);
 		await this.indexer.index(actor, replacement);
-		return replacement;
+		return {
+			entry: replacement,
+			changes: [
+				{ kind: 'modified', before: target, after: deleted },
+				{ kind: 'created', after: replacement }
+			]
+		};
 	}
 
 	private async applyRemove(
 		actor: ActorContext,
 		payload: MemoryChangePayload
-	): Promise<MemoryEntry> {
+	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		if (!payload.memoryEntryId) throw new ValidationError('Memory removals require a target entry');
-		const target = await this.getActive(actor, payload.memoryEntryId);
-		return this.softDelete(actor, target);
+		const target = await this.getActiveForUpdate(actor, payload.memoryEntryId);
+		const entry = await this.softDelete(actor, target);
+		return { entry, changes: [{ kind: 'modified', before: target, after: entry }] };
+	}
+
+	private async getActiveForUpdate(
+		actor: ActorContext,
+		memoryEntryId: MemoryEntryId
+	): Promise<MemoryEntry> {
+		const entry = await this.entries.findByIdForUpdate(actor, memoryEntryId);
+		if (!entry || entry.deletedAt)
+			throw new NotFoundError('Memory entry was not found', { memoryEntryId });
+		return entry;
 	}
 
 	private async getActive(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
@@ -185,14 +189,6 @@ export class MemoryLibrary {
 		});
 		await this.indexer.index(actor, deleted);
 		return deleted;
-	}
-
-	private async restore(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
-		const { deletedAt: _deletedAt, ...withoutDeletion } = entry;
-		void _deletedAt;
-		const restored = await this.entries.update(actor, { ...withoutDeletion, updatedAt: now() });
-		await this.indexer.index(actor, restored);
-		return restored;
 	}
 
 	private async requireProject(actor: ActorContext, projectId: ProjectId): Promise<void> {

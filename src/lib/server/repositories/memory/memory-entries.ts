@@ -8,9 +8,9 @@ export interface MemoryEntryListFilter {
 	readonly includeDeleted?: boolean;
 }
 
-/** `update` is used only by `apply`, which never edits a row in place: it inserts a replacement and soft-deletes the old one, so every accepted change stays revertible. */
 export interface MemoryEntryRepository {
 	findById(actor: ActorContext, id: MemoryEntryId): Promise<MemoryEntry | undefined>;
+	findByIdForUpdate(actor: ActorContext, id: MemoryEntryId): Promise<MemoryEntry | undefined>;
 	list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
 	insert(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry>;
 	update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry>;

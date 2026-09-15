@@ -5,8 +5,8 @@
 - [x] Generic aggregate participants: PR #44 merged; required CI checks passed.
 - [x] Shared placement, lifecycle and task decisions and incomplete-inventory checks: PR #47; required CI checks passed.
 - [x] Shared skill document writes and import drafts: PR #48; required CI checks passed.
-- [ ] Resolve selection origins once in the reference, relationship, task and skill controllers.
-- [ ] Persist proposal application effects and reverse them under version checks; refuse legacy undo.
+- [x] Resolve selection origins once: PR #50 merged; required CI checks passed.
+- [ ] Persist proposal application effects and reverse them under version checks; require recorded changes for undo.
 - [ ] Share agent/workflow settlement and browser event consumption; test cancellation races.
 - [ ] Share indexing plans; recover queued attachment work with PostgreSQL advisory claims.
 - [ ] Share export preparation and replace the named-entity decoder with `entities`.
@@ -23,10 +23,12 @@ Required behavior checks:
 - Domain writes and sync proofs commit or roll back together.
 - Skill metadata-only edits leave history untouched; concurrent document edits conflict.
 - Imports stay drafts; publication creates snapshots; restoration preserves attachments and links.
-- Proposal undo reverses all recorded effects atomically and refuses stale or legacy effects.
+- Proposal undo reverses all recorded effects atomically and refuses stale effects or missing application records.
 - Cancellation and settlement races produce one terminal outcome and its required events.
 - Restarted attachment workers resume queued work; competing workers cannot publish conflicting results.
 - Shared projections and exports preserve displayed records, content and asset availability.
+
+Only the current record and event formats are supported. Remove obsolete compatibility paths when their producers are gone.
 
 ## Baseline measurements
 

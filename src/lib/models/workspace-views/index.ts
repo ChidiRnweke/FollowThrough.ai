@@ -379,28 +379,9 @@ export class WorkspaceViews {
 					missing.push({ type: 'source_anchors', id: [reference.sourceAnchorId] });
 				return { reference, ...(anchor ? { anchor } : {}) };
 			});
-		const pendingSuggestions = this.all('suggestions')
-			.filter((suggestion) => suggestion.noteId === noteId && suggestion.status === 'proposed')
-			.flatMap((suggestion) => {
-				const provenance = this.get('provenance', suggestion.provenanceId);
-				if (!provenance) {
-					missing.push({ type: 'provenance', id: [suggestion.provenanceId] });
-					return [];
-				}
-				const anchor = suggestion.sourceAnchorId
-					? this.get('source_anchors', suggestion.sourceAnchorId)
-					: undefined;
-				if (suggestion.sourceAnchorId && !anchor)
-					missing.push({ type: 'source_anchors', id: [suggestion.sourceAnchorId] });
-				return [
-					{
-						suggestion,
-						note: { id: note.id, title: note.title },
-						...(anchor ? { anchor } : {}),
-						origin: provenanceOrigin(provenance)
-					}
-				];
-			});
+		const suggestions = this.suggestions(noteId, 'proposed');
+		const pendingSuggestions = suggestions.views;
+		missing.push(...suggestions.missing);
 		return {
 			view: {
 				note,
@@ -420,6 +401,34 @@ export class WorkspaceViews {
 			},
 			missing
 		};
+	}
+
+	suggestions(noteId: NoteId, status: WorkspaceValues['suggestions']['status']) {
+		const missing: WorkspaceResourceIdentity[] = [];
+		const note = this.get('notes', noteId);
+		const views = this.all('suggestions')
+			.filter((suggestion) => suggestion.noteId === noteId && suggestion.status === status)
+			.flatMap((suggestion) => {
+				const provenance = this.get('provenance', suggestion.provenanceId);
+				if (!provenance) {
+					missing.push({ type: 'provenance', id: [suggestion.provenanceId] });
+					return [];
+				}
+				const anchor = suggestion.sourceAnchorId
+					? this.get('source_anchors', suggestion.sourceAnchorId)
+					: undefined;
+				if (suggestion.sourceAnchorId && !anchor)
+					missing.push({ type: 'source_anchors', id: [suggestion.sourceAnchorId] });
+				return [
+					{
+						suggestion,
+						...(note ? { note: { id: note.id, title: note.title } } : {}),
+						...(anchor ? { anchor } : {}),
+						origin: provenanceOrigin(provenance)
+					}
+				];
+			});
+		return { views, missing };
 	}
 
 	todo(todo: Todo): TodoView {

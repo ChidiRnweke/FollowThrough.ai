@@ -8,9 +8,23 @@ import type {
 	SuggestionStatus
 } from '$lib/models/suggestions';
 
-export type SuggestionTransition = Partial<
-	Pick<Suggestion, 'status' | 'decidedAt' | 'appliedArtifactId' | 'isAutoAccepted' | 'updatedAt'>
-> & { readonly appliedArtifactType?: Suggestion['kind'] };
+export type SuggestionTransition = {
+	readonly decidedAt: DateTime;
+	readonly updatedAt?: DateTime;
+} & (
+	| {
+			readonly status: 'accepted';
+			readonly appliedArtifactId: string;
+			readonly appliedArtifactType?: Suggestion['kind'];
+			readonly isAutoAccepted?: boolean;
+	  }
+	| {
+			readonly status: 'rejected' | 'reverted';
+			readonly appliedArtifactId?: never;
+			readonly appliedArtifactType?: never;
+			readonly isAutoAccepted?: never;
+	  }
+);
 
 /** `transition` is a compare-and-swap on `expectedStatus`: a double accept or a decision on an already-decided suggestion fails instead of silently winning. */
 export interface SuggestionRepository {

@@ -1,3 +1,5 @@
+import type { UndoAvailability } from '$lib/models/proposal-effects';
+import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import type {
 	ISuggestionApplication,
 	SuggestionArtifact
@@ -22,8 +24,9 @@ import type {
 	MemorySuggestionView
 } from '$lib/models/memory';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import { ValidationError } from '$lib/errors';
+import { InvalidTransitionError, ValidationError } from '$lib/errors';
 import type {
+	SuggestionEffectService,
 	SuggestionAccepter,
 	SuggestionFinder,
 	SuggestionLister,
@@ -67,6 +70,7 @@ export interface AcceptReviewedSuggestionInput extends AcceptSuggestionInput {
  * so a suggestion is never accepted without its edit actually landing.
  */
 export interface SuggestionsController {
+	undoAvailability(actor: ActorContext, input: RevertSuggestionInput): Promise<UndoAvailability>;
 	/**
 	 * List suggestions by status, sorted oldest-first and grouped by the note they apply
 	 * to so the UI can present a per-note review surface. Suggestions not tied to a note
@@ -119,6 +123,9 @@ export interface SuggestionsDependencies {
 	suggestionRejecter: SuggestionRejecter;
 	suggestionReverter: SuggestionReverter;
 	artifactApplier: SuggestionArtifactApplier;
+	suggestionEffects: SuggestionEffectService;
+	memoryIndexer: MemoryIndexer;
+	diagramIndexer: { index(actor: ActorContext, diagram: Diagram): Promise<void> };
 	drawioReviewSaver?: DrawioReviewSaver;
 	transactionRunner: TransactionRunner;
 }
@@ -162,9 +169,50 @@ export class Suggestions implements SuggestionsController {
 		actor: ActorContext,
 		input: AcceptSuggestionInput
 	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
+		return this.acceptInTransaction(actor, input);
+	}
+	acceptReviewed(
+		actor: ActorContext,
+		input: AcceptReviewedSuggestionInput
+	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
+		return this.acceptInTransaction(actor, input, true);
+	}
+	private acceptInTransaction(
+		actor: ActorContext,
+		input: AcceptReviewedSuggestionInput,
+		requireReview = false
+	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
 		return this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
 			const pending = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
-			const artifact = await this.dependencies.artifactApplier.apply(actor, pending);
+			if (pending.status !== 'proposed')
+				throw new InvalidTransitionError('Only a pending suggestion can be accepted');
+			if (
+				requireReview &&
+				pending.kind === 'diagram' &&
+				pending.payload.kind === 'drawio' &&
+				!input.drawioReview
+			)
+				throw new ValidationError('A draw.io diagram must be accepted through its review.');
+			if (input.drawioReview && (pending.kind !== 'diagram' || pending.payload.kind !== 'drawio'))
+				throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
+			const applied = await this.dependencies.artifactApplier.apply(actor, pending);
+			let artifact = applied.artifact;
+			let changes = applied.changes;
+			if (input.drawioReview) {
+				const created = changes.find((change) => change.after.type === 'diagrams');
+				if (!created || created.after.type !== 'diagrams' || created.after.value.kind !== 'drawio')
+					throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
+				if (!this.dependencies.drawioReviewSaver)
+					throw new ValidationError('Draw.io suggestion review is unavailable.');
+				const diagram = await this.dependencies.drawioReviewSaver.save(actor, {
+					...input.drawioReview,
+					diagramId: created.after.value.id
+				});
+				artifact = diagram;
+				changes = [{ kind: 'created', after: { type: 'diagrams', value: diagram } }];
+			}
+			await this.dependencies.suggestionEffects.record(actor, pending.id, changes);
 			const suggestion = await this.dependencies.suggestionAccepter.accept(
 				actor,
 				pending,
@@ -174,35 +222,16 @@ export class Suggestions implements SuggestionsController {
 			return { suggestion, artifact };
 		});
 	}
-	acceptReviewed(
-		actor: ActorContext,
-		input: AcceptReviewedSuggestionInput
-	): Promise<AcceptSuggestionOutput<SuggestionArtifact>> {
+	undoAvailability(actor: ActorContext, input: RevertSuggestionInput): Promise<UndoAvailability> {
 		return this.dependencies.transactionRunner.run(async () => {
-			if (!input.drawioReview) {
-				// A draw.io diagram accepted without its review has no preview and can
-				// never gain one: nothing outside the draw.io embed can draw draw.io, so
-				// the export that review produces is the only preview it will ever have.
-				// Checked before applying, so a refused acceptance creates nothing at all
-				// rather than relying on the transaction to undo it.
-				const pending = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
-				if (pending.kind === 'diagram' && pending.payload.kind === 'drawio')
-					throw new ValidationError('A draw.io diagram must be accepted through its review.');
-				return this.accept(actor, input);
-			}
-			const accepted = await this.accept(actor, input);
-			if (accepted.suggestion.kind !== 'diagram' || accepted.suggestion.payload.kind !== 'drawio')
-				throw new ValidationError('The suggestion did not create the expected draw.io diagram.');
-			if (!this.dependencies.drawioReviewSaver)
-				throw new ValidationError('Draw.io suggestion review is unavailable.');
-			const artifact = accepted.artifact as Diagram;
-			const diagram = await this.dependencies.drawioReviewSaver.save(actor, {
-				...input.drawioReview,
-				diagramId: artifact.id as DiagramId
-			});
-			return { ...accepted, artifact: diagram };
+			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
+			return this.dependencies.suggestionEffects.availability(
+				actor,
+				await this.dependencies.suggestionFinder.get(actor, input.suggestionId)
+			);
 		});
 	}
+
 	reject(actor: ActorContext, input: RejectSuggestionInput): Promise<Suggestion> {
 		return this.dependencies.transactionRunner.run(async () =>
 			this.dependencies.suggestionRejecter.reject(
@@ -213,8 +242,15 @@ export class Suggestions implements SuggestionsController {
 	}
 	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion> {
 		return this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
 			const accepted = await this.dependencies.suggestionFinder.get(actor, input.suggestionId);
-			await this.dependencies.artifactApplier.revert(actor, accepted);
+			const restored = await this.dependencies.suggestionEffects.restore(actor, accepted);
+			for (const record of restored) {
+				if (record.type === 'memory_entries')
+					await this.dependencies.memoryIndexer.index(actor, record.value);
+				if (record.type === 'diagrams')
+					await this.dependencies.diagramIndexer.index(actor, record.value);
+			}
 			return this.dependencies.suggestionReverter.revert(actor, accepted);
 		});
 	}
