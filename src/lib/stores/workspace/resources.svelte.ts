@@ -28,6 +28,7 @@ import {
 	workspaceCommandSchema,
 	mutationResource,
 	prepareWorkspaceCommand,
+	workspaceCommandNeedsInventory,
 	type PreparedWorkspaceCommand,
 	assertWorkspaceWriteIdentity,
 	type WorkspaceCommand
@@ -304,15 +305,35 @@ export class WorkspaceResources {
 		await this.readLocal();
 	}
 
-	prepareCommand(
+	async prepareCommand(
 		command: PreparedWorkspaceCommand,
 		observed: WorkspaceRecord | null,
 		now: DateTime
 	) {
+		const createsEntry = command.kind === 'createNote' || command.kind === 'createFolder';
+		const projectId = createsEntry
+			? command.projectId
+			: observed?.type === 'notes'
+				? observed.value.projectId
+				: null;
+		const newParentId = createsEntry
+			? command.parentId
+			: command.kind === 'archiveNote'
+				? command.noteId
+				: null;
+		// A queued creation establishes an empty starting collection for its new identity.
+		const knownNewScope = this.pending.some(
+			({ intent }) =>
+				(intent.command.kind === 'createProject' && intent.command.id === projectId) ||
+				(intent.command.kind === 'createFolder' && intent.command.id === newParentId)
+		);
+		if (workspaceCommandNeedsInventory(command, observed, this.records) && !knownNewScope)
+			await this.requireCollections();
 		return prepareWorkspaceCommand(command, observed, {
 			userId: this.accountId as UserId,
 			now,
-			records: this.records
+			records: this.records,
+			inventory: knownNewScope || this.collectionReadiness() === 'ready' ? 'complete' : 'partial'
 		});
 	}
 	async create(
@@ -324,7 +345,7 @@ export class WorkspaceResources {
 		const input = plain(command);
 		const now = new SvelteDate().toISOString() as DateTime;
 		await this.initialize();
-		const content = this.prepareCommand(input, null, now);
+		const content = await this.prepareCommand(input, null, now);
 		if (!content.local) throw new Error('Creation must produce a resource');
 		await this.append({
 			...content,
@@ -642,7 +663,7 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			const content =
 				command.kind === 'discardPublished'
 					? this.publishedContent(command.revision, context.local)
-					: this.resources.prepareCommand(command, context.local, now);
+					: await this.resources.prepareCommand(command, context.local, now);
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');
 			if (content.local) this.valueOf(content.local);

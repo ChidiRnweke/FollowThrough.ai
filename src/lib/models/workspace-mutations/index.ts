@@ -554,10 +554,39 @@ export const workspaceWriteCancellationSchema = z.object({
 export type WorkspaceWriteCancellation = z.infer<typeof workspaceWriteCancellationSchema>;
 
 export type PreparedWorkspaceCommand = Exclude<WorkspaceCommand, { kind: 'discardNoteDraft' }>;
+/** Commands whose meaning depends on a complete collection rather than one loaded record. */
+export function workspaceCommandNeedsInventory(
+	command: PreparedWorkspaceCommand,
+	observed: WorkspaceRecord | null,
+	records: ReadonlyMap<string, WorkspaceRecord>
+): boolean {
+	switch (command.kind) {
+		case 'createNote':
+		case 'createFolder':
+			return true;
+		case 'archiveNote':
+			return observed?.type === 'notes' && observed.value.kind === 'folder';
+		case 'restoreNote': {
+			if (observed?.type !== 'notes') return false;
+			const parent = observed.value.parentId
+				? records.get(workspaceResourceKey({ type: 'notes', id: [observed.value.parentId] }))
+				: undefined;
+			const decision = decideNoteRestore(
+				observed.value,
+				parent?.type === 'notes' ? parent.value : null
+			);
+			return decision.kind === 'restore' && decision.placement === 'root';
+		}
+		default:
+			return false;
+	}
+}
+
 export interface WorkspaceCommandContext {
 	readonly userId: UserId;
 	readonly now: DateTime;
 	readonly records: ReadonlyMap<string, WorkspaceRecord>;
+	readonly inventory: 'complete' | 'partial';
 }
 
 /** Derive local effects from the command and the version this editor actually observed. */
@@ -566,6 +595,13 @@ export const prepareWorkspaceCommand = (
 	observed: WorkspaceRecord | null,
 	context: WorkspaceCommandContext
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
+	if (
+		workspaceCommandNeedsInventory(command, observed, context.records) &&
+		context.inventory !== 'complete'
+	)
+		throw new Error(
+			'Required workspace data is not available on this device. Reconnect and retry.'
+		);
 	const { userId, now, records } = context;
 	const value = <K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K] => {
 		if (!observed || !isWorkspaceRecord(observed, type))
