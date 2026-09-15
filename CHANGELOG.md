@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.5...v0.5.6) (2026-09-15)
+
+
+### Bug Fixes
+
+* **suggestions:** prevent undo from deleting existing data ([#54](https://github.com/ChidiRnweke/FollowThrough.ai/issues/54)) ([b33df72](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b33df723601e45efea43ddbe9f481d28a3a393b2))
+* **workspace:** fade a pane in and hide the pane it replaces ([#56](https://github.com/ChidiRnweke/FollowThrough.ai/issues/56)) ([b4a2378](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b4a23784b69fb0227e51168664a4d5ca2206f980))
+
 ## [0.5.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.4...v0.5.5) (2026-09-15)
 
 
