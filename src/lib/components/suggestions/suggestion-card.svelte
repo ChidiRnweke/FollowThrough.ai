@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { UndoAvailability } from '$lib/models/proposal-effects';
 	import type { SuggestionId, SuggestionView } from '$lib/models/suggestions';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
@@ -17,15 +16,13 @@
 		busy = false,
 		onaccept,
 		onreject,
-		onreview,
-		undo
+		onreview
 	}: {
 		view: SuggestionView;
 		busy?: boolean;
 		onaccept?: (suggestionId: SuggestionId) => void;
 		onreject?: (suggestionId: SuggestionId) => void;
 		onreview?: () => void;
-		undo?: { availability: UndoAvailability; onundo: () => void };
 	} = $props();
 
 	const suggestion = $derived(view.suggestion);
@@ -125,15 +122,6 @@
 			{provenanceCaption(view.origin, view.note?.title)}
 		</p>
 	</Card.Content>
-	{#if suggestion.status === 'accepted' && undo}
-		<Card.Footer class="flex-col items-start gap-2 px-4">
-			{#if undo.availability.kind === 'available'}
-				<Button size="sm" variant="outline" disabled={busy} onclick={undo.onundo}>Undo</Button>
-			{:else}
-				<p class="text-sm text-muted-foreground">{undo.availability.message}</p>
-			{/if}
-		</Card.Footer>
-	{/if}
 	{#if suggestion.status === 'proposed' && (onaccept || onreject || onreview)}
 		<Card.Footer class="gap-2 px-4">
 			{#if onreview}

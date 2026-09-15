@@ -79,14 +79,6 @@ export class MemoryLibrary {
 		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
-	): Promise<MemoryEntry> {
-		return (await this.applyWithChange(actor, payload, provenanceId)).entry;
-	}
-
-	async applyWithChange(
-		actor: ActorContext,
-		payload: MemoryChangePayload,
-		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
 		if (!(await this.provenance.findById(actor, provenanceId)))
 			throw new NotFoundError('Memory change provenance was not found');

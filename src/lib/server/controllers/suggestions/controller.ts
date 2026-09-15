@@ -1,4 +1,3 @@
-import type { UndoAvailability } from '$lib/models/proposal-effects';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import type {
 	ISuggestionApplication,
@@ -70,7 +69,6 @@ export interface AcceptReviewedSuggestionInput extends AcceptSuggestionInput {
  * so a suggestion is never accepted without its edit actually landing.
  */
 export interface SuggestionsController {
-	undoAvailability(actor: ActorContext, input: RevertSuggestionInput): Promise<UndoAvailability>;
 	/**
 	 * List suggestions by status, sorted oldest-first and grouped by the note they apply
 	 * to so the UI can present a per-note review surface. Suggestions not tied to a note
@@ -219,15 +217,6 @@ export class Suggestions implements SuggestionsController {
 				input.autoAccepted ?? false
 			);
 			return { suggestion, artifact };
-		});
-	}
-	undoAvailability(actor: ActorContext, input: RevertSuggestionInput): Promise<UndoAvailability> {
-		return this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.suggestionEffects.lock(actor, input.suggestionId);
-			return this.dependencies.suggestionEffects.availability(
-				actor,
-				await this.dependencies.suggestionFinder.get(actor, input.suggestionId)
-			);
 		});
 	}
 

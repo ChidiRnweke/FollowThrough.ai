@@ -31,11 +31,6 @@ export interface MemoryChangeApplier {
 		actor: ActorContext,
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
-	): Promise<MemoryEntry>;
-	applyWithChange(
-		actor: ActorContext,
-		payload: MemoryChangePayload,
-		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
 }
 export interface MemoryIndexer {

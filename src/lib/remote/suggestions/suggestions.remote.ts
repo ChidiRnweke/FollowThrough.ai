@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, query } from '$app/server';
+import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { RejectSuggestionInput, SuggestionId } from '$lib/models/suggestions';
@@ -35,10 +35,3 @@ export const rejectSuggestion = command(z.object({ suggestionId }), async (input
 		.suggestions()
 		.reject(requestActor(), input as RejectSuggestionInput);
 });
-
-export const suggestionUndoAvailability = query(z.object({ suggestionId }), async (input) =>
-	AppFactory.controllers().suggestions().undoAvailability(requestActor(), input)
-);
-export const revertSuggestion = command(z.object({ suggestionId }), async (input) =>
-	AppFactory.controllers().suggestions().revert(requestActor(), input)
-);

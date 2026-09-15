@@ -12,14 +12,6 @@ export type RecordedChange<Record> =
 export interface ApplicationEffect<Record> {
 	readonly changes: readonly RecordedChange<Record>[];
 }
-export type UndoAvailability =
-	| { readonly kind: 'available' }
-	| {
-			readonly kind: 'unavailable';
-			readonly reason: 'unrecorded' | 'changed' | 'not-accepted';
-			readonly message: string;
-	  };
-
 export function applicationEffectSchema<Record>(record: z.ZodType<Record>) {
 	return z
 		.object({

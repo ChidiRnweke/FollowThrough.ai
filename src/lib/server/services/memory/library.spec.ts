@@ -166,7 +166,7 @@ describe('User profile memory invariants', () => {
 
 	it('applies a user-scoped add as a profile entry', async () => {
 		const { service } = await setup();
-		const entry = await service.apply(
+		const { entry } = await service.apply(
 			testActor(),
 			{ operation: 'add', content: 'I am the founder.' },
 			testProvenanceId()
@@ -185,14 +185,14 @@ describe('Memory change application invariants', () => {
 
 	it('creates an entry with provenance on add', async () => {
 		const { service } = await setup();
-		const entry = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		expect(entry.provenanceId).toBe(testProvenanceId());
 	});
 
 	it('links an update replacement to the entry it supersedes', async () => {
 		const { service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const replacement = await service.apply(
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry: replacement } = await service.apply(
 			testActor(),
 			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
 			testProvenanceId()
@@ -202,7 +202,7 @@ describe('Memory change application invariants', () => {
 
 	it('supersedes the target entry on update', async () => {
 		const { service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
 			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
@@ -213,8 +213,8 @@ describe('Memory change application invariants', () => {
 
 	it('keeps only the replacement chunks after an update', async () => {
 		const { search, service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const replacement = await service.apply(
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry: replacement } = await service.apply(
 			testActor(),
 			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
 			testProvenanceId()
@@ -224,7 +224,7 @@ describe('Memory change application invariants', () => {
 
 	it('rejects an update against a superseded entry', async () => {
 		const { service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
 			addPayload({ operation: 'remove', memoryEntryId: original.id, content: undefined }),
@@ -241,7 +241,7 @@ describe('Memory change application invariants', () => {
 
 	it('soft-deletes the target on remove', async () => {
 		const { service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
 			addPayload({ operation: 'remove', memoryEntryId: original.id, content: undefined }),
@@ -254,8 +254,8 @@ describe('Memory change application invariants', () => {
 describe('Memory application effects', () => {
 	it('records both sides of a memory replacement', async () => {
 		const { service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const result = await service.applyWithChange(
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const result = await service.apply(
 			testActor(),
 			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
 			testProvenanceId()
@@ -271,8 +271,8 @@ describe('Memory application effects', () => {
 	});
 	it('records the original entry before removing it', async () => {
 		const { service } = await setup();
-		const original = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const result = await service.applyWithChange(
+		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
+		const result = await service.apply(
 			testActor(),
 			addPayload({ operation: 'remove', memoryEntryId: original.id }),
 			testProvenanceId()
