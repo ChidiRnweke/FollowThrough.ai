@@ -238,7 +238,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		db,
 		notes: noteRepository,
 		preferences,
-		searchRepository,
 		indexer: knowledgeSearch.attachmentIndexer,
 		openRouterApiKey,
 		openRouterBaseURL,
@@ -423,7 +422,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: { preferences: toolPreferences, syncMutations: synchronization.mutations },
-		attachments: { attachments, transactionRunner },
+		attachments: {
+			attachments,
+			transactionRunner,
+			attachmentIndexer: knowledgeSearch.attachmentIndexer
+		},
 		deliverables: {
 			syncMutations: synchronization.mutations,
 			templateUploader: templates,

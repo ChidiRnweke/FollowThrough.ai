@@ -28,7 +28,7 @@ export const setupAttachments = () => {
 	const ocr = new InMemoryDocumentOcr();
 	const describer = new InMemoryImageDescriber();
 	const storage = new InMemoryStorage();
-	const service = new AttachmentLibrary(repository, notes, storage, search);
+	const service = new AttachmentLibrary(repository, notes, storage);
 	const worker = new AttachmentProcessing({
 		records: repository,
 		claims,

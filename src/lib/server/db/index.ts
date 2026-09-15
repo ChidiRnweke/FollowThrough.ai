@@ -11,7 +11,13 @@ function runtimeClient() {
 	if (!databaseUrl) throw new Error('DATABASE_URL is not set');
 	return (client = postgres(databaseUrl));
 }
-export const postgresConnections = { reserve: () => runtimeClient().reserve() };
+export const postgresSessionConnections = {
+	open: () => {
+		const databaseUrl = process.env.DATABASE_URL;
+		if (!databaseUrl) throw new Error('DATABASE_URL is not set');
+		return postgres(databaseUrl, { max: 1 });
+	}
+};
 
 /** Query-builder surface shared by the postgres-js and PGlite drivers. */
 export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;

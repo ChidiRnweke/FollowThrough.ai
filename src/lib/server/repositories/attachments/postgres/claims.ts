@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { z } from 'zod';
 import type { Sql } from 'postgres';
@@ -8,19 +9,20 @@ import type { AttachmentClaim, AttachmentClaims } from '../claims';
 const claimRow = z.object({ owned: z.boolean(), pid: z.number().int() });
 const backendRow = z.object({ pid: z.number().int() });
 interface ConnectionScope {
+	database: Database;
 	run<T>(database: Database, work: () => Promise<T>): Promise<T>;
 }
-/** The reserved connection owns both the session lock and every completion transaction. */
+/** The dedicated single-connection session owns both the session lock and every completion transaction. */
 export class PostgresAttachmentClaims implements AttachmentClaims {
 	constructor(
-		private readonly connections: Pick<Sql, 'reserve'>,
+		private readonly connections: { open(): Sql },
 		private readonly scope: ConnectionScope
 	) {}
 	async withClaim<T>(
 		versionId: AttachmentVersionId,
 		work: (claim: AttachmentClaim) => Promise<T>
 	): Promise<{ kind: 'claimed'; value: T } | { kind: 'busy' }> {
-		const connection = await this.connections.reserve();
+		const connection = this.connections.open();
 		try {
 			const acquired = claimRow.parse(
 				(
@@ -28,24 +30,21 @@ export class PostgresAttachmentClaims implements AttachmentClaims {
 				)[0]
 			);
 			if (!acquired.owned) return { kind: 'busy' };
-			try {
-				const value = await this.scope.run(drizzle(connection, { schema }), () =>
-					work({
-						assertOwned: async () => {
-							const current = backendRow.parse(
-								(await connection`select pg_backend_pid() as pid`)[0]
-							);
-							if (current.pid !== acquired.pid)
-								throw new Error('Attachment processing connection lost its claim');
-						}
-					})
-				);
-				return { kind: 'claimed', value };
-			} finally {
-				await connection`select pg_advisory_unlock(hashtextextended(${versionId}, 71341))`;
-			}
+			const value = await this.scope.run(drizzle(connection, { schema }), () =>
+				work({
+					assertOwned: async () => {
+						const current = z
+							.array(backendRow)
+							.nonempty()
+							.parse(await this.scope.database.execute(sql`select pg_backend_pid() as pid`))[0];
+						if (current.pid !== acquired.pid)
+							throw new Error('Attachment processing connection lost its claim');
+					}
+				})
+			);
+			return { kind: 'claimed', value };
 		} finally {
-			await connection.release();
+			await connection.end();
 		}
 	}
 }

@@ -95,6 +95,7 @@ export interface AttachmentsController {
 /** Everything the {@link AttachmentsController} needs: the attachment manager and a transaction runner for atomic mutations. */
 export interface AttachmentsDependencies {
 	attachments: AttachmentManager;
+	attachmentIndexer: { remove(actor: ActorContext, attachmentId: AttachmentId): Promise<void> };
 	transactionRunner: TransactionRunner;
 }
 
@@ -133,9 +134,12 @@ export class Attachments implements AttachmentsController {
 		);
 	}
 	removeById(actor: ActorContext, attachmentId: AttachmentId) {
-		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.attachments.removeById(actor, attachmentId)
-		);
+		return this.dependencies.transactionRunner.run(async () => {
+			const result = await this.dependencies.attachments.removeById(actor, attachmentId);
+			if (result.kind === 'removed')
+				await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
+			return result;
+		});
 	}
 	download(actor: ActorContext, noteId: NoteId, path: string) {
 		return this.dependencies.attachments.download(actor, noteId, path);
@@ -144,8 +148,9 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.attachments.read(actor, noteId, path, offset, limit);
 	}
 	remove(actor: ActorContext, noteId: NoteId, path: string) {
-		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.attachments.remove(actor, noteId, path)
-		);
+		return this.dependencies.transactionRunner.run(async () => {
+			const attachmentId = await this.dependencies.attachments.remove(actor, noteId, path);
+			if (attachmentId) await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
+		});
 	}
 }

@@ -240,7 +240,11 @@ export class ContentIndex {
 		private readonly defer = false
 	) {}
 	readonly notes = { index: this.indexNote.bind(this) };
-	readonly attachments = { index: this.indexAttachment.bind(this) };
+	readonly attachments = {
+		index: this.indexAttachment.bind(this),
+		remove: (actor: ActorContext, attachmentId: Attachment['id']) =>
+			this.apply(actor, { kind: 'remove', source: { kind: 'attachment', attachmentId } })
+	};
 	readonly memories = { index: this.indexMemory.bind(this) };
 	diagrams(notes: NoteReader) {
 		return { index: this.indexDiagram.bind(this, notes) };

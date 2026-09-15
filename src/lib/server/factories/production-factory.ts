@@ -2,7 +2,7 @@ import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/p
 import {
 	db,
 	postgresTransactionRunner,
-	postgresConnections,
+	postgresSessionConnections,
 	postgresConnectionScope
 } from '$lib/server/db';
 import {
@@ -25,7 +25,10 @@ export type { ProductionApplication } from '../application';
  */
 export function createProductionFactory(): ProductionApplication {
 	return createApplication({
-		attachmentClaims: new PostgresAttachmentClaims(postgresConnections, postgresConnectionScope),
+		attachmentClaims: new PostgresAttachmentClaims(
+			postgresSessionConnections,
+			postgresConnectionScope
+		),
 		db,
 		transactionRunner: postgresTransactionRunner,
 		openRouterApiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),

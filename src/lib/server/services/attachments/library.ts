@@ -14,7 +14,6 @@ import type { TodoId } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
-import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
 
 import type { IAttachmentStorage } from '$lib/server/repositories/attachments/storage';
 
@@ -40,8 +39,7 @@ export class AttachmentLibrary {
 	constructor(
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository,
-		private readonly storage: IAttachmentStorage,
-		private readonly retrieval: RetrievalIndexRepository
+		private readonly storage: IAttachmentStorage
 	) {}
 
 	async initiate(
@@ -182,11 +180,9 @@ export class AttachmentLibrary {
 			if (!note) throw new NotFoundError('Containing note was not found');
 			if (documentReferencesAttachment(note.document, attachmentId))
 				return { kind: 'referenced-by-note', note: { id: note.id, title: note.title } };
-			await this.retrieval.deleteForAttachment(actor, attachmentId);
 			await this.attachments.remove(actor, note.id, found.attachment.path);
 			return { kind: 'removed' };
 		}
-		await this.retrieval.deleteForAttachment(actor, attachmentId);
 		await this.attachments.removeById(actor, attachmentId);
 		await this.storage.remove(found.version.objectKey);
 		return { kind: 'removed' };
@@ -220,10 +216,15 @@ export class AttachmentLibrary {
 		};
 	}
 
-	async remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void> {
+	async remove(
+		actor: ActorContext,
+		noteId: NoteId,
+		path: string
+	): Promise<AttachmentId | undefined> {
 		const validatedPath = validateAttachmentPath(path);
 		const found = await this.attachments.findByPath(actor, noteId, validatedPath);
 		await this.attachments.remove(actor, noteId, validatedPath);
 		if (found) await this.storage.remove(found.version.objectKey);
+		return found?.attachment.id;
 	}
 }

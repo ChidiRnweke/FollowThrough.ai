@@ -294,10 +294,10 @@ export class AttachmentRecords implements AttachmentRepository {
 		const [row] = await this.database
 			.update(schema.attachmentVersions)
 			.set({
-				parserKind: version.parserKind,
-				extractedText: version.extractedText,
+				parserKind: version.parserKind ?? null,
+				extractedText: version.extractedText ?? null,
 				processingStatus: version.processingStatus,
-				processingFailure: version.processingFailure,
+				processingFailure: version.processingFailure ?? null,
 				processedAt: version.processedAt ? new Date(version.processedAt) : null
 			})
 			.where(eq(schema.attachmentVersions.id, version.id))

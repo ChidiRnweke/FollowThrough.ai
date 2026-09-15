@@ -60,7 +60,10 @@ const setup = async (suffix: string) => {
 	const extraction = new InMemoryAttachmentExtraction();
 	const worker = new AttachmentProcessing({
 		records,
-		claims: new PostgresAttachmentClaims(client, transaction.connectionScope),
+		claims: new PostgresAttachmentClaims(
+			{ open: () => postgres(context.url, { max: 1 }) },
+			transaction.connectionScope
+		),
 		extraction,
 		preferences: {
 			get: async () => ({
@@ -113,5 +116,22 @@ describe('attachment processing persistence', () => {
 				.map((item) => item.versionId)
 				.sort()
 		).toEqual([view.version.id, latest.version.id].sort());
+	});
+	it('clears a previous failure when retry queues a version', async () => {
+		const { owner, records, view, transaction } = await setup('9714');
+		await transaction.transactionRunner.run(() =>
+			records.updateVersion(owner, {
+				...view.version,
+				processingStatus: 'failed',
+				processingFailure: 'OCR unavailable',
+				processedAt: now
+			})
+		);
+		await transaction.transactionRunner.run(() =>
+			records.updateVersion(owner, { ...view.version, processingStatus: 'queued' })
+		);
+		expect(
+			(await records.findById(owner, view.attachment.id))?.version.processingFailure
+		).toBeUndefined();
 	});
 });

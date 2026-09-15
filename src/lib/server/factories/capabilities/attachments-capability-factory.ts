@@ -23,7 +23,6 @@ import {
 	type ObjectStorageConfig
 } from '$lib/server/services/attachments/storage';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import type { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { operationObserver } from '$lib/server/services/telemetry';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
@@ -39,7 +38,6 @@ export interface AttachmentsCapabilityInput {
 	readonly visionModel: string;
 	readonly notes: NoteRepository;
 	readonly preferences: AgentPreferenceCatalog;
-	readonly searchRepository: KnowledgeIndexRecords;
 	readonly indexer: ContentIndex['attachments'];
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
@@ -95,7 +93,7 @@ export const createAttachmentsCapability = (
 	return {
 		repository,
 		storage,
-		library: new AttachmentLibrary(repository, input.notes, storage, input.searchRepository),
+		library: new AttachmentLibrary(repository, input.notes, storage),
 		processing: new AttachmentProcessing({
 			records: repository,
 			claims: input.claims,

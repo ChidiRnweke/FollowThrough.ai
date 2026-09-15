@@ -49,7 +49,7 @@ export interface AttachmentManager {
 		offset?: number,
 		limit?: number
 	): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }>;
-	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
+	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentId | undefined>;
 }
 
 export type {

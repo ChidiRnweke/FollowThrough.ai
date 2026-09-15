@@ -117,7 +117,7 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 	read(): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }> {
 		throw new Error('not used');
 	}
-	remove(_actor: ActorContext, _noteId: NoteId, _path: string): Promise<void> {
+	remove(_actor: ActorContext, _noteId: NoteId, _path: string): Promise<AttachmentId | undefined> {
 		throw new Error('not used');
 	}
 }

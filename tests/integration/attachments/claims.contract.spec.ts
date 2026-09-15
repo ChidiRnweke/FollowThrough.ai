@@ -18,7 +18,10 @@ const setup = () => {
 	return {
 		client,
 		...transactions,
-		claims: new PostgresAttachmentClaims(client, transactions.connectionScope),
+		claims: new PostgresAttachmentClaims(
+			{ open: () => postgres(context.url, { max: 1 }) },
+			transactions.connectionScope
+		),
 		versionId: crypto.randomUUID() as AttachmentVersionId
 	};
 };
@@ -68,9 +71,11 @@ describe('attachment processing connection claims', () => {
 	it('refuses completion after the owning session is terminated', async () => {
 		const { claims, versionId, database, client, transactionRunner } = setup();
 		let completed = false;
+		let entered = false;
 		await claims
 			.withClaim(versionId, async (claim) => {
 				const [row] = await database.execute(sql`select pg_backend_pid() as pid`);
+				entered = true;
 				await client`select pg_terminate_backend(${Number(row?.pid)})`;
 				await transactionRunner.run(async () => {
 					await claim.assertOwned();
@@ -83,7 +88,7 @@ describe('attachment processing connection claims', () => {
 				},
 				() => undefined
 			);
-		expect(completed).toBe(false);
+		expect({ entered, completed }).toEqual({ entered: true, completed: false });
 	});
 	it('releases ownership so another worker can resume the version', async () => {
 		const { claims, versionId } = setup();

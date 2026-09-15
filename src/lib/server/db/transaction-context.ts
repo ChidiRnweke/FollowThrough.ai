@@ -12,7 +12,10 @@ export function createTransactionContext<TDatabase extends TransactionalDatabase
 ): {
 	database: TDatabase;
 	transactionRunner: TransactionRunner;
-	connectionScope: { run<T>(database: TDatabase, work: () => Promise<T>): Promise<T> };
+	connectionScope: {
+		database: TDatabase;
+		run<T>(database: TDatabase, work: () => Promise<T>): Promise<T>;
+	};
 } {
 	const context = new AsyncLocalStorage<{ database: TDatabase; transactional: boolean }>();
 	const contextualDatabase = new Proxy(database, {
@@ -25,6 +28,7 @@ export function createTransactionContext<TDatabase extends TransactionalDatabase
 	return {
 		database: contextualDatabase,
 		connectionScope: {
+			database: contextualDatabase,
 			run: (database, work) => context.run({ database, transactional: false }, work)
 		},
 		transactionRunner: {
