@@ -37,6 +37,12 @@ export default defineConfig({
 		rolldownOptions: {
 			output: {
 				strictExecutionOrder: true,
+				// Entries-aware groups append Kit's entry names (`nodes/0`, `entries/pages/…`) to
+				// the chunk name. Kit derives each CSS asset path from that name, so the slashes
+				// nest the stylesheet in folders. Its relative `url(./font.woff2)` then misses the
+				// flat assets folder. Kit owns `assetFileNames`, so flatten the name here instead.
+				// Only group names carry `~`; Kit's own entry names must keep their paths.
+				sanitizeFileName: (name) => (name.includes('~') ? name.replaceAll('/', '_') : name),
 				// Keep production modules statically linked while allowing Rolldown to split
 				// large shared graphs into cacheable chunks below Vite's warning boundary.
 				codeSplitting: {
