@@ -476,3 +476,15 @@ export function proposalFromSelection(
 			};
 	}
 }
+
+export function assembleSuggestionView(
+	suggestion: Suggestion,
+	facts: Omit<SuggestionView, 'suggestion'>
+): SuggestionView {
+	return {
+		suggestion,
+		...(facts.note ? { note: { id: facts.note.id, title: facts.note.title } } : {}),
+		...(facts.anchor ? { anchor: facts.anchor } : {}),
+		origin: facts.origin
+	};
+}

@@ -1,3 +1,6 @@
+import { assembleBacklinkView } from '$lib/models/relationships';
+import { assembleReferenceView } from '$lib/models/references';
+import { assembleSuggestionView } from '$lib/models/suggestions';
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';
 import type {
@@ -21,7 +24,7 @@ import {
 import type { LocalDate } from '$lib/models/workspace';
 import { assembleTodoView, type Todo, type TodoListFilter, type TodoView } from '$lib/models/todos';
 import { assembleProjectTree, type ProjectId, type ProjectView } from '$lib/models/projects';
-import { noteEtag, sectionNumberingView, type NoteId } from '$lib/models/notes';
+import { assembleNoteView, sectionNumberingView, type NoteId } from '$lib/models/notes';
 import { provenanceOrigin } from '$lib/models/provenance';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
@@ -359,15 +362,7 @@ export class WorkspaceViews {
 				const target = this.get('notes', relationship.targetNoteId);
 				if (!source) missing.push({ type: 'notes', id: [relationship.sourceNoteId] });
 				if (!target) missing.push({ type: 'notes', id: [relationship.targetNoteId] });
-				return source && target
-					? [
-							{
-								relationship,
-								sourceNote: { id: source.id, title: source.title },
-								targetNote: { id: target.id, title: target.title }
-							}
-						]
-					: [];
+				return source && target ? [assembleBacklinkView(relationship, source, target)] : [];
 			});
 		const references = this.all('references')
 			.filter((reference) => reference.noteId === noteId)
@@ -377,7 +372,8 @@ export class WorkspaceViews {
 					: undefined;
 				if (reference.sourceAnchorId && !anchor)
 					missing.push({ type: 'source_anchors', id: [reference.sourceAnchorId] });
-				return { reference, ...(anchor ? { anchor } : {}) };
+				const { projectId: _projectId, ...domainReference } = reference;
+				return assembleReferenceView(domainReference, { anchor });
 			});
 		const pendingSuggestions = this.all('suggestions')
 			.filter((suggestion) => suggestion.noteId === noteId && suggestion.status === 'proposed')
@@ -393,18 +389,12 @@ export class WorkspaceViews {
 				if (suggestion.sourceAnchorId && !anchor)
 					missing.push({ type: 'source_anchors', id: [suggestion.sourceAnchorId] });
 				return [
-					{
-						suggestion,
-						note: { id: note.id, title: note.title },
-						...(anchor ? { anchor } : {}),
-						origin: provenanceOrigin(provenance)
-					}
+					assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
 				];
 			});
 		return {
-			view: {
+			view: assembleNoteView({
 				note,
-				etag: noteEtag(note),
 				backlinks,
 				references,
 				diagrams: this.all('diagrams').filter(
@@ -417,7 +407,7 @@ export class WorkspaceViews {
 					project?.sectionNumberingDefault,
 					preferences?.sectionNumberingDefault
 				)
-			},
+			}),
 			missing
 		};
 	}
