@@ -1,57 +1,59 @@
 ---
-title: 'ADR 0041: Share domain decisions between browser and server'
-description: Keep optimistic and authoritative behavior consistent without changing layer ownership.
+title: 'ADR 0041: Use the same rules for offline edits and server writes'
+description: Prevent browser and server implementations from making different decisions about the same edit.
 ---
 
 ## Status
 
-Accepted. Implementation is staged; the known remaining work is listed below.
+Accepted.
 
 ## Context
 
-Users can edit downloaded records offline and can change the same records through server actions.
-Separate placement, restoration and view assembly implementations can give those paths different
-answers. Skills also write note documents and history independently of note services. Repeated
-service contracts and copied foreign records require multiple edits for one concept.
+The application lets users edit downloaded notes, tasks and projects while offline. The browser
+shows each edit immediately and saves a command to a durable queue. When a connection is available,
+the server checks the command against the current saved records and applies it. Agents and external
+clients can also change those records through the server.
 
-The accepted simplification plan preserves offline intent, publication, approval, concurrency and
-format-specific layout. It measures simplification by deleted implementations and fewer independent
-decisions, as well as line counts.
+The browser and server currently implement some of the same rules separately. For example,
+restoring a note whose parent folder is unavailable requires a decision about where the note goes.
+If the two implementations differ, the browser can show a result that the server will never save.
+A change to one implementation also leaves the other paths with the old behavior.
+
+Shared rules cannot make the browser's cached records authoritative. A folder missing from a partial
+download might still exist on the server. The server must check current data even when the browser
+has already shown the edit.
 
 ## Decision
 
-We chose to implement each domain decision once as a typed pure operation. Browser and server
-adapters supply resolved facts; the server recomputes the result using authoritative data. An
-incomplete cache cannot prove absence or authorize a transition that requires complete inventory.
+We chose to implement each shared domain rule as a pure function. The browser and server call the
+same function with the facts they have resolved. The function returns the proposed change; it does
+not read storage, write records or call another feature. The server resolves authoritative facts
+and computes the change again before saving it.
 
-Generic operations own minimal facts. Aggregate models accept foreign participants instead of
-copying full entities. Small named reference projections remain useful for display. Each service
-contract has one declaration, and capability factories share reusable service instances.
+Each function takes only the facts needed for its decision. Placement rules, for example, need
+entry identities, parents and sibling order; they do not need document bodies. When a decision
+requires a complete inventory, the caller must establish completeness. An incomplete offline cache
+cannot stand in for an empty collection.
 
-Controllers retain cross-service orchestration and transaction ownership under ADR 0007. Domain
-writes, required secondary writes and sync proof commit together. Models retain their import
-boundaries. External data is parsed at the boundary under ADR 0037. The outbox and synchronization
-contract in ADR 0040 remain in force.
+Services perform storage work around these rules. Controllers continue to coordinate consequences
+across features and own their transactions, as described in ADR 0007. The durable queue and conflict
+review retain the synchronization contract in ADR 0040.
 
-New abstractions replace existing implementations in the same stage. This decision does not unify
-DOCX/PDF layout or the distinct execution inputs in ADR 0034. Proposal reversal and attachment
-recovery need explicit behavior corrections; structural extraction alone cannot establish safety.
+This decision covers rules whose meaning is the same in both paths. It does not require shared code
+for different behavior, such as PDF and DOCX layout, or make server-only actions available offline.
 
 ## Consequences
 
-- Equivalent resolved facts can produce the same optimistic and authoritative decision.
-- Model changes no longer require copying complete foreign record declarations.
-- Adapters still perform I/O and translate formats. Controllers retain explicit consequences.
-- Pure operations need explicit facts, including inventory completeness. This adds adapter work.
-- Behavior corrections need durable state and concurrency evidence beyond extraction tests.
+- The same command and resolved facts produce the same domain decision in the browser and server.
+- A rule change has one implementation to update and test.
+- Callers must provide explicit facts and establish whether required collections are complete.
+- Some offline actions must wait for missing facts. The browser retains the user's draft.
+- Shared rules reduce duplicated decisions but do not remove conflict checks or server validation.
 
 ## Evidence
 
-- `src/lib/server/services/*/contracts.ts` retains narrow contracts after duplicate implementation
-  exports are removed.
-- `src/lib/models/projects/index.ts` uses document participants for create/move results and a named
-  project-entry reference for tree display.
-- `src/lib/server/application.ts` already reuses capability-created note, task and project catalogs.
-- Known remaining duplication includes `prepareWorkspaceCommand`, aggregate note models,
-  `SkillLibrary` document writes, selection validation, run settlement and browser SSE readers.
-  The implementation record in `docs/architecture/domain-model.md` tracks these pending areas.
+- `src/lib/models/todos/index.ts` defines `applyTodoEdit`, which is reused by browser command
+  preparation and the task controller.
+- `src/lib/models/workspace-mutations/index.ts` prepares optimistic commands from cached records.
+- `src/lib/server/services/notes/catalog.ts` checks current records for note lifecycle operations.
+- ADR 0040 defines the durable command queue and review of conflicting edits.

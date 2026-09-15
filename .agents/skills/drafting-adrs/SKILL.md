@@ -124,6 +124,17 @@ the current code look compliant. Do not hide the violation.
 Name the conflicting code in Evidence. Put the same finding in the suspicious-code ledger when the
 backfill process uses one. This tells a future engineer which side is the intended design.
 
+## Keep the decision separate from delivery
+
+An ADR must make sense without the task conversation or implementation plan. Define the user
+behavior and the concrete problem before describing the choice. Refer to another document for
+supporting detail, not for the context needed to understand the decision.
+
+Status records acceptance of the decision. Put rollout progress, remaining stages, and execution
+checklists in the implementation plan. For example, write `Accepted.`, not `Accepted. Implementation
+is staged; remaining work is listed below.` Known violations belong in Evidence and a separate
+tracking document; they do not qualify acceptance.
+
 ## Make the ADR discoverable
 
 The title is an index entry. A human should understand the choice without opening the ADR.
