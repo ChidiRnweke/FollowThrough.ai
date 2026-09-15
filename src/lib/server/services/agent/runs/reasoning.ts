@@ -37,8 +37,7 @@ import {
 	allImages,
 	AgentProviderFailure,
 	parseProviderStreamEvent,
-	parseProviderToolCall,
-	unwrapDispatchedToolCall
+	parseProviderToolCall
 } from '$lib/models/agent';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import { ValidationError } from '$lib/errors';
@@ -330,8 +329,6 @@ const directTurnObserver: AgentTurnObserver = async function* (_context, operati
  * This covers the *transcript*; a run parked on an approval needs `parkedTools`
  * below as well, because the call it is parked on is not in the transcript yet.
  *
- * Historical `use_tool` envelopes are unwrapped so conversations that predate the
- * direct-dispatch surface keep working.
  */
 const promotedInConversation = async (
 	session: Session,
@@ -341,9 +338,7 @@ const promotedInConversation = async (
 	const names = new Set<string>();
 	for (const item of items) {
 		if (item.type !== 'function_call') continue;
-		const dispatched = unwrapDispatchedToolCall(item.name, item.arguments);
-		const name = dispatched?.name ?? item.name;
-		if (catalog.has(name)) names.add(name);
+		if (catalog.has(item.name)) names.add(item.name);
 	}
 	return [...names];
 };

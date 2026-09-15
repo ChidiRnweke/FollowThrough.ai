@@ -1322,35 +1322,6 @@ const providerArguments = (value: unknown): AgentPayloadObject => {
 	return read.value;
 };
 
-const dispatchedCall = (
-	name: string,
-	args: AgentPayloadObject
-): { readonly name: string; readonly arguments: AgentPayloadObject } | undefined => {
-	if (name !== 'use_tool') return undefined;
-	const inner = args.name;
-	if (typeof inner !== 'string') return undefined;
-	const payload = args.payload;
-	return {
-		name: inner,
-		arguments: payload === undefined ? {} : providerArguments(payload)
-	};
-};
-
-/**
- * The tool a legacy `use_tool` envelope dispatches to, or nothing when the call
- * is already a direct one.
- *
- * Conversations that predate the direct-dispatch surface still hold these
- * envelopes, and a tool discovered inside one has to stay callable in later
- * turns or the model reads its own transcript, repeats a call that worked a
- * message ago, and gets `Tool not found`.
- */
-export const unwrapDispatchedToolCall = (
-	name: string,
-	args: string | undefined
-): { readonly name: string; readonly arguments: AgentPayloadObject } | undefined =>
-	dispatchedCall(name, providerArguments(args));
-
 const providerReasoningText = (item: ProviderItem): string => {
 	const raw = item.rawItem;
 	const parts = raw?.rawContent ?? raw?.content ?? raw?.summary;
@@ -1365,11 +1336,10 @@ const providerCall = (item: ProviderItem): ProviderToolCall => {
 	const raw = item.rawItem;
 	const name = item.toolName ?? raw?.name ?? 'tool';
 	const args = providerArguments(item.arguments ?? raw?.arguments);
-	const dispatched = dispatchedCall(name, args);
 	return {
 		callId: item.callId ?? raw?.callId ?? raw?.call_id ?? raw?.id,
-		name: dispatched?.name ?? name,
-		arguments: dispatched?.arguments ?? args,
+		name,
+		arguments: args,
 		output: providerToolOutput(item.output ?? raw?.output)
 	};
 };
@@ -1800,27 +1770,10 @@ export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
 ]);
 
 const emptyContextSchema = z.object({}).strict();
-const legacyNoteActionRunContextSchema = noteActionRunContextSchema.omit({ kind: true });
-const legacyDiagramRunContextSchema = unpreparedDiagramRunContextSchema.omit({
-	kind: true,
-	state: true
-});
-
 // audit-allow: no-unknown-type — The stored run context snapshot, versioned at the repository and parsed here.
 export const parseAgentRunContextSnapshot = (value: unknown): AgentRunContext | undefined => {
 	if (emptyContextSchema.safeParse(value).success) return undefined;
 	return agentRunContextSchema.parse(value);
-};
-
-// audit-allow: no-unknown-type — The stored workflow context, at the same repository boundary.
-export const parseWorkflowRunContext = (value: unknown): WorkflowRunContext => {
-	const current = workflowRunContextSchema.safeParse(value);
-	if (current.success) return current.data;
-	const noteAction = legacyNoteActionRunContextSchema.safeParse(value);
-	if (noteAction.success) return { kind: 'note_action', ...noteAction.data };
-	const diagram = legacyDiagramRunContextSchema.safeParse(value);
-	if (diagram.success) return { kind: 'diagram', state: 'unprepared', ...diagram.data };
-	return workflowRunContextSchema.parse(value);
 };
 
 const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string().max(12_000) });

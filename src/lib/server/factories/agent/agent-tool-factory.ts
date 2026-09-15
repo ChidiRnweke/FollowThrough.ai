@@ -101,9 +101,8 @@ export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
  * the two preference tools it could disable its own way back — a selection that
  * cannot be undone from the agent is a trap, not a setting.
  *
- * `search_tools` and `use_tool` need no entry: they are assembled in
- * `agentTools()` and in the MCP surface rather than being definitions, so no
- * preference can reach them.
+ * `search_tools` needs no entry: the agent and MCP surfaces assemble it
+ * outside the capability definitions, so no preference can disable discovery.
  */
 
 /** Membership for callers holding a {@link ToolName}; see {@link FIRST_CLASS_TOOL_SET}. */
@@ -1092,7 +1091,7 @@ export class AgentTools {
 	 *
 	 * This is the one place the user's tool selection is applied, so a deselected
 	 * tool disappears from the in-app agent, from `search_tools` ranking, from
-	 * `use_tool` dispatch and from the MCP surface at once — there is no path to
+	 * direct tool dispatch and from the MCP surface at once — there is no path to
 	 * a capability that does not come through here.
 	 */
 	definitions(

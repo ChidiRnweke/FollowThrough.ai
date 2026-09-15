@@ -194,18 +194,25 @@ describe('Built-in skill provisioning invariants', () => {
 		);
 	});
 
-	it('adopts a legacy FollowThrough note without replacing its content', async () => {
+	it('does not claim a same-named custom note as a built-in skill', async () => {
 		const { provisioner, notes } = setup();
 		notes.notes = [
 			noteBuilder({
 				kind: 'skill',
 				title: 'FollowThrough',
-				plainText: 'My legacy app instructions'
+				plainText: 'My custom app instructions'
 			})
 		];
 		await provisioner.ensure(testActor());
-		expect(notes.notes.find((note) => note.title === 'FollowThrough')?.plainText).toBe(
-			'My legacy app instructions'
+		expect(
+			notes.notes
+				.filter((note) => note.title === 'FollowThrough')
+				.map((note) => ({ content: note.plainText, builtInKey: note.builtInKey }))
+		).toEqual(
+			expect.arrayContaining([
+				{ content: 'My custom app instructions', builtInKey: undefined },
+				expect.objectContaining({ builtInKey: 'followthrough' })
+			])
 		);
 	});
 

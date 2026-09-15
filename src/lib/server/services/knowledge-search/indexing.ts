@@ -112,46 +112,6 @@ export class TokenAwareChunker implements ContentChunker {
 	}
 }
 
-/** Character-based compatibility seam retained for small deterministic tests. */
-export class ParagraphChunker implements ContentChunker {
-	constructor(private readonly maximumCharacters = 1200) {}
-
-	chunk(content: string): readonly string[] {
-		const normalized = content.replace(/\r\n/g, '\n').trim();
-		if (!normalized) return [];
-		const chunks: string[] = [];
-		let current = '';
-		for (const paragraph of normalized.split(/\n\s*\n/)) {
-			for (const segment of this.splitLongParagraph(paragraph.trim())) {
-				const combined = current ? `${current}\n\n${segment}` : segment;
-				if (combined.length <= this.maximumCharacters) current = combined;
-				else {
-					if (current) chunks.push(current);
-					current = segment;
-				}
-			}
-		}
-		if (current) chunks.push(current);
-		return chunks;
-	}
-
-	private splitLongParagraph(paragraph: string): readonly string[] {
-		if (paragraph.length <= this.maximumCharacters) return [paragraph];
-		const segments: string[] = [];
-		let current = '';
-		for (const word of paragraph.split(/\s+/)) {
-			const combined = current ? `${current} ${word}` : word;
-			if (combined.length <= this.maximumCharacters) current = combined;
-			else {
-				if (current) segments.push(current);
-				current = word;
-			}
-		}
-		if (current) segments.push(current);
-		return segments;
-	}
-}
-
 export const retrievalChunkerFromEnv = (): TokenAwareChunker => {
 	const target = Number(process.env.RETRIEVAL_CHUNK_TOKENS ?? DEFAULT_TARGET_TOKENS);
 	const overlap = Number(process.env.RETRIEVAL_CHUNK_OVERLAP_TOKENS ?? DEFAULT_OVERLAP_TOKENS);

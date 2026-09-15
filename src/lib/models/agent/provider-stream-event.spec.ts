@@ -3,7 +3,6 @@ import {
 	AgentProviderFailure,
 	parseProviderStreamEvent,
 	parseProviderToolCall,
-	unwrapDispatchedToolCall,
 	type ProviderStreamEvent
 } from './index';
 
@@ -59,53 +58,6 @@ describe('Provider tool call arguments', () => {
 
 	it('rejects arguments that are not an object as a provider failure', () => {
 		expect(() => call({ callId: 'a', arguments: '[]' })).toThrowError(AgentProviderFailure);
-	});
-});
-
-describe('Legacy use_tool envelopes', () => {
-	it('presents the dispatched call under its inner name', () => {
-		expect(
-			call({
-				callId: 'a',
-				name: 'use_tool',
-				arguments: JSON.stringify({ name: 'create_note', payload: { title: 'Log' } })
-			})?.name
-		).toBe('create_note');
-	});
-
-	it('presents the inner payload as the call arguments', () => {
-		expect(
-			call({
-				callId: 'a',
-				name: 'use_tool',
-				arguments: JSON.stringify({ name: 'create_note', payload: { title: 'Log' } })
-			})?.arguments
-		).toEqual({ title: 'Log' });
-	});
-
-	it('accepts a payload the model sent as a JSON string', () => {
-		expect(
-			call({
-				callId: 'a',
-				name: 'use_tool',
-				arguments: JSON.stringify({ name: 'create_note', payload: '{"title":"Log"}' })
-			})?.arguments
-		).toEqual({ title: 'Log' });
-	});
-
-	it('leaves an envelope without an inner name as the envelope', () => {
-		expect(call({ callId: 'a', name: 'use_tool', arguments: '{}' })?.name).toBe('use_tool');
-	});
-
-	it('names the dispatched tool from a stored transcript call', () => {
-		expect(
-			unwrapDispatchedToolCall('use_tool', JSON.stringify({ name: 'search_notes', payload: {} }))
-				?.name
-		).toBe('search_notes');
-	});
-
-	it('reports nothing for a call that was already direct', () => {
-		expect(unwrapDispatchedToolCall('search_notes', '{}')).toBeUndefined();
 	});
 });
 
