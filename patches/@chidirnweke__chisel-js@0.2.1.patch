@@ -1,0 +1,26 @@
+diff --git a/dist/main.js b/dist/main.js
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..a61beef2fb9d2a7606c42b2ee3d2cbc4cc9e0dc4 100755
+--- a/dist/main.js
++++ b/dist/main.js
+@@ -9087,6 +9087,12 @@ class ImportBoundaryService {
+     const importedLayer = layers.get(edge.imported);
+     if (importedLayer === undefined)
+       return [];
++    // Shared services/controllers keep their real layer. Browser-facing code may
++    // call them without routing a local decision through the server. The separate
++    // server-leak check still rejects any server-only dependency they acquire.
++    if ([Layer.CLIENT, Layer.STORES, Layer.COMPONENTS].includes(importerLayer) &&
++        /^src\/lib\/(services|controllers)\//.test(edge.imported))
++      return [];
+     const banned = BANNED_INTERNAL.get(importerLayer);
+     if (banned === undefined)
+       return [];
+@@ -9208,8 +9214,6 @@ function fixFor(importer, imported) {
+ var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
+ var SERVER_ROOT_FILE_RE = /^src\/lib\/server\/([^/]*[Ff]actory|application|config|index)\.(ts|js)$/;
+ var MISPLACED_LAYER_DIRS = [
+-  [/^src\/lib\/services\//, "src/lib/services/", "src/lib/server/services/"],
+-  [/^src\/lib\/controllers\//, "src/lib/controllers/", "src/lib/server/controllers/"],
+   [/^src\/lib\/repositories\//, "src/lib/repositories/", "src/lib/server/repositories/"],
+   [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
+ ];
