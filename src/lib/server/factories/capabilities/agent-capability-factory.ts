@@ -1,3 +1,5 @@
+import { RunRecovery } from '$lib/server/controllers/run-recovery/controller';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { OpenRouter } from '@openrouter/sdk';
 import { normalizeLanguageModelId, webSearchOptionsFromEnvironment } from '$lib/models/agent';
 import type { Database } from '$lib/server/db';
@@ -80,6 +82,7 @@ export interface AgentCapability {
 	readonly eventBus: AgentEvents;
 	/** Runs the editor's note actions as cancellable, resumable agent runs. */
 	readonly workflowRunner: WorkflowRunner;
+	readonly recovery: RunRecovery;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
@@ -98,6 +101,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const runs = new AgentRunRecords(input.db);
 	const runLedger = new AgentRunLedger(runs);
 	const runEvents = new AgentRunEventRecords(input.db);
+	const settlements = new RunSettlements(runs, runEvents, input.transactionRunner);
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEvents();
@@ -126,6 +130,20 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		traceAgentTurn,
 		webSearchOptionsFromEnvironment(process.env)
 	);
+	const executor = new AgentRunLifecycle({
+		settlements,
+		runs,
+		events: runEvents,
+		decisions: runDecisions,
+		sessions,
+		transactions: input.transactionRunner,
+		contextBuilder: context,
+		provenance: input.provenance,
+		conversations,
+		runner,
+		eventBus
+	});
+
 	return {
 		conversations,
 		preferences,
@@ -139,6 +157,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		sessions,
 		context,
 		workflowRunner: new WorkflowRunner({
+			settlements,
+			transactions: input.transactionRunner,
 			runs,
 			events: runEvents,
 			conversations,
@@ -149,18 +169,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 			},
 			defaultModel: normalizeLanguageModelId(input.defaultModel)
 		}),
-		executor: new AgentRunLifecycle({
-			runs,
-			events: runEvents,
-			decisions: runDecisions,
-			sessions,
-			transactions: input.transactionRunner,
-			contextBuilder: context,
-			provenance: input.provenance,
-			conversations,
-			runner,
-			eventBus
-		}),
+		executor,
+		recovery: new RunRecovery(runs, executor, settlements, eventBus),
 		eventBus
 	};
 };

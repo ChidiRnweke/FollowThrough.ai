@@ -1,3 +1,5 @@
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { describe, expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentRunId, AgentEvent, Conversation, ConversationId } from '$lib/models/agent';
@@ -11,6 +13,7 @@ const setup = () => {
 	const actor = testActor();
 	const runs = new InMemoryAgentRunPersistence();
 	const created: Conversation[] = [];
+	const transactions = new InMemoryTransactionRunner([runs]);
 	const activeRuns = {
 		controllers: new Map<AgentRunId, AbortController>(),
 		register: (runId: AgentRunId) => {
@@ -24,6 +27,8 @@ const setup = () => {
 	const runner = new WorkflowRunner({
 		runs,
 		events: runs,
+		transactions,
+		settlements: new RunSettlements(runs, runs, transactions),
 		conversations: {
 			createWorkflow: async (
 				ctx: ActorContext,
@@ -177,5 +182,27 @@ describe('WorkflowRunner', () => {
 		await settle(runs, receipt.runId);
 
 		expect(runs.runs.find((item) => item.id === receipt.runId)?.status).toBe('cancelled');
+	});
+});
+
+describe('workflow completion racing cancellation', () => {
+	it('does not publish a result when cancellation wins despite an ignored abort', async () => {
+		const { actor, runner, runs, activeRuns } = setup();
+		let finish!: (result: string) => void;
+		const result = new Promise<string>((resolve) => {
+			finish = resolve;
+		});
+		const receipt = await runner.start(
+			actor,
+			task(() => result)
+		);
+		await runs.transition(receipt.runId, 'running', 'cancelling');
+		activeRuns.abort(receipt.runId);
+		finish('must not reach the editor');
+		await settle(runs, receipt.runId);
+		expect({
+			status: runs.runs[0].status,
+			results: runs.events.filter((record) => record.event.type === 'workflow_result')
+		}).toEqual({ status: 'cancelled', results: [] });
 	});
 });

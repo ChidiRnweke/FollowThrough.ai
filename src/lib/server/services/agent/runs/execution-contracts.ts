@@ -41,3 +41,11 @@ export interface WorkflowRunTask<Result> {
 export interface WorkflowRunStarter {
 	start<Result>(actor: ActorContext, task: WorkflowRunTask<Result>): Promise<AgentRunReceipt>;
 }
+
+export interface RunSettlement {
+	settle(
+		runId: AgentRunId,
+		outcome: import('$lib/models/agent').RunSettlementOutcome,
+		materialize: (run: AgentRun) => Promise<void>
+	): Promise<import('$lib/models/agent').RunSettlementResult>;
+}

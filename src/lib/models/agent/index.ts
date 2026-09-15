@@ -1940,3 +1940,71 @@ export const configuredAgentModels = (
 	}
 	return result;
 };
+
+export type RunSettlementOutcome =
+	| { readonly kind: 'completed'; readonly conversationId: ConversationId; readonly model: string }
+	| {
+			readonly kind: 'workflow_completed';
+			readonly conversationId: ConversationId;
+			readonly model: string;
+			readonly action: NoteActionKind;
+			readonly result: AgentPayload;
+	  }
+	| { readonly kind: 'cancelled'; readonly message: string }
+	| {
+			readonly kind: 'failed';
+			readonly code: string;
+			readonly message: string;
+			readonly retryable: boolean;
+	  };
+export type RunSettlementResult =
+	{ readonly kind: 'settled'; readonly run: AgentRun } | { readonly kind: 'lost' };
+export interface RunSettlementPlan {
+	readonly expected: 'running' | 'cancelling';
+	readonly status: 'completed' | 'cancelled' | 'failed';
+	readonly patch: Partial<AgentRun>;
+	readonly events: readonly AgentEvent[];
+}
+export function decideRunSettlement(
+	runId: AgentRunId,
+	outcome: RunSettlementOutcome,
+	finishedAt: DateTime
+): RunSettlementPlan {
+	switch (outcome.kind) {
+		case 'completed':
+		case 'workflow_completed':
+			return {
+				expected: 'running',
+				status: 'completed',
+				patch: { finishedAt, serializedState: undefined, pendingDecisions: [] },
+				events: [
+					...(outcome.kind === 'workflow_completed'
+						? [{ type: 'workflow_result' as const, action: outcome.action, result: outcome.result }]
+						: []),
+					{ type: 'completed', runId, conversationId: outcome.conversationId, model: outcome.model }
+				]
+			};
+		case 'cancelled':
+			return {
+				expected: 'cancelling',
+				status: 'cancelled',
+				patch: { finishedAt, failure: 'The request was cancelled' },
+				events: [{ type: 'cancelled', runId, message: outcome.message }]
+			};
+		case 'failed':
+			return {
+				expected: 'running',
+				status: 'failed',
+				patch: { finishedAt, failure: outcome.message, providerErrorCode: outcome.code },
+				events: [
+					{
+						type: 'failed',
+						runId,
+						code: outcome.code,
+						message: outcome.message,
+						retryable: outcome.retryable
+					}
+				]
+			};
+	}
+}

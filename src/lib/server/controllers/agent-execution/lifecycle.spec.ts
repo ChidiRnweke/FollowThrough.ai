@@ -1,3 +1,4 @@
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { describe, expect, it } from 'vitest';
 import { AgentProviderFailure } from '$lib/models/agent';
 import type {
@@ -82,12 +83,14 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		updatedAt: testTime
 	};
 	runs.runs.push(run);
+	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new AgentRunLifecycle({
 		runs,
 		events: runs,
 		decisions: runs,
 		sessions,
-		transactions: new InMemoryTransactionRunner([runs, sessions]),
+		transactions,
+		settlements: new RunSettlements(runs, runs, transactions),
 		contextBuilder: options?.contextBuilder ?? { build: async () => resolvedContext },
 		provenance: {
 			record: async () => {
@@ -341,7 +344,10 @@ describe('settling a run whose execution threw', () => {
 	const crash = async (error: unknown) => {
 		const context = setup(throwingRunner(error));
 		await context.lifecycle.execute(testRunId, new AbortController().signal).catch(() => undefined);
-		await context.lifecycle.failRun(testRunId, error);
+		await context.lifecycle.failRun(
+			testRunId,
+			error instanceof Error ? error : new Error(String(error))
+		);
 		return context;
 	};
 
@@ -401,7 +407,10 @@ describe('settling a run whose execution threw', () => {
 			]
 		});
 		await context.runs.transition(testRunId, 'queued', 'running');
-		await context.lifecycle.failRun(testRunId, error);
+		await context.lifecycle.failRun(
+			testRunId,
+			error instanceof Error ? error : new Error(String(error))
+		);
 		return context;
 	};
 
@@ -458,12 +467,12 @@ describe('telling the client what a mutation left stale', () => {
 	it('reports each mutation the provider gave no call id for', async () => {
 		expect(
 			await staleResources([{ toolName: 'save_note' }, { toolName: 'archive_project' }])
-		).toEqual(['save_note', 'archive_project']);
+		).toEqual(['workspace', 'workspace']);
 	});
 
-	it('reports an identified mutation once its call settles', async () => {
+	it('reports a committed mutation regardless of its provider call id', async () => {
 		expect(await staleResources([{ toolName: 'save_note', callId: 'call-1' }])).toEqual([
-			'save_note'
+			'workspace'
 		]);
 	});
 });

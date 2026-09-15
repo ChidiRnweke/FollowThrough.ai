@@ -1006,12 +1006,12 @@ export class ChatStore {
 			onOpen: () => {
 				if (generation === this.connectionGeneration) this.connection = 'connected';
 			},
-			onEvent: (record) => {
+			onEvent: async (record) => {
 				if (generation !== this.connectionGeneration) return;
 				if (BigInt(record.cursor) <= BigInt(this.cursor)) return;
+				await this.apply(reply, record.event, record.attempt);
 				this.cursor = record.cursor;
 				this.storage.save({ runId, cursor: this.cursor, attempt: this.attempt });
-				this.apply(reply, record.event, record.attempt);
 			},
 			onError: () => {
 				if (generation === this.connectionGeneration)
@@ -1079,7 +1079,14 @@ export class ChatStore {
 		}
 	}
 
-	private apply(reply: ChatEntry, event: AgentEvent, attempt: number): void {
+	private async apply(reply: ChatEntry, event: AgentEvent, attempt: number): Promise<void> {
+		if (
+			event.type === 'resources_stale' ||
+			event.type === 'completed' ||
+			event.type === 'cancelled' ||
+			(event.type === 'failed' && !event.retryable)
+		)
+			await this.resources?.synchronize();
 		if (event.type === 'run_queued') {
 			this.runStatus = 'queued';
 			reply.status = 'queued';
@@ -1160,13 +1167,8 @@ export class ChatStore {
 			this.runStatus = 'completed';
 			this.conversationId = event.conversationId;
 			this.detach();
-		} else if (event.type === 'resources_stale') void this.resources?.synchronize();
-		if (
-			event.type === 'completed' ||
-			event.type === 'cancelled' ||
-			(event.type === 'failed' && !event.retryable)
-		)
-			void this.resources?.synchronize();
+		}
+
 		this.storage.save({
 			...(this.runId ? { runId: this.runId } : {}),
 			cursor: this.cursor,

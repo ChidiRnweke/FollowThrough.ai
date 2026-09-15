@@ -42,7 +42,7 @@ export class InMemoryNoteActionRunTransport {
 		};
 	}
 
-	async cancel(runId: AgentRunId): Promise<unknown> {
+	async cancel(runId: AgentRunId): Promise<void> {
 		this.cancelled.push(runId);
 		return undefined;
 	}

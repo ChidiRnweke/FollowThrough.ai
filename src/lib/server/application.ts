@@ -551,8 +551,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	return {
 		controllers: controllerFactory,
 		recoverInterruptedRuns: async () =>
-			(await runRepository.recoverInterrupted('Process restarted')) +
-			(await attachmentRepository.failInterrupted()),
+			(await agentCapability.recovery.recover()) + (await attachmentRepository.failInterrupted()),
 		backgroundTasks: [knowledgeSearch.maintenance, attachmentCapability.retention],
 		eventBus,
 		provenance,

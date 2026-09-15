@@ -14,11 +14,9 @@ const runId = 'run-1' as AgentRunId;
 const setup = () => {
 	const transport = new InMemoryNoteActionRunTransport();
 	const storage = new InMemoryNoteActionRunStorage();
-	return {
-		transport,
-		storage,
-		store: new NoteActionRunsStore(noteId, transport, storage)
-	};
+	const store = new NoteActionRunsStore(noteId, transport, storage);
+	store.on('convert', () => {});
+	return { transport, storage, store };
 };
 
 /** Starts a tracked run and returns the promise callers await on the live path. */

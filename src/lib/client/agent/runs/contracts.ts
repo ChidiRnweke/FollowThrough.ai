@@ -26,7 +26,7 @@ export interface AgentRunTransport {
 		runId: AgentRunId;
 		after: string;
 		onOpen: () => void;
-		onEvent: (record: AgentRunEventRecord) => void;
+		onEvent: (record: AgentRunEventRecord) => void | Promise<void>;
 		onError: () => void;
 	}): AgentRunEventConnection;
 }

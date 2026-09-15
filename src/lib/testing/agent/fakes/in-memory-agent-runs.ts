@@ -212,21 +212,8 @@ export class InMemoryAgentRunPersistence
 		return updated;
 	}
 
-	async recoverInterrupted(failureMessage: string): Promise<number> {
-		let count = 0;
-		this.runs = this.runs.map((run) => {
-			if (run.status === 'running' || run.status === 'cancelling') {
-				count++;
-				return {
-					...run,
-					status: 'failed' as const,
-					failure: failureMessage,
-					finishedAt: new Date().toISOString() as DateTime
-				};
-			}
-			return run;
-		});
-		return count;
+	async listInterrupted(): Promise<readonly AgentRun[]> {
+		return this.runs.filter((run) => run.status === 'running' || run.status === 'cancelling');
 	}
 
 	async append(
