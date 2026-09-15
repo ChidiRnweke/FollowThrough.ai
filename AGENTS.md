@@ -172,6 +172,9 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
 4. Classify the method in the `AgentToolCoverage` map in
    `src/lib/server/factories/agent/agent-tool-factory.ts`. The map is total over each controller's
    methods; a missing entry is a type error.
+5. Register the public method in `src/lib/server/factories/controller-surfaces.ts`. This map is
+   total over controller interfaces. Boundary instrumentation uses it to start tracing before
+   execution and to leave internal helpers untouched.
 
 Boundary logging and tracing are automatic (`instrumentedController` wraps every controller):
 one `domain.method` span, info before / debug after / warn on `DomainError` / error otherwise,

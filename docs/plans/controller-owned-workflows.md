@@ -102,12 +102,15 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
 - P01 and the note portion of P12: implemented in merged PR #66; skill policy still needs review.
 - P02: return the persisted accepted task suggestion; 13 extraction tests, type checking,
   architecture audits, and the full 3,504-test suite passed.
+- P03: start logging and tracing before public capability execution. The explicit, typed
+  surface excludes helpers; internal calls retain one boundary. Sixteen instrumentation tests
+  and the full 3,506-test suite passed, including pre-await child span parentage.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.
-- P03–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
+- P04–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
