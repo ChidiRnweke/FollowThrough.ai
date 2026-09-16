@@ -7,8 +7,8 @@ import type {
 	AgentRunId,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import { readAgentEvent, selectionActionEvent } from '../stored-values';
-import type { SelectionActionResult } from '../agent-runs';
+import { readAgentEvent, noteActionEvent } from '../stored-values';
+import type { NoteActionResult } from '../agent-runs';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -65,11 +65,11 @@ const toDecision = (row: typeof schema.agentRunDecisions.$inferSelect): AgentRun
 });
 
 export class AgentRunEventRecords implements AgentRunEventRepository {
-	appendSelectionResult(
+	appendNoteActionResult(
 		runId: AgentRunId,
-		result: SelectionActionResult
+		result: NoteActionResult
 	): Promise<AgentRunEventRecord> {
-		return this.append(runId, 1, selectionActionEvent(result));
+		return this.append(runId, 1, noteActionEvent(result));
 	}
 	constructor(private readonly database: Database) {}
 

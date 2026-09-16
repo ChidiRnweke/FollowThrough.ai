@@ -429,6 +429,14 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason:
 				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		},
+		executeDiagramRun: {
+			kind: 'excluded',
+			reason: 'Executes a saved diagram action after its durable claim.'
+		},
+		recoverQueuedDiagramRuns: {
+			kind: 'excluded',
+			reason: 'Startup recovery resumes saved diagram actions.'
 		}
 	},
 	diagramStudio: {

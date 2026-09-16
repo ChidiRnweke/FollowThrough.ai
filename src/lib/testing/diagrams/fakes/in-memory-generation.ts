@@ -16,18 +16,28 @@ export class InMemoryDiagramGeneration implements DiagramGenerator {
 	mermaidSource = 'flowchart LR\nA --> B';
 	submissions: DiagramSubmission[] | undefined;
 	failure: Error | undefined;
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> | undefined;
+	readonly mermaidByModel = new Map<string, string>();
 
 	open(request: DiagramGenerationRequest, signal?: AbortSignal): DiagramGenerationSession {
 		const candidates = this.submissions ?? [
 			request.operation === 'convert'
 				? { kind: 'drawio' as const, title: 'Converted architecture', source: this.source }
-				: { kind: 'mermaid' as const, source: this.mermaidSource }
+				: {
+						kind: 'mermaid' as const,
+						source: this.mermaidByModel.get(request.model) ?? this.mermaidSource
+					}
 		];
 		let accepted: DiagramSubmission | undefined;
 		let pending: string | undefined;
 		const failure = this.failure;
+		const started = this.started;
+		const completion = this.completion;
 		return {
 			events: (async function* (): AsyncGenerator<DiagramGenerationEvent> {
+				started.resolve();
+				await completion;
 				if (failure) throw failure;
 				for (const draft of candidates) {
 					signal?.throwIfAborted();

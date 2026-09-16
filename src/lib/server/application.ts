@@ -201,7 +201,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	}).library;
 	const agentCapability = createAgentCapability({
 		db,
-		transactionRunner,
 		controllers: () => controllerFactory,
 		toolRetriever,
 		files: agentFilesCapability.repository,
@@ -311,7 +310,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			markdownToContent: deliverables.markdownToContent,
 			exportPreparer: deliverables.prepareExport,
 			pdfGenerator: deliverables.pdfGenerator,
-			selectionRequests: agentCapability.selectionRequests,
+			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
 			runEvents: eventBus,
 			promiseGeneration: todoCapability.promiseGeneration,
@@ -325,7 +324,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			relationshipClassifier: relationshipCapability.classifier,
 			suggestionCreator: suggestions,
 			transactionRunner,
-			selectionRequests: agentCapability.selectionRequests,
+			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
 			runEvents: eventBus,
 			relationshipGeneration: relationshipCapability.generation,
@@ -337,7 +336,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceRanker: referenceCapability.ranking,
 			suggestionCreator: suggestions,
 			transactionRunner,
-			selectionRequests: agentCapability.selectionRequests,
+			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
 			runEvents: eventBus,
 			referenceModel: referenceCapability.model
@@ -360,7 +359,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			drawioTextExtractor: diagramCapability.textExtractor,
 			diagramWriter: diagrams,
 			diagramIndexer,
-			workflowRunner: agentCapability.workflowRunner
+			noteActionRequests: agentCapability.noteActionRequests,
+			runSettlements,
+			runEvents: eventBus
 		},
 		diagramStudio: {
 			diagramSourceNotes: notes,
@@ -634,7 +635,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 				interrupted +
 				(await controllerFactory.todos().recoverQueuedPromiseRuns()) +
 				(await controllerFactory.references().recoverQueuedReferenceRuns()) +
-				(await controllerFactory.relationships().recoverQueuedRelatedNoteRuns())
+				(await controllerFactory.relationships().recoverQueuedRelatedNoteRuns()) +
+				(await controllerFactory.diagrams().recoverQueuedDiagramRuns())
 			);
 		},
 		backgroundTasks: [

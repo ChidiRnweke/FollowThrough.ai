@@ -1,5 +1,5 @@
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
 import { normalizeLanguageModelId, webSearchOptionsFromEnvironment } from '$lib/models/agent';
 import type { Database } from '$lib/server/db';
@@ -15,13 +15,11 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
 import {
 	AgentModels,
 	AgentPreferenceCatalog,
@@ -29,7 +27,6 @@ import {
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { WorkflowRunner } from '$lib/server/controllers/workflow-execution/controller';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
@@ -41,7 +38,6 @@ import { AgentReplayVirtualizer } from '$lib/server/services/agent/conversations
 
 export interface AgentCapabilityInput {
 	readonly db: Database;
-	readonly transactionRunner: TransactionRunner;
 	readonly controllers: () => ProductionControllerFactory;
 	readonly toolRetriever: ToolRetriever;
 	readonly files: AgentFileRepository;
@@ -68,10 +64,8 @@ export interface AgentCapability {
 	readonly context: AgentContext;
 	readonly runner: AgentReasoning;
 	readonly settlements: RunSettlements;
-	readonly selectionRequests: SelectionRequests;
+	readonly noteActionRequests: NoteActionRequests;
 	readonly eventBus: AgentEvents;
-	/** Runs the editor's note actions as cancellable, resumable agent runs. */
-	readonly workflowRunner: WorkflowRunner;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
@@ -126,22 +120,9 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		runDecisions,
 		sessions,
 		context,
-		workflowRunner: new WorkflowRunner({
-			settlements,
-			transactions: input.transactionRunner,
-			runs,
-			events: runEvents,
-			conversations,
-			eventBus,
-			activeRuns: {
-				register: registerActiveRun,
-				release: releaseActiveRun
-			},
-			defaultModel: normalizeLanguageModelId(input.defaultModel)
-		}),
 		runner,
 		settlements,
-		selectionRequests: new SelectionRequests(runs, runEvents, conversationRepository),
+		noteActionRequests: new NoteActionRequests(runs, runEvents, conversationRepository),
 		eventBus
 	};
 };

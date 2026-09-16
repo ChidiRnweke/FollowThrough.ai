@@ -1,3 +1,4 @@
+import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -132,6 +133,61 @@ export interface ConvertInlineMermaidInput {
 	readonly source: string;
 	readonly instruction?: string;
 }
+
+export type StartGenerateMermaidInput = GenerateMermaidDiagramInput & {
+	readonly requestId: string;
+};
+export type StartReviseInlineMermaidInput = ReviseInlineMermaidInput & {
+	readonly requestId: string;
+};
+export type StartConvertInlineMermaidInput = ConvertInlineMermaidInput & {
+	readonly requestId: string;
+};
+
+const actionNoteIdSchema = z.uuid().transform((value) => value as NoteId);
+export const startGenerateMermaidSchema = z
+	.object({
+		requestId: z.uuid(),
+		selection: z
+			.object({
+				noteId: actionNoteIdSchema,
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+			.refine(
+				(selection) => selection.to >= selection.from,
+				'Selection end must follow its start.'
+			),
+		instruction: z.string().optional()
+	})
+	.strict() satisfies z.ZodType<StartGenerateMermaidInput>;
+export const startReviseInlineMermaidSchema = z
+	.object({
+		requestId: z.uuid(),
+		noteId: actionNoteIdSchema,
+		source: z.string(),
+		instruction: z.string(),
+		renderedPngDataUrl: z.string().max(14_000_000).optional()
+	})
+	.strict() satisfies z.ZodType<StartReviseInlineMermaidInput>;
+export const startConvertInlineMermaidSchema = z
+	.object({
+		requestId: z.uuid(),
+		noteId: actionNoteIdSchema,
+		source: z.string().trim().min(1).max(50_000),
+		instruction: z.string().trim().max(2_000).optional()
+	})
+	.strict() satisfies z.ZodType<StartConvertInlineMermaidInput>;
+
+export const diagramActionSubmissionSchema = z.discriminatedUnion('operation', [
+	startGenerateMermaidSchema.extend({ operation: z.literal('generate') }),
+	startReviseInlineMermaidSchema.extend({ operation: z.literal('revise') }),
+	startConvertInlineMermaidSchema.extend({ operation: z.literal('convert') })
+]);
+export type DiagramActionSubmission = z.infer<typeof diagramActionSubmissionSchema>;
 
 export interface ConvertInlineMermaidOutput<Proposal> {
 	readonly suggestion: Proposal;

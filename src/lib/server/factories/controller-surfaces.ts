@@ -90,7 +90,9 @@ export const controllerSurfaces = {
 		promote: true,
 		startGenerateMermaid: true,
 		startReviseInlineMermaid: true,
-		startConvertInlineMermaid: true
+		startConvertInlineMermaid: true,
+		executeDiagramRun: true,
+		recoverQueuedDiagramRuns: true
 	},
 	diagramStudio: {
 		synchronize: true,
