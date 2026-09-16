@@ -10,7 +10,7 @@ import {
 	type NoteRelationship,
 	type NoteRevision
 } from '$lib/models/notes';
-import { parseProvenance, type Provenance, type SourceAnchor } from '$lib/models/provenance';
+import { provenanceSchema, type Provenance, type SourceAnchor } from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
 import { skillMetadataSchema } from '$lib/models/skills';
@@ -101,7 +101,7 @@ export const toAnchor = (row: typeof schema.sourceAnchors.$inferSelect): SourceA
 	});
 
 export const toProvenance = (row: typeof schema.provenance.$inferSelect): Provenance =>
-	parseProvenance({
+	provenanceSchema.parse({
 		id: row.id,
 		userId: row.userId,
 		producerKind: row.producerKind,

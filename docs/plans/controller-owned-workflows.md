@@ -498,6 +498,13 @@ port and its fake are removed. Their receipt, success, failure and cancellation 
 controller behavior tests and PostgreSQL contracts for actual diagrams and proposal storage.
 The remaining global model ownership and content-change review stays open.
 
+Provenance record construction: NoteProvenance and SelectionOrigins now build resolved record values
+directly from typed producer input. The database mapper parses stored rows with the existing Zod schema.
+The model's procedural parseProvenance/asProvenance wrappers and their unknown-type allowance are
+removed. The construction-only tests are replaced by actual service evidence; malformed stored input
+still has a schema-boundary test. The memory proposal fixture now uses the real provenance service.
+Provenance presentation and suggestion view assembly still require their separate ownership cleanup.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

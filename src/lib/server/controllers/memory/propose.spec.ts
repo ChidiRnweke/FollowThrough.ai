@@ -2,11 +2,10 @@ import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-mem
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { MemoryDependencies } from './controller';
 import { describe, expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
-import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { ValidationError } from '$lib/errors';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import { NoteProvenance } from '$lib/server/services/notes/provenance';
+import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { Memory } from './controller';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -23,25 +22,8 @@ import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
-	testNow,
-	testProjectId,
-	testProvenanceId
+	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
-class RecordingProvenanceRecorder implements ProvenanceRecorder {
-	records: Provenance[] = [];
-	constructor(private readonly repository: InMemoryProvenanceRepository) {}
-
-	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
-		const provenance = asProvenance(input, {
-			id: testProvenanceId(this.records.length + 1),
-			userId: actor.userId,
-			createdAt: testNow
-		});
-		this.records.push(provenance);
-		return this.repository.insert(actor, provenance);
-	}
-}
 
 type ProjectAddition = Extract<ProposeMemoryChangeInput, { scope: 'project'; operation: 'add' }>;
 const addInput = (overrides: Partial<ProjectAddition> = {}): ProjectAddition => ({
@@ -57,7 +39,7 @@ const setup = () => {
 	const entries = new InMemoryMemoryEntryRepository();
 	const projects = new InMemoryProjectRepository();
 	const provenanceRepository = new InMemoryProvenanceRepository();
-	const provenance = new RecordingProvenanceRecorder(provenanceRepository);
+	const provenance = new NoteProvenance(provenanceRepository, new InMemoryAnchorRepository());
 	const suggestions = new InMemorySuggestions();
 	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
@@ -84,7 +66,16 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([entries, search, suggestions, effects])
 		})
 	);
-	return { entries, provenance, suggestions, trust, controller, search, memory, projects };
+	return {
+		entries,
+		provenance: provenanceRepository,
+		suggestions,
+		trust,
+		controller,
+		search,
+		memory,
+		projects
+	};
 };
 
 describe('Memory proposal orchestration invariants', () => {
@@ -97,7 +88,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('records agent provenance on the memory pipeline', async () => {
 		const { provenance, controller } = setup();
 		await controller.propose(testActor(), addInput());
-		expect(provenance.records[0]).toMatchObject({ pipeline: 'memory' });
+		expect(provenance.provenance[0]).toMatchObject({ pipeline: 'memory' });
 	});
 
 	it('leaves the entry uncreated without an authorizing trust policy', async () => {

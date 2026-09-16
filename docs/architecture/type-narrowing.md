@@ -434,8 +434,9 @@ produce.
   - [x] `ProvenanceRequest` distributes: the six hand-written `Omit<Provenance, …>` signatures
         collapsed the union to its shared keys, which is why every caller setting `pipeline`,
         `runId` or `model` was a type error.
-  - [x] `asProvenance` completes a request through the model's own parser, so the four sites that
-        spread a union member into a literal no longer widen it out of every arm.
+  - [x] Services construct complete provenance values from the discriminated request union.
+        TypeScript checks the producer-specific fields. Stored rows are parsed with `provenanceSchema`
+        in the database mapper; models contain the schema instead of procedural parsing wrappers.
   - [x] Delete the seven duplicate open-shaped declarations: `Provenance` in
         `models/{workspace,notes,memory,todos,suggestions}` and `SuggestionView` in
         `models/{memory,notes}`, plus the suggestion type tree `models/notes` had copied to

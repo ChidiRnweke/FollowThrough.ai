@@ -1,12 +1,11 @@
 import type { ActorContext } from '$lib/models/identity';
 import { decideSelection, type Note, type TextSelection } from '$lib/models/notes';
-import {
-	asProvenance,
-	type SelectionSource,
-	type SelectionOrigin,
-	type SelectionProducer,
-	type SourceAnchorId,
-	type ProvenanceId
+import type {
+	SelectionSource,
+	SelectionOrigin,
+	SelectionProducer,
+	SourceAnchorId,
+	ProvenanceId
 } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
@@ -52,17 +51,13 @@ export class SelectionOrigins {
 		source: SelectionSource<Note>,
 		producer: SelectionProducer
 	): Promise<SelectionOrigin<Note>> {
-		const provenance = await this.provenance.insert(
-			actor,
-			asProvenance(
-				{ ...producer, sourceAnchorId: source.anchor.id },
-				{
-					id: crypto.randomUUID() as ProvenanceId,
-					userId: actor.userId,
-					createdAt: new Date().toISOString() as DateTime
-				}
-			)
-		);
+		const provenance = await this.provenance.insert(actor, {
+			...producer,
+			sourceAnchorId: source.anchor.id,
+			id: crypto.randomUUID() as ProvenanceId,
+			userId: actor.userId,
+			createdAt: new Date().toISOString() as DateTime
+		});
 		return { ...source, provenance };
 	}
 }

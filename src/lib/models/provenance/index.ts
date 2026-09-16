@@ -338,22 +338,6 @@ const provenanceSchemas = [
 
 export const provenanceSchema: z.ZodType<Provenance> = z.union(provenanceSchemas);
 
-/** Parse a stored provenance row before its producer-specific facts enter domain logic. */
-// audit-allow: no-unknown-type — The persisted provenance row, parsed at the model that owns the union.
-export const parseProvenance = (value: unknown): Provenance => provenanceSchema.parse(value);
-
-/**
- * A request plus the identity storage gave it, as one record.
- *
- * Parsed rather than spread into a literal. Spreading a union member widens it —
- * the result is one object carrying every arm's fields, which no longer matches
- * any arm — and the four call sites that did it each answered the resulting
- * error differently. Parsing keeps the arm and refuses a request that could
- * never be a valid record, at the point it is built rather than at the database.
- */
-export const asProvenance = (request: ProvenanceRequest, identity: StoredIdentity): Provenance =>
-	parseProvenance({ ...request, ...identity });
-
 export interface SelectionSource<Document> {
 	readonly note: Document;
 	readonly anchor: SourceAnchor;
