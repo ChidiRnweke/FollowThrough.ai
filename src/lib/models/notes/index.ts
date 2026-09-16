@@ -10,6 +10,11 @@ type ProjectId = Brand<string, 'ProjectId'>;
 
 export type NoteId = Brand<string, 'NoteId'>;
 
+export type FolderContextResolution =
+	| { readonly kind: 'ready'; readonly noteIds: readonly NoteId[] }
+	| { readonly kind: 'incomplete' }
+	| { readonly kind: 'missing'; readonly folderId: NoteId };
+
 export type NoteEtag = Brand<string, 'NoteEtag'>;
 
 export type NoteRevisionId = Brand<string, 'NoteRevisionId'>;

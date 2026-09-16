@@ -49,6 +49,30 @@ const setup = async (skillProject = testProjectId()) => {
 };
 
 describe('Agent grounding invariants', () => {
+	it('retains every explicitly requested note from a large folder', async () => {
+		const { builder, notes } = await setup();
+		const attached = Array.from({ length: 80 }, (_, index) =>
+			noteBuilder({
+				id: testNoteId(100 + index),
+				title: `Research ${index}`,
+				plainText: `Finding ${index}`
+			})
+		);
+		notes.notes = [...notes.notes, ...attached];
+		const context = await builder.build(
+			testActor(),
+			{
+				conversationId: testConversationId(),
+				noteId: testNoteId(),
+				prompt: 'Summarize the folder',
+				contextNoteIds: attached.map((note) => note.id)
+			},
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.contextNotes.map((note) => note.noteId)).toEqual(
+			attached.map((note) => note.id)
+		);
+	});
 	it('keeps user memory out of application context', async () => {
 		const { builder } = await setup();
 		const context = await builder.build(
