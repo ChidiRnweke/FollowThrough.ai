@@ -9,7 +9,7 @@ import {
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -29,7 +29,7 @@ const setup = () => {
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
 		new InMemoryProvenanceRepository(),
-		new InMemoryProjects()
+		new InMemoryProjectRepository()
 	);
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({

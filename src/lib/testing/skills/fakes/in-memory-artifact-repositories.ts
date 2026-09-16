@@ -231,8 +231,14 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 		);
 	}
 
-	async delete(actor: ActorContext, id: DiagramId) {
+	async deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean> {
+		const eligible = this.diagrams.find(
+			(item) => item.id === id && item.userId === actor.userId && item.archivedAt !== undefined
+		);
+		if (!eligible) return false;
 		this.diagrams = this.diagrams.filter((item) => item.id !== id || item.userId !== actor.userId);
+		this.diagramRevisions = this.diagramRevisions.filter((revision) => revision.diagramId !== id);
+		return true;
 	}
 }
 
