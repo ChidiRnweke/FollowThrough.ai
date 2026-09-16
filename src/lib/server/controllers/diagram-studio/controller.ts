@@ -1,3 +1,4 @@
+import { mutationResource } from '$lib/services/workspace/commands';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
@@ -238,10 +239,11 @@ export class DiagramStudio implements DiagramStudioController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input, prepared.current);
-					return this.dependencies.syncMutations.complete(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);

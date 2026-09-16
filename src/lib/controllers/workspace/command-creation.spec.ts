@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newNote, newProject } from './index';
+import { newNote, newProject } from '$lib/controllers/workspace/commands';
 import {
 	projectBuilder,
 	noteBuilder,

@@ -54,6 +54,6 @@ for different behavior, such as PDF and DOCX layout, or make server-only actions
 
 - `src/lib/models/todos/index.ts` defines `applyTodoEdit`, which is reused by browser command
   preparation and the task controller.
-- `src/lib/models/workspace-mutations/index.ts` prepares optimistic commands from cached records.
+- `src/lib/controllers/workspace/commands.ts` prepares optimistic commands from cached records.
 - `src/lib/server/services/notes/catalog.ts` checks current records for note lifecycle operations.
 - ADR 0040 defines the durable command queue and review of conflicting edits.

@@ -1,5 +1,4 @@
 import { sameNoteDraft } from '$lib/models/notes';
-import { applySkillMetadataEdit } from '$lib/models/skills';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -103,28 +102,29 @@ export class SkillLibrary {
 		);
 	}
 
-	async prepareEdit(actor: ActorContext, input: SkillEditInput): Promise<PreparedSkillEdit<Note>> {
-		const current = await this.load(actor, input.noteId);
+	async prepareEdit(
+		actor: ActorContext,
+		current: Skill<Note>,
+		input: Omit<SkillEditInput, 'noteId'>
+	): Promise<PreparedSkillEdit<Note>> {
 		const displayName =
 			input.displayName === undefined ? current.note.title : input.displayName.trim();
 		if (!displayName) throw new ValidationError('Skill name is required');
 		if (!input.content) {
-			const skill = { ...current, ...applySkillMetadataEdit(current, input) };
 			return displayName === current.note.title
-				? { kind: 'metadata', skill }
-				: { kind: 'title', skill, document: { ...current.note, title: displayName } };
+				? { kind: 'metadata', skill: current }
+				: { kind: 'title', skill: current, document: { ...current.note, title: displayName } };
 		}
 		const manifest =
 			input.content.kind === 'manifest'
 				? input.content.manifest
 				: {
 						...this.portable(current),
-						description: input.description?.trim() || current.description,
 						instructions: input.content.text.trimEnd()
 					};
 		if (
 			(await this.skills.listAll(actor)).some(
-				(skill) => skill.noteId !== input.noteId && skill.slug === manifest.slug
+				(skill) => skill.noteId !== current.note.id && skill.slug === manifest.slug
 			)
 		)
 			throw new ValidationError('A skill with this portable name already exists');
@@ -157,11 +157,7 @@ export class SkillLibrary {
 				license: manifest.license,
 				compatibility: manifest.compatibility,
 				metadata: manifest.metadata,
-				allowImplicitInvocation: manifest.allowImplicitInvocation,
-				...(input.triggerHints
-					? { triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean) }
-					: {}),
-				...(input.isEnabled !== undefined ? { isEnabled: input.isEnabled } : {})
+				allowImplicitInvocation: manifest.allowImplicitInvocation
 			}
 		};
 	}

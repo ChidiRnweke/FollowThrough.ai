@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { memoryWrite, newMemory } from './index';
+import { memoryWrite, newMemory } from '$lib/controllers/workspace/commands';
 import {
 	memoryEntryBuilder,
 	testActor,

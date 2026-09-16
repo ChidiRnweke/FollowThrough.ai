@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteHasUnpublishedChanges } from './index';
+import { noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
 const note = noteBuilder({ currentRevision: 2, publishedRevision: 2 });
 it('offers publication for an offline edit without inventing a server revision', () => {
 	expect(

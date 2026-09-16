@@ -4,7 +4,8 @@ import type { WriteDraft } from '$lib/models/outbox';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
-import { assertWorkspaceWriteIdentity, type WorkspaceCommand } from './index';
+import { assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
+import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 
 const project = projectBuilder();
 const different = projectBuilder({

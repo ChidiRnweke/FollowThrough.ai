@@ -26,13 +26,14 @@ import {
 } from '$lib/models/workspace-records';
 import {
 	workspaceCommandSchema,
-	mutationResource,
-	prepareWorkspaceCommand,
-	workspaceCommandNeedsInventory,
 	type PreparedWorkspaceCommand,
-	assertWorkspaceWriteIdentity,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
+import { mutationResource, assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
+import {
+	prepareWorkspaceCommand,
+	workspaceCommandNeedsInventory
+} from '$lib/controllers/workspace/commands';
 import {
 	workspaceResourceKey,
 	type WorkspaceResourceType,

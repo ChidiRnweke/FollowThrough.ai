@@ -35,6 +35,7 @@ const setup = async (suffix: string) => {
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			skillEditor: library,
+			skillFinder: library,
 			skillUsageLister: library,
 			transactionRunner
 		})
