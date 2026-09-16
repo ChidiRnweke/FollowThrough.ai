@@ -1,7 +1,7 @@
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	BacklinkView,
+	BacklinkContext,
 	CreateRelationshipInput,
 	RelationshipId,
 	RelationshipClassification
@@ -41,9 +41,9 @@ export interface RelationshipFinder {
 export interface NoteLinkReconciler {
 	reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void>;
 }
-export interface BacklinkViewAssembler {
-	assemble(
+export interface BacklinkContextReader {
+	readContexts(
 		actor: ActorContext,
 		relationships: readonly NoteRelationship[]
-	): Promise<readonly BacklinkView[]>;
+	): Promise<readonly BacklinkContext[]>;
 }

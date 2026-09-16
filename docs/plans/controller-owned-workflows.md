@@ -521,6 +521,11 @@ note, project, anchor and provenance. Shared test fakes reuse these actual servi
 suggestion model retains types, schema objects and record-key values; it no longer constructs proposals
 or review views. Existing selection, proposal, controller and database tests cover the unchanged rules.
 
+Backlink and reference view ownership: RelationshipGraph and ReferenceLibrary read resolved records.
+Notes applies the shared presentation rules also used by WorkspaceViews. Their models no longer
+format these views. The existing server/downloaded note-view parity test covers both relationship
+endpoints and reference records. Relationship write policy and note projection remain open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

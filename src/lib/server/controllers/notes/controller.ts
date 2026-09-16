@@ -1,3 +1,5 @@
+import { assembleBacklinkView } from '$lib/services/relationships/presentation';
+import { assembleReferenceView } from '$lib/services/references/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
@@ -104,7 +106,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
 import type {
-	BacklinkViewAssembler,
+	BacklinkContextReader,
 	NoteLinkReconciler,
 	RelationshipFinder
 } from '$lib/server/services/relationships/contracts';
@@ -117,7 +119,7 @@ import type {
 } from '$lib/server/services/notes/contracts';
 import type {
 	ReferenceLister,
-	ReferenceViewAssembler
+	ReferenceContextReader
 } from '$lib/server/services/references/contracts';
 import type {
 	SuggestionLister,
@@ -336,9 +338,9 @@ export interface NotesDependencies {
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
 	relationshipFinder: RelationshipFinder;
-	backlinkViewAssembler: BacklinkViewAssembler;
+	backlinkContextReader: BacklinkContextReader;
 	referenceLister: ReferenceLister;
-	referenceViewAssembler: ReferenceViewAssembler;
+	referenceContextReader: ReferenceContextReader;
 	diagramLister: DiagramLister;
 	todoLister: TodoLister;
 	todoViewAssembler: TodoViewAssembler;
@@ -567,18 +569,22 @@ export class Notes implements NotesController {
 			this.dependencies.todoLister.list(actor, { noteId: input.noteId }),
 			this.dependencies.suggestionLister.listByStatus(actor, 'proposed', input.noteId)
 		]);
-		const [backlinks, referenceViews, todoViews, pendingContexts, sectionNumbering] =
+		const [backlinkContexts, referenceContexts, todoViews, pendingContexts, sectionNumbering] =
 			await Promise.all([
-				this.dependencies.backlinkViewAssembler.assemble(actor, relationships),
-				this.dependencies.referenceViewAssembler.assemble(actor, references),
+				this.dependencies.backlinkContextReader.readContexts(actor, relationships),
+				this.dependencies.referenceContextReader.readContexts(actor, references),
 				this.dependencies.todoViewAssembler.assemble(actor, todos),
 				this.dependencies.suggestionContextReader.readContexts(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
 		return assembleNoteView({
 			note,
-			backlinks,
-			references: referenceViews,
+			backlinks: backlinkContexts.map(({ relationship, source, target }) =>
+				assembleBacklinkView(relationship, source, target)
+			),
+			references: referenceContexts.map(({ reference, anchor }) =>
+				assembleReferenceView(reference, { anchor })
+			),
 			diagrams,
 			todos: todoViews,
 			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>

@@ -1,8 +1,7 @@
-import { assembleBacklinkView } from '$lib/models/relationships';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	BacklinkView,
+	BacklinkContext,
 	CreateRelationshipInput,
 	RelationshipId
 } from '$lib/models/relationships';
@@ -103,10 +102,10 @@ export class RelationshipGraph {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.relationships.listForNote(actor, noteId);
 	}
-	async assemble(
+	async readContexts(
 		actor: ActorContext,
 		relationships: readonly NoteRelationship[]
-	): Promise<readonly BacklinkView[]> {
+	): Promise<readonly BacklinkContext[]> {
 		return Promise.all(
 			relationships.map(async (relationship) => {
 				const [source, target] = await Promise.all([
@@ -114,7 +113,7 @@ export class RelationshipGraph {
 					this.notes.findById(actor, relationship.targetNoteId)
 				]);
 				if (!source || !target) throw new NotFoundError('Related note was not found');
-				return assembleBacklinkView(relationship, source, target);
+				return { relationship, source, target };
 			})
 		);
 	}

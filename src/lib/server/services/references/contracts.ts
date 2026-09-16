@@ -33,8 +33,8 @@ export interface ReferenceDeleter {
 export interface ReferenceLister {
 	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]>;
 }
-export interface ReferenceViewAssembler {
-	assemble(
+export interface ReferenceContextReader {
+	readContexts(
 		actor: ActorContext,
 		references: readonly ExternalReference[]
 	): Promise<readonly ReferenceView[]>;

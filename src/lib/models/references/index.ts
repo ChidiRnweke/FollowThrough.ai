@@ -134,10 +134,3 @@ export interface ReferenceView {
 	readonly reference: ExternalReference;
 	readonly anchor?: SourceAnchor;
 }
-
-export function assembleReferenceView(
-	reference: ExternalReference,
-	facts: Pick<ReferenceView, 'anchor'>
-): ReferenceView {
-	return { reference, ...(facts.anchor ? { anchor: facts.anchor } : {}) };
-}

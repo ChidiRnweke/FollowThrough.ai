@@ -126,14 +126,8 @@ export function decideRelationshipWrite<
 	};
 }
 
-export function assembleBacklinkView(
-	relationship: NoteRelationship,
-	source: NoteRef,
-	target: NoteRef
-): BacklinkView {
-	return {
-		relationship,
-		sourceNote: { id: source.id, title: source.title },
-		targetNote: { id: target.id, title: target.title }
-	};
+export interface BacklinkContext {
+	readonly relationship: NoteRelationship;
+	readonly source: NoteRef;
+	readonly target: NoteRef;
 }

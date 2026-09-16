@@ -23,8 +23,10 @@ The shared projection is `services/suggestions/presentation.ts`; producer labels
 `services/provenance/presentation.ts`. `WorkspaceViews` uses those same presentation rules for
 downloaded records. Keep record loading and missing-download reporting in the adapters.
 
-The note, backlink and reference projection helpers still live in their models and remain part of
-the global ownership migration. Models are intended to retain values, types and schemas only.
+Backlink and reference presentation also lives in shared services. Their server services read the
+related records; Notes applies the same presentation rules that WorkspaceViews uses offline.
+The note projection helper remains in its model pending the global ownership migration.
+Models are intended to retain values, types and schemas only.
 
 `server/controllers/notes/view.spec.ts` compares server and downloaded views from the same records.
 
