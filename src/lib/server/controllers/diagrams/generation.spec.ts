@@ -16,10 +16,10 @@ const setup = () => {
 			...fixture,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			suggestionCreator: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([suggestions])
+			transactionRunner: new InMemoryTransactionRunner([suggestions, fixture.persistence])
 		})
 	);
-	return { ...fixture, controller };
+	return { ...fixture, controller, suggestions };
 };
 
 const revision = {
@@ -29,6 +29,20 @@ const revision = {
 };
 
 describe('Diagram generation run settlement', () => {
+	it('fails the run when the generated draw.io proposal cannot be saved', async () => {
+		const { controller, persistence, suggestions } = setup();
+		suggestions.failCreation = true;
+		await controller
+			.convertInlineMermaid(testActor(), {
+				noteId: testNoteId(),
+				source: revision.source
+			})
+			.catch(() => undefined);
+		expect(persistence.runs.map(({ status, failure }) => ({ status, failure }))).toEqual([
+			{ status: 'failed', failure: 'Suggestion creation failed' }
+		]);
+	});
+
 	it('marks the run failed when its source note cannot be loaded during preparation', async () => {
 		const { controller, persistence } = setup();
 		await controller
