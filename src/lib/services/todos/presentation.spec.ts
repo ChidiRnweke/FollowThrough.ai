@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { assembleTodoView } from './index';
+import { assembleTodoView } from './presentation';
 import {
 	anchorBuilder,
 	noteBuilder,

@@ -65,7 +65,7 @@ describe('Today projection parity', () => {
 			capabilityDependencies<WorkspaceDependencies>({
 				todoLister: tasks,
 				waitingOnFinder: tasks,
-				todoViewAssembler: tasks,
+				todoContextReader: tasks,
 				noteTreeReader: notes,
 				suggestionLister: suggestions,
 				suggestionExpirer: suggestions

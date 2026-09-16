@@ -280,24 +280,12 @@ export function applyTodoEdit(
 	return { ...edited, waitingOn: edited.responsibility === 'mine' ? undefined : edited.waitingOn };
 }
 
-/** A linked note supplies the task's display source; its extraction origin stays visible separately. */
-export function assembleTodoView(
-	todo: Todo,
-	facts: {
-		readonly anchor: SourceAnchor | null;
-		readonly origin: NoteRef | null;
-		readonly linked: NoteRef | null;
-		readonly provenance: Provenance | null;
-	}
-): TodoView {
-	const source = facts.linked ?? facts.origin;
-	return {
-		todo,
-		...(source ? { sourceNote: { id: source.id, title: source.title } } : {}),
-		...(facts.origin ? { originNote: { id: facts.origin.id, title: facts.origin.title } } : {}),
-		...(facts.anchor ? { anchor: facts.anchor } : {}),
-		...(facts.provenance ? { provenance: facts.provenance } : {})
-	};
+export interface TodoContext {
+	readonly todo: Todo;
+	readonly anchor: SourceAnchor | null;
+	readonly origin: NoteRef | null;
+	readonly linked: NoteRef | null;
+	readonly provenance: Provenance | null;
 }
 
 /** Produce the initial task state without generating identities or writing storage. */

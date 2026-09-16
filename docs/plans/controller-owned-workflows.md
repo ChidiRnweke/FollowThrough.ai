@@ -588,6 +588,13 @@ siblings, including archived entries; new folders previously counted only active
 controller and offline tests cover the resulting consistent position. Creation project checks and
 client-assigned identity tests move with their owner. Other note lifecycle rules remain open.
 
+Task view ownership: TodoCatalog reads the task's anchor, origin, linked note and provenance.
+Task, note and Today controllers apply the shared task presentation service; downloaded views use
+the same rule. Models retain the resolved context as a value. The linked-note clearing test now
+performs the edit through the real controller and catalog before checking the returned source and
+origin, instead of reading a fixture that never had a linked note. Task creation and edit rules
+remain open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

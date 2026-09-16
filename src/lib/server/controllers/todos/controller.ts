@@ -1,3 +1,4 @@
+import { assembleTodoView } from '$lib/services/todos/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { TodoSuggestion } from '$lib/models/suggestions';
@@ -44,7 +45,7 @@ import type {
 	TodoEditor,
 	TodoLister,
 	TodoReader,
-	TodoViewAssembler
+	TodoContextReader
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
@@ -115,7 +116,7 @@ export interface TodosDependencies {
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	todoLister: TodoLister;
-	todoViewAssembler: TodoViewAssembler;
+	todoContextReader: TodoContextReader;
 	todoReader: TodoReader;
 	todoEditor: TodoEditor;
 	todoDeleter: TodoDeleter;
@@ -185,12 +186,14 @@ export class Todos implements TodosController {
 	constructor(private readonly dependencies: TodosDependencies) {}
 	async get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView> {
 		const todo = await this.dependencies.todoReader.get(actor, input.todoId);
-		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
-		return view!;
+		const context = await this.dependencies.todoContextReader.readContext(actor, todo);
+		const view = assembleTodoView(todo, context);
+		return view;
 	}
 	async list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput> {
 		const todos = await this.dependencies.todoLister.list(actor, filter);
-		return { todos: await this.dependencies.todoViewAssembler.assemble(actor, todos) };
+		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
+		return { todos: contexts.map((context) => assembleTodoView(context.todo, context)) };
 	}
 	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return this.dependencies.todoLister.count(actor, filter);
@@ -203,7 +206,8 @@ export class Todos implements TodosController {
 			this.dependencies.todoLister.list(actor, filter),
 			this.dependencies.projectLister.list(actor)
 		]);
-		const views = await this.dependencies.todoViewAssembler.assemble(actor, todos);
+		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
+		const views = contexts.map((context) => assembleTodoView(context.todo, context));
 		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 		const generatedAt = new Date();
 		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
@@ -231,8 +235,9 @@ export class Todos implements TodosController {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
 		const todo = await this.dependencies.todoEditor.update(actor, input);
-		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
-		return { todo, view: view! };
+		const context = await this.dependencies.todoContextReader.readContext(actor, todo);
+		const view = assembleTodoView(todo, context);
+		return { todo, view };
 	}
 	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput> {
 		return this.dependencies.transactionRunner.run(

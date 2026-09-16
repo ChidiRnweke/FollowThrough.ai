@@ -30,7 +30,7 @@ const setup = async (suffix: string) => {
 			todoCreator: catalog,
 			todoReader: catalog,
 			todoEditor: catalog,
-			todoViewAssembler: catalog,
+			todoContextReader: catalog,
 			todoDeleter: catalog
 		})
 	);

@@ -30,7 +30,7 @@ const setup = () => {
 	const service = new Todos(
 		capabilityDependencies<TodosDependencies>({
 			todoLister: todos,
-			todoViewAssembler: todos,
+			todoContextReader: todos,
 			projectLister: projects,
 			markdownToContent: markdownToDocument,
 			exportPreparer: prepareExport,
