@@ -444,6 +444,12 @@ settlement stays separate, and the queued-chat query excludes workflow runs. Pro
 its own queued recovery in the Todo controller. A PostgreSQL contract checks the query against both
 running chats and an actual queued note-action request.
 
+Tool activity journaling: event outcome selection and journal projection now belong to the focused
+conversation service. The Agent and Diagrams controllers call that same implementation before their
+journal writes. Models retain the event and activity values; they no longer execute these decisions.
+The old rationale that placed behavior in models to avoid service dependencies is removed. The wider
+model migration remains open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

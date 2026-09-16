@@ -7,7 +7,7 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
-import { toolOutcomeEvent } from '$lib/models/agent';
+import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
