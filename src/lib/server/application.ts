@@ -268,7 +268,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const references = referenceCapability.library;
 	const referenceFinder = referenceCapability.finder;
 	const suggestions = suggestionCapability.inbox;
-	const suggestionLister = suggestionCapability.lister;
 	const skills = skillCapability.library;
 	const provisionedSkills = skillCapability.provisioned;
 	const diagramCapability = createDiagramsCapability({
@@ -371,7 +370,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			now: diagramCapability.now
 		},
 		suggestions: {
-			suggestionLister,
+			suggestionLister: suggestions,
+			suggestionExpirer: suggestions,
 			suggestionViewAssembler: suggestions,
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,
@@ -467,7 +467,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			projectLister: projects,
 			noteTreeReader: notes,
 			skillFinder: provisionedSkills,
-			suggestionLister,
+			suggestionLister: suggestions,
+			suggestionExpirer: suggestions,
 			todoLister: todos,
 			waitingOnFinder: todos,
 			todoViewAssembler: todos
@@ -491,7 +492,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramLister: diagrams,
 			todoLister: todos,
 			todoViewAssembler: todos,
-			suggestionLister,
+			suggestionLister: suggestions,
+			suggestionExpirer: suggestions,
 			suggestionViewAssembler: suggestions,
 			noteEditor: notes,
 			noteArchiver: notes,

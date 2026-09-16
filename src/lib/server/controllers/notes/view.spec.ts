@@ -85,6 +85,7 @@ describe('note view assembly', () => {
 				todoLister: todos,
 				todoViewAssembler: todos,
 				suggestionLister: suggestions,
+				suggestionExpirer: suggestions,
 				suggestionViewAssembler: suggestions
 			})
 		);

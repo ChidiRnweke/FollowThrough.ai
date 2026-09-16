@@ -38,6 +38,7 @@ describe('Pending memory review invariants', () => {
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionLister: reader,
+				suggestionExpirer: reader,
 				suggestionViewAssembler: reader
 			})
 		);
@@ -71,6 +72,7 @@ describe('Pending memory review invariants', () => {
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionLister: reader,
+				suggestionExpirer: reader,
 				suggestionViewAssembler: reader
 			})
 		);

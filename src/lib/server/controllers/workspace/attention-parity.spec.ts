@@ -72,6 +72,7 @@ it('shows the same profile and visible-project memory attention from server and 
 			projectLister: projects,
 			noteTreeReader: new InMemoryNoteContent(),
 			suggestionLister: suggestions,
+			suggestionExpirer: suggestions,
 			skillFinder: new SkillLibrary(
 				new InMemorySkillRepository(),
 				new InMemoryNoteRepository(),

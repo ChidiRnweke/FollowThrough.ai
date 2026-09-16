@@ -7,7 +7,6 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
-import { ExpiringSuggestionLister } from '$lib/server/services/suggestions/expiring-lister';
 import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
 
 export interface SuggestionsCapabilityInput {
@@ -20,7 +19,6 @@ export interface SuggestionsCapabilityInput {
 export interface SuggestionsCapability {
 	readonly inbox: SuggestionInbox;
 	readonly effects: SuggestionEffects;
-	readonly lister: ExpiringSuggestionLister;
 }
 
 export const createSuggestionsCapability = (
@@ -34,7 +32,6 @@ export const createSuggestionsCapability = (
 	);
 	return {
 		inbox,
-		effects: new SuggestionEffects(new SuggestionEffectRecords(input.db)),
-		lister: new ExpiringSuggestionLister(inbox, inbox)
+		effects: new SuggestionEffects(new SuggestionEffectRecords(input.db))
 	};
 };

@@ -40,6 +40,7 @@ import type {
 	SuggestionAccepter,
 	SuggestionFinder,
 	SuggestionLister,
+	SuggestionExpirer,
 	SuggestionRejecter,
 	SuggestionReverter,
 	SuggestionViewAssembler
@@ -113,6 +114,7 @@ export interface SuggestionsController {
 /** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
 	suggestionLister: SuggestionLister;
+	suggestionExpirer: SuggestionExpirer;
 	suggestionViewAssembler: SuggestionViewAssembler;
 	suggestionFinder: SuggestionFinder;
 	suggestionAccepter: SuggestionAccepter;
@@ -137,6 +139,7 @@ export interface SuggestionsDependencies {
 export class Suggestions implements SuggestionsController {
 	constructor(private readonly dependencies: SuggestionsDependencies) {}
 	async list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput> {
+		await this.dependencies.suggestionExpirer.expire(actor);
 		const suggestions = await this.dependencies.suggestionLister.listByStatus(actor, input.status);
 		const views = await this.dependencies.suggestionViewAssembler.assemble(actor, suggestions);
 		const ordered = [...views].sort((a, b) =>
@@ -158,6 +161,7 @@ export class Suggestions implements SuggestionsController {
 		actor: ActorContext,
 		input: ListPendingMemoryInput
 	): Promise<ListPendingMemoryOutput> {
+		await this.dependencies.suggestionExpirer.expire(actor);
 		const pending = await this.dependencies.suggestionLister.listByStatus(actor, 'proposed');
 		const memory = pending.filter(
 			(suggestion) =>
