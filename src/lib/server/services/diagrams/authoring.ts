@@ -22,7 +22,8 @@ import type {
 	ToolActivity,
 	WorkflowRunContext
 } from '$lib/models/agent';
-import { parseProviderStreamEvent, toolActivityFromEvent } from '$lib/models/agent';
+import { toolActivityFromEvent } from '$lib/models/agent';
+import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
 import type {
 	ConvertInlineMermaidInput,
 	Diagram,

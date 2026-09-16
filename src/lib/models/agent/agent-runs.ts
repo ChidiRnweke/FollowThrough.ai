@@ -40,18 +40,6 @@ export function assertAgentRunTransition(from: AgentRunStatus, to: AgentRunStatu
 		throw new InvalidAgentRunTransition(`Agent run cannot transition from ${from} to ${to}`);
 }
 
-export class AgentProviderFailure extends Error {
-	constructor(
-		message: string,
-		public readonly providerCode: string,
-		public readonly transient: boolean,
-		options?: ErrorOptions
-	) {
-		super(message, options);
-		this.name = 'AgentProviderFailure';
-	}
-}
-
 export interface AgentRunDecisionRecord {
 	readonly runId: AgentRunId;
 	readonly callId: string;

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { PersistedSessionItem } from './session-item';
-import { AgentProviderFailure } from './agent-runs';
 import {
 	AGENT_TOOL_NAME_VALUES,
 	TOOL_NAME_VALUES,
@@ -1252,7 +1251,7 @@ const providerRawItemSchema = z.object({
  * kept beside it was reading one field twice — and reading it meant calling a
  * method on a value nothing had parsed.
  */
-const providerItemSchema = z.object({
+export const providerItemSchema = z.object({
 	rawItem: providerRawItemSchema.optional(),
 	toolName: z.string().optional(),
 	callId: z.string().optional(),
@@ -1260,12 +1259,18 @@ const providerItemSchema = z.object({
 	output: providerOutputValue.optional()
 });
 
-type ProviderItem = z.infer<typeof providerItemSchema>;
+export type ProviderItem = z.infer<typeof providerItemSchema>;
 
-const runItemStreamEventSchema = z.object({
+export const runItemStreamEventSchema = z.object({
 	type: z.literal('run_item_stream_event'),
 	name: z.string(),
 	item: providerItemSchema
+});
+
+/** Recognized tool events must not fall through the unfamiliar-event fallback. */
+export const providerToolEventHeaderSchema = z.object({
+	type: z.literal('run_item_stream_event'),
+	name: z.enum(['tool_called', 'tool_output'])
 });
 
 /** The OpenRouter chunk that carries token-level reasoning beside the visible text. */
@@ -1275,117 +1280,13 @@ const providerReasoningChunkSchema = z.object({
 		.optional()
 });
 
-const rawModelStreamEventSchema = z.object({
+export const rawModelStreamEventSchema = z.object({
 	type: z.literal('raw_model_stream_event'),
 	data: z.union([
 		z.object({ type: z.literal('output_text_delta'), delta: z.string() }),
 		z.object({ type: z.literal('model'), event: providerReasoningChunkSchema })
 	])
 });
-
-// audit-allow: no-unknown-type — A tool result straight off the provider SDK, classified rather than trusted.
-const providerToolOutput = (value: unknown): ProviderToolOutput => {
-	if (value === undefined || value === null) return { kind: 'none' };
-	const read = readAgentPayload(value);
-	return read.kind === 'valid'
-		? { kind: 'value', value: read.value }
-		: { kind: 'corrupt', message: read.message };
-};
-
-/**
- * Tool arguments, whether the provider sent them as JSON text or as an object.
- *
- * Both failures are fatal to the turn and always have been: a call whose
- * arguments nobody can read is a call that must not be presented as though it
- * ran.
- */
-// audit-allow: no-unknown-type — The arguments the model produced, before readAgentPayload classifies them.
-const providerArguments = (value: unknown): AgentPayloadObject => {
-	if (value === undefined) return {};
-	let candidate: unknown = value;
-	if (typeof value === 'string') {
-		try {
-			candidate = JSON.parse(value);
-		} catch (error) {
-			throw new AgentProviderFailure(
-				'The provider returned malformed JSON tool arguments',
-				'MALFORMED_TOOL_ARGUMENTS',
-				false,
-				{ cause: error }
-			);
-		}
-	}
-	const read = readAgentPayloadObject(candidate);
-	if (read.kind === 'corrupt')
-		throw new AgentProviderFailure(
-			'The provider returned tool arguments that were not an object',
-			'MALFORMED_TOOL_ARGUMENTS',
-			false,
-			{ cause: new Error(read.message) }
-		);
-	return read.value;
-};
-
-const providerReasoningText = (item: ProviderItem): string => {
-	const raw = item.rawItem;
-	const parts = raw?.rawContent ?? raw?.content ?? raw?.summary;
-	if (!parts) return '';
-	return parts
-		.map((part) => part.text)
-		.filter((text) => text.length > 0)
-		.join('\n');
-};
-
-const providerCall = (item: ProviderItem): ProviderToolCall => {
-	const raw = item.rawItem;
-	const name = item.toolName ?? raw?.name ?? 'tool';
-	const args = providerArguments(item.arguments ?? raw?.arguments);
-	return {
-		callId: item.callId ?? raw?.callId ?? raw?.call_id ?? raw?.id,
-		name,
-		arguments: args,
-		output: providerToolOutput(item.output ?? raw?.output)
-	};
-};
-
-/**
- * One stream event as an arm of {@link ProviderStreamEvent}.
- *
- * Raises only for arguments nobody can read; anything this union does not model
- * settles as `ignored`, so a newer SDK event type cannot fail a turn.
- */
-// audit-allow: no-unknown-type — The provider stream item; this is the run loop single parse point.
-export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent => {
-	const runItem = runItemStreamEventSchema.safeParse(event);
-	if (runItem.success) {
-		const { name, item } = runItem.data;
-		if (name === 'tool_called') return { type: 'tool_called', call: providerCall(item) };
-		if (name === 'tool_output') return { type: 'tool_output', call: providerCall(item) };
-		if (name !== 'reasoning_item_created') return { type: 'ignored' };
-		const text = providerReasoningText(item);
-		return text ? { type: 'reasoning_item', text } : { type: 'ignored' };
-	}
-	const raw = rawModelStreamEventSchema.safeParse(event);
-	if (!raw.success) return { type: 'ignored' };
-	const { data } = raw.data;
-	if (data.type === 'output_text_delta') return { type: 'text_delta', text: data.delta };
-	const reasoning = data.event.choices?.[0]?.delta?.reasoning;
-	return reasoning ? { type: 'reasoning_delta', text: reasoning } : { type: 'ignored' };
-};
-
-/**
- * A tool call held outside the stream — a `RunState` interruption parked on an
- * approval, which is not a stream event and never reaches the loop above.
- *
- * Absent when the value is not a tool item at all. The caller decides what that
- * means: for an approval it means a parked call nothing can be matched against,
- * which is a failure rather than a call to skip.
- */
-// audit-allow: no-unknown-type — The same provider item, read for the call it names.
-export const parseProviderToolCall = (item: unknown): ProviderToolCall | undefined => {
-	const parsed = providerItemSchema.safeParse(item);
-	return parsed.success ? providerCall(parsed.data) : undefined;
-};
 
 export interface DecideAgentRunInput {
 	readonly runId: AgentRunId;

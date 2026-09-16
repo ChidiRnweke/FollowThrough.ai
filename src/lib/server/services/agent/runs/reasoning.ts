@@ -33,14 +33,13 @@ import {
 	type AgentToolName,
 	type ToolName
 } from '$lib/models/agent/tool-catalog';
+import { allImages } from '$lib/models/agent';
 import {
-	allImages,
-	AgentProviderFailure,
 	parseProviderStreamEvent,
 	parseProviderToolCall
-} from '$lib/models/agent';
+} from '$lib/server/repositories/agent/provider-events';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
-import { ValidationError } from '$lib/errors';
+import { AgentProviderFailure, ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
