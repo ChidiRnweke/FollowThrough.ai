@@ -1,5 +1,10 @@
-import { decideIndexPlan, type IndexPlan } from '$lib/models/knowledge-search';
-import { InvalidGeneratedContentError, NotFoundError } from '$lib/errors';
+import type {
+	DiagramIndexContext,
+	IndexContent,
+	IndexPlan,
+	IndexingResult
+} from '$lib/models/knowledge-search';
+import { InvalidGeneratedContentError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { Attachment, ContentHash } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
@@ -11,21 +16,23 @@ import type {
 	RetrievalIndexRepository
 } from '$lib/server/repositories/knowledge-search';
 import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
-interface EmbeddingClient {
-	readonly model: string;
-	embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch>;
-}
+
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 
-interface NoteReader {
-	findById(actor: ActorContext, noteId: Note['id']): Promise<Note | undefined>;
-}
+export const diagramIndexNoteId = (diagram: Diagram) =>
+	diagram.archivedAt === undefined && diagram.searchableText.trim()
+		? diagram.sourceNoteId
+		: undefined;
 let sharedEncoding: Tiktoken | undefined;
 export const retrievalEncoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
 export interface ContentChunker {
 	chunk(content: string): readonly string[];
 }
-export type { EmbeddingBatch, EmbeddingClient };
+export type { EmbeddingBatch };
+const decideIndexPlan = (content: IndexContent): IndexPlan =>
+	content.contents.length
+		? { kind: 'index', ...content }
+		: { kind: 'remove', source: content.source };
 
 const DEFAULT_TARGET_TOKENS = 2400;
 const DEFAULT_OVERLAP_TOKENS = 480;
@@ -66,7 +73,7 @@ export class TokenAwareChunker implements ContentChunker {
 				current = this.encoding.decode(tokens.slice(this.targetTokens - this.overlapTokens)).trim();
 			}
 		}
-		if (current && chunks.at(-1) !== current) chunks.push(current);
+		if (current) chunks.push(current);
 		return chunks;
 	}
 
@@ -170,14 +177,14 @@ const deleteFor = (
  */
 const applyIndex = async (
 	repository: RetrievalIndexRepository,
-	embeddingClient: EmbeddingClient,
+	embeddingModel: string,
 	defer: boolean,
 	actor: ActorContext,
 	plan: IndexPlan
-): Promise<void> => {
+): Promise<IndexingResult> => {
 	if (plan.kind === 'remove') {
 		await deleteFor(repository, actor, plan.source);
-		return;
+		return { kind: 'stored' };
 	}
 
 	const { source, contents, embedPrefix, base } = plan;
@@ -187,74 +194,93 @@ const applyIndex = async (
 		contents.map((content) => retrievalContentHash(content, metadata))
 	);
 	const existing = await listFor(repository, actor, source);
-	const reusable = new Map(
-		existing
-			.filter((document) => document.embeddingModel === embeddingClient.model)
-			.map((document) => [document.contentHash, document])
-	);
+	const reusable = new Map<
+		string,
+		{ ids: SearchDocumentId[]; embedding: readonly number[] | undefined }
+	>();
+	for (const document of existing) {
+		if (document.embeddingModel !== embeddingModel) continue;
+		const prior = reusable.get(document.contentHash);
+		if (prior) {
+			prior.ids.push(document.id);
+			prior.embedding ??= document.embedding;
+		} else {
+			reusable.set(document.contentHash, { ids: [document.id], embedding: document.embedding });
+		}
+	}
 	const missingIndexes = hashes
 		.map((hash, index) => ({ hash, index }))
 		.filter(({ hash }) => !reusable.get(hash)?.embedding);
 
-	const embedded =
-		!defer && missingIndexes.length
-			? (
-					await embeddingClient.embed(
-						missingIndexes.map(({ index }) => `${embedPrefix}\n${contents[index]!}`)
-					)
-				).vectors
-			: undefined;
-	if (embedded && embedded.length !== missingIndexes.length)
-		throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
-	const generated = new Map(
-		embedded ? missingIndexes.map(({ hash }, index) => [hash, embedded[index]!]) : []
-	);
-
 	const documents: SearchDocument[] = contents.map((content, chunkIndex) => {
 		const hash = hashes[chunkIndex]!;
 		const prior = reusable.get(hash);
-		const vector = prior?.embedding ?? generated.get(hash);
-		const model = prior?.embedding
-			? prior.embeddingModel
-			: vector
-				? embeddingClient.model
-				: undefined;
+		const vector = prior?.embedding;
 		return {
 			...base,
-			id: (prior?.id ?? crypto.randomUUID()) as SearchDocumentId,
+			id: (prior?.ids.shift() ?? crypto.randomUUID()) as SearchDocumentId,
 			content,
 			contentHash: hash,
 			chunkIndex,
-			...(vector ? { embedding: vector } : {}),
-			...(model ? { embeddingModel: model } : {})
+			...(vector ? { embedding: vector, embeddingModel } : {})
 		};
 	});
 
+	if (!defer && missingIndexes.length)
+		return {
+			kind: 'needs_embeddings',
+			source,
+			documents,
+			model: embeddingModel,
+			missing: missingIndexes.map(({ index }) => ({
+				id: documents[index]!.id,
+				input: `${embedPrefix}\n${contents[index]!}`
+			}))
+		};
 	await repository.stage(actor, source, documents);
+	return { kind: 'stored' };
 };
 
 export class ContentIndex {
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
-		private readonly embeddingClient: EmbeddingClient,
+		private readonly embeddingModel: string,
 		private readonly chunker: ContentChunker = new TokenAwareChunker(),
 		private readonly defer = false
 	) {}
+	async complete(
+		actor: ActorContext,
+		pending: Extract<IndexingResult, { kind: 'needs_embeddings' }>,
+		batch: EmbeddingBatch
+	): Promise<void> {
+		if (batch.model !== pending.model || batch.vectors.length !== pending.missing.length)
+			throw new InvalidGeneratedContentError('Embedding results did not match the prepared index');
+		const vectors = new Map(
+			pending.missing.map((chunk, index) => [chunk.id, batch.vectors[index]!])
+		);
+		await this.repository.stage(
+			actor,
+			pending.source,
+			pending.documents.map((document) => {
+				const embedding = vectors.get(document.id);
+				return embedding ? { ...document, embedding, embeddingModel: batch.model } : document;
+			})
+		);
+	}
 	readonly notes = { index: this.indexNote.bind(this) };
 	readonly attachments = {
 		index: this.indexAttachment.bind(this),
-		remove: (actor: ActorContext, attachmentId: Attachment['id']) =>
-			this.apply(actor, { kind: 'remove', source: { kind: 'attachment', attachmentId } })
+		remove: async (actor: ActorContext, attachmentId: Attachment['id']) => {
+			await this.apply(actor, { kind: 'remove', source: { kind: 'attachment', attachmentId } });
+		}
 	};
 	readonly memories = { index: this.indexMemory.bind(this) };
-	diagrams(notes: NoteReader) {
-		return { index: this.indexDiagram.bind(this, notes) };
+	readonly diagrams = { index: this.indexDiagram.bind(this) };
+	apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<IndexingResult> {
+		return applyIndex(this.repository, this.embeddingModel, defer, actor, plan);
 	}
-	apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<void> {
-		return applyIndex(this.repository, this.embeddingClient, defer, actor, plan);
-	}
-	async indexNote(actor: ActorContext, note: Note): Promise<void> {
-		await this.apply(
+	async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
+		return this.apply(
 			actor,
 			decideIndexPlan({
 				source: { kind: 'note', noteId: note.id },
@@ -292,7 +318,7 @@ export class ContentIndex {
 			true
 		);
 	}
-	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<void> {
+	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult> {
 		// User-profile entries (no project) are injected into agent context directly and
 		// never enter the retrieval index.
 		const projectId = entry.projectId;
@@ -301,13 +327,12 @@ export class ContentIndex {
 				? []
 				: this.chunker.chunk(entry.content);
 		if (!contents.length || !projectId) {
-			await this.apply(actor, {
+			return this.apply(actor, {
 				kind: 'remove',
 				source: { kind: 'memory', memoryEntryId: entry.id }
 			});
-			return;
 		}
-		await this.apply(
+		return this.apply(
 			actor,
 			decideIndexPlan({
 				source: { kind: 'memory', memoryEntryId: entry.id },
@@ -323,34 +348,33 @@ export class ContentIndex {
 			})
 		);
 	}
-	async indexDiagram(notes: NoteReader, actor: ActorContext, diagram: Diagram): Promise<void> {
+	async indexDiagram(
+		actor: ActorContext,
+		diagram: Diagram,
+		context: DiagramIndexContext
+	): Promise<IndexingResult> {
 		const contents = this.chunker.chunk(diagram.searchableText);
 		// A diagram in the trash answers no searches, for the same reason one with no
 		// labels does not: the index describes what the project currently holds. Both
 		// conditions land here rather than in a second port, so "make the index agree
 		// with this row" stays one call whatever changed about the row.
 		if (diagram.archivedAt !== undefined || !contents.length) {
-			await this.apply(actor, {
+			return this.apply(actor, {
 				kind: 'remove',
 				source: { kind: 'diagram', diagramId: diagram.id }
 			});
-			return;
 		}
 		// A diagram chunk is a bare list of labels, so its title is the only context
 		// the reranker gets — `rerankDocumentText` joins title, section and content.
 		// A diagram that came from a note borrows that note's name; a studio diagram
 		// has none, so it must still say what it is rather than index untitled.
 		//
-		// Fetched for the note's title alone — the diagram carries its own
-		// `projectId` since it became project-owned, so nothing else here needs it.
-		const note =
-			diagram.sourceNoteId === undefined
-				? undefined
-				: await notes.findById(actor, diagram.sourceNoteId);
-		if (diagram.sourceNoteId && !note) throw new NotFoundError('Diagram source note was not found');
-		const sectionPath = note?.title ?? diagram.title ?? 'Untitled diagram';
-		const sourceTitle = note ? `Diagram in ${sectionPath}` : `Diagram: ${sectionPath}`;
-		await this.apply(
+		// The controller resolves the source-note title; the diagram owns its project.
+		const sectionPath =
+			context.kind === 'note' ? context.title : (diagram.title ?? 'Untitled diagram');
+		const sourceTitle =
+			context.kind === 'note' ? `Diagram in ${sectionPath}` : `Diagram: ${sectionPath}`;
+		return this.apply(
 			actor,
 			decideIndexPlan({
 				source: { kind: 'diagram', diagramId: diagram.id },

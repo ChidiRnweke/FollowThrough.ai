@@ -88,7 +88,7 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 				updatedAt: now
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient(), chunker).attachments,
+		indexer: new ContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
 		transactionRunner: transaction.transactionRunner,
 		visionModel: 'test/model',
 		logger: { error: () => {} }

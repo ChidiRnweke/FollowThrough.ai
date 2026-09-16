@@ -59,7 +59,7 @@ const setup = async (suffix: string) => {
 		.where(eq(schema.attachments.id, attachment.id));
 	const transaction = createTransactionContext(context.db);
 	const repository = new KnowledgeIndexRecords(transaction.database);
-	await new ContentIndex(repository, client, new TokenAwareChunker(30, 5)).attachments.index(
+	await new ContentIndex(repository, client.model, new TokenAwareChunker(30, 5)).attachments.index(
 		owner,
 		attachment,
 		text

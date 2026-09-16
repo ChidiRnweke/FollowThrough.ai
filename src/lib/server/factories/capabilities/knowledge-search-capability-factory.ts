@@ -7,7 +7,6 @@ import {
 	ContentIndex,
 	retrievalChunkerFromEnv
 } from '$lib/server/services/knowledge-search/indexing';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
@@ -43,12 +42,13 @@ export interface KnowledgeSearchCapabilityInput {
 
 export interface KnowledgeSearchCapability {
 	readonly repository: KnowledgeIndexRecords;
+	readonly indexWriter: ContentIndex;
 	readonly embeddingClient: EmbeddingClient;
 	readonly reranker: Reranker;
 	readonly queryGenerator: ISearchQueryGeneration;
 	readonly attachmentIndexer: ContentIndex['attachments'];
 	readonly noteIndexer: ContentIndex['notes'];
-	readonly diagramIndexer: ReturnType<ContentIndex['diagrams']>;
+	readonly diagramIndexer: ContentIndex['diagrams'];
 	readonly memoryIndexer: ContentIndex['memories'];
 	readonly lookup: KnowledgeLookup;
 	readonly relationshipClassifier: RelationshipDiscovery;
@@ -94,10 +94,11 @@ export const createKnowledgeSearchCapability = (
 			appURL: input.appURL,
 			observer: operationObserver
 		});
-	const index = new ContentIndex(repository, embeddingClient, chunker, input.deferEmbedding);
+	const index = new ContentIndex(repository, embeddingClient.model, chunker, input.deferEmbedding);
 
 	return {
 		repository,
+		indexWriter: index,
 		embeddingClient,
 		toolRetriever: new PgToolRetriever(embeddingClient, new ToolEmbeddingRecords(input.db)),
 		finalize: ({ preferences }) => ({
@@ -114,7 +115,7 @@ export const createKnowledgeSearchCapability = (
 		queryGenerator,
 		attachmentIndexer: index.attachments,
 		noteIndexer: index.notes,
-		diagramIndexer: index.diagrams(new NoteRecords(input.db)),
+		diagramIndexer: index.diagrams,
 		memoryIndexer: index.memories,
 		lookup: new KnowledgeLookup(repository),
 		relationshipClassifier: new RelationshipDiscovery({ observer: operationObserver }),

@@ -1,3 +1,6 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import { mapAppliedChange } from '$lib/models/proposal-effects';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
@@ -71,6 +74,8 @@ export interface MemoryController {
 }
 
 export interface MemoryDependencies {
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	memoryIndexer: MemoryIndexer;
 	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	memoryLister: MemoryEntryLister;
@@ -120,7 +125,7 @@ export class Memory implements MemoryController {
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const entry = await this.dependencies.memoryCreator.create(actor, input);
-			await this.dependencies.memoryIndexer.index(actor, entry);
+			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
 			return { entry };
 		});
 	}
@@ -131,7 +136,7 @@ export class Memory implements MemoryController {
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const entry = await this.dependencies.memoryEditor.update(actor, input);
-			await this.dependencies.memoryIndexer.index(actor, entry);
+			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
 			return { entry };
 		});
 	}
@@ -139,7 +144,7 @@ export class Memory implements MemoryController {
 	async remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
 			const entry = await this.dependencies.memoryDeleter.remove(actor, input.memoryEntryId);
-			await this.dependencies.memoryIndexer.index(actor, entry);
+			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
 		});
 	}
 
@@ -172,7 +177,10 @@ export class Memory implements MemoryController {
 					suggestion.provenanceId
 				);
 				for (const change of applied.changes)
-					await this.dependencies.memoryIndexer.index(actor, change.after);
+					await this.finishIndex(
+						actor,
+						await this.dependencies.memoryIndexer.index(actor, change.after)
+					);
 				const entry = applied.entry;
 				await this.dependencies.suggestionEffects.record(
 					actor,
@@ -191,5 +199,12 @@ export class Memory implements MemoryController {
 			}
 			return { suggestion };
 		});
+	}
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }

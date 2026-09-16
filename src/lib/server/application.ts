@@ -328,6 +328,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			workflowRunner: agentCapability.workflowRunner
 		},
 		diagrams: {
+			diagramSourceNotes: notes,
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			anchorCreator: notes,
 			mermaidCreator: diagramAgent,
 			provenanceRecorder: provenance,
@@ -350,6 +353,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			workflowRunner: agentCapability.workflowRunner
 		},
 		diagramStudio: {
+			diagramSourceNotes: notes,
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			transactionRunner,
 			diagramFinder: diagrams,
@@ -371,6 +377,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			now: diagramCapability.now
 		},
 		suggestions: {
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
 			suggestionViewAssembler: suggestions,
@@ -453,6 +461,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		skills: {
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			skillFinder: provisionedSkills,
 			skillUsageLister: skills,
@@ -485,6 +495,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoViewAssembler: todos
 		},
 		notes: {
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			folderCreator: projects,
 			markdown: noteCapability.markdown,
 			syncMutations: synchronization.mutations,
@@ -520,6 +532,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		trustPolicies: { trustPolicyStore: trust, syncMutations: synchronization.mutations },
 		memory: {
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			memoryLister: memory,

@@ -50,7 +50,7 @@ export const setupAttachments = (chunker = new TokenAwareChunker()) => {
 				updatedAt: testNow
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient(), chunker).attachments,
+		indexer: new ContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
 		transactionRunner: new InMemoryTransactionRunner([repository, search]),
 		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
 		logger: { error: () => {} }

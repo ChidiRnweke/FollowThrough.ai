@@ -21,19 +21,49 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
+	const indexEmbeddings = new InMemoryEmbeddingClient();
+	const indexWriter = new ContentIndex(search, indexEmbeddings.model);
 	const memory = new MemoryLibrary(entries, projects, new InMemoryProvenanceRepository());
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			memoryCreator: memory,
 			memoryEditor: memory,
 			memoryDeleter: memory,
-			memoryIndexer: new ContentIndex(search, new InMemoryEmbeddingClient()).memories,
+			memoryIndexer: indexWriter.memories,
+			indexEmbeddings,
+			indexWriter,
 			transactionRunner: new InMemoryTransactionRunner([entries, search])
 		})
 	);
-	return { controller, search, entries };
+	return { controller, search, entries, indexEmbeddings };
 };
 describe('Memory persistence and search', () => {
+	it('rolls back the memory when immediate embedding fails', async () => {
+		const { controller, entries, indexEmbeddings } = setup();
+		indexEmbeddings.failure = new Error('Provider unavailable');
+		await controller.create(testActor(), { projectId: testProjectId(), content: 'Fact' }).then(
+			() => {
+				throw new Error('Expected embedding failure');
+			},
+			(error) => {
+				if (error !== indexEmbeddings.failure) throw error;
+			}
+		);
+		expect(entries.entries).toEqual([]);
+	});
+
+	it('makes a shared memory searchable by vector before an immediate write returns', async () => {
+		const { controller, search } = setup();
+		const { entry } = await controller.create(testActor(), {
+			projectId: testProjectId(),
+			content: 'Fact'
+		});
+		expect(
+			(await search.searchByEmbedding(testActor(), [1, 0, 4], 10)).map(
+				({ document }) => document.memoryEntryId
+			)
+		).toEqual([entry.id]);
+	});
 	it('indexes a shared entry into search chunks', async () => {
 		const { search, controller } = await setup();
 		await controller.create(testActor(), { projectId: testProjectId(), content: 'Fact' });

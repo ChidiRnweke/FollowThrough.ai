@@ -49,25 +49,27 @@ const setup = async (suffix: string) => {
 	const search = new KnowledgeIndexRecords(database);
 	const index = new ContentIndex(
 		search,
-		new InMemoryEmbeddingClient(),
+		new InMemoryEmbeddingClient().model,
 		new TokenAwareChunker(),
 		true
-	).diagrams(notes.repository);
-	await index.index(seeded.owner, diagram);
+	).diagrams;
+	await index.index(seeded.owner, diagram, { kind: 'note', title: seeded.note.title });
 	const faults = { afterIndex: false };
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
 			syncMutations: sync.mutations,
 			transactionRunner,
 			diagramFinder: library,
+			diagramSourceNotes: notes.catalog,
 			diagramDraftWriter: library,
 			diagramRenamer: library,
 			diagramDeleter: library,
 			diagramArchiver: library,
 			diagramIndexer: {
-				index: async (actor, value) => {
-					await index.index(actor, value);
+				index: async (actor, value, sourceContext) => {
+					const result = await index.index(actor, value, sourceContext);
 					if (faults.afterIndex) throw new Error('Index transaction failed');
+					return result;
 				}
 			},
 			drawioXmlValidator: new DrawioXmlValidator(),

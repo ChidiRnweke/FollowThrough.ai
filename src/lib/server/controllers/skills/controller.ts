@@ -1,3 +1,6 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/models/notes';
 import { NotFoundError } from '$lib/errors';
@@ -101,6 +104,8 @@ export interface SkillsDependencies {
 	revisionRecorder: NoteRevisionRecorder;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;
@@ -253,7 +258,7 @@ export class Skills implements SkillsController {
 			note,
 			collectNoteLinkTargets(note.document)
 		);
-		await this.dependencies.noteIndexer.index(actor, note);
+		await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 		return note;
 	}
 
@@ -270,5 +275,12 @@ export class Skills implements SkillsController {
 			input.projectId,
 			input.pinned
 		);
+	}
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }
