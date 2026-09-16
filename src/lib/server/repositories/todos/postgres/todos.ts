@@ -19,6 +19,7 @@ export class TodoRecords implements TodoRepository {
 				and(
 					eq(schema.todos.id, id),
 					eq(schema.todos.userId, actor.userId),
+					isNull(schema.todos.deletedAt),
 					isNull(schema.projects.archivedAt)
 				)
 			);
@@ -155,7 +156,13 @@ export class TodoRecords implements TodoRepository {
 				deletedAt: todo.deletedAt ? new Date(todo.deletedAt) : null,
 				updatedAt: new Date(todo.updatedAt)
 			})
-			.where(and(eq(schema.todos.id, todo.id), eq(schema.todos.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.todos.id, todo.id),
+					eq(schema.todos.userId, actor.userId),
+					isNull(schema.todos.deletedAt)
+				)
+			)
 			.returning();
 		if (!row) throw new NotFoundError('Todo was not found');
 		return toTodo(row);
