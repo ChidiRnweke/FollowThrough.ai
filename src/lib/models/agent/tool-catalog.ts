@@ -244,7 +244,7 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'create_todos',
 		classification: 'mutation',
 		description:
-			'Create multiple todos in one call. Prefer this over repeated create_todo calls when adding several todos.'
+			'Create multiple todos atomically in one call. Choose a unique requestId (UUID) for this batch and reuse it with identical input after an uncertain outcome. A retry returns the original result without creating more tasks. Prefer this over repeated create_todo calls when adding several todos.'
 	},
 	{
 		name: 'update_todo',

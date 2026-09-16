@@ -1,5 +1,6 @@
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
+import { createTodoBatchSchema } from '$lib/models/todos';
 import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
@@ -67,6 +68,8 @@ const CASES: readonly InvocationCase[] = [
 			'Add three todos to my Profile project: renew the TLS certificates, book flights for the offsite, and review the incident postmortem.',
 		tool: 'create_todos',
 		payload: (args) => {
+			if (!createTodoBatchSchema.safeParse(args).success)
+				return 'batch input was invalid or missing its request ID';
 			if (typeof args.projectId !== 'string') return 'projectId was missing';
 			const todos = args.todos;
 			if (!Array.isArray(todos) || todos.length < 3)

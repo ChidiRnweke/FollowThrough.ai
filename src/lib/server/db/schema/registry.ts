@@ -80,6 +80,20 @@ export const workspaceSyncChanges = pgTable(
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 
+export const todoBatchReceipts = pgTable(
+	'todo_batch_receipts',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		requestId: uuid('request_id').notNull(),
+		request: jsonb('request').$type<import('$lib/models/todos').CreateTodoBatchInput>().notNull(),
+		result: jsonb('result').$type<import('$lib/models/todos').CreateTodoBatchOutput>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.requestId] })]
+);
+
 export const workspaceSyncReceipts = pgTable(
 	'workspace_sync_receipts',
 	{

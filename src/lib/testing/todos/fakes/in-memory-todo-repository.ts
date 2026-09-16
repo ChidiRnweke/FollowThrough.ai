@@ -1,10 +1,21 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Todo, TodoId, TodoListFilter, TodoStatus } from '$lib/models/todos';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
-export class InMemoryTodoRepository implements TodoRepository {
+export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipant {
 	todos: Todo[] = [];
 	updateFailures = new Map<TodoStatus, Error>();
+	insertFailures = new Map<string, Error>();
+	snapshot(): RestoreSnapshot {
+		const todos = structuredClone(this.todos);
+		return () => {
+			this.todos = todos;
+		};
+	}
 
 	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
 		return this.todos.find(
@@ -41,6 +52,8 @@ export class InMemoryTodoRepository implements TodoRepository {
 	}
 
 	async insert(_actor: ActorContext, todo: Todo): Promise<Todo> {
+		const failure = this.insertFailures.get(todo.title);
+		if (failure) throw failure;
 		this.todos.push(todo);
 		return todo;
 	}
