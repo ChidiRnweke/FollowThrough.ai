@@ -1,21 +1,25 @@
 import { SvelteSet } from 'svelte/reactivity';
 import {
-	buildNoteSearchPattern,
-	searchNoteTargets,
-	replaceInNoteDocument,
+	type Note,
 	type NoteId,
 	type NoteSearchHit,
 	type SearchNoteTextInput,
 	type ReplaceNoteTextOutput
 } from '$lib/models/notes';
+import { buildNoteSearchPattern, searchNoteTargets } from '$lib/services/notes/text-search';
 import type { ProjectId } from '$lib/models/projects';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-import { noteCommand } from '$lib/models/workspace-mutations';
+import { replaceNoteDrafts } from '$lib/controllers/notes/replace';
+import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 /** Search UI state shared by the panel and canvas. Results project the shared device records. */
 export class GlobalSearchStore {
+	constructor(
+		private readonly currentWorkspace: () => WorkspaceResources | undefined = () =>
+			workspaceSession.current?.resources
+	) {}
 	query = $state('');
 	replacement = $state('');
 	regex = $state(false);
@@ -24,7 +28,7 @@ export class GlobalSearchStore {
 	private submitted = $state<SearchNoteTextInput | null>(null);
 	hits = $derived.by<readonly NoteSearchHit[]>(() => {
 		const input = this.submitted;
-		const resources = workspaceSession.current?.resources;
+		const resources = this.currentWorkspace();
 		if (!input || !resources) return [];
 		return searchNoteTargets(
 			resources.views.notes.filter(
@@ -34,7 +38,7 @@ export class GlobalSearchStore {
 			input
 		);
 	});
-	partial = $derived(workspaceSession.current?.resources.availability !== 'complete');
+	partial = $derived.by(() => this.currentWorkspace()?.availability !== 'complete');
 	searching = $state(false);
 	/** Set when the pattern cannot run — an empty query or an invalid regex. */
 	searchError = $state<string | undefined>(undefined);
@@ -92,34 +96,31 @@ export class GlobalSearchStore {
 		const input = this.submitted;
 		if (!input) return;
 		try {
-			const resources = workspaceSession.current?.resources;
+			const resources = this.currentWorkspace();
 			if (!resources) throw new Error('Open the workspace before replacing text');
-			// Capture every reviewed body before the first asynchronous local write.
-			const edits = this.hits
+			const drafts = this.hits
 				.filter(
 					(hit) => hit.matches.length && (!scope.noteIds || scope.noteIds.includes(hit.noteId))
 				)
 				.map((hit) => {
 					const draft = resources.draft({ type: 'notes', id: [hit.noteId] });
-					draft.capture();
-					const note = draft.value;
-					if (!note)
-						throw new Error('A matching note is unavailable. Search again before replacing.');
-					const result = replaceInNoteDocument(note.document, input.query, this.replacement, input);
-					return { draft, note, result };
+					return {
+						capture: () => draft.capture(),
+						get value(): Note | null {
+							return $state.snapshot(draft.value) as Note | null;
+						},
+						stage: (command: Parameters<typeof draft.stage>[0]) => draft.stage(command)
+					};
 				});
-			let replacedNotes = 0;
-			let replacedMatches = 0;
-			for (const { draft, note, result } of edits) {
-				if (!result) continue;
-				const saved = await draft.stage(
-					noteCommand({ ...note, document: result.document, plainText: result.plainText })
-				);
-				if (saved.kind === 'failure') throw new Error(saved.message);
-				replacedNotes += 1;
-				replacedMatches += result.replaced;
+			const report = await replaceNoteDrafts(drafts, { ...input, replacement: this.replacement });
+			this.lastReplace = {
+				replacedNotes: report.saved.length,
+				replacedMatches: report.saved.reduce((sum, note) => sum + note.matches, 0)
+			};
+			if (report.kind === 'failure') {
+				this.searchError = `Saved replacements on this device in ${report.saved.length} ${report.saved.length === 1 ? 'note' : 'notes'}${report.saved.length ? ` (${report.saved.map((note) => note.title).join(', ')})` : ''}. Save not confirmed for "${report.failed.title}": ${report.failed.message}. ${report.unattempted.length} remaining ${report.unattempted.length === 1 ? 'note was' : 'notes were'} not attempted. Review the saved changes before searching again.`;
+				return { kind: 'failure', message: this.searchError };
 			}
-			this.lastReplace = { replacedNotes, replacedMatches };
 			this.searchError = undefined;
 		} catch (error) {
 			this.searchError = error instanceof Error ? error.message : 'Replace failed';

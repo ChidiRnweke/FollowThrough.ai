@@ -1,17 +1,19 @@
-import { describe, expect, it } from 'vitest';
 import {
 	expandNoteReplacement,
-	findProseMirrorDocumentIssue,
 	noteDocumentText,
 	noteSearchSnippet,
 	replaceInNoteDocument,
-	searchNoteText,
+	searchNoteText
+} from './text-search';
+import { describe, expect, it } from 'vitest';
+import {
+	findProseMirrorDocumentIssue,
 	type NoteSearchOptions,
 	type ProseMirrorDocument,
 	type ProseMirrorNode,
 	type ProseMirrorParagraphNode,
 	type ProseMirrorTextNode
-} from './index';
+} from '$lib/models/notes';
 
 const literal: NoteSearchOptions = { regex: false, caseSensitive: false };
 
@@ -68,8 +70,8 @@ describe('Searching note text', () => {
 		expect(searchNoteText('bbb', 'a*', { regex: true, caseSensitive: false })).toEqual([]);
 	});
 
-	it('caps the matches per note', () => {
-		expect(searchNoteText('a a a a', 'a', literal, 2)).toHaveLength(2);
+	it('shows every match that replacement will change beyond the former hundred-match limit', () => {
+		expect(searchNoteText('a '.repeat(150), 'a', literal)).toHaveLength(150);
 	});
 });
 

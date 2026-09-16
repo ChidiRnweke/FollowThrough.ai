@@ -106,6 +106,22 @@ describe('Searching note text', () => {
 
 describe('Replacing note text', () => {
 	const replace = { ...search, replacement: 'ship' };
+	it('rolls back every note and index change when a later replacement fails', async () => {
+		const { content, controller } = setup();
+		const original = [
+			noteWithText('deploy alpha'),
+			noteWithText('deploy beta', { id: testNoteId(2) })
+		];
+		content.notes = original;
+		content.failIndexFor.add(testNoteId(2));
+		await controller
+			.replaceText(testActor(), { ...replace, query: 'deploy' })
+			.catch(() => undefined);
+		expect({ notes: content.notes, indexed: content.indexedNoteIds }).toEqual({
+			notes: original,
+			indexed: []
+		});
+	});
 
 	it('rewrites the body of every matching note', async () => {
 		const { content, controller } = setup();

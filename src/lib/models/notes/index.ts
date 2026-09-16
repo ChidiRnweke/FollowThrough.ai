@@ -10,6 +10,15 @@ type ProjectId = Brand<string, 'ProjectId'>;
 
 export type NoteId = Brand<string, 'NoteId'>;
 
+export type NoteReplacementReport =
+	| { kind: 'complete'; saved: readonly { noteId: NoteId; title: string; matches: number }[] }
+	| {
+			kind: 'failure';
+			saved: readonly { noteId: NoteId; title: string; matches: number }[];
+			failed: { noteId: NoteId; title: string; message: string };
+			unattempted: readonly NoteId[];
+	  };
+
 export type FolderContextResolution =
 	| { readonly kind: 'ready'; readonly noteIds: readonly NoteId[] }
 	| { readonly kind: 'incomplete' }
@@ -397,8 +406,6 @@ export interface CompareNoteRevisionsOutput {
  * deliberate. An index signature on the types would make `node.attrs.anything`
  * type-check, which is the open-record indexing ADR 0037 exists to remove.
  *
- * This union lives in the notes domain barrel. Sibling model helpers such as
- * `text-search.ts` keep minimal structural views rather than importing the barrel.
  */
 
 export type ProseMirrorTextAlign = 'left' | 'center' | 'right' | 'justify';
@@ -1232,7 +1239,80 @@ export * from './note-patch';
 
 export * from './note-links';
 
-export * from './text-search';
+export interface NoteSearchOptions {
+	readonly regex: boolean;
+	readonly caseSensitive: boolean;
+}
+
+/** Half-open `[start, end)` offsets into the searched text, plus the matched text. */
+export interface NoteTextMatch {
+	readonly start: number;
+	readonly end: number;
+	readonly text: string;
+}
+
+/** A display window around a content match, so results render without shipping whole notes. */
+export interface NoteSearchSnippet {
+	readonly before: string;
+	readonly hit: string;
+	readonly after: string;
+	/** True only when `before` was actually cut short — a UI may prefix an ellipsis, never otherwise. */
+	readonly truncatedBefore: boolean;
+	/** True only when `after` was actually cut short — a UI may suffix an ellipsis, never otherwise. */
+	readonly truncatedAfter: boolean;
+}
+
+/** A content match paired with the snippet a result row renders. */
+export interface NoteSearchContentMatch extends NoteTextMatch {
+	readonly snippet: NoteSearchSnippet;
+}
+
+/** One note's worth of hits: content matches are offsets into `plainText`, title matches into `title`. */
+export interface NoteSearchHit {
+	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly titleMatches: readonly NoteTextMatch[];
+	readonly matches: readonly NoteSearchContentMatch[];
+}
+
+export interface NoteDocumentReplaceResult<Document = ProseMirrorDocument> {
+	readonly document: Document;
+	readonly plainText: string;
+	/** Matches actually replaced; zero-length matches are never counted. */
+	readonly replaced: number;
+}
+
+/** The columns a text search needs — a note's document body never travels for search. */
+export interface NoteSearchTarget {
+	readonly id: NoteId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly plainText: string;
+}
+
+export interface SearchNoteTextInput {
+	readonly query: string;
+	readonly regex: boolean;
+	readonly caseSensitive: boolean;
+	/** Scope the search to one project; omit it to search every active note. */
+	readonly projectId?: ProjectId;
+}
+
+export interface SearchNoteTextOutput {
+	readonly hits: readonly NoteSearchHit[];
+}
+
+export interface ReplaceNoteTextInput extends SearchNoteTextInput {
+	readonly replacement: string;
+	/** Replace only in these notes; omit to replace in every note the search hits. */
+	readonly noteIds?: readonly NoteId[];
+}
+
+export interface ReplaceNoteTextOutput {
+	readonly replacedNotes: number;
+	readonly replacedMatches: number;
+}
 
 export * from './section-numbering';
 
