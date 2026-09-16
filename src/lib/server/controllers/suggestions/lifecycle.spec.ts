@@ -1,4 +1,5 @@
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import {
@@ -35,11 +36,14 @@ describe('Pending memory review invariants', () => {
 			}),
 			suggestionBuilder({ id: testSuggestionId(3) })
 		];
+		reader.contexts = reader.suggestions.flatMap((suggestion) =>
+			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
+		);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionLister: reader,
 				suggestionExpirer: reader,
-				suggestionViewAssembler: reader
+				suggestionContextReader: reader
 			})
 		);
 		const result = await controller.listPendingMemory(testActor(), {});
@@ -69,11 +73,14 @@ describe('Pending memory review invariants', () => {
 				}
 			})
 		];
+		reader.contexts = reader.suggestions.flatMap((suggestion) =>
+			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
+		);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionLister: reader,
 				suggestionExpirer: reader,
-				suggestionViewAssembler: reader
+				suggestionContextReader: reader
 			})
 		);
 		const result = await controller.listPendingMemory(testActor(), { projectId: testProjectId() });

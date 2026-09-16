@@ -4,8 +4,7 @@ import type {
 	SelectionProposal,
 	ProposalSelectionOrigin,
 	SuggestionId,
-	SuggestionStatus,
-	SuggestionView
+	SuggestionStatus
 } from '$lib/models/suggestions';
 import {
 	ExpiredSuggestionError,
@@ -22,7 +21,8 @@ import type {
 	SuggestionProposal,
 	SuggestionRejecter,
 	SuggestionReverter,
-	SuggestionViewAssembler
+	SuggestionContextReader,
+	SuggestionContext
 } from '$lib/server/services/suggestions/contracts';
 import type {
 	RestoreSnapshot,
@@ -32,9 +32,10 @@ import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domai
 import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
 
 export class InMemorySuggestionReader
-	implements SuggestionLister, SuggestionExpirer, SuggestionViewAssembler
+	implements SuggestionLister, SuggestionExpirer, SuggestionContextReader
 {
 	suggestions: Suggestion[] = [];
+	contexts: SuggestionContext[] = [];
 	expiryFailure: Error | undefined;
 
 	async expire(actor: ActorContext): Promise<number> {
@@ -71,14 +72,18 @@ export class InMemorySuggestionReader
 		return (await this.listByStatus(actor, status)).length;
 	}
 
-	async assemble(
+	async readContexts(
 		actor: ActorContext,
 		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionView[]> {
-		return suggestions.map((suggestion) => ({
-			suggestion,
-			origin: { pipeline: 'memory' as const, createdAt: suggestion.createdAt }
-		}));
+	): Promise<readonly SuggestionContext[]> {
+		return suggestions.map((suggestion) => {
+			const context = this.contexts.find(
+				(context) =>
+					context.suggestion.id === suggestion.id && context.provenance.userId === actor.userId
+			);
+			if (!context) throw new NotFoundError('Suggestion context was not found');
+			return { ...context, suggestion };
+		});
 	}
 }
 

@@ -1,6 +1,6 @@
 import { assembleBacklinkView } from '$lib/models/relationships';
 import { assembleReferenceView } from '$lib/models/references';
-import { assembleSuggestionView } from '$lib/models/suggestions';
+import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';
 import type {
@@ -26,7 +26,7 @@ import type { LocalDate } from '$lib/models/workspace';
 import { assembleTodoView, type Todo, type TodoListFilter, type TodoView } from '$lib/models/todos';
 import { assembleProjectTree, type ProjectId, type ProjectView } from '$lib/models/projects';
 import { assembleNoteView, sectionNumberingView, type NoteId } from '$lib/models/notes';
-import { provenanceOrigin } from '$lib/models/provenance';
+import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 import type { WorkspaceSkill } from '$lib/models/workspace-views';
@@ -163,12 +163,10 @@ export class WorkspaceViews {
 					? this.get('source_anchors', suggestion.sourceAnchorId)
 					: undefined;
 				return [
-					{
-						suggestion,
+					assembleSuggestionView(suggestion, {
 						origin: provenanceOrigin(provenance),
-						...(provenance ? { provenance } : {}),
-						...(anchor ? { anchor } : {})
-					}
+						anchor
+					})
 				];
 			})
 			.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt));

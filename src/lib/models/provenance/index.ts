@@ -174,12 +174,6 @@ export type ProvenanceOrigin = { readonly createdAt: DateTime } & (
 	{ readonly pipeline: PipelineKind } | { readonly producerName: ProducerName }
 );
 
-/** The origin of a stored record. A pipeline names itself; anything else is its producer. */
-export const provenanceOrigin = (provenance: Provenance): ProvenanceOrigin =>
-	'pipeline' in provenance
-		? { pipeline: provenance.pipeline, createdAt: provenance.createdAt }
-		: { producerName: provenance.producerName, createdAt: provenance.createdAt };
-
 /**
  * The three facts only storage can supply.
  *
