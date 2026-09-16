@@ -4,7 +4,7 @@ import {
 } from '$lib/server/factories/production-controller-factory';
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
-import type { ToolRetriever } from './services/agent/tools/tool-retriever';
+import type { ToolRetriever } from './controllers/tool-discovery/controller';
 import type { ITextRecognition } from './services/attachments/mistral-ocr';
 import type { IImageDescription } from './services/attachments/image-description';
 import type { AttachmentClaims } from './services/attachments/contracts';

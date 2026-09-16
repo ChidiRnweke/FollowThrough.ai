@@ -13,7 +13,9 @@ import {
 } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import { seedToolEmbeddings } from '$lib/server/services/agent/tools/tool-embedding-seed';
+import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
+import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
 
 const main = async (): Promise<void> => {
@@ -22,7 +24,12 @@ const main = async (): Promise<void> => {
 		baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
 		appURL: process.env.ORIGIN ?? 'http://localhost:5173'
 	});
-	const summary = await seedToolEmbeddings(new ToolEmbeddingRecords(db), embeddings);
+	const transaction = createTransactionContext(db);
+	const summary = await new ToolDiscovery(
+		new ToolCatalogIndex(new ToolEmbeddingRecords(transaction.database)),
+		embeddings,
+		transaction.transactionRunner
+	).seed();
 	console.log(
 		`[seed-tool-embeddings] embedded ${summary.embedded}, unchanged ${summary.unchanged}, removed ${summary.removed}`
 	);
