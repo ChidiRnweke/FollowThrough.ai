@@ -15,10 +15,9 @@ import type {
 } from '$lib/server/services/agent/runs/preferences';
 import { resolveAgentModel } from '$lib/server/services/agent/runs/preferences';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
-import {
-	DiagramAuthoring,
-	MermaidSubmissionValidator
-} from '$lib/server/services/diagrams/authoring';
+import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
+import { DiagramGeneration } from '$lib/server/services/diagrams/generation';
+import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { DiagramContent } from '$lib/server/services/diagrams/content';
 import {
 	DrawioDiagramTextExtractor,
@@ -51,12 +50,15 @@ export interface DiagramsCapabilityInput {
 	readonly defaultVisionModel: string;
 	readonly sessions: AgentSessionRepository;
 	readonly projects: ProjectReader;
+	readonly apiKey: string;
+	readonly baseURL: string;
+	readonly appURL: string;
 }
 
 export interface DiagramsCapability {
 	readonly library: DiagramLibrary;
 	readonly transforms: DiagramContent;
-	readonly authoring: DiagramAuthoring;
+	readonly generation: DiagramAgentDependencies;
 	readonly suggestionValidator: DrawioXmlValidator;
 	readonly suggestionLabels: DrawioLabelExtractor;
 	readonly xmlValidator: DrawioXmlValidator;
@@ -89,7 +91,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		textExtractor: new DrawioDiagramTextExtractor(),
 		mermaidValidator: new MermaidSubmissionValidator(),
 		now: () => new Date().toISOString() as DateTime,
-		authoring: new DiagramAuthoring({
+		generation: {
 			contextBuilder: input.context,
 			conversations: input.conversations,
 			preferences: input.preferences,
@@ -102,7 +104,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			resolveModel: resolveAgentModel,
 			createToolEventMapper: () => new AgentToolEventMapper(),
 			observeWorkflow: traceWorkflow,
-			drawioValidator: new DrawioXmlValidator()
-		})
+			generator: new DiagramGeneration(input)
+		}
 	};
 };

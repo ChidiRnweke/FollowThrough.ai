@@ -78,7 +78,7 @@ Move behavior out of every model domain. Keep schemas and their inferred types b
       controller. Expiration hidden in suggestion listing remains part of the final wiring audit.
 - [ ] Move context, inline retrieval, relationship discovery and hidden provisioning into
       controllers; preserve source scope and explicit failures.
-- [ ] Move deliverable, board export and diagram authoring orchestration into controllers.
+- [x] Move deliverable, board export and diagram authoring orchestration into controllers.
 - [ ] Introduce an explicit shared-service placement supported by both architecture checkers;
       preserve server isolation and reject service-to-service orchestration through structural ports.
 - [ ] Migrate every model behavior family above to focused services or actual boundary readers;
@@ -330,6 +330,15 @@ Missing query vectors and missing current-model tool rows fail explicitly. Seed 
 roll back together; provider calls stay outside the transaction. Evaluations now use the production
 stored-vector discovery path. Tests assert ranked names, stored vectors, unchanged-seed behavior and
 rollback instead of call arguments or the presence of an exported class.
+
+Diagram generation: the diagrams controller now owns conversation and model selection, context
+preparation, provenance, submission validation and run settlement. DiagramGeneration only runs the
+provider protocol. It sends parsed submission candidates to the controller and waits for an explicit
+acceptance or rejection; it receives no validation or workflow service callbacks. Submission schemas
+remain model values, with SDK input parsing at the repository boundary. Preparation errors now fail
+the already-created run instead of leaving it running. Provider cancellation closes pending validation
+requests. Obsolete authoring ports and the fake whole-workflow implementation are removed. Agent
+context assembly, built-in skill provisioning and durable selection-workflow settlement remain open.
 
 ## Validation principles
 

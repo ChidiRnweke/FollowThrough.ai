@@ -1,3 +1,4 @@
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = (drawio = false) => {
+	const generation = diagramGenerationFixture();
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagrams();
@@ -21,7 +23,7 @@ const setup = (drawio = false) => {
 			capabilityDependencies<DiagramsDependencies>({
 				diagramSourceNotes: sourceNotes,
 				diagramFinder: diagrams,
-				mermaidReviser: diagrams,
+				...generation,
 				mermaidRenderer: diagrams,
 				textExtractor: diagrams,
 				diagramWriter: diagrams,
@@ -58,5 +60,14 @@ describe('Revise Mermaid workflow invariants', () => {
 			instruction: 'add queue'
 		});
 		expect(diagrams.indexedIds).toEqual([mermaidBuilder().id]);
+	});
+
+	it('preserves the existing title when the provider submits source without a new title', async () => {
+		const { controller } = setup();
+		const result = await controller.reviseMermaid(testActor(), {
+			diagramId: mermaidBuilder().id,
+			instruction: 'add queue'
+		});
+		expect(result.diagram.title).toBe(mermaidBuilder().title);
 	});
 });
