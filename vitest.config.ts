@@ -17,7 +17,11 @@ const browserPrebundled = [
 	'dexie-export-import',
 	'harper.js',
 	'harper.js/binary',
-	'@floating-ui/dom'
+	'@floating-ui/dom',
+	'@lucide/svelte/icons/chevron-right',
+	'@lucide/svelte/icons/cloud-off',
+	'@lucide/svelte/icons/cloud-upload',
+	'@lucide/svelte/icons/refresh-cw'
 ];
 const common = {
 	expect: { requireAssertions: true },
@@ -119,6 +123,7 @@ export default defineConfig({
 						'src/lib/components/notes/export/export-slider.svelte.spec.ts',
 						'src/lib/components/notes/note-conflict-dialog.svelte.spec.ts',
 						'src/lib/components/shared/safe-svg-preview.svelte.spec.ts',
+						'src/lib/components/shared/workspace-write-review.svelte.spec.ts',
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
 						'src/lib/client/sync/database.svelte.spec.ts',
 						'src/lib/client/clipboard/transfer.svelte.spec.ts',

@@ -234,6 +234,11 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   native-browser sanitizer/fallback tests now run in the regular unit gate.
   All 3,694 unit tests, ten mounted-chat browser tests and local quality checks pass.
 
+Pending-write review presentation rules now live in a focused shared service. The model keeps
+only the entry type and product-label values. Existing mounted review tests cover preserved
+local intent, authoritative conflict comparison, dependent-edit discard protection and account
+shutdown; they now run in the regular unit gate.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

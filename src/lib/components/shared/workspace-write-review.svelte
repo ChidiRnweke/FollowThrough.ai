@@ -46,7 +46,7 @@
 		writeExplanation,
 		writeStatus,
 		hasReviewContent
-	} from '$lib/models/workspace-write-review';
+	} from '$lib/services/workspace/write-review';
 
 	type Entry = OutboxEntry<WorkspaceCommand, WorkspaceRecord>;
 	let { resources, open = $bindable(false) }: { resources: WorkspaceResources; open?: boolean } =
