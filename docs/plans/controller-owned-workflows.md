@@ -220,6 +220,13 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   reservation. A deterministic test reproduces it. Completion now recognizes another request's
   committed template after either reservation or staging disappears. All 252 PostgreSQL contracts
   and 3,685 unit tests pass with that fix.
+- P21 fairness: reproduced starvation with a two-source budget and two persistent failures
+  ahead of healthy sources. The worker now advances a stable account/source cursor after every
+  attempt and wraps to retry earlier failures. A PostgreSQL contract verifies continuation after
+  deletion of the cursor source. The cursor is process-local; scheduler non-overlap and shutdown
+  drain remain unchanged. Worker orchestration and remaining operational-contract corrections
+  still belong to the outstanding global work.
+  All 3,688 unit tests, 253 PostgreSQL contracts and local quality checks pass.
 
 ## Validation principles
 

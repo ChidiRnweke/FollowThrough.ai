@@ -49,6 +49,7 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 	readonly intervalMs: number;
 	private readonly maxSourcesPerTick: number;
 	private readonly logger: Pick<Console, 'error' | 'log'>;
+	private after: string | undefined;
 
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
@@ -62,7 +63,11 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 	}
 
 	async run(): Promise<void> {
-		const pending = await this.repository.listPendingSources(this.maxSourcesPerTick);
+		let pending = await this.repository.listPendingSources(this.maxSourcesPerTick, this.after);
+		if (!pending.length && this.after !== undefined) {
+			this.after = undefined;
+			pending = await this.repository.listPendingSources(this.maxSourcesPerTick);
+		}
 		if (!pending.length) return;
 
 		let embedded = 0;
@@ -77,6 +82,9 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 					`[embedding-backfill] ${entry.source.kind} ${sourceId(entry.source)} failed:`,
 					error
 				);
+			} finally {
+				// Failed sources stay pending, but cannot monopolize the next tick.
+				this.after = entry.cursor;
 			}
 		}
 		this.logger.log(

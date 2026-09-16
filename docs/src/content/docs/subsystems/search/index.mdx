@@ -45,7 +45,14 @@ flowchart LR
 `}
 />
 
-`KnowledgeIndexMaintenance` (`index-maintenance.ts`) is the backfill worker. There is no job table: every tick (10 minutes by default, `EMBEDDING_SWEEP_INTERVAL_MS`) it takes up to 200 sources with vectorless chunks (`EMBEDDING_SWEEP_MAX_SOURCES`), embeds them outside the transaction (the network call must not hold row locks), then attaches vectors in one transaction and retires the superseded rows once nothing is pending. Failures are per-source; a poisoned document does not stall other users. It runs in the worker sidecar (`src/worker.ts`) alongside the attachment retention sweep.
+`KnowledgeIndexMaintenance` (`index-maintenance.ts`) is the backfill worker. There is no job table: every tick (10 minutes by default, `EMBEDDING_SWEEP_INTERVAL_MS`) it takes up to 200 sources with vectorless chunks (`EMBEDDING_SWEEP_MAX_SOURCES`), embeds them outside the transaction (the network call must not hold row locks), then attaches vectors in one transaction and retires the superseded rows once nothing is pending. It runs in the worker sidecar (`src/worker.ts`) alongside the attachment retention sweep.
+
+Sources have a stable order by account and source identity. Each tick continues after the previous
+source, including sources whose embedding failed. At the end of the ordered backlog, the worker
+starts again so failures remain retryable. A failing first batch therefore cannot consume every tick.
+The cursor lives in the worker process; restarting begins another scan without deleting pending work.
+The scheduler prevents overlapping ticks and waits for active work during shutdown. This traversal
+does not coordinate multiple worker replicas or preserve scan position across process restarts.
 
 ## Retrieval
 
