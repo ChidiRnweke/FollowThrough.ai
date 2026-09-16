@@ -165,3 +165,16 @@ export function userFacingMessage(error: unknown, fallback: string): string {
 	}
 	return fallback;
 }
+
+/** A provider failure with the retry classification reported by the execution boundary. */
+export class AgentProviderFailure extends Error {
+	constructor(
+		message: string,
+		public readonly providerCode: string,
+		public readonly transient: boolean,
+		options?: ErrorOptions
+	) {
+		super(message, options);
+		this.name = 'AgentProviderFailure';
+	}
+}
