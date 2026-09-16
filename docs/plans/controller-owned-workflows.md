@@ -563,6 +563,11 @@ resolved record and retains ownership/project checks. Models contain values, typ
 Controller tests cover invalid empty content and editing a removed entry; storage/service fixtures
 now supply valid prepared records. Agent proposal application remains in its focused memory service.
 
+Proposal-effect mapping ownership: the existing suggestion effect service owns conversion of created,
+modified and unchanged records. Memory and Suggestions coordinate this mapping before recording
+effects. The proposal-effect model retains value types and Zod schema construction only. Existing
+application and reversal tests cover the preserved before/after snapshots and change kinds.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
