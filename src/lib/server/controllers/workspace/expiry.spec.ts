@@ -23,7 +23,7 @@ it('counts pending proposals after expiry when assembling Today', async () => {
 			noteTreeReader: new InMemoryNoteContent(),
 			todoLister: tasks,
 			waitingOnFinder: tasks,
-			todoViewAssembler: tasks
+			todoContextReader: tasks
 		})
 	);
 	expect(

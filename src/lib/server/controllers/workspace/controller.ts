@@ -1,3 +1,4 @@
+import { assembleTodoView } from '$lib/services/todos/presentation';
 import type { TodoView } from '$lib/models/todos';
 import type { SkillSummary } from '$lib/models/skills';
 import type { NoteSummary } from '$lib/models/notes';
@@ -29,7 +30,7 @@ import type {
 } from '$lib/server/services/suggestions/contracts';
 import type {
 	TodoLister,
-	TodoViewAssembler,
+	TodoContextReader,
 	WaitingOnFinder
 } from '$lib/server/services/todos/contracts';
 import type { UserReader } from '$lib/server/services/identity/users';
@@ -69,7 +70,7 @@ export interface WorkspaceDependencies {
 	suggestionExpirer: SuggestionExpirer;
 	todoLister: TodoLister;
 	waitingOnFinder: WaitingOnFinder;
-	todoViewAssembler: TodoViewAssembler;
+	todoContextReader: TodoContextReader;
 }
 
 export class Workspace implements WorkspaceController {
@@ -123,7 +124,11 @@ export class Workspace implements WorkspaceController {
 			this.dependencies.suggestionLister.countByStatus(actor, 'proposed'),
 			this.dependencies.noteTreeReader.list(actor)
 		]);
-		const views = await this.dependencies.todoViewAssembler.assemble(actor, [...due, ...waiting]);
+		const contexts = await this.dependencies.todoContextReader.readContexts(actor, [
+			...due,
+			...waiting
+		]);
+		const views = contexts.map((context) => assembleTodoView(context.todo, context));
 		return assembleToday({
 			today: input.today,
 			due: views.slice(0, due.length),

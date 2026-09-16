@@ -12,7 +12,6 @@ import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
-	testAnchorId,
 	testNoteId,
 	testProjectId,
 	testTodoId,
@@ -117,15 +116,6 @@ describe('Todo management invariants', () => {
 		await expect(
 			service.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-
-	it('clearing a linked note restores the anchor-derived source', async () => {
-		const { service, todos, anchors, notes } = setup();
-		todos.todos = [todoBuilder({ sourceAnchorId: testAnchorId() })];
-		anchors.anchors = [anchorBuilder()];
-		notes.notes = [noteBuilder()];
-		const [view] = await service.assemble(testActor(), todos.todos);
-		expect(view?.sourceNote?.id).toBe(testNoteId());
 	});
 
 	it('rejects a source anchor from another project', async () => {

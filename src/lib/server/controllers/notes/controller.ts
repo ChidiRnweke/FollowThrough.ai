@@ -1,6 +1,7 @@
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
+import { assembleTodoView } from '$lib/services/todos/presentation';
 import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
@@ -125,7 +126,7 @@ import type {
 	SuggestionExpirer,
 	SuggestionContextReader
 } from '$lib/server/services/suggestions/contracts';
-import type { TodoLister, TodoViewAssembler } from '$lib/server/services/todos/contracts';
+import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/contracts';
 import type {
 	NoteArchiver,
 	NoteAttachmentRestorer,
@@ -341,7 +342,7 @@ export interface NotesDependencies {
 	referenceContextReader: ReferenceContextReader;
 	diagramLister: DiagramLister;
 	todoLister: TodoLister;
-	todoViewAssembler: TodoViewAssembler;
+	todoContextReader: TodoContextReader;
 	suggestionLister: SuggestionLister;
 	suggestionExpirer: SuggestionExpirer;
 	suggestionContextReader: SuggestionContextReader;
@@ -571,11 +572,11 @@ export class Notes implements NotesController {
 			this.dependencies.todoLister.list(actor, { noteId: input.noteId }),
 			this.dependencies.suggestionLister.listByStatus(actor, 'proposed', input.noteId)
 		]);
-		const [backlinkContexts, referenceContexts, todoViews, pendingContexts, sectionNumbering] =
+		const [backlinkContexts, referenceContexts, todoContexts, pendingContexts, sectionNumbering] =
 			await Promise.all([
 				this.dependencies.backlinkContextReader.readContexts(actor, relationships),
 				this.dependencies.referenceContextReader.readContexts(actor, references),
-				this.dependencies.todoViewAssembler.assemble(actor, todos),
+				this.dependencies.todoContextReader.readContexts(actor, todos),
 				this.dependencies.suggestionContextReader.readContexts(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
@@ -588,7 +589,7 @@ export class Notes implements NotesController {
 				assembleReferenceView(reference, { anchor })
 			),
 			diagrams,
-			todos: todoViews,
+			todos: todoContexts.map((context) => assembleTodoView(context.todo, context)),
 			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>
 				assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
 			),
