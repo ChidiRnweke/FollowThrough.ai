@@ -550,6 +550,12 @@ tests moved to the real controller with the real catalog and repository fake. A 
 also exposes descriptions that could not be cleared: resolved absence now writes SQL NULL, matching
 the downloaded workspace's result. Concurrent moves still need the locking review recorded above.
 
+Task-board export ownership: shared services own Markdown rendering, filename slugs and local-date
+formatting. The server PDF controller and browser Markdown export use that implementation. Callers
+supply one generation time for both content and filename. Export tests move with the service and use
+valid shared todo fixtures instead of asserting a fabricated object into the domain type. Task edit,
+creation and view rules remain open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

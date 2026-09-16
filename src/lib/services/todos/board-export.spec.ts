@@ -1,21 +1,12 @@
+import { todoBuilder, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { Todo, TodoView } from '$lib/models/todos';
-import { boardExportSlug, boardMarkdown } from './index';
+import { boardExportSlug, boardMarkdown } from './board-export';
 
 const generatedAt = new Date(2026, 7, 3); // 3 Aug 2026, local time
 
 const view = (overrides: Partial<Todo> = {}): TodoView => ({
-	todo: {
-		id: 'todo-1',
-		userId: 'user-1',
-		projectId: 'project-1',
-		title: 'Send the design',
-		status: 'open',
-		responsibility: 'mine',
-		createdAt: '2026-08-01T09:00:00Z',
-		updatedAt: '2026-08-01T09:00:00Z',
-		...overrides
-	} as Todo
+	todo: todoBuilder({ title: 'Send the design', ...overrides })
 });
 
 const exportBoard = (
@@ -90,7 +81,7 @@ describe('Kanban board Markdown export', () => {
 
 	it('shows the project name on each card when project names are provided', () => {
 		const markdown = exportBoard([view()], {
-			projectNames: new Map([['project-1', 'Apollo']])
+			projectNames: new Map([[testProjectId(), 'Apollo']])
 		});
 		expect(markdown).toContain('- [ ] **Send the design** · Apollo');
 	});
