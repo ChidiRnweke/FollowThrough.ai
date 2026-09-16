@@ -3,24 +3,11 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	BacklinkView,
 	CreateRelationshipInput,
-	LinkCandidate,
 	RelationshipId,
-	RelationshipKind
+	RelationshipClassification
 } from '$lib/models/relationships';
-import type { Note, NoteId, NoteRelationship, TextSelection } from '$lib/models/notes';
+import type { Note, NoteId, NoteRelationship } from '$lib/models/notes';
 
-export interface LinkFinder {
-	find(
-		actor: ActorContext,
-		selection: TextSelection,
-		signal?: AbortSignal
-	): Promise<readonly LinkCandidate[]>;
-}
-export interface RelationshipClassification {
-	readonly kind: RelationshipKind;
-	readonly justification: string;
-	readonly confidence: number;
-}
 export interface RelationshipClassifier {
 	classify(
 		sourceText: string,

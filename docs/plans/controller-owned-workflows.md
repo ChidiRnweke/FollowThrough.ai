@@ -210,6 +210,16 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   a suggestion-listing service. Regression tests cover expired/pending review, profile memory,
   Today counts, account isolation and storage failures. Service reads themselves do not expire rows.
   All 3,684 unit tests and local quality checks pass.
+- Global orchestration: related-note retrieval and classification now run in the relationship
+  controller using the already-resolved selection note. The service wrapper, duplicate note read
+  and duplicate heuristic classifier are removed. One model schema defines classification values.
+  Shared relationship rules retain the strongest passage from duplicate chunks; search and
+  classification receive cancellation. The reranking search wrapper remains pending global review.
+  All 3,686 unit tests and local quality checks pass.
+- P15 follow-up: CI exposed a race between checking for a completed template and reading its
+  reservation. A deterministic test reproduces it. Completion now recognizes another request's
+  committed template after either reservation or staging disappears. All 252 PostgreSQL contracts
+  and 3,685 unit tests pass with that fix.
 
 ## Validation principles
 

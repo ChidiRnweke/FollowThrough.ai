@@ -2,12 +2,10 @@ import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-sel
 import { describe, expect, it } from 'vitest';
 import type { ReferenceCandidate, Url } from '$lib/models/references';
 import type { TextSelection } from '$lib/models/notes';
-import { Relationships } from '$lib/server/controllers/relationships/controller';
 import { References } from '$lib/server/controllers/references/controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import {
-	InMemoryLinkFinder,
 	InMemoryProvenanceRecorder,
 	InMemoryReferencePipeline
 } from '$lib/testing/relationships/fakes/in-memory-pipelines';
@@ -44,22 +42,13 @@ const setup = () => {
 	content.notes = [noteBuilder({ plainText: selection.text })];
 	const suggestions = new InMemorySuggestions();
 	const provenance = new InMemoryProvenanceRecorder();
-	const links = new InMemoryLinkFinder();
 	const references = new InMemoryReferencePipeline();
 	const transactionRunner = new InMemoryTransactionRunner([content, provenance, suggestions]);
 	return {
 		content,
 		suggestions,
 		provenance,
-		links,
 		references,
-		relate: new Relationships({
-			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-			linkFinder: links,
-			suggestionCreator: suggestions,
-			transactionRunner,
-			workflowRunner: new InMemoryWorkflowRunner()
-		}),
 		reference: new References({
 			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 			referenceFinder: references,
@@ -70,63 +59,6 @@ const setup = () => {
 		})
 	};
 };
-
-describe('Relate workflow invariants', () => {
-	it('creates one backlink suggestion per related note', async () => {
-		const { links, relate } = setup();
-		links.candidates = [
-			{
-				targetNoteId: testNoteId(2),
-				kind: 'contradicts',
-				justification: 'Opposite decision',
-				confidence: 90
-			}
-		];
-		const result = await relate.suggestFromSelection(testActor(), { selection });
-		expect(result.suggestions).toHaveLength(1);
-	});
-
-	it('preserves the semantic relationship label', async () => {
-		const { links, relate } = setup();
-		links.candidates = [
-			{
-				targetNoteId: testNoteId(2),
-				kind: 'prior_decision',
-				justification: 'Earlier decision',
-				confidence: 88
-			}
-		];
-		const result = await relate.suggestFromSelection(testActor(), { selection });
-		expect(result.suggestions[0]?.kind === 'backlink' && result.suggestions[0].payload.kind).toBe(
-			'prior_decision'
-		);
-	});
-
-	it('returns no suggestions when retrieval finds no relationship', async () => {
-		const { relate } = setup();
-		const result = await relate.suggestFromSelection(testActor(), { selection });
-		expect(result.suggestions).toEqual([]);
-	});
-
-	it('rolls back its anchor when suggestion persistence fails', async () => {
-		const { content, suggestions, links, relate } = setup();
-		links.candidates = [
-			{
-				targetNoteId: testNoteId(2),
-				kind: 'mentions',
-				justification: 'Related subject',
-				confidence: 70
-			}
-		];
-		suggestions.failCreation = true;
-		try {
-			await relate.suggestFromSelection(testActor(), { selection });
-		} catch {
-			// The restored anchor collection is the invariant under test.
-		}
-		expect(content.anchors).toEqual([]);
-	});
-});
 
 describe('Reference workflow invariants', () => {
 	it('returns an honest empty outcome when search finds nothing', async () => {
