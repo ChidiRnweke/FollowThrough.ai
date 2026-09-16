@@ -5,14 +5,14 @@ import type {
 	MoveProjectEntryInput,
 	Project,
 	ProjectId,
-	ProjectTreeNode,
+	ProjectDetails,
 	RenameProjectInput,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note } from '$lib/models/notes';
 
 export interface ProjectCreator {
-	create(actor: ActorContext, input: CreateProjectInput): Promise<Project>;
+	create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project>;
 }
 
 export interface ProjectReader {
@@ -24,7 +24,7 @@ export interface ProjectLister {
 }
 
 export interface ProjectEditor {
-	rename(actor: ActorContext, input: RenameProjectInput): Promise<Project>;
+	rename(actor: ActorContext, input: RenameProjectInput & ProjectDetails): Promise<Project>;
 	archive(actor: ActorContext, projectId: ProjectId): Promise<Project>;
 	setSectionNumberingDefault(
 		actor: ActorContext,
@@ -33,7 +33,7 @@ export interface ProjectEditor {
 }
 
 export interface ProjectTreeReader {
-	read(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTreeNode[]>;
+	readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
 }
 
 export interface FolderCreator {

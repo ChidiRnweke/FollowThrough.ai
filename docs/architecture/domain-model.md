@@ -5,7 +5,7 @@ Use this map to find the code and tests for a change. Paths in the table are rel
 | Change                                  | Code to inspect                                                                                                                                                                        | Existing regression coverage                                                                                                                         |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Task fields or completion status        | `models/todos/index.ts`: `applyTodoEdit`; `server/services/todos/catalog.ts`: `create`, `change`, `update`                                                                             | `server/services/todos/catalog.spec.ts`                                                                                                              |
-| Folder placement or sibling order       | `models/projects/index.ts`: `decideProjectEntryMove`; `models/notes/index.ts`: `decideNoteCreation`                                                                                    | `server/services/projects/catalog.spec.ts`; `controllers/workspace/command-creation.spec.ts`                                                         |
+| Folder placement or sibling order       | `server/services/projects/catalog.ts`: `decideProjectEntryMove`; `models/notes/index.ts`: `decideNoteCreation`                                                                         | `server/services/projects/catalog.spec.ts`; `controllers/workspace/command-creation.spec.ts`                                                         |
 | Archive or restore a note               | `models/notes/index.ts`: `decideNoteArchive`, `decideNoteRestore`; `stores/workspace/resources.svelte.ts`: `prepareCommand`                                                            | `server/controllers/notes/restore.spec.ts`; `controllers/workspace/command-trash.spec.ts`                                                            |
 | Save a document or publish a snapshot   | `server/controllers/notes/controller.ts`: `save`, `publish`, `discardDraft`, `restoreRevision`; `server/services/notes/catalog.ts`: `save`, `record`                                   | `server/controllers/notes/save.spec.ts`; `server/controllers/notes/restore-revision.spec.ts`                                                         |
 | Skill metadata or imported instructions | `server/controllers/skills/controller.ts`: `update`, `restoreVersion`; `server/services/skills/library.ts`: `prepareEdit`, `commitEdit`                                                | `server/controllers/skills/import-document.spec.ts`; `server/controllers/skills/restore-version.spec.ts`                                             |
@@ -60,3 +60,10 @@ Agent checkpoints carry the serialized domain review with the tool call identity
 transport does not interpret note content. The tool boundary and client reader use the notes
 schema to recover the same value. Preview rendering reads this value, not a newer cached note.
 This preserves the self-contained model namespaces and the parsing boundary in ADR 0037.
+
+## Project rules
+
+Project controllers and downloaded workspace commands use `services/projects/details.ts` for
+name and description normalization. Controllers apply `services/projects/presentation.ts` to
+resolved entry records. ProjectCatalog owns move validation and sibling ordering against its real
+repository. The project model contains values, types and schemas only.

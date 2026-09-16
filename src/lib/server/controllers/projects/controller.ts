@@ -1,3 +1,6 @@
+import { assembleProjectTree } from '$lib/services/projects/presentation';
+import { decideProjectDetails } from '$lib/services/projects/details';
+import { ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { Note } from '$lib/models/notes';
 import type {
@@ -129,19 +132,35 @@ export class Projects implements ProjectsController {
 	}
 
 	async get(actor: ActorContext, input: GetProjectInput): Promise<GetProjectOutput> {
-		const [project, tree] = await Promise.all([
+		const [project, entries] = await Promise.all([
 			this.dependencies.projectReader.get(actor, input.projectId),
-			this.dependencies.projectTreeReader.read(actor, input.projectId)
+			this.dependencies.projectTreeReader.readEntries(actor, input.projectId)
 		]);
-		return { project, tree };
+		return { project, tree: assembleProjectTree(entries) };
 	}
 
 	async create(actor: ActorContext, input: CreateProjectInput): Promise<CreateProjectOutput> {
-		return { project: await this.dependencies.projectCreator.create(actor, input) };
+		const details = decideProjectDetails(input);
+		if (details.kind === 'invalid') throw new ValidationError(details.message);
+		return {
+			project: await this.dependencies.projectCreator.create(actor, {
+				...input,
+				name: details.name,
+				description: details.description
+			})
+		};
 	}
 
 	async rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput> {
-		return { project: await this.dependencies.projectEditor.rename(actor, input) };
+		const details = decideProjectDetails(input);
+		if (details.kind === 'invalid') throw new ValidationError(details.message);
+		return {
+			project: await this.dependencies.projectEditor.rename(actor, {
+				...input,
+				name: details.name,
+				description: details.description
+			})
+		};
 	}
 
 	async archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {

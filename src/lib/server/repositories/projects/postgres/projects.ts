@@ -106,7 +106,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		try {
 			const [row] = await this.database
 				.update(schema.projects)
-				.set({ name: input.name, description: input.description })
+				.set({ name: input.name, description: input.description ?? null })
 				.where(
 					and(
 						eq(schema.projects.id, input.projectId),
