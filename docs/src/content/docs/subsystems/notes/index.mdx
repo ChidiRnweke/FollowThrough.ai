@@ -1,11 +1,11 @@
 ---
 title: Notes
-description: How notes are saved, synced offline-first behind an ETag protocol, published, and bulk-imported, with every write transaction keeping derived state consistent.
+description: How notes are saved, synchronized through durable workspace operations, published, and imported.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-A note is a ProseMirror document plus a revision counter. Every save runs in one transaction that also repairs source anchors, rewrites the derived link rows, and re-indexes the note for search, so the body and its derived state can never diverge. Offline editing is an optimistic-concurrency protocol: the client carries an ETag (`note:<id>:r<revision>`), and a stale base is a conflict only when the remote content genuinely differs, so a retried save that already landed resolves to `saved`. Bulk import takes a zip of Markdown (a "vault") and is deliberately **not** transactional, with hard limits checked against declared archive sizes before anything decompresses.
+A note is a ProseMirror document plus a revision counter. Every save runs in one transaction that also repairs source anchors, rewrites the derived link rows, and re-indexes the note for search, so the body and its derived state can never diverge. Offline edits use the shared workspace outbox. Each operation carries its identity and observed resource version. A durable server receipt proves whether that exact operation applied; matching note content does not establish acknowledgement. Bulk import takes a zip of Markdown (a "vault") and is deliberately **not** transactional, with hard limits checked against declared archive sizes before anything decompresses.
 
 User-facing behavior: [Notes](/FollowThrough.ai/using/notes/).
 
@@ -15,15 +15,16 @@ Notes are the substrate everything else sits on: todos extract from them, memory
 
 ## The layers
 
-- **Models**: `src/lib/models/notes/`: `Note`, `NoteView`, `VersionedNote`, `NoteSyncRecord`, plus the pure functions `noteEtag`, `noteMatchesEtag`, `noteSyncContentEquals`, `collectNoteLinkTargets`, and `resolveWikiLinks`.
-- **Services**: `src/lib/server/services/notes/`: `NoteCatalog` (validation and writes), provenance recording, the pure archive reader `import.ts`, and isomorphic Markdown conversion (`markdown.ts`).
-- **Controllers**: `src/lib/server/controllers/notes/controller.ts` (`Notes`: get/create/save/sync/publish/discardDraft/listSyncInventory/rename/archive) and `src/lib/server/controllers/imports/controller.ts` (`NoteImportsController`).
-- **Repositories**: `src/lib/server/repositories/notes/`: all Drizzle access, including the compare-and-swap write `updateIfRevision`.
-- **Client**: `src/lib/client/notes/sync/`: `NoteSyncCoordinator` over IndexedDB; the offline half of the protocol.
+- **Models**: `src/lib/models/notes/` contains note values, request types and schemas. Remaining document and edit helpers are still being moved to their owners.
+- **Shared services**: `src/lib/services/notes/presentation.ts` assembles note views and computes revision tokens for server and downloaded records.
+- **Server services**: `NoteCatalog` validates and writes notes. Focused services handle anchors, relationships and indexing.
+- **Controllers**: `Notes` coordinates saves, synchronization, publication, archive import and view assembly. `WorkspaceViews` assembles downloaded views.
+- **Repositories**: note repositories own Drizzle access, including the compare-and-swap write `updateIfRevision`.
+- **Client**: `src/lib/client/sync/` owns IndexedDB storage, the outbox and the account workspace runtime.
 
 ## The save transaction
 
-`Notes.save` (`controller.ts:176`) does four things atomically:
+`Notes.save` does four things atomically:
 
 1. `NoteCatalog.save` validates and writes: non-empty title, a well-formed ProseMirror document, not archived, `projectId`/`kind` immutable: a save can never move a note between projects or turn it into a folder, and folders cannot hold authored content. Concurrency is optimistic: the candidate must carry the current revision, and the write is `updateIfRevision`, so a concurrent save loses with `StaleRevisionError` instead of overwriting.
 2. `repairForNote` re-points source anchors whose quote is still unique in the new text.
@@ -32,30 +33,25 @@ Notes are the substrate everything else sits on: todos extract from them, memory
 
 The read side (`get`) is the opposite shape: note, relationships, references, diagrams, todos, and pending suggestions are fetched in parallel and assembled into a `NoteView` carrying the note's ETag.
 
-## Sync: the ETag protocol
+## Offline synchronization
 
-The ETag is derived, never stored: `noteEtag(note)` returns `` `note:${id}:r${currentRevision}` `` (`models/notes/index.ts:359`), so any holder of a note can compute the token a save must present. `NoteSyncRecord` is the client's three-way state: `base` (last version both sides agreed on), `local` (device copy), and optional `remote` (diverged server copy), with state `synced | pending | syncing | conflict`. The UI-level `NoteSyncStatus` adds `loading`, `saving`, `error`, which is what the autosave indicator shows.
+A browser edit enters the workspace outbox before local save reports success. The operation keeps its identity, normalized command and observed resource version. The server's `Notes.synchronize` coordinates the operation lock, version check, note write and durable receipt in one transaction. Retrying the same operation cannot apply it twice.
 
-`Notes.sync` (`controller.ts:192`) is the offline client's write path. It first validates that the submitted note matches its `baseEtag` (`noteMatchesEtag`, else `ValidationError`), then delegates to `save`. The interesting part is what a `StaleRevisionError` means:
-
-- The controller re-reads the remote. If `noteSyncContentEquals(remote, submitted)` (title, plainText, pin, and document compared, **timestamps deliberately excluded**), the outcome is `saved`. Retrying a save that actually landed is never reported as a conflict.
-- Only genuine divergence returns `conflict` with the remote version attached.
+The resource version used by workspace synchronization is distinct from the note revision used by publication. `noteEtag(note)` in `services/notes/presentation.ts` returns `note:<id>:r<currentRevision>`. Publishing rejects a token for a different note or revision.
 
 <Mermaid
 	source={`
 flowchart LR
-	stage["stage edit (pending)"] --> flush["flush → sync(note, baseEtag)"]
-	flush --> outcome{"server outcome"}
-	outcome -->|"saved"| saved["base = server version (synced)"]
-	outcome -->|"conflict"| conflict["remote attached (conflict)"]
-	conflict --> keep["keepLocal: rebase onto remote revision, re-stage"]
-	conflict --> use["useRemote: adopt remote"]
+	stage["persist edit in workspace outbox"] --> send["send operation and observed version"]
+	send --> outcome{"server result"}
+	outcome -->|"applied or replayed"| receipt["commit exact receipt and available body"]
+	outcome -->|"version conflict"| review["retain edit for review"]
+	review --> keep["new operation against reviewed version"]
 	keep --> stage
-	use --> saved
 `}
 />
 
-On the client, `NoteSyncCoordinator` (`src/lib/client/notes/sync/coordinator.ts`) keeps one record per note in IndexedDB and drives it through the states: `stage` records an edit as `pending`, `flush` sends it, and any divergence lands the record in `conflict` with the remote attached. Resolution is a whole-document choice: there is no partial merge: `useRemote` adopts the server version; `keepLocal` rebases the local document onto the remote revision and re-stages it as `pending`. `listSyncInventory` returns every note in a project with its current ETag, so a returning client can diff device state against the server.
+An operation receipt can prove application even when a newer server version has replaced its resulting body. That newer body cannot stand in for the original result. The browser preserves uncertain edits for explicit review. See [ADR 0040](/FollowThrough.ai/decisions/0040-synchronize-workspace-records-locally-and-fetch-only-changed-versions/) for account ownership, replay and conflict rules.
 
 ## Publish and drafts
 
@@ -63,20 +59,20 @@ On the client, `NoteSyncCoordinator` (`src/lib/client/notes/sync/coordinator.ts`
 
 ## Vault import
 
-`NoteImportsController.importMarkdownArchive` bulk-imports a zip of Markdown. It is deliberately **not** transactional: a vault with three malformed files imports the rest and reports the three, because a partial import that reports itself is recoverable and a full rollback is the wrong trade for onboarding.
+The remote archive reader prepares Markdown entries, then `Notes.importMarkdownArchive` creates notes and resolves links. The whole import is deliberately **not** transactional: a vault with three malformed files imports the rest and reports the three. Each note save still commits its own derived state atomically.
 
-Archive reading (`src/lib/server/services/notes/import.ts`) is pure and defensive. `adm-zip` offers no protection of its own, so every limit is enforced against the **declared** uncompressed sizes in the zip headers before anything decompresses:
+Archive reading (`src/lib/remote/notes/archive-reader.server.ts`) checks the **declared** uncompressed sizes in the zip headers before decompressing entries:
 
 - Whole-archive rejections: over 25 MB total (`maxTotalBytes`), over 2,000 entries (`maxEntries`), or any path that escapes the root (`..` segments, with backslashes folded to `/` so Windows-style archives can't smuggle traversal past the check).
 - Per-file skips, reported not fatal: larger than 1 MB, nested deeper than 8 folders, not Markdown (`.md`, `.markdown`, `.mdx`).
 - Ignored outright: `__MACOSX/`, `.git/`, `.obsidian/`, `.trash/`, and any dotfile or dot-directory anywhere in the path.
 
-Creation runs in two passes (`controller.ts:126`): every note is created and titled first (the file name names the note, never frontmatter or a heading, and ` (2)` suffixes resolve title collisions within a folder), then bodies are written with `[[wiki links]]` resolved by `resolveWikiLinks` against the now-complete title map (case-insensitive, keyed on the title as written in the archive). A vault's links point both directions, so only after every note exists is every title resolvable; an unresolved link stays exactly as the author wrote it. YAML frontmatter is stripped and its keys reported as unmapped.
+Creation runs in two passes: notes are created and titled first, then bodies are written. `indexArchiveReferences` and `resolveArchiveLinks` in the import service resolve wiki links against original archive paths and titles, including records of failed imports. Display-name collision suffixes do not change that source identity. Relative paths resolve from the source folder. Ambiguous, missing and failed targets remain as written and appear in the import report. YAML frontmatter is stripped and its keys reported as unmapped.
 
 ## What always holds
 
 - A save and all its side effects (anchors, links, index) commit together or not at all.
-- Revision is the only concurrency token; content equality, not timing, decides whether a stale base was a retry or a conflict.
+- Note revisions guard direct note writes and publication. Workspace resource versions guard offline operations; durable receipts identify retries.
 - Conflict resolution always preserves a complete rich document; there is no partial merge.
 - Import is additive: a name collision never merges or overwrites an existing note.
 - The ETag is computable from any copy of the note: `note:<id>:r<currentRevision>`.

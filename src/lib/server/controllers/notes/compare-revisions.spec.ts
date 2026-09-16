@@ -3,7 +3,8 @@ import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag, type NoteRevisionId } from '$lib/models/notes';
+import type { NoteRevisionId } from '$lib/models/notes';
+import { noteEtag } from '$lib/services/notes/presentation';
 import {
 	noteBuilder,
 	testActor,
