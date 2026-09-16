@@ -132,6 +132,10 @@ export const controllerSurfaces = {
 		setPinned: true
 	},
 	agent: {
+		execute: true,
+		finishCancellation: true,
+		failRun: true,
+		recoverInterruptedRuns: true,
 		synchronize: true,
 		submit: true,
 		getRun: true,

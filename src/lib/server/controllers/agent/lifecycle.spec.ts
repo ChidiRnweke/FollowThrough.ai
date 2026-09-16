@@ -27,7 +27,9 @@ import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentRunLifecycle } from './controller';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import type { AgentRunner, ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
@@ -63,7 +65,7 @@ const throwingRunner = (error: unknown) => ({
 	}
 });
 
-const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecutionUpdate> }>(
+const setup = <T extends AgentRunner>(
 	runner: T,
 	options?: {
 		readonly contextMemory?: InMemoryMemoryEntryRepository;
@@ -95,50 +97,52 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 	};
 	runs.runs.push(run);
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
-	const lifecycle = new AgentRunLifecycle({
-		runs,
-		events: runs,
-		decisions: runs,
-		sessions,
-		transactions,
-		settlements: new RunSettlements(runs, runs),
-		contextFormatter: new AgentContext(),
-		contextNotes: new InMemoryNoteContent(),
-		contextSkills: new InMemorySkills(),
-		builtInSkills: builtInSkillsFixture().builtInSkills,
-		contextProjects: new InMemoryProjects(),
-		contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
-		contextConversations: new ConversationArchive(new InMemoryConversationRepository()),
-		provenance: {
-			record: async () => {
-				throw new Error('Unexpected provenance record');
-			}
-		},
-		conversations: {
-			recordToolActivity: async (_actor, _conversationId, activity) => {
-				toolRows.push(activity);
+	const lifecycle = new Agent(
+		capabilityDependencies<AgentDependencies>({
+			runs,
+			events: runs,
+			decisions: runs,
+			sessions,
+			transactionRunner: transactions,
+			settlements: new RunSettlements(runs, runs),
+			contextFormatter: new AgentContext(),
+			contextNotes: new InMemoryNoteContent(),
+			contextSkills: new InMemorySkills(),
+			builtInSkills: builtInSkillsFixture().builtInSkills,
+			contextProjects: new InMemoryProjects(),
+			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
+			contextConversations: new ConversationArchive(new InMemoryConversationRepository()),
+			provenance: {
+				record: async () => {
+					throw new Error('Unexpected provenance record');
+				}
 			},
-			recordAssistantText: async (_actor, _conversationId, text, _model, provenance) => {
-				journalled.push({ kind: 'text', text, cursor: provenance?.eventCursor });
-			},
-			recordAssistantReasoning: async (_actor, _conversationId, text, _model, provenance) => {
-				journalled.push({ kind: 'reasoning', text, cursor: provenance?.eventCursor });
-			}
-		},
-		runner: runner as never,
-		eventBus: {
-			notify: (runId) => {
-				notified.push(runId);
-				if (runs.events.some((record) => record.event.type === 'approval_required')) {
-					const saved = runs.runs.find((row) => row.id === runId);
-					approvalVisibility.push(
-						saved?.status === 'awaiting_approval' &&
-							saved.pendingDecisions.some((pending) => pending.review !== undefined)
-					);
+			conversationJournal: capabilityDependencies<ConversationJournal>({
+				recordToolActivity: async (_actor, _conversationId, activity) => {
+					toolRows.push(activity);
+				},
+				recordAssistantText: async (_actor, _conversationId, text, _model, provenance) => {
+					journalled.push({ kind: 'text', text, cursor: provenance?.eventCursor });
+				},
+				recordAssistantReasoning: async (_actor, _conversationId, text, _model, provenance) => {
+					journalled.push({ kind: 'reasoning', text, cursor: provenance?.eventCursor });
+				}
+			}),
+			runner,
+			eventBus: {
+				notify: (runId) => {
+					notified.push(runId);
+					if (runs.events.some((record) => record.event.type === 'approval_required')) {
+						const saved = runs.runs.find((row) => row.id === runId);
+						approvalVisibility.push(
+							saved?.status === 'awaiting_approval' &&
+								saved.pendingDecisions.some((pending) => pending.review !== undefined)
+						);
+					}
 				}
 			}
-		}
-	});
+		})
+	);
 	return { lifecycle, runs, notified, runner, journalled, toolRows, approvalVisibility };
 };
 

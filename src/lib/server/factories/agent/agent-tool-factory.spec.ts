@@ -1524,7 +1524,7 @@ describe('Agent tool coverage invariants', () => {
 /**
  * The id the run correlates a settled call by. It used to reach the executor as
  * `String(details?.toolCall?.callId ?? '')`, so a call the provider sent no id
- * for arrived as a value rather than as an absence — and `AgentRunLifecycle`
+ * for arrived as a value rather than as an absence — and the Agent controller
  * keys its successful mutations by exactly this string, where a second id-less
  * mutation overwrote the first.
  */

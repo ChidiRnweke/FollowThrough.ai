@@ -417,6 +417,14 @@ values and schemas. Metadata regressions run through the actual controller, and 
 tests follow their owning controller or service. Other domain decisions still in models, hidden
 execution-controller ports and durable selection workflows remain unfinished.
 
+Chat run lifecycle: the Agent controller now owns submission, execution, cancellation and restart
+recovery. AgentRunExecutor and the separate execution/recovery controllers are removed. The factory
+provides the actual reasoning runner, context services and settlement service. Submission tests now
+execute the real lifecycle with repository and provider fakes, including real approval checkpoints.
+A PostgreSQL regression reproduced context preparation overwriting concurrent cancellation; the
+repository update now guards the status in its write statement. WorkflowRunStarter still hides a
+controller, selection inputs are not yet reconstructible, and the wider model migration remains open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

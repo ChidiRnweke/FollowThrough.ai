@@ -9,12 +9,10 @@ import type {
 	AgentEvent,
 	AgentPreferences,
 	AgentRun,
-	AgentRunDecisionRecord,
 	AgentRunId,
 	AgentRunReceipt,
 	AgentRunEventRecord,
 	AgentRunSnapshot,
-	AgentSessionItem,
 	PersistedSessionItem,
 	Conversation,
 	ConversationId,
@@ -41,7 +39,6 @@ import {
 	resolveAgentModel,
 	resolveVisionModel
 } from '$lib/server/services/agent/runs/preferences';
-import type { AgentRunExecutor } from '$lib/server/services/agent/runs/execution-contracts';
 import {
 	abortActiveRun,
 	registerActiveRun,
@@ -50,51 +47,26 @@ import {
 import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
 import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-
-interface AgentRunRepository {
-	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
-	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
-	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
-	findActiveByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun | undefined>;
-	insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined>;
-	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
-	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
-}
-
-interface AgentRunEventRepository {
-	append(runId: AgentRunId, attempt: number, event: AgentEvent): Promise<AgentRunEventRecord>;
-	replay(
-		actor: ActorContext,
-		runId: AgentRunId,
-		after: string
-	): Promise<readonly StoredAgentRunEventRecord[]>;
-	latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string>;
-}
-
-interface AgentRunDecisionRepository {
-	record(
-		actor: ActorContext,
-		input: {
-			readonly runId: AgentRunId;
-			readonly callId: string;
-			readonly decision: 'approve' | 'reject';
-			readonly message?: string;
-		}
-	): Promise<AgentRunDecisionRecord>;
-}
-
-interface AgentSessionRepository {
-	list(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		limit?: number
-	): Promise<readonly AgentSessionItem[]>;
-	replace(conversationId: ConversationId, items: readonly PersistedSessionItem[]): Promise<void>;
-}
-
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
+import { AgentProviderFailure } from '$lib/errors';
+import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
+import type { MemoryLibrary } from '$lib/server/services/memory/library';
+import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { toolActivityFromEvent } from '$lib/models/agent';
+import type { AgentRunContext, PreparedAgentRun } from '$lib/models/agent';
+import type {
+	AgentRunDecisionRepository,
+	AgentRunEventRepository,
+	AgentRunRepository,
+	AgentSessionRepository
+} from '$lib/server/services/agent/runs/execution-contracts';
+import type { AgentRunExecutionOutcome } from '$lib/models/agent';
+import type { AgentRunner, AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
+import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 /** Grace period the executor gets to settle a cancelled run before the backstop does it. */
@@ -108,6 +80,10 @@ class DuplicateSubmission extends Error {}
  * transports; this one deals in run receipts, snapshots, and event cursors.
  */
 export interface AgentController {
+	execute(runId: AgentRunId, signal: AbortSignal): Promise<AgentRunExecutionOutcome>;
+	finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined>;
+	failRun(runId: AgentRunId, error: Error): Promise<void>;
+	recoverInterruptedRuns(): Promise<number>;
 	synchronize(
 		actor: ActorContext,
 		input: ConversationMutationRequest
@@ -213,7 +189,7 @@ export interface AgentController {
 
 /**
  * Everything the {@link AgentController} needs to do its work, injected so the
- * controller can be built and tested without touching real stores or the executor.
+ * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
@@ -238,8 +214,28 @@ export interface AgentDependencies {
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
-	/** Executes queued runs in the background and reports their lifecycle. */
-	executor: AgentRunExecutor;
+
+	readonly settlements: RunSettlement;
+
+	readonly contextFormatter: AgentContext;
+
+	readonly contextNotes: NoteReader;
+
+	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
+
+	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
+
+	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
+
+	readonly contextProjects: ProjectReader;
+
+	readonly contextConversations: Pick<ConversationArchive, 'get'>;
+
+	readonly provenance: ProvenanceRecorder;
+
+	readonly runner: AgentRunner;
+
+	readonly eventBus: Pick<AgentEventBus, 'notify'>;
 }
 
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
@@ -462,7 +458,7 @@ export class Agent implements AgentController {
 		// No in-process execution to abort. A run parked on an approval, or one
 		// started by another process, would otherwise sit in `cancelling` forever.
 		if (run.status !== 'cancelling') return this.snapshot(actor, run);
-		const cancelled = await this.dependencies.executor.finishCancellation(runId);
+		const cancelled = await this.finishCancellation(runId);
 		return this.snapshot(actor, cancelled ?? run);
 	}
 
@@ -475,11 +471,9 @@ export class Agent implements AgentController {
 	private settleCancellationAfterGrace(runId: AgentRunId): void {
 		const timer = setTimeout(() => {
 			// audit-allow: silent-catch — this detached grace timer has no request caller; failure is emitted as an operational error for repair.
-			this.dependencies.executor
-				.finishCancellation(runId)
-				.catch((error) =>
-					console.error(`[agent-run] Could not settle cancelled run ${runId}:`, error)
-				);
+			this.finishCancellation(runId).catch((error) =>
+				console.error(`[agent-run] Could not settle cancelled run ${runId}:`, error)
+			);
 		}, CANCELLATION_GRACE_MS);
 		timer.unref();
 	}
@@ -541,16 +535,12 @@ export class Agent implements AgentController {
 		const controller = registerActiveRun(runId);
 		const cleanup = () => releaseActiveRun(runId);
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
-		void this.dependencies.executor
-			.execute(runId, controller.signal)
+		void this.execute(runId, controller.signal)
 			.then(cleanup, async (error) => {
 				cleanup();
 				// Without this the run stays `running` forever, holding the
 				// conversation's single active-run slot and its open event stream.
-				await this.dependencies.executor.failRun(
-					runId,
-					error instanceof Error ? error : new Error(String(error))
-				);
+				await this.failRun(runId, error instanceof Error ? error : new Error(String(error)));
 			})
 			.catch((error) =>
 				console.error(`[agent-run] Background execution could not be settled for ${runId}:`, error)
@@ -748,5 +738,431 @@ export class Agent implements AgentController {
 		)
 			throw new ValidationError('This conversation already has an active agent run');
 		throw error;
+	}
+
+	async execute(runId: AgentRunId, signal: AbortSignal): Promise<AgentRunExecutionOutcome> {
+		try {
+			const run = await this.prepare(runId);
+			if (!run) return 'cancelled';
+			const actor: ActorContext = { userId: run.userId };
+			const request = run.inputSnapshot;
+			const decisions = await this.dependencies.decisions.loadUnconsumed(run.id);
+			const toolExecutor: AgentToolExecutor = {
+				execute: async (input, action) => {
+					const output = await action();
+					if (input.classification !== 'mutation') return output;
+					await this.persistEvent(run, actor, {
+						type: 'resources_stale',
+						resources: ['workspace']
+					});
+					return output;
+				}
+			};
+			for await (const update of this.dependencies.runner.execute({
+				actor,
+				run,
+				request,
+				context: run.contextSnapshot,
+				...(decisions.length > 0 ? { decisions } : {}),
+				signal,
+				toolExecutor
+			})) {
+				// A runner that swallows the abort and keeps yielding still settles
+				// here, at the next boundary, instead of wedging in `cancelling`.
+				if (signal.aborted) {
+					await this.finishCancellation(run.id);
+					return 'cancelled';
+				}
+				if (update.type === 'event') {
+					await this.persistEvent(run, actor, update.event);
+					continue;
+				}
+				if (update.type === 'approval_checkpoint') {
+					let parked: AgentRun | undefined;
+					await this.dependencies.transactionRunner.run(async () => {
+						parked = await this.dependencies.runs.transition(
+							run.id,
+							'running',
+							'awaiting_approval',
+							{
+								serializedState: update.serializedState,
+								// Carried across the park so the resumed turn joins this run's
+								// trace rather than opening a second one for the same request.
+								...(update.traceparent ? { traceparent: update.traceparent } : {}),
+								pendingDecisions: update.pendingDecisions,
+								updatedAt: new Date().toISOString() as DateTime
+							}
+						);
+						if (!parked) return;
+						await this.dependencies.sessions.replace(run.conversationId, update.sessionItems);
+						for (const decision of decisions)
+							await this.dependencies.decisions.consume(run.id, decision.callId, new Date());
+						for (const pending of update.pendingDecisions) {
+							const event: AgentEvent = {
+								type: 'approval_required',
+								runId: run.id,
+								callId: pending.callId,
+								name: pending.toolName,
+								arguments: pending.arguments,
+								...(pending.review ? { review: pending.review } : {})
+							};
+							const record = await this.dependencies.events.append(run.id, 1, event);
+							const activity = toolActivityFromEvent(event);
+							if (activity)
+								await this.dependencies.conversationJournal.recordToolActivity(
+									actor,
+									run.conversationId,
+									activity,
+									{ runId: run.id, eventCursor: record.cursor }
+								);
+						}
+					});
+					// The park lost the race with a cancellation: the row is `cancelling`,
+					// so settle it rather than report a park that never happened.
+					if (!parked) {
+						await this.finishCancellation(run.id);
+						return 'cancelled';
+					}
+					// Publish only after the checkpoint and its approval events commit together.
+					this.dependencies.eventBus.notify(run.id);
+					return 'awaiting_approval';
+				}
+				const settled = await this.complete(
+					run,
+					actor,
+					update.sessionItems,
+					decisions.map((decision) => decision.callId)
+				);
+				// Same race as the park above: completion arrived after the row was
+				// already `cancelling`, so the cancel wins.
+				if (!settled) {
+					await this.finishCancellation(run.id);
+					return 'cancelled';
+				}
+				return 'completed';
+			}
+			throw new Error('The agent provider ended without a durable outcome');
+		} catch (error) {
+			// A cancel that lands mid-prepare turns the snapshot write into an
+			// illegal `cancelling → running` update, and the abort can lag the
+			// commit that parked the row. Either way the run is settling, not
+			// failing; `finishCancellation` no-ops for any other status, so a
+			// settled row is what distinguishes the race from a real failure.
+			const settled = await this.finishCancellation(runId);
+			if (signal.aborted || settled) return 'cancelled';
+			throw error;
+		}
+	}
+
+	/**
+	 * Settles a run the user asked to stop. `cancelling` is the only legal
+	 * predecessor of `cancelled`, and the caller commits that write before
+	 * aborting, so by the time this runs the row is already parked there.
+	 * Returns undefined when the run settled on its own first.
+	 */
+	async finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined> {
+		const result = await this.dependencies.transactionRunner.run(async () => {
+			const settlement = await this.dependencies.settlements.claim(runId, {
+				kind: 'cancelled',
+				message: 'Generation stopped'
+			});
+			if (settlement.kind === 'lost') return settlement;
+			const run = settlement.run;
+
+			await this.abandonPendingCalls(run, 'The request was cancelled before you answered.');
+			await this.dependencies.decisions.clearPending(runId);
+
+			return this.dependencies.settlements.complete(settlement);
+		});
+		if (result.kind === 'lost') return undefined;
+		this.dependencies.eventBus.notify(runId);
+		return result.run;
+	}
+
+	/**
+	 * Settles a run whose background execution threw. Without this a crashed run
+	 * stays `running` forever, holding the conversation's single active-run slot
+	 * and keeping its event stream open.
+	 */
+	async failRun(runId: AgentRunId, error: Error): Promise<void> {
+		try {
+			const code = error instanceof AgentProviderFailure ? error.providerCode : 'INTERNAL';
+			const message = error.message;
+			const failed = await this.dependencies.transactionRunner.run(async () => {
+				const settlement = await this.dependencies.settlements.claim(runId, {
+					kind: 'failed',
+					code,
+					message,
+					retryable: false
+				});
+				if (settlement.kind === 'lost') return settlement;
+				const run = settlement.run;
+
+				await this.abandonPendingCalls(run, 'The run ended before you answered this.');
+
+				return this.dependencies.settlements.complete(settlement);
+			});
+			if (failed.kind === 'settled') {
+				this.dependencies.eventBus.notify(runId);
+				return;
+			}
+
+			// Not `running`: either the user asked to stop and the run is parked in
+			// `cancelling`, or it already settled. Both are handled by the no-op
+			// compare-and-set below.
+			await this.finishCancellation(runId);
+		} catch (settlementError) {
+			throw new AggregateError(
+				[error, settlementError],
+				`Agent run ${runId} failed and its failure could not be persisted`,
+				{ cause: settlementError }
+			);
+		}
+	}
+
+	private async prepare(runId: AgentRunId): Promise<PreparedAgentRun | undefined> {
+		const transitioned = await this.dependencies.runs.transitionAgent(runId, 'queued', 'running', {
+			startedAt: new Date().toISOString() as DateTime
+		});
+		if (!transitioned) return undefined;
+		let run = transitioned;
+		const actor: ActorContext = { userId: run.userId };
+
+		if (!run.provenanceId) {
+			const provenance = await this.dependencies.provenance.record(actor, {
+				producerKind: 'agent',
+				producerName: 'FollowThrough Workbench Agent',
+				pipeline: 'agent',
+				runId: run.id,
+				model: run.model,
+				metadata: {}
+			});
+			run = { ...run, provenanceId: provenance.id };
+			await this.dependencies.runs.update(actor, run);
+		}
+
+		if (!run.contextSnapshot) {
+			const context = await this.buildContext(actor, run.inputSnapshot);
+			run = { ...run, contextSnapshot: context };
+			await this.dependencies.runs.update(actor, run);
+		}
+
+		await this.dependencies.events.append(run.id, 1, {
+			type: 'run_started',
+			runId: run.id,
+			attempt: 1
+		});
+		this.dependencies.eventBus.notify(run.id);
+
+		return run as PreparedAgentRun;
+	}
+
+	private async buildContext(actor: ActorContext, input: RunAgentInput): Promise<AgentRunContext> {
+		await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.builtInSkills.ensure(actor)
+		);
+		const current = input.noteId
+			? {
+					kind: 'note' as const,
+					note: await this.dependencies.contextNotes.get(actor, input.noteId)
+				}
+			: { kind: 'no_current_note' as const };
+		const base = this.dependencies.contextFormatter.base(input, current);
+		const [skills, contextNotes, profileMemory] = await Promise.all([
+			this.dependencies.contextSkills.listEnabled(actor, base.projectId),
+			Promise.all(
+				(input.contextNoteIds ?? []).map((noteId) => this.loadAttachedNote(actor, noteId))
+			),
+			this.dependencies.contextMemory.list(actor, {})
+		]);
+		if (!input.appContext)
+			return this.dependencies.contextFormatter.build(input, {
+				base,
+				skills,
+				contextNotes,
+				profileMemory
+			});
+		const conversation = await this.dependencies.contextConversations.get(
+			actor,
+			input.conversationId
+		);
+		const origin = conversation.contextProjectId
+			? {
+					kind: 'project' as const,
+					project: await this.dependencies.contextProjects.get(actor, conversation.contextProjectId)
+				}
+			: { kind: 'no_origin_project' as const };
+		const appContext = this.dependencies.contextFormatter.appContext(
+			input.appContext,
+			conversation,
+			origin
+		);
+		if (!input.requestedScope)
+			return this.dependencies.contextFormatter.build(input, {
+				base,
+				skills,
+				contextNotes,
+				profileMemory,
+				appContext
+			});
+		const requested = input.requestedScope;
+		const [project, note] = await Promise.all([
+			requested.projectId
+				? this.dependencies.contextProjects.get(actor, requested.projectId)
+				: undefined,
+			requested.noteId ? this.dependencies.contextNotes.get(actor, requested.noteId) : undefined
+		]);
+		const requestedScope = this.dependencies.contextFormatter.requestedScope(input.appContext, {
+			project,
+			note
+		});
+		return this.dependencies.contextFormatter.build(input, {
+			base,
+			skills,
+			contextNotes,
+			profileMemory,
+			appContext: { ...appContext, requestedScope }
+		});
+	}
+
+	private async loadAttachedNote(actor: ActorContext, noteId: NoteId) {
+		try {
+			return await this.dependencies.contextNotes.get(actor, noteId);
+		} catch (error) {
+			if (!(error instanceof NotFoundError)) throw error;
+			throw new NotFoundError(
+				'An attached note is no longer available. Remove it from context and retry.',
+				{ noteId }
+			);
+		}
+	}
+
+	/**
+	 * Settles the calls a run was parked on when the run itself ends without them being
+	 * answered. The journal is append-only, so a call's last written row is its status
+	 * forever: a run that died holding an approval left that row saying `approval_required`
+	 * and nothing ever contradicted it. Reopening the conversation then replayed a live
+	 * Approve/Reject card for a run that could not act on either answer.
+	 *
+	 * The actor comes off the run row rather than the caller, because the two paths into
+	 * here — a crash and a cancellation — both start from a run id alone.
+	 */
+	private async abandonPendingCalls(run: AgentRun, failure: string): Promise<void> {
+		if (run.pendingDecisions.length === 0) return;
+		const actor: ActorContext = { userId: run.userId };
+		for (const pending of run.pendingDecisions)
+			await this.dependencies.conversationJournal.recordToolActivity(
+				actor,
+				run.conversationId,
+				{
+					callId: pending.callId,
+					name: pending.toolName,
+					input: pending.arguments,
+					failure,
+					status: 'failed'
+				},
+				{ runId: run.id }
+			);
+		await this.dependencies.runs.update(actor, { ...run, pendingDecisions: [] });
+	}
+
+	private async persistEvent(
+		run: AgentRun,
+		actor: ActorContext,
+		event: AgentEvent
+	): Promise<AgentRunEventRecord> {
+		const record = await this.dependencies.transactionRunner.run(async () => {
+			const record = await this.dependencies.events.append(run.id, 1, event);
+			const activity = toolActivityFromEvent(event);
+			if (activity)
+				await this.dependencies.conversationJournal.recordToolActivity(
+					actor,
+					run.conversationId,
+					activity,
+					{
+						runId: run.id,
+						eventCursor: record.cursor
+					}
+				);
+			return record;
+		});
+		this.dependencies.eventBus.notify(run.id);
+		return record;
+	}
+
+	private async complete(
+		run: AgentRun,
+		actor: ActorContext,
+		sessionItems: readonly PersistedSessionItem[],
+		decisionCallIds: readonly string[] = []
+	): Promise<boolean> {
+		const settled = await this.dependencies.transactionRunner.run(async () => {
+			const settlement = await this.dependencies.settlements.claim(run.id, {
+				kind: 'completed',
+				conversationId: run.conversationId,
+				model: run.model
+			});
+			if (settlement.kind === 'lost') return settlement;
+
+			await this.dependencies.sessions.replace(run.conversationId, sessionItems);
+			for (const callId of decisionCallIds)
+				await this.dependencies.decisions.consume(run.id, callId, new Date());
+			// One message per contiguous run of output, each carrying the cursor it began at.
+			// Written as a single blob it could only be replayed after every tool call, which
+			// is why a reopened conversation read as "all the work, then all the words".
+			const segments = await this.dependencies.events.reconstructOutput(run.id, 1);
+			for (const segment of segments) {
+				const provenance = { runId: run.id, eventCursor: segment.cursor };
+				if (segment.kind === 'reasoning')
+					await this.dependencies.conversationJournal.recordAssistantReasoning(
+						actor,
+						run.conversationId,
+						segment.text,
+						run.model,
+						provenance
+					);
+				else
+					await this.dependencies.conversationJournal.recordAssistantText(
+						actor,
+						run.conversationId,
+						segment.text,
+						run.model,
+						provenance
+					);
+			}
+
+			return this.dependencies.settlements.complete(settlement);
+		});
+		if (settled.kind === 'settled') this.dependencies.eventBus.notify(run.id);
+		return settled.kind === 'settled';
+	}
+
+	async recoverInterruptedRuns(): Promise<number> {
+		const interrupted = await this.dependencies.runs.listInterrupted();
+		for (const run of interrupted) {
+			if (run.kind === 'agent') {
+				if (run.status === 'cancelling') await this.finishCancellation(run.id);
+				else await this.failRun(run.id, new Error('Process restarted'));
+			} else {
+				const result = await this.dependencies.transactionRunner.run(async () => {
+					const settlement = await this.dependencies.settlements.claim(
+						run.id,
+						run.status === 'cancelling'
+							? { kind: 'cancelled', message: 'Generation stopped' }
+							: {
+									kind: 'failed',
+									code: 'PROCESS_RESTARTED',
+									message: 'Process restarted',
+									retryable: true
+								}
+					);
+					if (settlement.kind === 'lost') return settlement;
+
+					return this.dependencies.settlements.complete(settlement);
+				});
+				if (result.kind === 'settled') this.dependencies.eventBus.notify(run.id);
+			}
+		}
+		return interrupted.length;
 	}
 }

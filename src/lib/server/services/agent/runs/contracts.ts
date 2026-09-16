@@ -99,12 +99,12 @@ export interface InlineSuggestionThrottle {
  *
  * `callId` is optional because the provider does not always send one. It used to
  * arrive as `String(details?.toolCall?.callId ?? '')`, which spelled the absence
- * as a value. `AgentRunLifecycle` keys its successful mutations by this id, so
+ * as a value. The Agent controller keys its successful mutations by this id, so
  * two calls without one collided and the second settled under the first one's
  * resource.
  *
- * `AgentRunLifecycle` and `AgentReasoning` declare their own copies of this
- * port. They meet where the lifecycle hands its executor to the runner, so a
+ * `AgentReasoning` declares a local copy of this port. They meet where the
+ * controller hands its executor to the runner, so a
  * copy that drifts fails `pnpm check` there.
  */
 export interface AgentToolExecutor {

@@ -14,15 +14,29 @@ export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];
 	readonly started = Promise.withResolvers<void>();
 	completion: Promise<void> = Promise.resolve();
+	readonly signals: AbortSignal[] = [];
+	abortable = false;
+	outcome: Extract<AgentExecutionUpdate, { type: 'completed' | 'approval_checkpoint' }> = {
+		type: 'completed',
+		sessionItems: []
+	};
 
 	async *execute(
-		_input: Parameters<AgentRunner['execute']>[0]
+		input: Parameters<AgentRunner['execute']>[0]
 	): AsyncIterable<AgentExecutionUpdate> {
-		void _input;
+		this.signals.push(input.signal);
 		this.started.resolve();
 		for (const event of this.events) yield { type: 'event', event };
-		await this.completion;
-		yield { type: 'completed', sessionItems: [] };
+		const aborted = Promise.withResolvers<void>();
+		const onAbort = () => aborted.resolve();
+		if (input.signal.aborted) onAbort();
+		input.signal.addEventListener('abort', onAbort, { once: true });
+		try {
+			await (this.abortable ? Promise.race([this.completion, aborted.promise]) : this.completion);
+		} finally {
+			input.signal.removeEventListener('abort', onAbort);
+		}
+		yield this.outcome;
 	}
 }
 

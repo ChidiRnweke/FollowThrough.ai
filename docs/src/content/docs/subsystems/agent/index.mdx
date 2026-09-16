@@ -52,7 +52,7 @@ This is a different system from the OAuth2/OIDC flow that signs a user into the 
 
 ## Run lifecycle
 
-The controller's `submit` returns a receipt immediately; `AgentRunLifecycle.execute` (`src/lib/server/services/agent/runs/lifecycle.ts`) runs in the background. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers.
+The Agent controller's `submit` returns a receipt immediately. Its `execute` method (`src/lib/server/controllers/agent/controller.ts`) runs in the background. The same controller owns submission, execution, cancellation and restart recovery. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers. Context updates check the stored run status in the write statement so a concurrent cancellation cannot be overwritten.
 
 The state machine is owned by the model layer: `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it.
 

@@ -234,7 +234,7 @@ produce.
         below, so `Promise<unknown>` — the catalog's own section-1 example — was claiming an
         uncertainty that had already been resolved. `toolName` is a `ToolName`.
   - [x] `callId` is optional at that seam and is passed through or omitted, never coerced. It was
-        `String(details?.toolCall?.callId ?? '')`, and `AgentRunLifecycle` keys its successful
+        `String(details?.toolCall?.callId ?? '')`, and the Agent controller keys its successful
         mutations by exactly that string: two mutations the provider sent no id for shared the key
         `''`, so the second overwrote the first and one of the two resources was never reported
         stale. An id-less mutation now emits its `resources_stale` at once, because nothing will
@@ -302,7 +302,7 @@ produce.
         and 117 into `tool_succeeded`, following `0047_rename_diagram_tools`, which faced the same
         problem — a name the code stopped using and the rows still carried.
   - [x] `toolActivityFromEvent` is model-owned because two services need it and a service may not
-        import another. `AgentRunLifecycle` and `DiagramAuthoring` held a copy each and had already
+        import another. the Agent controller and `DiagramAuthoring` held a copy each and had already
         diverged — the diagram one wrote `output: undefined` onto a `succeeded` row, which the wire
         type cannot carry.
   - [x] `segmentOutput` takes `StoredAgentEvent`, and an unreadable row closes the open segment

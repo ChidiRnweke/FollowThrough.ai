@@ -110,5 +110,5 @@ anyone else yet.
   bodies, including stale reviews and skill-only targets.
 - `tests/integration/notes/reviewed-changes.contract.spec.ts` checks that reviewed skill drafts
   preserve metadata and publication history.
-- `src/lib/server/controllers/agent-execution/lifecycle.spec.ts` checks that actionable review
+- `src/lib/server/controllers/agent/lifecycle.spec.ts` checks that actionable review
   events carry the committed checkpoint.

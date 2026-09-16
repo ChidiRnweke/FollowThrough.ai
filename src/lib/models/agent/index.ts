@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 import type { PersistedSessionItem } from './session-item';
 import {
 	AGENT_TOOL_NAME_VALUES,
@@ -1052,7 +1053,7 @@ export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefine
  * tool call.
  *
  * Model-owned because two services need it and a service may not import
- * another: `AgentRunLifecycle` journals every run's calls, and
+ * another: the Agent controller journals every run's calls, and
  * The diagrams controller journals its own. The two workflows held a copy each, and the copies
  * had already diverged — the diagram one wrote `output: undefined` onto a
  * `succeeded` row, which the wire type cannot carry.

@@ -13,10 +13,7 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import {
-	AgentRunLifecycle,
-	type AgentRunExecutorDependencies
-} from '$lib/server/controllers/agent-execution/controller';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance } from '../database-harness';
@@ -55,15 +52,15 @@ const setup = async (suffix: string) => {
 	});
 	const runner = new InMemoryAgentRunner();
 	runner.events = [{ type: 'text_delta', text: 'Done' }];
-	const controller = new AgentRunLifecycle(
-		capabilityDependencies<AgentRunExecutorDependencies>({
+	const controller = new Agent(
+		capabilityDependencies<AgentDependencies>({
 			runs,
 			events,
 			sessions,
-			transactions: transaction.transactionRunner,
+			transactionRunner: transaction.transactionRunner,
 			decisions: new AgentRunDecisionRecords(transaction.database),
 			settlements: new RunSettlements(runs, events),
-			conversations: new ConversationArchive(conversations),
+			conversationJournal: new ConversationArchive(conversations),
 			runner,
 			eventBus: { notify: () => {} }
 		})

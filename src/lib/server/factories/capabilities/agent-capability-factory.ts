@@ -1,4 +1,3 @@
-import { RunRecovery } from '$lib/server/controllers/run-recovery/controller';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { OpenRouter } from '@openrouter/sdk';
 import { normalizeLanguageModelId, webSearchOptionsFromEnvironment } from '$lib/models/agent';
@@ -21,7 +20,6 @@ import { ConversationBuffer } from '$lib/server/services/agent/conversations/buf
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
-import { AgentRunLifecycle } from '$lib/server/controllers/agent-execution/controller';
 import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
 import {
 	AgentModels,
@@ -33,11 +31,6 @@ import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
 import { WorkflowRunner } from '$lib/server/controllers/workflow-execution/controller';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { ProjectCatalog } from '$lib/server/services/projects/catalog';
-import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
 import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog-factory';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
@@ -50,12 +43,6 @@ export interface AgentCapabilityInput {
 	readonly transactionRunner: TransactionRunner;
 	readonly controllers: () => ProductionControllerFactory;
 	readonly toolRetriever: ToolRetriever;
-	readonly notes: NoteCatalog;
-	readonly skills: SkillFinder;
-	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
-	readonly projects: ProjectCatalog;
-	readonly memory: MemoryLibrary;
-	readonly provenance: ProvenanceRecorder;
 	readonly files: AgentFileRepository;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
@@ -78,11 +65,11 @@ export interface AgentCapability {
 	readonly runDecisions: AgentRunDecisionRecords;
 	readonly sessions: AgentSessionRecords;
 	readonly context: AgentContext;
-	readonly executor: AgentRunLifecycle;
+	readonly runner: AgentReasoning;
+	readonly settlements: RunSettlements;
 	readonly eventBus: AgentEvents;
 	/** Runs the editor's note actions as cancellable, resumable agent runs. */
 	readonly workflowRunner: WorkflowRunner;
-	readonly recovery: RunRecovery;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
@@ -123,25 +110,6 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		traceAgentTurn,
 		webSearchOptionsFromEnvironment(process.env)
 	);
-	const executor = new AgentRunLifecycle({
-		settlements,
-		runs,
-		events: runEvents,
-		decisions: runDecisions,
-		sessions,
-		transactions: input.transactionRunner,
-		contextFormatter: context,
-		contextNotes: input.notes,
-		contextSkills: input.skills,
-		builtInSkills: input.builtInSkills,
-		contextMemory: input.memory,
-		contextProjects: input.projects,
-		contextConversations: conversations,
-		provenance: input.provenance,
-		conversations,
-		runner,
-		eventBus
-	});
 
 	return {
 		conversations,
@@ -168,8 +136,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 			},
 			defaultModel: normalizeLanguageModelId(input.defaultModel)
 		}),
-		executor,
-		recovery: new RunRecovery(runs, executor, settlements, eventBus, input.transactionRunner),
+		runner,
+		settlements,
 		eventBus
 	};
 };
