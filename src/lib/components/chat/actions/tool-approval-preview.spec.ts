@@ -29,6 +29,26 @@ const review: NoteChangeReview = {
 };
 
 describe('Previewing the saved note review', () => {
+	it.each(['save_skill', 'edit_skill'])('shows the stored skill change for %s', (name) => {
+		expect(approvalPreview(name, {}, { kind: 'note_review', review })).toMatchObject({
+			kind: 'note',
+			change: {
+				kind: 'prepared',
+				title: 'Release',
+				revision: 1,
+				body: { base: note.document, candidate: review.change.result.document }
+			}
+		});
+	});
+	it.each(['save_skill', 'edit_skill'])(
+		'requires a saved review before displaying a %s approval',
+		(name) => {
+			expect(approvalPreview(name, {}, { kind: 'none' })).toMatchObject({
+				kind: 'note',
+				change: { kind: 'failure' }
+			});
+		}
+	);
 	it('renders the prepared pair without loading a current note', () => {
 		expect(
 			approvalPreview(

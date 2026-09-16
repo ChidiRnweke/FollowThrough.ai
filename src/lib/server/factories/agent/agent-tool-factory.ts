@@ -55,17 +55,13 @@ import type { MemoryEntryId } from '$lib/models/memory';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
 import {
 	noteChangeRequestSchema,
 	noteChangeReviewSchema,
 	type NoteChangeReview,
 	type NoteChangeRequest,
-	applyNotePatch,
-	describeNotePatchFailure
+	type NoteChangeTarget
 } from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
 import { toolFailure } from '$lib/models/agent/tool-failure';
@@ -211,12 +207,19 @@ export const agentToolCoverage = {
 			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
 		},
 		create: { kind: 'mutation', tools: ['create_note'] },
-		save: { kind: 'mutation', tools: ['save_skill', 'edit_skill'] },
+		save: {
+			kind: 'excluded',
+			reason:
+				'Browser draft saves use synchronized writes; agent body tools apply prepared reviews.'
+		},
 		prepareChange: {
 			kind: 'excluded',
 			reason: 'Prepares the domain review carried by note write tools; does not write.'
 		},
-		applyReviewedChange: { kind: 'mutation', tools: ['save_note', 'edit_note'] },
+		applyReviewedChange: {
+			kind: 'mutation',
+			tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill']
+		},
 
 		publish: { kind: 'mutation', tools: ['publish_note'] },
 		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
@@ -867,18 +870,8 @@ interface AgentToolOutputMap {
 	readonly reject_suggestion: ControllerResult<SuggestionsController['reject']>;
 	readonly revert_suggestion: ControllerResult<SuggestionsController['revert']>;
 	readonly list_skills: ControllerResult<SkillsController['list']>;
-	readonly save_skill:
-		| ToolFailure
-		| { readonly noteId: NoteId; readonly name: string; readonly currentRevision: number };
-	readonly edit_skill:
-		| ToolFailure
-		| {
-				readonly noteId: NoteId;
-				readonly name: string;
-				readonly currentRevision: number;
-				readonly appliedEdits: number;
-				readonly matchedTexts: readonly string[];
-		  };
+	readonly save_skill: AgentToolOutputMap['save_note'];
+	readonly edit_skill: AgentToolOutputMap['edit_note'];
 	readonly create_skill: ControllerResult<SkillsController['create']>;
 	readonly list_skill_versions: { readonly revisions: readonly NoteRevisionProjection[] };
 	readonly restore_skill_version: ControllerResult<SkillsController['restoreVersion']>;
@@ -1072,7 +1065,8 @@ const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
 	};
 };
 
-const isReviewedNoteTool = (name: string): boolean => name === 'save_note' || name === 'edit_note';
+const isReviewedNoteTool = (name: string): boolean =>
+	name === 'save_note' || name === 'edit_note' || name === 'save_skill' || name === 'edit_skill';
 
 const readStoredNoteReview = (content: string): NoteChangeReview => {
 	try {
@@ -1088,10 +1082,11 @@ const readStoredNoteReview = (content: string): NoteChangeReview => {
 const prepareNoteReview = async (
 	factory: ControllerFactory,
 	actor: ActorContext,
-	input: NoteChangeRequest
+	input: NoteChangeRequest,
+	target: NoteChangeTarget
 ): Promise<NoteChangeReview> => {
 	try {
-		return await factory.notes().prepareChange(actor, input);
+		return await factory.notes().prepareChange(actor, input, target);
 	} catch (error) {
 		if (error instanceof DomainError) return { kind: 'failure', problems: [error.message] };
 		throw error;
@@ -1101,11 +1096,12 @@ const prepareNoteReview = async (
 const applyNoteReview = async (
 	factory: ControllerFactory,
 	actor: ActorContext,
-	review: NoteChangeReview
+	review: NoteChangeReview,
+	target: NoteChangeTarget
 ) => {
 	if (review.kind === 'failure')
 		return toolFailure('No changes were applied.', { problems: review.problems });
-	const result = await factory.notes().applyReviewedChange(actor, review.change);
+	const result = await factory.notes().applyReviewedChange(actor, review.change, target);
 	if (result.kind === 'failure')
 		return toolFailure(result.message, {
 			code: result.code,
@@ -1179,9 +1175,14 @@ export class AgentTools {
 		if (prepared) return prepared;
 		const request = noteChangeRequestSchema.parse({
 			...args,
-			kind: name === 'save_note' ? 'replace' : 'patch'
+			kind: name === 'save_note' || name === 'save_skill' ? 'replace' : 'patch'
 		});
-		const review = await prepareNoteReview(this.controllers, this.actor, request);
+		const review = await prepareNoteReview(
+			this.controllers,
+			this.actor,
+			request,
+			name.endsWith('_skill') ? 'skill' : 'authored'
+		);
 		this.noteReviews.set(callId, review);
 		return review;
 	}
@@ -1405,7 +1406,8 @@ export class AgentTools {
 						const result = await applyNoteReview(
 							this.controllers,
 							this.actor,
-							review ?? (await this.prepareNoteCall(definition.name, args, callId))
+							review ?? (await this.prepareNoteCall(definition.name, args, callId)),
+							definition.name.endsWith('_skill') ? 'skill' : 'authored'
 						);
 						const payload = readAgentPayload(result);
 						if (payload.kind === 'corrupt') throw new Error(payload.message);
@@ -1649,11 +1651,17 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 				applyNoteReview(
 					factory,
 					actor,
-					await prepareNoteReview(factory, actor, {
-						kind: 'replace',
-						noteId: input.noteId as NoteId,
-						markdown: input.markdown
-					})
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'replace',
+							noteId: input.noteId as NoteId,
+							markdown: input.markdown
+						},
+						'authored'
+					),
+					'authored'
 				)
 		),
 		edit_note: define(
@@ -1665,11 +1673,17 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 				applyNoteReview(
 					factory,
 					actor,
-					await prepareNoteReview(factory, actor, {
-						kind: 'patch',
-						noteId: input.noteId as NoteId,
-						edits: input.edits
-					})
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'patch',
+							noteId: input.noteId as NoteId,
+							edits: input.edits
+						},
+						'authored'
+					),
+					'authored'
 				)
 		),
 		rename_note: define(
@@ -1907,59 +1921,45 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'save_skill',
 			toolDescription('save_skill'),
 			'mutation',
-			z.object({ noteId: noteId, markdown: z.string() }),
-			async (input) => {
-				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-				if (view.skill.note.kind !== 'skill')
-					return toolFailure('save_skill only edits skill notes; this note is not a skill.');
-				const content = noteContentFromMarkdown(input.markdown);
-				const saved = await factory.notes().save(actor, {
-					note: { ...view.skill.note, ...content }
-				});
-				return {
-					noteId: saved.note.id,
-					name: view.skill.name,
-					currentRevision: saved.note.currentRevision
-				};
-			}
+			z.object({ noteId, markdown: z.string() }),
+			async (input) =>
+				applyNoteReview(
+					factory,
+					actor,
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'replace',
+							noteId: input.noteId as NoteId,
+							markdown: input.markdown
+						},
+						'skill'
+					),
+					'skill'
+				)
 		),
 		edit_skill: define(
 			'edit_skill',
 			toolDescription('edit_skill'),
 			'mutation',
 			noteEdits,
-			async (input) => {
-				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-				if (view.skill.note.kind !== 'skill')
-					return toolFailure('edit_skill only edits skill notes; this note is not a skill.');
-				const before = noteMarkdownFromContent(view.skill.note.document);
-				const patched = applyNotePatch(before, input.edits);
-				// A failure is returned rather than thrown so the occurrence counts and
-				// nearest matches survive into the model's next attempt.
-				if (!patched.ok)
-					return toolFailure('No edits were applied.', {
-						problems: patched.failures.map(describeNotePatchFailure)
-					});
-				const content = noteContentFromMarkdown(patched.markdown);
-				const saved = await factory.notes().save(actor, {
-					note: { ...view.skill.note, ...content }
-				});
-				return {
-					noteId: saved.note.id,
-					name: view.skill.name,
-					currentRevision: saved.note.currentRevision,
-					appliedEdits: patched.appliedEdits,
-					matchedTexts: patched.matchedTexts
-				};
-			},
-			async (input) => {
-				const parsed = noteEdits.safeParse(input);
-				if (!parsed.success) return false;
-				const view = await factory.skills().get(actor, { noteId: parsed.data.noteId as NoteId });
-				if (view.skill.note.kind !== 'skill') return false;
-				return applyNotePatch(noteMarkdownFromContent(view.skill.note.document), parsed.data.edits)
-					.ok;
-			}
+			async (input) =>
+				applyNoteReview(
+					factory,
+					actor,
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'patch',
+							noteId: input.noteId as NoteId,
+							edits: input.edits
+						},
+						'skill'
+					),
+					'skill'
+				)
 		),
 		create_skill: define(
 			'create_skill',

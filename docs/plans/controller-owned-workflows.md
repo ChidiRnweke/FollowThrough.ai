@@ -389,6 +389,15 @@ PostgreSQL coverage now executes the real lifecycle controller, including compet
 cancellation and terminal-event storage failure. Reconstructible selection inputs and the hidden
 execution-controller ports remain unfinished.
 
+Skill body approval: save_skill and edit_skill now carry the prepared document and base revision
+through the existing durable review checkpoint. Notes coordinates both note and skill body writes,
+with an explicit target requirement for the skill tools. The tool factory no longer rebuilds skill
+patches against a later body or calls an unguarded save. The browser displays the saved comparison;
+missing reviews block individual and grouped approval while rejection remains available. Skill
+metadata and publication history remain unchanged. The prior hand-written skill controller mocks
+were replaced by tests through the real Notes controller and shared content fake. Skill identity,
+lifecycle and the wider model migration remain unfinished.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
