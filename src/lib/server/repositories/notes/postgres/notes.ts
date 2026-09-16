@@ -146,7 +146,7 @@ export class NoteRecords implements NoteRepository {
 				title: note.title,
 				document: note.document,
 				plainText: note.plainText,
-				parentId: note.parentId,
+				parentId: note.parentId ?? null,
 				position: note.position,
 				isPinned: note.isPinned,
 				currentRevision: note.currentRevision,

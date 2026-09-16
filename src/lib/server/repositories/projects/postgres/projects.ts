@@ -195,7 +195,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		for (const entry of entries)
 			await this.database
 				.update(schema.notes)
-				.set({ parentId: entry.parentId, position: entry.position })
+				.set({ parentId: entry.parentId ?? null, position: entry.position })
 				.where(and(eq(schema.notes.id, entry.id), eq(schema.notes.userId, actor.userId)));
 	}
 

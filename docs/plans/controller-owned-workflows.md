@@ -537,6 +537,12 @@ noteSyncContentEquals helper and its obsolete test are removed. Workspace operat
 matching content, establish whether an offline operation applied. The note subsystem documentation
 now describes the active workspace protocol instead of the removed NoteSyncCoordinator.
 
+Root-placement persistence: project moves and note restoration supplied an absent parent to Drizzle
+updates. Drizzle skipped the field, so moved folders reappeared under their old parent and notes
+restored from an archived folder remained hidden there. Both total-record write paths now persist SQL
+NULL for root placement. Real PostgreSQL move/reload and archive/restore tests fail before the fix and
+pass after it. Concurrent project-tree moves still need a separate locking review.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
