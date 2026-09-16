@@ -3,7 +3,7 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -29,7 +29,7 @@ const setup = () => {
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
-	const projects = new InMemoryProjects();
+	const projects = new InMemoryProjectRepository();
 	// A diagram is created in a project, and creating one verifies the project is
 	// there — the same rule that stopped notes being filed wherever sorted first.
 	projects.projects = [projectBuilder({ id: testProjectId() })];

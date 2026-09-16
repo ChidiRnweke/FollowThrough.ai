@@ -37,7 +37,7 @@ const setup = async (suffix: string) => {
 		notes.repository,
 		notes.anchors,
 		notes.provenanceRepository,
-		projects.catalog
+		projects.repository
 	);
 	const diagram = drawioBuilder({
 		id: crypto.randomUUID() as DiagramId,
@@ -168,10 +168,13 @@ describe('diagram edits through the shared mutation boundary', () => {
 		).toEqual([{ revision: 2 }]);
 	});
 	it('returns an authoritative tombstone after a guarded permanent deletion', async () => {
-		const { owner, controller, diagram, baseEtag } = await setup('9364');
+		const { owner, controller, diagram, sync } = await setup('9364');
+		await controller.archiveProjectDiagram(owner, { diagramId: diagram.id });
+		const base = await sync.objects.read(owner, { type: 'diagrams', id: [diagram.id] }, null);
+		if (base.kind !== 'found') throw new Error('Expected the trashed diagram');
 		const result = await controller.synchronize(owner, {
 			operationId: crypto.randomUUID(),
-			baseEtag,
+			baseEtag: base.snapshot.etag,
 			command: { kind: 'deleteDiagram', diagramId: diagram.id }
 		});
 		expect(result.kind === 'applied' ? result.receipt.resource.kind : result.kind).toBe('deleted');

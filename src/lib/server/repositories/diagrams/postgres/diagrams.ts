@@ -307,11 +307,17 @@ export class DiagramRecords implements DiagramRepository {
 		).map(toDiagram);
 	}
 
-	async delete(actor: ActorContext, id: DiagramId): Promise<void> {
+	async deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean> {
 		const [row] = await this.database
 			.delete(schema.diagrams)
-			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.diagrams.id, id),
+					eq(schema.diagrams.userId, actor.userId),
+					isNotNull(schema.diagrams.archivedAt)
+				)
+			)
 			.returning({ id: schema.diagrams.id });
-		if (!row) throw new NotFoundError('Diagram was not found');
+		return row !== undefined;
 	}
 }

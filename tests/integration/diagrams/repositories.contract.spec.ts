@@ -10,18 +10,68 @@ import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagr
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { actor, context, now, seedNote } from '../database-harness';
 
-const diagram = (suffix: string, overrides: Partial<Diagram> = {}): Diagram =>
-	({
+const diagram = (
+	suffix: string,
+	input: Pick<Diagram, 'userId' | 'projectId' | 'sourceNoteId'> &
+		({ kind?: 'mermaid'; source?: string } | { kind: 'drawio'; source: string })
+): Diagram => {
+	const base = {
 		id: `a0000000-0000-4000-8000-${suffix.padStart(12, '0')}` as DiagramId,
-		kind: 'mermaid',
-		source: 'flowchart LR\nA --> B',
+		userId: input.userId,
+		projectId: input.projectId,
+		sourceNoteId: input.sourceNoteId,
 		searchableText: 'A B',
 		createdAt: now,
-		updatedAt: now,
-		...overrides
-	}) as Diagram;
+		updatedAt: now
+	};
+	return input.kind === 'drawio'
+		? { ...base, kind: 'drawio', source: input.source, currentRevision: 1, publishedRevision: 0 }
+		: { ...base, kind: 'mermaid', source: input.source ?? 'flowchart LR\nA --> B' };
+};
 
 describe('Project-owned diagram persistence invariants', () => {
+	it('preserves a diagram restored after a caller observed it in the trash', async () => {
+		const { owner, project } = await seedNote('489');
+		const repository = new DiagramRecords(context.db);
+		const stored = await repository.insert(
+			owner,
+			diagram('489', { userId: owner.userId, projectId: project.id })
+		);
+		await repository.setArchived(owner, stored.id, true);
+		await repository.findById(owner, stored.id);
+		await repository.setArchived(owner, stored.id, false);
+		const removed = await repository.deleteArchived(owner, stored.id);
+		expect({ removed, diagram: (await repository.findById(owner, stored.id))?.id }).toEqual({
+			removed: false,
+			diagram: stored.id
+		});
+	});
+
+	it('keeps saved note references when their trashed diagram is permanently deleted', async () => {
+		const { owner, project, note } = await seedNote('490');
+		const repository = new DiagramRecords(context.db);
+		const notes = new NoteRecords(context.db);
+		const stored = await repository.insert(
+			owner,
+			diagram('490', {
+				userId: owner.userId,
+				projectId: project.id,
+				kind: 'drawio',
+				source: '<mxfile/>'
+			})
+		);
+		const document: typeof note.document = {
+			type: 'doc',
+			content: [{ type: 'drawio', attrs: { diagramId: stored.id } }]
+		};
+		await notes.update(owner, { ...note, document });
+		await repository.setArchived(owner, stored.id, true);
+		await repository.deleteArchived(owner, stored.id);
+		expect({
+			diagram: await repository.findById(owner, stored.id),
+			document: (await notes.findById(owner, note.id))?.document
+		}).toEqual({ diagram: undefined, document });
+	});
 	it('rejects a draft write after publication moved without changing the working revision', async () => {
 		const { owner, project } = await seedNote('480');
 		const repository = new DiagramRecords(context.db);

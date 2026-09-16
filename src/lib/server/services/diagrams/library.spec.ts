@@ -17,7 +17,7 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { diagramEtag } from '$lib/models/diagrams';
 
 const setup = () => {
@@ -25,7 +25,7 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const anchors = new InMemoryAnchorRepository();
 	const provenance = new InMemoryProvenanceRepository();
-	const projects = new InMemoryProjects();
+	const projects = new InMemoryProjectRepository();
 	notes.notes = [noteBuilder()];
 	projects.projects = [projectBuilder()];
 	return {
@@ -39,6 +39,52 @@ const setup = () => {
 };
 
 describe('Diagram management invariants', () => {
+	it('rejects a diagram whose source note belongs to a different owned project', async () => {
+		const { service, projects } = setup();
+		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
+		await expect(
+			service.create(testActor(), mermaidBuilder({ projectId: testProjectId(2) }))
+		).rejects.toThrow('same project');
+	});
+
+	it('rejects moving a diagram into another account’s project', async () => {
+		const { service, projects, diagrams } = setup();
+		const foreign = projectBuilder({ id: testProjectId(2), userId: testActor(2).userId });
+		projects.projects.push(foreign);
+		const diagram = mermaidBuilder();
+		diagrams.diagrams = [diagram];
+		await expect(
+			service.update(testActor(), { ...diagram, projectId: foreign.id })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	});
+
+	it('requires trashing a diagram before permanent deletion', async () => {
+		const { service, diagrams } = setup();
+		const diagram = mermaidBuilder();
+		diagrams.diagrams = [diagram];
+		await expect(service.delete(testActor(), diagram.id)).rejects.toThrow('not in the trash');
+	});
+
+	it('preserves a valid source note when updating an owned diagram', async () => {
+		const { service, diagrams } = setup();
+		const diagram = mermaidBuilder();
+		diagrams.diagrams = [diagram];
+		const updated = { ...diagram, title: 'Revised architecture' };
+		await service.update(testActor(), updated);
+		expect(await service.get(testActor(), diagram.id)).toEqual(updated);
+	});
+
+	it('rejects changing a diagram source to a note from another project', async () => {
+		const { service, diagrams, notes, projects } = setup();
+		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
+		const otherNote = noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) });
+		notes.notes.push(otherNote);
+		const diagram = mermaidBuilder();
+		diagrams.diagrams = [diagram];
+		await expect(
+			service.update(testActor(), { ...diagram, sourceNoteId: otherNote.id })
+		).rejects.toThrow('same project');
+	});
 	it('rejects a diagram for a missing note', async () => {
 		const { service } = setup();
 		await expect(
@@ -68,9 +114,10 @@ describe('Diagram management invariants', () => {
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
-	it('deletes an existing owned diagram', async () => {
+	it('deletes an owned diagram after it is trashed', async () => {
 		const { service, diagrams } = setup();
 		diagrams.diagrams = [mermaidBuilder()];
+		await service.archive(testActor(), mermaidBuilder().id);
 		await service.delete(testActor(), mermaidBuilder().id);
 		expect(diagrams.diagrams).toEqual([]);
 	});
