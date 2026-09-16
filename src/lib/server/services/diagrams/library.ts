@@ -24,20 +24,11 @@ import {
 } from '$lib/errors';
 import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
+import type { ProjectRepository } from '$lib/server/repositories/projects';
 import type {
 	ProvenanceRepository,
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
-
-export interface DiagramProjectReader {
-	/**
-	 * Raises unless this actor may read the project. The call *is* the
-	 * authorization check — the only site discards the result — so the port asks
-	 * for the least a project can be rather than answering `unknown`, which said
-	 * the same thing while letting anything at all satisfy it.
-	 */
-	get(actor: ActorContext, projectId: ProjectId): Promise<{ readonly id: ProjectId }>;
-}
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -47,7 +38,7 @@ export class DiagramLibrary {
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository,
-		private readonly projects: DiagramProjectReader
+		private readonly projects: ProjectRepository
 	) {}
 	async get(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
 		const diagram = await this.diagrams.findById(actor, diagramId);
@@ -76,14 +67,7 @@ export class DiagramLibrary {
 	async create(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
 		if (diagram.userId !== actor.userId)
 			throw new OwnershipError('Cannot create another user’s diagram');
-		await this.projects.get(actor, diagram.projectId);
-		// A studio diagram has no source note, so there is nothing to check; one
-		// created from a note must still name a note that exists.
-		if (
-			diagram.sourceNoteId !== undefined &&
-			!(await this.notes.findById(actor, diagram.sourceNoteId))
-		)
-			throw new NotFoundError('Diagram note was not found');
+		await this.requireOwnedScope(actor, diagram);
 		if (diagram.sourceAnchorId) {
 			const anchor = await this.anchors.findById(actor, diagram.sourceAnchorId);
 			if (!anchor || anchor.noteId !== diagram.sourceNoteId)
@@ -97,6 +81,7 @@ export class DiagramLibrary {
 		if (diagram.userId !== actor.userId)
 			throw new OwnershipError('Cannot update another user’s diagram');
 		await this.get(actor, diagram.id);
+		await this.requireOwnedScope(actor, diagram);
 		if (diagram.sourceAnchorId) {
 			const anchor = await this.anchors.findById(actor, diagram.sourceAnchorId);
 			if (!anchor || anchor.noteId !== diagram.sourceNoteId)
@@ -107,8 +92,21 @@ export class DiagramLibrary {
 		return this.diagrams.update(actor, diagram);
 	}
 	async delete(actor: ActorContext, diagramId: DiagramId): Promise<void> {
-		await this.get(actor, diagramId);
-		return this.diagrams.delete(actor, diagramId);
+		const current = await this.get(actor, diagramId);
+		const decision = decideDiagramTrash('delete', current);
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+		if (!(await this.diagrams.deleteArchived(actor, diagramId)))
+			throw new StaleRevisionError('The diagram changed before it could be deleted');
+	}
+
+	private async requireOwnedScope(actor: ActorContext, diagram: Diagram): Promise<void> {
+		if (!(await this.projects.findById(actor, diagram.projectId)))
+			throw new NotFoundError('Diagram project was not found');
+		if (diagram.sourceNoteId === undefined) return;
+		const note = await this.notes.findById(actor, diagram.sourceNoteId);
+		if (!note) throw new NotFoundError('Diagram note was not found');
+		if (note.projectId !== diagram.projectId)
+			throw new ValidationError('The diagram and its source note must belong to the same project');
 	}
 
 	/** Reversible removal. `delete` above stays what it says: permanent. */

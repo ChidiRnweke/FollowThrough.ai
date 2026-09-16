@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DiagramLibrary } from './library';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -26,7 +26,7 @@ const setup = () => {
 			notes,
 			new InMemoryAnchorRepository(),
 			new InMemoryProvenanceRepository(),
-			new InMemoryProjects()
+			new InMemoryProjectRepository()
 		)
 	};
 };

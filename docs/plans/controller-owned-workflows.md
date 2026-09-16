@@ -371,6 +371,15 @@ Retry policy remains explicit and preserves the database-only setting for deferr
 cancellation and rollback tests now execute the Notes and Workspace controllers directly. Durable
 selection actions, settlement callbacks and the remaining model behavior are still unfinished.
 
+Diagram ownership and deletion: DiagramLibrary now receives the actual ProjectRepository, replacing
+the narrowed reader interface that concealed ProjectCatalog. Both creation and replacement require
+an owned project and a source note from that project. Permanent deletion requires a trashed diagram;
+the database checks the trash state in the delete statement, so a concurrent restoration survives.
+Saved note references remain intact after deletion. PostgreSQL tests cover that stored-reference
+policy and restoration race. The existing editor displays an unavailable preview for a missing
+diagram; this batch does not claim browser verification of that scenario. Diagram model decisions,
+clipboard references and the remaining publication races are still unfinished.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

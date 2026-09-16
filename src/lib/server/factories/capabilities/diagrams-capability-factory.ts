@@ -35,7 +35,7 @@ import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { traceWorkflow } from '$lib/server/services/telemetry';
-import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { ProjectRepository } from '$lib/server/repositories/projects';
 
 export interface DiagramsCapabilityInput {
 	readonly db: Database;
@@ -55,7 +55,7 @@ export interface DiagramsCapabilityInput {
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
 	readonly sessions: AgentSessionRepository;
-	readonly projects: ProjectReader;
+	readonly projects: ProjectRepository;
 	readonly apiKey: string;
 	readonly baseURL: string;
 	readonly appURL: string;

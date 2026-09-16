@@ -286,7 +286,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		builtInSkills: skillCapability.builtIns,
 		defaultModel: defaultAgentModel,
 		defaultVisionModel,
-		projects
+		projects: projectRepository
 	});
 	const diagrams = diagramCapability.library;
 	const diagramTransforms = diagramCapability.transforms;
