@@ -1,3 +1,4 @@
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
@@ -36,7 +37,7 @@ export const durableDiagramFixture = () => {
 	const settlements = new RunSettlements(state.persistence, state.persistence);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
 		...state,
-		anchorCreator: state.notes,
+		selectionOrigins: new InMemorySelectionOrigins(state.notes, state.provenance),
 		drawioXmlValidator: new DrawioXmlValidator(),
 		suggestionCreator: suggestions,
 		transactionRunner: transactions,

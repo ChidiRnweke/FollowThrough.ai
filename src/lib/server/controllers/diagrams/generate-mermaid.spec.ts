@@ -1,3 +1,4 @@
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
@@ -20,7 +21,7 @@ const setup = () => {
 	const provenance = new InMemoryProvenanceRecorder();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
-			anchorCreator: notes,
+			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,
 			suggestionCreator: suggestions,
 			transactionRunner: new InMemoryTransactionRunner([notes, provenance, suggestions])

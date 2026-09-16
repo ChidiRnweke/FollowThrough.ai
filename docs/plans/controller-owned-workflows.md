@@ -568,6 +568,12 @@ modified and unchanged records. Memory and Suggestions coordinate this mapping b
 effects. The proposal-effect model retains value types and Zod schema construction only. Existing
 application and reversal tests cover the preserved before/after snapshots and change kinds.
 
+Selected-text anchor ownership: Mermaid generation uses SelectionOrigins, the same service as task,
+reference, relationship and skill extraction. NoteCatalog creates notes only; its anchor overload and
+the duplicate fake implementation are removed. Selection validation lives with the actual source
+service, and its fake uses that rule. The offset test moved to SelectionOrigins; its existing mismatch
+test covers the removed duplicate. Existing diagram tests retain transactional anchor rollback.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
