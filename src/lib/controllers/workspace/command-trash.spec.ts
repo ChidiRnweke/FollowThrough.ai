@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { noteTrashWrite } from './index';
+import { noteTrashWrite } from '$lib/controllers/workspace/commands';
 import { noteBuilder, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('local note trash actions', () => {

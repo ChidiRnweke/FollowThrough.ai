@@ -407,6 +407,16 @@ stages a second name write. Portable slugs, publication and restoration policy a
 PostgreSQL and offline-view regressions cover renames and rollback. Skill metadata behavior still
 needs to leave models, and the remaining lifecycle and global refactor work remains open.
 
+Offline edit planning: workspace-mutations now holds command values and Zod schemas only. The shared
+workspace controller owns optimistic edit planning and completeness checks. Command identity, draft
+serialization and pending-publication projection have one focused shared service. Every synchronized
+server controller resolves its command target before the receipt service checks or records it.
+Skill metadata rules have one shared service called by browser and server controllers; SkillLibrary
+receives the resolved metadata and no longer calls a model helper. The skills model now contains only
+values and schemas. Metadata regressions run through the actual controller, and the offline behavior
+tests follow their owning controller or service. Other domain decisions still in models, hidden
+execution-controller ports and durable selection workflows remain unfinished.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

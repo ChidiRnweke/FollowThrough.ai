@@ -32,6 +32,7 @@ const setup = async (suffix: string) => {
 		capabilityDependencies<SkillsDependencies>({
 			transactionRunner,
 			skillEditor: library,
+			skillFinder: library,
 			skillUsageLister: library,
 			noteEditor: catalog,
 			anchorRepairer: content,

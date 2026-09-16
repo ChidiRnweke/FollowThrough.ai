@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
-	import { noteCommand } from '$lib/models/workspace-mutations';
+	import { noteCommand } from '$lib/services/workspace/commands';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
