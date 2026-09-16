@@ -1457,43 +1457,6 @@ export function sameNoteDraft(current: Note, candidate: Note): boolean {
 	);
 }
 
-/** Selection offsets describe one observed revision of the source document. */
-export function decideSelection(
-	selection: TextSelection,
-	note: Pick<Note, 'id' | 'currentRevision' | 'plainText'>
-): { kind: 'valid' } | { kind: 'invalid'; code: 'VALIDATION' | 'STALE_REVISION'; message: string } {
-	if (!selection.text.trim())
-		return { kind: 'invalid', code: 'VALIDATION', message: 'A non-empty selection is required' };
-	if (selection.revision !== note.currentRevision)
-		return {
-			kind: 'invalid',
-			code: 'STALE_REVISION',
-			message: 'The selected note revision is stale'
-		};
-	if (
-		!Number.isInteger(selection.from) ||
-		!Number.isInteger(selection.to) ||
-		selection.from < 0 ||
-		selection.from > selection.to ||
-		selection.to > note.plainText.length
-	)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: 'Selection offsets are outside the note'
-		};
-	if (
-		selection.noteId !== note.id ||
-		note.plainText.slice(selection.from, selection.to) !== selection.text
-	)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: 'Selection text does not match the note at those offsets'
-		};
-	return { kind: 'valid' };
-}
-
 /** Direct children and inline text use the editor's existing document representation. */
 export const documentNodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
 	'content' in node ? (node.content ?? []) : [];

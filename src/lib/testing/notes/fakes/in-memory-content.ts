@@ -5,8 +5,7 @@ import type {
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
-	SetNoteSectionNumberingInput,
-	TextSelection
+	SetNoteSectionNumberingInput
 } from '$lib/models/notes';
 import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import type { SourceAnchor } from '$lib/models/provenance';
@@ -28,7 +27,6 @@ import type {
 	NoteTreeReader,
 	NoteRevisionReader,
 	NoteRevisionRecorder,
-	SelectionAnchorCreator,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
@@ -36,7 +34,6 @@ import type {
 	RestoreSnapshot,
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { anchorBuilder, testAnchorId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 interface ContentSnapshot {
 	restoredAttachmentRevisionIds: NoteRevision['id'][];
@@ -58,7 +55,6 @@ export class InMemoryNoteContent
 		NoteRevisionReader,
 		NoteAttachmentRestorer,
 		NoteSectionNumberingEditor,
-		SelectionAnchorCreator,
 		SourceAnchorRepairer,
 		NoteIndexer,
 		NoteLinkReconciler,
@@ -80,7 +76,6 @@ export class InMemoryNoteContent
 	failIndex = false;
 	readFailure: Error | undefined;
 	failIndexFor = new Set<NoteId>();
-	private nextAnchor = 100;
 
 	async get(actor: ActorContext, noteId: NoteId): Promise<Note> {
 		if (this.readFailure) throw this.readFailure;
@@ -120,23 +115,6 @@ export class InMemoryNoteContent
 			title: note.title,
 			plainText: note.plainText
 		}));
-	}
-
-	async create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {
-		const note = await this.get(actor, selection.noteId);
-		if (!selection.text.trim()) throw new ValidationError('A non-empty selection is required');
-		if (selection.revision !== note.currentRevision)
-			throw new StaleRevisionError('The selected note revision is stale');
-		const anchor = anchorBuilder({
-			id: testAnchorId(this.nextAnchor++),
-			noteId: note.id,
-			from: selection.from,
-			to: selection.to,
-			quote: selection.text,
-			revision: selection.revision
-		});
-		this.anchors.push(anchor);
-		return anchor;
 	}
 
 	async save(actor: ActorContext, note: Note): Promise<Note> {

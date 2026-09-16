@@ -345,7 +345,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramSourceNotes: notes,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
-			anchorCreator: notes,
+			selectionOrigins: noteCapability.selectionOrigins,
 			generation: diagramCapability.generation,
 			suggestionCreator: suggestions,
 			transactionRunner,

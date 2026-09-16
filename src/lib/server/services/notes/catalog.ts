@@ -1,7 +1,6 @@
 import { decideRevisionWrite } from '$lib/models/revisions';
 import {
 	sameNoteDraft,
-	decideSelection,
 	decideNoteCreation,
 	decideNoteArchive,
 	decideNoteRestore
@@ -15,12 +14,11 @@ import type {
 	NoteRevisionId,
 	NoteSearchTarget,
 	NoteSummary,
-	SetNoteSectionNumberingInput,
-	TextSelection
+	SetNoteSectionNumberingInput
 } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
-import type { Provenance, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
+import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { TrashedNote } from '$lib/models/notes';
 
 import { NOTE_REVISION_HISTORY_LIMIT, findProseMirrorDocumentIssue } from '$lib/models/notes';
@@ -58,18 +56,6 @@ export class NoteCatalog {
 		projectId?: Note['projectId']
 	): Promise<readonly NoteSearchTarget[]> {
 		return this.notes.listSearchable(actor, projectId);
-	}
-
-	async create(
-		actor: ActorContext,
-		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
-	): Promise<Note>;
-	async create(actor: ActorContext, input: TextSelection): Promise<SourceAnchor>;
-	async create(
-		actor: ActorContext,
-		input: (CreateNoteInput & { documentKind?: 'note' | 'skill' }) | TextSelection
-	): Promise<Note | SourceAnchor> {
-		return 'text' in input ? this.createAnchor(actor, input) : this.createNote(actor, input);
 	}
 
 	async save(actor: ActorContext, candidate: Note): Promise<Note> {
@@ -336,7 +322,7 @@ export class NoteCatalog {
 		return repaired;
 	}
 
-	private async createNote(
+	async create(
 		actor: ActorContext,
 		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
 	): Promise<Note> {
@@ -360,24 +346,6 @@ export class NoteCatalog {
 			throw new ValidationError(decision.message);
 		}
 		return this.notes.insert(actor, decision.note);
-	}
-
-	private async createAnchor(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {
-		const note = await this.get(actor, selection.noteId);
-		const decision = decideSelection(selection, note);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return this.anchors.insert(actor, {
-			id: crypto.randomUUID() as SourceAnchorId,
-			noteId: note.id,
-			from: selection.from,
-			to: selection.to,
-			quote: selection.text,
-			revision: selection.revision,
-			createdAt: now()
-		});
 	}
 
 	/**

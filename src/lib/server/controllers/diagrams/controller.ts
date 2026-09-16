@@ -80,7 +80,7 @@ import {
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
 import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
-import type { SelectionAnchorCreator } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
 /**
@@ -249,7 +249,7 @@ type DiagramTask = { readonly signal?: AbortSignal } & (
 
 export interface DiagramsDependencies {
 	generation: DiagramAgentDependencies;
-	anchorCreator: SelectionAnchorCreator;
+	selectionOrigins: Pick<SelectionOriginService, 'resolve'>;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
 	diagramFinder: DiagramFinder;
@@ -517,7 +517,7 @@ export class Diagrams implements DiagramsController {
 		draft: Extract<DiagramSubmission, { kind: 'mermaid' }> & { readonly provenanceId: ProvenanceId }
 	): Promise<GenerateMermaidDiagramOutput<DiagramSuggestion>> {
 		const { provenanceId, ...diagram } = draft;
-		const anchor = await this.dependencies.anchorCreator.create(actor, selection);
+		const { anchor } = await this.dependencies.selectionOrigins.resolve(actor, selection);
 		const suggestion = await this.dependencies.suggestionCreator.create(actor, {
 			kind: 'diagram',
 			noteId: selection.noteId,

@@ -21,6 +21,12 @@ const setup = () => {
 };
 const selection = { noteId: testNoteId(), revision: 1, from: 0, to: 12, text: 'Do the work.' };
 describe('Selection origins', () => {
+	it('rejects selection offsets outside the note', async () => {
+		const { service } = setup();
+		await expect(service.resolve(testActor(), { ...selection, to: 99 })).rejects.toMatchObject({
+			code: 'VALIDATION'
+		});
+	});
 	it('records provenance for the resolved source anchor', async () => {
 		const { service } = setup();
 		const source = await service.resolve(testActor(), selection);
