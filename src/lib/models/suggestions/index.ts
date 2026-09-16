@@ -333,47 +333,6 @@ export type SuggestionProposal =
 	  })
 	| (SuggestionProposalBase & { readonly kind: 'memory'; readonly payload: MemoryChangePayload });
 
-type SuggestionIdentity = {
-	readonly id: SuggestionId;
-	readonly userId: UserId;
-	readonly now: DateTime;
-};
-export function materializeSuggestion<P extends SuggestionProposal>(
-	proposal: P,
-	identity: SuggestionIdentity
-): Extract<Suggestion, { kind: P['kind'] }>;
-export function materializeSuggestion(
-	proposal: SuggestionProposal,
-	identity: SuggestionIdentity
-): Suggestion {
-	const common = {
-		id: identity.id,
-		userId: identity.userId,
-		status: 'proposed' as const,
-		provenanceId: proposal.provenanceId,
-		isAutoAccepted: false,
-		createdAt: identity.now,
-		updatedAt: identity.now,
-		...(proposal.noteId !== undefined ? { noteId: proposal.noteId } : {}),
-		...(proposal.confidence !== undefined
-			? { confidence: proposal.confidence as Suggestion['confidence'] }
-			: {}),
-		...(proposal.sourceAnchorId !== undefined ? { sourceAnchorId: proposal.sourceAnchorId } : {})
-	};
-	switch (proposal.kind) {
-		case 'todo':
-			return { ...common, kind: 'todo', payload: proposal.payload };
-		case 'backlink':
-			return { ...common, kind: 'backlink', payload: proposal.payload };
-		case 'reference':
-			return { ...common, kind: 'reference', payload: proposal.payload };
-		case 'diagram':
-			return { ...common, kind: 'diagram', payload: proposal.payload };
-		case 'memory':
-			return { ...common, kind: 'memory', payload: proposal.payload };
-	}
-}
-
 /** `autoAccepted` distinguishes a trust-policy auto-accept from a user's manual click, so the two are never conflated in the audit trail. */
 export interface AcceptSuggestionInput {
 	readonly suggestionId: SuggestionId;
@@ -441,34 +400,3 @@ export type ProposalSelectionOrigin = SelectionOrigin<{
 	readonly id: NoteId;
 	readonly projectId: ProjectId;
 }>;
-export function proposalFromSelection<P extends SelectionProposal>(
-	origin: ProposalSelectionOrigin,
-	proposal: P
-): Extract<SuggestionProposal, { kind: P['kind'] }>;
-export function proposalFromSelection(
-	origin: ProposalSelectionOrigin,
-	proposal: SelectionProposal
-): SuggestionProposal {
-	const source = { sourceAnchorId: origin.anchor.id, provenanceId: origin.provenance.id };
-	const common = { ...source, noteId: origin.note.id, confidence: proposal.confidence };
-	switch (proposal.kind) {
-		case 'todo':
-			return {
-				...common,
-				kind: 'todo',
-				payload: { ...proposal.payload, ...source, projectId: origin.note.projectId }
-			};
-		case 'backlink':
-			return {
-				...common,
-				kind: 'backlink',
-				payload: { ...proposal.payload, ...source, sourceNoteId: origin.note.id }
-			};
-		case 'reference':
-			return {
-				...common,
-				kind: 'reference',
-				payload: { ...proposal.payload, ...source, noteId: origin.note.id }
-			};
-	}
-}

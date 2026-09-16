@@ -29,7 +29,7 @@ import type {
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
+import { createProposalRecord, selectionProposal } from '$lib/server/services/suggestions/inbox';
 
 export class InMemorySuggestionReader
 	implements SuggestionLister, SuggestionExpirer, SuggestionContextReader
@@ -106,7 +106,7 @@ export class InMemorySuggestions
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
 		if (this.failCreation) throw new ExternalServiceError('Suggestion creation failed');
-		const suggestion = materializeSuggestion(proposal, {
+		const suggestion = createProposalRecord(proposal, {
 			id: testSuggestionId(this.suggestions.length + 1),
 			userId: actor.userId,
 			now: testNow
@@ -125,7 +125,7 @@ export class InMemorySuggestions
 		origin: ProposalSelectionOrigin,
 		proposal: SelectionProposal
 	): Promise<Suggestion> {
-		return this.create(actor, proposalFromSelection(origin, proposal));
+		return this.create(actor, selectionProposal(origin, proposal));
 	}
 
 	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {
