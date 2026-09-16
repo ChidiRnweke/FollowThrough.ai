@@ -1,4 +1,4 @@
-import type { RunSettlement } from '$lib/server/services/agent/runs/execution-contracts';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { ActorContext } from '$lib/models/identity';
 import { AgentProviderFailure, NotFoundError } from '$lib/errors';
 import type { AgentContext } from '$lib/server/services/agent/runs/context';
@@ -228,14 +228,19 @@ export class AgentRunLifecycle {
 	 * Returns undefined when the run settled on its own first.
 	 */
 	async finishCancellation(runId: AgentRunId): Promise<AgentRun | undefined> {
-		const result = await this.deps.settlements.settle(
-			runId,
-			{ kind: 'cancelled', message: 'Generation stopped' },
-			async (run) => {
-				await this.abandonPendingCalls(run, 'The request was cancelled before you answered.');
-				await this.deps.decisions.clearPending(runId);
-			}
-		);
+		const result = await this.deps.transactions.run(async () => {
+			const settlement = await this.deps.settlements.claim(runId, {
+				kind: 'cancelled',
+				message: 'Generation stopped'
+			});
+			if (settlement.kind === 'lost') return settlement;
+			const run = settlement.run;
+
+			await this.abandonPendingCalls(run, 'The request was cancelled before you answered.');
+			await this.deps.decisions.clearPending(runId);
+
+			return this.deps.settlements.complete(settlement);
+		});
 		if (result.kind === 'lost') return undefined;
 		this.deps.eventBus.notify(runId);
 		return result.run;
@@ -250,13 +255,20 @@ export class AgentRunLifecycle {
 		try {
 			const code = error instanceof AgentProviderFailure ? error.providerCode : 'INTERNAL';
 			const message = error.message;
-			const failed = await this.deps.settlements.settle(
-				runId,
-				{ kind: 'failed', code, message, retryable: false },
-				async (run) => {
-					await this.abandonPendingCalls(run, 'The run ended before you answered this.');
-				}
-			);
+			const failed = await this.deps.transactions.run(async () => {
+				const settlement = await this.deps.settlements.claim(runId, {
+					kind: 'failed',
+					code,
+					message,
+					retryable: false
+				});
+				if (settlement.kind === 'lost') return settlement;
+				const run = settlement.run;
+
+				await this.abandonPendingCalls(run, 'The run ended before you answered this.');
+
+				return this.deps.settlements.complete(settlement);
+			});
 			if (failed.kind === 'settled') {
 				this.deps.eventBus.notify(runId);
 				return;
@@ -431,38 +443,43 @@ export class AgentRunLifecycle {
 		sessionItems: readonly PersistedSessionItem[],
 		decisionCallIds: readonly string[] = []
 	): Promise<boolean> {
-		const settled = await this.deps.settlements.settle(
-			run.id,
-			{ kind: 'completed', conversationId: run.conversationId, model: run.model },
-			async () => {
-				await this.deps.sessions.replace(run.conversationId, sessionItems);
-				for (const callId of decisionCallIds)
-					await this.deps.decisions.consume(run.id, callId, new Date());
-				// One message per contiguous run of output, each carrying the cursor it began at.
-				// Written as a single blob it could only be replayed after every tool call, which
-				// is why a reopened conversation read as "all the work, then all the words".
-				const segments = await this.deps.events.reconstructOutput(run.id, 1);
-				for (const segment of segments) {
-					const provenance = { runId: run.id, eventCursor: segment.cursor };
-					if (segment.kind === 'reasoning')
-						await this.deps.conversations.recordAssistantReasoning(
-							actor,
-							run.conversationId,
-							segment.text,
-							run.model,
-							provenance
-						);
-					else
-						await this.deps.conversations.recordAssistantText(
-							actor,
-							run.conversationId,
-							segment.text,
-							run.model,
-							provenance
-						);
-				}
+		const settled = await this.deps.transactions.run(async () => {
+			const settlement = await this.deps.settlements.claim(run.id, {
+				kind: 'completed',
+				conversationId: run.conversationId,
+				model: run.model
+			});
+			if (settlement.kind === 'lost') return settlement;
+
+			await this.deps.sessions.replace(run.conversationId, sessionItems);
+			for (const callId of decisionCallIds)
+				await this.deps.decisions.consume(run.id, callId, new Date());
+			// One message per contiguous run of output, each carrying the cursor it began at.
+			// Written as a single blob it could only be replayed after every tool call, which
+			// is why a reopened conversation read as "all the work, then all the words".
+			const segments = await this.deps.events.reconstructOutput(run.id, 1);
+			for (const segment of segments) {
+				const provenance = { runId: run.id, eventCursor: segment.cursor };
+				if (segment.kind === 'reasoning')
+					await this.deps.conversations.recordAssistantReasoning(
+						actor,
+						run.conversationId,
+						segment.text,
+						run.model,
+						provenance
+					);
+				else
+					await this.deps.conversations.recordAssistantText(
+						actor,
+						run.conversationId,
+						segment.text,
+						run.model,
+						provenance
+					);
 			}
-		);
+
+			return this.deps.settlements.complete(settlement);
+		});
 		if (settled.kind === 'settled') this.deps.eventBus.notify(run.id);
 		return settled.kind === 'settled';
 	}

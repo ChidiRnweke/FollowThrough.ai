@@ -12,12 +12,16 @@ import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/contr
 
 export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
 
 	async *execute(
 		_input: Parameters<AgentRunner['execute']>[0]
 	): AsyncIterable<AgentExecutionUpdate> {
 		void _input;
+		this.started.resolve();
 		for (const event of this.events) yield { type: 'event', event };
+		await this.completion;
 		yield { type: 'completed', sessionItems: [] };
 	}
 }

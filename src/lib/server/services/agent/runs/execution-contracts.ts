@@ -1,12 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	AgentRun,
-	AgentRunId,
-	AgentRunReceipt,
-	NoteActionKind,
-	RunSettlementOutcome,
-	RunSettlementResult
-} from '$lib/models/agent';
+import type { AgentRun, AgentRunId, AgentRunReceipt, NoteActionKind } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 export type {
 	AgentRunRepository,
@@ -36,12 +29,4 @@ export interface WorkflowRunTask<Result> {
  */
 export interface WorkflowRunStarter {
 	start<Result>(actor: ActorContext, task: WorkflowRunTask<Result>): Promise<AgentRunReceipt>;
-}
-
-export interface RunSettlement {
-	settle(
-		runId: AgentRunId,
-		outcome: RunSettlementOutcome,
-		materialize: (run: AgentRun) => Promise<void>
-	): Promise<RunSettlementResult>;
 }

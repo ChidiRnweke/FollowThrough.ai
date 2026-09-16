@@ -25,10 +25,16 @@ const recover = async (status: 'running' | 'cancelling') => {
 		updatedAt: testNow
 	};
 	runs.runs.push(run);
-	const settlements = new RunSettlements(runs, runs, new InMemoryTransactionRunner([runs]));
-	await new RunRecovery(runs, capabilityDependencies<AgentRunExecutor>({}), settlements, {
-		notify: () => {}
-	}).recover();
+	const settlements = new RunSettlements(runs, runs);
+	await new RunRecovery(
+		runs,
+		capabilityDependencies<AgentRunExecutor>({}),
+		settlements,
+		{
+			notify: () => {}
+		},
+		new InMemoryTransactionRunner([runs])
+	).recover();
 	return { status: runs.runs[0].status, events: runs.events.map((record) => record.event.type) };
 };
 describe('run recovery after restart', () => {
