@@ -294,6 +294,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
+			todoBatchReceipts: todoCapability.batchReceipts,
 			syncMutations: synchronization.mutations,
 			todoLister: todos,
 			todoViewAssembler: todos,

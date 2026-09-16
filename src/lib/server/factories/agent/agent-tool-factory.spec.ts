@@ -1,5 +1,10 @@
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
+import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import type { FunctionTool, Tool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -1078,100 +1083,58 @@ describe('Agent tool coverage invariants', () => {
 		expect(received).toEqual({ projectId, noteId });
 	});
 
-	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
-		const projectId = crypto.randomUUID();
-		const calls: { projectId: string; title: string }[] = [];
-		const factory = {
-			todos: () => ({
-				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
-					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = directToolFor('auto_accept', 'create_todos', { factory });
-		const _result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				projectId,
-				todos: [
-					{ title: 'Renew TLS certificates', responsibility: 'mine' },
-					{ title: 'Book offsite flights', responsibility: 'mine' },
-					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-				]
+	it('shares the saved task batch across agent and MCP retries', async () => {
+		const todos = new InMemoryTodos();
+		const receipts = new InMemoryTodoBatchReceipts();
+		const controller = new Todos(
+			capabilityDependencies<TodosDependencies>({
+				todoCreator: todos,
+				todoBatchReceipts: new TodoBatchReceipts(receipts),
+				transactionRunner: new InMemoryTransactionRunner([todos, receipts])
 			})
 		);
-		expect(calls).toHaveLength(3);
-	});
-
-	it('creates every todo in a single create_todos dispatch (2/3)', async () => {
-		const projectId = crypto.randomUUID();
-		const calls: { projectId: string; title: string }[] = [];
-		const factory = {
-			todos: () => ({
-				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
-					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
-				}
-			})
-		} as unknown as ControllerFactory;
+		const factory = capabilityDependencies<ControllerFactory>({ todos: () => controller });
 		const selected = directToolFor('auto_accept', 'create_todos', { factory });
-		const _result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				projectId,
-				todos: [
-					{ title: 'Renew TLS certificates', responsibility: 'mine' },
-					{ title: 'Book offsite flights', responsibility: 'mine' },
-					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-				]
-			})
-		);
-		expect(calls.map((call) => call.projectId)).toEqual([projectId, projectId, projectId]);
-	});
-
-	it('creates every todo in a single create_todos dispatch (3/3)', async () => {
-		const projectId = crypto.randomUUID();
-		const calls: { projectId: string; title: string }[] = [];
-		const factory = {
-			todos: () => ({
-				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
-					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = directToolFor('auto_accept', 'create_todos', { factory });
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				projectId,
-				todos: [
-					{ title: 'Renew TLS certificates', responsibility: 'mine' },
-					{ title: 'Book offsite flights', responsibility: 'mine' },
-					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-				]
-			})
-		);
-		// Flat, and keyed `todoId`: nested under `todo` the id was one level below where
-		// the transcript looks for it, so every todo the agent created was unopenable.
-		expect(result).toEqual({
+		const payload = {
+			requestId: crypto.randomUUID(),
+			projectId: testProjectId(),
 			todos: [
-				{ todoId: 'todo-1', title: 'Renew TLS certificates', status: 'open' },
-				{ todoId: 'todo-2', title: 'Book offsite flights', status: 'open' },
-				{ todoId: 'todo-3', title: 'Review incident postmortem', status: 'open' }
+				{ title: 'Renew TLS certificates', responsibility: 'mine' },
+				{ title: 'Book flights', responsibility: 'mine' }
 			]
+		};
+		const input = JSON.stringify(payload);
+		const first = await selected.invoke({} as never, input);
+		const retry = await selected.invoke({} as never, input);
+		const mcp = new McpTools(factory, testActor(), { provenanceId: testProvenanceId() }, allTools)
+			.definitions()
+			.find((definition) => definition.name === 'create_todos');
+		if (!mcp) throw new Error('Missing task batch tool');
+		const externalRetry = await mcp.execute(payload);
+		expect({ first, retry, externalRetry, titles: todos.todos.map((todo) => todo.title) }).toEqual({
+			first: {
+				todos: todos.todos.map((todo) => ({
+					todoId: todo.id,
+					title: todo.title,
+					status: todo.status
+				}))
+			},
+			retry: first,
+			externalRetry: first,
+			titles: ['Renew TLS certificates', 'Book flights']
 		});
 	});
 
 	it('rejects invalid create_todos payloads with a model-readable error', async () => {
 		const selected = directToolFor('auto_accept', 'create_todos');
 		const projectId = crypto.randomUUID();
+		const requestId = crypto.randomUUID();
 		const results: string[] = [];
 		for (const payload of [
-			{ projectId, todos: [] },
-			{ projectId, todos: [{ responsibility: 'mine' }] },
-			{ projectId }
+			{ requestId, projectId, todos: [] },
+			{ requestId, projectId, todos: [{ responsibility: 'mine' }] },
+			{ requestId, projectId },
+			{ projectId, todos: [{ title: 'Valid task', responsibility: 'mine' }] }
 		]) {
 			results.push(String(await selected.invoke({} as never, JSON.stringify(payload))));
 		}

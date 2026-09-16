@@ -7,6 +7,8 @@ import type {
 } from '$lib/server/repositories/provenance';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
 import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
+import { TodoBatchReceiptRecords } from '$lib/server/repositories/todos/postgres/batch-receipts';
 import { PromiseDiscovery } from '$lib/server/services/todos/promise-discovery';
 import { DeterministicPromiseExtractor } from '$lib/server/services/todos/promise-rules';
 import { operationObserver } from '$lib/server/services/telemetry';
@@ -21,10 +23,12 @@ export interface TodosCapabilityInput {
 
 export interface TodosCapability {
 	readonly catalog: TodoCatalog;
+	readonly batchReceipts: TodoBatchReceipts;
 	readonly promiseExtractor: PromiseDiscovery;
 }
 
 export const createTodosCapability = (input: TodosCapabilityInput): TodosCapability => ({
+	batchReceipts: new TodoBatchReceipts(new TodoBatchReceiptRecords(input.db)),
 	catalog: new TodoCatalog(
 		new TodoRecords(input.db),
 		input.projects,

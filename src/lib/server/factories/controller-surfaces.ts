@@ -52,6 +52,7 @@ export const controllerSurfaces = {
 		restoreRevision: true
 	},
 	todos: {
+		createBatch: true,
 		synchronize: true,
 		get: true,
 		list: true,

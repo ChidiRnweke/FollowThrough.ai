@@ -1,11 +1,14 @@
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { TodoSuggestion } from '$lib/models/suggestions';
+import type { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	BoardPdfExportResult,
 	CreateTodoInput,
+	CreateTodoBatchInput,
+	CreateTodoBatchOutput,
 	ExtractPromisesInput,
 	ExtractPromisesOutput,
 	GetTodoViewInput,
@@ -56,6 +59,8 @@ export interface TodosController {
 	exportBoardPdf(actor: ActorContext, filter: TodoListFilter): Promise<BoardPdfExportResult>;
 	/** Create a todo. */
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
+	/** Commit all tasks in input order; repeated requests return the saved outcome. */
+	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput>;
 	/**
 	 * Validate and persist the supplied fields and status as one complete edit.
 	 *
@@ -97,6 +102,7 @@ export interface TodosDependencies {
 	suggestionCreator: SuggestionCreator;
 	trustPolicyEvaluator: TrustPolicyEvaluator;
 	todoCreator: TodoCreator;
+	todoBatchReceipts: Pick<TodoBatchReceipts, 'findForUpdate' | 'save'>;
 	suggestionAccepter: SuggestionAccepter;
 	suggestionEffects: SuggestionEffectService;
 	transactionRunner: TransactionRunner;
@@ -155,6 +161,27 @@ export class Todos implements TodosController {
 		const todo = await this.dependencies.todoEditor.update(actor, input);
 		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
 		return { todo, view: view! };
+	}
+	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput> {
+		return this.dependencies.transactionRunner.run(
+			async () => {
+				const previous = await this.dependencies.todoBatchReceipts.findForUpdate(actor, input);
+				if (previous.kind === 'saved') return previous.result;
+				const todos: Todo[] = [];
+				for (const item of input.todos) {
+					todos.push(
+						await this.dependencies.todoCreator.create(actor, {
+							...item,
+							projectId: input.projectId
+						})
+					);
+				}
+				const result = { todos };
+				await this.dependencies.todoBatchReceipts.save(actor, input, result);
+				return result;
+			},
+			{ retry: 'database-only' }
+		);
 	}
 	async remove(actor: ActorContext, todoId: TodoId): Promise<void> {
 		await this.dependencies.todoReader.get(actor, todoId);

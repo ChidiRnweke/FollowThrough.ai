@@ -130,7 +130,10 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   follows editing's responsibility normalization. PostgreSQL checks exposed skipped clears
   and nullable values hidden by the row mapper; both are fixed. Five task sync contracts and
   the full 3,580-test suite passed. Shared task rules still require the global model migration.
-  P09/A04 durable, atomic task batches remain a separate slice.
+  P09/A04 adds controller-owned atomic batches and account-scoped durable receipts. Agent
+  and MCP callers supply a stable request UUID; duplicate deliveries return original ordered
+  results, and changed input cannot reuse an ID. Seven PostgreSQL contracts cover concurrency,
+  rollback, lost responses, account isolation, and corrupt receipts. The full 3,583-test suite passed.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.

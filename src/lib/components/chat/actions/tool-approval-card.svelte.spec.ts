@@ -27,7 +27,11 @@ const pendingCall = (name: AgentToolName, args: AgentPayloadObject): ChatToolAct
 });
 
 const createTodos = (todos: readonly AgentPayloadObject[]): ChatToolActivity =>
-	pendingCall('create_todos', { projectId: PROJECT_ID, todos });
+	pendingCall('create_todos', {
+		requestId: '00000000-0000-4000-8000-0000000000bb',
+		projectId: PROJECT_ID,
+		todos
+	});
 
 const renderCard = (tool: ChatToolActivity) =>
 	render(ToolApprovalCard, { tool, shell, onapprove: () => {}, onreject: () => {} });
