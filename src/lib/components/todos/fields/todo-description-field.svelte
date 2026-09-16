@@ -3,7 +3,7 @@
 	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId } from '$lib/models/todos';
-	import { renderMarkdown } from '$lib/models/markdown';
+	import { renderMarkdown } from '$lib/client/markdown/rendering';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import ImageZoom from '$lib/components/shared/image-zoom.svelte';
@@ -205,7 +205,7 @@
 		ondragover={(event) => event.preventDefault()}
 	>
 		<ErrorBoundary label="this description" source={saved}>
-			{#if rendered.ok}
+			{#if rendered.kind === 'rendered'}
 				{#if rendered.html}
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -- Marked output is sanitized by DOMPurify in renderMarkdown. -->
 					{@html rendered.html}

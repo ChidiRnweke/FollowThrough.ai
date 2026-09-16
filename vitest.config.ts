@@ -122,6 +122,7 @@ export default defineConfig({
 						'src/lib/components/layout/error-boundary.svelte.spec.ts',
 						'src/lib/client/sync/database.svelte.spec.ts',
 						'src/lib/client/clipboard/transfer.svelte.spec.ts',
+						'src/lib/client/markdown/rendering.svelte.spec.ts',
 						'src/lib/components/edra/commands/cut-editor.svelte.spec.ts',
 						'src/lib/client/sync/workspace-local-repository.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',

@@ -106,7 +106,7 @@
 		type ProofreadSelection
 	} from '$lib/components/edra/commands/Proofread.js';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
-	import { dictionaryWordFor } from '$lib/models/proofreading';
+	import { dictionaryWordFor } from '$lib/services/proofreading/rules';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
