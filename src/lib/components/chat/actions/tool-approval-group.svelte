@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { isNoteBodyTool } from './tool-approval-preview';
 	import type { ShellContext } from '$lib/client/shell/views';
 
 	import type { AgentPreferenceValues } from '$lib/models/agent';
@@ -29,7 +30,7 @@
 	const unavailable = $derived(
 		tools.some(
 			(tool) =>
-				(tool.name === 'save_note' || tool.name === 'edit_note') &&
+				isNoteBodyTool(tool.name) &&
 				(tool.status !== 'approval_required' || tool.noteReview?.kind !== 'prepared')
 		)
 	);

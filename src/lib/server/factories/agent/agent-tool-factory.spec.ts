@@ -1356,95 +1356,6 @@ describe('Agent tool coverage invariants', () => {
 		expect(result).toMatchObject({ failure: 'No changes were applied.' });
 	});
 
-	const editSkillFixture = () => {
-		const current = noteBuilder({
-			id: crypto.randomUUID() as never,
-			kind: 'skill',
-			title: 'Compliance format',
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Number every finding.' }] }]
-			} as never
-		});
-		const skill = {
-			note: current,
-			name: 'Compliance format',
-			description: 'Formats responses for compliance review',
-			triggerHints: ['compliance']
-		};
-		let saved: typeof current | undefined;
-		const factory = {
-			skills: () => ({ get: async () => ({ skill, usages: [] }) }),
-			notes: () => ({
-				save: async (_actor: unknown, input: { note: typeof current }) => {
-					saved = input.note;
-					return {
-						note: { ...input.note, currentRevision: 2 },
-						etag: 'note:x:r2',
-						repairedAnchorIds: []
-					};
-				}
-			})
-		} as unknown as ControllerFactory;
-		const invoke = (name: string, payload: unknown) =>
-			directToolFor('auto_accept', name, { factory }).invoke({} as never, JSON.stringify(payload));
-		return { current, invoke, saved: () => saved };
-	};
-
-	it('applies a targeted edit to a skill body', async () => {
-		const fixture = editSkillFixture();
-		await fixture.invoke('edit_skill', {
-			noteId: fixture.current.id,
-			edits: [{ oldText: 'Number every finding.', newText: 'Number every finding exactly once.' }]
-		});
-		expect(fixture.saved()?.plainText).toContain('exactly once.');
-	});
-
-	it('replaces a whole skill body with save_skill', async () => {
-		const fixture = editSkillFixture();
-		await fixture.invoke('save_skill', {
-			noteId: fixture.current.id,
-			markdown: 'New instructions.'
-		});
-		expect(fixture.saved()?.plainText).toBe('New instructions.');
-	});
-
-	it('reports how many skill edits applied', async () => {
-		const fixture = editSkillFixture();
-		const result = await fixture.invoke('edit_skill', {
-			noteId: fixture.current.id,
-			edits: [{ oldText: 'Number every finding.', newText: 'Number every finding exactly once.' }]
-		});
-		expect(result).toMatchObject({ appliedEdits: 1 });
-	});
-
-	it('saves nothing when a skill anchor does not match', async () => {
-		const fixture = editSkillFixture();
-		await fixture.invoke('edit_skill', {
-			noteId: fixture.current.id,
-			edits: [{ oldText: 'read-through', newText: 'write-behind' }]
-		});
-		expect(fixture.saved()).toBeUndefined();
-	});
-
-	it('refuses edit_skill on a note that is not a skill', async () => {
-		const note = noteBuilder({ id: crypto.randomUUID() as never, kind: 'note' });
-		const factory = {
-			skills: () => ({
-				get: async () => ({
-					skill: { note, name: 'n', description: 'd', triggerHints: [] },
-					usages: []
-				})
-			}),
-			notes: () => ({ save: async () => ({ note: {}, etag: '', repairedAnchorIds: [] }) })
-		} as unknown as ControllerFactory;
-		const result = await directToolFor('auto_accept', 'edit_skill', { factory }).invoke(
-			{} as never,
-			JSON.stringify({ noteId: note.id, edits: [{ oldText: 'x', newText: 'y' }] })
-		);
-		expect(result).toMatchObject({ failure: expect.stringContaining('not a skill') });
-	});
-
 	it('does not expose the agent controller recursively', () => {
 		const names = registry('approval_required')
 			.tools()
@@ -1762,16 +1673,9 @@ describe('Doomed note edits never reach the approval boundary', () => {
 
 	const notesFactory = (note: ReturnType<typeof noteBuilder>) => reviewedNoteFixture(note).factory;
 
-	const skillsFactory = (note: ReturnType<typeof noteBuilder>) =>
-		({
-			skills: () => ({
-				get: async () => ({ skill: { note, name: note.title } })
-			})
-		}) as unknown as ControllerFactory;
-
 	const directTool = (name: 'edit_note' | 'edit_skill', note: ReturnType<typeof noteBuilder>) =>
 		registry('approval_required', {
-			factory: name === 'edit_note' ? notesFactory(note) : skillsFactory(note)
+			factory: notesFactory(note)
 		})
 			.tools()
 			.find((candidate) => candidate.name === name) as FunctionTool;

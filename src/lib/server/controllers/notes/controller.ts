@@ -7,6 +7,7 @@ import {
 	applyNotePatch,
 	describeNotePatchFailure,
 	type NoteChangeRequest,
+	type NoteChangeTarget,
 	type NoteChangeReview,
 	type PreparedNoteChange,
 	type ApplyReviewedNoteChangeOutput
@@ -147,10 +148,15 @@ export interface NotesController {
 		actor: ActorContext,
 		input: ImportMarkdownArchiveInput
 	): Promise<ImportMarkdownArchiveOutput>;
-	prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview>;
+	prepareChange(
+		actor: ActorContext,
+		input: NoteChangeRequest,
+		target: NoteChangeTarget
+	): Promise<NoteChangeReview>;
 	applyReviewedChange(
 		actor: ActorContext,
-		change: PreparedNoteChange
+		change: PreparedNoteChange,
+		target: NoteChangeTarget
 	): Promise<ApplyReviewedNoteChangeOutput>;
 	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
@@ -620,8 +626,17 @@ export class Notes implements NotesController {
 		return { note: await this.dependencies.noteCreator.create(actor, input) };
 	}
 	/** Resolve a body proposal once; later approval never reruns the requested patch. */
-	async prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview> {
+	async prepareChange(
+		actor: ActorContext,
+		input: NoteChangeRequest,
+		target: NoteChangeTarget
+	): Promise<NoteChangeReview> {
 		const note = await this.dependencies.noteReader.get(actor, input.noteId);
+		if (target === 'skill' && note.kind !== 'skill')
+			return {
+				kind: 'failure',
+				problems: ['This tool only edits skill notes; this note is not a skill.']
+			};
 		if (note.archivedAt || note.kind === 'folder')
 			return {
 				kind: 'failure',
@@ -658,12 +673,17 @@ export class Notes implements NotesController {
 
 	async applyReviewedChange(
 		actor: ActorContext,
-		change: PreparedNoteChange
+		change: PreparedNoteChange,
+		target: NoteChangeTarget
 	): Promise<ApplyReviewedNoteChangeOutput> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async (): Promise<ApplyReviewedNoteChangeOutput> => {
 					const current = await this.dependencies.noteReader.get(actor, change.noteId);
+					if (target === 'skill' && current.kind !== 'skill')
+						throw new ValidationError(
+							'This tool only edits skill notes; this note is not a skill.'
+						);
 					if (current.archivedAt || current.kind === 'folder')
 						throw new ValidationError(
 							'Only active authored content can receive a reviewed note change'

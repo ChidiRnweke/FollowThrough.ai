@@ -33,10 +33,10 @@ We apply a proposal and mark it accepted in one transaction. We also undo a prop
 reverted in one transaction. This prevents the approval history from disagreeing with the saved
 data.
 
-### Reviewed note content
+### Reviewed note and skill content
 
-A note can change while its approval prompt is open. We chose to bind approval of
-`edit_note` and `save_note` to the reviewed base revision and the prepared result. This
+A note or skill instruction body can change while its approval prompt is open. We chose to bind
+`edit_note`, `save_note`, `edit_skill` and `save_skill` to the reviewed base revision and prepared result. This
 preserves the change the user inspected. The prompt, checkpoint, and resumed execution
 carry the same preparation. The browser does not rebuild it from its current cache.
 
@@ -46,11 +46,13 @@ returns unchanged without another write, as described in ADR 0010. This does not
 which call produced that result. We do not promise exactly-once tool execution.
 
 The checkpoint and its approval event commit together before the user can act on the
-prompt. Older note approvals without a saved preparation remain rejectable but cannot
+prompt. Older body-change approvals without a saved preparation remain rejectable but cannot
 write. Automatic acceptance uses the same preparation and conditional write.
 
-This decision covers the two note-body tools. Skill-specific approval and history policy
-remain separate workflows.
+Skill body tools also require a skill note when preparing and applying the change. Their approval
+card shows the saved text comparison and revision, using the same review as note body tools.
+These body edits save drafts. Skill metadata, publication and restoration history remain separate
+workflows.
 
 ## How a tool is classified
 
@@ -104,5 +106,9 @@ anyone else yet.
   stale reviews, unchanged retries, ownership, and transactional consequences.
 - `src/lib/server/factories/agent/reviewed-note-tools.spec.ts` checks checkpoint resume,
   partial approvals, legacy calls, and automatic acceptance.
+- `src/lib/server/factories/agent/reviewed-skill-tools.spec.ts` checks the same contract for skill
+  bodies, including stale reviews and skill-only targets.
+- `tests/integration/notes/reviewed-changes.contract.spec.ts` checks that reviewed skill drafts
+  preserve metadata and publication history.
 - `src/lib/server/controllers/agent-execution/lifecycle.spec.ts` checks that actionable review
   events carry the committed checkpoint.
