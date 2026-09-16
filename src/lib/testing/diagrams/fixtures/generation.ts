@@ -1,6 +1,6 @@
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
-import { BaseAgentContext } from '$lib/server/services/agent/runs/base-context';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import {
@@ -41,7 +41,10 @@ export const diagramGenerationFixture = () => {
 	const provider = new InMemoryDiagramGeneration();
 	const provenance = new InMemoryProvenanceRecorder();
 	const generation: DiagramAgentDependencies = {
-		contextBuilder: new AgentContext(new BaseAgentContext(notes), skills, notes),
+		contextFormatter: new AgentContext(),
+		contextNotes: notes,
+		contextSkills: skills,
+		contextMemory: new InMemoryMemoryEntryRepository(),
 		conversations: new ConversationArchive(conversations),
 		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
 		models: {

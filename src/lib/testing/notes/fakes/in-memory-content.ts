@@ -77,10 +77,12 @@ export class InMemoryNoteContent
 	anchors: SourceAnchor[] = [];
 	indexedNoteIds: NoteId[] = [];
 	failIndex = false;
+	readFailure: Error | undefined;
 	failIndexFor = new Set<NoteId>();
 	private nextAnchor = 100;
 
 	async get(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		if (this.readFailure) throw this.readFailure;
 		const note = this.notes.find(
 			(candidate) => candidate.id === noteId && candidate.userId === actor.userId
 		);

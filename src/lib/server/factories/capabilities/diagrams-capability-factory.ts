@@ -8,6 +8,9 @@ import type {
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import type {
 	AgentModelCatalog,
@@ -41,6 +44,9 @@ export interface DiagramsCapabilityInput {
 	readonly provenanceRepository: ProvenanceRepository;
 	readonly provenance: ProvenanceRecorder;
 	readonly context: AgentContext;
+	readonly contextNotes: NoteReader;
+	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
+	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceCatalog;
 	readonly models: AgentModelCatalog;
@@ -92,7 +98,10 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		mermaidValidator: new MermaidSubmissionValidator(),
 		now: () => new Date().toISOString() as DateTime,
 		generation: {
-			contextBuilder: input.context,
+			contextFormatter: input.context,
+			contextNotes: input.contextNotes,
+			contextSkills: input.contextSkills,
+			contextMemory: input.contextMemory,
 			conversations: input.conversations,
 			preferences: input.preferences,
 			models: input.models,

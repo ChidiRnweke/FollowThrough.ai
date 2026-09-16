@@ -24,7 +24,6 @@ import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { ProvenanceId } from '$lib/models/provenance';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 
 export interface AgentWorkflowToolbox {
@@ -42,13 +41,6 @@ export interface AgentWorkflowToolbox {
 		selection: TextSelection,
 		instruction?: string
 	): Promise<GenerateMermaidDiagramOutput<Suggestion>>;
-}
-export interface AgentContextBuilder {
-	build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId }
-	): Promise<AgentRunContext>;
 }
 export interface AgentRunner {
 	execute(input: {

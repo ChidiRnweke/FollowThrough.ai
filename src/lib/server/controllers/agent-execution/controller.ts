@@ -1,6 +1,13 @@
 import type { RunSettlement } from '$lib/server/services/agent/runs/execution-contracts';
 import type { ActorContext } from '$lib/models/identity';
-import { AgentProviderFailure } from '$lib/errors';
+import { AgentProviderFailure, NotFoundError } from '$lib/errors';
+import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { MemoryLibrary } from '$lib/server/services/memory/library';
+import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import type { NoteId } from '$lib/models/notes';
 import { toolActivityFromEvent } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
@@ -20,7 +27,7 @@ import type {
 import type { ToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import type { DateTime } from '$lib/models/workspace';
-import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
+import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
 import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
@@ -28,13 +35,6 @@ import type {
 } from '$lib/server/services/agent/runs/execution-contracts';
 import type { AgentSessionRepository } from '$lib/server/services/agent/runs/execution-contracts';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-interface AgentContextBuilder {
-	build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId }
-	): Promise<AgentRunContext>;
-}
 /** Declared locally, matching the port in `./contracts`. */
 interface AgentToolExecutor {
 	execute(
@@ -96,7 +96,12 @@ export interface AgentRunExecutorDependencies {
 	readonly decisions: AgentRunDecisionRepository;
 	readonly sessions: AgentSessionRepository;
 	readonly transactions: TransactionRunner;
-	readonly contextBuilder: AgentContextBuilder;
+	readonly contextFormatter: AgentContext;
+	readonly contextNotes: NoteReader;
+	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
+	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
+	readonly contextProjects: ProjectReader;
+	readonly contextConversations: Pick<ConversationArchive, 'get'>;
 	readonly provenance: ProvenanceRecorder;
 	readonly conversations: ConversationJournal;
 	readonly runner: AgentRunner;
@@ -291,9 +296,7 @@ export class AgentRunLifecycle {
 		}
 
 		if (!run.contextSnapshot) {
-			const context = await this.deps.contextBuilder.build(actor, run.inputSnapshot, {
-				provenanceId: run.provenanceId!
-			});
+			const context = await this.buildContext(actor, run.inputSnapshot);
 			run = { ...run, contextSnapshot: context };
 			await this.deps.runs.update(actor, run);
 		}
@@ -306,6 +309,70 @@ export class AgentRunLifecycle {
 		this.deps.eventBus.notify(run.id);
 
 		return run as PreparedAgentRun;
+	}
+
+	private async buildContext(actor: ActorContext, input: RunAgentInput): Promise<AgentRunContext> {
+		const current = input.noteId
+			? { kind: 'note' as const, note: await this.deps.contextNotes.get(actor, input.noteId) }
+			: { kind: 'no_current_note' as const };
+		const base = this.deps.contextFormatter.base(input, current);
+		const [skills, contextNotes, profileMemory] = await Promise.all([
+			this.deps.contextSkills.listEnabled(actor, base.projectId),
+			Promise.all(
+				(input.contextNoteIds ?? []).map((noteId) => this.loadAttachedNote(actor, noteId))
+			),
+			this.deps.contextMemory.list(actor, {})
+		]);
+		if (!input.appContext)
+			return this.deps.contextFormatter.build(input, { base, skills, contextNotes, profileMemory });
+		const conversation = await this.deps.contextConversations.get(actor, input.conversationId);
+		const origin = conversation.contextProjectId
+			? {
+					kind: 'project' as const,
+					project: await this.deps.contextProjects.get(actor, conversation.contextProjectId)
+				}
+			: { kind: 'no_origin_project' as const };
+		const appContext = this.deps.contextFormatter.appContext(
+			input.appContext,
+			conversation,
+			origin
+		);
+		if (!input.requestedScope)
+			return this.deps.contextFormatter.build(input, {
+				base,
+				skills,
+				contextNotes,
+				profileMemory,
+				appContext
+			});
+		const requested = input.requestedScope;
+		const [project, note] = await Promise.all([
+			requested.projectId ? this.deps.contextProjects.get(actor, requested.projectId) : undefined,
+			requested.noteId ? this.deps.contextNotes.get(actor, requested.noteId) : undefined
+		]);
+		const requestedScope = this.deps.contextFormatter.requestedScope(input.appContext, {
+			project,
+			note
+		});
+		return this.deps.contextFormatter.build(input, {
+			base,
+			skills,
+			contextNotes,
+			profileMemory,
+			appContext: { ...appContext, requestedScope }
+		});
+	}
+
+	private async loadAttachedNote(actor: ActorContext, noteId: NoteId) {
+		try {
+			return await this.deps.contextNotes.get(actor, noteId);
+		} catch (error) {
+			if (!(error instanceof NotFoundError)) throw error;
+			throw new NotFoundError(
+				'An attached note is no longer available. Remove it from context and retry.',
+				{ noteId }
+			);
+		}
 	}
 
 	/**

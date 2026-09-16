@@ -1,31 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { ContextSelection, RunAgentInput } from '$lib/models/agent';
-import type { Note, NoteId, TextSelection } from '$lib/models/notes';
-import type { ActorContext } from '$lib/models/identity';
-import {
-	noteBuilder,
-	testActor,
-	testConversationId,
-	testNoteId,
-	testProvenanceId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-import { BaseAgentContext } from './base-context';
-
-describe('BaseAgentContext', () => {
-	it('is available as a domain service', () => {
-		expect(BaseAgentContext).toBeTypeOf('function');
-	});
-});
+import type { RunAgentInput } from '$lib/models/agent';
+import type { TextSelection } from '$lib/models/notes';
+import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { AgentContext } from './context';
 
 describe('The pinned passages a run is built with', () => {
 	const note = noteBuilder({ id: testNoteId(1), title: 'Q3 planning' });
-
-	const readerFor = (found: Note) => ({
-		get: async (_actor: ActorContext, noteId: NoteId): Promise<Note> => {
-			if (noteId !== found.id) throw new Error(`No note ${noteId}`);
-			return found;
-		}
-	});
 
 	const selection = (overrides: Partial<TextSelection> = {}): TextSelection => ({
 		noteId: note.id,
@@ -36,14 +16,12 @@ describe('The pinned passages a run is built with', () => {
 		...overrides
 	});
 
-	const build = async (input: Partial<Omit<RunAgentInput, 'conversationId'>>) =>
-		new BaseAgentContext(readerFor(note)).build(
-			testActor(),
-			{ conversationId: testConversationId(), prompt: 'Help', ...input },
-			{
-				provenanceId: testProvenanceId()
-			}
-		) as Promise<{ selections?: readonly ContextSelection[] }>;
+	const build = (input: Partial<Omit<RunAgentInput, 'conversationId'>>) =>
+		new AgentContext().base(input, { kind: 'note', note });
+
+	it('derives the active project from the resolved current note', () => {
+		expect(build({}).projectId).toBe(note.projectId);
+	});
 
 	it('carries every pinned passage', async () => {
 		const context = await build({

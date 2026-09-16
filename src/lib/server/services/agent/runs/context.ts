@@ -1,51 +1,29 @@
-import { NotFoundError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentRunContext,
 	BaseAgentContextData,
+	ContextSelection,
 	Conversation,
-	ConversationId,
 	ContextNote,
 	ResolvedAgentAppContextV1,
-	RunAgentInput
+	RunAgentInput,
+	AppContextSnapshotV1
 } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
-import type { Note, NoteId } from '$lib/models/notes';
-import type { Project, ProjectId } from '$lib/models/projects';
-import type { ProvenanceId } from '$lib/models/provenance';
+import type { Note } from '$lib/models/notes';
+import type { Project } from '$lib/models/projects';
 import type { SkillSummary } from '$lib/models/skills';
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
-interface AgentContextBuilder {
-	build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<AgentRunContext>;
-}
-interface BaseAgentContextBuilder {
-	build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<BaseAgentContextData>;
-}
-interface NoteReader {
-	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
-}
-interface SkillFinder {
-	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-}
-interface ConversationReader {
-	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
-}
-interface ProjectReader {
-	get(actor: ActorContext, projectId: ProjectId): Promise<Project>;
-}
-interface MemoryLister {
-	list(
-		actor: ActorContext,
-		filter: { readonly projectId?: ProjectId; readonly includeDeleted?: boolean }
-	): Promise<readonly MemoryEntry[]>;
+
+export type CurrentContextNote =
+	{ readonly kind: 'note'; readonly note: Note } | { readonly kind: 'no_current_note' };
+export type ConversationContextProject =
+	{ readonly kind: 'project'; readonly project: Project } | { readonly kind: 'no_origin_project' };
+export interface AgentContextValues {
+	readonly base: BaseAgentContextData;
+	readonly skills: readonly SkillSummary[];
+	readonly contextNotes: readonly Note[];
+	readonly profileMemory: readonly MemoryEntry[];
+	readonly appContext?: ResolvedAgentAppContextV1;
 }
 
 /**
@@ -85,50 +63,98 @@ interface AdvertisedSkill {
 	readonly description: string;
 }
 
-/**
- * Assembles the per-run agent context. Project knowledge is NOT front-loaded
- * here — the agent retrieves it on demand via the `search` and scoped memory
- * tools. This builder provides only explicitly attached context notes and
- * discoverable skill summaries.
- */
-export class AgentContext implements AgentContextBuilder {
-	constructor(
-		private readonly base: BaseAgentContextBuilder,
-		private readonly skillFinder: SkillFinder,
-		private readonly noteReader: NoteReader,
-		private readonly conversations?: ConversationReader,
-		private readonly projects?: ProjectReader,
-		private readonly memoryLister?: MemoryLister
-	) {}
+/** Formats resolved resources for a run. Controllers own every resource read. */
+export class AgentContext {
+	base(
+		input: Pick<RunAgentInput, 'projectId' | 'selection' | 'selections'>,
+		current: CurrentContextNote
+	): BaseAgentContextData {
+		const note = current.kind === 'note' ? current.note : undefined;
+		// One shape for the prompt to read, whichever field the request arrived with. The
+		// singular `selection` is deliberately not emitted alongside it: it exists on the input
+		// so the selection-bound tools can be offered, and repeating the excerpt here would put
+		// the same passage in front of the model twice.
+		const pinned = input.selections ?? (input.selection ? [input.selection] : []);
+		// Titled only from the note this run already loaded, which is the note the passages
+		// almost always came from. Reading a note apiece to name the rest would buy a label the
+		// model can fetch itself.
+		const selections: ContextSelection[] = pinned.map((selection) =>
+			note && selection.noteId === note.id ? { ...selection, title: note.title } : selection
+		);
+		const projectId = input.projectId ?? note?.projectId;
+		return {
+			...(projectId ? { projectId } : {}),
+			...(note ? { noteId: note.id } : {}),
+			...(note ? { noteTitle: note.title } : {}),
+			...(selections.length ? { selections } : {})
+		};
+	}
 
-	async build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<AgentRunContext> {
-		const base = await this.base.build(actor, input, run);
-		const projectId = input.projectId ?? base.projectId;
-		const [availableSkills, contextNotes, allMemories] = await Promise.all([
-			this.skillFinder.listEnabled(actor, projectId),
-			this.loadContextNotes(actor, input.contextNoteIds ?? []),
-			this.memoryLister ? this.memoryLister.list(actor, {}) : Promise.resolve([])
-		]);
-		const userMemories = allMemories.filter((m) => m.shareWithAgents);
+	build(input: RunAgentInput, values: AgentContextValues): AgentRunContext {
+		const userMemories = values.profileMemory.filter((entry) => entry.shareWithAgents);
 		const requested = new Set((input.requestedSkillNames ?? []).map((name) => name.toLowerCase()));
 		const requestedNoteIds = new Set(input.requestedSkillNoteIds ?? []);
 		return {
-			...base,
-			...(await this.resolveAppContext(actor, input, input.conversationId ?? run.conversationId)),
-			...(userMemories.length > 0
-				? { userMemory: userMemories.map((entry) => entry.content) }
-				: {}),
-			contextNotes: contextNotes.map(contextNoteOf),
-			skills: this.buildCatalog(availableSkills, (skill) =>
+			...values.base,
+			...(values.appContext ? { appContext: values.appContext } : {}),
+			...(userMemories.length ? { userMemory: userMemories.map((entry) => entry.content) } : {}),
+			contextNotes: values.contextNotes.map(contextNoteOf),
+			skills: this.buildCatalog(values.skills, (skill) =>
 				this.isRequested(skill, requested, requestedNoteIds)
 			)
 		};
 	}
 
+	appContext(
+		snapshot: AppContextSnapshotV1,
+		conversation: Conversation,
+		origin: ConversationContextProject
+	): ResolvedAgentAppContextV1 {
+		const currentProjectId = snapshot.currentProject?.id ?? snapshot.activeResource?.projectId;
+		const projectTransition =
+			origin.kind === 'no_origin_project'
+				? 'origin_unscoped'
+				: !currentProjectId
+					? 'screen_unscoped'
+					: origin.project.id === currentProjectId
+						? 'same_project'
+						: 'different_project';
+		return {
+			...snapshot,
+			conversationOrigin: {
+				...(origin.kind === 'project'
+					? { projectId: origin.project.id, projectName: origin.project.name }
+					: {}),
+				...(conversation.contextNoteId ? { noteId: conversation.contextNoteId } : {})
+			},
+			projectTransition
+		};
+	}
+
+	requestedScope(
+		snapshot: AppContextSnapshotV1,
+		resolved: { readonly project?: Project; readonly note?: Note }
+	): NonNullable<ResolvedAgentAppContextV1['requestedScope']> {
+		const staged = [
+			resolved.note ? 'note "' + resolved.note.title + '"' : undefined,
+			resolved.project ? 'project "' + resolved.project.name + '"' : undefined
+		].filter((part): part is string => part !== undefined);
+		const current = snapshot.currentProject?.name
+			? 'project "' + snapshot.currentProject.name + '"'
+			: 'the ' + snapshot.surface.kind + ' screen';
+		return {
+			...(resolved.project
+				? { projectId: resolved.project.id, projectName: resolved.project.name }
+				: {}),
+			...(resolved.note ? { noteId: resolved.note.id, noteTitle: resolved.note.title } : {}),
+			note:
+				'The user is now on ' +
+				current +
+				', but staged this request from ' +
+				staged.join(' in ') +
+				'. The current screen is the active scope; act on the staged target only if the request plainly refers to it, and say which one you used when it is ambiguous.'
+		};
+	}
 	private isRequested(
 		skill: SkillSummary,
 		requestedNames: ReadonlySet<string>,
@@ -176,92 +202,5 @@ export class AgentContext implements AgentContextBuilder {
 			items.push(advertised);
 		}
 		return truncated ? { items, truncated: true } : { items };
-	}
-
-	private async resolveAppContext(
-		actor: ActorContext,
-		input: RunAgentInput,
-		conversationId: ConversationId
-	): Promise<{ appContext?: ResolvedAgentAppContextV1 }> {
-		if (!input.appContext) return {};
-		const conversation = await this.conversations?.get(actor, conversationId);
-		const originProjectId = conversation?.contextProjectId;
-		const originProject = originProjectId
-			? await this.projects?.get(actor, originProjectId)
-			: undefined;
-		const currentProjectId =
-			input.appContext.currentProject?.id ?? input.appContext.activeResource?.projectId;
-		const projectTransition = !originProjectId
-			? 'origin_unscoped'
-			: !currentProjectId
-				? 'screen_unscoped'
-				: originProjectId === currentProjectId
-					? 'same_project'
-					: 'different_project';
-		return {
-			appContext: {
-				...input.appContext,
-				conversationOrigin: {
-					...(originProjectId ? { projectId: originProjectId } : {}),
-					...(originProject ? { projectName: originProject.name } : {}),
-					...(conversation?.contextNoteId ? { noteId: conversation.contextNoteId } : {})
-				},
-				projectTransition,
-				...(await this.resolveRequestedScope(actor, input))
-			}
-		};
-	}
-
-	/**
-	 * The staged scope only survives here when the live snapshot overrode it, so
-	 * its presence already means "the user has moved on". Names are resolved so
-	 * the agent can name both sides to the user instead of echoing ids.
-	 */
-	private async resolveRequestedScope(
-		actor: ActorContext,
-		input: RunAgentInput
-	): Promise<Pick<ResolvedAgentAppContextV1, 'requestedScope'>> {
-		const requested = input.requestedScope;
-		if (!requested) return {};
-		const [project, note] = await Promise.all([
-			requested.projectId ? this.projects?.get(actor, requested.projectId) : undefined,
-			requested.noteId ? this.noteReader.get(actor, requested.noteId) : undefined
-		]);
-		const staged = [
-			note ? `note "${note.title}"` : requested.noteId ? 'another note' : undefined,
-			project ? `project "${project.name}"` : requested.projectId ? 'another project' : undefined
-		].filter((part): part is string => part !== undefined);
-		const current = input.appContext?.currentProject?.name
-			? `project "${input.appContext.currentProject.name}"`
-			: `the ${input.appContext?.surface.kind ?? 'unknown'} screen`;
-		return {
-			requestedScope: {
-				...(requested.projectId ? { projectId: requested.projectId } : {}),
-				...(project ? { projectName: project.name } : {}),
-				...(requested.noteId ? { noteId: requested.noteId } : {}),
-				...(note ? { noteTitle: note.title } : {}),
-				note: `The user is now on ${current}, but staged this request from ${staged.join(' in ')}. The current screen is the active scope; act on the staged target only if the request plainly refers to it, and say which one you used when it is ambiguous.`
-			}
-		};
-	}
-
-	/** Explicitly attached notes are required context, including notes selected through a folder. */
-	private async loadContextNotes(
-		actor: ActorContext,
-		noteIds: readonly Note['id'][]
-	): Promise<readonly Note[]> {
-		return Promise.all(
-			noteIds.map(async (noteId) => {
-				try {
-					return await this.noteReader.get(actor, noteId);
-				} catch (error) {
-					if (!(error instanceof NotFoundError)) throw error;
-					throw new NotFoundError(
-						'An attached note is no longer available. Remove it from context and retry.',
-						{ noteId }
-					);
-				}
-			})
-		);
 	}
 }

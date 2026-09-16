@@ -18,7 +18,6 @@ import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trus
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
-import { BaseAgentContext } from '$lib/server/services/agent/runs/base-context';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
@@ -105,14 +104,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEvents();
-	const context = new AgentContext(
-		new BaseAgentContext(input.notes),
-		input.skills,
-		input.notes,
-		conversations,
-		input.projects,
-		input.memory
-	);
+	const context = new AgentContext();
 	const runner = new AgentReasoning(
 		agentToolRegistry(input.controllers, input.toolRetriever),
 		sessions,
@@ -137,7 +129,12 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		decisions: runDecisions,
 		sessions,
 		transactions: input.transactionRunner,
-		contextBuilder: context,
+		contextFormatter: context,
+		contextNotes: input.notes,
+		contextSkills: input.skills,
+		contextMemory: input.memory,
+		contextProjects: input.projects,
+		contextConversations: conversations,
 		provenance: input.provenance,
 		conversations,
 		runner,

@@ -340,6 +340,15 @@ the already-created run instead of leaving it running. Provider cancellation clo
 requests. Obsolete authoring ports and the fake whole-workflow implementation are removed. Agent
 context assembly, built-in skill provisioning and durable selection-workflow settlement remain open.
 
+Agent context loading: agent execution and diagram controllers now load their required notes, skills
+and profile memory directly. Chat execution also resolves conversation origin and staged scope.
+AgentContext formats resolved values and no longer receives readers or an optional collaborator.
+BaseAgentContext and its separate builder ports are removed. Selection normalization, skill ordering,
+token thresholds and scope descriptions share the same formatter. Context tests now execute durable
+runs; missing attached notes still fail with an actionable message, and storage failures stay visible.
+Shared profile facts remain standing context, while private facts and project memory remain excluded.
+Built-in provisioning hidden behind skill reads remains the next separate ownership concern.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
