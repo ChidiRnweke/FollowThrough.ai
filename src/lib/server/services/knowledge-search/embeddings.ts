@@ -1,4 +1,5 @@
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
+import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import { getEmbeddingAttributes } from '@arizeai/openinference-core';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import OpenAI from 'openai';
@@ -38,11 +39,6 @@ const createLanguageModelClient = (
 			'X-OpenRouter-Title': 'FollowThrough'
 		}
 	});
-
-export interface EmbeddingBatch {
-	readonly model: string;
-	readonly vectors: readonly (readonly number[])[];
-}
 
 export interface IEmbeddings {
 	readonly model: string;

@@ -18,7 +18,8 @@ import type {
 } from '$lib/server/repositories/knowledge-search';
 import type {
 	EmbeddingBatch,
-	EmbeddingClient
+	EmbeddingClient,
+	Reranker
 } from '$lib/server/services/knowledge-search/contracts';
 
 interface OwnedSearchDocument {
@@ -309,12 +310,14 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 }
 
 export class InMemoryEmbeddingClient implements EmbeddingClient {
+	failure?: Error;
 	model = 'fake-embedding-v1';
 	generation = 1;
 	returnWrongCount = false;
 	rejectedContents = new Set<string>();
 
 	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
+		if (this.failure) throw this.failure;
 		if (contents.some((content) => this.rejectedContents.has(content)))
 			throw new Error('Embedding rejected this content');
 		const vectors = contents.map((content, index) => [this.generation, index, content.length]);
@@ -323,5 +326,26 @@ export class InMemoryEmbeddingClient implements EmbeddingClient {
 			model: this.model,
 			vectors: this.returnWrongCount ? vectors.slice(1) : vectors
 		};
+	}
+}
+
+export class InMemoryReranker implements Reranker {
+	order: 'input' | 'reverse' | 'relevant-first' = 'input';
+	failure?: Error;
+	async rerank(
+		_query: string,
+		matches: readonly SearchMatch[],
+		topN: number
+	): Promise<readonly SearchMatch[]> {
+		if (this.failure) throw this.failure;
+		const ordered = [...matches];
+		if (this.order === 'reverse') ordered.reverse();
+		if (this.order === 'relevant-first')
+			ordered.sort(
+				(left, right) =>
+					Number(right.document.content.includes('relevant')) -
+					Number(left.document.content.includes('relevant'))
+			);
+		return ordered.slice(0, topN);
 	}
 }

@@ -1,15 +1,36 @@
 import { type ActorContext } from '$lib/models/identity';
-import { type InlineSuggestion, type InlineSuggestionRequest } from '$lib/models/agent';
+import {
+	type InlineSuggestion,
+	type InlineSuggestionRequest,
+	type InlineCompletionContext
+} from '$lib/models/agent';
+import type { SearchMatch } from '$lib/models/knowledge-search';
 import { type Note } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
 import type {
-	InlineCompletionContextBuilder,
 	InlineCompletionGenerator,
 	InlineSuggestionThrottle
 } from '$lib/server/services/agent/runs/contracts';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import { traceWorkflow } from '$lib/server/services/telemetry';
+import type { OperationObserver } from '$lib/models/telemetry';
+import type { MemoryEntryLister } from '$lib/server/services/memory/contracts';
+import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
+import { queryVector, type KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import {
+	retrievalQuery,
+	inlineMemoryPlan,
+	inlineRankedMemory,
+	inlineProjectCandidates,
+	inlineProjectPassages,
+	inlineContextTraceOutput,
+	vectorSearchTraceOutput,
+	PROJECT_CANDIDATE_LIMIT,
+	PROJECT_PASSAGE_LIMIT,
+	USER_MEMORY_LIMIT
+} from '$lib/server/services/inline-suggestions/inline-context';
+import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
 const MIN_PREFIX_LENGTH = 12;
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
@@ -31,7 +52,11 @@ export interface InlineSuggestionsController {
 
 export interface InlineSuggestionsDependencies {
 	inlineCompletionGenerator: InlineCompletionGenerator;
-	inlineCompletionContextBuilder: InlineCompletionContextBuilder;
+	embeddings: EmbeddingClient;
+	knowledgeLookup: Pick<KnowledgeLookup, 'search'>;
+	reranker: Reranker;
+	memory: MemoryEntryLister;
+	observer: OperationObserver;
 	inlineSuggestionThrottle: InlineSuggestionThrottle;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;
@@ -77,12 +102,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 			},
 			async () => {
 				try {
-					const context = await this.dependencies.inlineCompletionContextBuilder.build(
-						actor,
-						authoritativeRequest,
-						note,
-						signal
-					);
+					const context = await this.buildContext(actor, authoritativeRequest, note, signal);
 					const budget = this.dependencies.inlineSuggestionThrottle.consume(actor.userId);
 					if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
 					let text: string;
@@ -115,6 +135,77 @@ export class InlineSuggestions implements InlineSuggestionsController {
 			},
 			(result) => JSON.stringify(result)
 		);
+	}
+
+	private async buildContext(
+		actor: ActorContext,
+		request: InlineSuggestionRequest,
+		note: Note,
+		signal: AbortSignal
+	): Promise<InlineCompletionContext> {
+		const query = retrievalQuery(request);
+		const { observer, memory, embeddings, knowledgeLookup } = this.dependencies;
+		return observer.run(
+			'inline.context',
+			{ input: query, outputMimeType: MimeType.JSON },
+			async () => {
+				signal.throwIfAborted();
+				const [matches, entries] = await Promise.all([
+					observer.run(
+						'retrieval.vector-search',
+						{ input: query, outputMimeType: MimeType.JSON, kind: OpenInferenceSpanKind.RETRIEVER },
+						async () => {
+							const batch = await embeddings.embed([query], signal);
+							signal.throwIfAborted();
+							return knowledgeLookup.search(
+								actor,
+								queryVector(batch),
+								PROJECT_CANDIDATE_LIMIT,
+								note.projectId
+							);
+						},
+						vectorSearchTraceOutput
+					),
+					memory.list(actor, {})
+				]);
+				signal.throwIfAborted();
+				const candidates = inlineProjectCandidates(matches, note);
+				const memoryPlan = inlineMemoryPlan(entries, note);
+				const [projectMatches, userMemory] = await Promise.all([
+					candidates.length > 1
+						? this.rank(query, candidates, PROJECT_PASSAGE_LIMIT, signal)
+						: candidates,
+					memoryPlan.kind === 'complete'
+						? memoryPlan.contents
+						: this.rank(query, memoryPlan.candidates, USER_MEMORY_LIMIT, signal).then(
+								inlineRankedMemory
+							)
+				]);
+				signal.throwIfAborted();
+				return {
+					noteTitle: note.title,
+					noteText: note.plainText,
+					userMemory,
+					projectPassages: inlineProjectPassages(projectMatches)
+				};
+			},
+			inlineContextTraceOutput
+		);
+	}
+
+	private async rank(
+		query: string,
+		candidates: readonly SearchMatch[],
+		limit: number,
+		signal: AbortSignal
+	): Promise<readonly SearchMatch[]> {
+		try {
+			return await this.dependencies.reranker.rerank(query, candidates, limit, signal);
+		} catch (error) {
+			if (signal.aborted) throw error;
+			// ADR 0036: the provider trace retains the failure; already retrieved knowledge remains usable.
+			return candidates.slice(0, limit);
+		}
 	}
 
 	private async authorize(
