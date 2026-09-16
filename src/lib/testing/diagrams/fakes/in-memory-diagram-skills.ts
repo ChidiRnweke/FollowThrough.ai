@@ -11,11 +11,8 @@ import type {
 	DiagramPromoter,
 	DiagramTextExtractor,
 	DiagramWriter,
-	DrawioDiagramCreator,
 	DrawioDiagramExporter,
-	MermaidDiagramCreator,
-	MermaidDiagramRenderer,
-	MermaidDiagramReviser
+	MermaidDiagramRenderer
 } from '$lib/server/services/diagrams/contracts';
 import type { SkillCreator } from '$lib/server/services/skills/contracts';
 import {
@@ -64,9 +61,7 @@ export const drawioBuilder = (overrides: Partial<DrawioDiagram> = {}): DrawioDia
 export class InMemoryDiagrams
 	implements
 		DiagramFinder,
-		MermaidDiagramReviser,
 		MermaidDiagramRenderer,
-		DrawioDiagramCreator,
 		DrawioDiagramExporter,
 		DiagramPromoter,
 		DiagramTextExtractor,
@@ -95,28 +90,8 @@ export class InMemoryDiagrams
 		return diagram;
 	}
 
-	async revise(
-		_actor: ActorContext,
-		diagram: MermaidDiagram,
-		instruction: string
-	): Promise<MermaidDiagram> {
-		void _actor;
-		return { ...diagram, source: `${diagram.source}\n%% ${instruction}` };
-	}
-
 	async render(source: string): Promise<string> {
 		return `<svg>${source}</svg>`;
-	}
-
-	async createFromMermaid(_actor: ActorContext, diagram: MermaidDiagram): Promise<DrawioDiagram> {
-		void _actor;
-		return drawioBuilder({
-			projectId: diagram.projectId,
-			sourceNoteId: diagram.sourceNoteId,
-			source:
-				'<mxfile><diagram name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="30" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>',
-			promotedFromId: diagram.id
-		});
 	}
 
 	async exportSvg(diagram: DrawioDiagram): Promise<string> {
@@ -158,21 +133,6 @@ export class InMemoryDiagrams
 		void _actor;
 		this.indexedIds.push(diagram.id);
 		return { kind: 'stored' };
-	}
-}
-
-export class InMemoryMermaidCreator implements MermaidDiagramCreator {
-	async create(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		instruction?: string
-	): Promise<{ title?: string; source: string }> {
-		void _actor;
-		void _selection;
-		return {
-			title: instruction ? `Diagram: ${instruction}` : 'Generated diagram',
-			source: 'flowchart LR\nA --> B'
-		};
 	}
 }
 

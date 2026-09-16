@@ -10,61 +10,15 @@ import type {
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams,
 	DrawioDiagram,
-	MermaidDiagram,
-	ReviseInlineMermaidInput,
-	ReviseInlineMermaidOutput,
-	ConvertInlineMermaidInput
+	MermaidDiagram
 } from '$lib/models/diagrams';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { ProvenanceId } from '$lib/models/provenance';
 export interface DiagramIconSearch {
 	search(query: string, limit?: number): Promise<readonly { name: string; url: string }[]>;
 }
-export interface MermaidDiagramDraft {
-	readonly title?: string;
-	readonly source: string;
-	readonly provenanceId?: ProvenanceId;
-}
-export interface DrawioDiagramDraft {
-	readonly title: string;
-	readonly source: string;
-	readonly provenanceId?: ProvenanceId;
-}
-export interface MermaidDiagramCreator {
-	create(
-		actor: ActorContext,
-		selection: TextSelection,
-		instruction?: string,
-		signal?: AbortSignal
-	): Promise<MermaidDiagramDraft>;
-}
-export interface MermaidDiagramReviser {
-	revise(
-		actor: ActorContext,
-		diagram: MermaidDiagram,
-		instruction: string
-	): Promise<MermaidDiagram>;
-}
-export interface InlineMermaidReviser {
-	reviseInline(
-		actor: ActorContext,
-		input: ReviseInlineMermaidInput,
-		signal?: AbortSignal
-	): Promise<ReviseInlineMermaidOutput>;
-}
-export interface InlineMermaidToDrawioConverter {
-	convertInline(
-		actor: ActorContext,
-		input: ConvertInlineMermaidInput,
-		signal?: AbortSignal
-	): Promise<DrawioDiagramDraft>;
-}
 export interface MermaidDiagramRenderer {
 	render(source: string): Promise<string>;
-}
-export interface DrawioDiagramCreator {
-	createFromMermaid(actor: ActorContext, diagram: MermaidDiagram): Promise<DrawioDiagram>;
 }
 export interface DrawioDiagramExporter {
 	exportSvg(diagram: DrawioDiagram): Promise<string>;

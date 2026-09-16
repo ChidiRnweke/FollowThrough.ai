@@ -266,6 +266,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const skills = skillCapability.library;
 	const provisionedSkills = skillCapability.provisioned;
 	const diagramCapability = createDiagramsCapability({
+		apiKey: openRouterApiKey,
+		baseURL: openRouterBaseURL,
+		appURL,
 		db,
 		notes: noteRepository,
 		anchors: anchorRepository,
@@ -284,7 +287,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	});
 	const diagrams = diagramCapability.library;
 	const diagramTransforms = diagramCapability.transforms;
-	const diagramAgent = diagramCapability.authoring;
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
@@ -332,15 +334,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			anchorCreator: notes,
-			mermaidCreator: diagramAgent,
-			provenanceRecorder: provenance,
+			generation: diagramCapability.generation,
 			suggestionCreator: suggestions,
 			transactionRunner,
 			diagramFinder: diagrams,
 			mermaidValidator: diagramCapability.mermaidValidator,
-			mermaidReviser: diagramAgent,
-			inlineMermaidReviser: diagramAgent,
-			inlineMermaidToDrawioConverter: diagramAgent,
 			now: diagramCapability.now,
 			drawioXmlValidator: diagramCapability.xmlValidator,
 			drawioSvgSanitizer: diagramCapability.svgSanitizer,
@@ -349,7 +347,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			drawioTextExtractor: diagramCapability.textExtractor,
 			diagramWriter: diagrams,
 			diagramIndexer,
-			drawioCreator: diagramAgent,
 			workflowRunner: agentCapability.workflowRunner
 		},
 		diagramStudio: {

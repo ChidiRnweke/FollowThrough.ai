@@ -1053,7 +1053,7 @@ export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefine
  *
  * Model-owned because two services need it and a service may not import
  * another: `AgentRunLifecycle` journals every run's calls, and
- * `DiagramAuthoring` journals its own. They held a copy each, and the copies
+ * The diagrams controller journals its own. The two workflows held a copy each, and the copies
  * had already diverged — the diagram one wrote `output: undefined` onto a
  * `succeeded` row, which the wire type cannot carry.
  */
