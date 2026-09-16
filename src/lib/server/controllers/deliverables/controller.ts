@@ -20,7 +20,7 @@ import type {
 	PreviewDocumentOutput,
 	TemplateId
 } from '$lib/models/deliverables';
-import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
+import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type {
 	ArtifactDeleter,
 	ArtifactLister,
@@ -200,12 +200,13 @@ export class Deliverables implements DeliverablesController {
 			await storage.remove(stagingKey);
 			return;
 		}
-		const upload = await templates.upload(actor, templateId);
+		let upload: TemplateUpload;
 		let bytes: Uint8Array;
 		try {
+			upload = await templates.upload(actor, templateId);
 			bytes = await storage.read(upload.objectKey, upload.byteSize);
 		} catch (error) {
-			// Another completion may have committed and removed staging after our initial read.
+			// Another completion may remove the reservation or staging after our initial read.
 			if (await templates.find(actor, templateId)) {
 				await storage.remove(stagingKey);
 				return;

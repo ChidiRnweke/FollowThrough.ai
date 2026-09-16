@@ -43,6 +43,19 @@ const setup = async () => {
 };
 
 describe('template upload completion', () => {
+	it('accepts a concurrent completion that publishes before the reservation is read', async () => {
+		const { complete, repository } = await setup();
+		const gate = Promise.withResolvers<void>();
+		repository.nextTemplateReadGate = gate.promise;
+		const delayed = complete();
+		await complete();
+		gate.resolve();
+		await delayed;
+		expect({ templates: repository.templates.length, uploads: repository.uploads.length }).toEqual({
+			templates: 1,
+			uploads: 0
+		});
+	});
 	it('keeps completed templates scoped to their project', async () => {
 		const { controller, complete } = await setup();
 		await complete();

@@ -70,6 +70,7 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 	templates: ProjectTemplate[] = [];
 	uploads: TemplateUpload[] = [];
 	insertFailure?: Error;
+	nextTemplateReadGate?: Promise<void>;
 	async insertUpload(_actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
 		this.uploads.push(upload);
 		return upload;
@@ -93,9 +94,13 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 	}
 
 	async findById(actor: ActorContext, id: TemplateId): Promise<ProjectTemplate | undefined> {
-		return this.templates.find(
+		const snapshot = this.templates.find(
 			(template) => template.id === id && template.userId === actor.userId
 		);
+		const gate = this.nextTemplateReadGate;
+		this.nextTemplateReadGate = undefined;
+		await gate;
+		return snapshot;
 	}
 
 	async listByProject(
