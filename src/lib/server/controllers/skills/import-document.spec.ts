@@ -73,6 +73,30 @@ const input: SkillEditInput = {
 };
 
 describe('Skill document imports', () => {
+	it('normalizes description and trigger hints through the shared metadata rules', async () => {
+		const { controller, note } = importSkill();
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			description: '  Release guidance  ',
+			triggerHints: [' release ', '', '  ']
+		});
+		expect({ description: skill.description, triggerHints: skill.triggerHints }).toEqual({
+			description: 'Release guidance',
+			triggerHints: ['release']
+		});
+	});
+	it('retains the current description when disabling a skill with an empty description', async () => {
+		const { controller, note } = importSkill();
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			description: '  ',
+			isEnabled: false
+		});
+		expect({ description: skill.description, enabled: skill.isEnabled }).toEqual({
+			description: 'Writes decisions',
+			enabled: false
+		});
+	});
 	it('reads the current note title in the skill list after a document rename', async () => {
 		const { catalog, service, note } = importSkill();
 		await catalog.save(testActor(), { ...note, title: 'Release decisions' });

@@ -162,25 +162,6 @@ export interface GetSkillViewInput {
 	readonly noteId: NoteId;
 }
 
-/** Metadata edits do not change the instruction document or its revision. */
-export function applySkillMetadataEdit(
-	current: Pick<Skill<never>, 'description' | 'triggerHints' | 'isEnabled'>,
-	input: {
-		readonly displayName?: string;
-		readonly description?: string;
-		readonly triggerHints?: readonly string[];
-		readonly isEnabled?: boolean;
-	}
-) {
-	return {
-		description: input.description?.trim() || current.description,
-		triggerHints: input.triggerHints
-			? input.triggerHints.map((hint) => hint.trim()).filter(Boolean)
-			: [...current.triggerHints],
-		isEnabled: input.isEnabled ?? current.isEnabled
-	};
-}
-
 /** A document edit includes the portable metadata whose validity its controller must check. */
 export type PreparedSkillEdit<Document> =
 	| { readonly kind: 'metadata'; readonly skill: Skill<Document> }

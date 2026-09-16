@@ -1,5 +1,6 @@
 import type { Note, NoteId, ReplaceNoteTextInput, NoteReplacementReport } from '$lib/models/notes';
-import { noteCommand, type PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
+import { noteCommand } from '$lib/services/workspace/commands';
+import { type PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 import { replaceInNoteDocument } from '$lib/services/notes/text-search';
 
 /** The captured editor base and its durable local write boundary. */

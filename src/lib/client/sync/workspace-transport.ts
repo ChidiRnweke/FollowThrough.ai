@@ -13,9 +13,9 @@ import { pullWorkspaceChangePage, readWorkspaceResource } from '$lib/remote/work
 import {
 	workspaceMutationResultSchema,
 	workspaceWriteRecoverySchema,
-	mutationResource,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
+import { mutationResource } from '$lib/services/workspace/commands';
 import {
 	pushWorkspaceMutation,
 	cancelWorkspaceMutation

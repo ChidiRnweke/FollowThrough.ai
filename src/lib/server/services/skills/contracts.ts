@@ -25,7 +25,11 @@ export interface SkillFinder {
 }
 
 export interface SkillEditor {
-	prepareEdit(actor: ActorContext, input: SkillEditInput): Promise<PreparedSkillEdit<Note>>;
+	prepareEdit(
+		actor: ActorContext,
+		current: Skill<Note>,
+		input: Omit<SkillEditInput, 'noteId'>
+	): Promise<PreparedSkillEdit<Note>>;
 	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
 	manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest>;
 	setPinned(

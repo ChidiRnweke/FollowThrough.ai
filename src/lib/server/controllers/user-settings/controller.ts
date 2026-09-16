@@ -1,3 +1,4 @@
+import { mutationResource } from '$lib/services/workspace/commands';
 import type { AtomicOperation } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type {
@@ -52,10 +53,11 @@ export class UserSettings implements UserSettingsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);

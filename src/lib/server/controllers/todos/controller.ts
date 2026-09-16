@@ -1,3 +1,4 @@
+import { mutationResource } from '$lib/services/workspace/commands';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
@@ -125,10 +126,11 @@ export class Todos implements TodosController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);

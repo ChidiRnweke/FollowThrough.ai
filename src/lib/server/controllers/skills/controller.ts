@@ -1,5 +1,8 @@
+import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import { serializeSkillManifest, validatePortableSkill } from '$lib/services/skills/manifest';
+import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
+import type { SkillEditInput } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note } from '$lib/models/notes';
@@ -83,10 +86,7 @@ export interface SkillsController {
 	/** Restore a skill to an earlier revision, in one transaction. */
 	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView<Note>>;
 	/** Edit a skill's content, returning the refreshed view with its usage counts. */
-	update(
-		actor: ActorContext,
-		input: Parameters<SkillEditor['prepareEdit']>[1]
-	): Promise<SkillView<Note>>;
+	update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>>;
 	/** Serialize a skill into the compact form the agent consumes. */
 	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string>;
 	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
@@ -126,10 +126,11 @@ export class Skills implements SkillsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
-					return this.dependencies.syncMutations.complete(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input, target);
 				},
 				{ retry: this.dependencies.syncRetry }
 			);
@@ -264,12 +265,15 @@ export class Skills implements SkillsController {
 			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
 		};
 	}
-	async update(
-		actor: ActorContext,
-		input: Parameters<SkillEditor['prepareEdit']>[1]
-	): Promise<SkillView<Note>> {
+	async update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
-			const prepared = await this.dependencies.skillEditor.prepareEdit(actor, input);
+			const current = await this.dependencies.skillFinder.load(actor, input.noteId);
+			const metadata = applySkillMetadataEdit(current, input);
+			const prepared = await this.dependencies.skillEditor.prepareEdit(
+				actor,
+				{ ...current, ...metadata },
+				input
+			);
 			if (prepared.kind === 'document') validatePortableSkill(prepared.manifest);
 			const note =
 				prepared.kind !== 'metadata'

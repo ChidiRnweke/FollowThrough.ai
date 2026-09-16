@@ -1,8 +1,8 @@
 import { workspaceWriteRejection } from '$lib/server/repositories/workspace/write-failure';
 import { DomainError, ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import {
-	mutationResource,
 	type WorkspaceMutationRequest,
 	type WorkspaceMutationResult,
 	type WorkspaceMutationPreparation,
@@ -42,9 +42,9 @@ export class WorkspaceMutationReceipts {
 
 	async prepare(
 		actor: ActorContext,
-		input: WorkspaceMutationRequest
+		input: WorkspaceMutationRequest,
+		identity: WorkspaceResourceIdentity
 	): Promise<WorkspaceMutationPreparation> {
-		const identity = mutationResource(input.command);
 		await this.dependencies.mutationReceipts.lockOperation(actor, input.operationId);
 		const previous = await this.dependencies.mutationReceipts.find(
 			actor,
@@ -91,14 +91,11 @@ export class WorkspaceMutationReceipts {
 
 	async complete(
 		actor: ActorContext,
-		input: WorkspaceMutationRequest
+		input: WorkspaceMutationRequest,
+		identity: WorkspaceResourceIdentity
 	): Promise<WorkspaceMutationResult> {
 		await this.dependencies.mutationReceipts.publishChanges();
-		const resource = await this.dependencies.syncObjects.read(
-			actor,
-			mutationResource(input.command),
-			null
-		);
+		const resource = await this.dependencies.syncObjects.read(actor, identity, null);
 		if (resource.kind !== 'found' && resource.kind !== 'deleted')
 			throw new Error('The mutation produced no authoritative resource');
 		const receipt: WorkspaceWriteReceipt = { operationId: input.operationId, resource };
