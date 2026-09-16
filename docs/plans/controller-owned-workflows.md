@@ -272,6 +272,15 @@ The agent controller binds the resolved conversation directly into already-narro
 it no longer reparses a value it just constructed. Existing submission tests cover first-message
 and existing-conversation snapshots.
 
+P15 controller ownership: document generation, previews, bundles, downloads and regeneration now
+coordinate focused collaborators in the deliverables controller. Task-board PDF assembly lives in
+the todos controller. Renderers consume prepared image and diagram values without service callbacks.
+Artifact metadata and provenance share one transaction for both generation and regeneration;
+failed signing or persistence removes the newly uploaded object. Original artifacts remain intact.
+Saved title visibility and diagram-theme settings are no longer discarded during validation.
+Server-side preparation of missing diagram renders remains outstanding; this slice does not
+complete P15 or the global refactor.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

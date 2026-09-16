@@ -10,9 +10,11 @@ import type {
 import { defaultExportSettings } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
 import { generateDocx } from './docx';
+import { prepareExport } from './export-preparation';
+import type { ExportInput } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
-type GenerateDocxArgs = Parameters<typeof generateDocx>[0];
+type GenerateDocxArgs = ExportInput;
 
 const renderCache = new Map<string, Promise<Buffer>>();
 
@@ -24,11 +26,12 @@ const memoizedGenerateDocx = (input: GenerateDocxArgs): Promise<Buffer> => {
 		diagramSvgs: input.diagramSvgs,
 		diagramPngs: input.diagramPngs,
 		diagramSizes: input.diagramSizes,
-		hasImageResolver: input.imageResolver !== undefined
+		images: [...(input.images ?? [])],
+		styles: input.styles
 	});
 	const cached = renderCache.get(key);
 	if (cached) return cached;
-	const rendered = generateDocx(input);
+	const rendered = generateDocx(prepareExport(input));
 	renderCache.set(key, rendered);
 	return rendered;
 };
@@ -165,7 +168,7 @@ const DIAGRAM_SOURCE = 'flowchart LR\n  A --> B';
 const DIAGRAM_SVG =
 	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><rect width="120" height="60" fill="#eee"/></svg>';
 
-const zipFor = async (overrides: Partial<Parameters<typeof generateDocx>[0]> = {}) =>
+const zipFor = async (overrides: Partial<ExportInput> = {}) =>
 	new AdmZip(
 		await memoizedGenerateDocx({
 			notes: [{ title: 'Note', document }],
@@ -558,7 +561,7 @@ describe('App-owned attachment images in an exported document', () => {
 	it('embeds an attachment image that the image resolver resolves to a data URL', async () => {
 		const zip = await zipFor({
 			notes: [{ title: 'Note', document: withAttachmentImage('/api/attachments/a1/content') }],
-			imageResolver: async (src) => (src === '/api/attachments/a1/content' ? TINY_PNG : undefined)
+			images: new Map([['/api/attachments/a1/content', TINY_PNG]])
 		});
 		expect(zip.getEntries().some((entry) => entry.entryName.startsWith('word/media/'))).toBe(true);
 	});

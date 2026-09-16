@@ -4,6 +4,11 @@ import type { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipt
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
+import type { Project } from '$lib/models/projects';
+import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
+import { boardExportDate, boardExportSlug, boardMarkdown } from '$lib/models/todos';
+import type { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import type { prepareExport } from '$lib/server/services/deliverables/export-preparation';
 import type {
 	BoardPdfExportResult,
 	CreateTodoInput,
@@ -29,7 +34,6 @@ import type {
 	SuggestionCreator
 } from '$lib/server/services/suggestions/contracts';
 import type {
-	BoardPdfExporter,
 	TodoCreator,
 	TodoDeleter,
 	TodoEditor,
@@ -106,7 +110,10 @@ export interface TodosDependencies {
 	suggestionAccepter: SuggestionAccepter;
 	suggestionEffects: SuggestionEffectService;
 	transactionRunner: TransactionRunner;
-	boardPdfExporter: BoardPdfExporter;
+	projectLister: { list(actor: ActorContext): Promise<readonly Project[]> };
+	markdownToContent: typeof noteContentFromMarkdown;
+	exportPreparer: typeof prepareExport;
+	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
 	workflowRunner: WorkflowRunStarter;
 }
 export class Todos implements TodosController {
@@ -148,7 +155,28 @@ export class Todos implements TodosController {
 		return this.dependencies.todoLister.listCategories(actor);
 	}
 	async exportBoardPdf(actor: ActorContext, filter: TodoListFilter): Promise<BoardPdfExportResult> {
-		return this.dependencies.boardPdfExporter.exportBoardPdf(actor, filter);
+		const [todos, projects] = await Promise.all([
+			this.dependencies.todoLister.list(actor, filter),
+			this.dependencies.projectLister.list(actor)
+		]);
+		const views = await this.dependencies.todoViewAssembler.assemble(actor, todos);
+		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+		const generatedAt = new Date();
+		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
+		const title = projectName ? `${projectName} todos` : 'Todos';
+		const { document } = this.dependencies.markdownToContent(
+			boardMarkdown(views, { title, generatedAt, projectNames })
+		);
+		const prepared = this.dependencies.exportPreparer({
+			title,
+			notes: [{ title, document }],
+			settings: { ...defaultExportSettings, includeTitle: true }
+		});
+		const pdf = await this.dependencies.pdfGenerator(prepared);
+		return {
+			data: pdf.toString('base64'),
+			filename: `kanban-${boardExportSlug(projectName ?? 'all')}-${boardExportDate(generatedAt)}.pdf`
+		};
 	}
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
 		const todo = await this.dependencies.todoCreator.create(actor, input);

@@ -1,4 +1,24 @@
 import { z } from 'zod';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+
+export interface ExportInput extends DiagramRenders {
+	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
+	readonly title: string;
+	readonly styles?: ExtractedTemplateStyles;
+	readonly settings?: ExportSettings;
+	readonly images?: ReadonlyMap<string, string>;
+}
+
+export type PreparedDiagram = { kind: 'raster' | 'vector'; data: string; size?: DiagramSize };
+
+export interface PreparedExport extends Omit<
+	ExportInput,
+	'settings' | 'images' | keyof DiagramRenders
+> {
+	readonly settings: ExportSettings;
+	readonly images: ReadonlyMap<string, string>;
+	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+}
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 

@@ -6,11 +6,11 @@ const document: ProseMirrorDocument = {
 	content: [{ type: 'image', attrs: { src: '/api/attachments/file/content' } }]
 };
 describe('shared export preparation', () => {
-	it('resolves attachment images for every renderer', async () => {
+	it('retains resolved attachment images for every renderer', async () => {
 		const prepared = await prepareExport({
 			title: 'Export',
 			notes: [{ title: 'Note', document }],
-			imageResolver: async () => 'data:image/png;base64,aGVsbG8='
+			images: new Map([['/api/attachments/file/content', 'data:image/png;base64,aGVsbG8=']])
 		});
 		expect(prepared.images.get('/api/attachments/file/content')).toBe(
 			'data:image/png;base64,aGVsbG8='
@@ -20,7 +20,7 @@ describe('shared export preparation', () => {
 		const prepared = await prepareExport({
 			title: 'Export',
 			notes: [{ title: 'Note', document }],
-			imageResolver: async () => undefined
+			images: new Map()
 		});
 		expect(prepared.images.has('/api/attachments/file/content')).toBe(false);
 	});

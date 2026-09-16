@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BoardPdfExport, type BoardPdfGenerator, type MarkdownToDocument } from './board-export';
+import { Todos, type TodosDependencies } from './controller';
+import { prepareExport } from '$lib/server/services/deliverables/export-preparation';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+type BoardPdfGenerator = TodosDependencies['pdfGenerator'];
+type MarkdownToDocument = TodosDependencies['markdownToContent'];
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
 import {
@@ -16,14 +20,23 @@ const setup = () => {
 	const markdownSources: string[] = [];
 	const markdownToDocument: MarkdownToDocument = (source) => {
 		markdownSources.push(source);
-		return { type: 'doc' };
+		return { document: { type: 'doc' }, plainText: source };
 	};
 	const pdfInputs: Parameters<BoardPdfGenerator>[0][] = [];
 	const pdfGenerator: BoardPdfGenerator = async (input) => {
 		pdfInputs.push(input);
 		return Buffer.from('pdf-bytes');
 	};
-	const service = new BoardPdfExport(todos, todos, projects, markdownToDocument, pdfGenerator);
+	const service = new Todos(
+		capabilityDependencies<TodosDependencies>({
+			todoLister: todos,
+			todoViewAssembler: todos,
+			projectLister: projects,
+			markdownToContent: markdownToDocument,
+			exportPreparer: prepareExport,
+			pdfGenerator
+		})
+	);
 	return { todos, projects, markdownSources, pdfInputs, service };
 };
 

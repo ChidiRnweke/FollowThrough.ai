@@ -51,6 +51,17 @@ export class DocumentTemplates {
 	find(actor: ActorContext, id: TemplateId) {
 		return this.repository.findById(actor, id);
 	}
+	async styles(
+		actor: ActorContext,
+		id: TemplateId,
+		projectId: ProjectId
+	): Promise<ExtractedTemplateStyles> {
+		const template = await this.repository.findById(actor, id);
+		if (!template) throw new NotFoundError('The selected template is unavailable or not ready');
+		if (template.projectId !== projectId)
+			throw new ValidationError('The selected template belongs to another project');
+		return template.extractedStyles;
+	}
 	list(actor: ActorContext, projectId: ProjectId) {
 		return this.repository.listByProject(actor, projectId);
 	}

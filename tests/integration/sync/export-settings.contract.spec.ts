@@ -8,13 +8,7 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
-import {
-	InMemoryArtifactRepository,
-	InMemoryAttachmentStorage,
-	InMemoryTemplateRepository
-} from '$lib/testing/attachments/fakes/in-memory-deliverables';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryArtifactRepository } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, seedNote } from '../database-harness';
 
@@ -23,29 +17,7 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database, transactionRunner });
 	const settings = new ExportSettingsRecords(database);
-	const artifacts = new ArtifactLibrary(
-		new InMemoryArtifactRepository(),
-		new InMemoryAttachmentStorage(),
-		async () => {
-			throw new Error('Settings do not generate files');
-		},
-		async () => {
-			throw new Error('Settings do not generate files');
-		},
-		new InMemoryProvenanceRecorder(),
-		new InMemoryNoteContent(),
-		new InMemoryTemplateRepository(),
-		transactionRunner,
-		settings,
-		{
-			downloadById: async () => {
-				throw new Error('Settings do not download files');
-			}
-		},
-		() => {
-			throw new Error('Settings do not generate bundles');
-		}
-	);
+	const artifacts = new ArtifactLibrary(new InMemoryArtifactRepository(), settings);
 	const controller = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
 			syncMutations: sync.mutations,
