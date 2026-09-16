@@ -112,7 +112,7 @@ describe('note view assembly', () => {
 				referenceContextReader: library,
 				diagramLister: new InMemoryDiagramRepository(),
 				todoLister: todos,
-				todoViewAssembler: todos,
+				todoContextReader: todos,
 				suggestionLister: suggestions,
 				suggestionExpirer: suggestions,
 				suggestionContextReader: suggestions

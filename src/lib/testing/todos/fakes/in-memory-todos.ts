@@ -5,7 +5,7 @@ import type {
 	TodoId,
 	TodoListFilter,
 	UpdateTodoInput,
-	TodoView
+	TodoContext
 } from '$lib/models/todos';
 import { applyTodoEdit } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -15,7 +15,7 @@ import type {
 	TodoCreator,
 	TodoLister,
 	TodoReader,
-	TodoViewAssembler,
+	TodoContextReader,
 	WaitingOnFinder
 } from '$lib/server/services/todos/contracts';
 import { testNow, testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -31,7 +31,7 @@ export class InMemoryTodos
 		TodoEditor,
 		TodoDeleter,
 		TodoLister,
-		TodoViewAssembler,
+		TodoContextReader,
 		WaitingOnFinder,
 		SnapshotParticipant
 {
@@ -116,8 +116,18 @@ export class InMemoryTodos
 		);
 	}
 
-	async assemble(_actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]> {
-		return todos.map((todo) => ({ todo }));
+	async readContexts(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoContext[]> {
+		return Promise.all(todos.map((todo) => this.readContext(actor, todo)));
+	}
+
+	async readContext(_actor: ActorContext, todo: Todo): Promise<TodoContext> {
+		return {
+			todo,
+			anchor: null,
+			origin: null,
+			linked: null,
+			provenance: null
+		};
 	}
 
 	snapshot(): RestoreSnapshot {

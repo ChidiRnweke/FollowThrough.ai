@@ -294,7 +294,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			todoLister: todos,
-			todoViewAssembler: todos,
+			todoContextReader: todos,
 			todoReader: todos,
 			todoEditor: todos,
 			todoDeleter: todos,
@@ -529,7 +529,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionExpirer: suggestions,
 			todoLister: todos,
 			waitingOnFinder: todos,
-			todoViewAssembler: todos
+			todoContextReader: todos
 		},
 		notes: {
 			indexEmbeddings: knowledgeSearch.embeddingClient,
@@ -551,7 +551,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceContextReader: references,
 			diagramLister: diagrams,
 			todoLister: todos,
-			todoViewAssembler: todos,
+			todoContextReader: todos,
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
 			suggestionContextReader: suggestions,

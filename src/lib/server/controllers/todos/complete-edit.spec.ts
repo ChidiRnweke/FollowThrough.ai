@@ -35,7 +35,7 @@ const setup = () => {
 		() => testNow
 	);
 	const controller = new Todos(
-		capabilityDependencies<TodosDependencies>({ todoEditor: catalog, todoViewAssembler: catalog })
+		capabilityDependencies<TodosDependencies>({ todoEditor: catalog, todoContextReader: catalog })
 	);
 	return { records, original, controller };
 };

@@ -16,7 +16,7 @@ const setup = () => {
 		controller: new Todos(
 			capabilityDependencies<TodosDependencies>({
 				todoLister: todos,
-				todoViewAssembler: todos,
+				todoContextReader: todos,
 				todoReader: todos,
 				todoEditor: todos,
 				todoDeleter: todos

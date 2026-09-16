@@ -1,4 +1,4 @@
-import { applyTodoEdit, assembleTodoView, decideTodoCreation } from '$lib/models/todos';
+import { applyTodoEdit, decideTodoCreation } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateTodoInput,
@@ -6,7 +6,7 @@ import type {
 	TodoId,
 	TodoListFilter,
 	UpdateTodoInput,
-	TodoView
+	TodoContext
 } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -83,27 +83,28 @@ export class TodoCatalog {
 		return this.list(actor, { responsibility: 'waiting_on' });
 	}
 
-	async assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]> {
-		return Promise.all(
-			todos.map(async (todo) => {
-				const anchor = todo.sourceAnchorId
-					? await this.anchors.findById(actor, todo.sourceAnchorId)
-					: undefined;
-				const origin = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
-				const linked = todo.linkedNoteId
-					? await this.notes.findById(actor, todo.linkedNoteId)
-					: undefined;
-				const provenance = todo.provenanceId
-					? await this.provenance.findById(actor, todo.provenanceId)
-					: undefined;
-				return assembleTodoView(todo, {
-					anchor: anchor ?? null,
-					origin: origin ?? null,
-					linked: linked ?? null,
-					provenance: provenance ?? null
-				});
-			})
-		);
+	async readContexts(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoContext[]> {
+		return Promise.all(todos.map((todo) => this.readContext(actor, todo)));
+	}
+
+	async readContext(actor: ActorContext, todo: Todo): Promise<TodoContext> {
+		const anchor = todo.sourceAnchorId
+			? await this.anchors.findById(actor, todo.sourceAnchorId)
+			: undefined;
+		const origin = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
+		const linked = todo.linkedNoteId
+			? await this.notes.findById(actor, todo.linkedNoteId)
+			: undefined;
+		const provenance = todo.provenanceId
+			? await this.provenance.findById(actor, todo.provenanceId)
+			: undefined;
+		return {
+			todo,
+			anchor: anchor ?? null,
+			origin: origin ?? null,
+			linked: linked ?? null,
+			provenance: provenance ?? null
+		};
 	}
 
 	private async validateLinkedNote(

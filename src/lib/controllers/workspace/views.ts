@@ -1,3 +1,4 @@
+import { assembleTodoView } from '$lib/services/todos/presentation';
 import { assembleProjectTree } from '$lib/services/projects/presentation';
 import { assembleNoteView } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
@@ -25,7 +26,7 @@ import {
 	type WorkspaceRecordOf
 } from '$lib/models/workspace-records';
 import type { LocalDate } from '$lib/models/workspace';
-import { assembleTodoView, type Todo, type TodoListFilter, type TodoView } from '$lib/models/todos';
+import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectView } from '$lib/models/projects';
 import { sectionNumberingView, type NoteId } from '$lib/models/notes';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';

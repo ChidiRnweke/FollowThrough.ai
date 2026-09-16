@@ -5,7 +5,7 @@ import type {
 	TodoId,
 	TodoListFilter,
 	UpdateTodoInput,
-	TodoView
+	TodoContext
 } from '$lib/models/todos';
 import type { SourceAnchor } from '$lib/models/provenance';
 export interface TodoCreator {
@@ -34,6 +34,7 @@ export interface TodoLister {
 	count(actor: ActorContext, filter: TodoListFilter): Promise<number>;
 	listCategories(actor: ActorContext): Promise<readonly string[]>;
 }
-export interface TodoViewAssembler {
-	assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]>;
+export interface TodoContextReader {
+	readContext(actor: ActorContext, todo: Todo): Promise<TodoContext>;
+	readContexts(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoContext[]>;
 }
