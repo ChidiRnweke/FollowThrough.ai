@@ -380,6 +380,15 @@ policy and restoration race. The existing editor displays an unavailable preview
 diagram; this batch does not claim browser verification of that scenario. Diagram model decisions,
 clipboard references and the remaining publication races are still unfinished.
 
+Run settlement: execution, workflow and recovery controllers now own their settlement transactions.
+RunSettlements only claims a terminal transition and writes the terminal events through actual
+repositories. It no longer invokes a controller callback or owns a transaction. The terminal-state
+decision moved out of the agent model into that focused service. Chat completion saves session state,
+consumed decisions and conversation output before terminal events in the same controller transaction.
+PostgreSQL coverage now executes the real lifecycle controller, including competing workers,
+cancellation and terminal-event storage failure. Reconstructible selection inputs and the hidden
+execution-controller ports remain unfinished.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

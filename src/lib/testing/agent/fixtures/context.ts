@@ -36,7 +36,7 @@ export const agentContextFixture = () => {
 		decisions: runs,
 		sessions,
 		transactions,
-		settlements: new RunSettlements(runs, runs, transactions),
+		settlements: new RunSettlements(runs, runs),
 		contextFormatter: new AgentContext(),
 		contextNotes: notes,
 		contextSkills: skills,

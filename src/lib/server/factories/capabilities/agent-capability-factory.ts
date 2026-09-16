@@ -101,7 +101,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const runs = new AgentRunRecords(input.db);
 	const runLedger = new AgentRunLedger(runs);
 	const runEvents = new AgentRunEventRecords(input.db);
-	const settlements = new RunSettlements(runs, runEvents, input.transactionRunner);
+	const settlements = new RunSettlements(runs, runEvents);
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEvents();
@@ -169,7 +169,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 			defaultModel: normalizeLanguageModelId(input.defaultModel)
 		}),
 		executor,
-		recovery: new RunRecovery(runs, executor, settlements, eventBus),
+		recovery: new RunRecovery(runs, executor, settlements, eventBus, input.transactionRunner),
 		eventBus
 	};
 };

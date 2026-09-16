@@ -1,4 +1,4 @@
-import type { RunSettlement } from '$lib/server/services/agent/runs/execution-contracts';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -147,17 +147,18 @@ export class WorkflowRunner implements WorkflowRunStarter {
 				throw new Error(
 					`The ${task.action} result could not be represented as JSON: ${carried.message}`
 				);
-			const settled = await this.dependencies.settlements.settle(
-				runId,
-				{
+			const settled = await this.dependencies.transactions.run(async () => {
+				const settlement = await this.dependencies.settlements.claim(runId, {
 					kind: 'workflow_completed',
 					conversationId,
 					model,
 					action: task.action,
 					result: carried.value
-				},
-				async () => {}
-			);
+				});
+				if (settlement.kind === 'lost') return settlement;
+
+				return this.dependencies.settlements.complete(settlement);
+			});
 			if (settled.kind === 'settled') this.dependencies.eventBus.notify(runId);
 			else await this.settleCancelled(runId);
 
@@ -174,22 +175,32 @@ export class WorkflowRunner implements WorkflowRunStarter {
 	}
 
 	private async settleCancelled(runId: AgentRunId): Promise<void> {
-		const settled = await this.dependencies.settlements.settle(
-			runId,
-			{ kind: 'cancelled', message: 'Generation stopped' },
-			async () => {}
-		);
+		const settled = await this.dependencies.transactions.run(async () => {
+			const settlement = await this.dependencies.settlements.claim(runId, {
+				kind: 'cancelled',
+				message: 'Generation stopped'
+			});
+			if (settlement.kind === 'lost') return settlement;
+
+			return this.dependencies.settlements.complete(settlement);
+		});
 		if (settled.kind === 'settled') this.dependencies.eventBus.notify(runId);
 	}
 
 	private async settleFailed(runId: AgentRunId, error: Error): Promise<void> {
 		const message = error.message;
 		try {
-			const settled = await this.dependencies.settlements.settle(
-				runId,
-				{ kind: 'failed', code: 'WORKFLOW_FAILED', message, retryable: true },
-				async () => {}
-			);
+			const settled = await this.dependencies.transactions.run(async () => {
+				const settlement = await this.dependencies.settlements.claim(runId, {
+					kind: 'failed',
+					code: 'WORKFLOW_FAILED',
+					message,
+					retryable: true
+				});
+				if (settlement.kind === 'lost') return settlement;
+
+				return this.dependencies.settlements.complete(settlement);
+			});
 			if (settled.kind === 'settled') this.dependencies.eventBus.notify(runId);
 			else await this.settleCancelled(runId);
 		} catch (settlementError) {
