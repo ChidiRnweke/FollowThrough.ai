@@ -5,7 +5,7 @@
 		modelMatchesQuery,
 		modelMetaLine,
 		shortModelName
-	} from '$lib/models/agent/model-label';
+	} from '$lib/services/agent/model-label';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Command from '$lib/components/ui/command';
