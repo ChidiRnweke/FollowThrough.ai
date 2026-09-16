@@ -1,6 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	Project,
 	ProjectId,
@@ -13,9 +12,7 @@ import type {
 	ProjectTreeRepository
 } from '$lib/server/repositories/projects/projects';
 import {
-	noteBuilder,
 	projectBuilder,
-	testNoteId,
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -29,9 +26,7 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 	set entries(value: Note[]) {
 		this.entriesStore.notes = value;
 	}
-	folderFailures = new Set<string>();
 	private nextProject = 100;
-	private nextEntry = 100;
 	snapshot(): () => void {
 		const projects = structuredClone(this.projects);
 		const entries = structuredClone(this.entries);
@@ -138,25 +133,6 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 					entry.userId === actor.userId && entry.projectId === projectId && !entry.archivedAt
 			)
 			.sort((left, right) => left.position - right.position);
-	}
-
-	async insertFolder(
-		actor: ActorContext,
-		input: CreateFolderInput,
-		position: number
-	): Promise<Note> {
-		if (this.folderFailures.has(input.name)) throw new Error('Folder could not be stored');
-		const folder = noteBuilder({
-			id: input.id ?? testNoteId(this.nextEntry++),
-			userId: actor.userId,
-			projectId: input.projectId,
-			parentId: input.parentId,
-			kind: 'folder',
-			position,
-			title: input.name
-		});
-		this.entries.push(folder);
-		return folder;
 	}
 
 	async persistOrder(

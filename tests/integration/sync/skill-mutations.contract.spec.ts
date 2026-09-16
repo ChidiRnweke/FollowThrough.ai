@@ -1,3 +1,4 @@
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -12,10 +13,10 @@ const setup = async (suffix: string) => {
 	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const note = await notes.catalog.create(source.owner, {
+	const note = await storedNote(notes.catalog, source.owner, {
 		projectId: source.note.projectId,
 		title: 'Writing',
-		documentKind: 'skill'
+		kind: 'skill'
 	});
 	const seeded = { ...source, note };
 	const sync = createSyncCapability({ db: database });

@@ -32,7 +32,7 @@ const setup = () => {
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
-			noteCreator: catalog,
+			noteCreation: catalog,
 			noteEditor: catalog,
 			anchorRepairer: catalog,
 			noteLinkReconciler: notes,

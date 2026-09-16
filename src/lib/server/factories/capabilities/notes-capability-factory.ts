@@ -32,11 +32,12 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const repository = new NoteRecords(input.db);
 	const anchors = new SourceAnchorRecords(input.db);
 	const provenanceRepository = new ProvenanceRecords(input.db);
+	const catalog = new NoteCatalog(repository, anchors, input.projects);
 	return {
 		markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
 		repository,
 		anchors,
-		catalog: new NoteCatalog(repository, anchors, input.projects),
+		catalog,
 		selectionOrigins: new SelectionOrigins(repository, anchors, provenanceRepository),
 		provenance: new NoteProvenance(provenanceRepository, anchors),
 		provenanceRepository

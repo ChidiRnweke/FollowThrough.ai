@@ -1,7 +1,6 @@
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateNoteInput,
 	Note,
 	NoteId,
 	NoteRevision,
@@ -20,12 +19,6 @@ import type {
 	SelectionProducer
 } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
-export interface NoteCreator {
-	create(
-		actor: ActorContext,
-		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
-	): Promise<Note>;
-}
 export interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
