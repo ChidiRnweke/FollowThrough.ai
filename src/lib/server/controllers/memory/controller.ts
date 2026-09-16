@@ -9,7 +9,7 @@ import type {
 	MemoryMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
@@ -77,7 +77,8 @@ export interface MemoryDependencies {
 	indexEmbeddings: IEmbeddings;
 	indexWriter: Pick<ContentIndex, 'complete'>;
 	memoryIndexer: MemoryIndexer;
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	memoryLister: MemoryEntryLister;
 	memoryCreator: MemoryEntryCreator;
 	memoryEditor: MemoryEntryEditor;
@@ -92,21 +93,42 @@ export interface MemoryDependencies {
 }
 
 export class Memory implements MemoryController {
-	synchronize(actor: ActorContext, input: MemoryMutationRequest): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async () => {
-			const command = input.command;
-			switch (command.kind) {
-				case 'createMemory':
-					await this.create(actor, command);
-					break;
-				case 'updateMemory':
-					await this.update(actor, command);
-					break;
-				case 'deleteMemory':
-					await this.remove(actor, command);
-					break;
-			}
-		});
+	async synchronize(
+		actor: ActorContext,
+		input: MemoryMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: MemoryMutationRequest
+	): Promise<void> {
+		const command = input.command;
+		switch (command.kind) {
+			case 'createMemory':
+				await this.create(actor, command);
+				break;
+			case 'updateMemory':
+				await this.update(actor, command);
+				break;
+			case 'deleteMemory':
+				await this.remove(actor, command);
+				break;
+		}
 	}
 	constructor(private readonly dependencies: MemoryDependencies) {}
 

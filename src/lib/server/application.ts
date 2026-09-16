@@ -116,7 +116,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		defaultAgentModel;
 	const deferEmbedding = config.deferEmbedding ?? false;
 	const identity = createIdentityCapability({ db });
-	const synchronization = createSyncCapability({ db, transactionRunner, deferEmbedding });
+	const synchronization = createSyncCapability({ db, deferEmbedding });
 	const projectCapability = createProjectsCapability({ db });
 	const noteCapability = createNotesCapability({ db, projects: projectCapability.repository });
 	const todoCapability = createTodosCapability({
@@ -295,6 +295,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		todos: {
 			todoBatchReceipts: todoCapability.batchReceipts,
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			todoLister: todos,
 			todoViewAssembler: todos,
 			todoReader: todos,
@@ -357,6 +358,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
 			diagramFinder: diagrams,
 			diagramLister: diagrams,
@@ -404,6 +406,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		agent: {
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			conversationJournal,
 			preferences,
 			models: modelCatalog,
@@ -418,6 +421,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		agentSettings: {
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
+			transactionRunner,
 			preferences,
 			models: modelCatalog,
 			defaultModel: defaultAgentModel,
@@ -425,10 +430,17 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		userSettings: {
 			preferences: identity.userPreferences,
-			syncMutations: synchronization.mutations
+			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
+			transactionRunner
 		},
 		apiTokens: { tokens: identity.apiTokens },
-		toolPreferences: { preferences: toolPreferences, syncMutations: synchronization.mutations },
+		toolPreferences: {
+			preferences: toolPreferences,
+			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
+			transactionRunner
+		},
 		attachments: {
 			attachments,
 			transactionRunner,
@@ -436,6 +448,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		deliverables: {
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			templates,
 			templateStorage: deliverables.templateStorage,
 			templateStyles: deliverables.templateStyles,
@@ -464,6 +477,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			skillFinder: skills,
 			builtInSkills: skillCapability.builtIns,
 			skillUsageLister: skills,
@@ -503,6 +517,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			folderCreator: projects,
 			markdown: noteCapability.markdown,
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			noteReader: notes,
 			noteTreeReader: notes,
 			noteTextSearcher: notes,
@@ -533,12 +548,18 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteIndexer,
 			transactionRunner
 		},
-		trustPolicies: { trustPolicyStore: trust, syncMutations: synchronization.mutations },
+		trustPolicies: {
+			trustPolicyStore: trust,
+			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
+			transactionRunner
+		},
 		memory: {
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			memoryLister: memory,
 			memoryCreator: memory,
 			memoryEditor: memory,
@@ -553,6 +574,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		projects: {
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			projectCreator: projects,
 			projectReader: projects,
 			projectLister: projects,

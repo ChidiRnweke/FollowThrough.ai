@@ -13,10 +13,12 @@ import { actor, context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const preferences = new ToolPreferenceRecords(database);
 	const tools = new ToolPreferences({
 		syncMutations: sync.mutations,
+		syncRetry: sync.mutationRetry,
+		transactionRunner,
 		preferences: new ToolAccess(preferences, {
 			entries: () => [
 				{
@@ -30,6 +32,8 @@ const setup = async (suffix: string) => {
 	});
 	const policies = new TrustPolicies({
 		syncMutations: sync.mutations,
+		syncRetry: sync.mutationRetry,
+		transactionRunner,
 		trustPolicyStore: new ToolTrust(new TrustPolicyRecords(database))
 	});
 	return { ...seeded, sync, preferences, tools, policies };

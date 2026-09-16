@@ -4,6 +4,10 @@ import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import type { NoteId } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import {
+	Workspace,
+	type WorkspaceDependencies
+} from '$lib/server/controllers/workspace/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
@@ -15,7 +19,7 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const synchronization = createSyncCapability({ db: database, transactionRunner });
+	const synchronization = createSyncCapability({ db: database });
 	const { catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
@@ -24,6 +28,7 @@ const setup = async (suffix: string) => {
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
 			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
 			noteReader: catalog,
 			noteArchiver: catalog,
@@ -45,6 +50,12 @@ const setup = async (suffix: string) => {
 	if (resource.kind !== 'found') throw new Error('Seeded note was not readable');
 	return {
 		...seeded,
+		workspace: new Workspace(
+			capabilityDependencies<WorkspaceDependencies>({
+				writeRecovery: synchronization.mutations,
+				transactionRunner
+			})
+		),
 		controller,
 		synchronization,
 		catalog,
@@ -189,21 +200,20 @@ describe('guarded note trash actions', () => {
 	});
 });
 
-it('returns a sync rejection when a referenced row disappears inside the transaction', async () => {
-	const { owner, note, database, synchronization, baseEtag } = await setup('9181');
-	const result = await synchronization.mutations.run(
-		owner,
-		{
-			operationId: crypto.randomUUID(),
-			baseEtag,
-			command: { kind: 'renameNote', noteId: note.id, title: 'Never committed' }
-		},
-		async () => {
+it('classifies a PostgreSQL foreign-key failure as a rejected sync edit', async () => {
+	const { note, database, synchronization, transactionRunner } = await setup('9181');
+	const result = await transactionRunner
+		.run(async () => {
 			await database.execute(
 				sql`update notes set project_id = ${crypto.randomUUID()} where id = ${note.id}`
 			);
-		}
-	);
+		})
+		.then(
+			() => {
+				throw new Error('Expected a missing reference');
+			},
+			(error: Error) => synchronization.mutations.reject(error)
+		);
 	expect(result).toEqual({
 		kind: 'rejected',
 		message: 'A referenced item is no longer available. Review or discard this change.'
@@ -221,7 +231,7 @@ it('does not disguise a non-sync database failure as a domain decision', async (
 	).rejects.toMatchObject({ cause: { code: '23502' } });
 });
 it('matches cancellation to normalized input after an applied response is lost', async () => {
-	const { owner, note, controller, synchronization, baseEtag } = await setup('9183');
+	const { owner, note, controller, workspace, baseEtag } = await setup('9183');
 	const input = workspaceMutationRequestSchema.parse({
 		operationId: crypto.randomUUID(),
 		baseEtag,
@@ -229,7 +239,7 @@ it('matches cancellation to normalized input after an applied response is lost',
 	});
 	if (input.command.kind !== 'renameNote') throw new Error('Expected a note rename');
 	const applied = await controller.synchronize(owner, { ...input, command: input.command });
-	const recovered = await synchronization.mutations.cancel(owner, {
+	const recovered = await workspace.cancelMutation(owner, {
 		operationId: input.operationId,
 		request: JSON.stringify(input)
 	});

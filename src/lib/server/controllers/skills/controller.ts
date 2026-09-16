@@ -10,7 +10,7 @@ import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateSkillFromSelectionInput,
@@ -98,7 +98,8 @@ export interface SkillsController {
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
 	skillUsageRecorder: SkillUsageRecorder;
@@ -118,16 +119,37 @@ export interface SkillsDependencies {
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {
-	synchronize(actor: ActorContext, input: SkillMutationRequest): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			void current;
-			switch (command.kind) {
-				case 'updateSkill':
-					await this.update(actor, command);
-					break;
-			}
-		});
+	async synchronize(
+		actor: ActorContext,
+		input: SkillMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: SkillMutationRequest
+	): Promise<void> {
+		const command = input.command;
+
+		switch (command.kind) {
+			case 'updateSkill':
+				await this.update(actor, command);
+				break;
+		}
 	}
 
 	constructor(private readonly dependencies: SkillsDependencies) {}

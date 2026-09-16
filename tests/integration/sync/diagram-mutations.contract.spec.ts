@@ -28,7 +28,7 @@ const source =
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const projects = createProjectsCapability({ db: database });
 	const notes = createNotesCapability({ db: database, projects: projects.repository });
 	const records = new DiagramRecords(database);
@@ -58,6 +58,7 @@ const setup = async (suffix: string) => {
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
 			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
 			transactionRunner,
 			diagramFinder: library,
 			diagramSourceNotes: notes.catalog,

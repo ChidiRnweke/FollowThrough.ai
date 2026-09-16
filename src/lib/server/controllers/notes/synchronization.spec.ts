@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import type { WorkspaceMutationRequest } from '$lib/models/workspace-mutations';
+import type { NoteMutationRequest } from '$lib/models/workspace-mutations';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryWorkspaceNoteReads,
@@ -14,9 +14,13 @@ import {
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { SyncMutationTransactions } from './mutations';
+import { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import {
+	Workspace,
+	type WorkspaceDependencies
+} from '$lib/server/controllers/workspace/controller';
 
-const input: WorkspaceMutationRequest = {
+const input: NoteMutationRequest = {
 	operationId: 'a0000000-0000-4000-8000-000000000001',
 	baseEtag: syncEtag(1n),
 	command: { kind: 'renameNote', noteId: testNoteId(), title: 'My rename' }
@@ -26,33 +30,34 @@ const setup = () => {
 	content.notes = [noteBuilder()];
 	const mutationReceipts = new InMemoryWorkspaceReceipts();
 	const transactionRunner = new InMemoryTransactionRunner([content, mutationReceipts]);
+	const mutations = new WorkspaceMutationReceipts({
+		mutationReceipts,
+		syncObjects: new InMemoryWorkspaceNoteReads(content)
+	});
 	const notes = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			syncMutations: mutations,
+			syncRetry: 'never',
 			noteReader: content,
 			noteEditor: content,
 			noteIndexer: content,
 			transactionRunner
 		})
 	);
-	const dependencies = {
-		mutationReceipts,
-		transactionRunner,
-		syncObjects: new InMemoryWorkspaceNoteReads(content)
-	};
-	const transactions = new SyncMutationTransactions(dependencies);
-	const apply = (request: WorkspaceMutationRequest) =>
-		transactions.run(testActor(), request, async () => {
-			if (request.command.kind !== 'renameNote')
-				throw new Error('Test operation must rename a note');
-			await notes.rename(testActor(), request.command);
-		});
-	return { content, mutationReceipts, apply, transactions };
+	const workspace = new Workspace(
+		capabilityDependencies<WorkspaceDependencies>({
+			writeRecovery: mutations,
+			transactionRunner
+		})
+	);
+	const apply = (request: NoteMutationRequest) => notes.synchronize(testActor(), request);
+	return { content, mutationReceipts, apply, workspace };
 };
 
 describe('guarded workspace mutation replay', () => {
 	it('does not execute an operation cancelled before submission', async () => {
-		const { transactions, apply, content } = setup();
-		await transactions.cancel(testActor(), {
+		const { workspace, apply, content } = setup();
+		await workspace.cancelMutation(testActor(), {
 			operationId: input.operationId,
 			request: JSON.stringify(input)
 		});
@@ -60,18 +65,20 @@ describe('guarded workspace mutation replay', () => {
 		expect(content.notes[0]?.title).toBe(noteBuilder().title);
 	});
 	it('keeps a cancelled operation cancelled on repeated cancellation', async () => {
-		const { transactions } = setup();
+		const { workspace } = setup();
 		const cancellation = { operationId: input.operationId, request: JSON.stringify(input) };
-		await transactions.cancel(testActor(), cancellation);
-		expect(await transactions.cancel(testActor(), cancellation)).toEqual({ kind: 'cancelled' });
+		await workspace.cancelMutation(testActor(), cancellation);
+		expect(await workspace.cancelMutation(testActor(), cancellation)).toEqual({
+			kind: 'cancelled'
+		});
 	});
 	it('recovers the applied receipt instead of undoing an edit when cancellation arrives later', async () => {
-		const { transactions, apply } = setup();
+		const { workspace, apply } = setup();
 		const applied = await apply(input);
 		if (applied.kind !== 'applied' || applied.receipt.resource.kind !== 'found')
 			throw new Error('Expected applied note');
 		expect(
-			await transactions.cancel(testActor(), {
+			await workspace.cancelMutation(testActor(), {
 				operationId: input.operationId,
 				request: JSON.stringify(input)
 			})
@@ -144,24 +151,18 @@ describe('guarded workspace mutation replay', () => {
 });
 
 it('reports a missing referenced resource as a rejected sync edit', async () => {
-	const { transactions } = setup();
+	const { content, apply } = setup();
 	const failure = Object.assign(new Error('Referenced project disappeared'), { code: '23503' });
-	expect(
-		await transactions.run(testActor(), input, async () => {
-			throw failure;
-		})
-	).toEqual({
+	content.saveFailure = failure;
+	expect(await apply(input)).toEqual({
 		kind: 'rejected',
 		message: 'A referenced item is no longer available. Review or discard this change.'
 	});
 });
 
 it.each(['23502', '23514'])('preserves unexpected constraint %s inside sync', async (code) => {
-	const { transactions } = setup();
+	const { content, apply } = setup();
 	const failure = Object.assign(new Error('Invalid domain write'), { code });
-	await expect(
-		transactions.run(testActor(), input, async () => {
-			throw failure;
-		})
-	).rejects.toBe(failure);
+	content.saveFailure = failure;
+	await expect(apply(input)).rejects.toBe(failure);
 });
