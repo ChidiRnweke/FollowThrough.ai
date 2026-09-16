@@ -113,6 +113,7 @@ import type {
 } from '$lib/server/services/references/contracts';
 import type {
 	SuggestionLister,
+	SuggestionExpirer,
 	SuggestionViewAssembler
 } from '$lib/server/services/suggestions/contracts';
 import type { TodoLister, TodoViewAssembler } from '$lib/server/services/todos/contracts';
@@ -328,6 +329,7 @@ export interface NotesDependencies {
 	todoLister: TodoLister;
 	todoViewAssembler: TodoViewAssembler;
 	suggestionLister: SuggestionLister;
+	suggestionExpirer: SuggestionExpirer;
 	suggestionViewAssembler: SuggestionViewAssembler;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
@@ -517,6 +519,7 @@ export class Notes implements NotesController {
 
 	constructor(private readonly dependencies: NotesDependencies) {}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<ResolvedNoteView> {
+		await this.dependencies.suggestionExpirer.expire(actor);
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
 			this.dependencies.noteReader.get(actor, input.noteId),
 			this.dependencies.relationshipFinder.findForNote(actor, input.noteId),

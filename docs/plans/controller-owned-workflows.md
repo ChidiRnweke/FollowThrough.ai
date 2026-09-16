@@ -205,6 +205,11 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   All 3,677 unit tests, type checking, lint, architecture audits and docs checks pass.
 - P09–P11, P13, P19, P21–P22: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
+- Global orchestration: proposal expiry now runs explicitly before note, workspace and review
+  reads in their controllers. The factory no longer disguises a write-then-read workflow as
+  a suggestion-listing service. Regression tests cover expired/pending review, profile memory,
+  Today counts, account isolation and storage failures. Service reads themselves do not expire rows.
+  All 3,684 unit tests and local quality checks pass.
 
 ## Validation principles
 
