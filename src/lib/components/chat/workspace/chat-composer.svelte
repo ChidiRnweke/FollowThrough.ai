@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { AgentExecutionMode, AgentModel, ConversationImageInput } from '$lib/models/agent';
 	import type { ContextChip, SelectionChip } from '$lib/stores/agent/chat.svelte';
+	import type { ResourceChip } from '$lib/models/chat';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -50,6 +51,7 @@
 		onfiles,
 		onkeydown,
 		oninput,
+		onbeforeinput,
 		onpaste,
 		ontoggleexecutionmode,
 		onmodelchange,
@@ -63,7 +65,7 @@
 		/** The passage highlighted right now: attached, but still following the caret. */
 		liveSelection?: SelectionChip;
 		chips: readonly ContextChip[];
-		mentionCandidates: readonly ContextChip[];
+		mentionCandidates: readonly ResourceChip[];
 		highlighted: number;
 		selectedImages: readonly ConversationImageInput[];
 		agentAvailable: boolean;
@@ -80,12 +82,13 @@
 		onremovechip: (chip: ContextChip, automatic: boolean) => void;
 		/** Promotes the highlighted passage to a pin, which stops it following the caret. */
 		onpinselection: (chip: SelectionChip) => void;
-		onpick: (chip: ContextChip) => void;
+		onpick: (chip: ResourceChip) => void;
 		onhighlight: (index: number) => void;
 		onremoveimage: (id: string) => void;
 		onfiles: (files: readonly File[]) => void;
 		onkeydown: (event: KeyboardEvent) => void;
-		oninput: () => void;
+		oninput: (event: Event) => void;
+		onbeforeinput?: (event: InputEvent) => void;
 		onpaste: (event: ClipboardEvent) => void;
 		ontoggleexecutionmode: () => void;
 		onmodelchange: (value: string | null) => void;
@@ -143,7 +146,7 @@
 		<span class="truncate">{live ? 'Current selection' : chip.name}</span>
 		{#if chip.kind === 'folder'}
 			<span class="shrink-0 text-xs text-muted-foreground">
-				{chip.noteCount === 1 ? '1 note' : `${chip.noteCount ?? 0} notes`}
+				{chip.noteCount === 1 ? '1 note' : `${chip.noteCount} notes`}
 			</span>
 		{:else if chip.kind === 'selection'}
 			<!-- The count goes where the folder's does, because it answers the same question:
@@ -319,6 +322,7 @@
 				class="max-h-56 min-h-16 px-3 overflow-y-auto"
 				{onkeydown}
 				{oninput}
+				{onbeforeinput}
 				{onpaste}
 				disabled={!agentAvailable}
 			/>
