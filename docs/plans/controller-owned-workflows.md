@@ -134,6 +134,13 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   and MCP callers supply a stable request UUID; duplicate deliveries return original ordered
   results, and changed input cannot reuse an ID. Seven PostgreSQL contracts cover concurrency,
   rollback, lost responses, account isolation, and corrupt receipts. The full 3,583-test suite passed.
+- P10/A06 folder expansion: all live descendants are included without the former 25-note cap.
+  Folder selection and submission require complete inventory; missing folders fail visibly
+  before the draft is cleared. Counts refresh with the inventory. Shared folder rules and
+  an 80-note server-context regression passed, as did the full 3,589-test suite. Actual
+  composer captures show 25 versus 40 notes for the same 40-note fixture. Mention identity
+  still needs its own slice. Server-side missing-note exclusions still need explicit treatment
+  during the context-orchestration correction; the old warning-only skip is not resolved here.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.
 - P15: export preparation landed in #65; verify the other export findings separately.

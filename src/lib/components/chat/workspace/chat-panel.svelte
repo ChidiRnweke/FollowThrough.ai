@@ -42,9 +42,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
+	import { folderNoteIds, resolveFolderContext } from '$lib/services/notes/folder-context';
 	import {
 		MENTION_PATTERN,
-		folderNoteIds,
 		liveChips,
 		mentionCandidatesFor,
 		mentionQueryOf,
@@ -326,7 +326,7 @@
 	}
 
 	// The open note travels along automatically, like Copilot's current file.
-	const autoChip = $derived.by((): ContextChip | undefined => {
+	const autoChip = $derived.by((): ResourceChip | undefined => {
 		if (!activeNoteId || chat.autoChipDismissedFor === activeNoteId) return undefined;
 		if (chat.chips.some((chip) => chip.kind === 'note' && chip.id === activeNoteId))
 			return undefined;
@@ -369,7 +369,14 @@
 	const mentionCandidates = $derived(
 		mentionQuery === undefined || !shell
 			? []
-			: mentionCandidatesFor(mentionQuery, shell.noteTree, shell.skills)
+			: mentionCandidatesFor(mentionQuery, shell.noteTree, shell.skills, resources.availability)
+	);
+	const visibleChips = $derived(
+		chat.chips.map((chip) =>
+			chip.kind === 'folder' && shell && resources.availability === 'complete'
+				? { ...chip, noteCount: folderNoteIds(shell.noteTree, chip.id).length }
+				: chip
+		)
 	);
 
 	$effect(() => {
@@ -415,48 +422,70 @@
 	 * editor's own selection is never read at this point, so what the agent gets is what the
 	 * composer showed — including the case where the user dismissed the chip and gets nothing.
 	 */
-	function requestFor(text: string): Omit<RunAgentInput, 'conversationId'> {
-		const folderNotes = shell
-			? chat.chips
-					.filter((chip): chip is ResourceChip => chip.kind === 'folder')
-					.flatMap((chip) => folderNoteIds(shell.noteTree, chip.id))
-			: [];
-		const contextNoteIds = [
-			...new Set([...(autoChip ? [autoChip.id] : []), ...folderNotes])
-		] as NoteId[];
+	function requestFor(
+		text: string
+	):
+		| { kind: 'ready'; request: Omit<RunAgentInput, 'conversationId'> }
+		| { kind: 'unavailable'; message: string } {
+		const folderIds = chat.chips
+			.filter((chip): chip is ResourceChip => chip.kind === 'folder')
+			.map((chip) => chip.id);
+		const folders = resolveFolderContext(
+			shell?.noteTree ?? [],
+			folderIds,
+			shell ? resources.availability : 'unknown'
+		);
+		if (folders.kind === 'incomplete')
+			return {
+				kind: 'unavailable',
+				message: 'The workspace is still loading. Wait before sending a folder as context.'
+			};
+		if (folders.kind === 'missing')
+			return {
+				kind: 'unavailable',
+				message: 'An attached folder is no longer available. Remove it or choose another folder.'
+			};
+		const contextNoteIds = [...new Set([...(autoChip ? [autoChip.id] : []), ...folders.noteIds])];
 		const interactionNoteId = focusedNoteId;
 		const interactionProjectId = interactionNoteId
-			? (shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId as
-					ProjectId | undefined)
+			? shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId
 			: activeProjectId;
 		return {
-			prompt: text,
-			...(selectedImages.length ? { images: selectedImages } : {}),
-			modelOverride: chat.modelOverride,
-			executionModeOverride: chat.executionModeOverride,
-			...(handoff?.noteId !== undefined
-				? { noteId: handoff.noteId }
-				: interactionNoteId !== undefined
-					? { noteId: interactionNoteId }
-					: {}),
-			...(handoff?.projectId !== undefined
-				? { projectId: handoff.projectId }
-				: interactionProjectId !== undefined
-					? { projectId: interactionProjectId }
-					: {}),
-			// A tagged folder rides in as the notes inside it; the store unions these
-			// with the note chips it maps itself.
-			...(contextNoteIds.length ? { contextNoteIds } : {}),
-			...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
-			...(handoff?.requestedSkillNames
-				? { requestedSkillNames: [...handoff.requestedSkillNames] }
-				: {})
+			kind: 'ready',
+			request: {
+				prompt: text,
+				...(selectedImages.length ? { images: selectedImages } : {}),
+				modelOverride: chat.modelOverride,
+				executionModeOverride: chat.executionModeOverride,
+				...(handoff?.noteId !== undefined
+					? { noteId: handoff.noteId }
+					: interactionNoteId !== undefined
+						? { noteId: interactionNoteId }
+						: {}),
+				...(handoff?.projectId !== undefined
+					? { projectId: handoff.projectId }
+					: interactionProjectId !== undefined
+						? { projectId: interactionProjectId }
+						: {}),
+				// A tagged folder rides in as the notes inside it; the store unions these
+				// with the note chips it maps itself.
+				...(contextNoteIds.length ? { contextNoteIds } : {}),
+				...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
+				...(handoff?.requestedSkillNames
+					? { requestedSkillNames: [...handoff.requestedSkillNames] }
+					: {})
+			}
 		};
 	}
 
 	async function send(): Promise<void> {
 		const text = prompt.trim();
 		if ((!text && !selectedImages.length) || chat.isStreaming) return;
+		const prepared = requestFor(text);
+		if (prepared.kind === 'unavailable') {
+			toast.error(prepared.message);
+			return;
+		}
 		if (chatRegistry.atStreamLimit()) {
 			toast.error(`Only ${MAX_CONCURRENT_STREAMS} chats can run at once. Wait for one to finish.`);
 			return;
@@ -474,7 +503,7 @@
 		selectedImages = [];
 		saveDraft();
 		const request = chat.send({
-			...requestFor(text),
+			...prepared.request,
 			images: sentImages,
 			...(render ? { contextImages: [render] } : {})
 		});
@@ -509,8 +538,13 @@
 	async function resubmit(entry: ChatEntry, text: string): Promise<void> {
 		const trimmed = text.trim();
 		if (!trimmed) return;
+		const prepared = requestFor(trimmed);
+		if (prepared.kind === 'unavailable') {
+			toast.error(prepared.message);
+			return;
+		}
 		cancelEditing();
-		const started = await chat.resubmit(entry, requestFor(trimmed));
+		const started = await chat.resubmit(entry, prepared.request);
 		if (!started) {
 			toast.error(
 				chat.isStreaming ? 'Wait for the current answer to finish.' : 'That could not be resent.'
@@ -701,7 +735,7 @@
 				bind:textareaRef
 				{autoChip}
 				liveSelection={liveSelectionChip}
-				chips={chat.chips}
+				chips={visibleChips}
 				{mentionCandidates}
 				{highlighted}
 				{selectedImages}

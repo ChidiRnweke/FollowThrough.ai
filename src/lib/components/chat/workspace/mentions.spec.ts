@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	FOLDER_NOTE_LIMIT,
-	folderNoteIds,
 	liveChips,
 	mentionCandidatesFor,
 	mentionQueryOf,
@@ -112,6 +110,16 @@ describe('chips the prompt still speaks for', () => {
 });
 
 describe('mention candidates', () => {
+	it('does not offer a partial folder as complete context', () => {
+		expect(
+			mentionCandidatesFor(
+				'Research',
+				[entry({ id: id(1), title: 'Research', kind: 'folder' })],
+				[],
+				'unknown'
+			)
+		).toEqual([]);
+	});
 	const tree = [
 		entry({ id: id(1), title: 'Research', kind: 'folder' }),
 		entry({ id: id(2), title: 'Research notes' }),
@@ -119,7 +127,7 @@ describe('mention candidates', () => {
 	] as NoteSummary[];
 
 	it('offers folders alongside notes', () => {
-		expect(mentionCandidatesFor('resea', tree, []).map((chip) => chip.kind)).toEqual([
+		expect(mentionCandidatesFor('resea', tree, [], 'complete').map((chip) => chip.kind)).toEqual([
 			'note',
 			'folder'
 		]);
@@ -130,51 +138,18 @@ describe('mention candidates', () => {
 			entry({ id: id(1), title: 'Research', kind: 'folder' }),
 			entry({ id: id(2), title: 'Findings', parentId: id(1) })
 		] as NoteSummary[];
-		expect(mentionCandidatesFor('research', tree, [])[0]?.noteCount).toBe(1);
+		expect(mentionCandidatesFor('research', tree, [], 'complete')[0]?.noteCount).toBe(1);
 	});
 
 	it('leaves archived entries out', () => {
-		expect(mentionCandidatesFor('research', tree, []).map((chip) => chip.name)).not.toContain(
-			'Archived research'
-		);
+		expect(
+			mentionCandidatesFor('research', tree, [], 'complete').map((chip) => chip.name)
+		).not.toContain('Archived research');
 	});
 
 	it('offers matching skills', () => {
-		expect(mentionCandidatesFor('analy', [], [skill('Note analyzer', id(9))])[0]?.kind).toBe(
-			'skill'
-		);
-	});
-});
-
-describe('expanding a tagged folder', () => {
-	const tree = [
-		entry({ id: id(1), title: 'Research', kind: 'folder' }),
-		entry({ id: id(2), title: 'Findings', parentId: id(1) }),
-		entry({ id: id(3), title: 'Interviews', kind: 'folder', parentId: id(1) }),
-		entry({ id: id(4), title: 'Session one', parentId: id(3) }),
-		entry({ id: id(5), title: 'Retired', parentId: id(1), archivedAt: at }),
-		entry({ id: id(6), title: 'Elsewhere' })
-	] as NoteSummary[];
-
-	it('collects notes from nested folders too', () => {
-		expect(folderNoteIds(tree, id(1))).toEqual([id(2), id(4)]);
-	});
-
-	it('leaves archived notes out', () => {
-		expect(folderNoteIds(tree, id(1))).not.toContain(id(5));
-	});
-
-	it('leaves notes outside the folder out', () => {
-		expect(folderNoteIds(tree, id(3))).toEqual([id(4)]);
-	});
-
-	it('caps a large folder', () => {
-		const crowded = [
-			entry({ id: id(1), title: 'Research', kind: 'folder' }),
-			...Array.from({ length: FOLDER_NOTE_LIMIT + 5 }, (_, index) =>
-				entry({ id: id(index + 2), title: `Note ${index}`, parentId: id(1) })
-			)
-		] as NoteSummary[];
-		expect(folderNoteIds(crowded, id(1))).toHaveLength(FOLDER_NOTE_LIMIT);
+		expect(
+			mentionCandidatesFor('analy', [], [skill('Note analyzer', id(9))], 'complete')[0]?.kind
+		).toBe('skill');
 	});
 });
