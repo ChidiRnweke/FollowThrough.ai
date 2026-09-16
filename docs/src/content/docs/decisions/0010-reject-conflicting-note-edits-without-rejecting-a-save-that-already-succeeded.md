@@ -24,14 +24,18 @@ canvas open. "The version I read is still the current one" is the same question 
 ## Decision
 
 We chose to send the base version with each save of a whole document. This covers notes and
-draw.io diagrams. Both name the base version the same way: the document id and the revision it was
-read at.
+draw.io diagrams. Direct document operations use an identifier and document revision. Workspace
+commands use the resource version and permanent operation identity defined in ADR 0040. A resource
+version and a published document revision describe different things and are not interchangeable.
 
-If the saved document changed in a different way, we return the base, local, and remote versions as
-a conflict. We do not choose one document for the user.
+If the saved document changed in a different way, we return the authoritative remote version as
+a conflict. The client retains its base and local edit for comparison. We do not choose one
+document for the user.
 
-If the server already contains the same content as the retry, we report success. The lost response
-does not turn a completed save into a conflict.
+Direct document saves can recognize an already-present requested result. Workspace command retries
+instead use the exact stored operation proof, so later edits cannot erase evidence of a completed
+save. If its original version is no longer current, the proof establishes completion without
+substituting a newer body. ADR 0040 defines this retry and descendant-edit contract.
 
 We will keep whole-document conflict handling while these documents are saved as whole documents.
 
@@ -51,15 +55,19 @@ present in the note is unchanged; a different result against a stale base requir
 - The client must keep the base and local versions until the save settles.
 - A conflict needs a user-facing comparison and resolution flow.
 - The system does not merge conflicting rich-text documents automatically.
-- Diagrams have no offline sync layer, so a diagram conflict surfaces at the moment of saving
-  rather than being reconciled in the background as a note's is.
+- Notes and diagrams both use the workspace outbox for supported offline edits. Conflicts remain
+  queued for explicit review. Server-only generation and compound operations remain online.
 
 ## Evidence
 
-- `src/lib/server/controllers/notes/controller.ts` returns saved or conflict outcomes.
-- `src/lib/server/controllers/notes/save.spec.ts` checks divergent and repeated saves.
-- `src/lib/client/notes/sync/coordinator.ts` keeps base, local, and remote versions.
-- `src/lib/client/notes/sync/coordinator.spec.ts` checks conflict and retry behavior.
+- `src/lib/server/controllers/notes/controller.ts` applies guarded document edits.
+- `src/lib/server/controllers/notes/save.spec.ts` checks stale revisions and no-op saves.
+- `src/lib/client/sync/mutation-queue.ts` retains pending intent and authoritative outcomes.
+- `src/lib/client/sync/mutation-queue.spec.ts` checks conflicts and retries with stable identities.
+- `src/lib/server/services/workspace/mutations.spec.ts` checks exact operation replay, divergent
+  resource versions, cancellation and rollback when a receipt cannot be stored.
+- `src/lib/components/shared/workspace-write-review.svelte.spec.ts` checks conflict comparison
+  and protects dependent edits from an outdated discard decision.
 - `src/lib/models/notes/index.ts` and `src/lib/models/diagrams/index.ts` build the base version the
   same way, in `noteEtag` and `diagramEtag`.
 - `src/lib/server/controllers/diagram-studio/controller.ts` takes a base version on

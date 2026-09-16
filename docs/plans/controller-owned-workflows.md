@@ -239,6 +239,12 @@ only the entry type and product-label values. Existing mounted review tests cove
 local intent, authoritative conflict comparison, dependent-edit discard protection and account
 shutdown; they now run in the regular unit gate.
 
+P21 operational contracts: feedback submission now has one model schema/type across its remote,
+controller and repository boundaries. The documented contract awaits persistence and propagates
+failure so the dialog can retain the report for retry. Controller tests cover saved context,
+failed submission and retry. ADR 0010 now references the current outbox, permanent operation proofs
+and diagram offline edits rather than the retired note-only sync coordinator.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
