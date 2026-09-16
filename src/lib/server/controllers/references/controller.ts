@@ -18,12 +18,12 @@ import type {
 	AgentRunReceipt,
 	AgentRunId,
 	RunSettlementOutcome,
-	SelectionActionRequest
+	NoteActionRequest
 } from '$lib/models/agent';
 import {
-	DuplicateSelectionRequest,
-	type SelectionRequests
-} from '$lib/server/services/agent/runs/selection-requests';
+	DuplicateNoteActionRequest,
+	type NoteActionRequests
+} from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
 import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
@@ -58,7 +58,7 @@ export interface ReferencesDependencies {
 	referenceRanker: ReferenceRanker;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	selectionRequests: SelectionRequests;
+	noteActionRequests: NoteActionRequests;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 	referenceModel: string;
@@ -71,7 +71,7 @@ export class References implements ReferencesController {
 		actor: ActorContext,
 		input: StartFindReferencesInput
 	): Promise<AgentRunReceipt> {
-		const request: SelectionActionRequest = {
+		const request: NoteActionRequest = {
 			requestId: input.requestId,
 			context: {
 				kind: 'reference_search',
@@ -82,11 +82,11 @@ export class References implements ReferencesController {
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.selectionRequests.prepare(actor, request)
+				this.dependencies.noteActionRequests.prepare(actor, request)
 			);
 		} catch (error) {
-			if (!(error instanceof DuplicateSelectionRequest)) throw error;
-			receipt = await this.dependencies.selectionRequests.existing(actor, request);
+			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
+			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
 		}
 		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchReferenceRun(actor, receipt.runId);
@@ -101,14 +101,14 @@ export class References implements ReferencesController {
 	}
 
 	async recoverQueuedReferenceRuns(): Promise<number> {
-		const queued = await this.dependencies.selectionRequests.queued('reference_search');
+		const queued = await this.dependencies.noteActionRequests.queued('reference_search');
 		for (const run of queued) this.launchReferenceRun(run.actor, run.runId);
 		return queued.length;
 	}
 
 	async executeReferenceRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.selectionRequests.claim(actor, runId, 'reference_search')
+			this.dependencies.noteActionRequests.claim(actor, runId, 'reference_search')
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
@@ -128,7 +128,7 @@ export class References implements ReferencesController {
 				});
 				if (claim.kind === 'lost') return false;
 				const result = await this.saveReferences(actor, input, ranked);
-				await this.dependencies.selectionRequests.recordResult(runId, {
+				await this.dependencies.noteActionRequests.recordResult(runId, {
 					action: 'reference',
 					result
 				});

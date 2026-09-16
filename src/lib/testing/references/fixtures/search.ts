@@ -3,7 +3,7 @@ import {
 	type ReferencesDependencies
 } from '$lib/server/controllers/references/controller';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ReferenceRanking } from '$lib/server/services/references/ranking';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
@@ -43,13 +43,13 @@ export const referenceSearchFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new SelectionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(runs, runs, conversations);
 	const dependencies: ReferencesDependencies = {
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 		referenceFinder: references,
 		referenceRanker: new ReferenceRanking(),
 		referenceModel: 'test/model',
-		selectionRequests: requests,
+		noteActionRequests: requests,
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		suggestionCreator: suggestions,

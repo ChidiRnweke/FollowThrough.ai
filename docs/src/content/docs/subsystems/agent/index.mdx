@@ -73,6 +73,14 @@ and whether classification uses rules or a specific model. Retrieval and classif
 transaction that writes backlink proposals and completion. Startup resumes queued requests from those
 values. Enabling or disabling a model does not change the classification mode of an existing request.
 
+The Diagrams controller owns generation, inline Mermaid revision and draw.io conversion requests.
+Each action stores its full input and chosen model before execution, then uses that same run for
+provenance, provider execution, the result and completion. It commits generated proposals and terminal
+events together. Queued actions resume from stored input; interrupted running actions fail explicitly.
+The browser retains uncertain diagram request identities per account. All note actions share
+`NoteActionRequests` for storage and `RunSettlements` for terminal claims. The callback workflow runner
+has been removed.
+
 The Agent controller's `submit` returns a receipt immediately. Its `execute` method (`src/lib/server/controllers/agent/controller.ts`) runs in the background. The same controller owns submission, execution, cancellation and restart recovery. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers. Context updates check the stored run status in the write statement so a concurrent cancellation cannot be overwritten.
 
 The state machine is owned by the model layer: `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it.

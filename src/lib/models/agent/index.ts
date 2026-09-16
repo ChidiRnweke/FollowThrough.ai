@@ -446,16 +446,57 @@ export interface RelatedNoteRunContext {
 	readonly selection: TextSelection;
 }
 
-export type SelectionActionRunContext =
-	PromiseExtractionRunContext | ReferenceSearchRunContext | RelatedNoteRunContext;
+export type DiagramActionInput =
+	| {
+			readonly operation: 'generate';
+			readonly selection: TextSelection;
+			readonly instruction?: string;
+	  }
+	| {
+			readonly operation: 'revise';
+			readonly noteId: NoteId;
+			readonly source: string;
+			readonly instruction: string;
+			readonly renderedPngDataUrl?: string;
+	  }
+	| {
+			readonly operation: 'convert';
+			readonly noteId: NoteId;
+			readonly source: string;
+			readonly instruction?: string;
+	  };
 
-export interface SelectionActionRequest {
+export interface DiagramActionRunContext {
+	readonly kind: 'diagram_action';
+	readonly model: string;
+	readonly input: DiagramActionInput;
+	readonly prepared?: { readonly context: AgentRunContext; readonly provenanceId: ProvenanceId };
+}
+
+export type NoteActionRunContext =
+	| PromiseExtractionRunContext
+	| ReferenceSearchRunContext
+	| RelatedNoteRunContext
+	| DiagramActionRunContext;
+
+export interface NoteActionRequest {
 	readonly requestId: string;
-	readonly context: SelectionActionRunContext;
+	readonly context: NoteActionRunContext;
+}
+
+export type NoteActionIntent =
+	| Omit<PromiseExtractionRunContext, 'generation'>
+	| Omit<ReferenceSearchRunContext, 'model'>
+	| Omit<RelatedNoteRunContext, 'generation'>
+	| Pick<DiagramActionRunContext, 'kind' | 'input'>;
+
+export interface NoteActionIdentity {
+	readonly requestId: string;
+	readonly context: NoteActionIntent;
 }
 
 export type WorkflowRunContext =
-	| SelectionActionRunContext
+	| NoteActionRunContext
 	| { readonly kind: 'note_action'; readonly action: NoteActionKind; readonly noteId: NoteId }
 	| {
 			readonly kind: 'diagram';
@@ -1644,6 +1685,42 @@ const preparedDiagramRunContextSchema = z
 	.strict();
 
 export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
+	z
+		.object({
+			kind: z.literal('diagram_action'),
+			model: z.string().min(1),
+			prepared: z
+				.object({ context: agentRunContextSchema, provenanceId: brandedUuid<ProvenanceId>() })
+				.strict()
+				.optional(),
+			input: z.discriminatedUnion('operation', [
+				z
+					.object({
+						operation: z.literal('generate'),
+						selection: textSelectionSchema,
+						instruction: z.string().optional()
+					})
+					.strict(),
+				z
+					.object({
+						operation: z.literal('revise'),
+						noteId: noteIdSchema,
+						source: z.string(),
+						instruction: z.string(),
+						renderedPngDataUrl: z.string().optional()
+					})
+					.strict(),
+				z
+					.object({
+						operation: z.literal('convert'),
+						noteId: noteIdSchema,
+						source: z.string(),
+						instruction: z.string().optional()
+					})
+					.strict()
+			])
+		})
+		.strict(),
 	z
 		.object({
 			kind: z.literal('related_notes'),

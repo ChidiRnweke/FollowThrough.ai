@@ -4,10 +4,10 @@ import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { startExtractPromisesSchema } from '$lib/models/todos';
 import { startFindReferencesSchema } from '$lib/models/references';
-import type {
-	ConvertInlineMermaidInput,
-	GenerateMermaidDiagramInput,
-	ReviseInlineMermaidInput
+import {
+	startGenerateMermaidSchema,
+	startReviseInlineMermaidSchema,
+	startConvertInlineMermaidSchema
 } from '$lib/models/diagrams';
 import type {
 	GetNoteRevisionInput,
@@ -16,20 +16,6 @@ import type {
 } from '$lib/models/notes';
 import { startRelateSelectionSchema } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
-
-const noteId = z
-	.string()
-	.uuid()
-	.transform((value) => value as NoteId);
-const textSelection = z
-	.object({
-		noteId,
-		revision: z.number().int().positive(),
-		from: z.number().int().nonnegative(),
-		to: z.number().int().nonnegative(),
-		text: z.string()
-	})
-	.refine((s) => s.to >= s.from, 'Selection end must follow its start.');
 
 export const discardNoteDraft = command(
 	z.object({
@@ -78,38 +64,14 @@ export const findReferences = command(startFindReferencesSchema, async (input) =
 	return AppFactory.controllers().references().startSuggestFromSelection(requestActor(), input);
 });
 
-export const generateDiagram = command(
-	z.object({ selection: textSelection, instruction: z.string().optional() }),
-	async (input) => {
-		return AppFactory.controllers()
-			.diagrams()
-			.startGenerateMermaid(requestActor(), input as GenerateMermaidDiagramInput);
-	}
-);
+export const generateDiagram = command(startGenerateMermaidSchema, async (input) => {
+	return AppFactory.controllers().diagrams().startGenerateMermaid(requestActor(), input);
+});
 
-export const reviseDiagram = command(
-	z.object({
-		noteId: z.string().uuid(),
-		source: z.string(),
-		instruction: z.string(),
-		renderedPngDataUrl: z.string().max(14_000_000).optional()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.diagrams()
-			.startReviseInlineMermaid(requestActor(), input as ReviseInlineMermaidInput);
-	}
-);
+export const reviseDiagram = command(startReviseInlineMermaidSchema, async (input) => {
+	return AppFactory.controllers().diagrams().startReviseInlineMermaid(requestActor(), input);
+});
 
-export const convertDiagram = command(
-	z.object({
-		noteId: z.string().uuid(),
-		source: z.string().trim().min(1).max(50_000),
-		instruction: z.string().trim().max(2_000).optional()
-	}),
-	async (input) => {
-		return AppFactory.controllers()
-			.diagrams()
-			.startConvertInlineMermaid(requestActor(), input as ConvertInlineMermaidInput);
-	}
-);
+export const convertDiagram = command(startConvertInlineMermaidSchema, async (input) => {
+	return AppFactory.controllers().diagrams().startConvertInlineMermaid(requestActor(), input);
+});

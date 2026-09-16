@@ -14,9 +14,15 @@ import type { ResolvedAgentRun } from '$lib/models/agent';
 import type { WorkflowAgentRun } from '$lib/models/agent';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type {
+	GenerateMermaidDiagramOutput,
+	ReviseInlineMermaidOutput,
+	ConvertInlineMermaidOutput
+} from '$lib/models/diagrams';
+import type {
 	TodoSuggestion,
 	ReferenceSuggestion,
-	BacklinkSuggestion
+	BacklinkSuggestion,
+	DiagramSuggestion
 } from '$lib/models/suggestions';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 import type { FindReferencesOutput } from '$lib/models/references';
@@ -62,16 +68,16 @@ export interface AgentRunRepository {
 }
 
 /** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */
-export type SelectionActionResult =
+export type NoteActionResult =
+	| { readonly action: 'diagram'; readonly result: GenerateMermaidDiagramOutput<DiagramSuggestion> }
+	| { readonly action: 'revise'; readonly result: ReviseInlineMermaidOutput }
+	| { readonly action: 'convert'; readonly result: ConvertInlineMermaidOutput<DiagramSuggestion> }
 	| { readonly action: 'relate'; readonly result: RelateSelectionOutput<BacklinkSuggestion> }
 	| { readonly action: 'promises'; readonly result: ExtractPromisesOutput<TodoSuggestion> }
 	| { readonly action: 'reference'; readonly result: FindReferencesOutput<ReferenceSuggestion> };
 
 export interface AgentRunEventRepository {
-	appendSelectionResult(
-		runId: AgentRunId,
-		result: SelectionActionResult
-	): Promise<AgentRunEventRecord>;
+	appendNoteActionResult(runId: AgentRunId, result: NoteActionResult): Promise<AgentRunEventRecord>;
 	append(runId: AgentRunId, attempt: number, event: AgentEvent): Promise<AgentRunEventRecord>;
 	replay(
 		actor: ActorContext,

@@ -22,13 +22,13 @@ import type {
 	AgentRunReceipt,
 	AgentRunId,
 	RunSettlementOutcome,
-	SelectionActionRequest,
+	NoteActionRequest,
 	SelectionGeneration
 } from '$lib/models/agent';
 import {
-	DuplicateSelectionRequest,
-	type SelectionRequests
-} from '$lib/server/services/agent/runs/selection-requests';
+	DuplicateNoteActionRequest,
+	type NoteActionRequests
+} from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
 import type { RelationshipRules } from '$lib/server/services/relationships/rules';
@@ -66,7 +66,7 @@ export interface RelationshipsDependencies {
 	relationshipClassifier: RelationshipClassifier;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	selectionRequests: SelectionRequests;
+	noteActionRequests: NoteActionRequests;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 	relationshipRules: RelationshipRules;
@@ -80,7 +80,7 @@ export class Relationships implements RelationshipsController {
 		actor: ActorContext,
 		input: StartRelateSelectionInput
 	): Promise<AgentRunReceipt> {
-		const request: SelectionActionRequest = {
+		const request: NoteActionRequest = {
 			requestId: input.requestId,
 			context: {
 				kind: 'related_notes',
@@ -91,11 +91,11 @@ export class Relationships implements RelationshipsController {
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.selectionRequests.prepare(actor, request)
+				this.dependencies.noteActionRequests.prepare(actor, request)
 			);
 		} catch (error) {
-			if (!(error instanceof DuplicateSelectionRequest)) throw error;
-			receipt = await this.dependencies.selectionRequests.existing(actor, request);
+			if (!(error instanceof DuplicateNoteActionRequest)) throw error;
+			receipt = await this.dependencies.noteActionRequests.existing(actor, request);
 		}
 		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchRelatedNoteRun(actor, receipt.runId);
@@ -110,14 +110,14 @@ export class Relationships implements RelationshipsController {
 	}
 
 	async recoverQueuedRelatedNoteRuns(): Promise<number> {
-		const queued = await this.dependencies.selectionRequests.queued('related_notes');
+		const queued = await this.dependencies.noteActionRequests.queued('related_notes');
 		for (const run of queued) this.launchRelatedNoteRun(run.actor, run.runId);
 		return queued.length;
 	}
 
 	async executeRelatedNoteRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.selectionRequests.claim(actor, runId, 'related_notes')
+			this.dependencies.noteActionRequests.claim(actor, runId, 'related_notes')
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
@@ -141,7 +141,7 @@ export class Relationships implements RelationshipsController {
 				});
 				if (claim.kind === 'lost') return false;
 				const result = await this.saveRelationships(actor, input, candidates);
-				await this.dependencies.selectionRequests.recordResult(runId, {
+				await this.dependencies.noteActionRequests.recordResult(runId, {
 					action: 'relate',
 					result
 				});
