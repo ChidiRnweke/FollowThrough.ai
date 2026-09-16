@@ -77,7 +77,7 @@ export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 	private summarize(skill: Skill<Note>): SkillSummary {
 		return {
 			noteId: skill.note.id,
-			name: skill.name,
+			name: skill.note.title,
 			slug: skill.slug,
 			description: skill.description,
 			triggerHints: skill.triggerHints,

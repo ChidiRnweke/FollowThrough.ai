@@ -56,11 +56,11 @@ export class SkillRecords implements SkillRepository {
 						: sql<boolean>`false`
 				)
 				.where(and(eq(schema.notes.userId, actor.userId), isNull(schema.projects.archivedAt)))
-				.orderBy(asc(schema.skills.name))
+				.orderBy(asc(schema.notes.title))
 		).map(({ note, skill, pin }) => ({
 			noteId: note.id as NoteId,
 			projectId: note.projectId as SkillSummary['projectId'],
-			name: skill.name,
+			name: note.title,
 			slug: skill.slug,
 			description: skill.description,
 			triggerHints: skill.triggerHints,
@@ -114,8 +114,8 @@ export class SkillRecords implements SkillRepository {
 			.insert(schema.skills)
 			.values({
 				noteId: skill.note.id,
-				name: skill.name,
-				slug: skill.slug ?? skill.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+				name: note.title,
+				slug: skill.slug ?? note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
 				description: skill.description,
 				triggerHints: [...skill.triggerHints],
 				license: skill.license,
@@ -127,8 +127,7 @@ export class SkillRecords implements SkillRepository {
 			.onConflictDoUpdate({
 				target: schema.skills.noteId,
 				set: {
-					name: skill.name,
-					slug: skill.slug ?? skill.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+					slug: skill.slug ?? note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
 					description: skill.description,
 					triggerHints: [...skill.triggerHints],
 					license: skill.license,

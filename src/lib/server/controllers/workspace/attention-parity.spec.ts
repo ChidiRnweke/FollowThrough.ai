@@ -75,7 +75,7 @@ it('shows the same profile and visible-project memory attention from server and 
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
 			skillFinder: new SkillLibrary(
-				new InMemorySkillRepository(),
+				new InMemorySkillRepository(new InMemoryNoteRepository()),
 				new InMemoryNoteRepository(),
 				new InMemoryProvenanceRepository()
 			)

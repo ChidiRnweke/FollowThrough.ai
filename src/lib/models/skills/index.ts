@@ -22,7 +22,6 @@ interface TextSelection {
 /** A skill is a note plus metadata: the instruction text lives in `note`, everything the agent uses to decide whether to load it lives alongside it. */
 export interface Skill<Document> {
 	readonly note: Document;
-	readonly name: string;
 	readonly slug?: string;
 	readonly description: string;
 	readonly triggerHints: readonly string[];
@@ -87,8 +86,9 @@ export interface SkillEditInput {
 
 export type SkillSummary = Pick<
 	Skill<never>,
-	'name' | 'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
+	'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
 > & {
+	readonly name: string;
 	readonly noteId: NoteId;
 	readonly projectId?: ProjectId;
 	readonly isPinned?: boolean;
@@ -164,7 +164,7 @@ export interface GetSkillViewInput {
 
 /** Metadata edits do not change the instruction document or its revision. */
 export function applySkillMetadataEdit(
-	current: Pick<Skill<never>, 'name' | 'description' | 'triggerHints' | 'isEnabled'>,
+	current: Pick<Skill<never>, 'description' | 'triggerHints' | 'isEnabled'>,
 	input: {
 		readonly displayName?: string;
 		readonly description?: string;
@@ -173,7 +173,6 @@ export function applySkillMetadataEdit(
 	}
 ) {
 	return {
-		name: input.displayName?.trim() || current.name,
 		description: input.description?.trim() || current.description,
 		triggerHints: input.triggerHints
 			? input.triggerHints.map((hint) => hint.trim()).filter(Boolean)
@@ -185,6 +184,7 @@ export function applySkillMetadataEdit(
 /** A document edit includes the portable metadata whose validity its controller must check. */
 export type PreparedSkillEdit<Document> =
 	| { readonly kind: 'metadata'; readonly skill: Skill<Document> }
+	| { readonly kind: 'title'; readonly skill: Skill<Document>; readonly document: Document }
 	| {
 			readonly kind: 'document';
 			readonly skill: Skill<Document>;

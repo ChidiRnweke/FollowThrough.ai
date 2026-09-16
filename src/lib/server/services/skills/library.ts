@@ -51,7 +51,6 @@ export class SkillLibrary {
 		if (description.length > 1024) throw new ValidationError('Skill description is too long');
 		return this.skills.insert(actor, {
 			note: owned,
-			name,
 			slug: skillSlug,
 			description,
 			triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean),
@@ -106,10 +105,14 @@ export class SkillLibrary {
 
 	async prepareEdit(actor: ActorContext, input: SkillEditInput): Promise<PreparedSkillEdit<Note>> {
 		const current = await this.load(actor, input.noteId);
+		const displayName =
+			input.displayName === undefined ? current.note.title : input.displayName.trim();
+		if (!displayName) throw new ValidationError('Skill name is required');
 		if (!input.content) {
-			// Metadata-only update: the note — its document, revision, and revision
-			// history — belongs to the note sync path and must not be touched here.
-			return { kind: 'metadata', skill: { ...current, ...applySkillMetadataEdit(current, input) } };
+			const skill = { ...current, ...applySkillMetadataEdit(current, input) };
+			return displayName === current.note.title
+				? { kind: 'metadata', skill }
+				: { kind: 'title', skill, document: { ...current.note, title: displayName } };
 		}
 		const manifest =
 			input.content.kind === 'manifest'
@@ -125,7 +128,6 @@ export class SkillLibrary {
 			)
 		)
 			throw new ValidationError('A skill with this portable name already exists');
-		const displayName = input.displayName?.trim() || current.name;
 		const instructions = manifest.instructions;
 		const note: Note = {
 			...current.note,
@@ -150,7 +152,6 @@ export class SkillLibrary {
 			skill: {
 				...current,
 				note,
-				name: displayName,
 				slug: manifest.slug,
 				description: manifest.description,
 				license: manifest.license,
@@ -176,7 +177,7 @@ export class SkillLibrary {
 
 	private portable(skill: Skill<Note>): SkillManifest {
 		return {
-			slug: skill.slug ?? slug(skill.name),
+			slug: skill.slug ?? slug(skill.note.title),
 			description: skill.description,
 			...(skill.license ? { license: skill.license } : {}),
 			...(skill.compatibility ? { compatibility: skill.compatibility } : {}),

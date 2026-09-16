@@ -10,7 +10,7 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 export const builtInSkillsFixture = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository(notes);
-	const skills = new InMemorySkillRepository();
+	const skills = new InMemorySkillRepository(notes);
 	const builtInSkills = new BuiltInSkills(projects, notes, skills, {
 		active: BUILT_INS,
 		retired: RETIRED_BUILT_INS
