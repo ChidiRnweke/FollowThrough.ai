@@ -1045,61 +1045,6 @@ export type ToolOutcomeEvent = Extract<
 	{ readonly type: 'tool_succeeded' | 'tool_reported_failure' | 'tool_failed' }
 >;
 
-/**
- * The outcome an event settles, or nothing when it settles none.
- *
- * "Did this call finish?" is one question with one answer, and asking it as a
- * three-way `type` test at every reader is how the old single arm's
- * `!event.failure` test came to mean three different things in three files.
- */
-export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefined =>
-	event.type === 'tool_succeeded' ||
-	event.type === 'tool_reported_failure' ||
-	event.type === 'tool_failed'
-		? event
-		: undefined;
-
-/**
- * The journal row an event calls for, or nothing when the event is not about a
- * tool call.
- *
- * Model-owned because two services need it and a service may not import
- * another: the Agent controller journals every run's calls, and
- * The diagrams controller journals its own. The two workflows held a copy each, and the copies
- * had already diverged — the diagram one wrote `output: undefined` onto a
- * `succeeded` row, which the wire type cannot carry.
- */
-export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
-	if (event.type === 'tool_started')
-		return { callId: event.callId, name: event.name, input: event.arguments, status: 'running' };
-	if (event.type === 'approval_required')
-		return {
-			callId: event.callId,
-			name: event.name,
-			input: event.arguments,
-			...(event.review ? { review: event.review } : {}),
-			status: 'approval_required'
-		};
-	const outcome = toolOutcomeEvent(event);
-	if (!outcome) return undefined;
-	// The arguments are not restated on an outcome, and the row that opened the
-	// call is the one that holds them; both journals key rows by `callId`.
-	const settled = {
-		...(outcome.callId === undefined ? {} : { callId: outcome.callId }),
-		name: outcome.name,
-		input: {}
-	};
-	if (outcome.type === 'tool_succeeded')
-		return {
-			...settled,
-			...(outcome.output === undefined ? {} : { output: outcome.output }),
-			status: 'succeeded'
-		};
-	return outcome.type === 'tool_failed'
-		? { ...settled, failure: outcome.failure, status: 'failed' }
-		: { ...settled, failure: outcome.failure, output: outcome.output, status: 'reported_failure' };
-};
-
 export const agentRunCursorSchema = z.string().regex(/^\d+$/);
 
 export const agentRunEventIdentitySchema = z.object({

@@ -10,7 +10,7 @@ import {
 } from '../fixtures/workspaces/time-aware';
 import { findCall } from '../assertions/tool-calls';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import { toolOutcomeEvent } from '$lib/models/agent';
+import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import { judgeAdherenceConsensus } from '../judges/consensus';
 import { ARCHETYPES, type EvalCase } from './types';
 

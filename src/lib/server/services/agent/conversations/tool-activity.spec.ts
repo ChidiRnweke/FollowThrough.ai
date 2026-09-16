@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toolActivityFromEvent } from '$lib/models/agent';
+import { toolActivityFromEvent } from './tool-activity';
 
 describe('Turning an event into the journal row it calls for', () => {
 	it('journals a reported failure with the value the failure was read out of', () => {

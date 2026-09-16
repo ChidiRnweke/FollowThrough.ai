@@ -16,7 +16,7 @@ import type {
 	ToolActivity,
 	WorkflowRunContext
 } from '$lib/models/agent';
-import { toolActivityFromEvent } from '$lib/models/agent';
+import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import {
 	assertRenderedPng,
 	diagramRevisionModel
