@@ -7,8 +7,10 @@ import type {
 } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
+import { prepareExport } from './export-preparation';
+import type { ExportInput } from '$lib/models/deliverables';
 
-type GeneratePdfArgs = Parameters<typeof generatePdf>[0];
+type GeneratePdfArgs = ExportInput;
 
 const renderCache = new Map<string, Promise<Buffer>>();
 
@@ -23,7 +25,7 @@ const memoizedGeneratePdf = (input: GeneratePdfArgs): Promise<Buffer> => {
 	});
 	const cached = renderCache.get(key);
 	if (cached) return cached;
-	const rendered = generatePdf(input);
+	const rendered = generatePdf(prepareExport(input));
 	renderCache.set(key, rendered);
 	return rendered;
 };
@@ -74,7 +76,7 @@ const document: ProseMirrorDocument = {
 	]
 };
 
-const generate = (overrides: Partial<Parameters<typeof generatePdf>[0]> = {}) =>
+const generate = (overrides: Partial<ExportInput> = {}) =>
 	memoizedGeneratePdf({ notes: [{ title: 'Note', document }], title: 'Export', ...overrides });
 
 /**

@@ -20,8 +20,10 @@ import type {
 
 export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotParticipant {
 	artifacts: Artifact[] = [];
+	insertFailure?: Error;
 
 	async insert(_actor: ActorContext, artifact: Artifact): Promise<Artifact> {
+		if (this.insertFailure) throw this.insertFailure;
 		this.artifacts.push(artifact);
 		return artifact;
 	}
@@ -139,6 +141,7 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 	objects = new Map<string, { data: Uint8Array; mediaType: string; checksumSha256?: string }>();
 	putFailure?: Error;
 	removeFailure?: Error;
+	downloadFailure?: Error;
 
 	async createUploadUrl(input: {
 		objectKey: string;
@@ -155,6 +158,7 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 		_expiresInSeconds: number,
 		downloadFilename?: string
 	): Promise<string> {
+		if (this.downloadFailure) throw this.downloadFailure;
 		const suffix = downloadFilename ? `?filename=${encodeURIComponent(downloadFilename)}` : '';
 		return `https://storage.test/download/${objectKey}${suffix}`;
 	}

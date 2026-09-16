@@ -2,45 +2,20 @@ import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
 import type { NoteId } from '$lib/models/notes';
 import { MAX_BUNDLE_ENTRIES } from '$lib/models/deliverables';
-import { ArtifactLibrary } from './artifacts';
-import { packZip } from './bundle';
-import {
-	InMemoryArtifactRepository,
-	InMemoryAttachmentStorage,
-	InMemoryTemplateRepository
-} from '$lib/testing/attachments/fakes/in-memory-deliverables';
-import { InMemoryExportSettingsRepository } from '$lib/testing/deliverables/fakes/in-memory-export-settings-repository';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import type { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import type { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
+import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
-const setup = () => {
-	const artifacts = new InMemoryArtifactRepository();
-	const storage = new InMemoryAttachmentStorage();
-	const notes = new InMemoryNoteContent();
-	const provenance = new InMemoryProvenanceRecorder();
-	const service = new ArtifactLibrary(
-		artifacts,
-		storage,
-		async (input) => Buffer.from(`docx:${input.title}`),
-		async (input) => Buffer.from(`pdf:${input.title}`),
-		provenance,
-		notes,
-		new InMemoryTemplateRepository(),
-		new InMemoryTransactionRunner([artifacts, storage, provenance]),
-		new InMemoryExportSettingsRepository(),
-		{ downloadById: async () => ({ url: 'https://storage.test/presigned' }) },
-		packZip
-	);
-	return { service, artifacts, storage, notes, provenance };
-};
-
+const setup = () =>
+	exportControllerFixture({
+		docxGenerator: async (input) => Buffer.from(`docx:${input.title}`),
+		pdfGenerator: async (input) => Buffer.from(`pdf:${input.title}`)
+	});
 /** Two notes, one of them a folder deeper, as a folder export would hand them over. */
 const twoNotes = (notes: InMemoryNoteContent) => {
 	notes.notes = [
