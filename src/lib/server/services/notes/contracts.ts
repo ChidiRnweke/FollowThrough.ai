@@ -109,6 +109,7 @@ export interface NoteIndexer {
 }
 
 export interface SelectionOriginService {
+	validate(actor: ActorContext, selection: TextSelection): Promise<void>;
 	resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>>;
 	record(
 		actor: ActorContext,

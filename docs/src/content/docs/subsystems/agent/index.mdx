@@ -52,6 +52,13 @@ This is a different system from the OAuth2/OIDC flow that signs a user into the 
 
 ## Run lifecycle
 
+Promise extraction from a note selection has its own durable input. The Todo controller stores the
+selection and generation settings before execution, and returns a run receipt. Repeated delivery of
+the same request ID returns that run. On startup it resumes queued extractions from stored input.
+Relative due dates use the stored submission time, including when recovery occurs on a later day.
+It saves extracted proposals and the result event in the same transaction as the successful terminal
+transition. Cancellation or a changed source selection prevents those writes.
+
 The Agent controller's `submit` returns a receipt immediately. Its `execute` method (`src/lib/server/controllers/agent/controller.ts`) runs in the background. The same controller owns submission, execution, cancellation and restart recovery. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers. Context updates check the stored run status in the write statement so a concurrent cancellation cannot be overwritten.
 
 The state machine is owned by the model layer: `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it.

@@ -1,33 +1,10 @@
-import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import type { PromiseCandidate } from '$lib/models/todos';
-import type { TextSelection } from '$lib/models/notes';
-import { Todos, type TodosDependencies } from './controller';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import {
-	InMemoryPromiseExtractor,
-	InMemoryProvenanceRecorder,
-	InMemoryTrustPolicyEvaluator
-} from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import {
-	noteBuilder,
-	testActor,
-	testNoteId,
-	testProjectId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-
-const selection: TextSelection = {
-	noteId: testNoteId(),
-	revision: 1,
-	from: 0,
-	to: 20,
-	text: 'I will send it soon.'
-};
+	promiseExtractionFixture as setup,
+	promiseSelection as selection
+} from '$lib/testing/todos/fixtures/promise-extraction';
+import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const candidate = (
 	action: string,
@@ -39,36 +16,6 @@ const candidate = (
 	confidence: 95,
 	...overrides
 });
-
-const setup = () => {
-	const content = new InMemoryNoteContent();
-	const extractor = new InMemoryPromiseExtractor();
-	const provenance = new InMemoryProvenanceRecorder();
-	const suggestions = new InMemorySuggestions();
-	const effects = new InMemorySuggestionEffects();
-	const trust = new InMemoryTrustPolicyEvaluator();
-	const todos = new InMemoryTodos();
-	content.notes = [noteBuilder({ plainText: selection.text })];
-	const controller = new Todos(
-		capabilityDependencies<TodosDependencies>({
-			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-			promiseExtractor: extractor,
-			suggestionCreator: suggestions,
-			trustPolicyEvaluator: trust,
-			todoCreator: todos,
-			suggestionAccepter: suggestions,
-			suggestionEffects: effects,
-			transactionRunner: new InMemoryTransactionRunner([
-				content,
-				provenance,
-				suggestions,
-				todos,
-				effects
-			])
-		})
-	);
-	return { content, extractor, provenance, suggestions, trust, todos, controller };
-};
 
 describe('Promise extraction orchestration invariants', () => {
 	it('creates one suggestion for each extracted promise', async () => {
