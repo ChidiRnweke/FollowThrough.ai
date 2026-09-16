@@ -526,6 +526,11 @@ Notes applies the shared presentation rules also used by WorkspaceViews. Their m
 format these views. The existing server/downloaded note-view parity test covers both relationship
 endpoints and reference records. Relationship write policy and note projection remain open.
 
+Skill portable-name truncation: a display name with a separator at character 64 previously created
+a stored slug ending in a hyphen. Export then rejected its own generated name. Generated names now
+trim separators after truncation too. The service-to-export regression fails before the change and
+passes after it. Existing stored portable names are not renamed by this fix.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
