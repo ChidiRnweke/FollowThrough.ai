@@ -10,7 +10,7 @@ import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
 import { packZip } from '$lib/server/services/deliverables/bundle';
 import { generateDocx } from '$lib/server/services/deliverables/docx';
 import { generatePdf } from '$lib/server/services/deliverables/pdf';
-import { extractTemplateStyles } from '$lib/server/services/deliverables/template-styles';
+import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
@@ -42,6 +42,8 @@ export interface DeliverablesCapabilityInput {
 
 export interface DeliverablesCapability {
 	readonly templates: DocumentTemplates;
+	readonly templateStorage: IAttachmentStorage;
+	readonly templateStyles: typeof verifiedTemplateStyles;
 	readonly artifacts: ArtifactLibrary;
 	/** Ephemeral kanban-board PDF export; persists no artifact. */
 	readonly boardPdfExporter: BoardPdfExport;
@@ -52,12 +54,9 @@ export const createDeliverablesCapability = (
 ): DeliverablesCapability => {
 	const templateRepository = new TemplateRecords(input.db);
 	return {
-		templates: new DocumentTemplates(
-			input.storage,
-			templateRepository,
-			input.transactionRunner,
-			extractTemplateStyles
-		),
+		templates: new DocumentTemplates(templateRepository),
+		templateStorage: input.storage,
+		templateStyles: verifiedTemplateStyles,
 		artifacts: new ArtifactLibrary(
 			new ArtifactRecords(input.db),
 			input.storage,
