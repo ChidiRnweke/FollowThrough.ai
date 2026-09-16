@@ -16,7 +16,7 @@ import {
 	testTodoId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './index';
+import { WorkspaceViews } from './views';
 
 const row = (record: WorkspaceRecord & { value: { id: string } }): [string, WorkspaceRecord] => [
 	JSON.stringify([record.type, record.value.id]),

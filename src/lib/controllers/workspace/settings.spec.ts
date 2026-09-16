@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WorkspaceViews } from './index';
+import { WorkspaceViews } from './views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { testActor, testProjectId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 

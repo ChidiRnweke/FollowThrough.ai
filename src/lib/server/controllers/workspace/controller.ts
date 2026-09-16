@@ -16,9 +16,9 @@ import type {
 	ShellContext as AggregateShellContext,
 	TodayView as AggregateTodayView
 } from '$lib/models/workspace';
-import type { PendingMemoryNotification } from '$lib/models/memory';
 import type { Project } from '$lib/models/projects';
-import type { Suggestion } from '$lib/models/suggestions';
+import { pendingMemoryNotifications } from '$lib/services/memory/attention';
+import { assembleToday } from '$lib/services/workspace/today';
 import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
 import type { ProjectLister } from '$lib/server/services/projects/contracts';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
@@ -65,41 +65,6 @@ export interface WorkspaceDependencies {
 	todoViewAssembler: TodoViewAssembler;
 }
 
-/**
- * Derive per-project pending-memory notification rows from proposed memory suggestions,
- * plus a profile-level row for suggestions not tied to a project. Projects with no
- * pending memories are omitted so the shell only surfaces counts worth acting on.
- */
-export const toPendingMemoryNotifications = (
-	projects: readonly Project[],
-	suggestions: readonly Suggestion[]
-): readonly PendingMemoryNotification[] => {
-	const counts = new Map<string | undefined, number>();
-	for (const suggestion of suggestions) {
-		if (suggestion.kind !== 'memory' || suggestion.status !== 'proposed') continue;
-		const projectId = suggestion.payload.projectId;
-		counts.set(projectId, (counts.get(projectId) ?? 0) + 1);
-	}
-	return [
-		...(counts.get(undefined)
-			? [{ label: 'Profile memory', href: '/profile', count: counts.get(undefined)! }]
-			: []),
-		...projects.flatMap((project) => {
-			const count = counts.get(project.id);
-			return count
-				? [
-						{
-							projectId: project.id,
-							label: project.name,
-							href: `/projects/${project.id}/memory`,
-							count
-						}
-					]
-				: [];
-		})
-	];
-};
-
 export class Workspace implements WorkspaceController {
 	constructor(private readonly dependencies: WorkspaceDependencies) {}
 	pullChangePage(actor: ActorContext, since: SyncCursor) {
@@ -126,7 +91,7 @@ export class Workspace implements WorkspaceController {
 			noteTree,
 			skills,
 			pendingSuggestionCount: pendingSuggestions.length,
-			pendingMemoryNotifications: toPendingMemoryNotifications(projects, pendingSuggestions)
+			pendingMemoryNotifications: pendingMemoryNotifications(projects, pendingSuggestions)
 		};
 	}
 	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {
@@ -140,16 +105,13 @@ export class Workspace implements WorkspaceController {
 			this.dependencies.noteTreeReader.list(actor)
 		]);
 		const views = await this.dependencies.todoViewAssembler.assemble(actor, [...due, ...waiting]);
-		const dueViews = views.slice(0, due.length);
-		const recency = [...notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-		return {
-			overdue: dueViews.filter((view) => (view.todo.dueDate ?? input.today) < input.today),
-			dueToday: dueViews.filter((view) => view.todo.dueDate === input.today),
-			waitingOn: views.slice(due.length),
+		return assembleToday({
+			today: input.today,
+			due: views.slice(0, due.length),
+			waiting: views.slice(due.length),
 			pendingSuggestionCount,
-			pinnedNotes: notes.filter((note) => note.isPinned),
-			recentNotes: recency.slice(0, 5)
-		};
+			notes
+		});
 	}
 }
 

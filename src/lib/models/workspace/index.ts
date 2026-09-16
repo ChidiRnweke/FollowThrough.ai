@@ -34,6 +34,15 @@ export interface TodayView<Task, Note> {
 	readonly recentNotes: readonly Note[];
 }
 
+/** Resolved records used by the browser and server to assemble the same Today view. */
+export interface TodayFacts<Task, Note> {
+	readonly today: LocalDate;
+	readonly due: readonly Task[];
+	readonly waiting: readonly Task[];
+	readonly notes: readonly Note[];
+	readonly pendingSuggestionCount: number;
+}
+
 /** Everything the app shell renders on every navigation: user, projects, note tree, skills, and pending review counts. */
 export interface ShellContext<User, Project, Note, Skill> {
 	readonly user: User;

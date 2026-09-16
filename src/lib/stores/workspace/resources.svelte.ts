@@ -38,7 +38,7 @@ import {
 	type WorkspaceResourceType,
 	type WorkspaceResourceIdentity
 } from '$lib/models/workspace-sync';
-import { WorkspaceViews } from '$lib/models/workspace-views';
+import { WorkspaceViews } from '$lib/controllers/workspace/views';
 import {
 	accessCache,
 	accessMessage,

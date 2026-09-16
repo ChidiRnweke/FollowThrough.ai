@@ -15,7 +15,8 @@ import type {
 	TodoCreator,
 	TodoLister,
 	TodoReader,
-	TodoViewAssembler
+	TodoViewAssembler,
+	WaitingOnFinder
 } from '$lib/server/services/todos/contracts';
 import { testNow, testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
@@ -31,9 +32,14 @@ export class InMemoryTodos
 		TodoDeleter,
 		TodoLister,
 		TodoViewAssembler,
+		WaitingOnFinder,
 		SnapshotParticipant
 {
 	todos: Todo[] = [];
+
+	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
+		return this.list(actor, { responsibility: 'waiting_on' });
+	}
 
 	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return (await this.list(actor, filter)).length;

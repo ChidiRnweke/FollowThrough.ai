@@ -10,7 +10,7 @@ import {
 	testNoteId,
 	testTodoId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './index';
+import { WorkspaceViews } from './views';
 
 const views = (records: readonly WorkspaceRecord[]) =>
 	new WorkspaceViews(
