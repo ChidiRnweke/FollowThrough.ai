@@ -1,15 +1,8 @@
-import { applyTodoEdit, decideTodoCreation } from '$lib/models/todos';
+import { decideTodoCreation } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateTodoInput,
-	Todo,
-	TodoId,
-	TodoListFilter,
-	UpdateTodoInput,
-	TodoContext
-} from '$lib/models/todos';
+import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type {
@@ -51,9 +44,14 @@ export class TodoCatalog {
 		return todo;
 	}
 
-	async update(actor: ActorContext, input: UpdateTodoInput): Promise<Todo> {
-		const current = await this.get(actor, input.todoId);
-		const todo = applyTodoEdit(current, input, this.clock());
+	async getForEdit(actor: ActorContext, todoId: TodoId): Promise<Todo> {
+		const todo = await this.todos.findForUpdate(actor, todoId);
+		if (!todo) throw new NotFoundError('Todo was not found', { todoId });
+		return todo;
+	}
+
+	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot edit another user’s task');
 		if (!todo.title) throw new ValidationError('Todo title is required');
 		if (todo.linkedNoteId) await this.validateLinkedNote(actor, todo.linkedNoteId, todo.projectId);
 		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);

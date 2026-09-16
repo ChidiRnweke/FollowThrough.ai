@@ -1,13 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateTodoInput,
-	Todo,
-	TodoId,
-	TodoListFilter,
-	UpdateTodoInput,
-	TodoContext
-} from '$lib/models/todos';
-import { applyTodoEdit } from '$lib/models/todos';
+import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	TodoDeleter,
@@ -89,9 +81,12 @@ export class InMemoryTodos
 		return todo;
 	}
 
-	async update(actor: ActorContext, input: UpdateTodoInput): Promise<Todo> {
-		const current = await this.get(actor, input.todoId);
-		const updated = applyTodoEdit(current, input, testNow);
+	getForEdit(actor: ActorContext, todoId: TodoId): Promise<Todo> {
+		return this.get(actor, todoId);
+	}
+
+	async update(actor: ActorContext, updated: Todo): Promise<Todo> {
+		const current = await this.get(actor, updated.id);
 		if (!updated.title) throw new ValidationError('Todo title is required');
 		this.todos = this.todos.map((candidate) => (candidate.id === current.id ? updated : candidate));
 		return updated;

@@ -5,7 +5,11 @@ description: How commitments in notes become reviewable, provenance-carrying tod
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-Todos track work. Most are created by hand, but the subsystem's center of gravity is `extractPromises`: select text in a note, and in **one transaction** the selection becomes a `SourceAnchor`, candidates are extracted and scored, provenance is recorded, and one `todo` suggestion per candidate is created, with auto-accept straight into a real todo when the user's trust policy allows. Every extracted todo carries the sentence, the note revision, and the pipeline that produced it, so a suggestion is always traceable back to its source. Review, accept, reject, and revert are owned by the shared suggestions pipeline.
+Todos track work. Users can create tasks directly or extract commitments from selected note text.
+Extraction prepares a durable request, generates candidates outside the publication transaction and
+then publishes anchors, provenance, suggestions and any auto-accepted tasks together. Each extracted
+task retains its source sentence, note revision and producer. The shared suggestions controller owns
+review, acceptance, rejection and reversal.
 
 User-facing behavior: [Todos](/FollowThrough.ai/using/todos/).
 
@@ -15,14 +19,18 @@ Meeting notes and project write-ups are full of promises, like "Sarah will send 
 
 ## Where the pieces live
 
-- **Models**: `src/lib/models/todos/index.ts`: `Todo`, `TodoView`, `TodoSuggestion`, `PromiseCandidate`, and the status/responsibility/strength unions.
-- **Services**: `src/lib/server/services/todos/`: `TodoCatalog` (`catalog.ts`) holds the business rules; `promise-extraction/` is the LLM extractor; `promise-rules.ts` is the deterministic fallback extractor.
+- **Models**: `src/lib/models/todos/index.ts`: `Todo`, `TodoView`, `PromiseCandidate`, and the status/responsibility/strength unions.
+- **Services**: `src/lib/server/services/todos/`: `TodoCatalog` (`catalog.ts`) resolves and persists task records; shared `services/todos/` owns edit and presentation rules; `promise-extraction/` is the LLM extractor; `promise-rules.ts` is the deterministic fallback extractor.
 - **Controllers**: `src/lib/server/controllers/todos/controller.ts`: the `Todos` class, the documented public surface (`get`, `list`, `count`, `listCategories`, `create`, `update`, `remove`, `extractPromises`). The Today view lives in `src/lib/server/controllers/workspace/controller.ts` (`getTodayView`).
 - **Repositories**: `src/lib/server/repositories/todos/` (`postgres/todos.ts`): all Drizzle queries; rows are mapped to models at the boundary.
 
-## The extraction transaction
+## Durable extraction and publication
 
-`Todos.extractPromises` (`controller.ts:148`) runs entirely inside the transaction runner. Anchor creation, extraction, provenance recording, suggestion creation, and any auto-accepted todos commit together or not at all: a failed run leaves no orphan anchor and no half-created suggestion.
+The task controller freezes selection and generation context in the durable request. Queued recovery
+uses that recorded input. The provider runs outside the publication transaction. Settlement claims
+the run before anchor, provenance, proposal, effect and completion writes commit together. A failed
+publication leaves no orphan anchor or half-created suggestion. Relative dates use the original run
+time, so recovery does not reinterpret “tomorrow” using the recovery date.
 
 <Mermaid
 	source={`
@@ -55,9 +63,21 @@ Auto-accept is decided per suggestion by `ToolTrust.shouldAutoAccept` (`src/lib/
 
 ## Kanban and status semantics
 
-`TodoStatus` is `backlog | open | in_progress | done | cancelled`. The kanban board (`src/lib/components/todos/kanban-board.svelte`) drags between these columns; every drag is a status change, and all status changes go through `TodoCatalog.change` (`catalog.ts:84`), which has one rule: `completedAt` is stamped exactly when status becomes `done` and stripped on every other status. The controller enforces this by routing any `status` inside `update` through `change`, so there is no path that sets `done` without `completedAt`.
+`TodoStatus` is `backlog | open | in_progress | done | cancelled`. A board drag is a task edit.
+The Todos controller starts a transaction, locks and reads the current active task, applies the
+shared edit rule and persists one complete result. Concurrent edits to different fields therefore
+retain both changes. The task catalog validates linked records before saving.
 
-Other `update` rules (`catalog.ts:65`): a todo cannot move between projects during an edit, a linked note must be an unarchived `note` (not a folder or skill) in the same project, and setting responsibility to `mine` clears `waitingOn`, since a counterparty cannot survive the switch. A controller-level `update` with no edit at all throws `InvalidGeneratedContentError`; a no-op update is a caller bug.
+The shared rule stamps `completedAt` when status changes to `done`, preserves it when editing an
+already completed task and clears it when reopening. It clears `waitingOn` when responsibility
+becomes `mine`. Null clears a nullable field; omitted fields keep their current values. Downloaded
+workspace commands use the same rule for optimistic edits.
+
+A linked note must be an active ordinary note in the same project. An edit cannot move the task to
+another project. A request with no edit fails. Deleted tasks are unavailable to identity reads, and
+a stale write cannot clear their deletion marker. The controller assembles the returned view through
+the same presentation service as downloaded views: a linked note takes display precedence while the
+extraction origin remains separately visible.
 
 ## Waiting-on tracking
 

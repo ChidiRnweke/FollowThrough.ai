@@ -1,3 +1,4 @@
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 import { TodoCatalog } from '$lib/server/services/todos/catalog';
@@ -35,7 +36,12 @@ const setup = () => {
 		() => testNow
 	);
 	const controller = new Todos(
-		capabilityDependencies<TodosDependencies>({ todoEditor: catalog, todoContextReader: catalog })
+		capabilityDependencies<TodosDependencies>({
+			todoEditor: catalog,
+			todoContextReader: catalog,
+			transactionRunner: new InMemoryTransactionRunner([records])
+		}),
+		() => testNow
 	);
 	return { records, original, controller };
 };

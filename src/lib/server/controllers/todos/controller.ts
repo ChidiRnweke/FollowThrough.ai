@@ -1,3 +1,4 @@
+import { applyTodoEdit } from '$lib/services/todos/edits';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
@@ -183,7 +184,10 @@ export class Todos implements TodosController {
 		}
 	}
 
-	constructor(private readonly dependencies: TodosDependencies) {}
+	constructor(
+		private readonly dependencies: TodosDependencies,
+		private readonly clock: () => DateTime = () => new Date().toISOString() as DateTime
+	) {}
 	async get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView> {
 		const todo = await this.dependencies.todoReader.get(actor, input.todoId);
 		const context = await this.dependencies.todoContextReader.readContext(actor, todo);
@@ -234,10 +238,13 @@ export class Todos implements TodosController {
 		if (Object.keys(input).every((key) => key === 'todoId')) {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
-		const todo = await this.dependencies.todoEditor.update(actor, input);
-		const context = await this.dependencies.todoContextReader.readContext(actor, todo);
-		const view = assembleTodoView(todo, context);
-		return { todo, view };
+		return this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.todoEditor.getForEdit(actor, input.todoId);
+			const edited = applyTodoEdit(current, input, this.clock());
+			const todo = await this.dependencies.todoEditor.update(actor, edited);
+			const context = await this.dependencies.todoContextReader.readContext(actor, todo);
+			return { todo, view: assembleTodoView(todo, context) };
+		});
 	}
 	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput> {
 		return this.dependencies.transactionRunner.run(

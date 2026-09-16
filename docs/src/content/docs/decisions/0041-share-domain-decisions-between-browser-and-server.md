@@ -68,6 +68,8 @@ for different behavior, such as PDF and DOCX layout, or make server-only actions
   and browser command preparation both use them.
 - `src/lib/services/notes/creation.ts` validates new notes and folders. The Notes, Projects and
   Skills controllers and browser command preparation all use it.
+- `src/lib/services/todos/edits.ts` defines `applyTodoEdit`, which is reused by browser command
+  preparation and the task controller.
 - `src/lib/controllers/workspace/commands.ts` prepares optimistic commands from cached records.
 - `src/lib/server/services/notes/catalog.ts` checks current records for note lifecycle operations.
 - ADR 0040 defines the durable command queue and review of conflicting edits.
