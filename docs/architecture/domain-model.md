@@ -61,6 +61,12 @@ transport does not interpret note content. The tool boundary and client reader u
 schema to recover the same value. Preview rendering reads this value, not a newer cached note.
 This preserves the self-contained model namespaces and the parsing boundary in ADR 0037.
 
+## Memory edits
+
+`services/memory/edits.ts` owns shared creation and edit rules. The Memory controller reads the
+active record under a row lock, applies the rule and coordinates persistence with indexing.
+`WorkspaceCommands` uses the same rules for downloaded records. Memory models hold data and schemas.
+
 ## Project rules
 
 Project controllers and downloaded workspace commands use `services/projects/details.ts` for

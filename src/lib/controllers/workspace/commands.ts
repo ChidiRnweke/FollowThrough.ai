@@ -1,7 +1,7 @@
 import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideRevisionWrite } from '$lib/models/revisions';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
-import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
+import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
 import type {
 	MemoryEntry,
 	MemoryEntryId,

@@ -2,12 +2,10 @@ import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateMemoryEntryInput,
 	MemoryChangePayload,
 	MemoryEntry,
 	MemoryEntryId,
-	MemoryApplication,
-	UpdateMemoryEntryInput
+	MemoryApplication
 } from '$lib/models/memory';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
@@ -19,10 +17,11 @@ export interface MemoryEntryLister {
 	list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
 }
 export interface MemoryEntryCreator {
-	create(actor: ActorContext, input: CreateMemoryEntryInput): Promise<MemoryEntry>;
+	create(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry>;
 }
 export interface MemoryEntryEditor {
-	update(actor: ActorContext, input: UpdateMemoryEntryInput): Promise<MemoryEntry>;
+	getForEdit(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;
+	update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry>;
 }
 export interface MemoryEntryDeleter {
 	remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry>;

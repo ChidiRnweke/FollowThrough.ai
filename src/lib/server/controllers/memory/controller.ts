@@ -1,3 +1,5 @@
+import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
+import { ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -18,11 +20,12 @@ import type {
 	ListMemoryInput,
 	ListMemoryOutput,
 	MemoryEntry,
+	MemoryEntryId,
 	ProposeMemoryChangeInput,
 	ProposeMemoryChangeOutput,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	MemoryChanges,
 	MemoryEntryCreator,
@@ -148,7 +151,13 @@ export class Memory implements MemoryController {
 		input: CreateMemoryEntryInput
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const entry = await this.dependencies.memoryCreator.create(actor, input);
+			const decision = decideMemoryCreation(input, {
+				id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
+				userId: actor.userId,
+				timestamp: new Date().toISOString() as DateTime
+			});
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const entry = await this.dependencies.memoryCreator.create(actor, decision.entry);
 			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
 			return { entry };
 		});
@@ -159,7 +168,10 @@ export class Memory implements MemoryController {
 		input: UpdateMemoryEntryInput
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const entry = await this.dependencies.memoryEditor.update(actor, input);
+			const current = await this.dependencies.memoryEditor.getForEdit(actor, input.memoryEntryId);
+			const decision = decideMemoryEdit(current, input, new Date().toISOString() as DateTime);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const entry = await this.dependencies.memoryEditor.update(actor, decision.entry);
 			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
 			return { entry };
 		});
