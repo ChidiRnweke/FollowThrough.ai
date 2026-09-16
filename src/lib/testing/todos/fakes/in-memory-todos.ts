@@ -82,7 +82,8 @@ export class InMemoryTodos
 
 	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
 		const todo = this.todos.find(
-			(candidate) => candidate.id === todoId && candidate.userId === actor.userId
+			(candidate) =>
+				candidate.id === todoId && candidate.userId === actor.userId && !candidate.deletedAt
 		);
 		if (!todo) throw new NotFoundError('Todo was not found');
 		return todo;

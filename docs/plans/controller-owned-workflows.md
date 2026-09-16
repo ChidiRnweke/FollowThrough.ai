@@ -595,6 +595,12 @@ performs the edit through the real controller and catalog before checking the re
 origin, instead of reading a fixture that never had a linked note. Task creation and edit rules
 remain open.
 
+Deleted task access: PostgreSQL identity reads returned deleted tasks, unlike the repository fake.
+A stale total-record update also wrote deletedAt back to NULL and restored the task. Identity reads
+and updates now require an active task. The shared fakes enforce the same condition. Both real
+PostgreSQL regressions fail before this fix: the stale write reports success, changes the title and
+clears deletion. The guarded write must leave the original title and deletion time intact.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
