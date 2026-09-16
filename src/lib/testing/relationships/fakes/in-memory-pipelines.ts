@@ -2,7 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { RelationshipClassification } from '$lib/models/relationships';
 import type { PipelineKind } from '$lib/models/agent';
 import type { PromiseCandidate } from '$lib/models/todos';
-import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
+import { provenanceSchema, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
 import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
@@ -117,9 +117,8 @@ export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotP
 	records: Provenance[] = [];
 
 	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
-		// Built through the model's own parser, exactly as production is, so the
-		// fake cannot hold a record production could never produce.
-		const provenance = asProvenance(input, {
+		const provenance = provenanceSchema.parse({
+			...input,
 			id: testProvenanceId(this.records.length + 1),
 			userId: actor.userId,
 			createdAt: testNow

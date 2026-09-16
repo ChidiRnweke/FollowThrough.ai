@@ -86,7 +86,7 @@ write(
 		(row) => row.item
 	)
 );
-// Aliased to the domain field names so the corpus feeds `parseProvenance`
+// Aliased to the domain field names so the corpus feeds `provenanceSchema`
 // directly, the same way `toProvenance` does. Nulls are dropped for the same
 // reason the mapper drops them: an absent optional is absent, not null.
 write(
