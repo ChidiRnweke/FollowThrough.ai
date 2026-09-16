@@ -3,7 +3,7 @@ import type { RelationshipClassification } from '$lib/models/relationships';
 import type { PipelineKind } from '$lib/models/agent';
 import type { PromiseCandidate } from '$lib/models/todos';
 import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
-import type { ReferenceCandidate } from '$lib/models/references';
+import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
 import type { StructuredRelationshipClient } from '$lib/server/services/relationships/contracts';
@@ -15,7 +15,6 @@ import type {
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
 	ReferenceFinder,
-	ReferenceRanker,
 	ReferenceSearchOptions,
 	WebReferenceClient
 } from '$lib/server/services/references/contracts';
@@ -73,9 +72,12 @@ export class InMemoryStructuredRelationshipClient implements StructuredRelations
 	}
 }
 
-export class InMemoryReferencePipeline implements ReferenceFinder, ReferenceRanker {
+export class InMemoryReferencePipeline implements ReferenceFinder {
 	candidates: ReferenceCandidate[] = [];
 	model?: string;
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly modelCandidates = new Map<string, readonly ReferenceCandidate[]>();
 	async find(
 		_actor: ActorContext,
 		_selection: TextSelection,
@@ -84,28 +86,20 @@ export class InMemoryReferencePipeline implements ReferenceFinder, ReferenceRank
 		void _actor;
 		void _selection;
 		this.model = options.model;
-		return this.candidates;
-	}
-	async rank(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		candidates: readonly ReferenceCandidate[]
-	): Promise<readonly ReferenceCandidate[]> {
-		const weight = { official: 0, standard: 1, vendor: 2, community: 3 };
-		return [...candidates].sort(
-			(a, b) => weight[a.tier] - weight[b.tier] || b.confidence - a.confidence
-		);
+		this.started.resolve();
+		await this.completion;
+		return (options.model ? this.modelCandidates.get(options.model) : undefined) ?? this.candidates;
 	}
 }
 
 export class InMemoryWebReferenceClient implements WebReferenceClient {
-	result?: readonly ReferenceCandidate[];
+	result?: readonly ReferenceSource[];
 	failure?: Error;
 	model?: string;
 	async search(
 		_selectionText: string,
 		options: ReferenceSearchOptions = {}
-	): Promise<readonly ReferenceCandidate[] | undefined> {
+	): Promise<readonly ReferenceSource[] | undefined> {
 		void _selectionText;
 		this.model = options.model;
 		if (this.failure) throw this.failure;

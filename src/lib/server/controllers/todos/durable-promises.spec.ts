@@ -13,11 +13,10 @@ const prepare = async (generation: PromiseGeneration = { kind: 'model', model: '
 		{ action: 'Send it', responsibility: 'mine', strength: 'explicit', confidence: 95 }
 	];
 	const receipt = await state.transactions.run(() =>
-		state.requests.prepare(
-			testActor(),
-			{ requestId: crypto.randomUUID(), selection: promiseSelection },
-			generation
-		)
+		state.requests.prepare(testActor(), {
+			requestId: crypto.randomUUID(),
+			context: { kind: 'promise_extraction', selection: promiseSelection, generation }
+		})
 	);
 	return { ...state, receipt };
 };
@@ -51,14 +50,14 @@ it('resolves tomorrow against the stored request date after queued recovery', as
 	const text = 'I will send it tomorrow.';
 	state.content.notes[0] = { ...state.content.notes[0], plainText: text };
 	const receipt = await state.transactions.run(() =>
-		state.requests.prepare(
-			testActor(),
-			{
-				requestId: crypto.randomUUID(),
+		state.requests.prepare(testActor(), {
+			requestId: crypto.randomUUID(),
+			context: {
+				kind: 'promise_extraction',
+				generation: { kind: 'rules' },
 				selection: { ...promiseSelection, to: text.length, text }
-			},
-			{ kind: 'rules' }
-		)
+			}
+		})
 	);
 	const submittedAt = '2026-09-01T10:00:00.000Z' as DateTime;
 	state.runs.runs[0] = { ...state.runs.runs[0], createdAt: submittedAt, updatedAt: submittedAt };

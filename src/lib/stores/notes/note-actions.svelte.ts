@@ -1,5 +1,5 @@
 import type { AgentRunReceipt } from '$lib/models/agent';
-import { PromiseSubmissions } from '$lib/client/notes/promise-submissions';
+import { SelectionSubmissions } from '$lib/client/notes/selection-submissions';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import type { DrawioDiagram } from '$lib/models/diagrams';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -40,7 +40,7 @@ class NoteActionsStore {
 			const session = workspaceSession.current;
 			if (!session) throw new Error('The workspace is not ready to extract promises');
 			const accountId = session.bootstrap.accountId;
-			const submissions = new PromiseSubmissions(sessionStorage);
+			const submissions = new SelectionSubmissions(sessionStorage, 'promises');
 			const input = submissions.prepare(accountId, selection);
 			const receipt = await extractPromises(input);
 			submissions.acknowledge(accountId, input.requestId);
@@ -51,7 +51,16 @@ class NoteActionsStore {
 		return this.call<AgentRunReceipt>(() => relateNote({ selection }));
 	}
 	findReferences(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => findReferences({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to search for references');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new SelectionSubmissions(sessionStorage, 'reference');
+			const input = submissions.prepare(accountId, selection);
+			const receipt = await findReferences(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	generateDiagram(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
 		return this.call<AgentRunReceipt>(() => generateDiagram({ selection }));

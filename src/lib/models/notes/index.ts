@@ -44,6 +44,29 @@ export interface TextSelection {
 	readonly text: string;
 }
 
+export interface SelectionSubmission {
+	readonly requestId: string;
+	readonly selection: TextSelection;
+}
+
+export const selectionSubmissionSchema = z
+	.object({
+		requestId: z.string().uuid(),
+		selection: z
+			.object({
+				noteId: z
+					.string()
+					.uuid()
+					.transform((value) => value as NoteId),
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+	})
+	.strict() satisfies z.ZodType<SelectionSubmission>;
+
 export type NoteKind = 'folder' | 'note' | 'skill';
 
 type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';

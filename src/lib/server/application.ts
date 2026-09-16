@@ -308,7 +308,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			markdownToContent: deliverables.markdownToContent,
 			exportPreparer: deliverables.prepareExport,
 			pdfGenerator: deliverables.pdfGenerator,
-			promiseRequests: agentCapability.promiseRequests,
+			selectionRequests: agentCapability.selectionRequests,
 			runSettlements,
 			runEvents: eventBus,
 			promiseGeneration: todoCapability.promiseGeneration,
@@ -327,10 +327,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		references: {
 			selectionOrigins: noteCapability.selectionOrigins,
 			referenceFinder,
-			referenceRanker: references,
+			referenceRanker: referenceCapability.ranking,
 			suggestionCreator: suggestions,
 			transactionRunner,
-			workflowRunner: agentCapability.workflowRunner
+			selectionRequests: agentCapability.selectionRequests,
+			runSettlements,
+			runEvents: eventBus,
+			referenceModel: referenceCapability.model
 		},
 		diagrams: {
 			diagramSourceNotes: notes,
@@ -620,7 +623,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		controllers: controllerFactory,
 		recoverInterruptedRuns: async () => {
 			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
-			return interrupted + (await controllerFactory.todos().recoverQueuedPromiseRuns());
+			return (
+				interrupted +
+				(await controllerFactory.todos().recoverQueuedPromiseRuns()) +
+				(await controllerFactory.references().recoverQueuedReferenceRuns())
+			);
 		},
 		backgroundTasks: [
 			knowledgeSearch.maintenance,

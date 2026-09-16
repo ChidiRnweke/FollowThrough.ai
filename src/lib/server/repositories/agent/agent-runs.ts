@@ -13,7 +13,8 @@ import type {
 import type { ResolvedAgentRun } from '$lib/models/agent';
 import type { WorkflowAgentRun } from '$lib/models/agent';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
-import type { TodoSuggestion } from '$lib/models/suggestions';
+import type { TodoSuggestion, ReferenceSuggestion } from '$lib/models/suggestions';
+import type { FindReferencesOutput } from '$lib/models/references';
 import type { DateTime } from '$lib/models/workspace';
 
 /** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
@@ -56,10 +57,14 @@ export interface AgentRunRepository {
 }
 
 /** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */
+export type SelectionActionResult =
+	| { readonly action: 'promises'; readonly result: ExtractPromisesOutput<TodoSuggestion> }
+	| { readonly action: 'reference'; readonly result: FindReferencesOutput<ReferenceSuggestion> };
+
 export interface AgentRunEventRepository {
-	appendPromiseResult(
+	appendSelectionResult(
 		runId: AgentRunId,
-		result: ExtractPromisesOutput<TodoSuggestion>
+		result: SelectionActionResult
 	): Promise<AgentRunEventRecord>;
 	append(runId: AgentRunId, attempt: number, event: AgentEvent): Promise<AgentRunEventRecord>;
 	replay(

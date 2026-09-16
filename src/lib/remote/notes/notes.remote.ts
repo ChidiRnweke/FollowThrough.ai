@@ -3,6 +3,7 @@ import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import { startExtractPromisesSchema } from '$lib/models/todos';
+import { startFindReferencesSchema } from '$lib/models/references';
 import type {
 	ConvertInlineMermaidInput,
 	GenerateMermaidDiagramInput,
@@ -75,7 +76,7 @@ export const relateNote = command(z.object({ selection: textSelection }), async 
 		.startSuggestFromSelection(requestActor(), input as RelateSelectionInput);
 });
 
-export const findReferences = command(z.object({ selection: textSelection }), async (input) => {
+export const findReferences = command(startFindReferencesSchema, async (input) => {
 	return AppFactory.controllers().references().startSuggestFromSelection(requestActor(), input);
 });
 

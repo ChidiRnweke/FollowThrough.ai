@@ -4,7 +4,7 @@ import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-s
 import { AgentRunEventRecords } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { PromiseRequests } from '$lib/server/services/agent/runs/promise-requests';
+import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { context, seedNote, now } from '../database-harness';
 
@@ -52,10 +52,11 @@ it('selects queued chat runs without selecting running chats or queued note acti
 		const running = await queuedChat();
 		await runs.transitionAgent(running.id, 'queued', 'running', { startedAt: now });
 		await transactionRunner.run(() =>
-			new PromiseRequests(runs, events, conversations).prepare(
-				owner,
-				{
-					requestId: crypto.randomUUID(),
+			new SelectionRequests(runs, events, conversations).prepare(owner, {
+				requestId: crypto.randomUUID(),
+				context: {
+					kind: 'promise_extraction',
+					generation: { kind: 'rules' },
 					selection: {
 						noteId: note.id,
 						revision: note.currentRevision,
@@ -63,9 +64,8 @@ it('selects queued chat runs without selecting running chats or queued note acti
 						to: note.plainText.length,
 						text: note.plainText
 					}
-				},
-				{ kind: 'rules' }
-			)
+				}
+			})
 		);
 		expect(
 			(await runs.listQueuedAgents())

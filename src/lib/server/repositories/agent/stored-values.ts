@@ -1,17 +1,14 @@
 import { z } from 'zod';
 import { readAgentPayload } from '$lib/models/agent/payload';
 import type { AgentEvent } from '$lib/models/agent';
-import type { ExtractPromisesOutput } from '$lib/models/todos';
-import type { TodoSuggestion } from '$lib/models/suggestions';
+import type { SelectionActionResult } from './agent-runs';
 
 /** The storage boundary serializes the resolved domain result into the event protocol. */
-export const promiseExtractionEvent = (
-	result: ExtractPromisesOutput<TodoSuggestion>
-): AgentEvent => {
-	const parsed = readAgentPayload(result);
+export const selectionActionEvent = (result: SelectionActionResult): AgentEvent => {
+	const parsed = readAgentPayload(result.result);
 	if (parsed.kind === 'corrupt')
-		throw new Error(`Promise extraction result cannot be stored: ${parsed.message}`);
-	return { type: 'workflow_result', action: 'promises', result: parsed.value };
+		throw new Error(`Note action result cannot be stored: ${parsed.message}`);
+	return { type: 'workflow_result', action: result.action, result: parsed.value };
 };
 import {
 	pendingDecisionIdentitySchema,

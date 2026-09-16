@@ -429,8 +429,21 @@ export interface PromiseExtractionRunContext {
 	readonly responsibility?: 'mine' | 'waiting_on';
 }
 
+export interface ReferenceSearchRunContext {
+	readonly kind: 'reference_search';
+	readonly model: string;
+	readonly selection: TextSelection;
+}
+
+export type SelectionActionRunContext = PromiseExtractionRunContext | ReferenceSearchRunContext;
+
+export interface SelectionActionRequest {
+	readonly requestId: string;
+	readonly context: SelectionActionRunContext;
+}
+
 export type WorkflowRunContext =
-	| PromiseExtractionRunContext
+	| SelectionActionRunContext
 	| { readonly kind: 'note_action'; readonly action: NoteActionKind; readonly noteId: NoteId }
 	| {
 			readonly kind: 'diagram';
@@ -1619,6 +1632,13 @@ const preparedDiagramRunContextSchema = z
 	.strict();
 
 export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
+	z
+		.object({
+			kind: z.literal('reference_search'),
+			model: z.string().min(1),
+			selection: textSelectionSchema
+		})
+		.strict(),
 	z
 		.object({
 			kind: z.literal('promise_extraction'),

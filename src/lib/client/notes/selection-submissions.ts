@@ -1,11 +1,17 @@
-import { startExtractPromisesSchema, type StartExtractPromisesInput } from '$lib/models/todos';
-import type { TextSelection } from '$lib/models/notes';
+import {
+	selectionSubmissionSchema,
+	type SelectionSubmission,
+	type TextSelection
+} from '$lib/models/notes';
 
 /** Retains an uncertain submission across a refresh, independently for each signed-in account. */
-export class PromiseSubmissions {
-	constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) {}
+export class SelectionSubmissions {
+	constructor(
+		private readonly storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
+		private readonly action: 'promises' | 'reference'
+	) {}
 
-	prepare(accountId: string, selection: TextSelection): StartExtractPromisesInput {
+	prepare(accountId: string, selection: TextSelection): SelectionSubmission {
 		const requests = this.read(accountId);
 		const existing = requests.find((request) => {
 			const previous = request.selection;
@@ -29,12 +35,13 @@ export class PromiseSubmissions {
 		else this.storage.removeItem(this.key(accountId));
 	}
 
-	private read(accountId: string): readonly StartExtractPromisesInput[] {
+	private read(accountId: string): readonly SelectionSubmission[] {
 		const value = this.storage.getItem(this.key(accountId));
-		return value === null ? [] : startExtractPromisesSchema.array().parse(JSON.parse(value));
+		return value === null ? [] : selectionSubmissionSchema.array().parse(JSON.parse(value));
 	}
 
 	private key(accountId: string): string {
-		return `followthrough.notes.promise-submissions.${accountId}`;
+		const action = this.action === 'promises' ? 'promise' : 'reference';
+		return `followthrough.notes.${action}-submissions.${accountId}`;
 	}
 }
