@@ -1,7 +1,6 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	Project,
 	ProjectId,
@@ -166,26 +165,6 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 				)
 				.orderBy(asc(schema.notes.position), asc(schema.notes.createdAt))
 		).map(toNote);
-	}
-
-	async insertFolder(
-		actor: ActorContext,
-		input: CreateFolderInput,
-		position: number
-	): Promise<Note> {
-		const [row] = await this.database
-			.insert(schema.notes)
-			.values({
-				...(input.id !== undefined ? { id: input.id } : {}),
-				userId: actor.userId,
-				projectId: input.projectId,
-				parentId: input.parentId,
-				kind: 'folder',
-				position,
-				title: input.name
-			})
-			.returning();
-		return toNote(row!);
 	}
 
 	async persistOrder(

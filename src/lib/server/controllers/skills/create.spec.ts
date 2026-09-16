@@ -26,7 +26,7 @@ const setup = () => {
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			skillCreator: skills,
-			noteCreator: notes,
+			noteCreation: notes,
 			transactionRunner: new InMemoryTransactionRunner([skills])
 		})
 	);

@@ -93,8 +93,8 @@ describe('imported note identities and write consequences', () => {
 		});
 	});
 	it('reports a failed parent folder and its blocked descendants while keeping independent branches', async () => {
-		const { run, records, projects } = importedNotesFixture();
-		projects.folderFailures.add('broken');
+		const { run, records } = importedNotesFixture();
+		records.insertFailures.add('broken');
 		const result = await run({
 			'broken/a.md': 'A',
 			'broken/child/b.md': 'B',
@@ -110,8 +110,8 @@ describe('imported note identities and write consequences', () => {
 		});
 	});
 	it('does not resolve a duplicate bare title merely because one folder failed', async () => {
-		const { run, projects } = importedNotesFixture();
-		projects.folderFailures.add('broken');
+		const { run, records } = importedNotesFixture();
+		records.insertFailures.add('broken');
 		const result = await run({
 			'broken/report.md': 'A',
 			'good/report.md': 'B',

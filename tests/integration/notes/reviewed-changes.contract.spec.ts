@@ -1,3 +1,4 @@
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, it, expect } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -20,8 +21,8 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 	const consequences = new InMemoryNoteContent();
 	const note =
 		target === 'skill'
-			? await catalog.create(seeded.owner, {
-					documentKind: 'skill',
+			? await storedNote(catalog, seeded.owner, {
+					kind: 'skill',
 					title: 'Release checklist',
 					projectId: seeded.project.id
 				})

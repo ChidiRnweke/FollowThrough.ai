@@ -1,7 +1,6 @@
 import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	MoveProjectEntryInput,
 	Project,
@@ -10,10 +9,9 @@ import type {
 	RenameProjectInput,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
-import type { Note, NoteId } from '$lib/models/notes';
+import type { Note } from '$lib/models/notes';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
-	FolderCreator,
 	ProjectCreator,
 	ProjectEditor,
 	ProjectEntryMover,
@@ -22,9 +20,7 @@ import type {
 	ProjectTreeReader
 } from '$lib/server/services/projects/contracts';
 import {
-	noteBuilder,
 	projectBuilder,
-	testNoteId,
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -36,13 +32,11 @@ export class InMemoryProjects
 		ProjectLister,
 		ProjectEditor,
 		ProjectTreeReader,
-		FolderCreator,
 		ProjectEntryMover
 {
 	projects: Project[] = [];
 	entries: Note[] = [];
 	private nextProject = 100;
-	private nextEntry = 100;
 
 	async create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project> {
 		const name = input.name;
@@ -124,30 +118,6 @@ export class InMemoryProjects
 		return entries;
 	}
 
-	async createFolder(actor: ActorContext, input: CreateFolderInput): Promise<Note> {
-		await this.get(actor, input.projectId);
-		const name = input.name.trim();
-		if (!name) throw new ValidationError('Folder name is required');
-		if (input.parentId) {
-			const parent = this.requireEntry(actor, input.projectId, input.parentId);
-			if (parent.kind !== 'folder') throw new ValidationError('A parent must be a folder');
-		}
-		const position = this.entries.filter(
-			(entry) => entry.projectId === input.projectId && entry.parentId === input.parentId
-		).length;
-		const folder = noteBuilder({
-			id: input.id ?? testNoteId(this.nextEntry++),
-			userId: actor.userId,
-			projectId: input.projectId,
-			kind: 'folder',
-			position,
-			title: name,
-			...(input.parentId ? { parentId: input.parentId } : {})
-		});
-		this.entries.push(folder);
-		return folder;
-	}
-
 	async move(actor: ActorContext, input: MoveProjectEntryInput): Promise<Note> {
 		const decision = decideProjectEntryMove(input, await this.readEntries(actor, input.projectId));
 		if (decision.kind === 'invalid') {
@@ -160,17 +130,6 @@ export class InMemoryProjects
 			return change ? { ...entry, parentId: change.parentId, position: change.position } : entry;
 		});
 		return { ...decision.entry, parentId: decision.parentId, position: decision.position };
-	}
-
-	private requireEntry(actor: ActorContext, projectId: ProjectId, entryId: NoteId): Note {
-		const entry = this.entries.find(
-			(candidate) =>
-				candidate.id === entryId &&
-				candidate.projectId === projectId &&
-				candidate.userId === actor.userId
-		);
-		if (!entry) throw new NotFoundError('Project entry was not found');
-		return entry;
 	}
 
 	private replaceProject(project: Project): void {

@@ -1,8 +1,11 @@
+import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { DateTime } from '$lib/models/workspace';
 import { assembleProjectTree } from '$lib/services/projects/presentation';
 import { decideProjectDetails } from '$lib/services/projects/details';
-import { ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
-import type { Note } from '$lib/models/notes';
+import type { Note, NoteId } from '$lib/models/notes';
 import type {
 	ProjectMutationRequest,
 	WorkspaceMutationResult
@@ -27,7 +30,6 @@ import type {
 	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
 import type {
-	FolderCreator,
 	ProjectCreator,
 	ProjectEditor,
 	ProjectEntryMover,
@@ -73,7 +75,7 @@ export interface ProjectsDependencies {
 	projectLister: ProjectLister;
 	projectEditor: ProjectEditor;
 	projectTreeReader: ProjectTreeReader;
-	folderCreator: FolderCreator;
+	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
 	entryMover: ProjectEntryMover;
 	transactionRunner: TransactionRunner;
 }
@@ -180,7 +182,22 @@ export class Projects implements ProjectsController {
 		actor: ActorContext,
 		input: CreateFolderInput
 	): Promise<CreateFolderOutput<Note>> {
-		return { folder: await this.dependencies.folderCreator.createFolder(actor, input) };
+		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+		const decision = decideNoteCreation(
+			{
+				id: input.id ?? (crypto.randomUUID() as NoteId),
+				title: input.name,
+				parentId: input.parentId,
+				kind: 'folder'
+			},
+			facts,
+			new Date().toISOString() as DateTime
+		);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+			throw new ValidationError(decision.message);
+		}
+		return { folder: await this.dependencies.noteCreation.insert(actor, decision.note) };
 	}
 
 	async move(

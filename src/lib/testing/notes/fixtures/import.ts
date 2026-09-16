@@ -1,7 +1,6 @@
 import AdmZip from 'adm-zip';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
@@ -37,15 +36,13 @@ export const importedNotesFixture = () => {
 	projects.projects = [projectBuilder()];
 	const catalog = new NoteCatalog(records, new InMemoryAnchorRepository(), projects);
 	const consequences = new InMemoryNoteContent();
-	const folders = new ProjectCatalog(projects, projects);
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteCreator: catalog,
+			noteCreation: catalog,
 			noteEditor: catalog,
 			anchorRepairer: catalog,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences,
-			folderCreator: folders,
 			markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
 			transactionRunner: new InMemoryTransactionRunner([records, consequences])
 		})
@@ -59,5 +56,5 @@ export const importedNotesFixture = () => {
 			skipped: archive.result.skipped
 		});
 	};
-	return { records, projects, consequences, controller, folders, run };
+	return { records, projects, consequences, controller, run };
 };

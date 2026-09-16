@@ -1,6 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	MoveProjectEntryInput,
 	Project,
@@ -34,10 +33,6 @@ export interface ProjectEditor {
 
 export interface ProjectTreeReader {
 	readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
-}
-
-export interface FolderCreator {
-	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<Note>;
 }
 
 export interface ProjectEntryMover {

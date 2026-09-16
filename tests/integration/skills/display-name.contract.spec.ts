@@ -1,3 +1,4 @@
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -40,8 +41,8 @@ const setup = async (suffix: string) => {
 			noteIndexer: content
 		})
 	);
-	const note = await catalog.create(owner, {
-		documentKind: 'skill',
+	const note = await storedNote(catalog, owner, {
+		kind: 'skill',
 		projectId: project.id,
 		title: 'Release checklist'
 	});

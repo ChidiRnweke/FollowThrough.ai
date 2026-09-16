@@ -1,3 +1,6 @@
+import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { DateTime } from '$lib/models/workspace';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import { serializeSkillManifest, validatePortableSkill } from '$lib/services/skills/manifest';
@@ -5,9 +8,9 @@ import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import type { SkillEditInput } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import type { Note } from '$lib/models/notes';
+import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/models/notes';
-import { NotFoundError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
 import type {
 	SkillMutationRequest,
@@ -30,7 +33,6 @@ import type { NoteRevision } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
-	NoteCreator,
 	NoteEditor,
 	NoteRevisionReader,
 	NoteRevisionRecorder,
@@ -115,7 +117,7 @@ export interface SkillsDependencies {
 	skillEditor: SkillEditor;
 	selectionOrigins: SelectionOriginService;
 	skillCreator: SkillCreator;
-	noteCreator: NoteCreator;
+	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {
@@ -179,10 +181,28 @@ export class Skills implements SkillsController {
 			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
 		};
 	}
+	private async createSkillNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
+		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+		const decision = decideNoteCreation(
+			{
+				id: input.id ?? (crypto.randomUUID() as NoteId),
+				title: input.title,
+				parentId: input.parentId,
+				kind: 'skill'
+			},
+			facts,
+			new Date().toISOString() as DateTime
+		);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+			throw new ValidationError(decision.message);
+		}
+		return this.dependencies.noteCreation.insert(actor, decision.note);
+	}
+
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteCreator.create(actor, {
-				documentKind: 'skill',
+			const note = await this.createSkillNote(actor, {
 				id: input.id,
 				title: input.name,
 				projectId: input.projectId,
@@ -207,8 +227,7 @@ export class Skills implements SkillsController {
 				producerName: 'Create Skill From Selection',
 				metadata: {}
 			});
-			const created = await this.dependencies.noteCreator.create(actor, {
-				documentKind: 'skill',
+			const created = await this.createSkillNote(actor, {
 				title: input.name,
 				projectId: source.note.projectId,
 				parentId: source.note.parentId

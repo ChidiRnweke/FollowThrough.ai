@@ -34,7 +34,7 @@ const setup = async (suffix: string) => {
 			noteArchiver: catalog,
 			noteEditor: catalog,
 			noteSectionNumbering: catalog,
-			noteCreator: catalog,
+			noteCreation: catalog,
 			notePublisher: catalog,
 			revisionRecorder: catalog,
 			noteIndexer: content,

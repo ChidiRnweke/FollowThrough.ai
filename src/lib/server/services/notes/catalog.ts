@@ -1,13 +1,9 @@
 import { decideRevisionWrite } from '$lib/models/revisions';
-import {
-	sameNoteDraft,
-	decideNoteCreation,
-	decideNoteArchive,
-	decideNoteRestore
-} from '$lib/models/notes';
+import { sameNoteDraft, decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
+	NoteCreationFacts,
 	Note,
 	NoteId,
 	NoteRevision,
@@ -322,30 +318,21 @@ export class NoteCatalog {
 		return repaired;
 	}
 
-	async create(
+	async creationFacts(
 		actor: ActorContext,
-		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
-	): Promise<Note> {
+		input: Pick<CreateNoteInput, 'projectId' | 'parentId'>
+	): Promise<NoteCreationFacts> {
 		const project = await this.resolveProject(actor, input.projectId);
-		const parent = input.parentId ? await this.notes.findById(actor, input.parentId) : undefined;
-		const decision = decideNoteCreation(
-			{
-				...input,
-				id: input.id ?? (crypto.randomUUID() as NoteId),
-				kind: input.documentKind ?? 'note'
-			},
-			{
-				project,
-				parent: parent ?? null,
-				siblingCount: await this.notes.countSiblings(actor, project.id, input.parentId)
-			},
-			now()
-		);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return this.notes.insert(actor, decision.note);
+		return {
+			project,
+			parent: input.parentId ? ((await this.notes.findById(actor, input.parentId)) ?? null) : null,
+			siblingCount: await this.notes.countSiblings(actor, project.id, input.parentId)
+		};
+	}
+
+	async insert(actor: ActorContext, note: Note): Promise<Note> {
+		if (note.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s note');
+		return this.notes.insert(actor, note);
 	}
 
 	/**

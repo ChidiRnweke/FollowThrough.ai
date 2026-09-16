@@ -1,3 +1,4 @@
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import type { SkillUsageId } from '$lib/models/skills';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -10,8 +11,8 @@ const seedSkillNote = async (suffix: string) => {
 		db: context.db,
 		projects: new ProjectRecords(context.db)
 	});
-	const note = await catalog.create(seeded.owner, {
-		documentKind: 'skill',
+	const note = await storedNote(catalog, seeded.owner, {
+		kind: 'skill',
 		projectId: seeded.project.id,
 		title: 'Contract skill'
 	});

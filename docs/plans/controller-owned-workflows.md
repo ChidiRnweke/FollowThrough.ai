@@ -579,6 +579,15 @@ verification. That read resolved on request success while its transaction was st
 now waits for transaction completion before closing the connection and allowing database cleanup.
 The corrupt row remains the asserted result; the production storage contract is unchanged.
 
+Note, folder and skill creation ownership: Notes, Projects and Skills each coordinate resolved
+creation facts, the shared creation rule and canonical note persistence. Archive import uses the
+Notes controller’s creation path. No service calls another service and no controller chains another.
+ProjectCatalog and ProjectRecords no longer contain a second
+folder creation path. Offline commands use the same shared rule. All document kinds count stored
+siblings, including archived entries; new folders previously counted only active siblings. The
+controller and offline tests cover the resulting consistent position. Creation project checks and
+client-assigned identity tests move with their owner. Other note lifecycle rules remain open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
