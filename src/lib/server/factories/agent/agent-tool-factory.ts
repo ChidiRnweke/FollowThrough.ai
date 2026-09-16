@@ -41,7 +41,7 @@ import {
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
 import type { NoteEtag, NoteId, NoteRevisionId, TextSelection } from '$lib/models/notes';
-import type { TodoId } from '$lib/models/todos';
+import { createTodoBatchSchema, type TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
@@ -269,7 +269,8 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Board export is a user download; the agent reads todos through list.'
 		},
-		create: { kind: 'mutation', tools: ['create_todo', 'create_todos'] },
+		create: { kind: 'mutation', tools: ['create_todo'] },
+		createBatch: { kind: 'mutation', tools: ['create_todos'] },
 		update: { kind: 'mutation', tools: ['update_todo'] },
 		remove: {
 			kind: 'excluded',
@@ -1793,34 +1794,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'create_todos',
 			toolDescription('create_todos'),
 			'mutation',
-			z.object({
-				projectId: projectId,
-				todos: z
-					.array(
-						z.object({
-							title: z.string().min(1),
-							description: z.string().optional(),
-							responsibility: z.enum(['mine', 'waiting_on']),
-							waitingOn: z.string().optional(),
-							dueDate: localDate.optional()
-						})
-					)
-					.min(1)
-					.max(20)
-			}),
-			async (input) => {
-				const created = [];
-				for (const todo of input.todos) {
-					const { dueDate, ...fields } = todo;
-					const result = await factory.todos().create(actor, {
-						...fields,
-						projectId: input.projectId,
-						...(dueDate ? { dueDate } : {})
-					});
-					created.push(projectTodoWrite(result.todo));
-				}
-				return { todos: created };
-			}
+			createTodoBatchSchema,
+			async (input) => ({
+				todos: (await factory.todos().createBatch(actor, input)).todos.map(projectTodoWrite)
+			})
 		),
 		update_todo: define(
 			'update_todo',

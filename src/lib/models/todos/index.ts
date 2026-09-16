@@ -1,4 +1,5 @@
 import type { Provenance } from '$lib/models/provenance';
+import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -84,6 +85,41 @@ export interface CreateTodoInput {
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly provenanceId?: ProvenanceId;
 }
+
+const batchProjectId = z.uuid().transform((value) => value as ProjectId);
+const batchLocalDate = z.iso.date().transform((value) => value as LocalDate);
+export const createTodoBatchSchema = z
+	.object({
+		requestId: z
+			.uuid()
+			.describe(
+				'A unique ID for this batch. Reuse it with identical input after an uncertain outcome.'
+			),
+		projectId: batchProjectId,
+		todos: z
+			.array(
+				z
+					.object({
+						title: z.string().trim().min(1),
+						description: z.string().optional(),
+						responsibility: z.enum(['mine', 'waiting_on']),
+						waitingOn: z.string().optional(),
+						dueDate: batchLocalDate.optional()
+					})
+					.strict()
+			)
+			.min(1)
+			.max(20)
+	})
+	.strict();
+export type CreateTodoBatchInput = z.infer<typeof createTodoBatchSchema>;
+export interface CreateTodoBatchOutput {
+	readonly todos: readonly Todo[];
+}
+export type TodoBatchLookup =
+	| { readonly kind: 'missing' }
+	| { readonly kind: 'reused' }
+	| { readonly kind: 'saved'; readonly result: CreateTodoBatchOutput };
 
 /** One commitment found by the extractor before it becomes a suggestion. `strength` (explicit/implied/tentative) drives the badge shown in the review UI. */
 export interface PromiseCandidate {
