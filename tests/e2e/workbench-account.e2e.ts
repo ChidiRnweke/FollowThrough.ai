@@ -22,6 +22,10 @@ test('restores each account’s saved tabs after switching accounts on the same 
 	const firstToken = (await context.cookies()).find((cookie) => cookie.name === 'session')?.value;
 	if (!firstToken) throw new Error('The first account session is required');
 	const changeAccount = async (account: string, token: string) => {
+		// End the old page before changing its account binding. Its account guard
+		// otherwise reloads concurrently with the next explicit test navigation.
+		// The browser context retains both accounts' storage across this navigation.
+		await page.goto('about:blank');
 		await context.addCookies([
 			{
 				name: 'session',
