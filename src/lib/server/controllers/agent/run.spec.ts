@@ -1,13 +1,8 @@
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentDependencies } from './controller';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { isTerminalAgentRunStatus, type PendingAgentDecision } from '$lib/models/agent';
+import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
 import type { AgentRunId, ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
-import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
-import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { assistantItem, userItem } from '$lib/testing/agent/session-items';
 import {
 	appContextBuilder,
@@ -15,83 +10,43 @@ import {
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { Agent } from './controller';
-import type { AgentRunExecutor } from '$lib/server/services/agent/runs/execution-contracts';
 
-const noopExecutor = capabilityDependencies<AgentRunExecutor>({
-	execute: async () => 'completed',
-	finishCancellation: async () => undefined
+const activeFixtures: ReturnType<typeof agentSubmissionFixture>[] = [];
+const setup = (phase: Parameters<typeof agentSubmissionFixture>[0] = 'queued') => {
+	const fixture = agentSubmissionFixture(phase);
+	activeFixtures.push(fixture);
+	return fixture;
+};
+afterEach(async () => {
+	for (const fixture of activeFixtures.splice(0)) {
+		for (const run of fixture.runs.runs)
+			await fixture.controller.cancel({ userId: run.userId }, run.id);
+		fixture.release();
+		await vi.waitFor(() => {
+			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+				throw new Error('Run did not settle after fixture cleanup');
+		});
+	}
 });
 
-/**
- * Keeps its run registered as in-flight — `execute` never settles — so a cancel
- * finds a live abort controller the way it does mid-stream.
- */
-const streamingExecutor = () => {
-	const signals: AbortSignal[] = [];
-	let started: () => void;
-	const running = new Promise<void>((resolve) => (started = resolve));
-	return {
-		signals,
-		running,
-		make: (runs: InMemoryAgentRunPersistence) =>
-			capabilityDependencies<AgentRunExecutor>({
-				execute: async (runId: AgentRunId, signal: AbortSignal) => {
-					signals.push(signal);
-					await runs.transition(runId, 'queued', 'running');
-					started();
-					return new Promise<never>(() => {});
-				},
-				finishCancellation: async () => undefined
-			})
+const awaitingApproval = async (pendingDecisions: readonly PendingAgentDecision[]) => {
+	const fixture = setup('approval');
+	fixture.runner.outcome = {
+		type: 'approval_checkpoint',
+		serializedState: 'provider-checkpoint',
+		sessionItems: [],
+		pendingDecisions: [...pendingDecisions]
 	};
-};
-
-/**
- * Parks its run on an approval and then settles it the way the real lifecycle
- * does, for a cancel that finds nothing in flight to abort.
- */
-const parkedExecutor = (runs: InMemoryAgentRunPersistence): AgentRunExecutor =>
-	capabilityDependencies<AgentRunExecutor>({
-		execute: async () => 'awaiting_approval',
-		finishCancellation: (runId: AgentRunId) => runs.transition(runId, 'cancelling', 'cancelled')
+	const receipt = await fixture.controller.submit(testActor(), {
+		requestId: crypto.randomUUID(),
+		input: 'Review these changes'
 	});
-
-const setup = (
-	makeExecutor: (runs: InMemoryAgentRunPersistence) => AgentRunExecutor = () => noopExecutor
-) => {
-	const runs = new InMemoryAgentRunPersistence();
-	const conversations = new InMemoryConversationRepository((runId) =>
-		runs.runs.some((run) => run.id === runId)
-	);
-	const sessions = new InMemoryAgentSessionRepository();
-	const controller = new Agent(
-		capabilityDependencies<AgentDependencies>({
-			conversationJournal: new ConversationArchive(conversations),
-			preferences: {
-				get: async (actor) => ({
-					userId: actor.userId,
-					executionMode: 'approval_required',
-					inlineSuggestionsEnabled: true,
-					createdAt: '2026-01-01T00:00:00.000Z' as DateTime,
-					updatedAt: '2026-01-01T00:00:00.000Z' as DateTime
-				}),
-				update: async () => {
-					throw new Error('Unexpected preference update');
-				}
-			},
-			models: { list: async () => [], assertSelectable: async () => undefined },
-			runs,
-			events: runs,
-			decisions: runs,
-			sessions,
-			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
-			defaultModel: 'openai/test-model',
-			defaultVisionModel: 'openai/test-vision-model',
-			executor: makeExecutor(runs)
-		})
-	);
-	return { controller, conversations, runs, sessions };
+	await vi.waitFor(() => {
+		if (fixture.runs.runs[0]?.status !== 'awaiting_approval')
+			throw new Error('Approval not parked');
+	});
+	fixture.pauseExecution();
+	return { ...fixture, receipt };
 };
 
 describe('durable agent submission', () => {
@@ -249,13 +204,18 @@ describe('resubmitting an edited question', () => {
 	const settled = async (input: { requestId: string; input: string }) => {
 		const context = setup();
 		const receipt = await context.controller.submit(testActor(), input);
-		land(context.runs);
+		await land(context);
 		return { ...context, receipt };
 	};
 
 	/** Rewinding refuses to touch a live conversation, so land its runs first. */
-	const land = (runs: InMemoryAgentRunPersistence): void => {
-		runs.runs = runs.runs.map((run) => ({ ...run, status: 'completed' }));
+	const land = async (context: ReturnType<typeof agentSubmissionFixture>): Promise<void> => {
+		context.release();
+		await vi.waitFor(() => {
+			if (context.runs.runs.some((run) => run.status !== 'completed'))
+				throw new Error('Run has not completed');
+		});
+		context.pauseExecution();
 	};
 
 	it('replaces the discarded question in the transcript', async () => {
@@ -293,16 +253,17 @@ describe('resubmitting an edited question', () => {
 	});
 
 	it('leaves earlier turns in place', async () => {
-		const { controller, conversations, runs, receipt } = await settled({
+		const context = await settled({
 			requestId: '20000000-0000-4000-8000-000000000005',
 			input: 'First'
 		});
+		const { controller, conversations, receipt } = context;
 		await controller.submit(testActor(), {
 			requestId: '20000000-0000-4000-8000-000000000006',
 			conversationId: receipt.conversationId,
 			input: 'Second'
 		});
-		land(runs);
+		await land(context);
 		await controller.submit(testActor(), {
 			requestId: '20000000-0000-4000-8000-000000000007',
 			conversationId: receipt.conversationId,
@@ -358,102 +319,50 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('aborts the in-flight execution of a running run', async () => {
-		const streaming = streamingExecutor();
-		const { controller } = setup(streaming.make);
+		const { controller, runner } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-00000000000c',
 			input: 'Stop mid-stream'
 		});
-		await streaming.running;
+		await runner.started.promise;
 		await controller.cancel(testActor(), receipt.runId);
-		expect(streaming.signals.at(-1)?.aborted).toBe(true);
+		expect(runner.signals.at(-1)?.aborted).toBe(true);
 	});
 
 	it('marks a running run as cancelling while the executor settles it', async () => {
-		const streaming = streamingExecutor();
-		const { controller } = setup(streaming.make);
+		const { controller, runner } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-00000000000d',
 			input: 'Stop mid-stream'
 		});
-		await streaming.running;
+		await runner.started.promise;
 		const snapshot = await controller.cancel(testActor(), receipt.runId);
 		expect(snapshot.run.status).toBe('cancelling');
 	});
 
 	it('cancels a run parked on an approval with nothing left to abort', async () => {
-		const { controller, runs } = setup(parkedExecutor);
+		const { controller, runs } = setup('approval');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-00000000000e',
 			input: 'Park then stop'
 		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = { ...original, status: 'awaiting_approval' };
+		await vi.waitFor(() => {
+			if (runs.runs[0]?.status !== 'awaiting_approval') throw new Error('Approval not parked');
+		});
 		const snapshot = await controller.cancel(testActor(), receipt.runId);
 		expect(snapshot.run.status).toBe('cancelled');
 	});
 
 	describe('the cancellation backstop', () => {
-		const settle = async (runs: InMemoryAgentRunPersistence, runId: AgentRunId) => {
-			const settled = await runs.transition(runId, 'cancelling', 'cancelled');
-			if (settled)
-				await runs.append(runId, 1, { type: 'cancelled', runId, message: 'Generation stopped' });
-			return settled;
-		};
-
-		/**
-		 * Its `execute` hangs forever even after the abort — the hung-provider case
-		 * that used to park the row in `cancelling` for good.
-		 */
-		const hangingExecutor = () => {
-			let started: () => void;
-			const running = new Promise<void>((resolve) => (started = resolve));
-			return {
-				running,
-				make: (runs: InMemoryAgentRunPersistence) =>
-					capabilityDependencies<AgentRunExecutor>({
-						execute: async (runId: AgentRunId) => {
-							await runs.transition(runId, 'queued', 'running');
-							started();
-							return new Promise<never>(() => {});
-						},
-						finishCancellation: (runId: AgentRunId) => settle(runs, runId)
-					})
-			};
-		};
-
-		/** The well-behaved executor: the abort unwinds it and it settles itself. */
-		const settlingExecutor = () => {
-			let started: () => void;
-			const running = new Promise<void>((resolve) => (started = resolve));
-			return {
-				running,
-				make: (runs: InMemoryAgentRunPersistence) =>
-					capabilityDependencies<AgentRunExecutor>({
-						execute: async (runId: AgentRunId, signal: AbortSignal) => {
-							await runs.transition(runId, 'queued', 'running');
-							started();
-							await new Promise<void>((resolve) =>
-								signal.addEventListener('abort', () => resolve(), { once: true })
-							);
-							await settle(runs, runId);
-							return 'cancelled';
-						},
-						finishCancellation: (runId: AgentRunId) => settle(runs, runId)
-					})
-			};
-		};
-
 		it('settles the run when the executor never unwinds', async () => {
 			vi.useFakeTimers();
 			try {
-				const hanging = hangingExecutor();
-				const { controller, runs } = setup(hanging.make);
+				const { controller, runs, runner } = setup('running');
 				const receipt = await controller.submit(testActor(), {
 					requestId: '10000000-0000-4000-8000-00000000000f',
 					input: 'Hang forever'
 				});
-				await hanging.running;
+				await runner.started.promise;
 				await controller.cancel(testActor(), receipt.runId);
 				await vi.advanceTimersByTimeAsync(10_000);
 				expect(runs.runs.find((run) => run.id === receipt.runId)?.status).toBe('cancelled');
@@ -465,13 +374,12 @@ describe('durable agent lifecycle commands', () => {
 		it('appends exactly one cancelled event when the executor beats the backstop', async () => {
 			vi.useFakeTimers();
 			try {
-				const settling = settlingExecutor();
-				const { controller, runs } = setup(settling.make);
+				const { controller, runs, runner } = setup('abortable');
 				const receipt = await controller.submit(testActor(), {
 					requestId: '10000000-0000-4000-8000-000000000010',
 					input: 'Settle promptly'
 				});
-				await settling.running;
+				await runner.started.promise;
 				await controller.cancel(testActor(), receipt.runId);
 				await vi.advanceTimersByTimeAsync(10_000);
 				expect(
@@ -486,17 +394,9 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('requeues an approval decision on the same run', async () => {
-		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000007',
-			input: 'Archive it'
-		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = {
-			...original,
-			status: 'awaiting_approval',
-			pendingDecisions: [{ callId: 'call-1', toolName: 'archive_note', arguments: {} }]
-		};
+		const { controller, receipt } = await awaitingApproval([
+			{ callId: 'call-1', toolName: 'archive_note', arguments: {} }
+		]);
 		const snapshot = await controller.decide(testActor(), {
 			runId: receipt.runId,
 			callId: 'call-1',
@@ -506,20 +406,10 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('records every call in a batch decision against one requeue', async () => {
-		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000009',
-			input: 'Do both'
-		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = {
-			...original,
-			status: 'awaiting_approval',
-			pendingDecisions: [
-				{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
-				{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
-			]
-		};
+		const { controller, runs, receipt } = await awaitingApproval([
+			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
+			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
+		]);
 		await controller.decideMany(testActor(), {
 			runId: receipt.runId,
 			callIds: ['call-a', 'call-b'],
@@ -529,17 +419,9 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('records nothing when one call in a batch is not pending (1/2)', async () => {
-		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000010',
-			input: 'Do both'
-		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = {
-			...original,
-			status: 'awaiting_approval',
-			pendingDecisions: [{ callId: 'call-a', toolName: 'create_todo', arguments: {} }]
-		};
+		const { controller, receipt } = await awaitingApproval([
+			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
+		]);
 		await expect(
 			controller.decideMany(testActor(), {
 				runId: receipt.runId,
@@ -550,32 +432,27 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('records nothing when one call in a batch is not pending (2/2)', async () => {
-		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000010',
-			input: 'Do both'
-		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = {
-			...original,
-			status: 'awaiting_approval',
-			pendingDecisions: [{ callId: 'call-a', toolName: 'create_todo', arguments: {} }]
-		};
+		const { controller, runs, receipt } = await awaitingApproval([
+			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
+		]);
+		await controller
+			.decideMany(testActor(), {
+				runId: receipt.runId,
+				callIds: ['call-a', 'call-missing'],
+				decision: 'approve'
+			})
+			.catch((error) => {
+				if (!(error instanceof Error) || error.message !== 'The pending tool call was not found')
+					throw error;
+				return { kind: 'failure' };
+			});
 		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(0);
 	});
 
 	it('rejects a contradictory duplicate decision', async () => {
-		const { controller, runs } = setup();
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000008',
-			input: 'Archive it'
-		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = {
-			...original,
-			status: 'awaiting_approval',
-			pendingDecisions: [{ callId: 'call-2', toolName: 'archive_note', arguments: {} }]
-		};
+		const { controller, receipt } = await awaitingApproval([
+			{ callId: 'call-2', toolName: 'archive_note', arguments: {} }
+		]);
 		await controller.decide(testActor(), {
 			runId: receipt.runId,
 			callId: 'call-2',
@@ -591,24 +468,25 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('manual retry creates ancestry without another prompt', async () => {
-		const { controller, conversations, runs } = setup();
+		const { controller, conversations, runner } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-000000000009',
 			input: 'Try this once'
 		});
-		const original = runs.runs[0]!;
-		runs.runs[0] = { ...original, status: 'failed' };
+		await runner.started.promise;
+		await controller.failRun(receipt.runId, new Error('Provider unavailable'));
 		await controller.retry(testActor(), receipt.runId, '10000000-0000-4000-8000-000000000010');
 		expect(conversations.messages.filter((message) => message.role === 'user')).toHaveLength(1);
 	});
 
 	it('manual retry points at the failed run', async () => {
-		const { controller, runs } = setup();
+		const { controller, runs, runner } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-000000000011',
 			input: 'Try this once'
 		});
-		runs.runs[0] = { ...runs.runs[0]!, status: 'failed' };
+		await runner.started.promise;
+		await controller.failRun(receipt.runId, new Error('Provider unavailable'));
 		const retried = await controller.retry(
 			testActor(),
 			receipt.runId,

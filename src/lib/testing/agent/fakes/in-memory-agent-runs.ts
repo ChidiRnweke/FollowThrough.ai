@@ -33,6 +33,8 @@ export class InMemoryAgentRunPersistence
 		SnapshotParticipant
 {
 	runs: AgentRun[] = [];
+	/** Allows a cancellation to commit while the execution claim is waiting on storage. */
+	executionClaim: Promise<void> = Promise.resolve();
 	events: AgentRunEventRecord[] = [];
 	decisions: AgentRunDecisionRecord[] = [];
 	private cursor = 0n;
@@ -161,6 +163,7 @@ export class InMemoryAgentRunPersistence
 		to: AgentRunStatus,
 		patch: Partial<ResolvedAgentRun> = {}
 	): Promise<ResolvedAgentRun | undefined> {
+		if (from === 'queued' && to === 'running') await this.executionClaim;
 		const fromStatuses = Array.isArray(from) ? from : [from];
 		for (const status of fromStatuses) assertAgentRunTransition(status, to);
 		const run = this.runs.find(

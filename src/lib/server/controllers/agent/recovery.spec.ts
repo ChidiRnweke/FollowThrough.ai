@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId, WorkflowAgentRun } from '$lib/models/agent';
-import type { AgentRunExecutor } from '$lib/server/services/agent/runs/execution-contracts';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { RunRecovery } from './controller';
+import { Agent, type AgentDependencies } from './controller';
 
 const recover = async (status: 'running' | 'cancelling') => {
 	const runs = new InMemoryAgentRunPersistence();
@@ -26,15 +25,14 @@ const recover = async (status: 'running' | 'cancelling') => {
 	};
 	runs.runs.push(run);
 	const settlements = new RunSettlements(runs, runs);
-	await new RunRecovery(
-		runs,
-		capabilityDependencies<AgentRunExecutor>({}),
-		settlements,
-		{
-			notify: () => {}
-		},
-		new InMemoryTransactionRunner([runs])
-	).recover();
+	await new Agent(
+		capabilityDependencies<AgentDependencies>({
+			runs,
+			settlements,
+			eventBus: { notify: () => {} },
+			transactionRunner: new InMemoryTransactionRunner([runs])
+		})
+	).recoverInterruptedRuns();
 	return { status: runs.runs[0].status, events: runs.events.map((record) => record.event.type) };
 };
 describe('run recovery after restart', () => {

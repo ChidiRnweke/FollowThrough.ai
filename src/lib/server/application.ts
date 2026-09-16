@@ -201,12 +201,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		transactionRunner,
 		controllers: () => controllerFactory,
 		toolRetriever,
-		notes,
-		skills: skillCapability.library,
-		builtInSkills: skillCapability.builtIns,
-		projects,
-		memory,
-		provenance,
 		files: agentFilesCapability.repository,
 		openRouterApiKey,
 		openRouterBaseURL,
@@ -228,7 +222,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		runDecisions,
 		sessions: agentSessions,
 		context: agentContext,
-		executor,
+		runner: agentRunner,
+		settlements: runSettlements,
 		eventBus
 	} = agentCapability;
 	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
@@ -417,7 +412,17 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner,
 			defaultModel: defaultAgentModel,
 			defaultVisionModel,
-			executor
+			runner: agentRunner,
+			settlements: runSettlements,
+			eventBus,
+			contextFormatter: agentContext,
+			contextNotes: notes,
+			contextSkills: skills,
+			builtInSkills: skillCapability.builtIns,
+			contextMemory: memory,
+			contextProjects: projects,
+			contextConversations: conversationJournal,
+			provenance
 		},
 		agentSettings: {
 			syncMutations: synchronization.mutations,
@@ -609,7 +614,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
 		controllers: controllerFactory,
-		recoverInterruptedRuns: () => agentCapability.recovery.recover(),
+		recoverInterruptedRuns: () => controllerFactory.agent().recoverInterruptedRuns(),
 		backgroundTasks: [
 			knowledgeSearch.maintenance,
 			attachmentCapability.retention,

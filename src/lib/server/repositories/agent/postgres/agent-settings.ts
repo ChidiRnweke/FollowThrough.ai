@@ -23,7 +23,7 @@ import {
 	parseRunAgentInput,
 	readPendingDecisions
 } from '../stored-values';
-import { NotFoundError } from '$lib/errors';
+import { NotFoundError, StaleRevisionError } from '$lib/errors';
 import type {
 	AgentPreferencesRepository,
 	AgentRunRepository,
@@ -294,9 +294,15 @@ export class AgentRunRecords implements AgentRunRepository {
 				definitionVersion: run.definitionVersion ?? 1,
 				updatedAt: new Date(run.updatedAt)
 			})
-			.where(and(eq(schema.agentRuns.id, run.id), eq(schema.agentRuns.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.agentRuns.id, run.id),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.status, current.status)
+				)
+			)
 			.returning();
-		if (!row) throw new NotFoundError('Agent run was not found');
+		if (!row) throw new StaleRevisionError('Agent run changed while updating');
 		return toRun(row);
 	}
 
