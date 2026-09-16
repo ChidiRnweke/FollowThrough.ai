@@ -160,6 +160,43 @@ describe('The review card only offers the room a change actually needs', () => {
 });
 
 describe('Reviewed note approval controls', () => {
+	it('names the reviewed skill without downloading its current body', async () => {
+		const review = noteReviewBuilder();
+		const screen = await renderCard({
+			...pendingCall('edit_skill', {
+				noteId: review.change.noteId,
+				edits: [{ oldText: 'Monday', newText: 'Tuesday' }]
+			}),
+			status: 'approval_required',
+			noteReview: review
+		});
+		await expect.element(screen.getByText('Edit skill · Release', { exact: true })).toBeVisible();
+	});
+	it('blocks a skill approval that has no saved review', async () => {
+		const screen = await renderCard(
+			pendingCall('save_skill', { noteId: NOTE_ID, markdown: 'Tuesday' })
+		);
+		await expect
+			.element(screen.getByRole('button', { name: 'Approve', exact: true }))
+			.toBeDisabled();
+	});
+	it('keeps rejection available for a skill approval with no saved review', async () => {
+		const screen = await renderCard(
+			pendingCall('save_skill', { noteId: NOTE_ID, markdown: 'Tuesday' })
+		);
+		await expect.element(screen.getByRole('button', { name: 'Reject', exact: true })).toBeEnabled();
+	});
+	it('blocks bundle approval when a skill change has no saved review', async () => {
+		const screen = await render(ToolApprovalGroup, {
+			tools: [
+				pendingCall('save_skill', { noteId: NOTE_ID, markdown: 'Tuesday' }),
+				{ ...pendingCall('archive_note', { noteId: NOTE_ID }), callId: 'another-call' }
+			],
+			onapprove: () => {},
+			onreject: () => {}
+		});
+		await expect.element(screen.getByRole('button', { name: 'Approve all (2)' })).toBeDisabled();
+	});
 	it('names the prepared note without downloading the current note', async () => {
 		const review = noteReviewBuilder();
 		const screen = await renderCard({

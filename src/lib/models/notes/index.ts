@@ -1062,6 +1062,7 @@ export const noteChangeRequestSchema = z.discriminatedUnion('kind', [
 		.strict()
 ]);
 export type NoteChangeRequest = z.infer<typeof noteChangeRequestSchema>;
+export type NoteChangeTarget = 'authored' | 'skill';
 
 /** The content the user reviewed, independent of subsequent browser/server reads. */
 export const preparedNoteChangeSchema = z

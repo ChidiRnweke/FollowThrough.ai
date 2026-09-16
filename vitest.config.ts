@@ -142,6 +142,7 @@ export default defineConfig({
 						'src/lib/stores/agent/replay.svelte.spec.ts',
 						'src/lib/stores/agent/mention-context.svelte.spec.ts',
 						'src/lib/components/chat/workspace/mention-input.svelte.spec.ts',
+						'src/lib/components/chat/actions/tool-approval-card.svelte.spec.ts',
 						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',
 						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts',
 						'src/lib/components/notes/proofread-menu.svelte.spec.ts'
