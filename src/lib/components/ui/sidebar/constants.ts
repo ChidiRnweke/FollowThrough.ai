@@ -9,7 +9,7 @@ export const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 /**
  * The desktop width is no longer a constant — it is the user's resizable
  * preference, clamped against the shell's space budget. See
- * `SIDEBAR_WIDTH_DEFAULT_PX` and `effectiveSidebarWidth` in `$lib/models/workspace`.
+ * `SIDEBAR_WIDTH_DEFAULT_PX` in workspace models and the shared sidebar-width service.
  * The mobile sheet stays fixed: there is no rail to drag below `sm`.
  */
 export const SIDEBAR_WIDTH_MOBILE = '18rem';

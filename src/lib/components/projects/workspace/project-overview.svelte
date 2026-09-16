@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/models/projects';
+	import { projectExportEntries } from '$lib/services/projects/export-entries';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
