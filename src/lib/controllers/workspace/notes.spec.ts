@@ -99,6 +99,7 @@ describe('normalized skill detail', () => {
 		records.set(JSON.stringify(['skills', note.id]), { type: 'skills', value: metadata });
 		expect(new WorkspaceViews(records).skill(note.id)).toEqual({
 			...metadata,
+			name: note.title,
 			note: { ...note, kind: 'skill', plainText: 'Local instructions' }
 		});
 	});

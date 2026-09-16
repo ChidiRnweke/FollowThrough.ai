@@ -280,7 +280,7 @@ export const projectSkillView = (
 	instructions: string
 ): SkillViewProjection => ({
 	noteId: view.skill.note.id,
-	name: view.skill.name,
+	name: view.skill.note.title,
 	description: view.skill.description,
 	triggerHints: view.skill.triggerHints,
 	instructions

@@ -2,15 +2,28 @@ import { describe, expect, it } from 'vitest';
 import type { SkillUsageId } from '$lib/models/skills';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
+const seedSkillNote = async (suffix: string) => {
+	const seeded = await seedNote(suffix);
+	const { catalog } = createNotesCapability({
+		db: context.db,
+		projects: new ProjectRecords(context.db)
+	});
+	const note = await catalog.create(seeded.owner, {
+		documentKind: 'skill',
+		projectId: seeded.project.id,
+		title: 'Contract skill'
+	});
+	return { ...seeded, note };
+};
 describe('Postgres skill repository invariants', () => {
 	it('persists skill usage provenance', async () => {
-		const { owner, note } = await seedNote('33');
+		const { owner, note } = await seedSkillNote('33');
 		const provenance = await seedProvenance(owner, '33');
 		const repository = new SkillRecords(context.db);
 		await repository.insert(owner, {
-			note: { ...note, kind: 'skill' },
-			name: 'Contract skill',
+			note,
 			description: 'Contract',
 			triggerHints: ['contract'],
 			isEnabled: true
@@ -24,11 +37,10 @@ describe('Postgres skill repository invariants', () => {
 		expect(usage.provenanceId).toBe(provenance.id);
 	});
 	it('hides enabled skills from an archived project', async () => {
-		const { owner, note, project } = await seedNote('49');
+		const { owner, note, project } = await seedSkillNote('49');
 		const repository = new SkillRecords(context.db);
 		await repository.insert(owner, {
-			note: { ...note, kind: 'skill' },
-			name: 'Archived skill',
+			note,
 			description: 'Contract',
 			triggerHints: ['contract'],
 			isEnabled: true

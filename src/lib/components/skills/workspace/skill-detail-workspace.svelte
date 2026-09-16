@@ -103,12 +103,11 @@
 							kind: 'failure',
 							message: 'The skill details are unavailable. Reopen the skill.'
 						};
-					if (description !== savedDescription || note.title !== details.name) {
+					if (description !== savedDescription) {
 						const result = await metadata.stage({
 							kind: 'updateSkill',
 							noteId: details.noteId,
-							description,
-							displayName: note.title
+							description
 						});
 						if (result.kind === 'failure') return result;
 						savedDescription = description.trim() || details.description;

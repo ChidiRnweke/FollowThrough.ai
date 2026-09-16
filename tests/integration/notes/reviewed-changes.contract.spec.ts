@@ -29,7 +29,6 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 	if (target === 'skill')
 		await new SkillRecords(database).insert(seeded.owner, {
 			note,
-			name: 'Release checklist',
 			slug: 'release-checklist',
 			description: 'Release instructions',
 			triggerHints: ['release'],

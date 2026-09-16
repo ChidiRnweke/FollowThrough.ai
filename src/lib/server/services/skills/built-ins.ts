@@ -56,7 +56,7 @@ export class BuiltInSkills {
 		if (!skill) throw new NotFoundError(`Built-in skill "${key}" is incomplete`);
 		if (!skill.isEnabled)
 			throw new ValidationError(
-				`The ${skill.name} skill is disabled. Re-enable it in Skills first.`
+				`The ${skill.note.title} skill is disabled. Re-enable it in Skills first.`
 			);
 		return skill;
 	}
@@ -120,7 +120,6 @@ export class BuiltInSkills {
 		return (
 			note.title === released.name &&
 			note.plainText === released.instructions &&
-			skill.name === released.name &&
 			skill.slug === released.key &&
 			skill.description === released.description &&
 			skill.allowImplicitInvocation === released.allowImplicitInvocation &&
@@ -163,7 +162,6 @@ export class BuiltInSkills {
 		await this.skills.update(actor, {
 			...skill,
 			note: updated,
-			name: definition.name,
 			slug: definition.key,
 			description: definition.description,
 			triggerHints: definition.triggerHints,
@@ -212,7 +210,6 @@ export class BuiltInSkills {
 	private toSkill(note: Note, definition: BuiltInSkillDefinition): Skill<Note> {
 		return {
 			note,
-			name: definition.name,
 			slug: definition.key,
 			description: definition.description,
 			triggerHints: definition.triggerHints,

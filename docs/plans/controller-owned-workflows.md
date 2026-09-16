@@ -398,6 +398,15 @@ metadata and publication history remain unchanged. The prior hand-written skill 
 were replaced by tests through the real Notes controller and shared content fake. Skill identity,
 lifecycle and the wider model migration remain unfinished.
 
+Skill display name: the note title is the sole editable display name. Skill domain values no longer
+carry a second name. Server summaries and local workspace views derive it from the current note.
+Legacy display-name commands rename the note through the controller's document consequences and
+transaction. The existing skills.name sync column remains a database-maintained projection for older
+clients; migration 0057 backfills it and keeps both journal records atomic. The editor no longer
+stages a second name write. Portable slugs, publication and restoration policy are unchanged. Real
+PostgreSQL and offline-view regressions cover renames and rollback. Skill metadata behavior still
+needs to leave models, and the remaining lifecycle and global refactor work remains open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
