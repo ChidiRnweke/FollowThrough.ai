@@ -1,3 +1,4 @@
+import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideRevisionWrite } from '$lib/models/revisions';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
@@ -15,7 +16,7 @@ import {
 	type Todo,
 	type UpdateTodoInput
 } from '$lib/models/todos';
-import { decideProjectDetails, type Project, type ProjectId } from '$lib/models/projects';
+import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import {
