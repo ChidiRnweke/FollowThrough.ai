@@ -479,6 +479,14 @@ together. The PostgreSQL contracts use actual vector retrieval and prove duplica
 cancellation, rollback and recovery. Diagram actions still use the workflow callback and remain the
 next P11 migration; the broader model and content-change work is not complete.
 
+Diagram publication failure: The controller now commits generated proposals or saved Mermaid
+revisions together with completion of their generation run. Provider execution and session cleanup
+finish before the write transaction. Proposal or indexing failure leaves the run failed; completion
+failure rolls back the generated output. Regression tests reproduced the previous completed run after
+a failed proposal and the retained revision after failed indexing. PostgreSQL contracts cover both
+proposal and completion write failures. The duplicate outer workflow and durable diagram input
+migration remain open P11 work.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

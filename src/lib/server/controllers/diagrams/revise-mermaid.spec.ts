@@ -20,9 +20,10 @@ const setup = (drawio = false) => {
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
+		persistence: generation.persistence,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
-				transactionRunner: new InMemoryTransactionRunner([]),
+				transactionRunner: new InMemoryTransactionRunner([diagrams, generation.persistence]),
 				diagramSourceNotes: sourceNotes,
 				diagramFinder: diagrams,
 				...generation,
@@ -36,6 +37,25 @@ const setup = (drawio = false) => {
 };
 
 describe('Revise Mermaid workflow invariants', () => {
+	it('rolls back the revision and fails its run when indexing fails', async () => {
+		const { controller, diagrams, persistence } = setup();
+		const original = structuredClone(diagrams.diagrams);
+		diagrams.failIndex = true;
+		await controller
+			.reviseMermaid(testActor(), {
+				diagramId: mermaidBuilder().id,
+				instruction: 'add queue'
+			})
+			.catch(() => undefined);
+		expect({
+			diagrams: diagrams.diagrams,
+			runs: persistence.runs.map((run) => run.status)
+		}).toEqual({
+			diagrams: original,
+			runs: ['failed']
+		});
+	});
+
 	it('rejects revision of a promoted draw.io diagram', async () => {
 		const { controller } = setup(true);
 		await expect(
