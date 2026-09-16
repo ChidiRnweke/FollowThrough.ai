@@ -1,4 +1,24 @@
 import { NotFoundError, ValidationError } from '$lib/errors';
+import { randomUUID } from 'node:crypto';
+import {
+	MAX_BUNDLE_ENTRIES,
+	type ExportInput,
+	type PreparedExport
+} from '$lib/models/deliverables';
+import type { AttachmentId } from '$lib/models/attachments';
+import type { Note, NoteId } from '$lib/models/notes';
+import type { DateTime } from '$lib/models/workspace';
+import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
+import {
+	mediaTypeFor,
+	safeFilename,
+	validateSettings
+} from '$lib/server/services/deliverables/artifacts';
+import type {
+	prepareExport,
+	exportImageSources
+} from '$lib/server/services/deliverables/export-preparation';
+import { attachmentIdFromSrc } from '$lib/server/services/deliverables/export-preparation';
 import type {
 	DeliverableMutationRequest,
 	WorkspaceMutationResult
@@ -25,10 +45,6 @@ import type {
 	ArtifactDeleter,
 	ArtifactLister,
 	ArtifactReader,
-	ArtifactRegenerator,
-	BundleGenerator,
-	DocumentGenerator,
-	DocumentPreviewer,
 	ExportSettingsReader,
 	ExportSettingsWriter
 } from '$lib/server/services/deliverables/artifact-contracts';
@@ -42,8 +58,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
  * per-project export settings.
  *
  * Template uploads are two-phase (initiate then complete) so an abandoned upload never
- * leaves a partial template behind; document generation runs inside a transaction so an
- * artifact is never observable half-written.
+ * leaves a partial template behind. Generated artifact metadata and provenance commit together.
  */
 export interface DeliverablesController {
 	synchronize(
@@ -78,8 +93,8 @@ export interface DeliverablesController {
 	/**
 	 * Generate a finished document artifact from a template and note content.
 	 *
-	 * Runs in a transaction so the artifact record, its content, and any provenance land
-	 * atomically — a failed generation leaves no half-created artifact behind.
+	 * Render and upload before committing artifact metadata and provenance together.
+	 * Remove the new upload if signing or persistence fails.
 	 */
 	generateDocument(
 		actor: ActorContext,
@@ -88,9 +103,8 @@ export interface DeliverablesController {
 	/**
 	 * Generate one document per note and return them zipped.
 	 *
-	 * Deliberately outside the transaction that {@link generateDocument} runs in: a bundle
-	 * persists nothing, so there is no artifact record for a failure to leave half-written.
-	 * The zip is a download only — it does not appear in the artifact library.
+	 * Store an ephemeral zip without artifact metadata or provenance. The zip does not
+	 * appear in the artifact library.
 	 */
 	generateBundle(actor: ActorContext, input: GenerateBundleInput): Promise<GenerateBundleOutput>;
 	/**
@@ -122,8 +136,8 @@ export interface DeliverablesController {
 		artifactId: ArtifactId
 	): Promise<Pick<Artifact, 'id' | 'title'>>;
 	/**
-	 * Re-run generation for an existing artifact, replacing its content with a fresh
-	 * render of the current note state. Used to refresh a document whose source changed.
+	 * Create a new artifact from the existing source identities and current note/settings
+	 * state. Preserve the original artifact and its stored content.
 	 */
 	regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput>;
 }
@@ -134,15 +148,26 @@ export interface DeliverablesDependencies {
 	templates: DocumentTemplates;
 	templateStorage: IAttachmentStorage;
 	templateStyles: typeof verifiedTemplateStyles;
-	documentGenerator: DocumentGenerator;
-	bundleGenerator: BundleGenerator;
-	documentPreviewer: DocumentPreviewer;
+	noteReader: { get(actor: ActorContext, id: NoteId): Promise<Note> };
+	provenanceRecorder: {
+		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
+	};
+	artifactWriter: { store(actor: ActorContext, artifact: Artifact): Promise<Artifact> };
+	artifactStorage: IAttachmentStorage;
+	attachmentDownloader: {
+		downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }>;
+	};
+	fetchImage: (url: string) => Promise<string | undefined>;
+	prepareExport: typeof prepareExport;
+	exportImageSources: typeof exportImageSources;
+	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
+	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
+	zipPacker: (files: readonly { path: string; bytes: Uint8Array }[]) => Buffer;
 	exportSettingsReader: ExportSettingsReader;
 	exportSettingsWriter: ExportSettingsWriter;
 	artifactLister: ArtifactLister;
 	artifactReader: ArtifactReader;
 	artifactDeleter: ArtifactDeleter;
-	artifactRegenerator: ArtifactRegenerator;
 	transactionRunner: TransactionRunner;
 }
 
@@ -239,23 +264,143 @@ export class Deliverables implements DeliverablesController {
 		actor: ActorContext,
 		input: GenerateDocumentInput
 	): Promise<GenerateDocumentOutput> {
-		return this.dependencies.transactionRunner.run(async () =>
-			this.dependencies.documentGenerator.generate(actor, input)
+		const prepared = await this.prepareDocument(actor, input);
+		const buffer = await this.renderDocument(input.format, prepared);
+		const id = randomUUID() as ArtifactId;
+		const objectKey = `artifacts/${actor.userId}/${id}.${input.format}`;
+		const storage = this.dependencies.artifactStorage;
+		await storage.put(objectKey, buffer, mediaTypeFor(input.format));
+		try {
+			const downloadUrl = await storage.createDownloadUrl(
+				objectKey,
+				3600,
+				safeFilename(input.title, input.format)
+			);
+			const artifact = await this.dependencies.transactionRunner.run(async () => {
+				const provenance = await this.dependencies.provenanceRecorder.record(actor, {
+					producerKind: 'user',
+					producerName: 'document-export',
+					metadata: {}
+				});
+				return this.dependencies.artifactWriter.store(actor, {
+					id,
+					userId: actor.userId,
+					projectId: input.projectId,
+					title: input.title,
+					format: input.format,
+					objectKey,
+					byteSize: buffer.length,
+					sourceNoteIds: input.noteIds,
+					templateId: input.templateId,
+					provenanceId: provenance.id,
+					...('runId' in provenance ? { runId: provenance.runId } : {}),
+					createdAt: new Date().toISOString() as DateTime
+				});
+			});
+			return { artifact, downloadUrl };
+		} catch (error) {
+			try {
+				await storage.remove(objectKey);
+			} catch (cleanupError) {
+				throw new AggregateError(
+					[error, cleanupError],
+					'Export failed and its uploaded file could not be removed',
+					{ cause: cleanupError }
+				);
+			}
+			throw error;
+		}
+	}
+
+	private async prepareDocument(
+		actor: ActorContext,
+		input: PreviewDocumentInput & { templateId?: TemplateId }
+	): Promise<PreparedExport> {
+		const notes = await Promise.all(
+			input.noteIds.map(async (id) => {
+				const note = await this.dependencies.noteReader.get(actor, id);
+				return { title: note.title, document: note.document };
+			})
 		);
+		const settings = input.settings
+			? validateSettings(input.settings)
+			: await this.getExportSettings(actor, input.projectId);
+		const styles = input.templateId
+			? await this.dependencies.templates.styles(actor, input.templateId, input.projectId)
+			: undefined;
+		const images = new Map<string, string>();
+		for (const source of new Set(
+			notes.flatMap((note) => this.dependencies.exportImageSources(note.document))
+		)) {
+			const attachmentId = attachmentIdFromSrc(source);
+			if (!attachmentId) continue;
+			const { url } = await this.dependencies.attachmentDownloader.downloadById(
+				actor,
+				attachmentId as AttachmentId
+			);
+			const image = await this.dependencies.fetchImage(url);
+			if (image) images.set(source, image);
+		}
+		const exportInput: ExportInput = {
+			...input,
+			notes,
+			settings,
+			images,
+			...(styles ? { styles } : {})
+		};
+		return this.dependencies.prepareExport(exportInput);
+	}
+
+	private renderDocument(format: 'pdf' | 'docx', input: PreparedExport): Promise<Buffer> {
+		return format === 'pdf'
+			? this.dependencies.pdfGenerator(input)
+			: this.dependencies.docxGenerator(input);
 	}
 
 	async generateBundle(
 		actor: ActorContext,
 		input: GenerateBundleInput
 	): Promise<GenerateBundleOutput> {
-		return this.dependencies.bundleGenerator.generateBundle(actor, input);
+		if (!input.entries.length) throw new ValidationError('Select at least one document.');
+		if (input.entries.length > MAX_BUNDLE_ENTRIES)
+			throw new ValidationError(`Export up to ${MAX_BUNDLE_ENTRIES} documents at a time.`);
+		const files: { path: string; bytes: Uint8Array }[] = [];
+		for (const entry of input.entries) {
+			const prepared = await this.prepareDocument(actor, { ...input, noteIds: [entry.noteId] });
+			const note = prepared.notes[0];
+			if (!note) throw new NotFoundError(`Note ${entry.noteId} not found`);
+			const bytes = await this.renderDocument(input.format, { ...prepared, title: note.title });
+			files.push({ path: `${entry.path}.${input.format}`, bytes });
+		}
+		const buffer = this.dependencies.zipPacker(files);
+		const objectKey = `bundles/${actor.userId}/${randomUUID()}.zip`;
+		await this.dependencies.artifactStorage.put(objectKey, buffer, 'application/zip');
+		try {
+			const downloadUrl = await this.dependencies.artifactStorage.createDownloadUrl(
+				objectKey,
+				3600,
+				safeFilename(input.title, 'zip')
+			);
+			return { downloadUrl, fileCount: files.length, byteSize: buffer.length };
+		} catch (error) {
+			try {
+				await this.dependencies.artifactStorage.remove(objectKey);
+			} catch (cleanupError) {
+				throw new AggregateError(
+					[error, cleanupError],
+					'Bundle export failed and its uploaded file could not be removed',
+					{ cause: cleanupError }
+				);
+			}
+			throw error;
+		}
 	}
 
 	async previewDocument(
 		actor: ActorContext,
 		input: PreviewDocumentInput
 	): Promise<PreviewDocumentOutput> {
-		const buffer = await this.dependencies.documentPreviewer.preview(actor, input);
+		const buffer = await this.dependencies.pdfGenerator(await this.prepareDocument(actor, input));
 		return { data: buffer.toString('base64') };
 	}
 
@@ -287,7 +432,15 @@ export class Deliverables implements DeliverablesController {
 		actor: ActorContext,
 		artifactId: ArtifactId
 	): Promise<GetArtifactDownloadOutput> {
-		return this.dependencies.artifactReader.download(actor, artifactId);
+		const artifact = await this.getArtifact(actor, artifactId);
+		if (!artifact) throw new NotFoundError('Artifact not found');
+		return {
+			url: await this.dependencies.artifactStorage.createDownloadUrl(
+				artifact.objectKey,
+				3600,
+				safeFilename(artifact.title, artifact.format)
+			)
+		};
 	}
 
 	async deleteArtifact(
@@ -301,6 +454,14 @@ export class Deliverables implements DeliverablesController {
 		actor: ActorContext,
 		artifactId: ArtifactId
 	): Promise<GenerateDocumentOutput> {
-		return this.dependencies.artifactRegenerator.regenerate(actor, artifactId);
+		const existing = await this.getArtifact(actor, artifactId);
+		if (!existing) throw new NotFoundError('Artifact not found');
+		return this.generateDocument(actor, {
+			projectId: existing.projectId,
+			noteIds: existing.sourceNoteIds,
+			title: existing.title,
+			format: existing.format,
+			templateId: existing.templateId
+		});
 	}
 }

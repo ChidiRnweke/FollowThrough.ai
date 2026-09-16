@@ -1,9 +1,4 @@
-import {
-	prepareExport,
-	exportImage,
-	type ExportInput,
-	type PreparedDiagram
-} from '$lib/server/repositories/deliverables/export-preparation';
+import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import {
 	documentNodeContent as nodeContent,
 	documentInlineText as collectText,
@@ -537,7 +532,7 @@ function convertNode(
 		case 'image': {
 			const src = node.attrs?.src ?? undefined;
 			if (!src) break;
-			const data = exportImage(src, ctx.images);
+			const data = ctx.images.get(src);
 			if (!data) {
 				results.push(
 					new Paragraph({
@@ -565,8 +560,8 @@ function convertNode(
 	return results;
 }
 
-export async function generateDocx(input: ExportInput): Promise<Buffer> {
-	const { notes, settings, images, diagrams } = await prepareExport(input);
+export async function generateDocx(input: PreparedExport): Promise<Buffer> {
+	const { notes, settings, images, diagrams } = input;
 	const styles = resolveStyles(input.styles, settings);
 	const ctx: DocxContext = {
 		styles,

@@ -253,13 +253,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const attachments = attachmentCapability.library;
 	const deliverables = createDeliverablesCapability({
 		db,
-		storage: attachmentStorage,
-		transactionRunner,
-		provenance,
-		notes,
-		todos,
-		projects,
-		attachmentDownloader: attachments
+		storage: attachmentStorage
 	});
 	const templates = deliverables.templates;
 	const artifacts = deliverables.artifacts;
@@ -307,7 +301,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionAccepter: suggestions,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
-			boardPdfExporter: deliverables.boardPdfExporter,
+			projectLister: projects,
+			markdownToContent: deliverables.markdownToContent,
+			exportPreparer: deliverables.prepareExport,
+			pdfGenerator: deliverables.pdfGenerator,
 			workflowRunner: agentCapability.workflowRunner
 		},
 		relationships: {
@@ -430,15 +427,22 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			templates,
 			templateStorage: deliverables.templateStorage,
 			templateStyles: deliverables.templateStyles,
-			documentGenerator: artifacts,
-			bundleGenerator: artifacts,
-			documentPreviewer: artifacts,
+			noteReader: notes,
+			provenanceRecorder: provenance,
+			artifactWriter: artifacts,
+			artifactStorage: deliverables.artifactStorage,
+			attachmentDownloader: attachments,
+			fetchImage: deliverables.fetchImage,
+			prepareExport: deliverables.prepareExport,
+			exportImageSources: deliverables.exportImageSources,
+			docxGenerator: deliverables.docxGenerator,
+			pdfGenerator: deliverables.pdfGenerator,
+			zipPacker: deliverables.zipPacker,
 			exportSettingsReader: artifacts,
 			exportSettingsWriter: artifacts,
 			artifactLister: artifacts,
 			artifactReader: artifacts,
 			artifactDeleter: artifacts,
-			artifactRegenerator: artifacts,
 			transactionRunner
 		},
 		skills: {
