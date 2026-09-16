@@ -33,7 +33,7 @@ import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
 import { WorkflowRunner } from '$lib/server/controllers/workflow-execution/controller';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
-import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';

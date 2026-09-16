@@ -1,15 +1,5 @@
-/** One stored tool-catalog vector, minus the vector itself (never read back out). */
-export interface StoredToolEmbedding {
-	readonly name: string;
-	readonly description: string;
-	readonly contentHash: string;
-	readonly embeddingModel: string;
-}
-
-/** A catalog entry with its freshly computed vector, written by the deploy seeder. */
-export interface ToolEmbeddingWrite extends StoredToolEmbedding {
-	readonly embedding: readonly number[];
-}
+import type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
+export type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
 
 export interface ToolEmbeddingRepository {
 	/** Everything currently seeded, for drift detection. */
@@ -25,6 +15,7 @@ export interface ToolEmbeddingRepository {
 	rankByVector(
 		queryVector: readonly number[],
 		names: readonly string[],
-		limit: number
+		limit: number,
+		model: string
 	): Promise<string[]>;
 }

@@ -53,10 +53,8 @@ import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
-import type {
-	ToolDescriptor,
-	ToolRetriever
-} from '$lib/server/services/agent/tools/tool-retriever';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent

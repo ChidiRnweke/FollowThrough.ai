@@ -10,7 +10,7 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
-import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import {
 	McpTools,
 	FIRST_CLASS_TOOL_NAMES,

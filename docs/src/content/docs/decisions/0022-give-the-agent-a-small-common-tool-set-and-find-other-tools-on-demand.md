@@ -38,3 +38,6 @@ We will keep this design while the tool catalog is large enough to compete with 
 - `FIRST_CLASS_TOOL_NAMES` defines the small direct tool set.
 - `search_tools` retrieves other tool definitions and promotes their real schemas.
 - Tool-search tests check discovery and direct calls.
+- The tool-discovery controller coordinates query embeddings and stored ranking. Incomplete or
+  outdated model seeds fail explicitly rather than silently hiding tools. Seed replacement and
+  retired-tool removal share a transaction.

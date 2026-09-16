@@ -323,6 +323,14 @@ Regression tests reproduce and fix dropped identical final paragraphs and reused
 identical content appears more than once. Agent context, provisioning, diagram authoring, durable
 selection workflows and the other model families remain unfinished.
 
+Tool discovery and seeding: ToolDiscovery now coordinates embeddings, stored ranking and seed
+transactions. The locally declared embedding ports and both retriever service implementations are
+removed. ToolCatalogIndex owns catalog drift, vector persistence and ranking against the repository.
+Missing query vectors and missing current-model tool rows fail explicitly. Seed writes and pruning
+roll back together; provider calls stay outside the transaction. Evaluations now use the production
+stored-vector discovery path. Tests assert ranked names, stored vectors, unchanged-seed behavior and
+rollback instead of call arguments or the presence of an exported class.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
