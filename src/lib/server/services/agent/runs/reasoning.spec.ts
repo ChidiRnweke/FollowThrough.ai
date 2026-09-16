@@ -12,7 +12,8 @@ import {
 	type StreamEvent
 } from '@openai/agents';
 import { z } from 'zod';
-import { AgentProviderFailure, parseProviderStreamEvent } from '$lib/models/agent';
+import { AgentProviderFailure } from '$lib/errors';
+import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
 import type {
 	AgentRunContext,
 	ContextSelection,

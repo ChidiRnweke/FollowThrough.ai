@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-	AgentProviderFailure,
-	parseProviderStreamEvent,
-	parseProviderToolCall,
-	type ProviderStreamEvent
-} from './index';
+import { AgentProviderFailure } from '$lib/errors';
+import type { ProviderStreamEvent } from '$lib/models/agent';
+import { parseProviderStreamEvent, parseProviderToolCall } from './provider-events';
 
 /**
  * The item shape the SDK emits: the facts live on `item.rawItem`, a declared
@@ -32,8 +29,8 @@ describe('Provider tool call identity', () => {
 		expect(call({ id: 'c' })?.callId).toBe('c');
 	});
 
-	it('reports no id rather than coercing a non-string one', () => {
-		expect(call({ callId: { value: 'c' } })?.callId).toBeUndefined();
+	it('rejects a non-string tool identity instead of silently discarding the tool event', () => {
+		expect(() => call({ callId: { value: 'c' } })).toThrowError(AgentProviderFailure);
 	});
 
 	it('reports no id rather than an empty string when the provider sent none', () => {
@@ -59,9 +56,19 @@ describe('Provider tool call arguments', () => {
 	it('rejects arguments that are not an object as a provider failure', () => {
 		expect(() => call({ callId: 'a', arguments: '[]' })).toThrowError(AgentProviderFailure);
 	});
+
+	it('rejects a malformed known tool event before it can be mistaken for an unfamiliar event', () => {
+		expect(() => call({ callId: 'a', arguments: 42 })).toThrowError(AgentProviderFailure);
+	});
 });
 
 describe('Provider tool call output', () => {
+	it('rejects an unreadable known tool outcome instead of dropping the result', () => {
+		expect(() => streamed('tool_output', { callId: 42, output: 'Saved' })).toThrowError(
+			AgentProviderFailure
+		);
+	});
+
 	it('reports a readable result as a value', () => {
 		expect(call({ callId: 'a', output: '{"noteId":"n1"}' })?.output).toEqual({
 			kind: 'value',

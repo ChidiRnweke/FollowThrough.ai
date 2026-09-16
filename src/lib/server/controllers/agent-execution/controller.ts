@@ -1,6 +1,7 @@
 import type { RunSettlement } from '$lib/server/services/agent/runs/execution-contracts';
 import type { ActorContext } from '$lib/models/identity';
-import { AgentProviderFailure, toolActivityFromEvent } from '$lib/models/agent';
+import { AgentProviderFailure } from '$lib/errors';
+import { toolActivityFromEvent } from '$lib/models/agent';
 import type {
 	AgentExecutionUpdate,
 	AgentEvent,

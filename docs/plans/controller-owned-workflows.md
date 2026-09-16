@@ -257,6 +257,13 @@ into archive paths. Model-picker labels, effective-model display and query match
 in one focused service; their model file retains value types. Existing behavior tests move with
 their implementations.
 
+Global models: provider event decoding now runs in the server provider-event mapper. Models retain
+schemas and event values; tool-argument decoding, output classification, call identity selection and
+reasoning-event mapping move together to the boundary. Provider failures use the explicit error
+module. A regression exposed malformed known tool events silently becoming ignored events; these
+now fail explicitly while unfamiliar SDK event types retain the fallback. General payload readers
+and run-transition rules remain pending model cleanup.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

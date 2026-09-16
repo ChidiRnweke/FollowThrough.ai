@@ -154,7 +154,8 @@ produce.
     `no-json-parse-cast` violation in `buffer.ts`, and the fake's `snapshot as AgentSessionItem[]`.
     Fifteen `Record<string, unknown>` occurrences in the strict layers go with them.
 - [x] **TN-24: Normalize all provider stream events before reasoning logic**
-  - [x] `ProviderStreamEvent` in `models/agent/index.ts`, parsed once by `parseProviderStreamEvent`
+  - [x] `ProviderStreamEvent` and its schemas in `models/agent/index.ts`, decoded by
+        `parseProviderStreamEvent` at `server/repositories/agent/provider-events.ts`
         at the top of the run loop. In the barrel rather than a sibling file because the right type
         for a call's arguments and output is `AgentPayload` from `./payload`, and only the barrel
         may import a sibling — a sibling would have needed a third hand-copy of the JSON type after

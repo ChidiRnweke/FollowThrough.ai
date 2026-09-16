@@ -1,7 +1,7 @@
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
-import { AgentProviderFailure } from '$lib/models/agent';
+import { AgentProviderFailure } from '$lib/errors';
 import type {
 	AgentExecutionUpdate,
 	AgentRun,
