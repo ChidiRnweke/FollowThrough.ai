@@ -7,10 +7,12 @@ import type {
 
 /** A connected replay whose frames can be delivered again after a consumer failure. */
 export class InMemoryRunTransport implements AgentRunTransport {
+	requests = new Map<string, Parameters<AgentRunTransport['submit']>[0]>();
 	snapshot?: AgentRunSnapshot;
 	private connection?: Parameters<AgentRunTransport['openEvents']>[0];
 	constructor(readonly receipt: AgentRunReceipt) {}
-	async submit(): Promise<AgentRunReceipt> {
+	async submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunReceipt> {
+		this.requests.set(input.requestId, structuredClone(input));
 		return this.receipt;
 	}
 	async get(): Promise<AgentRunSnapshot> {

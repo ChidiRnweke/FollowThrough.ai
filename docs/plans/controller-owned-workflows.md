@@ -138,8 +138,11 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   Folder selection and submission require complete inventory; missing folders fail visibly
   before the draft is cleared. Counts refresh with the inventory. Shared folder rules and
   an 80-note server-context regression passed, as did the full 3,589-test suite. Actual
-  composer captures show 25 versus 40 notes for the same 40-note fixture. Mention identity
-  still needs its own slice. Server-side missing-note exclusions still need explicit treatment
+  composer captures show 25 versus 40 notes for the same 40-note fixture. Mention references
+  now retain resource IDs and text ranges through edits, removal, and tracked undo/redo.
+  Picked skills submit IDs. Duplicate-title removal has native browser input coverage and
+  before/after composer captures. The full 3,595-test suite and 26 composer browser tests pass.
+  Server-side missing-note exclusions still need explicit treatment
   during the context-orchestration correction; the old warning-only skip is not resolved here.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
   enrichment into the processing controller. Verify the remaining search-tail finding separately.

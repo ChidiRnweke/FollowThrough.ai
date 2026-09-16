@@ -1,6 +1,8 @@
 import type { NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
-import type { ContextChip, ResourceChip } from '$lib/stores/agent/chat.svelte';
+import type { ResourceChip } from '$lib/models/chat';
+import { MENTION_PATTERN } from '$lib/models/chat';
+export { MENTION_PATTERN } from '$lib/models/chat';
 import { folderNoteIds } from '$lib/services/notes/folder-context';
 
 /**
@@ -13,8 +15,6 @@ import { folderNoteIds } from '$lib/services/notes/folder-context';
  * typed, and `[^\s@]*` keeps the query to a single word — which is also what closes
  * the picker once `withMention` writes a (possibly multi-word) title plus a space.
  */
-export const MENTION_PATTERN = /(^|\s)@([^\s@]*)$/;
-
 export const mentionQueryOf = (prompt: string): string | undefined =>
 	MENTION_PATTERN.exec(prompt)?.[2];
 
@@ -52,23 +52,3 @@ export const mentionCandidatesFor = (
 		.map((skill): ResourceChip => ({ kind: 'skill', id: skill.noteId, name: skill.name }));
 	return [...notes, ...folders, ...matched];
 };
-
-const tokenOf = (chip: ContextChip): string => `@${chip.name}`;
-
-/** Replaces the `@query` being typed with the chosen name, left in the sentence. */
-export const withMention = (prompt: string, chip: ContextChip): string =>
-	prompt.replace(MENTION_PATTERN, `$1${tokenOf(chip)} `);
-
-/** Drops every occurrence of a chip's token, closing the gap it leaves behind. */
-export const withoutMention = (prompt: string, chip: ContextChip): string =>
-	prompt.split(tokenOf(chip)).join('').replace(/ {2,}/g, ' ');
-
-/**
- * The chips still spoken for by the prompt text.
- *
- * A pinned selection is not spoken for by anything: it has no sayable name, so there is no
- * token to keep or delete, and it is held on by having been pinned. Only the tag-driven
- * chips answer to the sentence.
- */
-export const liveChips = (prompt: string, chips: readonly ContextChip[]): ContextChip[] =>
-	chips.filter((chip) => chip.kind === 'selection' || prompt.includes(tokenOf(chip)));

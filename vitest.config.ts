@@ -128,6 +128,8 @@ export default defineConfig({
 						'src/lib/stores/workspace/resources.svelte.spec.ts',
 						'src/lib/stores/workspace/drafts.svelte.spec.ts',
 						'src/lib/stores/agent/replay.svelte.spec.ts',
+						'src/lib/stores/agent/mention-context.svelte.spec.ts',
+						'src/lib/components/chat/workspace/mention-input.svelte.spec.ts',
 						'src/lib/client/workbench/indexeddb-layout.svelte.spec.ts',
 						'src/lib/components/edra/commands/proofread-menu.svelte.spec.ts',
 						'src/lib/components/notes/proofread-menu.svelte.spec.ts'
