@@ -1,16 +1,12 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { RelationshipClassification } from '$lib/models/relationships';
 import type { PipelineKind } from '$lib/models/agent';
-import type { LinkCandidate } from '$lib/models/relationships';
 import type { PromiseCandidate } from '$lib/models/todos';
 import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
 import type { ReferenceCandidate } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
-import type {
-	LinkFinder,
-	RelationshipClassification,
-	StructuredRelationshipClient
-} from '$lib/server/services/relationships/contracts';
+import type { StructuredRelationshipClient } from '$lib/server/services/relationships/contracts';
 import type {
 	PromiseExtractor,
 	StructuredPromiseClient,
@@ -51,15 +47,6 @@ export class InMemoryStructuredPromiseClient implements StructuredPromiseClient 
 		void _text;
 		if (this.failure) throw this.failure;
 		return this.result;
-	}
-}
-
-export class InMemoryLinkFinder implements LinkFinder {
-	candidates: LinkCandidate[] = [];
-	async find(_actor: ActorContext, _selection: TextSelection): Promise<readonly LinkCandidate[]> {
-		void _actor;
-		void _selection;
-		return this.candidates;
 	}
 }
 

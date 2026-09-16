@@ -10,14 +10,12 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
 import {
 	EmbeddedKnowledgeSearcher,
-	ProjectScopedLinkFinder,
 	RerankingKnowledgeSearcher,
 	type Reranker
 } from '$lib/server/services/knowledge-search/semantic';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { operationObserver } from '$lib/server/services/telemetry';
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
 import {
@@ -38,7 +36,6 @@ import type { MemoryLibrary } from '$lib/server/services/memory/library';
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
 	readonly transactionRunner: TransactionRunner;
-	readonly notes: NoteCatalog;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
@@ -59,7 +56,7 @@ export interface KnowledgeSearchCapability {
 	readonly memoryIndexer: ContentIndex['memories'];
 	readonly embeddedSearcher: EmbeddedKnowledgeSearcher;
 	readonly searcher: RerankingKnowledgeSearcher;
-	readonly linkFinder: ProjectScopedLinkFinder;
+	readonly relationshipClassifier: RelationshipDiscovery;
 	readonly maintenance: KnowledgeIndexMaintenance;
 	readonly toolRetriever: ToolRetriever;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
@@ -133,11 +130,7 @@ export const createKnowledgeSearchCapability = (
 		memoryIndexer: index.memories,
 		embeddedSearcher,
 		searcher: new RerankingKnowledgeSearcher(embeddedSearcher, reranker),
-		linkFinder: new ProjectScopedLinkFinder(
-			input.notes,
-			new RerankingKnowledgeSearcher(embeddedSearcher, reranker),
-			new RelationshipDiscovery({ observer: operationObserver })
-		),
+		relationshipClassifier: new RelationshipDiscovery({ observer: operationObserver }),
 		maintenance: new KnowledgeIndexMaintenance(
 			repository,
 			embeddingClient,

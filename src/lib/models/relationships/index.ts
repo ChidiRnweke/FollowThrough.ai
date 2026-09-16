@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -21,6 +23,14 @@ interface TextSelection {
 }
 
 export type RelationshipKind = 'prior_decision' | 'contradicts' | 'elaborates' | 'mentions';
+
+export const relationshipClassificationSchema = z.object({
+	kind: z.enum(['prior_decision', 'contradicts', 'elaborates', 'mentions']),
+	justification: z.string().min(1),
+	confidence: z.number().int().min(0).max(100)
+});
+
+export type RelationshipClassification = z.infer<typeof relationshipClassificationSchema>;
 
 interface NoteRelationship {
 	readonly id: RelationshipId;
@@ -50,6 +60,12 @@ export interface LinkCandidate {
 	readonly kind: RelationshipKind;
 	readonly justification: string;
 	readonly confidence: number;
+}
+
+export interface RelatedNoteMatch {
+	readonly noteId: NoteId;
+	readonly content: string;
+	readonly score: number;
 }
 
 export interface RelateSelectionInput {

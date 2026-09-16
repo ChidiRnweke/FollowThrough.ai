@@ -1,18 +1,14 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import OpenAI from 'openai';
-import { z } from 'zod';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
-import type { RelationshipKind } from '$lib/models/relationships';
+import {
+	relationshipClassificationSchema,
+	type RelationshipClassification
+} from '$lib/models/relationships';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
-
-export interface RelationshipClassification {
-	readonly kind: RelationshipKind;
-	readonly justification: string;
-	readonly confidence: number;
-}
 
 export interface IRelationshipDiscovery {
 	classify(
@@ -47,12 +43,6 @@ const createLanguageModelClient = (
 			'X-OpenRouter-Title': 'FollowThrough'
 		}
 	});
-
-const RelationshipOutput = z.object({
-	kind: z.enum(['prior_decision', 'contradicts', 'elaborates', 'mentions']),
-	justification: z.string().min(1),
-	confidence: z.number().int().min(0).max(100)
-});
 
 const SYSTEM_PROMPT = `Classify the relationship between a current architecture passage and retrieved project knowledge.
 Use prior_decision only when the target records a decision made before the source.
@@ -94,7 +84,10 @@ export class RelationshipLanguageModel implements RelationshipLanguageModelPort 
 							{ role: 'system', content: SYSTEM_PROMPT },
 							{ role: 'user', content: input }
 						],
-						response_format: zodResponseFormat(RelationshipOutput, 'relationship_classification')
+						response_format: zodResponseFormat(
+							relationshipClassificationSchema,
+							'relationship_classification'
+						)
 					},
 					signal ? { signal } : undefined
 				);

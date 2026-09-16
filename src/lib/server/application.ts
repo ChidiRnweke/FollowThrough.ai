@@ -167,7 +167,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const knowledgeSearch = createKnowledgeSearchCapability({
 		db,
 		transactionRunner,
-		notes,
 		openRouterApiKey,
 		openRouterBaseURL,
 		appURL,
@@ -182,7 +181,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		diagramIndexer,
 		memoryIndexer,
 		searcher: knowledgeSearcher,
-		linkFinder
+		relationshipClassifier
 	} = knowledgeSearch;
 	const toolRetriever = knowledgeSearch.toolRetriever;
 	const agentFilesCapability = createAgentFilesCapability({
@@ -313,7 +312,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		relationships: {
 			selectionOrigins: noteCapability.selectionOrigins,
-			linkFinder,
+			knowledgeSearcher,
+			relationshipClassifier,
 			suggestionCreator: suggestions,
 			transactionRunner,
 			workflowRunner: agentCapability.workflowRunner

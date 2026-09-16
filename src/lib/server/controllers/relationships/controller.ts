@@ -1,8 +1,15 @@
 import type { BacklinkSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
-import type { RelateSelectionInput, RelateSelectionOutput } from '$lib/models/relationships';
+import type {
+	RelateSelectionInput,
+	RelateSelectionOutput,
+	LinkCandidate
+} from '$lib/models/relationships';
+import type { Note, TextSelection } from '$lib/models/notes';
+import { relatedNoteMatches, relatedNoteCandidate } from '$lib/services/relationships/candidates';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { LinkFinder } from '$lib/server/services/relationships/contracts';
+import type { RelationshipClassifier } from '$lib/server/services/relationships/contracts';
+import type { KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
@@ -32,7 +39,8 @@ export interface RelationshipsController {
 
 export interface RelationshipsDependencies {
 	selectionOrigins: SelectionOriginService;
-	linkFinder: LinkFinder;
+	knowledgeSearcher: KnowledgeSearcher;
+	relationshipClassifier: RelationshipClassifier;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
 	workflowRunner: WorkflowRunStarter;
@@ -61,7 +69,7 @@ export class Relationships implements RelationshipsController {
 		return this.dependencies.transactionRunner.run(async () => {
 			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
 			const { anchor } = source;
-			const candidates = await this.dependencies.linkFinder.find(actor, input.selection, signal);
+			const candidates = await this.findCandidates(actor, source.note, input.selection, signal);
 			const origin = await this.dependencies.selectionOrigins.record(actor, source, {
 				producerKind: 'pipeline',
 				producerName: 'Relate',
@@ -83,5 +91,33 @@ export class Relationships implements RelationshipsController {
 			);
 			return { anchorId: anchor.id, suggestions };
 		});
+	}
+
+	private async findCandidates(
+		actor: ActorContext,
+		note: Note,
+		selection: TextSelection,
+		signal?: AbortSignal
+	): Promise<readonly LinkCandidate[]> {
+		signal?.throwIfAborted();
+		const matches = await this.dependencies.knowledgeSearcher.search(
+			actor,
+			selection.text,
+			12,
+			note.projectId,
+			signal
+		);
+		signal?.throwIfAborted();
+		return Promise.all(
+			relatedNoteMatches(note.id, matches).map(async (match) => {
+				const classification = await this.dependencies.relationshipClassifier.classify(
+					selection.text,
+					match.content,
+					signal
+				);
+				signal?.throwIfAborted();
+				return relatedNoteCandidate(match, classification);
+			})
+		);
 	}
 }
