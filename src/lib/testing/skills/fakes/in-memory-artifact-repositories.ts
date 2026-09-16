@@ -261,9 +261,12 @@ export class InMemorySkillRepository implements SkillRepository {
 			.filter((item) => item.note.userId === actor.userId)
 			.map((item) => ({
 				noteId: item.note.id,
+				projectId: item.note.projectId,
 				name: item.name,
+				slug: item.slug,
 				description: item.description,
 				triggerHints: item.triggerHints,
+				allowImplicitInvocation: item.allowImplicitInvocation,
 				isEnabled: item.isEnabled
 			}));
 	}
