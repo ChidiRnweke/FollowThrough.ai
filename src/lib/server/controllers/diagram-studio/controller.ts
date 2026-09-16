@@ -439,19 +439,21 @@ export class DiagramStudio implements DiagramStudioController {
 		actor: ActorContext,
 		input: SaveProjectDiagramDraftInput
 	): Promise<PublishProjectDiagramOutput> {
-		return this.writeOutcome(actor, input.diagramId, input.baseEtag, async () => {
-			const source = this.dependencies.drawioXmlValidator.validate(input.source);
-			const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
-			const diagram = await this.dependencies.diagramDraftWriter.saveDraftSource(
-				actor,
-				input.diagramId,
-				source,
-				searchableText,
-				input.baseEtag
-			);
-			await this.dependencies.diagramIndexer.index(actor, diagram);
-			return diagram;
-		});
+		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
+			this.dependencies.transactionRunner.run(async () => {
+				const source = this.dependencies.drawioXmlValidator.validate(input.source);
+				const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
+				const diagram = await this.dependencies.diagramDraftWriter.saveDraftSource(
+					actor,
+					input.diagramId,
+					source,
+					searchableText,
+					input.baseEtag
+				);
+				await this.dependencies.diagramIndexer.index(actor, diagram);
+				return diagram;
+			})
+		);
 	}
 
 	publishProjectDiagram(
@@ -562,21 +564,22 @@ export class DiagramStudio implements DiagramStudioController {
 		actor: ActorContext,
 		input: DeleteProjectDiagramInput
 	): Promise<Diagram> {
-		const archived = await this.dependencies.diagramArchiver.archive(actor, input.diagramId);
-		// Re-indexed rather than left alone: a diagram in the trash is out of the
-		// project, and a search that still returns it offers the user something they
-		// cannot open.
-		await this.dependencies.diagramIndexer.index(actor, archived);
-		return archived;
+		return this.dependencies.transactionRunner.run(async () => {
+			const archived = await this.dependencies.diagramArchiver.archive(actor, input.diagramId);
+			await this.dependencies.diagramIndexer.index(actor, archived);
+			return archived;
+		});
 	}
 
 	async restoreProjectDiagram(
 		actor: ActorContext,
 		input: DeleteProjectDiagramInput
 	): Promise<Diagram> {
-		const restored = await this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
-		await this.dependencies.diagramIndexer.index(actor, restored);
-		return restored;
+		return this.dependencies.transactionRunner.run(async () => {
+			const restored = await this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
+			await this.dependencies.diagramIndexer.index(actor, restored);
+			return restored;
+		});
 	}
 
 	listTrashedProjectDiagrams(

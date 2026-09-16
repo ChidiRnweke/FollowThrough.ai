@@ -103,6 +103,14 @@ const withArchivedAt = (diagram: Diagram, archived: boolean): Diagram => {
 export class InMemoryDiagramRepository implements DiagramRepository {
 	diagrams: Diagram[] = [];
 	diagramRevisions: DiagramRevision[] = [];
+	snapshot(): () => void {
+		const diagrams = structuredClone(this.diagrams);
+		const revisions = structuredClone(this.diagramRevisions);
+		return () => {
+			this.diagrams = diagrams;
+			this.diagramRevisions = revisions;
+		};
+	}
 	/** Notes whose document renders a diagram, keyed by diagram id. */
 	referencingNotes = new Map<DiagramId, number>();
 	async findById(actor: ActorContext, id: DiagramId) {

@@ -162,8 +162,11 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   services resolve links. Actual before/after controller results and component captures show
   a duplicate-title link changing from a silently selected note to an explicit warning.
   All 3,604 unit tests, type checking, lint, architecture audits, and docs checks pass.
-- P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
-  diagram findings remain to be checked.
+- P17: controller-owned draw.io writes implemented in this stack. Draft saves and trash
+  transitions now also commit their search changes atomically. Three stateful tests reproduced
+  partial writes before the fix. Seven PostgreSQL mutation contracts pass, including rollback
+  after real index writes. The full 3,607-test suite and local quality checks pass.
+  Rendering after permanent deletion remains to be verified.
 - P09–P11, P13, P18–P23: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
