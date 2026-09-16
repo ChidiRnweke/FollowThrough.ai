@@ -1,4 +1,9 @@
-import type { AgentEvent, StoredAgentRunEventRecord, AgentRunId } from '$lib/models/agent';
+import type {
+	AgentEvent,
+	StoredAgentRunEventRecord,
+	AgentRunId,
+	StoredNoteActionRun
+} from '$lib/models/agent';
 
 interface EventStream {
 	close(): void;
@@ -71,13 +76,13 @@ export class InMemoryNoteActionRunTransport {
 
 /** Session storage without a browser, and shareable across two stores to model a refresh. */
 export class InMemoryNoteActionRunStorage {
-	private records: readonly unknown[] = [];
+	private records: readonly StoredNoteActionRun[] = [];
 
-	load(): readonly never[] {
-		return this.records as readonly never[];
+	load(): readonly StoredNoteActionRun[] {
+		return this.records;
 	}
 
-	save(runs: readonly unknown[]): void {
+	save(runs: readonly StoredNoteActionRun[]): void {
 		this.records = runs;
 	}
 }

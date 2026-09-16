@@ -113,6 +113,7 @@ export default defineConfig({
 						// was broken twice over.
 						'src/lib/components/notes/open-note.svelte.spec.ts',
 						'src/lib/client/notes/promise-submissions.svelte.spec.ts',
+						'src/lib/client/notes/action-run-storage.svelte.spec.ts',
 						// Feeds real editor JSON through `parseProseMirrorDocument` and asserts
 						// `attrs: { textAlign: null }`. It would have caught the strict-schema
 						// outage on the day it landed; it sat in `browser-full`, which the
