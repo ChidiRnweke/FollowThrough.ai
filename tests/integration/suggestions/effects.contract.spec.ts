@@ -7,10 +7,9 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
-import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { SuggestionEffects, mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
-import { mapAppliedChange } from '$lib/models/proposal-effects';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
 
 const setup = async (suffix: string) => {
