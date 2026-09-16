@@ -98,8 +98,7 @@ export class AgentContext implements AgentContextBuilder {
 		private readonly noteReader: NoteReader,
 		private readonly conversations?: ConversationReader,
 		private readonly projects?: ProjectReader,
-		private readonly memoryLister?: MemoryLister,
-		private readonly logger: Pick<Console, 'warn'> = console
+		private readonly memoryLister?: MemoryLister
 	) {}
 
 	async build(
@@ -246,35 +245,23 @@ export class AgentContext implements AgentContextBuilder {
 		};
 	}
 
-	/**
-	 * The attached notes that are still there.
-	 *
-	 * `Promise.all` over the reads meant one deleted note failed the whole turn:
-	 * a chip the user pinned before deleting the note behind it took down every
-	 * request that followed, and the message said only that a note was not found.
-	 *
-	 * Only `NotFoundError` counts as absence. Anything else is the lookup itself
-	 * failing, and treating that as "the note is gone" would turn an outage into
-	 * a context that is quietly thinner than the one the user asked for — with
-	 * the agent answering about fewer notes than were attached and nothing
-	 * anywhere saying so. Hence the warn: a skip the user cannot see is a skip
-	 * somebody has to be able to find afterwards.
-	 */
+	/** Explicitly attached notes are required context, including notes selected through a folder. */
 	private async loadContextNotes(
 		actor: ActorContext,
 		noteIds: readonly Note['id'][]
 	): Promise<readonly Note[]> {
-		const loaded = await Promise.all(
+		return Promise.all(
 			noteIds.map(async (noteId) => {
 				try {
 					return await this.noteReader.get(actor, noteId);
 				} catch (error) {
 					if (!(error instanceof NotFoundError)) throw error;
-					this.logger.warn(`Context note ${noteId} no longer exists and was left out.`);
-					return undefined;
+					throw new NotFoundError(
+						'An attached note is no longer available. Remove it from context and retry.',
+						{ noteId }
+					);
 				}
 			})
 		);
-		return loaded.filter((note) => note !== undefined);
 	}
 }

@@ -245,6 +245,11 @@ failure so the dialog can retain the report for retry. Controller tests cover sa
 failed submission and retry. ADR 0010 now references the current outbox, permanent operation proofs
 and diagram offline edits rather than the retired note-only sync coordinator.
 
+P10 missing context: a regression reproduces successful context assembly after one of two
+explicitly attached notes disappears. Context loading now fails with an actionable message and
+the missing note identity; operational read failures retain their original error. This closes the
+silent omission path. Agent-context service orchestration remains pending the global migration.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
