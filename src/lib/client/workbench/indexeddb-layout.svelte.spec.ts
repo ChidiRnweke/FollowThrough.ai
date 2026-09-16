@@ -75,17 +75,16 @@ describe('IndexedDB workspace storage', () => {
 			request.onerror = () => reject(request.error);
 			request.onsuccess = () => {
 				const database = request.result;
-				const read = database
-					.transaction('workspace', 'readonly')
-					.objectStore('workspace')
-					.get('current');
-				read.onsuccess = () => {
+				const transaction = database.transaction('workspace', 'readonly');
+				const read = transaction.objectStore('workspace').get('current');
+				// Request success precedes transaction completion. Cleanup must wait for both.
+				transaction.oncomplete = () => {
 					database.close();
 					resolve(read.result);
 				};
-				read.onerror = () => {
+				transaction.onabort = () => {
 					database.close();
-					reject(read.error);
+					reject(transaction.error ?? new Error('Stored layout read was aborted'));
 				};
 			};
 		});
