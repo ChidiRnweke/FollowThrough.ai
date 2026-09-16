@@ -515,6 +515,12 @@ inventing a memory origin for every proposal. Other note/backlink/reference proj
 The memory-view parity test exposed a client-only full provenance field that the declared view type
 and server response did not carry. Shared projection now gives both paths the same review view.
 
+Proposal creation ownership: SuggestionInbox now owns createProposalRecord and selectionProposal.
+They initialize proposed state and bind a selected-source proposal's envelope and payload to the same
+note, project, anchor and provenance. Shared test fakes reuse these actual service policies. The
+suggestion model retains types, schema objects and record-key values; it no longer constructs proposals
+or review views. Existing selection, proposal, controller and database tests cover the unchanged rules.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
