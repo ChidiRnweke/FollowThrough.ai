@@ -1,54 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
-import type { WorkbenchLayoutRecord } from '$lib/client/workbench/indexeddb-layout';
-import { WorkbenchStore, type WorkbenchRouter, type WorkspaceRepository } from './workbench.svelte';
+import { WorkbenchStore } from './workbench.svelte';
+import { InMemoryWorkbenchLayout } from '$lib/testing/workbench/fakes/in-memory-layout';
+import { InMemoryWorkbenchRouter } from '$lib/testing/workbench/fakes/in-memory-router';
 
 const NOTE_A = '11111111-1111-4111-8111-111111111111' as NoteId;
 const NOTE_B = '22222222-2222-4222-8222-222222222222' as NoteId;
 
-/** Records what was written so persistence can be asserted without IndexedDB. */
-class InMemoryWorkspaceRepository implements WorkspaceRepository {
-	record?: WorkbenchLayoutRecord;
-
-	async get(): Promise<WorkbenchLayoutRecord | undefined> {
-		return this.record;
-	}
-
-	async put(record: WorkbenchLayoutRecord): Promise<void> {
-		this.record = record;
-	}
-}
-
-/**
- * Stands in for SvelteKit's router.  `goto` resolves a tick late — as the real
- * one does — and while it is in flight `page.url` is still the *old* URL.  The
- * `onNavigationPending` hook is how a test reproduces the layout's `$effect`
- * firing during that window.
- */
-class FakeRouter implements WorkbenchRouter {
-	url: URL;
-	onNavigationPending?: () => void;
-	gotoCount = 0;
-
-	constructor(href: string) {
-		this.url = new URL(href, 'https://followthrough.test');
-	}
-
-	async goto(url: string): Promise<void> {
-		this.gotoCount += 1;
-		this.onNavigationPending?.();
-		await Promise.resolve();
-		this.url = new URL(url, 'https://followthrough.test');
-	}
-
-	currentUrl(): URL {
-		return this.url;
-	}
-}
-
 const setup = (href: string, openTabs: readonly NoteId[], focused: NoteId) => {
-	const router = new FakeRouter(href);
-	const repository = new InMemoryWorkspaceRepository();
+	const router = new InMemoryWorkbenchRouter(href);
+	const repository = new InMemoryWorkbenchLayout();
 	const store = new WorkbenchStore(router, repository);
 	store.openTabs = openTabs;
 	store.focusedTabId = focused;

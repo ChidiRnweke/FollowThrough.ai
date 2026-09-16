@@ -13,9 +13,12 @@ const deleteDatabase = (name: string): Promise<void> =>
 	});
 
 const setup = () => {
-	const databaseName = `followthrough-workspace-test-${crypto.randomUUID()}`;
+	const prefix = `followthrough-workspace-test-${crypto.randomUUID()}`;
+	const accountId = crypto.randomUUID();
+	const repository = new IndexedDbWorkbenchLayout(accountId, prefix);
+	const databaseName = repository.databaseName;
 	databases.push(databaseName);
-	return { databaseName, repository: new IndexedDbWorkbenchLayout(databaseName) };
+	return { databaseName, accountId, prefix, repository };
 };
 
 const id = (n: number): NoteId =>
@@ -36,7 +39,116 @@ afterEach(async () => {
 	for (const database of databases.splice(0)) await deleteDatabase(database);
 });
 
+const writeRaw = async (databaseName: string, value: object): Promise<void> => {
+	const database = await new Promise<IDBDatabase>((resolve, reject) => {
+		const request = indexedDB.open(databaseName);
+		request.onupgradeneeded = () =>
+			request.result.createObjectStore('workspace', { keyPath: 'id' });
+		request.onsuccess = () => resolve(request.result);
+		request.onerror = () => reject(request.error);
+	});
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const transaction = database.transaction('workspace', 'readwrite');
+			transaction.objectStore('workspace').put(value);
+			transaction.oncomplete = () => resolve();
+			transaction.onerror = () => reject(transaction.error);
+		});
+	} finally {
+		database.close();
+	}
+};
+
 describe('IndexedDB workspace storage', () => {
+	it('retains the original row after reporting a corrupt layout', async () => {
+		const { databaseName, repository } = setup();
+		await repository.put(record());
+		const corrupt = { ...record(), openTabs: ['not-a-tab'] };
+		await writeRaw(databaseName, corrupt);
+		const outcome = await repository.get().then(
+			() => 'read',
+			() => 'rejected'
+		);
+		repository.close();
+		const stored = await new Promise<unknown>((resolve, reject) => {
+			const request = indexedDB.open(databaseName);
+			request.onerror = () => reject(request.error);
+			request.onsuccess = () => {
+				const database = request.result;
+				const read = database
+					.transaction('workspace', 'readonly')
+					.objectStore('workspace')
+					.get('current');
+				read.onsuccess = () => {
+					database.close();
+					resolve(read.result);
+				};
+				read.onerror = () => {
+					database.close();
+					reject(read.error);
+				};
+			};
+		});
+		expect({ outcome, stored }).toEqual({ outcome: 'rejected', stored: corrupt });
+	});
+	it('keeps layouts separate for accounts using the same device', async () => {
+		const first = setup();
+		const second = new IndexedDbWorkbenchLayout(crypto.randomUUID(), first.prefix);
+		databases.push(second.databaseName);
+		await first.repository.put(record());
+		const stored = await second.get();
+		first.repository.close();
+		second.close();
+		expect(stored).toBeUndefined();
+	});
+	it('keeps another account layout when one account clears its tabs', async () => {
+		const first = setup();
+		const second = new IndexedDbWorkbenchLayout(crypto.randomUUID(), first.prefix);
+		databases.push(second.databaseName);
+		await first.repository.put(record());
+		await second.put(
+			record({ openTabs: [id(3)], focusedNoteId: id(3), pinnedTabs: [], recentlyUsed: [id(3)] })
+		);
+		await first.repository.clear();
+		const stored = await second.get();
+		first.repository.close();
+		second.close();
+		expect(stored?.openTabs).toEqual([id(3)]);
+	});
+	it('does not adopt an old layout that has no recorded account owner', async () => {
+		const { prefix, repository } = setup();
+		databases.push(prefix);
+		await writeRaw(prefix, record());
+		const stored = await repository.get();
+		repository.close();
+		expect(stored).toBeUndefined();
+	});
+	it('rejects a stored layout with malformed tab identities', async () => {
+		const { databaseName, repository } = setup();
+		await repository.put(record());
+		await writeRaw(databaseName, { ...record(), openTabs: ['not-a-tab'] });
+		try {
+			await expect(repository.get()).rejects.toThrow('Saved tabs could not be read');
+		} finally {
+			repository.close();
+		}
+	});
+	it('rejects a stored layout with an invalid split ratio', async () => {
+		const { databaseName, repository } = setup();
+		await repository.put(record());
+		await writeRaw(databaseName, { ...record(), splitRatio: 7 });
+		try {
+			await expect(repository.get()).rejects.toThrow('Saved tabs could not be read');
+		} finally {
+			repository.close();
+		}
+	});
+	it('never reopens a closed account connection', async () => {
+		const { repository } = setup();
+		await repository.put(record());
+		repository.close();
+		await expect(repository.get()).rejects.toThrow('Workbench storage is closed');
+	});
 	it('round-trips a workspace record', async () => {
 		const { repository } = setup();
 		const original = record();
@@ -73,11 +185,11 @@ describe('IndexedDB workspace storage', () => {
 	});
 
 	it('survives a database reopen', async () => {
-		const { databaseName, repository: first } = setup();
+		const { accountId, prefix, repository: first } = setup();
 		const original = record();
 		await first.put(original);
 		first.close();
-		const second = new IndexedDbWorkbenchLayout(databaseName);
+		const second = new IndexedDbWorkbenchLayout(accountId, prefix);
 		const stored = await second.get();
 		second.close();
 		expect(stored).toEqual(original);

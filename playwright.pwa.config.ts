@@ -6,7 +6,7 @@ export default defineConfig({
 	testDir: './tests',
 	workers: 1,
 	fullyParallel: false,
-	testMatch: '**/pwa.e2e.{ts,js}',
+	testMatch: ['**/pwa.e2e.{ts,js}', '**/workbench-account.e2e.ts'],
 	use: {
 		// The separate headless shell segfaults during context creation on CI.
 		// Use regular Chromium's headless mode for the installed-app scenarios.
