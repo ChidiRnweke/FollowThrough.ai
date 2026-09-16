@@ -28,7 +28,7 @@ const setup = () => {
 		runs,
 		events: runs,
 		transactions,
-		settlements: new RunSettlements(runs, runs, transactions),
+		settlements: new RunSettlements(runs, runs),
 		conversations: {
 			createWorkflow: async (
 				ctx: ActorContext,

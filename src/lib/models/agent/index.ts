@@ -1810,46 +1810,6 @@ export interface RunSettlementPlan {
 	readonly patch: Partial<AgentRun>;
 	readonly events: readonly AgentEvent[];
 }
-export function decideRunSettlement(
-	runId: AgentRunId,
-	outcome: RunSettlementOutcome,
-	finishedAt: DateTime
-): RunSettlementPlan {
-	switch (outcome.kind) {
-		case 'completed':
-		case 'workflow_completed':
-			return {
-				expected: 'running',
-				status: 'completed',
-				patch: { finishedAt, serializedState: undefined, pendingDecisions: [] },
-				events: [
-					...(outcome.kind === 'workflow_completed'
-						? [{ type: 'workflow_result' as const, action: outcome.action, result: outcome.result }]
-						: []),
-					{ type: 'completed', runId, conversationId: outcome.conversationId, model: outcome.model }
-				]
-			};
-		case 'cancelled':
-			return {
-				expected: 'cancelling',
-				status: 'cancelled',
-				patch: { finishedAt, failure: 'The request was cancelled' },
-				events: [{ type: 'cancelled', runId, message: outcome.message }]
-			};
-		case 'failed':
-			return {
-				expected: 'running',
-				status: 'failed',
-				patch: { finishedAt, failure: outcome.message, providerErrorCode: outcome.code },
-				events: [
-					{
-						type: 'failed',
-						runId,
-						code: outcome.code,
-						message: outcome.message,
-						retryable: outcome.retryable
-					}
-				]
-			};
-	}
-}
+export type RunSettlementClaim =
+	| { readonly kind: 'claimed'; readonly run: AgentRun; readonly events: readonly AgentEvent[] }
+	| { readonly kind: 'lost' };

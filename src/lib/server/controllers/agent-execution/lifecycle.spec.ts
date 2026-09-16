@@ -101,7 +101,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		decisions: runs,
 		sessions,
 		transactions,
-		settlements: new RunSettlements(runs, runs, transactions),
+		settlements: new RunSettlements(runs, runs),
 		contextFormatter: new AgentContext(),
 		contextNotes: new InMemoryNoteContent(),
 		contextSkills: new InMemorySkills(),
