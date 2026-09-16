@@ -1,3 +1,4 @@
+import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
@@ -18,7 +19,7 @@ import type { Diagram } from '$lib/models/diagrams';
 import type { TodoView } from '$lib/models/todos';
 import type { SuggestionView } from '$lib/models/suggestions';
 import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ImportMarkdownArchiveInput,
@@ -316,7 +317,8 @@ export interface NotesController {
 export interface NotesDependencies {
 	folderCreator: FolderCreator;
 	markdown: NoteMarkdown;
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
@@ -471,55 +473,77 @@ export class Notes implements NotesController {
 			unresolvedLinks
 		};
 	}
-	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			switch (command.kind) {
-				case 'createNote':
-					await this.create(actor, command);
-					break;
-				case 'renameNote':
-					await this.rename(actor, command);
-					break;
-				case 'archiveNote':
-					await this.archive(actor, command);
-					break;
-				case 'restoreNote':
-					await this.restore(actor, command);
-					break;
-				case 'publishNote':
-					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
-						throw new ValidationError('The note no longer exists');
-					await this.publish(actor, {
+	async synchronize(
+		actor: ActorContext,
+		input: NoteMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input, prepared.current);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: NoteMutationRequest,
+		current: WorkspaceMutationCurrent
+	): Promise<void> {
+		const command = input.command;
+		switch (command.kind) {
+			case 'createNote':
+				await this.create(actor, command);
+				break;
+			case 'renameNote':
+				await this.rename(actor, command);
+				break;
+			case 'archiveNote':
+				await this.archive(actor, command);
+				break;
+			case 'restoreNote':
+				await this.restore(actor, command);
+				break;
+			case 'publishNote':
+				if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+					throw new ValidationError('The note no longer exists');
+				await this.publish(actor, {
+					noteId: command.noteId,
+					baseEtag: noteEtag(current.snapshot.value.value)
+				});
+				break;
+			case 'discardNoteDraft':
+				await this.discardDraft(actor, command);
+				break;
+			case 'noteNumbering':
+				await this.setSectionNumbering(actor, command);
+				break;
+			case 'saveNote': {
+				if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+					throw new ValidationError('The note no longer exists');
+				await this.save(actor, {
+					note: applyNoteDraftEdit(
+						current.snapshot.value.value,
+						command,
+						current.snapshot.value.value.updatedAt
+					)
+				});
+				if (command.sectionNumbering !== undefined)
+					await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
 						noteId: command.noteId,
-						baseEtag: noteEtag(current.snapshot.value.value)
+						enabled: command.sectionNumbering ?? undefined
 					});
-					break;
-				case 'discardNoteDraft':
-					await this.discardDraft(actor, command);
-					break;
-				case 'noteNumbering':
-					await this.setSectionNumbering(actor, command);
-					break;
-				case 'saveNote': {
-					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
-						throw new ValidationError('The note no longer exists');
-					await this.save(actor, {
-						note: applyNoteDraftEdit(
-							current.snapshot.value.value,
-							command,
-							current.snapshot.value.value.updatedAt
-						)
-					});
-					if (command.sectionNumbering !== undefined)
-						await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
-							noteId: command.noteId,
-							enabled: command.sectionNumbering ?? undefined
-						});
-					break;
-				}
+				break;
 			}
-		});
+		}
 	}
 
 	constructor(private readonly dependencies: NotesDependencies) {}

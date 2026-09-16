@@ -2,7 +2,7 @@ import type { SuggestionEffectService } from '$lib/server/services/suggestions/c
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { Project } from '$lib/models/projects';
 import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
@@ -95,7 +95,8 @@ export interface TodosController {
 	startExtractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<AgentRunReceipt>;
 }
 export interface TodosDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	todoLister: TodoLister;
 	todoViewAssembler: TodoViewAssembler;
 	todoReader: TodoReader;
@@ -117,25 +118,46 @@ export interface TodosDependencies {
 	workflowRunner: WorkflowRunStarter;
 }
 export class Todos implements TodosController {
-	synchronize(actor: ActorContext, input: TodoMutationRequest): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			void current;
-			switch (command.kind) {
-				case 'createTodo':
-					await this.create(actor, command);
-					break;
-				case 'updateTodo': {
-					const { kind, ...edits } = command;
-					void kind;
-					await this.update(actor, edits);
-					break;
-				}
-				case 'deleteTodo':
-					await this.remove(actor, command.todoId);
-					break;
+	async synchronize(
+		actor: ActorContext,
+		input: TodoMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: TodoMutationRequest
+	): Promise<void> {
+		const command = input.command;
+
+		switch (command.kind) {
+			case 'createTodo':
+				await this.create(actor, command);
+				break;
+			case 'updateTodo': {
+				const { kind, ...edits } = command;
+				void kind;
+				await this.update(actor, edits);
+				break;
 			}
-		});
+			case 'deleteTodo':
+				await this.remove(actor, command.todoId);
+				break;
+		}
 	}
 
 	constructor(private readonly dependencies: TodosDependencies) {}

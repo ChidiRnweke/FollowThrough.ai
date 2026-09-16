@@ -1,8 +1,9 @@
+import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	ToolPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import { ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
@@ -50,22 +51,42 @@ export interface ToolPreferencesController {
 }
 
 export interface ToolPreferencesDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	transactionRunner: AtomicOperation;
+	syncRetry: 'database-only' | 'never';
 	preferences: ToolPreferenceStore;
 }
 
 export class ToolPreferences implements ToolPreferencesController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: ToolPreferenceMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async () => {
-			if (input.command.userId !== actor.userId)
-				throw new ValidationError('The preferences belong to another account');
-			const command = input.command;
-			if (command.kind === 'resetProjectToolOverride') await this.clearOverride(actor, command);
-			else await this.setEnabled(actor, command);
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: ToolPreferenceMutationRequest
+	): Promise<void> {
+		if (input.command.userId !== actor.userId)
+			throw new ValidationError('The preferences belong to another account');
+		const command = input.command;
+		if (command.kind === 'resetProjectToolOverride') await this.clearOverride(actor, command);
+		else await this.setEnabled(actor, command);
 	}
 	constructor(private readonly dependencies: ToolPreferencesDependencies) {}
 

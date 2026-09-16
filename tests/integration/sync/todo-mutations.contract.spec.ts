@@ -12,7 +12,7 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const projects = new ProjectRecords(database);
 	const notes = createNotesCapability({ db: database, projects });
 	const { catalog } = createTodosCapability({
@@ -25,6 +25,8 @@ const setup = async (suffix: string) => {
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
 			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
+			transactionRunner,
 			todoCreator: catalog,
 			todoReader: catalog,
 			todoEditor: catalog,

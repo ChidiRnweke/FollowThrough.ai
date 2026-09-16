@@ -1,8 +1,9 @@
+import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	AgentPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
 import { webSearchEngines } from '$lib/models/agent';
@@ -71,7 +72,9 @@ export interface AgentSettingsController {
 }
 
 export interface AgentSettingsDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	transactionRunner: AtomicOperation;
+	syncRetry: 'database-only' | 'never';
 	preferences: AgentPreferencesStore;
 	models: AgentModelCatalog;
 	/** Deployment fallback chat model when the user has not chosen one. */
@@ -81,15 +84,33 @@ export interface AgentSettingsDependencies {
 }
 
 export class AgentSettings implements AgentSettingsController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: AgentPreferenceMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async () => {
-			if (input.command.userId !== actor.userId)
-				throw new ValidationError('The preferences belong to another account');
-			await this.updatePreferences(actor, input.command.patch);
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: AgentPreferenceMutationRequest
+	): Promise<void> {
+		if (input.command.userId !== actor.userId)
+			throw new ValidationError('The preferences belong to another account');
+		await this.updatePreferences(actor, input.command.patch);
 	}
 	constructor(private readonly dependencies: AgentSettingsDependencies) {}
 

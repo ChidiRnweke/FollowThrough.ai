@@ -1,9 +1,10 @@
+import type { AtomicOperation } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type {
 	UserPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	ActorContext,
 	UpdateUserPreferencesInput,
@@ -37,21 +38,41 @@ export interface UserSettingsController {
 }
 
 export interface UserSettingsDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	transactionRunner: AtomicOperation;
+	syncRetry: 'database-only' | 'never';
 	preferences: UserPreferencesReader & UserPreferencesWriter;
 }
 
 export class UserSettings implements UserSettingsController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: UserPreferenceMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async () => {
-			if (input.command.userId !== actor.userId)
-				throw new ValidationError('The preferences belong to another account');
-			await this.updatePreferences(actor, {
-				sectionNumberingDefault: input.command.sectionNumberingDefault
-			});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: UserPreferenceMutationRequest
+	): Promise<void> {
+		if (input.command.userId !== actor.userId)
+			throw new ValidationError('The preferences belong to another account');
+		await this.updatePreferences(actor, {
+			sectionNumberingDefault: input.command.sectionNumberingDefault
 		});
 	}
 	constructor(private readonly dependencies: UserSettingsDependencies) {}

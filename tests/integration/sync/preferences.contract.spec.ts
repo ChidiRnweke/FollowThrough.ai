@@ -19,18 +19,22 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(database));
 	const agent = new AgentSettings(
 		capabilityDependencies<AgentSettingsDependencies>({
 			preferences,
-			syncMutations: sync.mutations
+			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
+			transactionRunner
 		})
 	);
 	const user = new UserSettings(
 		capabilityDependencies<UserSettingsDependencies>({
 			preferences: new UserPreferenceStore(new UserPreferencesRecords(database)),
-			syncMutations: sync.mutations
+			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
+			transactionRunner
 		})
 	);
 	return { owner, sync, preferences, agent, user };

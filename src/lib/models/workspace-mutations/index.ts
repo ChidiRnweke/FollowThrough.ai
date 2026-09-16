@@ -281,6 +281,14 @@ export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
 ]);
 export type WorkspaceMutationResult = z.infer<typeof workspaceMutationResultSchema>;
 
+export type WorkspaceMutationCurrent = Extract<
+	WorkspaceMutationResult,
+	{ kind: 'conflict' }
+>['remote'];
+export type WorkspaceMutationPreparation =
+	| { readonly kind: 'ready'; readonly current: WorkspaceMutationCurrent }
+	| { readonly kind: 'finished'; readonly result: WorkspaceMutationResult };
+
 export const workspaceWriteRecoverySchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('cancelled') }),
 	z.object({ kind: z.literal('applied'), receipt: workspaceWriteReceiptSchema }),

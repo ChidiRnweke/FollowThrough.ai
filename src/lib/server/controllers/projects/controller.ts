@@ -3,7 +3,7 @@ import type {
 	ProjectMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveProjectInput,
@@ -62,7 +62,8 @@ export interface ProjectsController {
 }
 
 export interface ProjectsDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	projectCreator: ProjectCreator;
 	projectReader: ProjectReader;
 	projectLister: ProjectLister;
@@ -74,31 +75,49 @@ export interface ProjectsDependencies {
 }
 
 export class Projects implements ProjectsController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: ProjectMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			void current;
-			switch (command.kind) {
-				case 'createProject':
-					await this.create(actor, command);
-					break;
-				case 'renameProject':
-					await this.rename(actor, command);
-					break;
-				case 'archiveProject':
-					await this.archive(actor, command);
-					break;
-				case 'projectNumbering':
-					await this.setSectionNumberingDefault(actor, command);
-					break;
-				case 'createFolder':
-					await this.createFolder(actor, command);
-					break;
-			}
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: ProjectMutationRequest
+	): Promise<void> {
+		const command = input.command;
+
+		switch (command.kind) {
+			case 'createProject':
+				await this.create(actor, command);
+				break;
+			case 'renameProject':
+				await this.rename(actor, command);
+				break;
+			case 'archiveProject':
+				await this.archive(actor, command);
+				break;
+			case 'projectNumbering':
+				await this.setSectionNumberingDefault(actor, command);
+				break;
+			case 'createFolder':
+				await this.createFolder(actor, command);
+				break;
+		}
 	}
 
 	constructor(private readonly dependencies: ProjectsDependencies) {}

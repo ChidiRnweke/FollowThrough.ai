@@ -64,7 +64,7 @@ present in the note is unchanged; a different result against a stale base requir
 - `src/lib/server/controllers/notes/save.spec.ts` checks stale revisions and no-op saves.
 - `src/lib/client/sync/mutation-queue.ts` retains pending intent and authoritative outcomes.
 - `src/lib/client/sync/mutation-queue.spec.ts` checks conflicts and retries with stable identities.
-- `src/lib/server/services/workspace/mutations.spec.ts` checks exact operation replay, divergent
+- `src/lib/server/controllers/notes/synchronization.spec.ts` checks exact operation replay, divergent
   resource versions, cancellation and rollback when a receipt cannot be stored.
 - `src/lib/components/shared/workspace-write-review.svelte.spec.ts` checks conflict comparison
   and protects dependent edits from an outdated discard decision.

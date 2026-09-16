@@ -1,3 +1,4 @@
+import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -5,7 +6,7 @@ import {
 	diagramIndexNoteId,
 	type ContentIndex
 } from '$lib/server/services/knowledge-search/indexing';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	DiagramMutationRequest,
 	WorkspaceMutationResult
@@ -203,7 +204,8 @@ export interface DiagramStudioController {
 }
 
 export interface DiagramStudioDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	transactionRunner: TransactionRunner;
 	diagramFinder: DiagramFinder;
 	diagramLister: DiagramLister;
@@ -229,48 +231,65 @@ export interface DiagramStudioDependencies {
 }
 
 export class DiagramStudio implements DiagramStudioController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: DiagramMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			if (command.kind === 'archiveDiagram') {
-				await this.archiveProjectDiagram(actor, command);
-				return;
-			}
-			if (command.kind === 'restoreDiagram') {
-				await this.restoreProjectDiagram(actor, command);
-				return;
-			}
-			if (command.kind === 'deleteDiagram') {
-				await this.deleteProjectDiagram(actor, command);
-				return;
-			}
-			if (
-				current.kind !== 'found' ||
-				current.snapshot.value.type !== 'diagrams' ||
-				current.snapshot.value.value.kind !== 'drawio'
-			)
-				throw new UnsupportedDiagramOperationError(
-					'Only an existing draw.io diagram can be edited'
-				);
-			const baseEtag = diagramEtag(current.snapshot.value.value);
-			let result: DiagramWriteOutcome;
-			switch (command.kind) {
-				case 'saveDiagram':
-					result = await this.saveProjectDiagramDraft(actor, { ...command, baseEtag });
-					break;
-				case 'renameDiagram':
-					result = await this.renameProjectDiagram(actor, { ...command, baseEtag });
-					break;
-				case 'publishDiagram':
-					result = await this.publishProjectDiagram(actor, { ...command, baseEtag });
-					break;
-			}
-			if (result.outcome !== 'saved')
-				throw new StaleRevisionError('The diagram changed during the guarded write');
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input, prepared.current);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: DiagramMutationRequest,
+		current: WorkspaceMutationCurrent
+	): Promise<void> {
+		const command = input.command;
+		if (command.kind === 'archiveDiagram') {
+			await this.archiveProjectDiagram(actor, command);
+			return;
+		}
+		if (command.kind === 'restoreDiagram') {
+			await this.restoreProjectDiagram(actor, command);
+			return;
+		}
+		if (command.kind === 'deleteDiagram') {
+			await this.deleteProjectDiagram(actor, command);
+			return;
+		}
+		if (
+			current.kind !== 'found' ||
+			current.snapshot.value.type !== 'diagrams' ||
+			current.snapshot.value.value.kind !== 'drawio'
+		)
+			throw new UnsupportedDiagramOperationError('Only an existing draw.io diagram can be edited');
+		const baseEtag = diagramEtag(current.snapshot.value.value);
+		let result: DiagramWriteOutcome;
+		switch (command.kind) {
+			case 'saveDiagram':
+				result = await this.saveProjectDiagramDraft(actor, { ...command, baseEtag });
+				break;
+			case 'renameDiagram':
+				result = await this.renameProjectDiagram(actor, { ...command, baseEtag });
+				break;
+			case 'publishDiagram':
+				result = await this.publishProjectDiagram(actor, { ...command, baseEtag });
+				break;
+		}
+		if (result.outcome !== 'saved')
+			throw new StaleRevisionError('The diagram changed during the guarded write');
 	}
 
 	constructor(private readonly dependencies: DiagramStudioDependencies) {}
