@@ -157,24 +157,31 @@ export const defaultExportSettings: ExportSettings = {
 	diagramTheme: { base: 'light' }
 };
 
+/** Complete settings supplied by a browser request or agent tool. */
+export const exportSettingsSchema = z.object({
+	fontFamily: z.enum(['helvetica', 'times', 'courier']),
+	fontSize: z.number().min(8).max(18),
+	lineHeight: z.number().min(1).max(2.2),
+	margin: z.number().min(18).max(144),
+	includeTitle: z.boolean().optional(),
+	diagramTheme: z
+		.object({
+			base: z.enum(['light', 'dark']),
+			colors: z.record(z.string(), z.string()).optional()
+		})
+		.optional()
+});
+
 /**
  * Stored settings are a partial overlay on the defaults, so every field is
  * optional here and the reader merges the result. Written to JSONB by the
  * exporter's own repositories, where typed values are always a subset of this.
  */
-export const exportSettingsOverlaySchema = z
-	.object({
-		fontFamily: z.enum(['helvetica', 'times', 'courier']),
+export const exportSettingsOverlaySchema = exportSettingsSchema
+	.extend({
 		fontSize: z.number(),
 		lineHeight: z.number(),
-		margin: z.number(),
-		includeTitle: z.boolean(),
-		diagramTheme: z
-			.object({
-				base: z.enum(['light', 'dark']),
-				colors: z.record(z.string(), z.string()).optional()
-			})
-			.optional()
+		margin: z.number()
 	})
 	.partial();
 

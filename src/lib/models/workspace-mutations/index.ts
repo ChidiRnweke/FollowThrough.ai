@@ -9,7 +9,7 @@ import type {
 } from '$lib/models/memory';
 import { z } from 'zod';
 import { appliedWriteProofSchema } from '$lib/models/outbox';
-import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
+import { exportSettingsSchema } from '$lib/models/deliverables';
 import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
 import { decideDiagramTrash, type DiagramId } from '$lib/models/diagrams';
 import {
@@ -125,13 +125,7 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		kind: z.literal('updateExportSettings'),
 		userId: resourceDataSchemas.export_settings.shape.userId,
 		projectId,
-		settings: exportSettingsOverlaySchema
-			.required({ fontFamily: true, fontSize: true, lineHeight: true, margin: true })
-			.extend({
-				fontSize: z.number().min(8).max(18),
-				lineHeight: z.number().min(1).max(2.2),
-				margin: z.number().min(18).max(144)
-			})
+		settings: exportSettingsSchema
 	}),
 	z.object({
 		kind: z.literal('createMemory'),
