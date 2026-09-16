@@ -34,7 +34,6 @@ import TableOfContents, {
 import { DiagramDeletion } from './DiagramDeletion.js';
 import { InlineSuggestion, type InlineSuggestionRequestInput } from './InlineSuggestion.js';
 import { Proofread, type ProofreadIssueReport } from './Proofread.js';
-import { toast } from 'svelte-sonner';
 import {
 	armLiteralPaste,
 	clipboardImage,
@@ -50,11 +49,16 @@ import { createNoteLinkRenderer } from './note-link-renderer.svelte.js';
 import { createSlashCommandRenderer } from './slash-command-renderer.svelte.js';
 import { createHeadingLinkRenderer } from './heading-link-renderer.svelte.js';
 import { hasMedia, selectionMedia } from './diagram-copy.js';
-import { selectionClipboardItem, selectionPlainText } from './clipboard-payload.js';
+import { clipboardSource, type SerializedSelection } from './clipboard-payload.js';
 
 const lowlight = createLowlight(all);
 
 export interface EdraEditorProps {
+	/** The host owns media preparation, clipboard access, and failure reporting. */
+	onCopy?: (selection: SerializedSelection) => void;
+	/** Delete a cut selection only after its complete clipboard write is confirmed. */
+	onCut?: (selection: SerializedSelection) => Promise<boolean>;
+	onCutChanged?: () => void;
 	onUpdate?: () => void;
 	/** Read-only instances render the document with every node view but accept no edits. */
 	editable?: boolean;
@@ -253,26 +257,29 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 				// and an image as a relative, cookie-authenticated attachment URL, so the
 				// default serialization pastes code and broken links into anything outside
 				// this app.
+				cut: (view, event) => {
+					if (!props?.onCut || !hasMedia(selectionMedia(view.state))) return false;
+					event.preventDefault();
+					const captured = view.state;
+					void props.onCut(clipboardSource(captured)).then((complete) => {
+						if (!complete || view.isDestroyed) return;
+						if (!view.state.doc.eq(captured.doc)) {
+							props.onCutChanged?.();
+							return;
+						}
+						view.dispatch(
+							view.state.tr.delete(captured.selection.from, captured.selection.to).scrollIntoView()
+						);
+					});
+					return true;
+				},
 				copy: (view, event) => {
-					if (typeof ClipboardItem === 'undefined') return false;
+					if (!props?.onCopy) return false;
 					const media = selectionMedia(view.state);
 					if (!hasMedia(media)) return false;
 					event.preventDefault();
 
-					// Reached synchronously, while the keystroke's activation is still live: the
-					// pictures are still being rendered inside the item. See `selectionClipboardItem`.
-					// audit-allow: silent-catch — rich-copy failure falls back to plain text without claiming the image was copied.
-					void navigator.clipboard.write([selectionClipboardItem(view.state)]).catch(() => {
-						// Whatever went wrong, the selection's text still belongs on the clipboard.
-						const fallback = media.lone?.kind === 'mermaid' ? media.lone.source : undefined;
-						// audit-allow: silent-catch — total clipboard failure is reported after both rich and text writes fail.
-						void navigator.clipboard
-							.writeText(fallback ?? selectionPlainText(view.state))
-							.catch((error) => {
-								console.error('Clipboard text fallback failed', error);
-								toast.error('The selection could not be copied.');
-							});
-					});
+					props.onCopy(clipboardSource(view.state));
 					return true;
 				}
 			}

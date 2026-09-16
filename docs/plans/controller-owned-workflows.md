@@ -183,7 +183,13 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   the inclusive threshold. Six PostgreSQL policy contracts and two control browser tests pass;
   matching component captures show the five former controls and two effective controls.
   The full 3,642-test suite and local quality checks pass.
-- P09–P11, P13, P18–P19, P21–P22: reconcile current code against the detailed assessment and
+- P18: a shared controller now coordinates image/Mermaid clipboard preparation and writes.
+  Missing media and text-only fallback are explicit. The undocumented media ceilings are removed.
+  Native Chromium copy/paste into a separate-origin document preserves available media and marks
+  missing attachments. Cut retains content after an incomplete write or intervening document edit.
+  All 3,654 unit tests pass, including eight clipboard adapter and four mounted-editor cut tests.
+  Saved draw.io reference portability remains with the outstanding diagram-reference work.
+- P09–P11, P13, P19, P21–P22: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
