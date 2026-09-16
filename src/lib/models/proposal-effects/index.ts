@@ -36,17 +36,3 @@ export function applicationEffectSchema<Record>(record: z.ZodType<Record>) {
 		})
 		.strict();
 }
-
-export function mapAppliedChange<Input, Output>(
-	change: AppliedChange<Input>,
-	map: (record: Input) => Output
-): AppliedChange<Output> {
-	switch (change.kind) {
-		case 'created':
-			return { kind: 'created', after: map(change.after) };
-		case 'modified':
-			return { kind: 'modified', before: map(change.before), after: map(change.after) };
-		case 'unchanged':
-			return { kind: 'unchanged', after: map(change.after) };
-	}
-}

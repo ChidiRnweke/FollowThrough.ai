@@ -5,7 +5,7 @@ import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
-import { mapAppliedChange } from '$lib/models/proposal-effects';
+import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { Suggestion } from '$lib/models/suggestions';
 import type {
