@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoResponsibility, TodoView } from '$lib/models/todos';
-	import { boardExportDate, boardExportSlug, boardMarkdown } from '$lib/models/todos';
+	import {
+		boardExportDate,
+		boardExportSlug,
+		boardMarkdown
+	} from '$lib/services/todos/board-export';
 	import { exportBoardPdf } from '$lib/remote/todos/todos.remote';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
@@ -36,11 +40,13 @@
 	   is built from the todos the workspace passes in. The PDF is generated server-side,
 	   where the title search cannot reach, so it reflects only the shareable URL filters. */
 	function exportMarkdown(): void {
+		const generatedAt = new Date();
 		const markdown = boardMarkdown(todos, {
 			title: 'Todos',
+			generatedAt,
 			...(projectNames ? { projectNames } : {})
 		});
-		const filename = `kanban-${boardExportSlug(projectId ? 'project' : 'all')}-${boardExportDate(new Date())}.md`;
+		const filename = `kanban-${boardExportSlug(projectId ? 'project' : 'all')}-${boardExportDate(generatedAt)}.md`;
 		download(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), filename);
 	}
 

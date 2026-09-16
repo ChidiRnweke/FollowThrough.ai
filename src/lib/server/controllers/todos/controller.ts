@@ -7,7 +7,7 @@ import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/m
 import type { ActorContext } from '$lib/models/identity';
 import type { Project } from '$lib/models/projects';
 import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
-import { boardExportDate, boardExportSlug, boardMarkdown } from '$lib/models/todos';
+import { boardExportDate, boardExportSlug, boardMarkdown } from '$lib/services/todos/board-export';
 import type { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import type { prepareExport } from '$lib/server/services/deliverables/export-preparation';
 import type {
