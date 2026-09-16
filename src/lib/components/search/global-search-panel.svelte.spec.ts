@@ -76,6 +76,21 @@ describe('The toolbar defines the search in two rows', () => {
 });
 
 describe('Replace all asks before rewriting notes', () => {
+	it('does not offer replacement when matches occur only in titles', async () => {
+		seedResults();
+		globalSearch.hits = [
+			{ ...hit, matches: [], titleMatches: [{ start: 0, end: 4, text: 'ship' }] }
+		];
+		const screen = await render(GlobalSearchPanel, {});
+		await expect.element(screen.getByRole('button', { name: 'Replace all' })).toBeDisabled();
+	});
+	it('counts only body matches in replacement confirmation', async () => {
+		seedResults();
+		globalSearch.hits = [{ ...hit, titleMatches: [{ start: 0, end: 4, text: 'ship' }] }];
+		const screen = await render(GlobalSearchPanel, {});
+		await screen.getByRole('button', { name: 'Replace all' }).click();
+		await expect.element(screen.getByText('Replace 2 matches across 1 note?')).toBeVisible();
+	});
 	it('opens a confirmation naming the blast radius', async () => {
 		seedResults();
 		const screen = await render(GlobalSearchPanel, {});

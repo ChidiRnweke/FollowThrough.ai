@@ -167,7 +167,16 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   partial writes before the fix. Seven PostgreSQL mutation contracts pass, including rollback
   after real index writes. The full 3,607-test suite and local quality checks pass.
   Rendering after permanent deletion remains to be verified.
-- P09–P11, P13, P18–P23: reconcile current code against the detailed assessment and
+- P23: server replacements now commit all selected note bodies and indexes atomically.
+  Browser replacements retain durable per-note queue semantics and report confirmed saves,
+  the unconfirmed write, and unattempted notes. Actual browser execution also reproduced and
+  fixed cloning of Svelte reactive note values. Search/replacement rules moved from models
+  to one shared service; a shared controller coordinates local writes. Two PostgreSQL contracts
+  verify rollback and recovery. Browser tests and before/after captures exercise the actual store,
+  workspace drafts, and queue with in-memory storage.
+  All 3,632 unit tests and local quality checks pass. Replacement confirmation counts every
+  body match, including those beyond the former search cap, and excludes title-only matches.
+- P09–P11, P13, P18–P22: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
