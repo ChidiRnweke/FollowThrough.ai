@@ -1,9 +1,11 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	projectTemplateStylesSchema,
 	type ProjectId,
-	type ProjectTemplate
+	type ProjectTemplate,
+	type TemplateUpload
 } from '$lib/models/projects';
 import type { TemplateId } from '$lib/models/deliverables';
 import type { TemplateRepository } from '$lib/server/repositories/deliverables';
@@ -21,16 +23,66 @@ const toTemplate = (row: typeof schema.projectTemplates.$inferSelect): ProjectTe
 	objectKey: row.objectKey,
 	mediaType: row.mediaType,
 	byteSize: row.byteSize,
-	...(row.extractedStyles
-		? { extractedStyles: projectTemplateStylesSchema.parse(row.extractedStyles) }
-		: {}),
+	extractedStyles: projectTemplateStylesSchema.parse(row.extractedStyles),
 	isDefault: row.isDefault,
 	createdAt: instant(row.createdAt),
 	updatedAt: instant(row.updatedAt)
 });
 
+const toUpload = (row: typeof schema.templateUploads.$inferSelect): TemplateUpload => ({
+	...row,
+	id: row.id as TemplateId,
+	userId: row.userId as TemplateUpload['userId'],
+	projectId: row.projectId as ProjectId,
+	createdAt: instant(row.createdAt)
+});
+
 export class TemplateRecords implements TemplateRepository {
 	constructor(private readonly database: Database) {}
+
+	async insertUpload(actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
+		const [project] = await this.database
+			.select({ id: schema.projects.id })
+			.from(schema.projects)
+			.where(
+				and(eq(schema.projects.id, upload.projectId), eq(schema.projects.userId, actor.userId))
+			);
+		if (!project) throw new NotFoundError('Project not found');
+		const [row] = await this.database
+			.insert(schema.templateUploads)
+			.values({ ...upload, userId: actor.userId, createdAt: new Date(upload.createdAt) })
+			.returning();
+		return toUpload(row!);
+	}
+	async findUpload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.templateUploads)
+			.where(
+				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, actor.userId))
+			);
+		return row ? toUpload(row) : undefined;
+	}
+	async findUploadForUpdate(
+		actor: ActorContext,
+		id: TemplateId
+	): Promise<TemplateUpload | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.templateUploads)
+			.where(
+				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, actor.userId))
+			)
+			.for('update');
+		return row ? toUpload(row) : undefined;
+	}
+	async deleteUpload(actor: ActorContext, id: TemplateId): Promise<void> {
+		await this.database
+			.delete(schema.templateUploads)
+			.where(
+				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, actor.userId))
+			);
+	}
 
 	async insert(actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
 		const [row] = await this.database
@@ -57,7 +109,11 @@ export class TemplateRecords implements TemplateRepository {
 			.select()
 			.from(schema.projectTemplates)
 			.where(
-				and(eq(schema.projectTemplates.id, id), eq(schema.projectTemplates.userId, actor.userId))
+				and(
+					eq(schema.projectTemplates.id, id),
+					eq(schema.projectTemplates.userId, actor.userId),
+					isNotNull(schema.projectTemplates.extractedStyles)
+				)
 			);
 		return row ? toTemplate(row) : undefined;
 	}
@@ -73,7 +129,8 @@ export class TemplateRecords implements TemplateRepository {
 				.where(
 					and(
 						eq(schema.projectTemplates.projectId, projectId),
-						eq(schema.projectTemplates.userId, actor.userId)
+						eq(schema.projectTemplates.userId, actor.userId),
+						isNotNull(schema.projectTemplates.extractedStyles)
 					)
 				)
 				.orderBy(asc(schema.projectTemplates.name))

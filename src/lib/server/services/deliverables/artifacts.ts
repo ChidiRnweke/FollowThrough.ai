@@ -5,6 +5,7 @@ import type { AttachmentId } from '$lib/models/attachments';
 import type {
 	Artifact,
 	ArtifactId,
+	TemplateId,
 	DiagramRenders,
 	ListArtifactsOutput,
 	ListArtifactsParams,
@@ -171,11 +172,13 @@ export class ArtifactLibrary {
 
 	private async templateStyles(
 		actor: ActorContext,
-		templateId: GenerateDocumentInput['templateId']
-	): Promise<ExtractedTemplateStyles | undefined> {
-		if (!templateId) return undefined;
+		templateId: TemplateId,
+		projectId: ProjectId
+	): Promise<ExtractedTemplateStyles> {
 		const template = await this.templateRepo.findById(actor, templateId);
-		if (!template?.extractedStyles) return undefined;
+		if (!template) throw new NotFoundError('The selected template is unavailable or not ready');
+		if (template.projectId !== projectId)
+			throw new ValidationError('The selected template belongs to another project');
 		return template.extractedStyles;
 	}
 
@@ -210,7 +213,9 @@ export class ArtifactLibrary {
 		const settings = input.settings
 			? validateSettings(input.settings)
 			: await this.getSettings(actor, input.projectId);
-		const extractedStyles = await this.templateStyles(actor, input.templateId);
+		const extractedStyles = input.templateId
+			? await this.templateStyles(actor, input.templateId, input.projectId)
+			: undefined;
 		const imageResolver = this.imageResolver(actor);
 
 		const files: BundleFile[] = [];
@@ -250,7 +255,9 @@ export class ArtifactLibrary {
 			? validateSettings(input.settings)
 			: await this.getSettings(actor, input.projectId);
 
-		const extractedStyles = await this.templateStyles(actor, input.templateId);
+		const extractedStyles = input.templateId
+			? await this.templateStyles(actor, input.templateId, input.projectId)
+			: undefined;
 		const buffer = await this.renderDocument({
 			notes,
 			title: input.title,

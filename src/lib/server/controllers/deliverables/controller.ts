@@ -1,4 +1,4 @@
-import { ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	DeliverableMutationRequest,
 	WorkspaceMutationResult
@@ -32,11 +32,9 @@ import type {
 	ExportSettingsReader,
 	ExportSettingsWriter
 } from '$lib/server/services/deliverables/artifact-contracts';
-import type {
-	TemplateDeleter,
-	TemplateLister,
-	TemplateUploader
-} from '$lib/server/services/deliverables/template-contracts';
+import type { DocumentTemplates } from '$lib/server/services/deliverables/templates';
+import type { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
+import type { IAttachmentStorage } from '$lib/server/services/attachments/storage';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 /**
@@ -133,9 +131,9 @@ export interface DeliverablesController {
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
 export interface DeliverablesDependencies {
 	syncMutations: Pick<SyncMutationTransactions, 'run'>;
-	templateUploader: TemplateUploader;
-	templateLister: TemplateLister;
-	templateDeleter: TemplateDeleter;
+	templates: DocumentTemplates;
+	templateStorage: IAttachmentStorage;
+	templateStyles: typeof verifiedTemplateStyles;
 	documentGenerator: DocumentGenerator;
 	bundleGenerator: BundleGenerator;
 	documentPreviewer: DocumentPreviewer;
@@ -172,19 +170,68 @@ export class Deliverables implements DeliverablesController {
 			checksumSha256: string;
 		}
 	) {
-		return this.dependencies.templateUploader.initiateUpload(actor, input);
+		const upload = await this.dependencies.templates.reserveUpload(actor, input);
+		const uploadUrl = await this.dependencies.templateStorage.createUploadUrl({
+			objectKey: upload.objectKey,
+			mediaType: upload.mediaType,
+			byteSize: upload.byteSize,
+			checksumSha256: upload.checksumSha256,
+			expiresInSeconds: 600
+		});
+		return {
+			templateId: upload.id,
+			uploadUrl,
+			requiredHeaders: {
+				'content-type': upload.mediaType,
+				'x-amz-meta-sha256': upload.checksumSha256
+			}
+		};
 	}
 
 	async completeTemplateUpload(actor: ActorContext, templateId: TemplateId): Promise<void> {
-		await this.dependencies.templateUploader.completeUpload(actor, templateId);
+		const {
+			templates,
+			templateStorage: storage,
+			templateStyles,
+			transactionRunner
+		} = this.dependencies;
+		const stagingKey = `staging/${actor.userId}/templates/${templateId}`;
+		if (await templates.find(actor, templateId)) {
+			await storage.remove(stagingKey);
+			return;
+		}
+		const upload = await templates.upload(actor, templateId);
+		let bytes: Uint8Array;
+		try {
+			bytes = await storage.read(upload.objectKey, upload.byteSize);
+		} catch (error) {
+			// Another completion may have committed and removed staging after our initial read.
+			if (await templates.find(actor, templateId)) {
+				await storage.remove(stagingKey);
+				return;
+			}
+			throw error;
+		}
+		const styles = await templateStyles(upload, bytes);
+		const destination = `projects/${upload.projectId}/templates/${templateId}`;
+		// Write the exact bytes verified above. A signed staging URL may still accept writes.
+		await storage.put(destination, bytes, upload.mediaType);
+		await transactionRunner.run(async () => {
+			const locked = await templates.lockUpload(actor, templateId);
+			if (await templates.find(actor, templateId)) return;
+			if (!locked) throw new NotFoundError('Template upload no longer exists');
+			await templates.store(actor, locked, destination, styles);
+			await templates.finishUpload(actor, templateId);
+		});
+		await storage.remove(stagingKey);
 	}
 
 	async listTemplates(actor: ActorContext, projectId: ProjectId) {
-		return this.dependencies.templateLister.list(actor, projectId);
+		return this.dependencies.templates.list(actor, projectId);
 	}
 
 	async deleteTemplate(actor: ActorContext, templateId: TemplateId): Promise<void> {
-		await this.dependencies.templateDeleter.delete(actor, templateId);
+		await this.dependencies.templates.delete(actor, templateId);
 	}
 
 	async generateDocument(

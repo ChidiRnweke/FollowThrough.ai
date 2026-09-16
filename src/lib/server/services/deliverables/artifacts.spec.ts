@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
-import type { ArtifactId, ExportSettings } from '$lib/models/deliverables';
+import type { ArtifactId, ExportSettings, TemplateId } from '$lib/models/deliverables';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import type { ImageSourceResolver } from '$lib/server/repositories/deliverables/export-images';
 import { ArtifactLibrary } from './artifacts';
@@ -98,6 +98,23 @@ describe('artifact settings behavior', () => {
 });
 
 describe('artifact generation behavior', () => {
+	it('rejects an explicitly selected template that is unavailable', async () => {
+		const { service, notes } = setup();
+		notes.notes = [noteBuilder()];
+		await expect(
+			service.generate(testActor(), {
+				projectId: testProjectId(),
+				noteIds: [testNoteId()],
+				title: 'Board report',
+				format: 'pdf',
+				templateId: '00000000-0000-4000-8000-000000000091' as TemplateId
+			})
+		).rejects.toMatchObject({
+			code: 'NOT_FOUND',
+			message: 'The selected template is unavailable or not ready'
+		});
+	});
+
 	it('previews the selected notes without creating an artifact', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];

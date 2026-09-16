@@ -1187,6 +1187,22 @@ export const toolEmbeddings = pgTable('tool_embeddings', {
 	...timestamps
 });
 
+export const templateUploads = pgTable('template_uploads', {
+	id: uuid('id').primaryKey(),
+	userId: uuid('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	projectId: uuid('project_id')
+		.notNull()
+		.references(() => projects.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	objectKey: text('object_key').notNull(),
+	mediaType: text('media_type').notNull(),
+	byteSize: integer('byte_size').notNull(),
+	checksumSha256: text('checksum_sha256').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+});
+
 export const projectTemplates = pgTable(
 	'project_templates',
 	{
@@ -1206,7 +1222,9 @@ export const projectTemplates = pgTable(
 		...timestamps
 	},
 	(table) => [
-		uniqueIndex('project_templates_project_name_unique').on(table.projectId, table.name),
+		uniqueIndex('project_templates_project_name_unique')
+			.on(table.projectId, table.name)
+			.where(sql`${table.extractedStyles} is not null`),
 		index('project_templates_project_idx').on(table.projectId)
 	]
 );

@@ -149,7 +149,12 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   bounded embedding batches preserve tail content. The worker repairs historical truncated indexes
   from saved extraction without another provider request. Seven PostgreSQL processing/search
   contracts, the full 3,599-test suite, type checking, architecture audits, lint, and docs checks pass.
-- P15: export preparation landed in #65; verify the other export findings separately.
+- P15: export preparation landed in #65. Template uploads now have separate durable reservations;
+  the controller verifies bytes, extracts styles, writes the final object, and publishes under a
+  reservation lock. Incomplete templates stay out of lists and explicit unavailable choices fail.
+  Legacy incomplete rows remain preserved and require re-upload because their checksum was not
+  recorded. Eighteen PostgreSQL deliverable contracts and the full 3,607-test suite pass.
+  Regeneration assets and artifact/provenance atomicity remain open.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.
 - P09–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
