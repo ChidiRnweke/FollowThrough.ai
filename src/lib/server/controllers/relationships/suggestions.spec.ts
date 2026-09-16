@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Relationships } from './controller';
 import type { TextSelection } from '$lib/models/notes';
-import { EmbeddedKnowledgeSearcher } from '$lib/server/services/knowledge-search/semantic';
+import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import {
 	InMemorySearchRepository,
-	InMemoryEmbeddingClient
+	InMemoryEmbeddingClient,
+	InMemoryReranker
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -41,7 +42,9 @@ const setup = () => {
 	client.result = { kind: 'prior_decision', justification: 'Earlier decision', confidence: 88 };
 	const controller = new Relationships({
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-		knowledgeSearcher: new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient()),
+		knowledgeLookup: new KnowledgeLookup(repository),
+		embeddings: new InMemoryEmbeddingClient(),
+		reranker: new InMemoryReranker(),
 		relationshipClassifier: new RelationshipDiscovery({ client }),
 		suggestionCreator: suggestions,
 		transactionRunner: new InMemoryTransactionRunner([content, provenance, suggestions]),

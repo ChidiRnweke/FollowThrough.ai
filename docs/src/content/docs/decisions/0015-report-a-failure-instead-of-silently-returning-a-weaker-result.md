@@ -35,7 +35,8 @@ failure contract, but its loss must still be visible to an operator when it matt
 
 ## Evidence
 
-- Knowledge search and reranking throw when their required result cannot be produced.
+- Required knowledge retrieval failures propagate. ADR 0036 defines the later, narrow exception
+  for ranking-provider failure: preserve retrieved candidates and retain the failed provider trace.
 - Mistral OCR fails instead of switching to a weaker parser.
 - `docs/architecture/suspicious-findings.md` tracks current silent fallbacks in model listing,
   exports, feedback, token bookkeeping, promise extraction, and relationship classification.

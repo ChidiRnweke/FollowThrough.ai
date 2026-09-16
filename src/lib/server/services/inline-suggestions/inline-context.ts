@@ -1,4 +1,3 @@
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	InlineCompletionContext,
 	InlineCompletionPassage,
@@ -6,63 +5,20 @@ import type {
 } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
-import { searchDocumentIdSchema, type SearchMatch } from '$lib/models/knowledge-search';
-import type { ProjectId } from '$lib/models/projects';
-import type { MemoryEntryListFilter } from '$lib/server/repositories/memory';
-import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
-import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
-import type { OperationObserver } from '$lib/models/telemetry';
-const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
-
-const countRetrievalTokens = (value: string): number => tokenEncoding().encode(value).length;
-
-interface KnowledgeSearcher {
-	search(
-		actor: ActorContext,
-		query: string,
-		limit?: number,
-		projectId?: ProjectId,
-		signal?: AbortSignal
-	): Promise<readonly SearchMatch[]>;
-}
-
-interface MemoryEntryLister {
-	list(actor: ActorContext, filter: MemoryEntryListFilter): Promise<readonly MemoryEntry[]>;
-}
-
-interface Reranker {
-	rerank(
-		query: string,
-		matches: readonly SearchMatch[],
-		topN: number,
-		signal?: AbortSignal
-	): Promise<readonly SearchMatch[]>;
-}
-
-export interface IInlineSuggestionContext {
-	build(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		note: Note,
-		signal: AbortSignal
-	): Promise<InlineCompletionContext>;
-}
+import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
+import { getEncoding, type Tiktoken } from 'js-tiktoken';
+let encoding: Tiktoken | undefined;
+const countRetrievalTokens = (value: string): number =>
+	(encoding ??= getEncoding('cl100k_base')).encode(value).length;
 
 const USER_MEMORY_THRESHOLD = 20;
-const USER_MEMORY_LIMIT = 8;
+export const USER_MEMORY_LIMIT = 8;
 const USER_MEMORY_OUTPUT_TOKENS = 4_000;
 const USER_MEMORY_RERANK_TOKENS = 24_000;
-const PROJECT_PASSAGE_LIMIT = 8;
-const PROJECT_CANDIDATE_LIMIT = 40;
+export const PROJECT_PASSAGE_LIMIT = 8;
+export const PROJECT_CANDIDATE_LIMIT = 40;
 
-export interface RetrievalInlineCompletionContextDependencies {
-	readonly searcher: KnowledgeSearcher;
-	readonly memory: MemoryEntryLister;
-	readonly reranker: Reranker;
-	readonly observer?: OperationObserver;
-}
-
-const retrievalQuery = (request: InlineSuggestionRequest): string =>
+export const retrievalQuery = (request: InlineSuggestionRequest): string =>
 	[
 		request.headingPath.join(' > '),
 		request.currentSection.trim(),
@@ -103,7 +59,7 @@ const withinTokenBudget = (values: readonly string[], budget: number): readonly 
 
 const memoryAsMatch = (entry: MemoryEntry, note: Note): SearchMatch => ({
 	document: {
-		id: searchDocumentIdSchema.parse(entry.id),
+		id: entry.id as string as SearchDocumentId,
 		projectId: note.projectId,
 		memoryEntryId: entry.id,
 		sourceTitle: 'User memory',
@@ -138,125 +94,40 @@ export const vectorSearchTraceOutput = (results: readonly SearchMatch[]): string
 		}))
 	);
 
-export class InlineSuggestionContext implements IInlineSuggestionContext {
-	private readonly observer: OperationObserver;
-	constructor(private readonly dependencies: RetrievalInlineCompletionContextDependencies) {
-		this.observer = dependencies.observer ?? directObserver;
+/** Select shared memory facts before the controller decides whether ranking is needed. */
+export function inlineMemoryPlan(
+	entries: readonly MemoryEntry[],
+	note: Note
+):
+	| { kind: 'complete'; contents: readonly string[] }
+	| { kind: 'rank'; candidates: readonly SearchMatch[] } {
+	const shared = activeSharedUserMemory(entries);
+	const contents = shared.map((entry) => entry.content);
+	const tokens = contents.reduce((total, content) => total + countRetrievalTokens(content), 0);
+	if (shared.length <= USER_MEMORY_THRESHOLD && tokens <= USER_MEMORY_OUTPUT_TOKENS)
+		return { kind: 'complete', contents };
+	const candidates: SearchMatch[] = [];
+	let used = 0;
+	for (const entry of shared) {
+		const tokens = countRetrievalTokens(entry.content);
+		if (used + tokens > USER_MEMORY_RERANK_TOKENS) continue;
+		candidates.push(memoryAsMatch(entry, note));
+		used += tokens;
 	}
-
-	async build(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		note: Note,
-		signal: AbortSignal
-	): Promise<InlineCompletionContext> {
-		const query = retrievalQuery(request);
-		return this.observer.run(
-			'inline.context',
-			{ input: query, outputMimeType: MimeType.JSON },
-			async () => {
-				signal.throwIfAborted();
-				const [projectPassages, userEntries] = await Promise.all([
-					this.projectPassages(actor, request, query, signal).catch(async (error) => {
-						if (signal.aborted) throw error;
-						await this.observer.run(
-							'inline.project-retrieval-degraded',
-							{ outputMimeType: MimeType.JSON },
-							async () => ({
-								outcome: 'empty_fallback',
-								error: error instanceof Error ? error.message : String(error)
-							}),
-							(result) => JSON.stringify(result)
-						);
-						return [] as readonly InlineCompletionPassage[];
-					}),
-					this.dependencies.memory.list(actor, {})
-				]);
-				signal.throwIfAborted();
-				const userMemory = await this.userMemory(
-					query,
-					activeSharedUserMemory(userEntries),
-					note,
-					signal
-				);
-				signal.throwIfAborted();
-				return {
-					noteTitle: note.title,
-					noteText: note.plainText,
-					userMemory,
-					projectPassages
-				};
-			},
-			inlineContextTraceOutput
-		);
-	}
-
-	private async projectPassages(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		query: string,
-		signal: AbortSignal
-	): Promise<readonly InlineCompletionPassage[]> {
-		const matches = await this.observer.run(
-			'retrieval.vector-search',
-			{
-				input: query,
-				outputMimeType: MimeType.JSON,
-				kind: OpenInferenceSpanKind.RETRIEVER
-			},
-			async () => {
-				return this.dependencies.searcher.search(
-					actor,
-					query,
-					PROJECT_CANDIDATE_LIMIT,
-					request.projectId,
-					signal
-				);
-			},
-			vectorSearchTraceOutput
-		);
-		const candidates = matches.filter((match) => match.document.noteId !== request.noteId);
-		if (candidates.length <= PROJECT_PASSAGE_LIMIT) return candidates.map(passageOf);
-		const ranked = await this.dependencies.reranker
-			.rerank(query, candidates, PROJECT_PASSAGE_LIMIT, signal)
-			.catch((error) => {
-				if (signal.aborted) throw error;
-				return candidates.slice(0, PROJECT_PASSAGE_LIMIT);
-			});
-		return ranked.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
-	}
-
-	private async userMemory(
-		query: string,
-		entries: readonly MemoryEntry[],
-		note: Note,
-		signal: AbortSignal
-	): Promise<readonly string[]> {
-		const contents = entries.map((entry) => entry.content);
-		const tokenCount = contents.reduce(
-			(total, content) => total + countRetrievalTokens(content),
-			0
-		);
-		if (entries.length <= USER_MEMORY_THRESHOLD && tokenCount <= USER_MEMORY_OUTPUT_TOKENS)
-			return contents;
-
-		const candidates: SearchMatch[] = [];
-		let used = 0;
-		for (const entry of entries) {
-			const tokens = countRetrievalTokens(entry.content);
-			if (used + tokens > USER_MEMORY_RERANK_TOKENS) continue;
-			candidates.push(memoryAsMatch(entry, note));
-			used += tokens;
-		}
-		const ranked = await this.dependencies.reranker
-			.rerank(query, candidates, USER_MEMORY_LIMIT, signal)
-			.catch((error) => {
-				if (signal.aborted) throw error;
-				return candidates.slice(0, USER_MEMORY_LIMIT);
-			});
-		return withinTokenBudget(
-			ranked.slice(0, USER_MEMORY_LIMIT).map((match) => match.document.content),
-			USER_MEMORY_OUTPUT_TOKENS
-		);
-	}
+	return { kind: 'rank', candidates };
 }
+
+export const inlineRankedMemory = (matches: readonly SearchMatch[]): readonly string[] =>
+	withinTokenBudget(
+		matches.slice(0, USER_MEMORY_LIMIT).map((match) => match.document.content),
+		USER_MEMORY_OUTPUT_TOKENS
+	);
+
+export const inlineProjectCandidates = (
+	matches: readonly SearchMatch[],
+	note: Note
+): readonly SearchMatch[] => matches.filter((match) => match.document.noteId !== note.id);
+
+export const inlineProjectPassages = (
+	matches: readonly SearchMatch[]
+): readonly InlineCompletionPassage[] => matches.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
