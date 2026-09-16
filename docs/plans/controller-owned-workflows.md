@@ -264,6 +264,14 @@ module. A regression exposed malformed known tool events silently becoming ignor
 now fail explicitly while unfamiliar SDK event types retain the fallback. General payload readers
 and run-transition rules remain pending model cleanup.
 
+Global models: stored agent events, pending approvals and run input/context snapshots are decoded
+in repository readers. Their schemas and result values stay in models. A damaged whole approval
+column now returns an explicit corrupt result and produces an operational warning; the run stays
+readable for cancellation, but no damaged approval is treated as authorization.
+The agent controller binds the resolved conversation directly into already-narrow submission data;
+it no longer reparses a value it just constructed. Existing submission tests cover first-message
+and existing-conversation snapshots.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

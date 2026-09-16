@@ -1,6 +1,6 @@
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
-import { readPendingDecisions } from '$lib/models/agent';
+import { readPendingDecisions } from './stored-values';
 
 /**
  * `agent_runs.pending_decisions` is declared
@@ -56,8 +56,8 @@ describe('Reading the pending decisions off a run row', () => {
 		expect(readPendingDecisions([]).decisions).toEqual([]);
 	});
 
-	it('answers a column that is not an array at all with no decisions', () => {
-		expect(readPendingDecisions('call-1').decisions).toEqual([]);
+	it('reports a damaged decision column instead of claiming the run has no approvals', () => {
+		expect(readPendingDecisions('call-1')).toMatchObject({ kind: 'corrupt' });
 	});
 });
 

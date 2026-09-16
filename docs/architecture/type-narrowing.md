@@ -278,7 +278,8 @@ produce.
     and from provider interruptions, so closing it over the catalog without a parse would be a lie.
     TN-34 owns that key equality.
 - [x] **TN-32: Parse persisted and streamed run events, and split the tool outcome arms**
-  - [x] `readAgentEvent` and `agentEventSchema` in `models/agent/index.ts`, with `StoredAgentEvent`
+  - [x] `readAgentEvent` in `server/repositories/agent/stored-values.ts` and `agentEventSchema`
+        in `models/agent/index.ts`, with `StoredAgentEvent`
         as a read-boundary union rather than a sixth arm on `AgentEvent`. `AgentEvent` is the write
         type too, and an `unrecognised` arm on it is a state a producer could say; `StoredSuggestion`
         set the precedent. The three readers of one stored shape are retired with it:
@@ -706,7 +707,8 @@ the input to a model-local parser or co-located provider adapter schema. The mom
 differently.
 
 **Remedy:** name the shape and parse into it at the zone. Exemplar: `parseRunAgentInput`
-(`src/lib/models/agent/index.ts`) — zod schema in the model, called by the repository mapper.
+(`src/lib/server/repositories/agent/stored-values.ts`) — the repository reader applies the model's
+Zod schema and checks the snapshot's conversation against its owning row.
 
 The rule fires on a parameter, a return type, a field, a type alias, or any of those reached
 through a union, an array, `readonly`, or a generic argument. Two positions stay legal because

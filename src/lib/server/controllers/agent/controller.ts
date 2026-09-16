@@ -27,7 +27,7 @@ import type {
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { allImages, isTerminalAgentRunStatus, resolveAgentRunInput } from '$lib/models/agent';
+import { allImages, isTerminalAgentRunStatus } from '$lib/models/agent';
 import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
@@ -299,7 +299,7 @@ export class Agent implements AgentController {
 					// The snapshot names the conversation the run belongs to, not merely the
 					// one the client knew about: on a chat's first message the client has no
 					// id yet, and a run's own record of itself should not have that gap.
-					resolveAgentRunInput(runInput, conversation.id),
+					{ ...runInput, conversationId: conversation.id },
 					model,
 					conversation,
 					preferences
