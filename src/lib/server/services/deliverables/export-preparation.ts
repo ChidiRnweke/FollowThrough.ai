@@ -4,9 +4,30 @@ import {
 	defaultExportSettings,
 	svgViewBoxSize,
 	type ExportInput,
+	type ExportDiagramReference,
 	type PreparedDiagram,
 	type PreparedExport
 } from '$lib/models/deliverables';
+
+export function exportDiagramReferences(
+	document: ProseMirrorDocument
+): readonly ExportDiagramReference[] {
+	const references: ExportDiagramReference[] = [];
+	const walk = (node: ProseMirrorNode): void => {
+		if (node.type === 'mermaid') {
+			const source = (node.content ?? [])
+				.map((child) => (child.type === 'text' ? child.text : ''))
+				.join('');
+			if (source.trim()) references.push({ kind: 'mermaid', source });
+		} else if (node.type === 'drawio' && node.attrs?.diagramId) {
+			references.push({ kind: 'drawio', diagramId: node.attrs.diagramId });
+		} else if ('content' in node) {
+			for (const child of node.content ?? []) walk(child);
+		}
+	};
+	for (const node of document.content ?? []) walk(node);
+	return references;
+}
 
 /** Extract the app-owned attachment reference; authorization still belongs to its service. */
 export function attachmentIdFromSrc(source: string): string | undefined {

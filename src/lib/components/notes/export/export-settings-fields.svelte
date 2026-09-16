@@ -11,7 +11,7 @@
 		MERMAID_PALETTE_KEYS,
 		MERMAID_PALETTE_LABELS,
 		mermaidTokensFor
-	} from '$lib/components/edra/mermaid-rendering';
+	} from '$lib/client/diagrams/mermaid-rendering';
 
 	let {
 		settings = $bindable(),
