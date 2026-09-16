@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import { NotFoundError } from '$lib/errors';
 import type { Todo, TodoId, TodoListFilter, TodoStatus } from '$lib/models/todos';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
 import type {
@@ -57,7 +58,8 @@ export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipa
 		this.todos.push(todo);
 		return todo;
 	}
-	async update(_actor: ActorContext, todo: Todo): Promise<Todo> {
+	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (!(await this.findById(actor, todo.id))) throw new NotFoundError('Todo was not found');
 		const failure = this.updateFailures.get(todo.status);
 		if (failure) throw failure;
 		this.todos = this.todos.map((item) => (item.id === todo.id ? todo : item));
