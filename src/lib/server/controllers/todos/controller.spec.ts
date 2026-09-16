@@ -19,8 +19,7 @@ const setup = () => {
 				todoViewAssembler: todos,
 				todoReader: todos,
 				todoEditor: todos,
-				todoDeleter: todos,
-				todoStatusChanger: todos
+				todoDeleter: todos
 			})
 		)
 	};

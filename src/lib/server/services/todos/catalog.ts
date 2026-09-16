@@ -5,11 +5,11 @@ import type {
 	Todo,
 	TodoId,
 	TodoListFilter,
-	TodoStatus,
+	UpdateTodoInput,
 	TodoView
 } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
-import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type {
@@ -25,14 +25,15 @@ export class TodoCatalog {
 		private readonly projects: ProjectRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly clock: () => DateTime = now
 	) {}
 
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
 		const decision = decideTodoCreation(input, {
 			id: input.id ?? (crypto.randomUUID() as TodoId),
 			userId: actor.userId,
-			timestamp: now()
+			timestamp: this.clock()
 		});
 		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 		if (!(await this.projects.findById(actor, input.projectId)))
@@ -50,31 +51,20 @@ export class TodoCatalog {
 		return todo;
 	}
 
-	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
-		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot update another user’s todo');
-		const current = await this.get(actor, todo.id);
-		if (todo.projectId !== current.projectId)
-			throw new ValidationError('A todo cannot move between projects during an edit');
-		const title = todo.title.trim();
-		if (!title) throw new ValidationError('Todo title is required');
+	async update(actor: ActorContext, input: UpdateTodoInput): Promise<Todo> {
+		const current = await this.get(actor, input.todoId);
+		const todo = applyTodoEdit(current, input, this.clock());
+		if (!todo.title) throw new ValidationError('Todo title is required');
 		if (todo.linkedNoteId) await this.validateLinkedNote(actor, todo.linkedNoteId, todo.projectId);
 		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
-		return this.todos.update(
-			actor,
-			applyTodoEdit(todo, { title, waitingOn: todo.waitingOn ?? null }, now())
-		);
-	}
-
-	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {
-		const todo = await this.get(actor, todoId);
-		return this.todos.update(actor, applyTodoEdit(todo, { status }, now()));
+		return this.todos.update(actor, todo);
 	}
 
 	async softDelete(actor: ActorContext, todoId: TodoId): Promise<void> {
 		await this.get(actor, todoId);
-		await this.todos.softDelete(actor, todoId, now());
+		await this.todos.softDelete(actor, todoId, this.clock());
 	}
 
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {

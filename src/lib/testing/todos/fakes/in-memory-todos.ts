@@ -4,17 +4,17 @@ import type {
 	Todo,
 	TodoId,
 	TodoListFilter,
-	TodoStatus,
+	UpdateTodoInput,
 	TodoView
 } from '$lib/models/todos';
-import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
+import { applyTodoEdit } from '$lib/models/todos';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	TodoDeleter,
 	TodoEditor,
 	TodoCreator,
 	TodoLister,
 	TodoReader,
-	TodoStatusChanger,
 	TodoViewAssembler
 } from '$lib/server/services/todos/contracts';
 import { testNow, testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -29,7 +29,6 @@ export class InMemoryTodos
 		TodoReader,
 		TodoEditor,
 		TodoDeleter,
-		TodoStatusChanger,
 		TodoLister,
 		TodoViewAssembler,
 		SnapshotParticipant
@@ -58,9 +57,13 @@ export class InMemoryTodos
 			userId: actor.userId,
 			projectId: input.projectId,
 			title: input.title.trim(),
+			status: input.status ?? 'open',
+			...(input.status === 'done' ? { completedAt: testNow } : {}),
 			responsibility: input.responsibility,
 			...(input.description !== undefined ? { description: input.description } : {}),
-			...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn } : {}),
+			...(input.responsibility === 'waiting_on' && input.waitingOn?.trim()
+				? { waitingOn: input.waitingOn.trim() }
+				: {}),
 			...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
 			...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
 			...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
@@ -79,14 +82,11 @@ export class InMemoryTodos
 		return todo;
 	}
 
-	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
-		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot update another user’s todo');
-		if (!todo.title.trim()) throw new ValidationError('Todo title is required');
-		const current = await this.get(actor, todo.id);
-		if (todo.projectId !== current.projectId)
-			throw new ValidationError('A todo cannot move between projects during an edit');
-		const updated = { ...todo, title: todo.title.trim(), updatedAt: testNow };
-		this.todos = this.todos.map((candidate) => (candidate.id === todo.id ? updated : candidate));
+	async update(actor: ActorContext, input: UpdateTodoInput): Promise<Todo> {
+		const current = await this.get(actor, input.todoId);
+		const updated = applyTodoEdit(current, input, testNow);
+		if (!updated.title) throw new ValidationError('Todo title is required');
+		this.todos = this.todos.map((candidate) => (candidate.id === current.id ? updated : candidate));
 		return updated;
 	}
 
@@ -94,20 +94,6 @@ export class InMemoryTodos
 		const current = await this.get(actor, todoId);
 		const deleted: Todo = { ...current, deletedAt: testNow, updatedAt: testNow };
 		this.todos = this.todos.map((candidate) => (candidate.id === todoId ? deleted : candidate));
-	}
-
-	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {
-		const current = await this.get(actor, todoId);
-		const { completedAt: _completedAt, ...withoutCompletion } = current;
-		void _completedAt;
-		const updated: Todo = {
-			...withoutCompletion,
-			status,
-			...(status === 'done' ? { completedAt: testNow } : {}),
-			updatedAt: testNow
-		};
-		this.todos = this.todos.map((candidate) => (candidate.id === todoId ? updated : candidate));
-		return updated;
 	}
 
 	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {

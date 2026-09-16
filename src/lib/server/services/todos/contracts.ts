@@ -5,7 +5,7 @@ import type {
 	Todo,
 	TodoId,
 	TodoListFilter,
-	TodoStatus,
+	UpdateTodoInput,
 	TodoView
 } from '$lib/models/todos';
 import type { SourceAnchor } from '$lib/models/provenance';
@@ -16,13 +16,10 @@ export interface TodoReader {
 	get(actor: ActorContext, todoId: TodoId): Promise<Todo>;
 }
 export interface TodoEditor {
-	update(actor: ActorContext, todo: Todo): Promise<Todo>;
+	update(actor: ActorContext, input: UpdateTodoInput): Promise<Todo>;
 }
 export interface TodoDeleter {
 	softDelete(actor: ActorContext, todoId: TodoId): Promise<void>;
-}
-export interface TodoStatusChanger {
-	change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo>;
 }
 export interface DueTodoFinder {
 	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]>;

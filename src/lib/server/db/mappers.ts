@@ -1,6 +1,6 @@
 import { suggestionSchema } from '$lib/models/suggestions';
 import type { ApiToken, Session, User } from '$lib/models/identity';
-import type { DateTime, LocalDate } from '$lib/models/workspace';
+import type { DateTime } from '$lib/models/workspace';
 import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
 import type { MemoryEntry } from '$lib/models/memory';
@@ -16,6 +16,7 @@ import type { Skill } from '$lib/models/skills';
 import { skillMetadataSchema } from '$lib/models/skills';
 import { type StoredSuggestion, type Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
+import { todoRecordSchema } from '$lib/models/workspace-records';
 import type { TrustPolicy } from '$lib/models/agent';
 import type * as schema from '$lib/server/db/schema';
 
@@ -114,12 +115,14 @@ export const toProvenance = (row: typeof schema.provenance.$inferSelect): Proven
 	});
 
 export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
-	domain<Todo>({
+	todoRecordSchema.parse({
 		...row,
 		description: row.description ?? undefined,
 		priority: row.priority ?? undefined,
 		category: row.category ?? undefined,
-		dueDate: row.dueDate ? (row.dueDate as LocalDate) : undefined,
+		waitingOn: row.waitingOn ?? undefined,
+		linkedNoteId: row.linkedNoteId ?? undefined,
+		dueDate: row.dueDate ?? undefined,
 		dueDateVerbatim: row.dueDateVerbatim ?? undefined,
 		promiseStrength: row.promiseStrength ?? undefined,
 		sourceAnchorId: row.sourceAnchorId ?? undefined,
