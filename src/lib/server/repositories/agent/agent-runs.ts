@@ -51,6 +51,7 @@ export interface AgentRunRepository {
 	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	listInterrupted(): Promise<readonly AgentRun[]>;
+	listQueuedAgents(): Promise<readonly ResolvedAgentRun[]>;
 	listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]>;
 }
 

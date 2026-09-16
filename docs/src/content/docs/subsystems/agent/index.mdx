@@ -52,6 +52,9 @@ This is a different system from the OAuth2/OIDC flow that signs a user into the 
 
 ## Run lifecycle
 
+At startup, the Agent controller settles interrupted executions and resumes queued chat requests from
+their saved input. A request committed before shutdown does not need another browser submission to start.
+
 Promise extraction from a note selection has its own durable input. The Todo controller stores the
 selection and generation settings before execution, and returns a run receipt. Repeated delivery of
 the same request ID returns that run. On startup it resumes queued extractions from stored input.

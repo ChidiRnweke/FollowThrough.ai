@@ -464,6 +464,14 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row;
 	}
 
+	async listQueuedAgents(): Promise<readonly ResolvedAgentRun[]> {
+		const rows = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(and(eq(schema.agentRuns.kind, 'agent'), eq(schema.agentRuns.status, 'queued')));
+		return rows.map(toResolvedRun);
+	}
+
 	async listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]> {
 		const rows = await this.database
 			.select()

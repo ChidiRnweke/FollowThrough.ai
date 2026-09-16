@@ -1163,6 +1163,8 @@ export class Agent implements AgentController {
 				if (result.kind === 'settled') this.dependencies.eventBus.notify(run.id);
 			}
 		}
-		return interrupted.length;
+		const queued = await this.dependencies.runs.listQueuedAgents();
+		for (const run of queued) this.executeInBackground(run.id);
+		return interrupted.length + queued.length;
 	}
 }
