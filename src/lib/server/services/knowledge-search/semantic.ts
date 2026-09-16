@@ -1,6 +1,4 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { LinkCandidate, RelationshipKind } from '$lib/models/relationships';
-import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchMatch } from '$lib/models/knowledge-search';
 import { InvalidGeneratedContentError } from '$lib/errors';
@@ -30,24 +28,6 @@ export interface Reranker {
 		topN: number,
 		signal?: AbortSignal
 	): Promise<readonly SearchMatch[]>;
-}
-
-interface LinkFinder {
-	find(actor: ActorContext, selection: TextSelection): Promise<readonly LinkCandidate[]>;
-}
-interface RelationshipClassifier {
-	classify(
-		sourceText: string,
-		targetText: string,
-		signal?: AbortSignal
-	): Promise<{
-		readonly kind: RelationshipKind;
-		readonly justification: string;
-		readonly confidence: number;
-	}>;
-}
-interface NoteReader {
-	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
 
 export class EmbeddedKnowledgeSearcher implements KnowledgeSearcher {
@@ -103,72 +83,5 @@ export class RerankingKnowledgeSearcher implements KnowledgeSearcher {
 			if (signal?.aborted) throw error;
 			return candidates.slice(0, limit);
 		}
-	}
-}
-
-export class ProjectScopedLinkFinder implements LinkFinder {
-	constructor(
-		private readonly noteReader: NoteReader,
-		private readonly searcher: KnowledgeSearcher,
-		private readonly classifier: RelationshipClassifier = new HeuristicRelationshipClassifier()
-	) {}
-
-	async find(
-		actor: ActorContext,
-		selection: TextSelection,
-		signal?: AbortSignal
-	): Promise<readonly LinkCandidate[]> {
-		const note = await this.noteReader.get(actor, selection.noteId);
-		const matches = await this.searcher.search(actor, selection.text, 12, note.projectId);
-		const unique = new Map<NoteId, SearchMatch>();
-		for (const match of matches) {
-			const targetNoteId = match.document.noteId;
-			if (targetNoteId !== undefined && targetNoteId !== selection.noteId)
-				unique.set(targetNoteId, match);
-		}
-		return Promise.all(
-			[...unique.entries()].slice(0, 5).map(async ([targetNoteId, match]) => {
-				const classification = await this.classifier.classify(
-					selection.text,
-					match.document.content,
-					signal
-				);
-				return {
-					targetNoteId,
-					kind: classification.kind,
-					justification: classification.justification,
-					confidence: Math.round(
-						(Math.max(0, Math.min(100, classification.confidence)) +
-							Math.max(0, Math.min(1, match.score)) * 100) /
-							2
-					)
-				};
-			})
-		);
-	}
-}
-
-export class HeuristicRelationshipClassifier implements RelationshipClassifier {
-	async classify(sourceText: string, targetText: string) {
-		const sourceNegates = /\b(?:not|never|instead|opposite|avoid)\b/i.test(sourceText);
-		const targetNegates = /\b(?:not|never|instead|opposite|avoid)\b/i.test(targetText);
-		if (sourceNegates !== targetNegates)
-			return {
-				kind: 'contradicts' as const,
-				justification: 'The two passages express opposing constraints or recommendations.',
-				confidence: 70
-			};
-		if (/\b(?:decided|decision|selected|chose|approved)\b/i.test(targetText))
-			return {
-				kind: 'prior_decision' as const,
-				justification:
-					'The related passage records an earlier decision relevant to this selection.',
-				confidence: 70
-			};
-		return {
-			kind: 'mentions' as const,
-			justification: `Semantically related content: ${targetText.slice(0, 180)}`,
-			confidence: 60
-		};
 	}
 }
