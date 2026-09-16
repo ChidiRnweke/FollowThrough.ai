@@ -14,13 +14,15 @@ import type {
 import {
 	assertAgentRunTransition,
 	isTerminalAgentRunStatus,
-	parseAgentRunContextSnapshot,
-	parseRunAgentInput,
 	parseSessionItem,
 	workflowRunContextSchema,
-	readPendingDecisions,
 	toStoredSessionItem
 } from '$lib/models/agent';
+import {
+	parseAgentRunContextSnapshot,
+	parseRunAgentInput,
+	readPendingDecisions
+} from '../stored-values';
 import { NotFoundError } from '$lib/errors';
 import type {
 	AgentPreferencesRepository,
@@ -60,7 +62,12 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
  * loudly through the interruption check in `reasoning.ts`.
  */
 const toPendingDecisions = (row: typeof schema.agentRuns.$inferSelect) => {
-	const { decisions, dropped } = readPendingDecisions(row.pendingDecisions);
+	const read = readPendingDecisions(row.pendingDecisions);
+	if (read.kind === 'corrupt') {
+		console.warn(`[agent-runs] Pending decisions on run ${row.id} are corrupt: ${read.reason}`);
+		return read.decisions;
+	}
+	const { decisions, dropped } = read;
 	if (dropped.length > 0)
 		console.warn(
 			`[agent-runs] ${dropped.length} pending decision(s) on run ${row.id} could not be read and were dropped: ${dropped.join(', ')}`

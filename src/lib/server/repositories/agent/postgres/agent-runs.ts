@@ -7,7 +7,7 @@ import type {
 	AgentRunId,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import { readAgentEvent } from '$lib/models/agent';
+import { readAgentEvent } from '../stored-values';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,

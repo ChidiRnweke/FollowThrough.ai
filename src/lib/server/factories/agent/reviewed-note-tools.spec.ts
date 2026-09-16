@@ -1,11 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { RunContext } from '@openai/agents';
 import { AgentTools } from './agent-tool-factory';
-import {
-	readPendingDecisions,
-	type PendingAgentDecision,
-	type AgentExecutionMode
-} from '$lib/models/agent';
+import { type PendingAgentDecision, type AgentExecutionMode } from '$lib/models/agent';
+import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
 import { noteChangeReviewSchema } from '$lib/models/notes';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
