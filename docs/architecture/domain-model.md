@@ -25,7 +25,7 @@ downloaded records. Keep record loading and missing-download reporting in the ad
 
 Backlink and reference presentation also lives in shared services. Their server services read the
 related records; Notes applies the same presentation rules that WorkspaceViews uses offline.
-The note projection helper remains in its model pending the global ownership migration.
+Note view assembly and revision tokens live in `services/notes/presentation.ts`.
 Models are intended to retain values, types and schemas only.
 
 `server/controllers/notes/view.spec.ts` compares server and downloaded views from the same records.
