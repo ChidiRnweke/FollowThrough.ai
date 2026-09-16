@@ -4,13 +4,35 @@ import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const clearScenario = () => {
 	for (const account of ['promise-test-a', 'promise-test-b'])
-		for (const action of ['promise', 'reference'])
+		for (const action of ['promise', 'reference', 'relate'])
 			sessionStorage.removeItem(`followthrough.notes.${action}-submissions.${account}`);
 };
 beforeEach(clearScenario);
 afterEach(clearScenario);
 
 const selection = { noteId: testNoteId(), revision: 1, from: 0, to: 4, text: 'Send' };
+
+it('restores an uncertain related-note request after a refresh', () => {
+	const first = new SelectionSubmissions(sessionStorage, 'relate').prepare(
+		'promise-test-a',
+		selection
+	);
+	expect(
+		new SelectionSubmissions(sessionStorage, 'relate').prepare('promise-test-a', { ...selection })
+			.requestId
+	).toBe(first.requestId);
+});
+
+it('keeps related-note and reference-search identities distinct', () => {
+	const first = new SelectionSubmissions(sessionStorage, 'relate').prepare(
+		'promise-test-a',
+		selection
+	);
+	expect(
+		new SelectionSubmissions(sessionStorage, 'reference').prepare('promise-test-a', selection)
+			.requestId
+	).not.toBe(first.requestId);
+});
 
 it('restores an uncertain reference request after a refresh', () => {
 	const first = new SelectionSubmissions(sessionStorage, 'reference').prepare(

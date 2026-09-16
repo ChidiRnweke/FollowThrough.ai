@@ -8,7 +8,7 @@ import {
 export class SelectionSubmissions {
 	constructor(
 		private readonly storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
-		private readonly action: 'promises' | 'reference'
+		private readonly action: 'promises' | 'reference' | 'relate'
 	) {}
 
 	prepare(accountId: string, selection: TextSelection): SelectionSubmission {
@@ -41,7 +41,7 @@ export class SelectionSubmissions {
 	}
 
 	private key(accountId: string): string {
-		const action = this.action === 'promises' ? 'promise' : 'reference';
+		const action = this.action === 'promises' ? 'promise' : this.action;
 		return `followthrough.notes.${action}-submissions.${accountId}`;
 	}
 }

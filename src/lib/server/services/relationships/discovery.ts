@@ -1,170 +1,26 @@
-import { zodResponseFormat } from 'openai/helpers/zod';
-import OpenAI from 'openai';
+import type { RelationshipClassification } from '$lib/models/relationships';
+import type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
-import {
-	relationshipClassificationSchema,
-	type RelationshipClassification
-} from '$lib/models/relationships';
-import type { OperationObserver } from '$lib/models/telemetry';
-const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
-const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
-
-export interface IRelationshipDiscovery {
-	classify(
-		sourceText: string,
-		targetText: string,
-		signal?: AbortSignal
-	): Promise<RelationshipClassification>;
-}
-
-interface RelationshipLanguageModelPort {
-	classify(
-		sourceText: string,
-		targetText: string,
-		signal?: AbortSignal
-	): Promise<RelationshipClassification | undefined>;
-}
-
-interface LanguageModelClientOptions {
-	readonly baseURL?: string;
-	readonly appURL?: string;
-}
-
-const createLanguageModelClient = (
-	apiKey: string,
-	options: LanguageModelClientOptions = {}
-): OpenAI =>
-	new OpenAI({
-		apiKey,
-		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
-		defaultHeaders: {
-			'HTTP-Referer': options.appURL ?? 'http://localhost:5173',
-			'X-OpenRouter-Title': 'FollowThrough'
-		}
-	});
-
-const SYSTEM_PROMPT = `Classify the relationship between a current architecture passage and retrieved project knowledge.
-Use prior_decision only when the target records a decision made before the source.
-Use contradicts for materially incompatible claims or constraints.
-Use elaborates when the target adds meaningful detail to the same idea.
-Use mentions for a weaker topical relationship.
-Give a concise, evidence-based justification and calibrated confidence.`;
-
-export interface RelationshipDiscoveryOptions extends LanguageModelClientOptions {
-	readonly model?: string;
-	readonly observer?: OperationObserver;
-}
-
-export class RelationshipLanguageModel implements RelationshipLanguageModelPort {
-	private readonly client;
-	private readonly model: string;
-	private readonly observer: OperationObserver;
-
-	constructor(apiKey: string, options: RelationshipDiscoveryOptions = {}) {
-		this.model = options.model ?? DEFAULT_GENERATION_MODEL;
-		this.client = createLanguageModelClient(apiKey, options);
-		this.observer = options.observer ?? directObserver;
-	}
-
+export class RelationshipDiscovery {
+	constructor(private readonly client: StructuredRelationshipClient) {}
 	async classify(
 		sourceText: string,
 		targetText: string,
-		signal?: AbortSignal
-	): Promise<RelationshipClassification | undefined> {
-		const input = `SOURCE:\n${sourceText}\n\nTARGET:\n${targetText}`;
-		return this.observer.run(
-			'relationship.classify',
-			{ input, metadata: { model: this.model } },
-			async () => {
-				const completion = await this.client.chat.completions.parse(
-					{
-						model: this.model,
-						messages: [
-							{ role: 'system', content: SYSTEM_PROMPT },
-							{ role: 'user', content: input }
-						],
-						response_format: zodResponseFormat(
-							relationshipClassificationSchema,
-							'relationship_classification'
-						)
-					},
-					signal ? { signal } : undefined
-				);
-				return completion.choices[0]?.message.parsed ?? undefined;
-			},
-			(result) => JSON.stringify(result)
-		);
-	}
-}
-
-class RelationshipRules implements IRelationshipDiscovery {
-	async classify(sourceText: string, targetText: string): Promise<RelationshipClassification> {
-		const sourceNegates = /\b(?:not|never|instead|opposite|avoid)\b/i.test(sourceText);
-		const targetNegates = /\b(?:not|never|instead|opposite|avoid)\b/i.test(targetText);
-		if (sourceNegates !== targetNegates)
-			return {
-				kind: 'contradicts',
-				justification: 'The two passages express opposing constraints or recommendations.',
-				confidence: 70
-			};
-		if (/\b(?:decided|decision|selected|chose|approved)\b/i.test(targetText))
-			return {
-				kind: 'prior_decision',
-				justification:
-					'The related passage records an earlier decision relevant to this selection.',
-				confidence: 70
-			};
-		return {
-			kind: 'mentions',
-			justification: `Semantically related content: ${targetText.slice(0, 180)}`,
-			confidence: 60
-		};
-	}
-}
-
-export class RelationshipDiscovery implements IRelationshipDiscovery {
-	private readonly client?: RelationshipLanguageModelPort;
-	private readonly fallback: IRelationshipDiscovery;
-
-	constructor(
-		options: {
-			client?: RelationshipLanguageModelPort;
-			fallback?: IRelationshipDiscovery;
-			apiKey?: string;
-			model?: string;
-			observer?: OperationObserver;
-		} = {}
-	) {
-		const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY;
-		this.client =
-			options.client ??
-			(apiKey
-				? new RelationshipLanguageModel(apiKey, {
-						model: options.model,
-						baseURL: process.env.OPENROUTER_BASE_URL,
-						appURL: process.env.ORIGIN,
-						observer: options.observer
-					})
-				: undefined);
-		this.fallback = options.fallback ?? new RelationshipRules();
-	}
-
-	async classify(
-		sourceText: string,
-		targetText: string,
+		model: string,
 		signal?: AbortSignal
 	): Promise<RelationshipClassification> {
-		if (!this.client) return this.fallback.classify(sourceText, targetText, signal);
 		try {
-			const result = await this.client.classify(sourceText, targetText, signal);
+			const result = await this.client.classify(sourceText, targetText, model, signal);
 			if (!result)
 				throw new InvalidGeneratedContentError(
 					'The model returned no structured relationship output'
 				);
 			return result;
 		} catch (error) {
-			if (error instanceof InvalidGeneratedContentError) throw error;
+			if (signal?.aborted) throw error;
+			if (error instanceof InvalidGeneratedContentError || error instanceof ExternalServiceError)
+				throw error;
 			throw new ExternalServiceError('Relationship classification failed', {
 				cause: error instanceof Error ? error.message : String(error)
 			});

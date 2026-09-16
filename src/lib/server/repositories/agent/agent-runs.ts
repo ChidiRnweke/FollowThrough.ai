@@ -13,7 +13,12 @@ import type {
 import type { ResolvedAgentRun } from '$lib/models/agent';
 import type { WorkflowAgentRun } from '$lib/models/agent';
 import type { ExtractPromisesOutput } from '$lib/models/todos';
-import type { TodoSuggestion, ReferenceSuggestion } from '$lib/models/suggestions';
+import type {
+	TodoSuggestion,
+	ReferenceSuggestion,
+	BacklinkSuggestion
+} from '$lib/models/suggestions';
+import type { RelateSelectionOutput } from '$lib/models/relationships';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { DateTime } from '$lib/models/workspace';
 
@@ -58,6 +63,7 @@ export interface AgentRunRepository {
 
 /** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */
 export type SelectionActionResult =
+	| { readonly action: 'relate'; readonly result: RelateSelectionOutput<BacklinkSuggestion> }
 	| { readonly action: 'promises'; readonly result: ExtractPromisesOutput<TodoSuggestion> }
 	| { readonly action: 'reference'; readonly result: FindReferencesOutput<ReferenceSuggestion> };
 

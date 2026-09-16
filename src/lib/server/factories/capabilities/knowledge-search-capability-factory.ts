@@ -12,7 +12,6 @@ import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
-import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import { operationObserver } from '$lib/server/services/telemetry';
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
@@ -52,7 +51,6 @@ export interface KnowledgeSearchCapability {
 	readonly diagramIndexer: ContentIndex['diagrams'];
 	readonly memoryIndexer: ContentIndex['memories'];
 	readonly lookup: KnowledgeLookup;
-	readonly relationshipClassifier: RelationshipDiscovery;
 	readonly maintenance: EmbeddingMaintenance;
 	readonly toolRetriever: ToolRetriever;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
@@ -123,7 +121,6 @@ export const createKnowledgeSearchCapability = (
 		diagramIndexer: index.diagrams,
 		memoryIndexer: index.memories,
 		lookup: new KnowledgeLookup(repository),
-		relationshipClassifier: new RelationshipDiscovery({ observer: operationObserver }),
 		maintenance: new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			embeddingClient,

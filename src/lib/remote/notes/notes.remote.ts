@@ -14,7 +14,7 @@ import type {
 	DiscardNoteDraftInput,
 	RestoreNoteRevisionInput
 } from '$lib/models/notes';
-import type { RelateSelectionInput } from '$lib/models/relationships';
+import { startRelateSelectionSchema } from '$lib/models/relationships';
 import type { NoteId } from '$lib/models/notes';
 
 const noteId = z
@@ -70,10 +70,8 @@ export const extractPromises = command(startExtractPromisesSchema, async (input)
 	return AppFactory.controllers().todos().startExtractPromises(requestActor(), input);
 });
 
-export const relateNote = command(z.object({ selection: textSelection }), async (input) => {
-	return AppFactory.controllers()
-		.relationships()
-		.startSuggestFromSelection(requestActor(), input as RelateSelectionInput);
+export const relateNote = command(startRelateSelectionSchema, async (input) => {
+	return AppFactory.controllers().relationships().startSuggestFromSelection(requestActor(), input);
 });
 
 export const findReferences = command(startFindReferencesSchema, async (input) => {
