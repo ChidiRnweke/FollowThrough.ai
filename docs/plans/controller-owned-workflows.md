@@ -450,6 +450,12 @@ journal writes. Models retain the event and activity values; they no longer exec
 The old rationale that placed behavior in models to avoid service dependencies is removed. The wider
 model migration remains open.
 
+Saved note actions: browser storage and in-memory note stores now include the account identity.
+The browser reader owns JSON parsing through a model schema. Its fake stores the same typed values
+without casting unknown records to never. Native session-storage regressions cover account switching,
+another account clearing its actions, unscoped legacy records and corrupt account records. Legacy
+unscoped entries are not assigned to a signed-in account because they carry no ownership evidence.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

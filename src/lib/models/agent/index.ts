@@ -1047,6 +1047,37 @@ export type ToolOutcomeEvent = Extract<
 
 export const agentRunCursorSchema = z.string().regex(/^\d+$/);
 
+export interface NoteActionContext {
+	readonly source?: string;
+	readonly insertAt?: number;
+}
+
+export interface StoredNoteActionRun {
+	readonly runId: AgentRunId;
+	readonly action: NoteActionKind;
+	readonly noteId: NoteId;
+	readonly cursor: string;
+	readonly context: NoteActionContext;
+}
+
+export const storedNoteActionRunSchema = z
+	.object({
+		runId: z
+			.string()
+			.min(1)
+			.transform((value) => value as AgentRunId),
+		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
+		noteId: z
+			.string()
+			.min(1)
+			.transform((value) => value as NoteId),
+		cursor: agentRunCursorSchema,
+		context: z
+			.object({ source: z.string().optional(), insertAt: z.number().int().optional() })
+			.strict()
+	})
+	.strict() satisfies z.ZodType<StoredNoteActionRun>;
+
 export const agentRunEventIdentitySchema = z.object({
 	cursor: agentRunCursorSchema,
 	runId: runIdSchema,
