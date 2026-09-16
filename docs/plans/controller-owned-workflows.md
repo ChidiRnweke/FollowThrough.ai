@@ -438,6 +438,12 @@ against September 16, and now preserves September 2. PostgreSQL covers concurren
 reconstruction, cancellation and result-event rollback. The other selection actions still use the
 closure-based WorkflowRunner; their migration and the global model cleanup remain open.
 
+Queued chat recovery: startup now resumes persisted chat runs that have not claimed execution yet.
+A regression previously left a committed request queued forever after recovery. Running/cancelling
+settlement stays separate, and the queued-chat query excludes workflow runs. Promise extraction keeps
+its own queued recovery in the Todo controller. A PostgreSQL contract checks the query against both
+running chats and an actual queued note-action request.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
