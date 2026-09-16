@@ -608,6 +608,13 @@ creation policy remains open. Edit tests moved from the catalog to the real cont
 A real PostgreSQL regression holds the task row until two competing edits reach it. Before the fix,
 one edit overwrites the other; after locking before the read, title and description changes survive.
 
+Task creation ownership: Todos and Suggestions apply the same shared creation rule used by offline
+commands. Task batches and automatic promise acceptance use the Todos controller’s creation method.
+TodoCatalog persists the resolved task after ownership, project, anchor and provenance checks. Task
+models now contain values, types and Zod schemas only. The task and suggestion-artifact fakes no
+longer duplicate construction or invent a project. Creation tests moved to the real task controller
+with the real catalog and repository fakes.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

@@ -1,4 +1,3 @@
-import { decideTodoCreation } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
 import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
@@ -22,20 +21,14 @@ export class TodoCatalog {
 		private readonly clock: () => DateTime = now
 	) {}
 
-	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		const decision = decideTodoCreation(input, {
-			id: input.id ?? (crypto.randomUUID() as TodoId),
-			userId: actor.userId,
-			timestamp: this.clock()
-		});
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		if (!(await this.projects.findById(actor, input.projectId)))
+	async create(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s task');
+		if (!(await this.projects.findById(actor, todo.projectId)))
 			throw new NotFoundError('Todo project was not found');
-		if (input.sourceAnchorId)
-			await this.validateAnchor(actor, input.sourceAnchorId, input.projectId);
-		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
+		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
+		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
-		return this.todos.insert(actor, decision.todo);
+		return this.todos.insert(actor, todo);
 	}
 
 	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
