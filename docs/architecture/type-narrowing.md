@@ -301,10 +301,9 @@ produce.
         `drizzle/0049_split_tool_outcome_events.sql` rewrites 30 rows into `tool_reported_failure`
         and 117 into `tool_succeeded`, following `0047_rename_diagram_tools`, which faced the same
         problem — a name the code stopped using and the rows still carried.
-  - [x] `toolActivityFromEvent` is model-owned because two services need it and a service may not
-        import another. the Agent controller and `DiagramAuthoring` held a copy each and had already
-        diverged — the diagram one wrote `output: undefined` onto a `succeeded` row, which the wire
-        type cannot carry.
+  - [x] The Agent and Diagrams controllers use the conversation tool-activity service to project
+        resolved events into journal entries. Both controllers own the journal write. The shared
+        projection preserves reported failures and their output; its types remain in models.
   - [x] `segmentOutput` takes `StoredAgentEvent`, and an unreadable row closes the open segment
         rather than being skipped: it is something that happened between two runs of output, and
         merging across it would give the second run the first one's cursor. The controller drops

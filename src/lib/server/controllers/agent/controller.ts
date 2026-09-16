@@ -55,7 +55,7 @@ import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { toolActivityFromEvent } from '$lib/models/agent';
+import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { AgentRunContext, PreparedAgentRun } from '$lib/models/agent';
 import type {
 	AgentRunDecisionRepository,
