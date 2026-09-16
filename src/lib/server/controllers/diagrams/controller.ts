@@ -22,6 +22,7 @@ import {
 	diagramRevisionModel
 } from '$lib/server/services/diagrams/submission-validation';
 import type { DiagramGenerator } from '$lib/server/services/diagrams/generation';
+import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 import type { AgentContext } from '$lib/server/services/agent/runs/context';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
@@ -299,14 +300,17 @@ export class Diagrams implements DiagramsController {
 		input: GenerateMermaidDiagramInput,
 		signal?: AbortSignal
 	): Promise<GenerateMermaidDiagramOutput<DiagramSuggestion>> {
-		return this.generateDraft(actor, {
-			operation: 'generate',
-			noteId: input.selection.noteId,
-			selection: input.selection,
-			instruction: input.instruction,
-			signal
-		}).then(({ provenanceId, ...diagram }) =>
-			this.dependencies.transactionRunner.run(async () => {
+		return this.publishGeneration(
+			actor,
+			{
+				operation: 'generate',
+				noteId: input.selection.noteId,
+				selection: input.selection,
+				instruction: input.instruction,
+				signal
+			},
+			async ({ provenanceId, kind, ...diagram }) => {
+				if (kind !== 'mermaid') throw new ValidationError('Expected a Mermaid diagram');
 				const anchor = await this.dependencies.anchorCreator.create(actor, input.selection);
 				const suggestion = await this.dependencies.suggestionCreator.create(actor, {
 					kind: 'diagram',
@@ -316,7 +320,7 @@ export class Diagrams implements DiagramsController {
 					payload: { noteId: input.selection.noteId, kind: 'mermaid', ...diagram }
 				});
 				return { anchorId: anchor.id, suggestion };
-			})
+			}
 		);
 	}
 
@@ -325,8 +329,11 @@ export class Diagrams implements DiagramsController {
 		input: ReviseInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ReviseInlineMermaidOutput> {
-		const draft = await this.generateDraft(actor, { operation: 'revise', ...input, signal });
-		return { source: draft.source, ...(draft.title ? { title: draft.title } : {}) };
+		return this.publishGeneration(
+			actor,
+			{ operation: 'revise', ...input, signal },
+			async (draft) => ({ source: draft.source, ...(draft.title ? { title: draft.title } : {}) })
+		);
 	}
 
 	startGenerateMermaid(
@@ -370,18 +377,20 @@ export class Diagrams implements DiagramsController {
 		input: ConvertInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ConvertInlineMermaidOutput<DiagramSuggestion>> {
-		return this.generateDraft(actor, { operation: 'convert', ...input, signal }).then(
-			({ provenanceId, ...draft }) =>
-				this.dependencies.transactionRunner.run(async () => {
-					this.dependencies.drawioXmlValidator.validate(draft.source);
-					const suggestion = await this.dependencies.suggestionCreator.create(actor, {
-						kind: 'diagram',
-						noteId: input.noteId,
-						provenanceId,
-						payload: { noteId: input.noteId, kind: 'drawio', ...draft }
-					});
-					return { suggestion };
-				})
+		return this.publishGeneration(
+			actor,
+			{ operation: 'convert', ...input, signal },
+			async ({ provenanceId, ...draft }) => {
+				if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
+				this.dependencies.drawioXmlValidator.validate(draft.source);
+				const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+					kind: 'diagram',
+					noteId: input.noteId,
+					provenanceId,
+					payload: { noteId: input.noteId, ...draft }
+				});
+				return { suggestion };
+			}
 		);
 	}
 
@@ -433,28 +442,33 @@ export class Diagrams implements DiagramsController {
 			throw new UnsupportedDiagramOperationError('Only Mermaid diagrams can be revised by AI');
 		if (existing.sourceNoteId === undefined)
 			throw new ValidationError('This operation needs a diagram created from a note.');
-		const draft = await this.generateDraft(actor, {
-			operation: 'revise',
-			noteId: existing.sourceNoteId,
-			source: existing.source,
-			instruction: input.instruction
-		});
-		const revised: MermaidDiagram = {
-			...existing,
-			...(draft.title ? { title: draft.title } : {}),
-			source: draft.source,
-			provenanceId: draft.provenanceId,
-			updatedAt: this.dependencies.now()
-		};
-		const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
-		const searchableText = await this.dependencies.textExtractor.extract(revised);
-		const saved = (await this.dependencies.diagramWriter.update(actor, {
-			...revised,
-			renderedSvg,
-			searchableText
-		})) as MermaidDiagram;
-		await this.indexDiagram(actor, saved);
-		return { diagram: saved };
+		return this.publishGeneration(
+			actor,
+			{
+				operation: 'revise',
+				noteId: existing.sourceNoteId,
+				source: existing.source,
+				instruction: input.instruction
+			},
+			async (draft) => {
+				const revised: MermaidDiagram = {
+					...existing,
+					...(draft.title ? { title: draft.title } : {}),
+					source: draft.source,
+					provenanceId: draft.provenanceId,
+					updatedAt: this.dependencies.now()
+				};
+				const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
+				const searchableText = await this.dependencies.textExtractor.extract(revised);
+				const saved = (await this.dependencies.diagramWriter.update(actor, {
+					...revised,
+					renderedSvg,
+					searchableText
+				})) as MermaidDiagram;
+				await this.indexDiagram(actor, saved);
+				return { diagram: saved };
+			}
+		);
 	}
 
 	async promote(
@@ -471,27 +485,31 @@ export class Diagrams implements DiagramsController {
 			throw new UnsupportedDiagramOperationError(
 				'Only a diagram created from a note can be promoted here'
 			);
-		const draft = await this.generateDraft(actor, {
-			operation: 'convert',
-			noteId: sourceNoteId,
-			source: source.source
-		});
-		this.dependencies.drawioXmlValidator.validate(draft.source);
-		const suggestion = await this.dependencies.transactionRunner.run(async () => {
-			const provenanceId = draft.provenanceId;
-			return this.dependencies.suggestionCreator.create(actor, {
-				kind: 'diagram',
+		return this.publishGeneration(
+			actor,
+			{
+				operation: 'convert',
 				noteId: sourceNoteId,
-				provenanceId,
-				payload: {
+				source: source.source
+			},
+			async (draft) => {
+				if (draft.kind !== 'drawio') throw new ValidationError('Expected a draw.io diagram');
+				this.dependencies.drawioXmlValidator.validate(draft.source);
+				const provenanceId = draft.provenanceId;
+				const suggestion = await this.dependencies.suggestionCreator.create(actor, {
+					kind: 'diagram',
 					noteId: sourceNoteId,
-					kind: 'drawio',
-					title: draft.title,
-					source: draft.source
-				}
-			});
-		});
-		return { source, suggestion };
+					provenanceId,
+					payload: {
+						noteId: sourceNoteId,
+						kind: 'drawio',
+						title: draft.title,
+						source: draft.source
+					}
+				});
+				return { source, suggestion };
+			}
+		);
 	}
 	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
 		const noteId = diagramIndexNoteId(diagram);
@@ -515,18 +533,11 @@ export class Diagrams implements DiagramsController {
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
-	private generateDraft(
+	private async publishGeneration<Result>(
 		actor: ActorContext,
-		task: Extract<DiagramTask, { operation: 'convert' }>
-	): Promise<{ title: string; source: string; provenanceId: ProvenanceId }>;
-	private generateDraft(
-		actor: ActorContext,
-		task: DiagramTask
-	): Promise<{ title?: string; source: string; provenanceId: ProvenanceId }>;
-	private async generateDraft(
-		actor: ActorContext,
-		task: DiagramTask
-	): Promise<{ title?: string; source: string; provenanceId: ProvenanceId }> {
+		task: DiagramTask,
+		publish: (draft: DiagramSubmission & { readonly provenanceId: ProvenanceId }) => Promise<Result>
+	): Promise<Result> {
 		const renderedPngDataUrl = task.operation === 'revise' ? task.renderedPngDataUrl : undefined;
 		assertRenderedPng(renderedPngDataUrl);
 		if (task.operation === 'generate' && !task.selection.text.trim())
@@ -608,7 +619,7 @@ export class Diagrams implements DiagramsController {
 			};
 			await this.dependencies.generation.runs.updateContext(actor, run.id, context);
 
-			return await this.dependencies.generation.observeWorkflow(
+			const draft = await this.dependencies.generation.observeWorkflow(
 				'diagram.agent-turn',
 				{
 					input: input.prompt,
@@ -671,14 +682,19 @@ export class Diagrams implements DiagramsController {
 								assistantText,
 								model
 							);
-						await this.dependencies.generation.runs.complete(actor, run.id);
-						return { title: draft.title, source: draft.source, provenanceId: provenance.id };
+						return { ...draft, provenanceId: provenance.id };
 					} finally {
 						await session.close();
 					}
 				},
 				(result) => JSON.stringify(result)
 			);
+			task.signal?.throwIfAborted();
+			return await this.dependencies.transactionRunner.run(async () => {
+				const result = await publish(draft);
+				await this.dependencies.generation.runs.complete(actor, run.id);
+				return result;
+			});
 		} catch (error) {
 			await this.dependencies.generation.runs.fail(
 				actor,
