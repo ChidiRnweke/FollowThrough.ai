@@ -72,6 +72,28 @@ export interface RelateSelectionInput {
 	readonly selection: TextSelection;
 }
 
+export interface StartRelateSelectionInput extends RelateSelectionInput {
+	readonly requestId: string;
+}
+
+export const startRelateSelectionSchema = z
+	.object({
+		requestId: z.string().uuid(),
+		selection: z
+			.object({
+				noteId: z
+					.string()
+					.uuid()
+					.transform((value) => value as NoteId),
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+	})
+	.strict() satisfies z.ZodType<StartRelateSelectionInput>;
+
 export interface RelateSelectionOutput<Proposal> {
 	readonly anchorId: SourceAnchorId;
 	readonly suggestions: readonly Proposal[];

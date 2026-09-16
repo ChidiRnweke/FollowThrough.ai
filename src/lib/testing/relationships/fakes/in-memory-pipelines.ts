@@ -60,15 +60,21 @@ export class InMemoryStructuredPromiseClient implements StructuredPromiseClient 
 export class InMemoryStructuredRelationshipClient implements StructuredRelationshipClient {
 	result?: RelationshipClassification;
 	failure?: Error;
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly modelResults = new Map<string, RelationshipClassification>();
 
 	async classify(
 		_sourceText: string,
-		_targetText: string
+		_targetText: string,
+		model: string
 	): Promise<RelationshipClassification | undefined> {
 		void _sourceText;
 		void _targetText;
+		this.started.resolve();
+		await this.completion;
 		if (this.failure) throw this.failure;
-		return this.result;
+		return this.modelResults.get(model) ?? this.result;
 	}
 }
 

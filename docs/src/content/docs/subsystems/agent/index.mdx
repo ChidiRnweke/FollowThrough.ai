@@ -68,6 +68,11 @@ Both controllers share request storage; neither passes an executable callback to
 The browser retains uncertain request identities separately for each account and action. A missing
 web-search credential produces an explicit failure, not an empty search result.
 
+Related-note discovery is owned by the Relationships controller. Its saved input records the selection
+and whether classification uses rules or a specific model. Retrieval and classification run before the
+transaction that writes backlink proposals and completion. Startup resumes queued requests from those
+values. Enabling or disabling a model does not change the classification mode of an existing request.
+
 The Agent controller's `submit` returns a receipt immediately. Its `execute` method (`src/lib/server/controllers/agent/controller.ts`) runs in the background. The same controller owns submission, execution, cancellation and restart recovery. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers. Context updates check the stored run status in the write statement so a concurrent cancellation cannot be overwritten.
 
 The state machine is owned by the model layer: `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it.

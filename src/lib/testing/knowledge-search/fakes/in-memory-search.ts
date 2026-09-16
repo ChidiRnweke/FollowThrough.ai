@@ -311,6 +311,7 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 
 export class InMemoryEmbeddingClient implements EmbeddingClient {
 	failure?: Error;
+	readonly vectorsByContent = new Map<string, readonly number[]>();
 	model = 'fake-embedding-v1';
 	generation = 1;
 	returnWrongCount = false;
@@ -320,7 +321,10 @@ export class InMemoryEmbeddingClient implements EmbeddingClient {
 		if (this.failure) throw this.failure;
 		if (contents.some((content) => this.rejectedContents.has(content)))
 			throw new Error('Embedding rejected this content');
-		const vectors = contents.map((content, index) => [this.generation, index, content.length]);
+		const vectors = contents.map(
+			(content, index) =>
+				this.vectorsByContent.get(content) ?? [this.generation, index, content.length]
+		);
 		this.generation += 1;
 		return {
 			model: this.model,

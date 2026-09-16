@@ -468,6 +468,17 @@ sources are no longer cut off after six entries. PostgreSQL covers concurrent du
 cancellation without writes, result-event rollback and queued reconstruction. Relationship and diagram
 actions still require the same durable ownership migration; the global refactor remains open.
 
+Related-note discovery runs: Relationships now owns durable submission, retrieval, rule/model
+classification, completion and queued recovery. It uses the same SelectionRequests storage service and
+account-scoped browser retry identity as promises and references. The stored generation choice survives
+configuration changes. The relationship capability supplies the actual model adapter and deterministic
+rules separately; the discovery service no longer constructs or invokes a fallback service. Selection
+validation returns its resolved note without creating an anchor, so retrieval and classification happen
+before the write transaction. Completion, anchors, provenance, proposals and result events commit
+together. The PostgreSQL contracts use actual vector retrieval and prove duplicate submission,
+cancellation, rollback and recovery. Diagram actions still use the workflow callback and remain the
+next P11 migration; the broader model and content-change work is not complete.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

@@ -48,7 +48,16 @@ class NoteActionsStore {
 		});
 	}
 	relate(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => relateNote({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to find related notes');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new SelectionSubmissions(sessionStorage, 'relate');
+			const input = submissions.prepare(accountId, selection);
+			const receipt = await relateNote(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	findReferences(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
 		return this.call<AgentRunReceipt>(async () => {

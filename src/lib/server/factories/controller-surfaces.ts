@@ -70,7 +70,9 @@ export const controllerSurfaces = {
 	},
 	relationships: {
 		suggestFromSelection: true,
-		startSuggestFromSelection: true
+		startSuggestFromSelection: true,
+		executeRelatedNoteRun: true,
+		recoverQueuedRelatedNoteRuns: true
 	},
 	references: {
 		suggestFromSelection: true,

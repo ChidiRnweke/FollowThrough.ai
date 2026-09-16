@@ -7,6 +7,7 @@ import type {
 	ConversationId,
 	PromiseExtractionRunContext,
 	ReferenceSearchRunContext,
+	RelatedNoteRunContext,
 	SelectionActionRequest,
 	SelectionActionRunContext,
 	WorkflowAgentRun
@@ -25,7 +26,8 @@ export class DuplicateSelectionRequest extends Error {}
 
 type PromiseRun = WorkflowAgentRun & { readonly contextSnapshot: PromiseExtractionRunContext };
 type ReferenceRun = WorkflowAgentRun & { readonly contextSnapshot: ReferenceSearchRunContext };
-type SelectionRun = PromiseRun | ReferenceRun;
+type RelatedRun = WorkflowAgentRun & { readonly contextSnapshot: RelatedNoteRunContext };
+type SelectionRun = PromiseRun | ReferenceRun | RelatedRun;
 
 /** Persists note-action identity and input through actual repositories. Controllers own transactions. */
 export class SelectionRequests {
@@ -45,7 +47,12 @@ export class SelectionRequests {
 			userId: actor.userId,
 			kind: 'workflow',
 			contextNoteId: context.selection.noteId,
-			title: context.kind === 'promise_extraction' ? 'Extract promises' : 'Find references',
+			title:
+				context.kind === 'promise_extraction'
+					? 'Extract promises'
+					: context.kind === 'reference_search'
+						? 'Find references'
+						: 'Find related notes',
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
@@ -100,6 +107,11 @@ export class SelectionRequests {
 		runId: AgentRunId,
 		kind: 'reference_search'
 	): Promise<ReferenceRun | undefined>;
+	claim(
+		actor: ActorContext,
+		runId: AgentRunId,
+		kind: 'related_notes'
+	): Promise<RelatedRun | undefined>;
 	async claim(
 		actor: ActorContext,
 		runId: AgentRunId,
@@ -118,6 +130,8 @@ export class SelectionRequests {
 		if (claimed.contextSnapshot.kind === 'promise_extraction')
 			return { ...claimed, contextSnapshot: claimed.contextSnapshot };
 		if (claimed.contextSnapshot.kind === 'reference_search')
+			return { ...claimed, contextSnapshot: claimed.contextSnapshot };
+		if (claimed.contextSnapshot.kind === 'related_notes')
 			return { ...claimed, contextSnapshot: claimed.contextSnapshot };
 		throw new ValidationError('The claimed run has no saved selection');
 	}
@@ -152,7 +166,8 @@ export class SelectionRequests {
 		if (
 			run.kind !== 'workflow' ||
 			(run.contextSnapshot.kind !== 'promise_extraction' &&
-				run.contextSnapshot.kind !== 'reference_search') ||
+				run.contextSnapshot.kind !== 'reference_search' &&
+				run.contextSnapshot.kind !== 'related_notes') ||
 			!isDeepStrictEqual(this.intent(run.contextSnapshot), this.intent(request.context))
 		)
 			throw new ValidationError('This request ID already belongs to a different operation');

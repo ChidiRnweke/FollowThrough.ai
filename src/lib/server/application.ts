@@ -130,7 +130,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		db,
 		notes: noteCapability.repository,
 		anchors: noteCapability.anchors,
-		provenance: noteCapability.provenanceRepository
+		provenance: noteCapability.provenanceRepository,
+		openRouterApiKey,
+		openRouterBaseURL,
+		appURL,
+		defaultModel: DEFAULT_GENERATION_MODEL
 	});
 	const referenceCapability = createReferencesCapability({
 		db,
@@ -182,8 +186,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		memoryIndexer,
 		lookup: knowledgeLookup,
 		embeddingClient: searchEmbeddings,
-		reranker: searchReranker,
-		relationshipClassifier
+		reranker: searchReranker
 	} = knowledgeSearch;
 	const toolRetriever = knowledgeSearch.toolRetriever;
 	const agentFilesCapability = createAgentFilesCapability({
@@ -319,10 +322,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			knowledgeLookup,
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
-			relationshipClassifier,
+			relationshipClassifier: relationshipCapability.classifier,
 			suggestionCreator: suggestions,
 			transactionRunner,
-			workflowRunner: agentCapability.workflowRunner
+			selectionRequests: agentCapability.selectionRequests,
+			runSettlements,
+			runEvents: eventBus,
+			relationshipGeneration: relationshipCapability.generation,
+			relationshipRules: relationshipCapability.rules
 		},
 		references: {
 			selectionOrigins: noteCapability.selectionOrigins,
@@ -626,7 +633,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			return (
 				interrupted +
 				(await controllerFactory.todos().recoverQueuedPromiseRuns()) +
-				(await controllerFactory.references().recoverQueuedReferenceRuns())
+				(await controllerFactory.references().recoverQueuedReferenceRuns()) +
+				(await controllerFactory.relationships().recoverQueuedRelatedNoteRuns())
 			);
 		},
 		backgroundTasks: [

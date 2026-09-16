@@ -1,57 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { Relationships } from './controller';
-import type { TextSelection } from '$lib/models/notes';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
-import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient,
-	InMemoryReranker
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+	relatedNoteFixture as setup,
+	relatedSelection as selection
+} from '$lib/testing/relationships/fixtures/discovery';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import {
-	InMemoryProvenanceRecorder,
-	InMemoryStructuredRelationshipClient
-} from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryWorkflowRunner } from '$lib/testing/agent/fakes/in-memory-workflow-runner';
-import {
-	noteBuilder,
 	testActor,
 	testNoteId,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
-const selection: TextSelection = {
-	noteId: testNoteId(),
-	revision: 1,
-	from: 0,
-	to: 9,
-	text: 'Use OAuth'
-};
-const setup = () => {
-	const content = new InMemoryNoteContent();
-	content.notes = [noteBuilder({ plainText: selection.text })];
-	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
-	const repository = new InMemorySearchRepository();
-	const client = new InMemoryStructuredRelationshipClient();
-	client.result = { kind: 'prior_decision', justification: 'Earlier decision', confidence: 88 };
-	const controller = new Relationships({
-		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-		knowledgeLookup: new KnowledgeLookup(repository),
-		embeddings: new InMemoryEmbeddingClient(),
-		reranker: new InMemoryReranker(),
-		relationshipClassifier: new RelationshipDiscovery({ client }),
-		suggestionCreator: suggestions,
-		transactionRunner: new InMemoryTransactionRunner([content, provenance, suggestions]),
-		workflowRunner: new InMemoryWorkflowRunner()
-	});
-	return { controller, repository, client, suggestions, content };
-};
 
 describe('related-note proposal workflow', () => {
 	it('creates one proposal from duplicate passages and preserves its relationship label', async () => {

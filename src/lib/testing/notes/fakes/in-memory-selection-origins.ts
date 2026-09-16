@@ -13,17 +13,17 @@ export class InMemorySelectionOrigins implements SelectionOriginService {
 		private readonly notes: InMemoryNoteContent,
 		private readonly provenance: InMemoryProvenanceRecorder
 	) {}
-	async validate(actor: ActorContext, selection: TextSelection): Promise<void> {
+	async validate(actor: ActorContext, selection: TextSelection): Promise<Note> {
 		const note = await this.notes.get(actor, selection.noteId);
 		const decision = decideSelection(selection, note);
 		if (decision.kind === 'invalid') {
 			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
 			throw new ValidationError(decision.message);
 		}
+		return note;
 	}
 	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
-		await this.validate(actor, selection);
-		const note = await this.notes.get(actor, selection.noteId);
+		const note = await this.validate(actor, selection);
 		const anchor = await this.notes.create(actor, selection);
 		return { note, anchor };
 	}

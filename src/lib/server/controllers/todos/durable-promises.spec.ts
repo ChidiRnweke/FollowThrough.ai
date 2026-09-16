@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import type { PromiseGeneration } from '$lib/models/agent';
+import type { SelectionGeneration } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import {
 	promiseExtractionFixture,
@@ -7,7 +7,9 @@ import {
 } from '$lib/testing/todos/fixtures/promise-extraction';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const prepare = async (generation: PromiseGeneration = { kind: 'model', model: 'test/model' }) => {
+const prepare = async (
+	generation: SelectionGeneration = { kind: 'model', model: 'test/model' }
+) => {
 	const state = promiseExtractionFixture();
 	state.extractor.candidates = [
 		{ action: 'Send it', responsibility: 'mine', strength: 'explicit', confidence: 95 }
