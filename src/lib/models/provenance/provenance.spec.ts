@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { provenanceOrigin, provenanceSchema } from './index';
+import { provenanceSchema } from './index';
 
 const identity = {
 	id: '10000000-0000-4000-8000-000000000001',
@@ -142,6 +142,10 @@ const supportedProducers = [
 ] as const;
 
 describe('Reading stored provenance', () => {
+	it.each(supportedProducers)('accepts stored $label provenance', ({ value }) => {
+		expect(provenanceSchema.safeParse(value).success).toBe(true);
+	});
+
 	it('refuses stored relationship provenance without its source anchor', () => {
 		const missingAnchor = {
 			...identity,
@@ -151,23 +155,5 @@ describe('Reading stored provenance', () => {
 			metadata: {}
 		};
 		expect(() => provenanceSchema.parse(missingAnchor)).toThrow();
-	});
-});
-
-describe('Reading where a record came from', () => {
-	it('names the pipeline for a producer that ran as one', () => {
-		const record = provenanceSchema.parse(supportedProducers[2].value);
-		expect(provenanceOrigin(record)).toEqual({
-			pipeline: 'reference',
-			createdAt: identity.createdAt
-		});
-	});
-
-	it('names the producer for one that did not', () => {
-		const record = provenanceSchema.parse(supportedProducers[1].value);
-		expect(provenanceOrigin(record)).toEqual({
-			producerName: 'document-export',
-			createdAt: identity.createdAt
-		});
 	});
 });

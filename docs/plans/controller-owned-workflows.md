@@ -505,6 +505,16 @@ removed. The construction-only tests are replaced by actual service evidence; ma
 still has a schema-boundary test. The memory proposal fixture now uses the real provenance service.
 Provenance presentation and suggestion view assembly still require their separate ownership cleanup.
 
+Suggestion view ownership: SuggestionInbox returns resolved context records; Notes and Suggestions
+controllers apply the shared suggestion and provenance presentation rules. WorkspaceViews and the
+provenance caption use the same shared implementations. The provenance model now contains types and
+Zod schemas only. The suggestion model no longer assembles views. Existing provenance presentation
+tests moved with their rule owner, and the note-view parity test now includes a real selected-source
+proposal with its anchor and provenance. Suggestion test readers require supplied context instead of
+inventing a memory origin for every proposal. Other note/backlink/reference projections remain open.
+The memory-view parity test exposed a client-only full provenance field that the declared view type
+and server response did not carry. Shared projection now gives both paths the same review view.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

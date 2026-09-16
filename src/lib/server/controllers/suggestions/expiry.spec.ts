@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -20,11 +21,14 @@ const setup = () => {
 			expiresAt: testNow
 		})
 	];
+	proposals.contexts = proposals.suggestions.flatMap((suggestion) =>
+		suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
+	);
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
 			suggestionExpirer: proposals,
 			suggestionLister: proposals,
-			suggestionViewAssembler: proposals
+			suggestionContextReader: proposals
 		})
 	);
 	return { controller, proposals };

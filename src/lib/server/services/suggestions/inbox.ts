@@ -1,4 +1,4 @@
-import { assembleSuggestionView } from '$lib/models/suggestions';
+import type { SuggestionContext } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
@@ -9,8 +9,7 @@ import type {
 	ProposalSelectionOrigin,
 	SuggestionId,
 	SuggestionProposal,
-	SuggestionStatus,
-	SuggestionView
+	SuggestionStatus
 } from '$lib/models/suggestions';
 import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
 import { ExpiredSuggestionError, InvalidTransitionError, NotFoundError } from '$lib/errors';
@@ -19,7 +18,6 @@ import type {
 	ProvenanceRepository,
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
-import { provenanceOrigin } from '$lib/models/provenance';
 import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
 export interface Clock {
 	now(): DateTime;
@@ -120,10 +118,10 @@ export class SuggestionInbox {
 		return (await this.listByStatus(actor, status)).length;
 	}
 
-	async assemble(
+	async readContexts(
 		actor: ActorContext,
 		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionView[]> {
+	): Promise<readonly SuggestionContext[]> {
 		return Promise.all(
 			suggestions.map(async (suggestion) => {
 				const [provenance, note, anchor] = await Promise.all([
@@ -134,11 +132,7 @@ export class SuggestionInbox {
 						: undefined
 				]);
 				if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
-				return assembleSuggestionView(suggestion, {
-					note,
-					anchor,
-					origin: provenanceOrigin(provenance)
-				});
+				return { suggestion, note, anchor, provenance };
 			})
 		);
 	}

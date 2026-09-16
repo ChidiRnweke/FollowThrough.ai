@@ -10,10 +10,10 @@ import type {
 	SuggestionId,
 	SuggestionProposal,
 	SuggestionStatus,
-	SuggestionView
+	SuggestionContext
 } from '$lib/models/suggestions';
 
-export type { SuggestionProposal } from '$lib/models/suggestions';
+export type { SuggestionProposal, SuggestionContext } from '$lib/models/suggestions';
 
 export interface SuggestionCreator {
 	create<P extends SuggestionProposal>(
@@ -37,11 +37,11 @@ export interface SuggestionLister {
 	): Promise<readonly Suggestion[]>;
 	countByStatus(actor: ActorContext, status: SuggestionStatus): Promise<number>;
 }
-export interface SuggestionViewAssembler {
-	assemble(
+export interface SuggestionContextReader {
+	readContexts(
 		actor: ActorContext,
 		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionView[]>;
+	): Promise<readonly SuggestionContext[]>;
 }
 export interface SuggestionAccepter {
 	accept(

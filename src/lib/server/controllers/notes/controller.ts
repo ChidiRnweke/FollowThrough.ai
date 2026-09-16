@@ -1,4 +1,6 @@
 import { mutationResource } from '$lib/services/workspace/commands';
+import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
+import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -120,7 +122,7 @@ import type {
 import type {
 	SuggestionLister,
 	SuggestionExpirer,
-	SuggestionViewAssembler
+	SuggestionContextReader
 } from '$lib/server/services/suggestions/contracts';
 import type { TodoLister, TodoViewAssembler } from '$lib/server/services/todos/contracts';
 import type {
@@ -342,7 +344,7 @@ export interface NotesDependencies {
 	todoViewAssembler: TodoViewAssembler;
 	suggestionLister: SuggestionLister;
 	suggestionExpirer: SuggestionExpirer;
-	suggestionViewAssembler: SuggestionViewAssembler;
+	suggestionContextReader: SuggestionContextReader;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
 	noteArchiver: NoteArchiver;
@@ -565,12 +567,12 @@ export class Notes implements NotesController {
 			this.dependencies.todoLister.list(actor, { noteId: input.noteId }),
 			this.dependencies.suggestionLister.listByStatus(actor, 'proposed', input.noteId)
 		]);
-		const [backlinks, referenceViews, todoViews, pendingSuggestions, sectionNumbering] =
+		const [backlinks, referenceViews, todoViews, pendingContexts, sectionNumbering] =
 			await Promise.all([
 				this.dependencies.backlinkViewAssembler.assemble(actor, relationships),
 				this.dependencies.referenceViewAssembler.assemble(actor, references),
 				this.dependencies.todoViewAssembler.assemble(actor, todos),
-				this.dependencies.suggestionViewAssembler.assemble(actor, pending),
+				this.dependencies.suggestionContextReader.readContexts(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
 		return assembleNoteView({
@@ -579,7 +581,9 @@ export class Notes implements NotesController {
 			references: referenceViews,
 			diagrams,
 			todos: todoViews,
-			pendingSuggestions,
+			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>
+				assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+			),
 			sectionNumbering
 		});
 	}

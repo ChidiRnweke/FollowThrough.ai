@@ -18,10 +18,13 @@ Use this map to find the code and tests for a change. Paths in the table are rel
 
 ## Note views
 
-`assembleNoteView` in `models/notes/index.ts` assembles the note surface. The Notes controller and
-`WorkspaceViews.note` both use it. Backlinks, references, and suggestions use the corresponding
-`assembleBacklinkView`, `assembleReferenceView`, and `assembleSuggestionView` functions in their
-owning models. Keep record loading and missing-download reporting in the adapters.
+The Notes and Suggestions controllers assemble suggestion views from resolved context records.
+The shared projection is `services/suggestions/presentation.ts`; producer labels come from
+`services/provenance/presentation.ts`. `WorkspaceViews` uses those same presentation rules for
+downloaded records. Keep record loading and missing-download reporting in the adapters.
+
+The note, backlink and reference projection helpers still live in their models and remain part of
+the global ownership migration. Models are intended to retain values, types and schemas only.
 
 `server/controllers/notes/view.spec.ts` compares server and downloaded views from the same records.
 

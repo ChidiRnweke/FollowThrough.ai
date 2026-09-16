@@ -11,6 +11,8 @@ import type {
 	DiagramTextExtractor
 } from '$lib/server/services/diagrams/contracts';
 import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
+import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
+import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import { mapAppliedChange, type AppliedChange } from '$lib/models/proposal-effects';
 import type { Todo } from '$lib/models/todos';
@@ -49,7 +51,7 @@ import type {
 	SuggestionExpirer,
 	SuggestionRejecter,
 	SuggestionReverter,
-	SuggestionViewAssembler
+	SuggestionContextReader
 } from '$lib/server/services/suggestions/contracts';
 
 type SuggestionArtifact = Todo | NoteRelationship | ExternalReference | Diagram | MemoryEntry;
@@ -121,7 +123,7 @@ export interface SuggestionsController {
 export interface SuggestionsDependencies {
 	suggestionLister: SuggestionLister;
 	suggestionExpirer: SuggestionExpirer;
-	suggestionViewAssembler: SuggestionViewAssembler;
+	suggestionContextReader: SuggestionContextReader;
 	suggestionFinder: SuggestionFinder;
 	suggestionAccepter: SuggestionAccepter;
 	suggestionRejecter: SuggestionRejecter;
@@ -155,7 +157,7 @@ export class Suggestions implements SuggestionsController {
 	async list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput> {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const suggestions = await this.dependencies.suggestionLister.listByStatus(actor, input.status);
-		const views = await this.dependencies.suggestionViewAssembler.assemble(actor, suggestions);
+		const views = await this.readViews(actor, suggestions);
 		const ordered = [...views].sort((a, b) =>
 			a.suggestion.createdAt.localeCompare(b.suggestion.createdAt)
 		);
@@ -181,12 +183,24 @@ export class Suggestions implements SuggestionsController {
 			(suggestion) =>
 				suggestion.kind === 'memory' && suggestion.payload.projectId === input.projectId
 		);
-		const views = await this.dependencies.suggestionViewAssembler.assemble(actor, memory);
+		const views = await this.readViews(actor, memory);
 		return {
 			suggestions: views
 				.filter((view): view is MemorySuggestionView => view.suggestion.kind === 'memory')
 				.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt))
 		};
+	}
+	private async readViews(
+		actor: ActorContext,
+		suggestions: readonly Suggestion[]
+	): Promise<readonly SuggestionView[]> {
+		const contexts = await this.dependencies.suggestionContextReader.readContexts(
+			actor,
+			suggestions
+		);
+		return contexts.map(({ suggestion, note, anchor, provenance }) =>
+			assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+		);
 	}
 	accept(
 		actor: ActorContext,
