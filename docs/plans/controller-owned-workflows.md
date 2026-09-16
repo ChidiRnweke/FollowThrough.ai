@@ -543,6 +543,13 @@ restored from an archived folder remained hidden there. Both total-record write 
 NULL for root placement. Real PostgreSQL move/reload and archive/restore tests fail before the fix and
 pass after it. Concurrent project-tree moves still need a separate locking review.
 
+Project rule ownership: controllers apply the shared project detail and tree-presentation services.
+ProjectCatalog accepts resolved details and reads entries; its own move policy retains sibling-order
+and cycle validation. The project model now contains values, types and schemas only. Tree and detail
+tests moved to the real controller with the real catalog and repository fake. A PostgreSQL regression
+also exposes descriptions that could not be cleared: resolved absence now writes SQL NULL, matching
+the downloaded workspace's result. Concurrent moves still need the locking review recorded above.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

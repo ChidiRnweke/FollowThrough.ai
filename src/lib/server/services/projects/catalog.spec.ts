@@ -15,50 +15,6 @@ const setup = () => {
 };
 
 describe('Project management invariants', () => {
-	it('normalizes a project name at the domain boundary', async () => {
-		const { service } = setup();
-		const project = await service.create(testActor(), { name: '  Migration  ' });
-		expect(project.name).toBe('Migration');
-	});
-
-	it('rejects a blank project name before persistence', async () => {
-		const { service } = setup();
-		await expect(service.create(testActor(), { name: '   ' })).rejects.toMatchObject({
-			code: 'VALIDATION'
-		});
-	});
-
-	it('assembles nested entries into a recursive tree', async () => {
-		const { repository, service } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
-			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) })
-		];
-		const tree = await service.read(testActor(), projectBuilder().id);
-		expect(tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
-	});
-
-	it('does not expose root skill documents in project trees', async () => {
-		const { repository, service } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1) }),
-			noteBuilder({ id: testNoteId(2), kind: 'skill' })
-		];
-		const tree = await service.read(testActor(), projectBuilder().id);
-		expect(tree.map((node) => node.entry.id)).toEqual([testNoteId(1)]);
-	});
-
-	it('does not expose nested skill documents in project trees', async () => {
-		const { repository, service } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
-			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) }),
-			noteBuilder({ id: testNoteId(3), kind: 'skill', parentId: testNoteId(1) })
-		];
-		const tree = await service.read(testActor(), projectBuilder().id);
-		expect(tree[0]?.children.map((node) => node.entry.id)).toEqual([testNoteId(2)]);
-	});
-
 	it('rejects moving an entry below its descendant', async () => {
 		const { repository, service } = setup();
 		repository.entries = [
@@ -129,7 +85,7 @@ describe('Project management invariants', () => {
 	it('hides a project tree after the project is archived', async () => {
 		const { service } = setup();
 		await service.archive(testActor(), projectBuilder().id);
-		await expect(service.read(testActor(), projectBuilder().id)).rejects.toMatchObject({
+		await expect(service.readEntries(testActor(), projectBuilder().id)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
 	});
@@ -137,15 +93,22 @@ describe('Project management invariants', () => {
 	it('allows an archived project name to be reused', async () => {
 		const { service } = setup();
 		await service.archive(testActor(), projectBuilder().id);
-		const replacement = await service.create(testActor(), { name: projectBuilder().name });
+		const replacement = await service.create(testActor(), {
+			name: projectBuilder().name,
+			description: undefined
+		});
 		expect(replacement.name).toBe(projectBuilder().name);
 	});
 
 	it('rejects renaming to another active project name', async () => {
 		const { service } = setup();
-		await service.create(testActor(), { name: 'Other' });
+		await service.create(testActor(), { name: 'Other', description: undefined });
 		await expect(
-			service.rename(testActor(), { projectId: projectBuilder().id, name: 'other' })
+			service.rename(testActor(), {
+				projectId: projectBuilder().id,
+				name: 'other',
+				description: undefined
+			})
 		).rejects.toMatchObject({ code: 'CONFLICT' });
 	});
 });

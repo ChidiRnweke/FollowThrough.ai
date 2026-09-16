@@ -1,3 +1,4 @@
+import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateFolderInput,
@@ -5,7 +6,7 @@ import type {
 	MoveProjectEntryInput,
 	Project,
 	ProjectId,
-	ProjectTreeNode,
+	ProjectDetails,
 	RenameProjectInput,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
@@ -43,9 +44,8 @@ export class InMemoryProjects
 	private nextProject = 100;
 	private nextEntry = 100;
 
-	async create(actor: ActorContext, input: CreateProjectInput): Promise<Project> {
-		const name = input.name.trim();
-		if (!name) throw new ValidationError('Project name is required');
+	async create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project> {
+		const name = input.name;
 		if (
 			this.projects.some(
 				(project) =>
@@ -59,7 +59,7 @@ export class InMemoryProjects
 			id: input.id ?? testProjectId(this.nextProject++),
 			userId: actor.userId,
 			name,
-			...(input.description?.trim() ? { description: input.description.trim() } : {})
+			description: input.description
 		});
 		this.projects.push(project);
 		return project;
@@ -79,18 +79,13 @@ export class InMemoryProjects
 			.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
-	async rename(actor: ActorContext, input: RenameProjectInput): Promise<Project> {
+	async rename(actor: ActorContext, input: RenameProjectInput & ProjectDetails): Promise<Project> {
 		const current = await this.get(actor, input.projectId);
-		const name = input.name.trim();
-		if (!name) throw new ValidationError('Project name is required');
+		const name = input.name;
 		const updated: Project = {
 			...current,
 			name,
-			...(input.description === undefined
-				? {}
-				: input.description.trim()
-					? { description: input.description.trim() }
-					: { description: undefined }),
+			description: input.description,
 			updatedAt: testNow
 		};
 		this.replaceProject(updated);
@@ -118,7 +113,7 @@ export class InMemoryProjects
 		return updated;
 	}
 
-	async read(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTreeNode[]> {
+	async readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
 		await this.get(actor, projectId);
 		const entries = this.entries
 			.filter(
@@ -126,11 +121,7 @@ export class InMemoryProjects
 					entry.userId === actor.userId && entry.projectId === projectId && !entry.archivedAt
 			)
 			.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
-		const build = (parentId?: NoteId): ProjectTreeNode[] =>
-			entries
-				.filter((entry) => entry.parentId === parentId)
-				.map((entry) => ({ entry, children: build(entry.id) }));
-		return build();
+		return entries;
 	}
 
 	async createFolder(actor: ActorContext, input: CreateFolderInput): Promise<Note> {
@@ -158,50 +149,17 @@ export class InMemoryProjects
 	}
 
 	async move(actor: ActorContext, input: MoveProjectEntryInput): Promise<Note> {
-		if (!Number.isInteger(input.position) || input.position < 0)
-			throw new ValidationError('Entry position must be a non-negative integer');
-		const entry = this.requireEntry(actor, input.projectId, input.entryId);
-		if (input.parentId === entry.id) throw new ValidationError('An entry cannot parent itself');
-		if (input.parentId) {
-			const parent = this.requireEntry(actor, input.projectId, input.parentId);
-			if (parent.kind !== 'folder') throw new ValidationError('A parent must be a folder');
-			let cursor: Note | undefined = parent;
-			while (cursor) {
-				if (cursor.id === entry.id)
-					throw new ValidationError('An entry cannot move below its descendant');
-				cursor = cursor.parentId
-					? this.requireEntry(actor, input.projectId, cursor.parentId)
-					: undefined;
-			}
+		const decision = decideProjectEntryMove(input, await this.readEntries(actor, input.projectId));
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+			throw new ValidationError(decision.message);
 		}
-		const oldSiblings = this.entries
-			.filter((candidate) => candidate.parentId === entry.parentId && candidate.id !== entry.id)
-			.sort((a, b) => a.position - b.position);
-		const targetSiblings = (
-			entry.parentId === input.parentId
-				? oldSiblings
-				: this.entries
-						.filter(
-							(candidate) => candidate.parentId === input.parentId && candidate.id !== entry.id
-						)
-						.sort((a, b) => a.position - b.position)
-		).slice();
-		targetSiblings.splice(Math.min(input.position, targetSiblings.length), 0, entry);
-		const updates = new Map<NoteId, Note>();
-		if (entry.parentId !== input.parentId)
-			oldSiblings.forEach((candidate, position) =>
-				updates.set(candidate.id, { ...candidate, position })
-			);
-		targetSiblings.forEach((candidate, position) =>
-			updates.set(candidate.id, {
-				...candidate,
-				parentId: input.parentId,
-				position,
-				updatedAt: candidate.id === entry.id ? testNow : candidate.updatedAt
-			})
-		);
-		this.entries = this.entries.map((candidate) => updates.get(candidate.id) ?? candidate);
-		return updates.get(entry.id)!;
+		const changes = new Map(decision.changes.map((change) => [change.id, change]));
+		this.entries = this.entries.map((entry) => {
+			const change = changes.get(entry.id);
+			return change ? { ...entry, parentId: change.parentId, position: change.position } : entry;
+		});
+		return { ...decision.entry, parentId: decision.parentId, position: decision.position };
 	}
 
 	private requireEntry(actor: ActorContext, projectId: ProjectId, entryId: NoteId): Note {
