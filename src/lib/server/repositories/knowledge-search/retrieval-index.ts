@@ -17,6 +17,7 @@ export type { IndexSource } from '$lib/models/knowledge-search';
 export interface PendingIndexSource {
 	readonly userId: UserId;
 	readonly source: IndexSource;
+	readonly cursor: string;
 }
 
 /** One chunk's freshly computed vector, ready to be written back. */
@@ -102,8 +103,8 @@ export interface RetrievalIndexRepository {
 		documents: readonly SearchDocument[]
 	): Promise<void>;
 
-	/** Sources holding at least one chunk without an embedding, oldest staged first. */
-	listPendingSources(limit: number): Promise<readonly PendingIndexSource[]>;
+	/** Pending sources in stable account/source order, strictly after the supplied cursor. */
+	listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]>;
 
 	/** The chunks of one source that still need vectors. */
 	listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]>;

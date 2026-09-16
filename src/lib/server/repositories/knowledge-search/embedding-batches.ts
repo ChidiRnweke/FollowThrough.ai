@@ -1,5 +1,5 @@
 import { InvalidGeneratedContentError } from '$lib/errors';
-import { getEncoding } from 'js-tiktoken';
+import { getEncoding, type Tiktoken } from 'js-tiktoken';
 
 export interface EmbeddingClient {
 	readonly model: string;
@@ -12,12 +12,13 @@ export interface EmbeddingBatch {
 }
 
 const EMBEDDING_BATCH_TOKENS = 30_000;
+let sharedEncoding: Tiktoken | undefined;
 
 export const embedInStableBatches = async (
 	client: EmbeddingClient,
 	contents: readonly string[]
 ): Promise<readonly (readonly number[])[]> => {
-	const encoding = getEncoding('cl100k_base');
+	const encoding = (sharedEncoding ??= getEncoding('cl100k_base'));
 	const vectors: (readonly number[])[] = [];
 	let batch: string[] = [];
 	let tokens = 0;

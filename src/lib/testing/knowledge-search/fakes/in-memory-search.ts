@@ -265,15 +265,18 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		];
 	}
 
-	async listPendingSources(limit: number): Promise<readonly PendingIndexSource[]> {
+	async listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]> {
 		const seen = new Map<string, PendingIndexSource>();
 		for (const item of this.documents) {
 			if (item.document.embedding) continue;
 			const source = sourceOf(item.document);
 			const key = `${item.userId}/${sourceKey(source)}`;
-			if (!seen.has(key)) seen.set(key, { userId: item.userId, source });
+			if (!seen.has(key)) seen.set(key, { userId: item.userId, source, cursor: key });
 		}
-		return [...seen.values()].slice(0, limit);
+		return [...seen.values()]
+			.filter((entry) => after === undefined || entry.cursor > after)
+			.sort((a, b) => (a.cursor < b.cursor ? -1 : a.cursor > b.cursor ? 1 : 0))
+			.slice(0, limit);
 	}
 
 	async listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]> {
@@ -309,8 +312,11 @@ export class InMemoryEmbeddingClient implements EmbeddingClient {
 	model = 'fake-embedding-v1';
 	generation = 1;
 	returnWrongCount = false;
+	rejectedContents = new Set<string>();
 
 	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
+		if (contents.some((content) => this.rejectedContents.has(content)))
+			throw new Error('Embedding rejected this content');
 		const vectors = contents.map((content, index) => [this.generation, index, content.length]);
 		this.generation += 1;
 		return {

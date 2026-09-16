@@ -86,6 +86,31 @@ describe('Postgres deferred embedding invariants', () => {
 	// The sweep is deliberately cross-actor — one worker serves every user — so what
 	// matters is that each source is reported against the owner whose data it is.
 	// That pairing is what lets the worker rebuild a correctly scoped ActorContext.
+	it('continues a bounded scan after the cursor source has been removed', async () => {
+		const first = await seedNote('9831');
+		const second = await seedNote('9832', first.owner);
+		const repository = new KnowledgeIndexRecords(context.db);
+		for (const [index, entry] of [first, second].entries())
+			await repository.stage(entry.owner, { kind: 'note', noteId: entry.note.id }, [
+				chunk(
+					String(9831 + index),
+					entry.project.id,
+					entry.note.id,
+					'Pending cursor contract',
+					false
+				)
+			]);
+		const initial = await repository.listPendingSources(500);
+		const cursor = initial.find(
+			(entry) => entry.source.kind === 'note' && entry.source.noteId === first.note.id
+		)?.cursor;
+		if (!cursor) throw new Error('The seeded first source must have a cursor');
+		await repository.deleteForNote(first.owner, first.note.id);
+		const page = await repository.listPendingSources(1, cursor);
+		expect(page.map((entry) => ({ userId: entry.userId, source: entry.source }))).toEqual([
+			{ userId: second.owner.userId, source: { kind: 'note', noteId: second.note.id } }
+		]);
+	});
 	it('attributes a pending source to its owner', async () => {
 		const { owner, project, note } = await seedNote('917');
 		const repository = new KnowledgeIndexRecords(context.db);
