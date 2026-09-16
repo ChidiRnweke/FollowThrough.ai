@@ -1,4 +1,5 @@
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
@@ -12,38 +13,23 @@ import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submis
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
-import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryDiagramGeneration } from '$lib/testing/diagrams/fakes/in-memory-generation';
-import { noteBuilder, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const diagramGenerationFixture = () => {
 	const persistence = new InMemoryAgentRunPersistence();
 	const conversations = new InMemoryConversationRepository();
 	const notes = new InMemoryNoteContent();
-	const skillNote = noteBuilder({
-		id: testNoteId(99),
-		kind: 'skill',
-		plainText: 'Create editable diagrams.'
-	});
-	notes.notes = [noteBuilder(), skillNote];
-	const skills = new InMemorySkills();
-	skills.skills = [
-		{
-			note: skillNote,
-			name: 'diagramming',
-			description: 'Draw diagrams',
-			triggerHints: [],
-			isEnabled: true
-		}
-	];
+	notes.notes = [noteBuilder()];
+	const skills = builtInSkillsFixture();
 	const provider = new InMemoryDiagramGeneration();
 	const provenance = new InMemoryProvenanceRecorder();
 	const generation: DiagramAgentDependencies = {
 		contextFormatter: new AgentContext(),
 		contextNotes: notes,
-		contextSkills: skills,
+		contextSkills: skills.skillFinder,
 		contextMemory: new InMemoryMemoryEntryRepository(),
 		conversations: new ConversationArchive(conversations),
 		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
@@ -64,7 +50,7 @@ export const diagramGenerationFixture = () => {
 		},
 		runs: new AgentRunLedger(persistence),
 		provenance,
-		builtInSkills: { load: (actor) => skills.load(actor, skillNote.id) },
+		builtInSkills: skills.builtInSkills,
 		defaultModel: 'test/model',
 		defaultVisionModel: 'test/vision',
 		resolveModel: resolveAgentModel,

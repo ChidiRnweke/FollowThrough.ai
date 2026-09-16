@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { AgentRunLifecycle } from '$lib/server/controllers/agent-execution/controller';
@@ -39,6 +40,7 @@ export const agentContextFixture = () => {
 		contextFormatter: new AgentContext(),
 		contextNotes: notes,
 		contextSkills: skills,
+		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: projects,
 		contextMemory: memory,
 		contextConversations: journal,
