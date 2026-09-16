@@ -9,6 +9,7 @@ import {
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
@@ -43,6 +44,7 @@ const setup = () => {
 				diagramDraftWriter: library,
 				diagramConversations: library,
 				diagramWriter: library,
+				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: { index: async () => {} },

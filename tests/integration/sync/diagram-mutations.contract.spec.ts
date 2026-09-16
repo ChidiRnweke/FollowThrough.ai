@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { DiagramId } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/models/diagrams';
+import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
@@ -42,6 +46,15 @@ const setup = async (suffix: string) => {
 		sourceNoteId: seeded.note.id
 	});
 	await records.insert(seeded.owner, diagram);
+	const search = new KnowledgeIndexRecords(database);
+	const index = new ContentIndex(
+		search,
+		new InMemoryEmbeddingClient(),
+		new TokenAwareChunker(),
+		true
+	).diagrams(notes.repository);
+	await index.index(seeded.owner, diagram);
+	const faults = { afterIndex: false };
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
 			syncMutations: sync.mutations,
@@ -51,7 +64,12 @@ const setup = async (suffix: string) => {
 			diagramRenamer: library,
 			diagramDeleter: library,
 			diagramArchiver: library,
-			diagramIndexer: { index: async () => undefined },
+			diagramIndexer: {
+				index: async (actor, value) => {
+					await index.index(actor, value);
+					if (faults.afterIndex) throw new Error('Index transaction failed');
+				}
+			},
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
 			drawioTextExtractor: new DrawioDiagramTextExtractor()
@@ -59,10 +77,46 @@ const setup = async (suffix: string) => {
 	);
 	const base = await sync.objects.read(seeded.owner, { type: 'diagrams', id: [diagram.id] }, null);
 	if (base.kind !== 'found') throw new Error('Expected the created diagram');
-	return { ...seeded, controller, sync, diagram, baseEtag: base.snapshot.etag };
+	return { ...seeded, controller, sync, diagram, search, faults, baseEtag: base.snapshot.etag };
 };
 
 describe('diagram edits through the shared mutation boundary', () => {
+	it('rolls back both the draft and its staged search rows after an indexing failure', async () => {
+		const { owner, controller, diagram, search, faults } = await setup('9781');
+		const before = await search.listForDiagram(owner, diagram.id);
+		faults.afterIndex = true;
+		await controller
+			.saveProjectDiagramDraft(owner, {
+				diagramId: diagram.id,
+				source,
+				baseEtag: diagramEtag(diagram)
+			})
+			.catch(() => undefined);
+		expect({
+			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
+			search: await search.listForDiagram(owner, diagram.id)
+		}).toEqual({ diagram, search: before });
+	});
+	it('rolls back a trash move and the removed search rows after an indexing failure', async () => {
+		const { owner, controller, diagram, search, faults } = await setup('9782');
+		const before = await search.listForDiagram(owner, diagram.id);
+		faults.afterIndex = true;
+		await controller.archiveProjectDiagram(owner, { diagramId: diagram.id }).catch(() => undefined);
+		expect({
+			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
+			search: await search.listForDiagram(owner, diagram.id)
+		}).toEqual({ diagram, search: before });
+	});
+	it('retains a trashed diagram and its absent search rows when restoration fails', async () => {
+		const { owner, controller, diagram, search, faults } = await setup('9783');
+		const archived = await controller.archiveProjectDiagram(owner, { diagramId: diagram.id });
+		faults.afterIndex = true;
+		await controller.restoreProjectDiagram(owner, { diagramId: diagram.id }).catch(() => undefined);
+		expect({
+			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
+			search: await search.listForDiagram(owner, diagram.id)
+		}).toEqual({ diagram: archived, search: [] });
+	});
 	it('acknowledges the normalized draft and does not apply a replay twice', async () => {
 		const { owner, controller, diagram, baseEtag } = await setup('9361');
 		const input = {
