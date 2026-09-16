@@ -1,4 +1,12 @@
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { AgentContext } from '$lib/server/services/agent/runs/context';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-gated-memory';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import { AgentProviderFailure } from '$lib/errors';
@@ -57,7 +65,7 @@ const throwingRunner = (error: unknown) => ({
 const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecutionUpdate> }>(
 	runner: T,
 	options?: {
-		readonly contextBuilder?: { build(): Promise<AgentRunContext> };
+		readonly contextMemory?: InMemoryMemoryEntryRepository;
 		readonly pendingDecisions?: AgentRun['pendingDecisions'];
 	}
 ) => {
@@ -93,7 +101,12 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		sessions,
 		transactions,
 		settlements: new RunSettlements(runs, runs, transactions),
-		contextBuilder: options?.contextBuilder ?? { build: async () => resolvedContext },
+		contextFormatter: new AgentContext(),
+		contextNotes: new InMemoryNoteContent(),
+		contextSkills: new InMemorySkills(),
+		contextProjects: new InMemoryProjects(),
+		contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
+		contextConversations: new ConversationArchive(new InMemoryConversationRepository()),
 		provenance: {
 			record: async () => {
 				throw new Error('Unexpected provenance record');
@@ -309,18 +322,9 @@ describe('a cancellation that races preparation', () => {
 	 * settlement must not depend on abort timing.
 	 */
 	const racingSetup = () => {
-		let entered: () => void;
-		let release: () => void;
-		const building = new Promise<void>((resolve) => (entered = resolve));
-		const gate = new Promise<void>((resolve) => (release = resolve));
+		const memory = new InMemoryGatedMemoryEntries();
 		const context = setup(abortingRunner(), {
-			contextBuilder: {
-				build: async () => {
-					entered();
-					await gate;
-					return resolvedContext;
-				}
-			}
+			contextMemory: memory
 		});
 		// An empty snapshot forces prepare to write one, which is the write the
 		// cancel races.
@@ -329,7 +333,7 @@ describe('a cancellation that races preparation', () => {
 		const { contextSnapshot: _contextSnapshot, ...unprepared } = current;
 		void _contextSnapshot;
 		context.runs.runs[0] = unprepared;
-		return { ...context, building, release: () => release() };
+		return { ...context, building: memory.started, release: () => memory.release() };
 	};
 
 	it('settles as cancelled instead of failing the run', async () => {

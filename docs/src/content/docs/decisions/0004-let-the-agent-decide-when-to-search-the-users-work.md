@@ -45,7 +45,9 @@ This decision covers search over the user's saved work. It does not cover discov
 
 ## Evidence
 
-- `src/lib/server/services/agent/runs/context.ts` does not load project knowledge into every run.
+- Agent execution and diagram controllers load selected context and shared profile memory.
+  `src/lib/server/services/agent/runs/context.ts` formats those resolved values; it does not load
+  project knowledge into every run.
 - `src/lib/models/agent/tool-catalog.ts` defines `search` and `search_note` as agent tools.
 - `src/lib/server/factories/agent/agent-tool-factory.ts` connects those tools to knowledge search.
 - `src/lib/server/services/agent/runs/reasoning.ts` points the agent to `search_note` when an attached
