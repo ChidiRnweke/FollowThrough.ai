@@ -44,7 +44,7 @@ describe('offline creation', () => {
 			)
 		).toThrow('An active parent folder is required');
 	});
-	it('keeps the server distinction between note sibling counts and active folder sibling counts', () => {
+	it('uses the same stored sibling count for notes and folders', () => {
 		const entries = [noteBuilder({ archivedAt: testNow })];
 		expect(
 			['note', 'folder'].map(
@@ -58,6 +58,6 @@ describe('offline creation', () => {
 						testNow
 					).position
 			)
-		).toEqual([1, 0]);
+		).toEqual([1, 1]);
 	});
 });

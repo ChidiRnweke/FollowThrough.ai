@@ -20,7 +20,6 @@ const setup = () => {
 			projectLister: projects,
 			projectEditor: projects,
 			projectTreeReader: projects,
-			folderCreator: projects,
 			entryMover: projects,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
@@ -102,31 +101,6 @@ describe('Project filesystem invariants', () => {
 		];
 		const result = await controller.get(testActor(), { projectId: testProjectId() });
 		expect(result.tree.map((node) => node.entry.id)).toEqual([testNoteId(2), testNoteId()]);
-	});
-
-	it('creates an empty folder under another folder', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		projects.entries = [noteBuilder({ id: testNoteId(), kind: 'folder' })];
-		const result = await controller.createFolder(testActor(), {
-			projectId: testProjectId(),
-			parentId: testNoteId(),
-			name: 'Decisions'
-		});
-		expect(result.folder.kind).toBe('folder');
-	});
-
-	it('rejects a document as a parent', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		projects.entries = [noteBuilder({ id: testNoteId(), kind: 'note' })];
-		await expect(
-			controller.createFolder(testActor(), {
-				projectId: testProjectId(),
-				parentId: testNoteId(),
-				name: 'Decisions'
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
 	it('rejects moving a folder below its descendant', async () => {

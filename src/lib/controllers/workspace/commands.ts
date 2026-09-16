@@ -1,3 +1,4 @@
+import { decideNoteCreation } from '$lib/services/notes/creation';
 import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideRevisionWrite } from '$lib/models/revisions';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
@@ -21,7 +22,6 @@ import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import {
 	applyNoteDraftEdit,
-	decideNoteCreation,
 	decideNoteArchive,
 	decideNoteRestore,
 	type Note,
@@ -85,12 +85,8 @@ export const newNote = (
 		{
 			project,
 			parent: entries.find((entry) => entry.id === parentId) ?? null,
-			// Folder repositories expose active entries; ordinary note creation counts all stored siblings.
 			siblingCount: entries.filter(
-				(entry) =>
-					entry.projectId === project.id &&
-					entry.parentId === parentId &&
-					(kind === 'note' || !entry.archivedAt)
+				(entry) => entry.projectId === project.id && entry.parentId === parentId
 			).length
 		},
 		timestamp

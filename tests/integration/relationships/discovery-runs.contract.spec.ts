@@ -1,3 +1,4 @@
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { afterAll, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -75,7 +76,8 @@ const setup = async (suffix: string) => {
 		confidence: 95
 	};
 	const targetText = 'The team chose OAuth.';
-	const target = await notes.catalog.create(seeded.owner, {
+	const target = await storedNote(notes.catalog, seeded.owner, {
+		kind: 'note',
 		projectId: seeded.project.id,
 		title: 'Earlier decision'
 	});

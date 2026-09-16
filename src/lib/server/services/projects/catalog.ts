@@ -1,6 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	MoveProjectEntryInput,
 	Project,
@@ -10,7 +9,7 @@ import type {
 	RenameProjectInput,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
-import { decideNoteCreation, type Note, type NoteId } from '$lib/models/notes';
+import type { Note, NoteId } from '$lib/models/notes';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	ProjectRepository,
@@ -57,34 +56,6 @@ export class ProjectCatalog {
 	async readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
 		await this.get(actor, projectId);
 		return this.tree.list(actor, projectId);
-	}
-
-	async createFolder(actor: ActorContext, input: CreateFolderInput): Promise<Note> {
-		const project = await this.get(actor, input.projectId);
-		const entries = await this.tree.list(actor, input.projectId);
-		const decision = decideNoteCreation(
-			{
-				id: input.id ?? (crypto.randomUUID() as NoteId),
-				title: input.name,
-				kind: 'folder',
-				parentId: input.parentId
-			},
-			{
-				project,
-				parent: entries.find((entry) => entry.id === input.parentId) ?? null,
-				siblingCount: entries.filter((entry) => entry.parentId === input.parentId).length
-			},
-			new Date().toISOString() as Note['createdAt']
-		);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return this.tree.insertFolder(
-			actor,
-			{ ...input, id: decision.note.id, name: decision.note.title },
-			decision.note.position
-		);
 	}
 
 	async move(actor: ActorContext, input: MoveProjectEntryInput): Promise<Note> {

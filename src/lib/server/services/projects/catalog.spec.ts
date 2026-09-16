@@ -70,18 +70,6 @@ describe('Project management invariants', () => {
 		);
 	});
 
-	it('rejects a note as a folder parent', async () => {
-		const { repository, service } = setup();
-		repository.entries = [noteBuilder({ id: testNoteId(2), kind: 'note' })];
-		await expect(
-			service.createFolder(testActor(), {
-				projectId: projectBuilder().id,
-				parentId: testNoteId(2),
-				name: 'Nested'
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
-	});
-
 	it('hides a project tree after the project is archived', async () => {
 		const { service } = setup();
 		await service.archive(testActor(), projectBuilder().id);

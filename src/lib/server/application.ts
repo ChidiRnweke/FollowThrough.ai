@@ -512,7 +512,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			skillEditor: skills,
 			selectionOrigins: noteCapability.selectionOrigins,
 			skillCreator: skills,
-			noteCreator: notes,
+			noteCreation: notes,
 			transactionRunner
 		},
 		workspace: {
@@ -534,14 +534,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		notes: {
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
-			folderCreator: projects,
 			markdown: noteCapability.markdown,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			noteReader: notes,
 			noteTreeReader: notes,
 			noteTextSearcher: notes,
-			noteCreator: notes,
+			noteCreation: notes,
 			noteSectionNumbering: notes,
 			projectReader: projects,
 			userPreferences: identity.userPreferences,
@@ -600,7 +599,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			projectLister: projects,
 			projectEditor: projects,
 			projectTreeReader: projects,
-			folderCreator: projects,
+			noteCreation: notes,
 			entryMover: projects,
 			transactionRunner
 		},

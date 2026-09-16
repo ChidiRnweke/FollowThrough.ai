@@ -1,3 +1,5 @@
+import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { describe, expect, it } from 'vitest';
 import type { ProjectId } from '$lib/models/projects';
 import type { NoteId } from '$lib/models/notes';
@@ -17,11 +19,15 @@ describe('stable offline creation identities', () => {
 	it('keeps the caller-assigned folder identity so child references remain valid', async () => {
 		const { owner, project } = await seedNote('9002');
 		const id = crypto.randomUUID() as NoteId;
-		const folder = await new ProjectRecords(context.db).insertFolder(
-			owner,
-			{ id, projectId: project.id, name: 'Offline folder' },
-			1
-		);
+		const { catalog } = createNotesCapability({
+			db: context.db,
+			projects: new ProjectRecords(context.db)
+		});
+		const { folder } = await noteCreationControllers(catalog).projects.createFolder(owner, {
+			id,
+			projectId: project.id,
+			name: 'Offline folder'
+		});
 		expect(folder.id).toBe(id);
 	});
 });

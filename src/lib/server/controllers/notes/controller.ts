@@ -1,3 +1,6 @@
+import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { DateTime } from '$lib/models/workspace';
 import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
@@ -40,7 +43,6 @@ import {
 	uniqueTitleIn,
 	unmappedFrontmatterKeys
 } from '$lib/server/services/notes/import';
-import type { FolderCreator } from '$lib/server/services/projects/contracts';
 import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
@@ -110,7 +112,6 @@ import type {
 } from '$lib/server/services/relationships/contracts';
 import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
 import type {
-	NoteCreator,
 	NoteReader,
 	NoteTextSearcher,
 	NoteTreeReader
@@ -324,14 +325,13 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
-	folderCreator: FolderCreator;
 	markdown: NoteMarkdown;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
-	noteCreator: NoteCreator;
+	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
 	noteSectionNumbering: NoteSectionNumberingEditor;
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
@@ -413,11 +413,15 @@ export class Notes implements NotesController {
 			}
 			const parentId = parentPath ? importedFolderId(folders, parentPath) : input.parentId;
 			const result = await importAttempt(() =>
-				this.dependencies.folderCreator.createFolder(actor, {
-					projectId: input.projectId,
-					name: parts.at(-1)!,
-					...(parentId ? { parentId } : {})
-				})
+				this.createDocument(
+					actor,
+					{
+						projectId: input.projectId,
+						title: parts.at(-1)!,
+						...(parentId ? { parentId } : {})
+					},
+					'folder'
+				)
 			);
 			if (result.kind === 'failure') {
 				blocked.add(path);
@@ -633,8 +637,31 @@ export class Notes implements NotesController {
 		);
 	}
 	async create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput> {
-		return { note: await this.dependencies.noteCreator.create(actor, input) };
+		return { note: await this.createDocument(actor, input, 'note') };
 	}
+	private async createDocument(
+		actor: ActorContext,
+		input: CreateNoteInput,
+		kind: 'note' | 'folder'
+	): Promise<Note> {
+		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+		const decision = decideNoteCreation(
+			{
+				id: input.id ?? (crypto.randomUUID() as NoteId),
+				title: input.title,
+				parentId: input.parentId,
+				kind: kind
+			},
+			facts,
+			new Date().toISOString() as DateTime
+		);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+			throw new ValidationError(decision.message);
+		}
+		return this.dependencies.noteCreation.insert(actor, decision.note);
+	}
+
 	/** Resolve a body proposal once; later approval never reruns the requested patch. */
 	async prepareChange(
 		actor: ActorContext,

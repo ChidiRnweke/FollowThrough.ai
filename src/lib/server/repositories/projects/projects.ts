@@ -1,6 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	Project,
 	ProjectId,
@@ -29,7 +28,6 @@ export interface ProjectRepository {
 /** The folder/note tree built on top of the notes table. `persistOrder` is the only multi-row write, used by the `move` transaction to renumber two sibling lists at once. */
 export interface ProjectTreeRepository {
 	list(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
-	insertFolder(actor: ActorContext, input: CreateFolderInput, position: number): Promise<Note>;
 	persistOrder(
 		actor: ActorContext,
 		entries: readonly { id: NoteId; parentId?: NoteId; position: number }[]
