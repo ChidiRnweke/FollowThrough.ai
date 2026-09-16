@@ -18,6 +18,7 @@ import type {
 	SuggestionCreator,
 	SuggestionFinder,
 	SuggestionLister,
+	SuggestionExpirer,
 	SuggestionProposal,
 	SuggestionRejecter,
 	SuggestionReverter,
@@ -30,16 +31,39 @@ import type {
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
 
-export class InMemorySuggestionReader implements SuggestionLister, SuggestionViewAssembler {
+export class InMemorySuggestionReader
+	implements SuggestionLister, SuggestionExpirer, SuggestionViewAssembler
+{
 	suggestions: Suggestion[] = [];
+	expiryFailure: Error | undefined;
+
+	async expire(actor: ActorContext): Promise<number> {
+		if (this.expiryFailure) throw this.expiryFailure;
+		let expired = 0;
+		this.suggestions = this.suggestions.map((suggestion) => {
+			if (
+				suggestion.userId !== actor.userId ||
+				suggestion.status !== 'proposed' ||
+				suggestion.expiresAt === undefined ||
+				suggestion.expiresAt > testNow
+			)
+				return suggestion;
+			expired += 1;
+			return { ...suggestion, status: 'expired', decidedAt: testNow, updatedAt: testNow };
+		});
+		return expired;
+	}
 
 	async listByStatus(
-		_actor: ActorContext,
+		actor: ActorContext,
 		status: SuggestionStatus,
 		noteId?: Suggestion['noteId']
 	): Promise<readonly Suggestion[]> {
 		return this.suggestions.filter(
-			(suggestion) => suggestion.status === status && (!noteId || suggestion.noteId === noteId)
+			(suggestion) =>
+				suggestion.userId === actor.userId &&
+				suggestion.status === status &&
+				(!noteId || suggestion.noteId === noteId)
 		);
 	}
 

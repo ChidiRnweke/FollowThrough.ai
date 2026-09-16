@@ -67,7 +67,8 @@ describe('Today projection parity', () => {
 				waitingOnFinder: tasks,
 				todoViewAssembler: tasks,
 				noteTreeReader: notes,
-				suggestionLister: suggestions
+				suggestionLister: suggestions,
+				suggestionExpirer: suggestions
 			})
 		);
 		expect(await server.getTodayView(testActor(), { today })).toEqual(browser.today(today));

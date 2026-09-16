@@ -22,7 +22,10 @@ import { assembleToday } from '$lib/services/workspace/today';
 import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
 import type { ProjectLister } from '$lib/server/services/projects/contracts';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
-import type { SuggestionLister } from '$lib/server/services/suggestions/contracts';
+import type {
+	SuggestionExpirer,
+	SuggestionLister
+} from '$lib/server/services/suggestions/contracts';
 import type {
 	TodoLister,
 	TodoViewAssembler,
@@ -60,6 +63,7 @@ export interface WorkspaceDependencies {
 	projectLister: ProjectLister;
 	skillFinder: SkillFinder;
 	suggestionLister: SuggestionLister;
+	suggestionExpirer: SuggestionExpirer;
 	todoLister: TodoLister;
 	waitingOnFinder: WaitingOnFinder;
 	todoViewAssembler: TodoViewAssembler;
@@ -78,6 +82,7 @@ export class Workspace implements WorkspaceController {
 		return this.dependencies.syncObjects.read(actor, identity, etag);
 	}
 	async getShellContext(actor: ActorContext): Promise<ShellContext> {
+		await this.dependencies.suggestionExpirer.expire(actor);
 		const [user, projects, noteTree, skills, pendingSuggestions] = await Promise.all([
 			this.dependencies.userReader.get(actor),
 			this.dependencies.projectLister.list(actor),
@@ -95,6 +100,7 @@ export class Workspace implements WorkspaceController {
 		};
 	}
 	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {
+		await this.dependencies.suggestionExpirer.expire(actor);
 		const [due, waiting, pendingSuggestionCount, notes] = await Promise.all([
 			this.dependencies.todoLister.list(actor, {
 				dueBefore: input.today,
