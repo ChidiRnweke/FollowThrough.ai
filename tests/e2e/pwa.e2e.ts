@@ -613,7 +613,7 @@ test('keeps tool and trust-policy changes in the shared offline outbox', async (
 	await page.getByText('Saved on device', { exact: true }).waitFor();
 	const selected = await tool.getAttribute('aria-checked');
 	await page.goto('/settings?tab=policies');
-	const policy = page.getByRole('group', { name: 'Trust policy for Agent', exact: true });
+	const policy = page.getByRole('group', { name: 'Trust policy for Memory changes', exact: true });
 	await policy.getByRole('radio', { name: 'Auto-accept', exact: true }).click();
 	await page.getByText('Saved on device', { exact: true }).waitFor();
 	await page.goto('/settings?tab=tools');
