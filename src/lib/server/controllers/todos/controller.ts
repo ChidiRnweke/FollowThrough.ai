@@ -16,6 +16,8 @@ import type {
 	CreateTodoBatchInput,
 	CreateTodoBatchOutput,
 	ExtractPromisesInput,
+	StartExtractPromisesInput,
+	PromiseCandidate,
 	ExtractPromisesOutput,
 	GetTodoViewInput,
 	ListTodosOutput,
@@ -30,6 +32,8 @@ import { InvalidGeneratedContentError, InvalidTransitionError } from '$lib/error
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
+import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
+import type { DateTime } from '$lib/models/workspace';
 import type {
 	SuggestionAccepter,
 	SuggestionCreator
@@ -43,8 +47,15 @@ import type {
 	TodoViewAssembler
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
-import type { AgentRunReceipt } from '$lib/models/agent';
-import type { WorkflowRunStarter } from '$lib/server/services/agent/runs/execution-contracts';
+import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
+import type { PromiseGeneration } from '$lib/models/agent';
+import {
+	DuplicatePromiseRequest,
+	type PromiseRequests
+} from '$lib/server/services/agent/runs/promise-requests';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
+import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
+import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
 
 /**
  * Application boundary for todos: tracking, filtering, and the promise-extraction
@@ -93,7 +104,12 @@ export interface TodosController {
 	 * durable rather than once the extraction is done. Its result arrives as a
 	 * `workflow_result` event, so a client that refreshes mid-run can still collect it.
 	 */
-	startExtractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<AgentRunReceipt>;
+	startExtractPromises(
+		actor: ActorContext,
+		input: StartExtractPromisesInput
+	): Promise<AgentRunReceipt>;
+	executePromiseRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
+	recoverQueuedPromiseRuns(): Promise<number>;
 }
 export interface TodosDependencies {
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
@@ -116,7 +132,11 @@ export interface TodosDependencies {
 	markdownToContent: typeof noteContentFromMarkdown;
 	exportPreparer: typeof prepareExport;
 	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
-	workflowRunner: WorkflowRunStarter;
+	promiseRequests: PromiseRequests;
+	runSettlements: RunSettlement;
+	runEvents: Pick<AgentEventBus, 'notify'>;
+	promiseGeneration: PromiseGeneration;
+	promiseRules: IPromiseRules;
 }
 export class Todos implements TodosController {
 	async synchronize(
@@ -239,82 +259,207 @@ export class Todos implements TodosController {
 		await this.dependencies.todoReader.get(actor, todoId);
 		await this.dependencies.todoDeleter.softDelete(actor, todoId);
 	}
-	startExtractPromises(actor: ActorContext, input: ExtractPromisesInput): Promise<AgentRunReceipt> {
-		return this.dependencies.workflowRunner.start(actor, {
-			action: 'promises',
-			noteId: input.selection.noteId,
-			title: 'Extract promises',
-			run: (signal) => this.extractPromises(actor, input, signal)
+	async startExtractPromises(
+		actor: ActorContext,
+		input: StartExtractPromisesInput
+	): Promise<AgentRunReceipt> {
+		let receipt: AgentRunReceipt;
+		try {
+			receipt = await this.dependencies.transactionRunner.run(() =>
+				this.dependencies.promiseRequests.prepare(actor, input, this.dependencies.promiseGeneration)
+			);
+		} catch (error) {
+			if (!(error instanceof DuplicatePromiseRequest)) throw error;
+			receipt = await this.dependencies.promiseRequests.existing(actor, input);
+		}
+		this.dependencies.runEvents.notify(receipt.runId);
+		if (receipt.status === 'queued') this.launchPromiseRun(actor, receipt.runId);
+		return receipt;
+	}
+
+	private launchPromiseRun(actor: ActorContext, runId: AgentRunId): void {
+		// audit-allow: silent-catch — detached execution persists its terminal state; settlement failures are emitted for operational repair.
+		void this.executePromiseRun(actor, runId).catch((error) =>
+			console.error(`[promise-run] Could not settle ${runId}:`, error)
+		);
+	}
+
+	async recoverQueuedPromiseRuns(): Promise<number> {
+		const queued = await this.dependencies.promiseRequests.queued();
+		for (const run of queued) this.launchPromiseRun(run.actor, run.runId);
+		return queued.length;
+	}
+
+	async executePromiseRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
+		const run = await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.promiseRequests.claim(actor, runId)
+		);
+		if (!run) return;
+		this.dependencies.runEvents.notify(runId);
+		const active = registerActiveRun(runId);
+		try {
+			const input = run.contextSnapshot;
+			await this.dependencies.selectionOrigins.validate(actor, input.selection);
+			const candidates = await this.extractCandidates(
+				actor,
+				input,
+				input.generation,
+				run.createdAt,
+				active.signal
+			);
+			active.signal.throwIfAborted();
+			const saved = await this.dependencies.transactionRunner.run(async () => {
+				const claim = await this.dependencies.runSettlements.claim(runId, {
+					kind: 'completed',
+					conversationId: run.conversationId,
+					model: run.model
+				});
+				if (claim.kind === 'lost') return false;
+				const result = await this.saveExtractedPromises(actor, input, candidates);
+				await this.dependencies.promiseRequests.recordResult(runId, result);
+				await this.dependencies.runSettlements.complete(claim);
+				return true;
+			});
+			if (saved) this.dependencies.runEvents.notify(runId);
+			else await this.settlePromiseRun(runId, { kind: 'cancelled', message: 'Generation stopped' });
+		} catch (error) {
+			try {
+				if (active.signal.aborted)
+					await this.settlePromiseRun(runId, { kind: 'cancelled', message: 'Generation stopped' });
+				else {
+					const failed = await this.settlePromiseRun(runId, {
+						kind: 'failed',
+						code: 'WORKFLOW_FAILED',
+						message: error instanceof Error ? error.message : String(error),
+						retryable: true
+					});
+					if (!failed)
+						await this.settlePromiseRun(runId, {
+							kind: 'cancelled',
+							message: 'Generation stopped'
+						});
+				}
+			} catch (settlementError) {
+				throw new AggregateError(
+					[error, settlementError],
+					'Promise extraction failed and could not be settled',
+					{ cause: settlementError }
+				);
+			}
+		} finally {
+			releaseActiveRun(runId);
+		}
+	}
+
+	private async settlePromiseRun(
+		runId: AgentRunId,
+		outcome: RunSettlementOutcome
+	): Promise<boolean> {
+		const settled = await this.dependencies.transactionRunner.run(async () => {
+			const claim = await this.dependencies.runSettlements.claim(runId, outcome);
+			if (claim.kind === 'lost') return false;
+			await this.dependencies.runSettlements.complete(claim);
+			return true;
 		});
+		if (settled) this.dependencies.runEvents.notify(runId);
+		return settled;
 	}
 	async extractPromises(
 		actor: ActorContext,
 		input: ExtractPromisesInput,
 		signal?: AbortSignal
 	): Promise<ExtractPromisesOutput<TodoSuggestion>> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
-			const { anchor } = source;
-			const extracted = await this.dependencies.promiseExtractor.extract(
-				actor,
-				input.selection,
-				signal
-			);
-			const candidates = input.responsibility
-				? extracted.filter((candidate) => candidate.responsibility === input.responsibility)
-				: extracted;
-			const origin = await this.dependencies.selectionOrigins.record(actor, source, {
-				producerKind: 'pipeline',
-				producerName: 'Extract Promises',
-				pipeline: 'extract_promises',
-				metadata: {}
-			});
-			const suggestions = [];
-			const createdTodos: Todo[] = [];
-			for (const candidate of candidates) {
-				let suggestion = await this.dependencies.suggestionCreator.createFromSelection(
-					actor,
-					origin,
-					{
-						kind: 'todo',
-						confidence: candidate.confidence,
-						payload: {
-							title: candidate.action,
-							responsibility: candidate.responsibility,
-							dueDateVerbatim: candidate.dueDateVerbatim,
-							dueDate: candidate.resolvedDueDate,
-							promiseStrength: candidate.strength
-						}
-					}
-				);
+		const requestedAt = new Date().toISOString() as DateTime;
+		await this.dependencies.selectionOrigins.validate(actor, input.selection);
+		const extracted = await this.extractCandidates(
+			actor,
+			input,
+			this.dependencies.promiseGeneration,
+			requestedAt,
+			signal
+		);
+		signal?.throwIfAborted();
+		return this.dependencies.transactionRunner.run(() =>
+			this.saveExtractedPromises(actor, input, extracted)
+		);
+	}
 
-				if (
-					await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(
-						actor,
-						'extract_promises',
-						suggestion
-					)
-				) {
-					const todo = await this.dependencies.todoCreator.create(actor, suggestion.payload);
-					await this.dependencies.suggestionEffects.record(actor, suggestion.id, [
-						{ kind: 'created', after: { type: 'todos', value: todo } }
-					]);
-					createdTodos.push(todo);
-					const accepted = await this.dependencies.suggestionAccepter.accept(
-						actor,
-						suggestion,
-						todo.id,
-						true
-					);
-					if (accepted.kind !== 'todo')
-						throw new InvalidTransitionError(
-							'Task acceptance returned a different suggestion kind'
-						);
-					suggestion = accepted;
-				}
-				suggestions.push(suggestion);
-			}
-			return { anchorId: anchor.id, suggestions, createdTodos };
+	private extractCandidates(
+		actor: ActorContext,
+		input: ExtractPromisesInput,
+		generation: PromiseGeneration,
+		requestedAt: DateTime,
+		signal?: AbortSignal
+	): Promise<readonly PromiseCandidate[]> {
+		return generation.kind === 'rules'
+			? this.dependencies.promiseRules.extract(actor, input.selection, requestedAt)
+			: this.dependencies.promiseExtractor.extract(
+					actor,
+					input.selection,
+					{ model: generation.model, requestedAt },
+					signal
+				);
+	}
+
+	private async saveExtractedPromises(
+		actor: ActorContext,
+		input: ExtractPromisesInput,
+		extracted: readonly PromiseCandidate[]
+	): Promise<ExtractPromisesOutput<TodoSuggestion>> {
+		const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
+		const { anchor } = source;
+		const candidates = input.responsibility
+			? extracted.filter((candidate) => candidate.responsibility === input.responsibility)
+			: extracted;
+		const origin = await this.dependencies.selectionOrigins.record(actor, source, {
+			producerKind: 'pipeline',
+			producerName: 'Extract Promises',
+			pipeline: 'extract_promises',
+			metadata: {}
 		});
+		const suggestions = [];
+		const createdTodos: Todo[] = [];
+		for (const candidate of candidates) {
+			let suggestion = await this.dependencies.suggestionCreator.createFromSelection(
+				actor,
+				origin,
+				{
+					kind: 'todo',
+					confidence: candidate.confidence,
+					payload: {
+						title: candidate.action,
+						responsibility: candidate.responsibility,
+						dueDateVerbatim: candidate.dueDateVerbatim,
+						dueDate: candidate.resolvedDueDate,
+						promiseStrength: candidate.strength
+					}
+				}
+			);
+
+			if (
+				await this.dependencies.trustPolicyEvaluator.shouldAutoAccept(
+					actor,
+					'extract_promises',
+					suggestion
+				)
+			) {
+				const todo = await this.dependencies.todoCreator.create(actor, suggestion.payload);
+				await this.dependencies.suggestionEffects.record(actor, suggestion.id, [
+					{ kind: 'created', after: { type: 'todos', value: todo } }
+				]);
+				createdTodos.push(todo);
+				const accepted = await this.dependencies.suggestionAccepter.accept(
+					actor,
+					suggestion,
+					todo.id,
+					true
+				);
+				if (accepted.kind !== 'todo')
+					throw new InvalidTransitionError('Task acceptance returned a different suggestion kind');
+				suggestion = accepted;
+			}
+			suggestions.push(suggestion);
+		}
+		return { anchorId: anchor.id, suggestions, createdTodos };
 	}
 }

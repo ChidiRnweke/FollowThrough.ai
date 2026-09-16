@@ -1,4 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { WorkflowAgentRun } from '$lib/models/agent';
+import type { ExtractPromisesOutput } from '$lib/models/todos';
+import type { TodoSuggestion } from '$lib/models/suggestions';
+import { promiseExtractionEvent } from '$lib/server/repositories/agent/stored-values';
 import type {
 	AgentEvent,
 	AgentRun,
@@ -215,6 +219,20 @@ export class InMemoryAgentRunPersistence
 		return updated;
 	}
 
+	failedEvent?: AgentEvent['type'];
+	async listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]> {
+		return this.runs.filter(
+			(run): run is WorkflowAgentRun => run.kind === 'workflow' && run.status === 'queued'
+		);
+	}
+
+	appendPromiseResult(
+		runId: AgentRunId,
+		result: ExtractPromisesOutput<TodoSuggestion>
+	): Promise<AgentRunEventRecord> {
+		return this.append(runId, 1, promiseExtractionEvent(result));
+	}
+
 	async listInterrupted(): Promise<readonly AgentRun[]> {
 		return this.runs.filter((run) => run.status === 'running' || run.status === 'cancelling');
 	}
@@ -224,6 +242,7 @@ export class InMemoryAgentRunPersistence
 		attempt: number,
 		event: AgentEvent
 	): Promise<AgentRunEventRecord> {
+		if (event.type === this.failedEvent) throw new Error('Event storage unavailable');
 		this.cursor += 1n;
 		const record = { cursor: this.cursor.toString(), runId, attempt, event, createdAt: new Date() };
 		this.events.push(record);

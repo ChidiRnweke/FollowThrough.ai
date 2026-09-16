@@ -21,7 +21,10 @@ export class SelectionOrigins {
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
+	async validate(actor: ActorContext, selection: TextSelection): Promise<void> {
+		await this.selectedNote(actor, selection);
+	}
+	private async selectedNote(actor: ActorContext, selection: TextSelection): Promise<Note> {
 		const note = await this.notes.findById(actor, selection.noteId);
 		if (!note) throw new NotFoundError('Selection note was not found');
 		const decision = decideSelection(selection, note);
@@ -29,6 +32,10 @@ export class SelectionOrigins {
 			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
 			throw new ValidationError(decision.message);
 		}
+		return note;
+	}
+	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
+		const note = await this.selectedNote(actor, selection);
 		const anchor = await this.anchors.insert(actor, {
 			id: crypto.randomUUID() as SourceAnchorId,
 			noteId: note.id,

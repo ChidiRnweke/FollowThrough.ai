@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import { PromiseDiscovery } from './promise-discovery';
-import { DeterministicPromiseExtractor } from './promise-rules';
 import { InMemoryStructuredPromiseClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const selection: TextSelection = {
 	noteId: testNoteId(),
@@ -12,6 +11,8 @@ const selection: TextSelection = {
 	to: 15,
 	text: 'I will send it.'
 };
+
+const context = { model: 'test/model', requestedAt: testNow };
 
 const structured = {
 	action: 'Send it',
@@ -27,32 +28,23 @@ describe('Structured promise client boundary', () => {
 	it('maps structured output into a domain promise', async () => {
 		const client = new InMemoryStructuredPromiseClient();
 		client.result = [structured];
-		const extractor = new PromiseDiscovery({
-			client,
-			fallback: new DeterministicPromiseExtractor()
-		});
-		const result = await extractor.extract(testActor(), selection);
+		const extractor = new PromiseDiscovery(client);
+		const result = await extractor.extract(testActor(), selection, context);
 		expect(result[0]?.action).toBe('Send it');
 	});
 
 	it('omits a null owner from the domain promise', async () => {
 		const client = new InMemoryStructuredPromiseClient();
 		client.result = [structured];
-		const extractor = new PromiseDiscovery({
-			client,
-			fallback: new DeterministicPromiseExtractor()
-		});
-		const result = await extractor.extract(testActor(), selection);
+		const extractor = new PromiseDiscovery(client);
+		const result = await extractor.extract(testActor(), selection, context);
 		expect(result[0]?.ownerName).toBeUndefined();
 	});
 
 	it('rejects a missing parsed output', async () => {
 		const client = new InMemoryStructuredPromiseClient();
-		const extractor = new PromiseDiscovery({
-			client,
-			fallback: new DeterministicPromiseExtractor()
-		});
-		await expect(extractor.extract(testActor(), selection)).rejects.toMatchObject({
+		const extractor = new PromiseDiscovery(client);
+		await expect(extractor.extract(testActor(), selection, context)).rejects.toMatchObject({
 			code: 'INVALID_GENERATED_CONTENT'
 		});
 	});
@@ -60,21 +52,9 @@ describe('Structured promise client boundary', () => {
 	it('maps a client failure to an external-service error', async () => {
 		const client = new InMemoryStructuredPromiseClient();
 		client.failure = new Error('network unavailable');
-		const extractor = new PromiseDiscovery({
-			client,
-			fallback: new DeterministicPromiseExtractor()
-		});
-		await expect(extractor.extract(testActor(), selection)).rejects.toMatchObject({
+		const extractor = new PromiseDiscovery(client);
+		await expect(extractor.extract(testActor(), selection, context)).rejects.toMatchObject({
 			code: 'EXTERNAL_SERVICE'
 		});
-	});
-
-	it('uses deterministic extraction when no client is configured', async () => {
-		const extractor = new PromiseDiscovery({
-			apiKey: '',
-			fallback: new DeterministicPromiseExtractor()
-		});
-		const result = await extractor.extract(testActor(), selection);
-		expect(result[0]?.action).toBe('Send it');
 	});
 });

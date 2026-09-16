@@ -348,6 +348,14 @@ export const agentToolCoverage = {
 			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
 		},
 		extractPromises: { kind: 'proposal', tools: ['extract_promises'] },
+		executePromiseRun: {
+			kind: 'excluded',
+			reason: 'The application executes persisted promise extraction requests.'
+		},
+		recoverQueuedPromiseRuns: {
+			kind: 'excluded',
+			reason: 'The application resumes queued promise extraction requests after startup.'
+		},
 		startExtractPromises: {
 			kind: 'excluded',
 			reason:

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { command, query } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type { ExtractPromisesInput } from '$lib/models/todos';
+import { startExtractPromisesSchema } from '$lib/models/todos';
 import type {
 	ConvertInlineMermaidInput,
 	GenerateMermaidDiagramInput,
@@ -65,10 +65,8 @@ export const restoreNoteRevision = command(
 	}
 );
 
-export const extractPromises = command(z.object({ selection: textSelection }), async (input) => {
-	return AppFactory.controllers()
-		.todos()
-		.startExtractPromises(requestActor(), input as ExtractPromisesInput);
+export const extractPromises = command(startExtractPromisesSchema, async (input) => {
+	return AppFactory.controllers().todos().startExtractPromises(requestActor(), input);
 });
 
 export const relateNote = command(z.object({ selection: textSelection }), async (input) => {
