@@ -58,6 +58,9 @@ type NoteKind = 'folder' | 'note' | 'skill';
 
 export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
 
+/** Proposal workflows that currently apply the user's auto-accept policy. */
+export const PROPOSAL_AUTO_ACCEPT_PIPELINES = ['extract_promises', 'memory'] as const;
+
 export type ToolClassification = 'read' | 'proposal' | 'mutation';
 
 /**

@@ -398,12 +398,14 @@ export const TOOL_DESCRIPTIONS = [
 	{
 		name: 'list_trust_policies',
 		classification: 'read',
-		description: 'Read pipeline-specific trust policies.'
+		description:
+			'Read auto-accept policies for extracted tasks and memory proposals. Chat tool approval is controlled separately by execution mode.'
 	},
 	{
 		name: 'update_trust_policy',
 		classification: 'mutation',
-		description: 'Change a pipeline-specific trust policy.'
+		description:
+			'Change automatic acceptance of extracted tasks or memory proposals. Note links and external references require review. This does not change chat tool approval or tool availability.'
 	},
 	{
 		name: 'list_tool_preferences',

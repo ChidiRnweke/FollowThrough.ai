@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
+	import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { DateTime } from '$lib/models/workspace';
@@ -10,9 +11,8 @@
 	const current = workspaceSession.current;
 	if (!current) throw new Error('Open the workspace before editing settings');
 	const session = current;
-	const pipelines = ['extract_promises', 'relate', 'reference', 'agent', 'memory'] as const;
 	const policies = $derived(
-		pipelines.map((pipeline): TrustPolicy => {
+		PROPOSAL_AUTO_ACCEPT_PIPELINES.map((pipeline): TrustPolicy => {
 			const stored = session.resources.views
 				.all('trust_policies')
 				.find((policy) => policy.pipeline === pipeline);
@@ -66,8 +66,9 @@
 	{/if}
 	<!-- The pb-2 steps the preamble out to 32px so it does not read as a caption of the fields. -->
 	<p class="pb-2 text-sm text-muted-foreground">
-		Decide per pipeline whether accepted work needs your review first. Trust is earned one pipeline
-		at a time.
+		Choose whether extracted tasks and memory changes are applied automatically. Note links and
+		external references require review. Chat tool approvals use the execution mode chosen for the
+		chat.
 	</p>
 	{#if policies.length === 0}
 		<p class="text-sm text-muted-foreground">No policies configured yet.</p>

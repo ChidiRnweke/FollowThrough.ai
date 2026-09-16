@@ -176,7 +176,14 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   workspace drafts, and queue with in-memory storage.
   All 3,632 unit tests and local quality checks pass. Replacement confirmation counts every
   body match, including those beyond the former search cap, and excludes title-only matches.
-- P09–P11, P13, P18–P22: reconcile current code against the detailed assessment and
+- P20: checked consumers and accepted review policy. Only extracted tasks and memory proposals
+  use auto-accept policies. Settings and the agent tool now expose those controls; unsupported
+  writes, including legacy queued commands, fail explicitly. Historical rows remain stored.
+  Chat tool approval and tool availability stay separate. The confidence caption now matches
+  the inclusive threshold. Six PostgreSQL policy contracts and two control browser tests pass;
+  matching component captures show the five former controls and two effective controls.
+  The full 3,642-test suite and local quality checks pass.
+- P09–P11, P13, P18–P19, P21–P22: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
