@@ -574,6 +574,11 @@ the duplicate fake implementation are removed. Selection validation lives with t
 service, and its fake uses that rule. The offset test moved to SelectionOrigins; its existing mismatch
 test covers the removed duplicate. Existing diagram tests retain transactional anchor rollback.
 
+Workbench corruption-test cleanup: CI observed a blocked IndexedDB deletion after the raw-row
+verification. That read resolved on request success while its transaction was still active. The test
+now waits for transaction completion before closing the connection and allowing database cleanup.
+The corrupt row remains the asserted result; the production storage contract is unchanged.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
