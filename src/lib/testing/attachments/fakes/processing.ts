@@ -126,8 +126,14 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 		return this.viewOf(version);
 	}
 	async listPendingVersions() {
-		return this.found && ['queued', 'processing'].includes(this.found.version.processingStatus)
-			? [{ ...testActor(), versionId: this.found.version.id }]
+		const version = this.found?.version;
+		return version &&
+			(['queued', 'processing'].includes(version.processingStatus) ||
+				(version.processingStatus === 'partial' &&
+					version.processingFailure === undefined &&
+					version.extractedText !== undefined &&
+					version.parserKind !== undefined))
+			? [{ ...testActor(), versionId: version.id }]
 			: [];
 	}
 	async findVersionForUpdate() {
