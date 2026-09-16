@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asProvenance, provenanceOrigin, provenanceSchema } from './index';
-import type { Provenance, ProvenanceRequest } from './index';
+import { provenanceOrigin, provenanceSchema } from './index';
 
 const identity = {
 	id: '10000000-0000-4000-8000-000000000001',
@@ -142,37 +141,16 @@ const supportedProducers = [
 	}
 ] as const;
 
-describe('Completing a request into a record', () => {
-	const storedIdentity = {
-		id: identity.id as Provenance['id'],
-		userId: identity.userId as Provenance['userId'],
-		createdAt: identity.createdAt as Provenance['createdAt']
-	};
-
-	const relateRequest = {
-		producerKind: 'pipeline',
-		producerName: 'Relate',
-		pipeline: 'relate',
-		sourceAnchorId: anchorId,
-		metadata: {}
-	} as ProvenanceRequest;
-
-	it('keeps the arm the request was in', () => {
-		expect(asProvenance(relateRequest, storedIdentity)).toMatchObject({ pipeline: 'relate' });
-	});
-
-	it('carries the identity storage supplied', () => {
-		expect(asProvenance(relateRequest, storedIdentity).id).toBe(identity.id);
-	});
-
-	it('refuses a request that could never be a valid record', () => {
+describe('Reading stored provenance', () => {
+	it('refuses stored relationship provenance without its source anchor', () => {
 		const missingAnchor = {
+			...identity,
 			producerKind: 'pipeline',
 			producerName: 'Relate',
 			pipeline: 'relate',
 			metadata: {}
-		} as ProvenanceRequest;
-		expect(() => asProvenance(missingAnchor, storedIdentity)).toThrow();
+		};
+		expect(() => provenanceSchema.parse(missingAnchor)).toThrow();
 	});
 });
 

@@ -15,6 +15,25 @@ const setup = () => {
 };
 
 describe('Provenance management invariants', () => {
+	it('preserves the relationship producer and its owned source anchor', async () => {
+		const { service, anchors } = setup();
+		anchors.anchors = [anchorBuilder()];
+		const recorded = await service.record(testActor(), {
+			producerKind: 'pipeline',
+			producerName: 'Relate',
+			pipeline: 'relate',
+			sourceAnchorId: testAnchorId(),
+			metadata: {}
+		});
+		expect(recorded).toMatchObject({
+			userId: testActor().userId,
+			producerKind: 'pipeline',
+			producerName: 'Relate',
+			pipeline: 'relate',
+			sourceAnchorId: testAnchorId()
+		});
+	});
+
 	it('records provenance under the acting user', async () => {
 		const { service } = setup();
 		const recorded = await service.record(testActor(), {
