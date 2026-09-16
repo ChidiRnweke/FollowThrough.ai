@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SkillLibrary } from './library';
+import { serializeSkillManifest } from '$lib/services/skills/manifest';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -42,6 +43,19 @@ const setup = () => {
 };
 
 describe('Skill management invariants', () => {
+	it('exports a skill when its generated portable name is truncated at a word separator', async () => {
+		const { service, notes } = setup();
+		const name = `${'a'.repeat(63)} next word`;
+		notes.notes[0] = { ...notes.notes[0], title: name };
+		await service.create(testActor(), notes.notes[0], {
+			name,
+			description: 'Description',
+			triggerHints: []
+		});
+		const manifest = await service.manifest(testActor(), notes.notes[0].id);
+		expect(serializeSkillManifest(manifest)).toContain(`name: ${'a'.repeat(63)}\n`);
+	});
+
 	it('rejects an empty skill name', async () => {
 		const { service } = setup();
 		await expect(

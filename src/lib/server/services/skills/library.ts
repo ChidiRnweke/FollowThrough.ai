@@ -25,7 +25,8 @@ const slug = (value: string): string =>
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '')
-		.slice(0, 64) || `skill-${crypto.randomUUID().slice(0, 8)}`;
+		.slice(0, 64)
+		.replace(/-+$/g, '') || `skill-${crypto.randomUUID().slice(0, 8)}`;
 
 export class SkillLibrary {
 	constructor(
