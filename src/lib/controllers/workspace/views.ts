@@ -1,5 +1,5 @@
-import { assembleBacklinkView } from '$lib/models/relationships';
-import { assembleReferenceView } from '$lib/models/references';
+import { assembleBacklinkView } from '$lib/services/relationships/presentation';
+import { assembleReferenceView } from '$lib/services/references/presentation';
 import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';

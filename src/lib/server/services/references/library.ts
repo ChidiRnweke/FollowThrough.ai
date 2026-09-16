@@ -1,4 +1,3 @@
-import { assembleReferenceView } from '$lib/models/references';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateReferenceInput,
@@ -48,7 +47,7 @@ export class ReferenceLibrary {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.references.listForNote(actor, noteId);
 	}
-	async assemble(
+	async readContexts(
 		actor: ActorContext,
 		references: readonly ExternalReference[]
 	): Promise<readonly ReferenceView[]> {
@@ -57,7 +56,7 @@ export class ReferenceLibrary {
 				const anchor = reference.sourceAnchorId
 					? await this.anchors.findById(actor, reference.sourceAnchorId)
 					: undefined;
-				return assembleReferenceView(reference, { anchor });
+				return { reference, ...(anchor ? { anchor } : {}) };
 			})
 		);
 	}
