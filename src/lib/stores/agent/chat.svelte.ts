@@ -35,6 +35,9 @@ import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
 import type { SelectionChip } from './selection-chip';
 import { SvelteSet } from 'svelte/reactivity';
+import type { ContextChip, ResourceChip, MentionHistory } from '$lib/models/chat';
+import { createMentionHistory } from '$lib/services/chat/mentions';
+export type { ContextChip, ResourceChip } from '$lib/models/chat';
 
 export type { ChatToolActivity } from './chat-tools';
 export type { SelectionChip } from './selection-chip';
@@ -133,25 +136,6 @@ const persistedConversation = (key: string): PersistedConversationResult => {
 		};
 	}
 };
-
-/**
- * A whole resource attached by name. Its `@Name` token in the prompt is the source of truth:
- * typing the token away detaches the chip, and removing the chip deletes the token.
- */
-export interface ResourceChip {
-	readonly kind: 'note' | 'skill' | 'folder';
-	readonly id: NoteId;
-	readonly name: string;
-	/** Folders only: how many notes the tag stands for, shown before sending. */
-	readonly noteCount?: number;
-}
-
-/**
- * The two kinds of attachment differ in what holds them on. A resource chip is held by its
- * token in the sentence; a selection chip has no sayable name, so it is held only by having
- * been pinned — and is let go only by being dismissed.
- */
-export type ContextChip = ResourceChip | SelectionChip;
 
 export type ChatPart =
 	| { kind: 'text'; text: string }
@@ -429,6 +413,7 @@ export class ChatStore {
 	/** True while a decision is in flight, so a bundle cannot be answered twice. */
 	deciding = $state(false);
 	chips = $state<ContextChip[]>([]);
+	mentionDraft = $state<MentionHistory>(createMentionHistory(''));
 	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
 	/**
 	 * The one highlighted passage the user has waved off, by chip id. Not cleared on send:
@@ -713,7 +698,7 @@ export class ChatStore {
 		const noteChips = this.chips
 			.filter((chip): chip is ResourceChip => chip.kind === 'note')
 			.map((chip) => chip.id);
-		const skillChips = this.chips.filter((chip) => chip.kind === 'skill').map((chip) => chip.name);
+		const skillChips = this.chips.flatMap((chip) => (chip.kind === 'skill' ? [chip.id] : []));
 		// The singular `selection` is derived here and nowhere else. It stays on the wire
 		// because the selection-bound tools (extract_promises, relate_selection, …) are offered
 		// only when the run input has one; the plural field is what the prompt actually quotes.
@@ -772,12 +757,10 @@ export class ChatStore {
 				...(input.noteId ? { noteId: input.noteId } : {}),
 				...(selections.length ? { selections, selection: selections[0] } : {}),
 				contextNoteIds: [...new SvelteSet([...(input.contextNoteIds ?? []), ...noteChips])],
-				requestedSkillNames: [
-					...new SvelteSet([...(input.requestedSkillNames ?? []), ...skillChips])
+				...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {}),
+				requestedSkillNoteIds: [
+					...new SvelteSet([...(input.requestedSkillNoteIds ?? []), ...skillChips])
 				],
-				...(input.requestedSkillNoteIds
-					? { requestedSkillNoteIds: input.requestedSkillNoteIds }
-					: {}),
 				...(input.retryUserOrdinal !== undefined
 					? { retryUserOrdinal: input.retryUserOrdinal }
 					: {})
@@ -954,6 +937,7 @@ export class ChatStore {
 		this.modelOverride = null;
 		this.visionModelOverride = null;
 		this.chips = [];
+		this.mentionDraft = createMentionHistory('');
 		this.autoChipDismissedFor = undefined;
 		this.dismissedSelectionId = undefined;
 		this.hydratedConversationId = undefined;
@@ -983,6 +967,7 @@ export class ChatStore {
 		this.visionModelOverride = null;
 		this.executionModeOverride = this.defaultExecutionMode;
 		this.chips = [];
+		this.mentionDraft = createMentionHistory('');
 		this.autoChipDismissedFor = undefined;
 		this.dismissedSelectionId = undefined;
 		this.runId = undefined;

@@ -1,5 +1,7 @@
 import type { TextSelection } from '$lib/models/notes';
 import { countWords } from '$lib/models/notes/reading-time';
+import type { SelectionChip } from '$lib/models/chat';
+export type { SelectionChip } from '$lib/models/chat';
 
 /**
  * A passage of a note, pinned to the composer as context.
@@ -13,15 +15,6 @@ import { countWords } from '$lib/models/notes/reading-time';
  * do not outlive the message they were pinned for: an excerpt held across turns would go on
  * describing a passage the note no longer contains.
  */
-export interface SelectionChip {
-	readonly kind: 'selection';
-	readonly id: string;
-	/** The note the passage came from. Chips are read at a glance, so the title is the label. */
-	readonly name: string;
-	readonly wordCount: number;
-	readonly selection: TextSelection;
-}
-
 export const selectionChipIdOf = (selection: TextSelection): string =>
 	`${selection.noteId}:${selection.from}-${selection.to}`;
 

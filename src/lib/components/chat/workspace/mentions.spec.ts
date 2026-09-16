@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-	liveChips,
-	mentionCandidatesFor,
-	mentionQueryOf,
-	withMention,
-	withoutMention
-} from './mentions';
+import { mentionCandidatesFor, mentionQueryOf } from './mentions';
 import type { NoteId, NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
-import type { ContextChip } from '$lib/stores/agent/chat.svelte';
 
 const id = (n: number): NoteId =>
 	`00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as unknown as NoteId;
@@ -29,22 +22,6 @@ const entry = (overrides: Partial<NoteSummary> & Pick<NoteSummary, 'id' | 'title
 const skill = (name: string, noteId: NoteId): SkillSummary =>
 	({ name, noteId, description: '', triggerHints: [], isEnabled: true }) as SkillSummary;
 
-const folderChip: ContextChip = { kind: 'folder', id: id(1), name: 'Research', noteCount: 2 };
-const noteChip: ContextChip = { kind: 'note', id: id(2), name: 'Q3 Planning' };
-const selectionChip: ContextChip = {
-	kind: 'selection',
-	id: `${id(2)}:12-41`,
-	name: 'Q3 Planning',
-	wordCount: 6,
-	selection: {
-		noteId: id(2),
-		revision: 4,
-		from: 12,
-		to: 41,
-		text: 'We ship the export flow first.'
-	}
-};
-
 describe('mention query detection', () => {
 	it('reads the word being typed after an @', () => {
 		expect(mentionQueryOf('summarise @rese')).toBe('rese');
@@ -60,52 +37,6 @@ describe('mention query detection', () => {
 
 	it('ignores an @ in the middle of a word', () => {
 		expect(mentionQueryOf('mail tester@local')).toBeUndefined();
-	});
-});
-
-describe('writing a mention into the prompt', () => {
-	it('leaves the chosen name in the sentence', () => {
-		expect(withMention('summarise @rese', folderChip)).toBe('summarise @Research ');
-	});
-
-	it('keeps a multi-word title whole', () => {
-		expect(withMention('compare @q3', noteChip)).toBe('compare @Q3 Planning ');
-	});
-
-	it('preserves the text before the tag', () => {
-		expect(withMention('@rese', folderChip)).toBe('@Research ');
-	});
-});
-
-describe('removing a mention from the prompt', () => {
-	it('deletes the tag', () => {
-		expect(withoutMention('summarise @Research now', folderChip)).toBe('summarise now');
-	});
-
-	it('removes every occurrence of the tag', () => {
-		expect(withoutMention('@Research versus @Research', folderChip)).toBe(' versus ');
-	});
-});
-
-describe('chips the prompt still speaks for', () => {
-	it('keeps a chip whose tag is present', () => {
-		expect(liveChips('summarise @Research', [folderChip])).toEqual([folderChip]);
-	});
-
-	it('drops a chip whose tag was typed away', () => {
-		expect(liveChips('summarise @Resear', [folderChip])).toEqual([]);
-	});
-
-	it('judges each chip on its own tag', () => {
-		expect(liveChips('@Q3 Planning only', [folderChip, noteChip])).toEqual([noteChip]);
-	});
-
-	it('keeps a pinned passage, which has no tag to type away', () => {
-		expect(liveChips('what does this commit me to?', [selectionChip])).toEqual([selectionChip]);
-	});
-
-	it('keeps a pinned passage even when its note title is nowhere in the sentence', () => {
-		expect(liveChips('', [selectionChip, noteChip])).toEqual([selectionChip]);
 	});
 });
 
@@ -138,7 +69,10 @@ describe('mention candidates', () => {
 			entry({ id: id(1), title: 'Research', kind: 'folder' }),
 			entry({ id: id(2), title: 'Findings', parentId: id(1) })
 		] as NoteSummary[];
-		expect(mentionCandidatesFor('research', tree, [], 'complete')[0]?.noteCount).toBe(1);
+		expect(
+			mentionCandidatesFor('research', tree, [], 'complete').find((chip) => chip.kind === 'folder')
+				?.noteCount
+		).toBe(1);
 	});
 
 	it('leaves archived entries out', () => {
