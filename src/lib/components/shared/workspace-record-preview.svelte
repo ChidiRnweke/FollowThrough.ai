@@ -10,7 +10,8 @@
 		SYNC_VALUE,
 		SYNC_EVIDENCE
 	} from './sync-review';
-	import { reviewFieldLabels, visibleReviewFields } from '$lib/models/workspace-write-review';
+	import { reviewFieldLabels } from '$lib/models/workspace-write-review';
+	import { visibleReviewFields } from '$lib/services/workspace/write-review';
 	let {
 		label,
 		record,
