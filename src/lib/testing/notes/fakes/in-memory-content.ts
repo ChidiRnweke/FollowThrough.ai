@@ -76,6 +76,7 @@ export class InMemoryNoteContent
 	anchors: SourceAnchor[] = [];
 	indexedNoteIds: NoteId[] = [];
 	failIndex = false;
+	failIndexFor = new Set<NoteId>();
 	private nextAnchor = 100;
 
 	async get(actor: ActorContext, noteId: NoteId): Promise<Note> {
@@ -237,7 +238,8 @@ export class InMemoryNoteContent
 	}
 
 	async index(actor: ActorContext, note: Note): Promise<void> {
-		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
+		if (this.failIndex || this.failIndexFor.has(note.id))
+			throw new ExternalServiceError('Indexing failed');
 		if (note.userId !== actor.userId) throw new OwnershipError('Cannot index another user’s note');
 		this.indexedNoteIds = [...this.indexedNoteIds.filter((noteId) => noteId !== note.id), note.id];
 	}

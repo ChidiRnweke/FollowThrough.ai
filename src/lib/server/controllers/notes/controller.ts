@@ -80,16 +80,18 @@ import type {
 } from '$lib/models/notes';
 import {
 	MAX_NOTE_DOCUMENTS,
-	buildNoteSearchPattern,
 	collectNoteLinkTargets,
 	diffNoteRevisionTexts,
 	noteEtag,
 	noteMatchesEtag,
-	replaceInNoteDocument,
-	searchNoteTargets,
 	sectionNumberingView
 } from '$lib/models/notes';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
+import {
+	buildNoteSearchPattern,
+	replaceInNoteDocument,
+	searchNoteTargets
+} from '$lib/services/notes/text-search';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
@@ -736,27 +738,37 @@ export class Notes implements NotesController {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
 		assertValidSearch(input.query, options);
 		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);
-		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
-		const hits = searchNoteTargets(
-			scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
-			input.query,
-			options
-		);
-		let replacedNotes = 0;
-		let replacedMatches = 0;
-		for (const hit of hits) {
-			// Title matches are display-only: replace rewrites document bodies, never titles.
-			if (hit.matches.length === 0) continue;
-			const note = await this.dependencies.noteReader.get(actor, hit.noteId);
-			const result = replaceInNoteDocument(note.document, input.query, input.replacement, options);
-			if (result === undefined) continue;
-			await this.save(actor, {
-				note: { ...note, document: result.document, plainText: result.plainText }
-			});
-			replacedNotes += 1;
-			replacedMatches += result.replaced;
-		}
-		return { replacedNotes, replacedMatches };
+		return this.dependencies.transactionRunner.run(async () => {
+			const targets = await this.dependencies.noteTextSearcher.listSearchable(
+				actor,
+				input.projectId
+			);
+			const hits = searchNoteTargets(
+				scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
+				input.query,
+				options
+			);
+			let replacedNotes = 0;
+			let replacedMatches = 0;
+			for (const hit of hits) {
+				// Title matches are display-only: replace rewrites document bodies, never titles.
+				if (hit.matches.length === 0) continue;
+				const note = await this.dependencies.noteReader.get(actor, hit.noteId);
+				const result = replaceInNoteDocument(
+					note.document,
+					input.query,
+					input.replacement,
+					options
+				);
+				if (result === undefined) continue;
+				await this.save(actor, {
+					note: { ...note, document: result.document, plainText: result.plainText }
+				});
+				replacedNotes += 1;
+				replacedMatches += result.replaced;
+			}
+			return { replacedNotes, replacedMatches };
+		});
 	}
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {

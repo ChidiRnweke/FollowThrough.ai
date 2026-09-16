@@ -1,3 +1,11 @@
+import type {
+	NoteSearchOptions,
+	NoteTextMatch,
+	NoteSearchSnippet,
+	NoteSearchHit,
+	NoteDocumentReplaceResult,
+	NoteSearchTarget
+} from '$lib/models/notes';
 /**
  * Exact and regex search across notes, plus document-level replace.
  *
@@ -14,14 +22,7 @@
  * completely empty by the replacement.
  */
 
-type NoteId = string & { readonly __brand: 'NoteId' };
-type ProjectId = string & { readonly __brand: 'ProjectId' };
-
-/**
- * The structural view search walks. A document the notes domain's strict schema
- * accepted satisfies it; chisel keeps sibling files self-contained, so the view
- * is declared here rather than imported from the barrel.
- */
+/** Read-only view used by the text traversal; preserves extension-specific fields. */
 interface DocumentNodeView {
 	readonly type: string;
 	readonly text?: string;
@@ -44,46 +45,6 @@ interface MutableDocument {
 	readonly type: 'doc';
 	content?: MutableDocumentNode[];
 }
-
-export interface NoteSearchOptions {
-	readonly regex: boolean;
-	readonly caseSensitive: boolean;
-}
-
-/** Half-open `[start, end)` offsets into the searched text, plus the matched text. */
-export interface NoteTextMatch {
-	readonly start: number;
-	readonly end: number;
-	readonly text: string;
-}
-
-/** A display window around a content match, so results render without shipping whole notes. */
-export interface NoteSearchSnippet {
-	readonly before: string;
-	readonly hit: string;
-	readonly after: string;
-	/** True only when `before` was actually cut short — a UI may prefix an ellipsis, never otherwise. */
-	readonly truncatedBefore: boolean;
-	/** True only when `after` was actually cut short — a UI may suffix an ellipsis, never otherwise. */
-	readonly truncatedAfter: boolean;
-}
-
-/** A content match paired with the snippet a result row renders. */
-export interface NoteSearchContentMatch extends NoteTextMatch {
-	readonly snippet: NoteSearchSnippet;
-}
-
-/** One note's worth of hits: content matches are offsets into `plainText`, title matches into `title`. */
-export interface NoteSearchHit {
-	readonly noteId: NoteId;
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly titleMatches: readonly NoteTextMatch[];
-	readonly matches: readonly NoteSearchContentMatch[];
-}
-
-/** Matches per note are capped so a pathological query (`a` on a long note) stays a bounded payload. */
-export const MAX_NOTE_SEARCH_MATCHES_PER_NOTE = 100;
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -114,11 +75,11 @@ interface RichMatch extends NoteTextMatch {
  * All non-overlapping matches. Zero-length matches (`a*`, `^`) are skipped — they cannot
  * be highlighted or replaced meaningfully, and skipping them keeps the loop total.
  */
-const findMatches = (text: string, pattern: RegExp, limit: number): RichMatch[] => {
+const findMatches = (text: string, pattern: RegExp): RichMatch[] => {
 	const matches: RichMatch[] = [];
 	pattern.lastIndex = 0;
 	let exec = pattern.exec(text);
-	while (exec !== null && matches.length < limit) {
+	while (exec !== null) {
 		if (exec[0] === '') {
 			pattern.lastIndex += 1;
 		} else {
@@ -132,12 +93,11 @@ const findMatches = (text: string, pattern: RegExp, limit: number): RichMatch[] 
 export const searchNoteText = (
 	text: string,
 	query: string,
-	options: NoteSearchOptions,
-	limit: number = MAX_NOTE_SEARCH_MATCHES_PER_NOTE
+	options: NoteSearchOptions
 ): NoteTextMatch[] => {
 	const pattern = buildNoteSearchPattern(query, options);
 	if (pattern === undefined) return [];
-	return findMatches(text, pattern, limit).map(({ start, end, text: matched }) => ({
+	return findMatches(text, pattern).map(({ start, end, text: matched }) => ({
 		start,
 		end,
 		text: matched
@@ -258,15 +218,6 @@ const layoutDocument = (document: ProseMirrorDocument): DocumentLayout => {
 export const noteDocumentText = (document: ProseMirrorDocument): string =>
 	layoutDocument(document).text;
 
-export interface NoteDocumentReplaceResult<
-	Document extends ProseMirrorDocument = ProseMirrorDocument
-> {
-	readonly document: Document;
-	readonly plainText: string;
-	/** Matches actually replaced; zero-length matches are never counted. */
-	readonly replaced: number;
-}
-
 const EMPTY_PARAGRAPH: MutableDocumentNode = { type: 'paragraph' };
 
 /** Drops text nodes the replacement emptied; every other node keeps its shape. */
@@ -302,7 +253,7 @@ export const replaceInNoteDocument = <Document extends ProseMirrorDocument>(
 	// flows back out unchanged in shape, only text nodes lost or gained characters.
 	const clone = structuredClone(document) as MutableDocument;
 	const layout = layoutDocument(clone);
-	const matches = findMatches(layout.text, pattern, Number.POSITIVE_INFINITY);
+	const matches = findMatches(layout.text, pattern);
 	if (matches.length === 0) return undefined;
 
 	for (const match of [...matches].sort((a, b) => b.start - a.start)) {
@@ -341,14 +292,6 @@ export const replaceInNoteDocument = <Document extends ProseMirrorDocument>(
 	};
 };
 
-/** The columns a text search needs — a note's document body never travels for search. */
-export interface NoteSearchTarget {
-	readonly id: NoteId;
-	readonly projectId: ProjectId;
-	readonly title: string;
-	readonly plainText: string;
-}
-
 /** Assembles the hits for a set of search targets, dropping notes with no match at all. */
 export const searchNoteTargets = (
 	targets: readonly NoteSearchTarget[],
@@ -373,26 +316,3 @@ export const searchNoteTargets = (
 	}
 	return hits;
 };
-
-export interface SearchNoteTextInput {
-	readonly query: string;
-	readonly regex: boolean;
-	readonly caseSensitive: boolean;
-	/** Scope the search to one project; omit it to search every active note. */
-	readonly projectId?: ProjectId;
-}
-
-export interface SearchNoteTextOutput {
-	readonly hits: readonly NoteSearchHit[];
-}
-
-export interface ReplaceNoteTextInput extends SearchNoteTextInput {
-	readonly replacement: string;
-	/** Replace only in these notes; omit to replace in every note the search hits. */
-	readonly noteIds?: readonly NoteId[];
-}
-
-export interface ReplaceNoteTextOutput {
-	readonly replacedNotes: number;
-	readonly replacedMatches: number;
-}

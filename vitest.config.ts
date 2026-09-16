@@ -127,6 +127,8 @@ export default defineConfig({
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
 						'src/lib/stores/workspace/resources.svelte.spec.ts',
 						'src/lib/stores/workspace/drafts.svelte.spec.ts',
+						'src/lib/stores/search/global-search.svelte.spec.ts',
+						'src/lib/components/search/global-search-panel.svelte.spec.ts',
 						'src/lib/stores/agent/replay.svelte.spec.ts',
 						'src/lib/stores/agent/mention-context.svelte.spec.ts',
 						'src/lib/components/chat/workspace/mention-input.svelte.spec.ts',
