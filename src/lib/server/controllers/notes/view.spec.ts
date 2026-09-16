@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { WorkspaceViews } from '$lib/models/workspace-views';
+import { WorkspaceViews } from '$lib/controllers/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,

@@ -195,8 +195,14 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   being assigned to the next signed-in account. The authenticated two-account regression
   reproduced lost sibling tabs on the previous code and passes with the new storage. Matching
   screenshots show the restored tab. All 3,669 unit tests and local quality checks pass, along
-  with the existing 27 PWA scenarios and the new account-switch scenario. Today/attention
-  projections remain open.
+  with all 28 PWA scenarios under explicitly configured seeded-session authentication.
+- P19 Today/attention: browser and server controllers now use one Today grouping service and
+  one memory-notification service. Workspace view orchestration moved out of models; that model
+  now contains only the skill value type. Server acquisition and local cache acquisition remain
+  separate. Full-response parity covers local-date groups, waiting tasks, pinned/recent notes,
+  pending proposals, profile memory and archived projects. The other feature rules still called
+  from workspace views remain part of the outstanding global model migration.
+  All 3,677 unit tests, type checking, lint, architecture audits and docs checks pass.
 - P09–P11, P13, P19, P21–P22: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
