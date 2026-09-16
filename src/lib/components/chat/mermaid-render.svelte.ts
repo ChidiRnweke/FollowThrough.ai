@@ -54,7 +54,7 @@ export const createMermaidRender = (
 const drawMermaid = async (source: string, dark: boolean): Promise<MermaidRender> => {
 	try {
 		const { initializeMermaid, renderMermaidOffscreen, sanitizeMermaidSvg } =
-			await import('$lib/components/edra/mermaid-rendering');
+			await import('$lib/client/diagrams/mermaid-rendering');
 		initializeMermaid(dark);
 		const svg = await renderMermaidOffscreen(`chat-mermaid-${crypto.randomUUID()}`, source);
 		return { kind: 'ready', svg: sanitizeMermaidSvg(svg) };

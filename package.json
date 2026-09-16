@@ -70,7 +70,6 @@
 		"@electric-sql/pglite": "^0.5.4",
 		"@electric-sql/pglite-pgvector": "^0.0.5",
 		"@eslint/js": "latest",
-		"@fontsource-variable/inter": "^5.2.8",
 		"@fontsource-variable/jetbrains-mono": "^5.2.8",
 		"@fontsource-variable/newsreader": "^5.3.0",
 		"@internationalized/date": "^3.12.2",
@@ -95,7 +94,6 @@
 		"globals": "^17.6.0",
 		"mode-watcher": "^1.1.0",
 		"paneforge": "^1.0.2",
-		"playwright": "^1.60.0",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"prettier-plugin-tailwindcss": "^0.8.0",
@@ -114,6 +112,7 @@
 		"vitest-browser-svelte": "^2.1.1"
 	},
 	"dependencies": {
+		"@fontsource-variable/inter": "^5.2.8",
 		"@arizeai/openinference-core": "^2.4.0",
 		"@arizeai/openinference-instrumentation-openai-agents": "^0.2.2",
 		"@arizeai/openinference-semantic-conventions": "^2.5.0",
@@ -178,6 +177,7 @@
 		"mermaid": "^11.16.0",
 		"openai": "^6.46.0",
 		"pdfmake": "^0.3.11",
+		"playwright": "^1.60.0",
 		"postgres": "^3.4.9",
 		"re2js": "^2.8.6",
 		"svelte-dnd-action": "^0.9.74",

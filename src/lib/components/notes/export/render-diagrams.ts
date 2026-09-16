@@ -2,15 +2,15 @@ import { mode } from 'mode-watcher';
 import type { DiagramSize, ExportSettings } from '$lib/models/deliverables';
 import { svgViewBoxSize } from '$lib/models/deliverables';
 import { rasterizeSvg } from '$lib/client/images/rasterize';
-import { initializeMermaid, sanitizeMermaidSvg } from '$lib/components/edra/mermaid-rendering';
+import { initializeMermaid, sanitizeMermaidSvg } from '$lib/client/diagrams/mermaid-rendering';
 import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 
 /**
  * Rendering the mermaid diagrams an export carries.
  *
- * Diagrams are rendered in the browser rather than on the server: mermaid needs a DOM to
- * lay one out, and the resulting raster is what both generators embed. Shared by the
- * single-note and bulk export dialogs so the two produce the same documents.
+ * Interactive exports can supply browser renders. The server renders missing sources for
+ * regeneration, agent exports and bundles. Both paths share the same Mermaid theme rules.
+ * The resulting raster is what both document generators embed.
  */
 
 export interface DiagramRenders {

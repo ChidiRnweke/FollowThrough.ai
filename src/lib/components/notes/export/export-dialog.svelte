@@ -11,7 +11,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { diagramKeepsOwnColours } from '$lib/components/edra/mermaid-rendering';
+	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
 	import {
 		type DiagramRenders,
 		mergeDiagramRenders,

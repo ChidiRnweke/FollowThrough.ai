@@ -4,7 +4,7 @@ import { ClipboardTransfer } from '$lib/controllers/notes/clipboard';
 import { BrowserClipboardDocument } from '$lib/client/clipboard/document';
 import { BrowserClipboardWriter } from '$lib/client/clipboard/writer';
 import { readClipboardImage } from '$lib/client/clipboard/images';
-import { mermaidPngBlob } from '$lib/components/edra/mermaid-export';
+import { mermaidPngBlob } from '$lib/client/diagrams/mermaid-export';
 
 const transfer = new ClipboardTransfer({
 	writer: new BrowserClipboardWriter(),

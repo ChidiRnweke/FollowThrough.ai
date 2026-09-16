@@ -2,6 +2,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { parseProseMirrorDocument, type ProseMirrorDocument } from '$lib/models/notes';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
+	import { MermaidNodeView } from '$lib/components/diagrams';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -24,6 +25,7 @@
 	// Same edra stack as the note editor, with every AI/diagram/suggestion
 	// callback omitted — those features disable cleanly when no handler is passed.
 	const editor = createEditor({
+		mermaidView: MermaidNodeView,
 		// Read once at creation; the label is fixed for the editor's lifetime.
 		ariaLabel: untrack(() => ariaLabel),
 		onUpdate: () => {

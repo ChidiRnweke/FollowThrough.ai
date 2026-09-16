@@ -5,7 +5,7 @@
 		initializeMermaid,
 		renderMermaidOffscreen,
 		sanitizeMermaidSvg
-	} from '$lib/components/edra/mermaid-rendering';
+	} from '$lib/client/diagrams/mermaid-rendering';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 
 	/*

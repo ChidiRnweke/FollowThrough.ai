@@ -1,5 +1,5 @@
 import { NotFoundError, ValidationError } from '$lib/errors';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import {
 	MAX_BUNDLE_ENTRIES,
 	type ExportInput,
@@ -16,8 +16,13 @@ import {
 } from '$lib/server/services/deliverables/artifacts';
 import type {
 	prepareExport,
-	exportImageSources
+	exportImageSources,
+	exportDiagramReferences
 } from '$lib/server/services/deliverables/export-preparation';
+import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
+import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
+import { createMermaidConfig } from '$lib/services/diagrams/mermaid-theme';
 import { attachmentIdFromSrc } from '$lib/server/services/deliverables/export-preparation';
 import type {
 	DeliverableMutationRequest,
@@ -160,6 +165,9 @@ export interface DeliverablesDependencies {
 	fetchImage: (url: string) => Promise<string | undefined>;
 	prepareExport: typeof prepareExport;
 	exportImageSources: typeof exportImageSources;
+	exportDiagramReferences: typeof exportDiagramReferences;
+	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
+	diagramRenderer: Pick<DiagramRasterizer, 'render'>;
 	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
 	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
 	zipPacker: (files: readonly { path: string; bytes: Uint8Array }[]) => Buffer;
@@ -316,12 +324,13 @@ export class Deliverables implements DeliverablesController {
 		actor: ActorContext,
 		input: PreviewDocumentInput & { templateId?: TemplateId }
 	): Promise<PreparedExport> {
-		const notes = await Promise.all(
+		const sourceNotes = await Promise.all(
 			input.noteIds.map(async (id) => {
 				const note = await this.dependencies.noteReader.get(actor, id);
-				return { title: note.title, document: note.document };
+				return note;
 			})
 		);
+		const notes = sourceNotes.map((note) => ({ title: note.title, document: note.document }));
 		const settings = input.settings
 			? validateSettings(input.settings)
 			: await this.getExportSettings(actor, input.projectId);
@@ -329,6 +338,57 @@ export class Deliverables implements DeliverablesController {
 			? await this.dependencies.templates.styles(actor, input.templateId, input.projectId)
 			: undefined;
 		const images = new Map<string, string>();
+		const pendingDiagrams = new Map<string, ExportDiagramSource>();
+		for (const note of sourceNotes) {
+			for (const reference of this.dependencies.exportDiagramReferences(note.document)) {
+				if (reference.kind === 'mermaid') {
+					const key = createHash('sha256').update(reference.source, 'utf8').digest('hex');
+					if (!input.diagramPngs?.[key]) pendingDiagrams.set(key, { ...reference, key });
+				} else {
+					const diagram = await this.dependencies.diagramReader.get(
+						actor,
+						reference.diagramId as DiagramId
+					);
+					if (
+						diagram.projectId !== note.projectId ||
+						diagram.kind !== 'drawio' ||
+						diagram.archivedAt
+					)
+						throw new ValidationError(
+							'An exported draw.io diagram is unavailable in the source note’s project'
+						);
+					if (diagram.currentRevision !== diagram.publishedRevision)
+						throw new ValidationError(
+							'Publish the current draw.io diagram before exporting it; its preview is out of date'
+						);
+					if (input.diagramPngs?.[diagram.id]) continue;
+					if (!diagram.renderedSvg)
+						throw new ValidationError(
+							'Open and save the draw.io diagram before exporting it; its preview is missing'
+						);
+					pendingDiagrams.set(diagram.id, {
+						kind: 'svg',
+						key: diagram.id,
+						source: diagram.renderedSvg
+					});
+				}
+			}
+		}
+		const renderedDiagrams = pendingDiagrams.size
+			? await this.dependencies.diagramRenderer.render(
+					[...pendingDiagrams.values()],
+					createMermaidConfig({
+						base: settings.diagramTheme?.base ?? 'light',
+						...(settings.diagramTheme?.colors ? { palette: settings.diagramTheme.colors } : {})
+					})
+				)
+			: new Map<string, ExportDiagramRaster>();
+		const diagramPngs = { ...input.diagramPngs };
+		const diagramSizes = { ...input.diagramSizes };
+		for (const [key, rendered] of renderedDiagrams) {
+			diagramPngs[key] = rendered.png;
+			diagramSizes[key] = rendered.size;
+		}
 		for (const source of new Set(
 			notes.flatMap((note) => this.dependencies.exportImageSources(note.document))
 		)) {
@@ -346,6 +406,8 @@ export class Deliverables implements DeliverablesController {
 			notes,
 			settings,
 			images,
+			diagramPngs,
+			diagramSizes,
 			...(styles ? { styles } : {})
 		};
 		return this.dependencies.prepareExport(exportInput);

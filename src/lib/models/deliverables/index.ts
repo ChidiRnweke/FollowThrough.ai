@@ -9,6 +9,19 @@ export interface ExportInput extends DiagramRenders {
 	readonly images?: ReadonlyMap<string, string>;
 }
 
+export type ExportDiagramSource =
+	| { readonly kind: 'mermaid'; readonly key: string; readonly source: string }
+	| { readonly kind: 'svg'; readonly key: string; readonly source: string };
+
+export type ExportDiagramReference =
+	| { readonly kind: 'mermaid'; readonly source: string }
+	| { readonly kind: 'drawio'; readonly diagramId: string };
+
+export interface ExportDiagramRaster {
+	readonly png: string;
+	readonly size: DiagramSize;
+}
+
 export type PreparedDiagram = { kind: 'raster' | 'vector'; data: string; size?: DiagramSize };
 
 export interface PreparedExport extends Omit<

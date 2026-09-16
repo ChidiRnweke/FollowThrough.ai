@@ -11,7 +11,7 @@ import {
 	useEditor,
 	VideoExtended
 } from './index.js';
-import type { Editor, Extensions } from '@tiptap/core';
+import type { Editor, Extensions, NodeViewProps } from '@tiptap/core';
 import { all, createLowlight } from 'lowlight';
 import extensions from './extensions.js';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -21,10 +21,10 @@ import MediaPlaceholderComp from '../MediaPlaceHolder.svelte';
 import ImageExtendedComp from '../ImageExtended.svelte';
 import VideoExtendedComp from '../VideoExtended.svelte';
 import IFrameComp from '../IFrame.svelte';
-import MermaidComp from '../Mermaid.svelte';
 import DrawioComp from '../Drawio.svelte';
 import type { Component } from 'svelte';
 import type { DrawioPreviewProps, DrawioReferenceView } from './nodes.js';
+import { MermaidNode } from './nodes.js';
 import type { NoteLinkTarget } from './NoteLinkSuggestion.js';
 import CalloutComp from '../Callout.svelte';
 import TableOfContents, {
@@ -54,6 +54,8 @@ import { clipboardSource, type SerializedSelection } from './clipboard-payload.j
 const lowlight = createLowlight(all);
 
 export interface EdraEditorProps {
+	/** The host supplies its themed diagram UI; headless editors retain the source node. */
+	mermaidView?: Component<NodeViewProps>;
 	/** The host owns media preparation, clipboard access, and failure reporting. */
 	onCopy?: (selection: SerializedSelection) => void;
 	/** Delete a cut selection only after its complete clipboard write is confirmed. */
@@ -145,7 +147,7 @@ export const createEditor = (props?: EdraEditorProps, extraExtensions: Extension
 			ImageExtended(ImageExtendedComp),
 			VideoExtended(VideoExtendedComp),
 			IFrameExtended(IFrameComp),
-			Mermaid(MermaidComp).configure({
+			(props?.mermaidView ? Mermaid(props.mermaidView) : MermaidNode).configure({
 				onRevise: props?.onReviseMermaid,
 				onConvert: props?.onConvertMermaid,
 				onCancel: props?.onCancelMermaid,

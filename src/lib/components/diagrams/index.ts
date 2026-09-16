@@ -1,4 +1,5 @@
 export { default as DiagramPreview } from './diagram-preview.svelte';
+export { default as MermaidNodeView } from './mermaid-node.svelte';
 export { default as ProjectDiagramPicker } from './project-diagram-picker.svelte';
 export { default as DrawioEmbed } from './drawio-embed.svelte';
 export { default as DrawioReviewDialog } from './drawio-review-dialog.svelte';
