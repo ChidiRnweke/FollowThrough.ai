@@ -1,9 +1,30 @@
 import { ExternalServiceError } from '$lib/errors';
+import type { StoredMessage } from '$lib/models/agent';
 import OpenAI from 'openai';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
 const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
+
+/** Resolve whether search needs a conversation rewrite and preserve only readable speech. */
+export function searchQueryInput(
+	query: string,
+	history: readonly StoredMessage[]
+): { kind: 'direct'; query: string } | { kind: 'conversation'; transcript: string } {
+	if (history.length <= 1) return { kind: 'direct', query };
+	const spoken = history.flatMap((message) => {
+		if (message.kind === 'unreadable') return [];
+		const content = message.content;
+		return [
+			typeof content.text === 'string'
+				? content.text
+				: typeof content.content === 'string'
+					? content.content
+					: JSON.stringify(content)
+		];
+	});
+	return { kind: 'conversation', transcript: [...spoken, 'user: ' + query].join('\n') };
+}
 
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;

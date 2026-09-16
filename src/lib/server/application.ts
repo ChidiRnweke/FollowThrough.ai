@@ -10,7 +10,7 @@ import type { IImageDescription } from './services/attachments/image-description
 import type { AttachmentClaims } from './services/attachments/contracts';
 import type { EmbeddingClient } from './services/knowledge-search/contracts';
 import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
-import type { Reranker } from './services/knowledge-search/semantic';
+import type { Reranker } from './services/knowledge-search/contracts';
 import type { ReferenceFinder } from './services/references/contracts';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
@@ -180,7 +180,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		noteIndexer,
 		diagramIndexer,
 		memoryIndexer,
-		searcher: knowledgeSearcher,
+		lookup: knowledgeLookup,
+		embeddingClient: searchEmbeddings,
+		reranker: searchReranker,
 		relationshipClassifier
 	} = knowledgeSearch;
 	const toolRetriever = knowledgeSearch.toolRetriever;
@@ -228,7 +230,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		executor,
 		eventBus
 	} = agentCapability;
-	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences, memory });
+	const finalizedKnowledgeSearch = knowledgeSearch.finalize({ preferences });
 	const feedback = createFeedbackCapability({ db });
 	const attachmentCapability = createAttachmentsCapability({
 		claims: config.attachmentClaims,
@@ -309,7 +311,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		relationships: {
 			selectionOrigins: noteCapability.selectionOrigins,
-			knowledgeSearcher,
+			knowledgeLookup,
+			embeddings: searchEmbeddings,
+			reranker: searchReranker,
 			relationshipClassifier,
 			suggestionCreator: suggestions,
 			transactionRunner,
@@ -542,7 +546,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		retrieval: {
-			knowledgeSearcher,
+			knowledgeLookup,
+			embeddings: searchEmbeddings,
+			reranker: searchReranker,
 			queryGenerator,
 			conversations: conversationJournal
 		},
@@ -550,7 +556,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteReader: notes,
 			preferences: finalizedKnowledgeSearch.preferences,
 			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
-			inlineCompletionContextBuilder: finalizedKnowledgeSearch.inlineContext,
+			knowledgeLookup,
+			embeddings: searchEmbeddings,
+			reranker: searchReranker,
+			memory,
+			observer: finalizedKnowledgeSearch.observer,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
 			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission

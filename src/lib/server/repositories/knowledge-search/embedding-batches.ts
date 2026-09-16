@@ -1,4 +1,5 @@
 import { InvalidGeneratedContentError } from '$lib/errors';
+import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 
 export interface EmbeddingClient {
@@ -6,10 +7,7 @@ export interface EmbeddingClient {
 	embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch>;
 }
 
-export interface EmbeddingBatch {
-	readonly model: string;
-	readonly vectors: readonly (readonly number[])[];
-}
+export type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 
 const EMBEDDING_BATCH_TOKENS = 30_000;
 let sharedEncoding: Tiktoken | undefined;

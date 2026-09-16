@@ -296,6 +296,16 @@ editor receives the application diagram view from its host instead of importing 
 Its toolbar now uses one accessible button per action. The production image includes the
 headless browser and copies dependency patches before installation.
 
+Search/context ownership: knowledge search, relationship suggestions and inline suggestions now
+coordinate embeddings, vector lookup and ranking in their controllers. The former embedded-search,
+reranking-search and inline-context orchestration classes are removed, including their factory
+composition and service-shaped ports. The lookup service owns only stored vector queries; the inline
+context service selects passages and memory from resolved values. Inline retrieval failures propagate
+instead of being turned into empty grounding. Inline project results now rerank every multi-result
+set, including sets smaller than eight. ADR 0036's explicit vector-order fallback on ranking-provider
+failure remains intact. AgentContext, provisioning, indexing and durable selection workflows still
+need their own ownership changes.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

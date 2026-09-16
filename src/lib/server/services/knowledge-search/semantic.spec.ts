@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SearchDocument, SearchDocumentId } from '$lib/models/knowledge-search';
-import { EmbeddedKnowledgeSearcher } from './semantic';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { KnowledgeLookup, queryVector, knowledgeSearchSource } from './semantic';
+import type { AttachmentId } from '$lib/models/attachments';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
 	testActor,
 	testNoteId,
@@ -25,13 +23,15 @@ const document = (overrides: Partial<SearchDocument> = {}): SearchDocument => ({
 });
 
 describe('Embedded search invariants', () => {
-	it('returns no matches for an empty query', async () => {
-		const searcher = new EmbeddedKnowledgeSearcher(
-			new InMemorySearchRepository(),
-			new InMemoryEmbeddingClient()
-		);
-		const matches = await searcher.search(testActor(), '   ');
-		expect(matches).toEqual([]);
+	it('identifies an attachment chunk by its source rather than the containing note', () => {
+		const attachmentId = crypto.randomUUID() as AttachmentId;
+		expect(knowledgeSearchSource(document({ attachmentId }))).toMatchObject({
+			kind: 'attachment',
+			id: attachmentId
+		});
+	});
+	it('rejects a query batch containing more than one vector', () => {
+		expect(() => queryVector({ model: 'fake', vectors: [[1], [2]] })).toThrow('invalid result');
 	});
 
 	it('limits vector results to the requested project', async () => {
@@ -40,8 +40,8 @@ describe('Embedded search invariants', () => {
 		await repository.replaceForNote(testActor(), testNoteId(3), [
 			document({ noteId: testNoteId(3), projectId: testProjectId(2) })
 		]);
-		const searcher = new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient());
-		const matches = await searcher.search(testActor(), 'messaging', 10, testProjectId());
+		const searcher = new KnowledgeLookup(repository);
+		const matches = await searcher.search(testActor(), [1, 0, 0], 10, testProjectId());
 		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(2)]);
 	});
 
@@ -51,8 +51,8 @@ describe('Embedded search invariants', () => {
 		await repository.replaceForNote(testActor(), testNoteId(3), [
 			document({ noteId: testNoteId(3) })
 		]);
-		const searcher = new EmbeddedKnowledgeSearcher(repository, new InMemoryEmbeddingClient());
-		const matches = await searcher.search(testActor(), 'messaging', 10, undefined, undefined, {
+		const searcher = new KnowledgeLookup(repository);
+		const matches = await searcher.search(testActor(), [1, 0, 0], 10, undefined, {
 			noteId: testNoteId(3)
 		});
 		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(3)]);

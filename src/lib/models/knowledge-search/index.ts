@@ -78,20 +78,6 @@ export type KnowledgeSearchSource =
 			readonly title: string;
 	  };
 
-/** Preserve the chunk's source instead of presenting every search hit as a note. */
-export function knowledgeSearchSource(document: SearchDocument): KnowledgeSearchSource {
-	const context = {
-		projectId: document.projectId,
-		...(document.sourceTitle ? { title: document.sourceTitle } : {})
-	};
-	if (document.attachmentId) return { ...context, kind: 'attachment', id: document.attachmentId };
-	if (document.diagramId) return { ...context, kind: 'diagram', id: document.diagramId };
-	if (document.memoryEntryId)
-		return { ...context, kind: 'memory', id: document.memoryEntryId, title: document.content };
-	if (document.noteId) return { ...context, kind: 'note', id: document.noteId };
-	return { kind: 'unavailable', projectId: document.projectId };
-}
-
 export type IndexSource =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
 	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }

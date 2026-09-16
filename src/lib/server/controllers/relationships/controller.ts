@@ -9,7 +9,12 @@ import type { Note, TextSelection } from '$lib/models/notes';
 import { relatedNoteMatches, relatedNoteCandidate } from '$lib/services/relationships/candidates';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RelationshipClassifier } from '$lib/server/services/relationships/contracts';
-import type { KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
+import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
+import {
+	queryVector,
+	searchCandidateLimit,
+	type KnowledgeLookup
+} from '$lib/server/services/knowledge-search/semantic';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
@@ -39,7 +44,9 @@ export interface RelationshipsController {
 
 export interface RelationshipsDependencies {
 	selectionOrigins: SelectionOriginService;
-	knowledgeSearcher: KnowledgeSearcher;
+	knowledgeLookup: Pick<KnowledgeLookup, 'search'>;
+	embeddings: EmbeddingClient;
+	reranker: Reranker;
 	relationshipClassifier: RelationshipClassifier;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
@@ -100,13 +107,25 @@ export class Relationships implements RelationshipsController {
 		signal?: AbortSignal
 	): Promise<readonly LinkCandidate[]> {
 		signal?.throwIfAborted();
-		const matches = await this.dependencies.knowledgeSearcher.search(
+		if (!selection.text.trim()) return [];
+		const batch = await this.dependencies.embeddings.embed([selection.text], signal);
+		signal?.throwIfAborted();
+		const candidates = await this.dependencies.knowledgeLookup.search(
 			actor,
-			selection.text,
-			12,
-			note.projectId,
-			signal
+			queryVector(batch),
+			searchCandidateLimit(12),
+			note.projectId
 		);
+		// ADR 0036 permits vector order on provider failure, but never on cancellation.
+		const matches =
+			candidates.length > 1
+				? await this.dependencies.reranker
+						.rerank(selection.text, candidates, 12, signal)
+						.catch((error) => {
+							if (signal?.aborted) throw error;
+							return candidates.slice(0, 12);
+						})
+				: candidates;
 		signal?.throwIfAborted();
 		return Promise.all(
 			relatedNoteMatches(note.id, matches).map(async (match) => {

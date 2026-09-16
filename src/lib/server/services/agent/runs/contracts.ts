@@ -22,7 +22,7 @@ import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
-import type { Note, NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
@@ -61,16 +61,6 @@ export interface AgentRunner {
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate>;
-}
-
-/** Deterministically assembles note, memory, and project retrieval context. */
-export interface InlineCompletionContextBuilder {
-	build(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		note: Note,
-		signal: AbortSignal
-	): Promise<InlineCompletionContext>;
 }
 
 /**

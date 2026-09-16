@@ -1,106 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import type { ActorContext, UserId } from '$lib/models/identity';
-import type { ConversationId, Message } from '$lib/models/agent';
-import type { ProjectId } from '$lib/models/projects';
-import type { SearchDocument, SearchMatch } from '$lib/models/knowledge-search';
-import type { KnowledgeSearcher } from '$lib/server/services/knowledge-search/contracts';
-import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
-import type { SearchFilter } from '$lib/server/repositories/knowledge-search';
-import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
-import { Retrieval } from './controller';
+import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
+import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
-const actor: ActorContext = { userId: 'user-1' as UserId };
-
-const message = (role: Message['role'], text: string): Message => ({
-	id: `m-${text}` as Message['id'],
-	conversationId: 'conv-1' as ConversationId,
-	role,
-	content: { text },
-	createdAt: '2026-01-01T00:00:00Z' as Message['createdAt']
-});
-
-const searchMatch = (content: string): SearchMatch => ({
-	document: {
-		id: 'doc-1' as SearchDocument['id'],
-		projectId: 'project-1' as ProjectId,
-		content,
-		contentHash: 'h',
-		sourceRevision: 1,
-		chunkIndex: 0
-	},
-	score: 0.9
-});
-
-class RecordingSearcher implements KnowledgeSearcher {
-	query = '';
-	filter: SearchFilter | undefined;
-	constructor(private readonly results: readonly SearchMatch[] = []) {}
-	async search(
-		_actor: ActorContext,
-		query: string,
-		_limit?: number,
-		_projectId?: ProjectId,
-		_signal?: AbortSignal,
-		filter?: SearchFilter
-	): Promise<readonly SearchMatch[]> {
-		this.query = query;
-		this.filter = filter;
-		return this.results;
-	}
-}
-
-const queryGenerator: ISearchQueryGeneration = { generate: async () => 'CONDENSED' };
-const journalOf = (messages: readonly Message[]): ConversationJournal =>
-	({ listMessages: async () => messages }) as unknown as ConversationJournal;
-
-describe('Retrieval', () => {
-	it('uses the raw query when there is no conversation id', async () => {
-		const searcher = new RecordingSearcher();
-		await new Retrieval({
-			knowledgeSearcher: searcher,
-			queryGenerator,
-			conversations: journalOf([])
-		}).search(actor, { query: 'raw query' });
-		expect(searcher.query).toBe('raw query');
-	});
-
-	it('uses the raw query when the conversation has no prior turns', async () => {
-		const searcher = new RecordingSearcher();
-		await new Retrieval({
-			knowledgeSearcher: searcher,
-			queryGenerator,
-			conversations: journalOf([message('user', 'first')])
-		}).search(actor, { query: 'raw query', conversationId: 'conv-1' as ConversationId });
-		expect(searcher.query).toBe('raw query');
-	});
-
-	it('condenses the conversation into the search query when multi-turn', async () => {
-		const searcher = new RecordingSearcher();
-		await new Retrieval({
-			knowledgeSearcher: searcher,
-			queryGenerator,
-			conversations: journalOf([message('user', 'a'), message('assistant', 'b')])
-		}).search(actor, { query: 'follow up', conversationId: 'conv-1' as ConversationId });
-		expect(searcher.query).toBe('CONDENSED');
-	});
-
+const actor = testActor();
+const setup = searchControllerFixture;
+describe('knowledge search content and scope', () => {
 	it('returns the full chunk content untruncated', async () => {
-		const searcher = new RecordingSearcher([searchMatch('x'.repeat(2000))]);
-		const results = await new Retrieval({
-			knowledgeSearcher: searcher,
-			queryGenerator,
-			conversations: journalOf([])
-		}).search(actor, { query: 'q' });
-		expect(results[0]!.content.length).toBe(2000);
+		const fixture = setup();
+		fixture.repository.documents = [
+			{ userId: actor.userId, document: searchDocumentBuilder({ content: 'x'.repeat(2000) }) }
+		];
+		const result = await fixture.controller.search(actor, { query: 'q' });
+		expect(result[0]?.content.length).toBe(2000);
 	});
-
-	it('passes a note scope through to the searcher', async () => {
-		const searcher = new RecordingSearcher();
-		await new Retrieval({
-			knowledgeSearcher: searcher,
-			queryGenerator,
-			conversations: journalOf([])
-		}).search(actor, { query: 'q', noteId: 'note-9' as never });
-		expect(searcher.filter).toEqual({ noteId: 'note-9' });
+	it('limits search to the requested note', async () => {
+		const fixture = setup();
+		fixture.repository.documents = [
+			{
+				userId: actor.userId,
+				document: searchDocumentBuilder({ noteId: testNoteId(9), content: 'Scoped note' })
+			},
+			{
+				userId: actor.userId,
+				document: searchDocumentBuilder({ noteId: testNoteId(8), content: 'Other note' })
+			}
+		];
+		expect(
+			(await fixture.controller.search(actor, { query: 'q', noteId: testNoteId(9) })).map(
+				(match) => match.content
+			)
+		).toEqual(['Scoped note']);
 	});
 });

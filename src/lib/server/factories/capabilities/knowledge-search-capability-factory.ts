@@ -8,11 +8,8 @@ import {
 } from '$lib/server/services/knowledge-search/indexing';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
-import {
-	EmbeddedKnowledgeSearcher,
-	RerankingKnowledgeSearcher,
-	type Reranker
-} from '$lib/server/services/knowledge-search/semantic';
+import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
@@ -30,8 +27,6 @@ import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/to
 import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
 import { InlineSuggestionCompletion } from '$lib/server/services/inline-suggestions/inline-completion';
-import { InlineSuggestionContext } from '$lib/server/services/inline-suggestions/inline-context';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
 
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
@@ -54,8 +49,7 @@ export interface KnowledgeSearchCapability {
 	readonly noteIndexer: ContentIndex['notes'];
 	readonly diagramIndexer: ReturnType<ContentIndex['diagrams']>;
 	readonly memoryIndexer: ContentIndex['memories'];
-	readonly embeddedSearcher: EmbeddedKnowledgeSearcher;
-	readonly searcher: RerankingKnowledgeSearcher;
+	readonly lookup: KnowledgeLookup;
 	readonly relationshipClassifier: RelationshipDiscovery;
 	readonly maintenance: KnowledgeIndexMaintenance;
 	readonly toolRetriever: ToolRetriever;
@@ -64,13 +58,12 @@ export interface KnowledgeSearchCapability {
 
 export interface KnowledgeSearchFinalizeInput {
 	readonly preferences: AgentPreferenceCatalog;
-	readonly memory: MemoryLibrary;
 }
 
 export interface KnowledgeSearchFinalized {
 	readonly preferences: AgentPreferenceCatalog;
 	readonly inlineCompletion: InlineSuggestionCompletion;
-	readonly inlineContext: InlineSuggestionContext;
+	readonly observer: typeof operationObserver;
 	readonly inlineAdmission: InlineSuggestionAdmission;
 }
 
@@ -93,7 +86,6 @@ export const createKnowledgeSearchCapability = (
 			observer: operationObserver
 		});
 	const chunker = retrievalChunkerFromEnv();
-	const embeddedSearcher = new EmbeddedKnowledgeSearcher(repository, embeddingClient);
 	const queryGenerator =
 		input.queryGenerator ??
 		new SearchQueryGeneration(input.openRouterApiKey, {
@@ -107,19 +99,14 @@ export const createKnowledgeSearchCapability = (
 		repository,
 		embeddingClient,
 		toolRetriever: new PgToolRetriever(embeddingClient, new ToolEmbeddingRecords(input.db)),
-		finalize: ({ preferences, memory }) => ({
+		finalize: ({ preferences }) => ({
 			preferences,
 			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {
 				baseURL: input.openRouterBaseURL,
 				appURL: input.appURL,
 				observer: operationObserver
 			}),
-			inlineContext: new InlineSuggestionContext({
-				searcher: embeddedSearcher,
-				memory,
-				reranker,
-				observer: operationObserver
-			}),
+			observer: operationObserver,
 			inlineAdmission: new InlineSuggestionAdmission()
 		}),
 		reranker,
@@ -128,8 +115,7 @@ export const createKnowledgeSearchCapability = (
 		noteIndexer: index.notes,
 		diagramIndexer: index.diagrams(new NoteRecords(input.db)),
 		memoryIndexer: index.memories,
-		embeddedSearcher,
-		searcher: new RerankingKnowledgeSearcher(embeddedSearcher, reranker),
+		lookup: new KnowledgeLookup(repository),
 		relationshipClassifier: new RelationshipDiscovery({ observer: operationObserver }),
 		maintenance: new KnowledgeIndexMaintenance(
 			repository,
