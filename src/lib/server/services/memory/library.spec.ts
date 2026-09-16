@@ -1,7 +1,11 @@
+import {
+	memoryEntryBuilder,
+	testMemoryEntryId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { MemoryChangePayload } from '$lib/models/memory';
 import type { Provenance } from '$lib/models/provenance';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError } from '$lib/errors';
 import { MemoryLibrary } from './library';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -44,23 +48,23 @@ describe('Memory entry management invariants', () => {
 	it('rejects a memory entry for an unknown project', async () => {
 		const { service } = await setup();
 		await expect(
-			service.create(testActor(), { projectId: testProjectId(99), content: 'Fact' })
+			service.create(
+				testActor(),
+				memoryEntryBuilder({
+					id: testMemoryEntryId(1),
+					projectId: testProjectId(99),
+					content: 'Fact'
+				})
+			)
 		).rejects.toBeInstanceOf(NotFoundError);
-	});
-
-	it('rejects an empty memory entry', async () => {
-		const { service } = await setup();
-		await expect(
-			service.create(testActor(), { projectId: testProjectId(), content: '   ' })
-		).rejects.toBeInstanceOf(ValidationError);
 	});
 
 	it('hides a removed entry from the project list', async () => {
 		const { service } = await setup();
-		const entry = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact'
-		});
+		const entry = await service.create(
+			testActor(),
+			memoryEntryBuilder({ id: testMemoryEntryId(2), projectId: testProjectId(), content: 'Fact' })
+		);
 		await service.remove(testActor(), entry.id);
 		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
 	});
@@ -69,24 +73,56 @@ describe('Memory entry management invariants', () => {
 describe('User profile memory invariants', () => {
 	it('creates a profile entry without any project', async () => {
 		const { service } = await setup();
-		const entry = await service.create(testActor(), { content: 'I lead the platform team.' });
+		const entry = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(3),
+				projectId: undefined,
+				content: 'I lead the platform team.'
+			})
+		);
 		expect(entry.projectId).toBeUndefined();
 	});
 
 	it('lists profile entries without project entries', async () => {
 		const { service } = await setup();
-		await service.create(testActor(), { projectId: testProjectId(), content: 'Project fact' });
-		const profile = await service.create(testActor(), { content: 'I prefer short answers.' });
+		await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(4),
+				projectId: testProjectId(),
+				content: 'Project fact'
+			})
+		);
+		const profile = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(5),
+				projectId: undefined,
+				content: 'I prefer short answers.'
+			})
+		);
 		expect((await service.list(testActor(), {})).map((item) => item.id)).toEqual([profile.id]);
 	});
 
 	it('lists project entries without profile entries', async () => {
 		const { service } = await setup();
-		const project = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Project fact'
-		});
-		await service.create(testActor(), { content: 'I prefer short answers.' });
+		const project = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(6),
+				projectId: testProjectId(),
+				content: 'Project fact'
+			})
+		);
+		await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(7),
+				projectId: undefined,
+				content: 'I prefer short answers.'
+			})
+		);
 		expect(
 			(await service.list(testActor(), { projectId: testProjectId() })).map((item) => item.id)
 		).toEqual([project.id]);
@@ -125,7 +161,14 @@ describe('Memory change application invariants', () => {
 	);
 	it('rejects a project replacement targeting profile memory', async () => {
 		const { service } = await setup();
-		const target = await service.create(testActor(), { content: 'Profile fact' });
+		const target = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(8),
+				projectId: undefined,
+				content: 'Profile fact'
+			})
+		);
 		await expect(
 			service.apply(
 				testActor(),

@@ -1,3 +1,7 @@
+import {
+	memoryEntryBuilder,
+	testMemoryEntryId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { MemoryDependencies } from './controller';
@@ -143,10 +147,14 @@ describe('Memory proposal orchestration invariants', () => {
 
 	it('rejects a profile proposal targeting project memory before recording a suggestion', async () => {
 		const { controller, memory, suggestions } = setup();
-		const target = await memory.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Existing fact'
-		});
+		const target = await memory.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(1),
+				projectId: testProjectId(),
+				content: 'Existing fact'
+			})
+		);
 		const outcome = await controller
 			.propose(testActor(), { scope: 'user', operation: 'remove', memoryEntryId: target.id })
 			.then(
@@ -161,10 +169,14 @@ describe('Memory proposal orchestration invariants', () => {
 	it('rejects a project proposal targeting another project', async () => {
 		const { controller, memory, projects } = setup();
 		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
-		const target = await memory.create(testActor(), {
-			projectId: testProjectId(2),
-			content: 'Existing fact'
-		});
+		const target = await memory.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(2),
+				projectId: testProjectId(2),
+				content: 'Existing fact'
+			})
+		);
 		await expect(
 			controller.propose(testActor(), {
 				scope: 'project',

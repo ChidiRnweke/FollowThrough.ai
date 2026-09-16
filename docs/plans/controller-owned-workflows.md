@@ -556,6 +556,13 @@ supply one generation time for both content and filename. Export tests move with
 valid shared todo fixtures instead of asserting a fabricated object into the domain type. Task edit,
 creation and view rules remain open.
 
+Memory edit ownership: Memory and WorkspaceCommands apply the same shared creation/edit rules.
+The controller resolves the current active entry under the existing repository row lock, applies
+the edit and coordinates persistence with indexing in its transaction. MemoryLibrary accepts the
+resolved record and retains ownership/project checks. Models contain values, types and schemas only.
+Controller tests cover invalid empty content and editing a removed entry; storage/service fixtures
+now supply valid prepared records. Agent proposal application remains in its focused memory service.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
