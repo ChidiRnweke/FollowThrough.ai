@@ -16,7 +16,8 @@ An agent that remembers nothing re-asks the same questions every run; an agent t
 ## The pieces
 
 - **Models**: `src/lib/models/memory/index.ts`: `MemoryEntry`, `MemoryChangePayload`, `MemorySuggestion`, `MemoryEntryType`.
-- **Services**: `src/lib/server/services/memory/library.ts`: `MemoryLibrary`, the only business-rule holder (create/update/remove/apply/revert).
+- **Shared services**: `src/lib/services/memory/edits.ts` owns creation and edit rules used by the server controller and downloaded workspace commands.
+- **Server services**: `MemoryLibrary` checks ownership and project scope, reads and persists entries, and applies agent proposals against repositories.
 - **Controllers**: `src/lib/server/controllers/memory/controller.ts`: the `Memory` class: `list`, `create`, `update`, `remove`, `propose`.
 - **Repositories**: `src/lib/server/repositories/memory/` (`postgres/memory-entries.ts`): user-scoped queries; `list` treats an omitted `projectId` as `projectId IS NULL`, i.e. profile memory.
 
@@ -24,7 +25,7 @@ An agent that remembers nothing re-asks the same questions every run; an agent t
 
 `MemoryEntry` carries `content`, an optional `type` (`fact | decision | constraint | preference`), `shareWithAgents` (default `true`), and three bookkeeping fields: `provenanceId`, `replacesEntryId`, `deletedAt`. Scope is expressed structurally by the nullable `projectId`: there is no scope enum.
 
-Agent-proposed changes are described by `MemoryChangePayload`: an `operation` (`add | update | remove`), an optional target `memoryEntryId`, optional new `content`, `shareWithAgents`, and a free-text `justification`. The payload travels inside a suggestion of kind `memory`, so memory reuses the general suggestion machinery rather than growing its own review flow.
+Agent-proposed changes are described by `MemoryChangePayload`, a union by scope and operation. Update and removal require a target entry; addition and update require content. The payload travels inside a suggestion of kind `memory`, so memory reuses the general suggestion machinery rather than growing its own review flow.
 
 ## The proposal transaction
 
