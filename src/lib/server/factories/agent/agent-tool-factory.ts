@@ -46,6 +46,7 @@ import { createTodoBatchSchema, type TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
+import { exportSettingsSchema } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 import { DomainError, NotFoundError, ValidationError } from '$lib/errors';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
@@ -2246,22 +2247,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'update_export_settings',
 			toolDescription('update_export_settings'),
 			'mutation',
-			z.object({
-				projectId: projectId,
-				fontFamily: z.enum(['helvetica', 'times', 'courier']),
-				fontSize: z.number().min(8).max(18),
-				lineHeight: z.number().min(1).max(2.2),
-				margin: z.number().min(18).max(144),
-				includeTitle: z.boolean().optional()
-			}),
-			(input) =>
-				factory.deliverables().updateExportSettings(actor, input.projectId, {
-					fontFamily: input.fontFamily,
-					fontSize: input.fontSize,
-					lineHeight: input.lineHeight,
-					margin: input.margin,
-					includeTitle: input.includeTitle
-				})
+			exportSettingsSchema.extend({ projectId }),
+			({ projectId, ...settings }) =>
+				factory.deliverables().updateExportSettings(actor, projectId, settings)
 		),
 		get_artifact: define(
 			'get_artifact',

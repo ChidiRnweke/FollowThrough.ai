@@ -281,6 +281,11 @@ Saved title visibility and diagram-theme settings are no longer discarded during
 Server-side preparation of missing diagram renders remains outstanding; this slice does not
 complete P15 or the global refactor.
 
+Export settings follow-up: browser requests silently stripped diagram colors, while the agent
+tool rejected them as unknown input. Both regressions were reproduced. Browser exports, agent
+settings updates and queued workspace writes now share the complete model schema. The stored
+partial-overlay schema derives the same field definitions while retaining its read contract.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
