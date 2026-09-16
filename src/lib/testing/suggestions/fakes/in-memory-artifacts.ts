@@ -1,9 +1,8 @@
 import { InMemoryApplicationEffects } from './in-memory-application-effects';
 import type { ActorContext } from '$lib/models/identity';
-import type { Todo, CreateTodoInput } from '$lib/models/todos';
-import { ExternalServiceError } from '$lib/errors';
+import type { Todo } from '$lib/models/todos';
+import { ExternalServiceError, OwnershipError } from '$lib/errors';
 import type { TodoCreator } from '$lib/server/services/todos/contracts';
-import { testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -24,15 +23,10 @@ export class InMemorySuggestionArtifacts implements TodoCreator, SnapshotPartici
 		this.effects.failRestore = value;
 	}
 
-	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
+	async create(actor: ActorContext, artifact: Todo): Promise<Todo> {
 		if (this.failApply) throw new ExternalServiceError('Artifact application failed');
-		const artifact = todoBuilder({
-			id: testTodoId(this.artifacts.length + 1),
-			userId: actor.userId,
-			projectId: input.projectId ?? todoBuilder().projectId,
-			title: input.title,
-			responsibility: input.responsibility
-		});
+		if (artifact.userId !== actor.userId)
+			throw new OwnershipError('Cannot create another user’s task');
 		this.effects.put({ type: 'todos', value: artifact });
 		return artifact;
 	}

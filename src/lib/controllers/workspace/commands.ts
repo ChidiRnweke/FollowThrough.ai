@@ -1,3 +1,4 @@
+import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import { decideProjectDetails } from '$lib/services/projects/details';
@@ -12,7 +13,7 @@ import type {
 } from '$lib/models/memory';
 import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
 import { decideDiagramTrash } from '$lib/models/diagrams';
-import { decideTodoCreation, type Todo, type UpdateTodoInput } from '$lib/models/todos';
+import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';

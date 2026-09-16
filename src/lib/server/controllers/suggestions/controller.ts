@@ -1,3 +1,4 @@
+import { decideTodoCreation } from '$lib/services/todos/creation';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import {
@@ -16,7 +17,7 @@ import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
-import type { Todo } from '$lib/models/todos';
+import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
 import type { ExternalReference } from '$lib/models/references';
 import type { NoteRelationship } from '$lib/models/notes';
 import type { MemoryEntry } from '$lib/models/memory';
@@ -293,13 +294,23 @@ export class Suggestions implements SuggestionsController {
 			return this.dependencies.suggestionReverter.revert(actor, accepted);
 		});
 	}
+	private async createTodo(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
+		const decision = decideTodoCreation(input, {
+			id: input.id ?? (crypto.randomUUID() as TodoId),
+			userId: actor.userId,
+			timestamp: this.dependencies.now()
+		});
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+		return this.dependencies.todoCreator.create(actor, decision.todo);
+	}
+
 	private async applySuggestion(
 		actor: ActorContext,
 		suggestion: Suggestion
 	): Promise<SuggestionApplicationResult> {
 		switch (suggestion.kind) {
 			case 'todo': {
-				const artifact = await this.dependencies.todoCreator.create(actor, suggestion.payload);
+				const artifact = await this.createTodo(actor, suggestion.payload);
 				return {
 					artifact,
 					changes: [{ kind: 'created', after: { type: 'todos', value: artifact } }]

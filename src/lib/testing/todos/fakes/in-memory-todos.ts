@@ -1,6 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import type { Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
+import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type {
 	TodoDeleter,
 	TodoEditor,
@@ -10,7 +10,7 @@ import type {
 	TodoContextReader,
 	WaitingOnFinder
 } from '$lib/server/services/todos/contracts';
-import { testNow, testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -47,27 +47,8 @@ export class InMemoryTodos
 		].sort();
 	}
 
-	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		if (!input.projectId) throw new ValidationError('Todo project is required');
-		if (!input.title.trim()) throw new ValidationError('Todo title is required');
-		const todo = todoBuilder({
-			id: input.id ?? testTodoId(this.todos.length + 1),
-			userId: actor.userId,
-			projectId: input.projectId,
-			title: input.title.trim(),
-			status: input.status ?? 'open',
-			...(input.status === 'done' ? { completedAt: testNow } : {}),
-			responsibility: input.responsibility,
-			...(input.description !== undefined ? { description: input.description } : {}),
-			...(input.responsibility === 'waiting_on' && input.waitingOn?.trim()
-				? { waitingOn: input.waitingOn.trim() }
-				: {}),
-			...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
-			...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
-			...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
-			...(input.sourceAnchorId !== undefined ? { sourceAnchorId: input.sourceAnchorId } : {}),
-			...(input.provenanceId !== undefined ? { provenanceId: input.provenanceId } : {})
-		});
+	async create(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s task');
 		this.todos.push(todo);
 		return todo;
 	}

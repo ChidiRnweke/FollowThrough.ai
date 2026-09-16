@@ -13,6 +13,7 @@ import {
 	suggestionBuilder,
 	memorySuggestionBuilder,
 	testActor,
+	testNow,
 	testProjectId,
 	testNoteId,
 	testSuggestionId,
@@ -99,6 +100,7 @@ const setup = () => {
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions,
 			todoCreator: artifacts,
+			now: () => testNow,
 			suggestionEffects: new SuggestionEffects(artifacts.effects),
 			transactionRunner
 		})
