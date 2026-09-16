@@ -9,6 +9,7 @@
 	import { parseTabId, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
@@ -83,12 +84,25 @@
 		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 	});
 
+	const workbenchAccountId = $derived(data.session.bootstrap.accountId);
+	$effect(() => {
+		const accountId = workbenchAccountId;
+		return untrack(() => {
+			const layout = new IndexedDbWorkbenchLayout(accountId);
+			const detachWorkbench = workbench.attach(layout);
+			void workbench.hydrate(projectOfTab);
+			return () => {
+				detachWorkbench();
+				layout.close();
+			};
+		});
+	});
+
 	onMount(() => {
 		// Injected rather than imported by the store: the agent stores reach back
 		// into the workbench through the app context, so importing them there would
 		// close an initialisation loop.
 		workbench.conversationOf = (sessionKey) => chatRegistry.peek(sessionKey)?.conversationId;
-		void workbench.hydrate(projectOfTab);
 		// Read here rather than in the note editor so the answer is already known
 		// when a note pane mounts; a pane that started before it would spend its
 		// first seconds underlining words the reader had already dismissed. This

@@ -189,6 +189,14 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   missing attachments. Cut retains content after an incomplete write or intervening document edit.
   All 3,654 unit tests pass, including eight clipboard adapter and four mounted-editor cut tests.
   Saved draw.io reference portability remains with the outstanding diagram-reference work.
+- P19 workbench: resource layouts now use account-specific IndexedDB databases and a parsed
+  storage boundary. The shell releases old account state, and delayed reads/navigation cannot
+  overwrite the next binding or a newer URL. Unowned legacy layouts remain preserved without
+  being assigned to the next signed-in account. The authenticated two-account regression
+  reproduced lost sibling tabs on the previous code and passes with the new storage. Matching
+  screenshots show the restored tab. All 3,669 unit tests and local quality checks pass, along
+  with the existing 27 PWA scenarios and the new account-switch scenario. Today/attention
+  projections remain open.
 - P09–P11, P13, P19, P21–P22: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 

@@ -22,7 +22,7 @@ export default defineConfig({
 	workers: 1,
 	fullyParallel: false,
 	testMatch: '**/*.e2e.{ts,js}',
-	testIgnore: '**/pwa.e2e.{ts,js}',
+	testIgnore: ['**/pwa.e2e.{ts,js}', '**/workbench-account.e2e.ts'],
 	use: { baseURL: appBaseURL, storageState: 'tests/.auth/state.json' },
 	webServer: {
 		command: 'pnpm dev:e2e',
