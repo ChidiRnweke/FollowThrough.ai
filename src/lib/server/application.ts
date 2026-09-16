@@ -308,7 +308,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			markdownToContent: deliverables.markdownToContent,
 			exportPreparer: deliverables.prepareExport,
 			pdfGenerator: deliverables.pdfGenerator,
-			workflowRunner: agentCapability.workflowRunner
+			promiseRequests: agentCapability.promiseRequests,
+			runSettlements,
+			runEvents: eventBus,
+			promiseGeneration: todoCapability.promiseGeneration,
+			promiseRules: todoCapability.promiseRules
 		},
 		relationships: {
 			selectionOrigins: noteCapability.selectionOrigins,
@@ -614,7 +618,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
 		controllers: controllerFactory,
-		recoverInterruptedRuns: () => controllerFactory.agent().recoverInterruptedRuns(),
+		recoverInterruptedRuns: async () => {
+			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
+			return interrupted + (await controllerFactory.todos().recoverQueuedPromiseRuns());
+		},
 		backgroundTasks: [
 			knowledgeSearch.maintenance,
 			attachmentCapability.retention,

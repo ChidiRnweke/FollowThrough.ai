@@ -11,6 +11,9 @@ import type {
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
 import type { ResolvedAgentRun } from '$lib/models/agent';
+import type { WorkflowAgentRun } from '$lib/models/agent';
+import type { ExtractPromisesOutput } from '$lib/models/todos';
+import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { DateTime } from '$lib/models/workspace';
 
 /** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
@@ -48,10 +51,15 @@ export interface AgentRunRepository {
 	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	listInterrupted(): Promise<readonly AgentRun[]>;
+	listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]>;
 }
 
 /** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */
 export interface AgentRunEventRepository {
+	appendPromiseResult(
+		runId: AgentRunId,
+		result: ExtractPromisesOutput<TodoSuggestion>
+	): Promise<AgentRunEventRecord>;
 	append(runId: AgentRunId, attempt: number, event: AgentEvent): Promise<AgentRunEventRecord>;
 	replay(
 		actor: ActorContext,

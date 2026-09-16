@@ -1,4 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
+import { decideSelection } from '$lib/models/notes';
+import { StaleRevisionError, ValidationError } from '$lib/errors';
 import type { Note, TextSelection } from '$lib/models/notes';
 import type { SelectionSource, SelectionOrigin, SelectionProducer } from '$lib/models/provenance';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
@@ -11,7 +13,16 @@ export class InMemorySelectionOrigins implements SelectionOriginService {
 		private readonly notes: InMemoryNoteContent,
 		private readonly provenance: InMemoryProvenanceRecorder
 	) {}
+	async validate(actor: ActorContext, selection: TextSelection): Promise<void> {
+		const note = await this.notes.get(actor, selection.noteId);
+		const decision = decideSelection(selection, note);
+		if (decision.kind === 'invalid') {
+			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
+			throw new ValidationError(decision.message);
+		}
+	}
 	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
+		await this.validate(actor, selection);
 		const note = await this.notes.get(actor, selection.noteId);
 		const anchor = await this.notes.create(actor, selection);
 		return { note, anchor };

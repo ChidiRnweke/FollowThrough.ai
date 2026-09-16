@@ -425,6 +425,19 @@ A PostgreSQL regression reproduced context preparation overwriting concurrent ca
 repository update now guards the status in its write statement. WorkflowRunStarter still hides a
 controller, selection inputs are not yet reconstructible, and the wider model migration remains open.
 
+Promise extraction runs: Todos now owns submission, provider/rule selection, execution, cancellation
+settlement and queued recovery. PromiseRequests uses actual run, event and conversation repositories;
+it stores the complete selection, responsibility filter and frozen generation settings. The browser
+retains an account-scoped request ID until a receipt arrives. Duplicate delivery returns the same run,
+including after deployment settings change. The controller performs extraction outside the write
+transaction, then conditionally claims completion and saves proposals, accepted tasks and result events
+atomically. A cancelled or stale selection cannot commit those writes. PromiseDiscovery no longer
+constructs another service or invokes a rule fallback. Both generation modes use the stored submission
+time for relative dates; a regression reproduced a resumed September 1 request resolving tomorrow
+against September 16, and now preserves September 2. PostgreSQL covers concurrent submission, queued
+reconstruction, cancellation and result-event rollback. The other selection actions still use the
+closure-based WorkflowRunner; their migration and the global model cleanup remain open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

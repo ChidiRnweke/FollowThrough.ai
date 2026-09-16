@@ -34,6 +34,27 @@ export type TodoPriority = 'low' | 'medium' | 'high';
 
 export type PromiseStrength = 'explicit' | 'implied' | 'tentative';
 
+export const DEFAULT_PROMISE_MODEL = 'deepseek/deepseek-v4-flash';
+
+export interface PromiseModelContext {
+	readonly model: string;
+	readonly requestedAt: DateTime;
+}
+
+export const promiseExtractionSchema = z.object({
+	promises: z.array(
+		z.object({
+			action: z.string().min(1),
+			ownerName: z.string().nullable(),
+			responsibility: z.enum(['mine', 'waiting_on']),
+			dueDateVerbatim: z.string().nullable(),
+			resolvedDueDate: z.string().nullable(),
+			strength: z.enum(['explicit', 'implied', 'tentative']),
+			confidence: z.number().int().min(0).max(100)
+		})
+	)
+});
+
 interface SourceAnchor {
 	readonly id: SourceAnchorId;
 	readonly noteId: NoteId;
@@ -137,6 +158,30 @@ export interface ExtractPromisesInput {
 	/** Limit extracted commitments to one responsibility; omit to keep every actor. */
 	readonly responsibility?: TodoResponsibility;
 }
+
+export interface StartExtractPromisesInput extends ExtractPromisesInput {
+	readonly requestId: string;
+}
+
+export const startExtractPromisesSchema: z.ZodType<StartExtractPromisesInput> = z
+	.object({
+		requestId: z.uuid(),
+		selection: z
+			.object({
+				noteId: z.uuid().transform((value) => value as NoteId),
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+			.refine(
+				(selection) => selection.to >= selection.from,
+				'Selection end must follow its start.'
+			),
+		responsibility: z.enum(['mine', 'waiting_on']).optional()
+	})
+	.strict();
 
 /** `createdTodos` is populated only for auto-accepted candidates; everything else stays in `suggestions`, pending review. */
 export interface ExtractPromisesOutput<Proposal> {

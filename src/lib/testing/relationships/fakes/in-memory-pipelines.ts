@@ -28,14 +28,22 @@ import type {
 
 export class InMemoryPromiseExtractor implements PromiseExtractor {
 	candidates: PromiseCandidate[] = [];
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly modelCandidates = new Map<string, readonly PromiseCandidate[]>();
 
 	async extract(
 		_actor: ActorContext,
-		_selection: TextSelection
+		_selection: TextSelection,
+		context: Parameters<PromiseExtractor['extract']>[2],
+		_signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
 		void _actor;
 		void _selection;
-		return this.candidates;
+		void _signal;
+		this.started.resolve();
+		await this.completion;
+		return this.modelCandidates.get(context.model) ?? this.candidates;
 	}
 }
 

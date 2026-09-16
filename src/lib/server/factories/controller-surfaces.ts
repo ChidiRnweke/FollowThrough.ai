@@ -64,7 +64,9 @@ export const controllerSurfaces = {
 		update: true,
 		remove: true,
 		extractPromises: true,
-		startExtractPromises: true
+		startExtractPromises: true,
+		executePromiseRun: true,
+		recoverQueuedPromiseRuns: true
 	},
 	relationships: {
 		suggestFromSelection: true,

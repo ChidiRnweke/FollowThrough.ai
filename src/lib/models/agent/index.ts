@@ -419,7 +419,18 @@ export interface AgentRunContext extends BaseAgentContextData {
 	readonly skills: AgentSkillCatalog;
 }
 
+export type PromiseGeneration =
+	{ readonly kind: 'rules' } | { readonly kind: 'model'; readonly model: string };
+
+export interface PromiseExtractionRunContext {
+	readonly kind: 'promise_extraction';
+	readonly generation: PromiseGeneration;
+	readonly selection: TextSelection;
+	readonly responsibility?: 'mine' | 'waiting_on';
+}
+
 export type WorkflowRunContext =
+	| PromiseExtractionRunContext
 	| { readonly kind: 'note_action'; readonly action: NoteActionKind; readonly noteId: NoteId }
 	| {
 			readonly kind: 'diagram';
@@ -1632,6 +1643,17 @@ const preparedDiagramRunContextSchema = z
 	.strict();
 
 export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
+	z
+		.object({
+			kind: z.literal('promise_extraction'),
+			generation: z.discriminatedUnion('kind', [
+				z.object({ kind: z.literal('rules') }).strict(),
+				z.object({ kind: z.literal('model'), model: z.string().min(1) }).strict()
+			]),
+			selection: textSelectionSchema,
+			responsibility: z.enum(['mine', 'waiting_on']).optional()
+		})
+		.strict(),
 	noteActionRunContextSchema,
 	unpreparedDiagramRunContextSchema,
 	preparedDiagramRunContextSchema

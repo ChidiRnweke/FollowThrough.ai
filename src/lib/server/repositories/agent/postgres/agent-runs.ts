@@ -7,7 +7,9 @@ import type {
 	AgentRunId,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import { readAgentEvent } from '../stored-values';
+import { readAgentEvent, promiseExtractionEvent } from '../stored-values';
+import type { ExtractPromisesOutput } from '$lib/models/todos';
+import type { TodoSuggestion } from '$lib/models/suggestions';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -64,6 +66,12 @@ const toDecision = (row: typeof schema.agentRunDecisions.$inferSelect): AgentRun
 });
 
 export class AgentRunEventRecords implements AgentRunEventRepository {
+	appendPromiseResult(
+		runId: AgentRunId,
+		result: ExtractPromisesOutput<TodoSuggestion>
+	): Promise<AgentRunEventRecord> {
+		return this.append(runId, 1, promiseExtractionEvent(result));
+	}
 	constructor(private readonly database: Database) {}
 
 	async append(

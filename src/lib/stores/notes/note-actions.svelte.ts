@@ -1,4 +1,6 @@
 import type { AgentRunReceipt } from '$lib/models/agent';
+import { PromiseSubmissions } from '$lib/client/notes/promise-submissions';
+import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import type { DrawioDiagram } from '$lib/models/diagrams';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { Note, TextSelection } from '$lib/models/notes';
@@ -34,7 +36,16 @@ class NoteActionsStore {
 	}
 
 	extractPromises(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => extractPromises({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to extract promises');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new PromiseSubmissions(sessionStorage);
+			const input = submissions.prepare(accountId, selection);
+			const receipt = await extractPromises(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	relate(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
 		return this.call<AgentRunReceipt>(() => relateNote({ selection }));
