@@ -14,7 +14,7 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './index';
+import { WorkspaceViews } from './views';
 
 const note = noteRecordSchema.parse(noteBuilder());
 const entries: [string, WorkspaceRecord][] = [
