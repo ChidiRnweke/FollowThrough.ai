@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	assertRenderedPng,
 	diagramRevisionModel,
-	DrawioSubmissionCollector,
 	MermaidSubmissionValidator
-} from './authoring';
-import { DrawioXmlValidator } from './drawio';
-import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+} from './submission-validation';
 
 describe('Diagram submission safety invariants', () => {
 	it('rejects a rendered payload that is not a PNG', () => {
@@ -74,26 +71,5 @@ describe('Diagram submission safety invariants', () => {
 				'flowchart LR\n  A["Mini app<br/>(JSON render)"]'
 			)
 		).rejects.toThrow('Use escaped \\n inside quoted labels');
-	});
-});
-
-describe('Draw.io agent submission invariants', () => {
-	it('accepts direct uncompressed draw.io XML', () => {
-		const result = new DrawioSubmissionCollector(new DrawioXmlValidator()).submit({
-			title: 'Architecture',
-			source: VALID_DRAWIO_XML
-		});
-		expect(result.source).toBe(VALID_DRAWIO_XML);
-	});
-
-	it('allows the bounded agent run to correct a rejected submission', () => {
-		const submissions = new DrawioSubmissionCollector(new DrawioXmlValidator());
-		try {
-			submissions.submit({ title: 'Invalid', source: '<mxfile />' });
-		} catch {
-			// The same collector remains open for the agent's next bounded tool turn.
-		}
-		const corrected = submissions.submit({ title: 'Corrected', source: VALID_DRAWIO_XML });
-		expect(corrected.title).toBe('Corrected');
 	});
 });

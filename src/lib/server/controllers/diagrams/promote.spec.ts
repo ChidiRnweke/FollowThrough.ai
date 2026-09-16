@@ -1,3 +1,4 @@
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import {
@@ -13,6 +14,7 @@ import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = (drawio = false) => {
+	const generation = diagramGenerationFixture();
 	const diagrams = new InMemoryDiagrams();
 	const suggestions = new InMemorySuggestions();
 	const provenance = new InMemoryProvenanceRecorder();
@@ -23,9 +25,8 @@ const setup = (drawio = false) => {
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
 				diagramFinder: diagrams,
-				drawioCreator: diagrams,
+				...generation,
 				drawioXmlValidator: new DrawioXmlValidator(),
-				provenanceRecorder: provenance,
 				suggestionCreator: suggestions,
 				transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
 			})
