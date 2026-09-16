@@ -59,6 +59,26 @@ const settle = () =>
 	new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
 
 describe('opening a stored note', () => {
+	it('renders a Mermaid diagram through the application node view', async () => {
+		const screen = openNote({
+			type: 'doc',
+			content: [
+				{
+					type: 'mermaid',
+					content: [
+						{
+							type: 'text',
+							text: 'flowchart LR\n  Notes[Current notes] --> Export[Generated document]'
+						}
+					]
+				}
+			]
+		});
+		await expect
+			.poll(() => screen.container.querySelector('.mermaid-container svg')?.textContent)
+			.toContain('Generated document');
+	});
+
 	it('renders a real stored document held in reactive state', async () => {
 		const state = $state({ document: storedDocument() });
 		const screen = openNote(state.document);

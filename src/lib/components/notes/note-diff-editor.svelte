@@ -5,6 +5,7 @@
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { createEditor } from '$lib/components/edra/commands/editor';
+	import { MermaidNodeView } from '$lib/components/diagrams';
 	import { toEditorContent } from './editor-document';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import TodoNodeView from '../todos/todo-node.svelte';
@@ -59,6 +60,7 @@
 		createEditor(
 			{
 				editable: false,
+				mermaidView: MermaidNodeView,
 				ariaLabel: `Read-only preview of ${label}`,
 				// Note links stay inert in a review pane: there is no pane to open them in,
 				// and a click must not navigate away from the comparison.

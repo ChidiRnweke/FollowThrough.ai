@@ -25,7 +25,7 @@
 	} from '$lib/models/notes';
 	import { activeHeadingAt, outlineFrom } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
-	import { ProjectDiagramPicker } from '$lib/components/diagrams';
+	import { ProjectDiagramPicker, MermaidNodeView } from '$lib/components/diagrams';
 	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
 	import { changedTopLevelBlockIndices } from '$lib/models/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
@@ -358,6 +358,7 @@
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
+			mermaidView: MermaidNodeView,
 			onCut: async (selection) => {
 				const report = await noteClipboard.copy(selection);
 				if (report.kind !== 'complete')

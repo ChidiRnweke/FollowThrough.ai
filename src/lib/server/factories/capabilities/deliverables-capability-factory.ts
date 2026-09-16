@@ -10,8 +10,10 @@ import { generateDocx } from '$lib/server/services/deliverables/docx';
 import { generatePdf } from '$lib/server/services/deliverables/pdf';
 import {
 	prepareExport,
-	exportImageSources
+	exportImageSources,
+	exportDiagramReferences
 } from '$lib/server/services/deliverables/export-preparation';
+import { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
 import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
@@ -33,6 +35,8 @@ export const createDeliverablesCapability = (input: DeliverablesCapabilityInput)
 	fetchImage: fetchRemoteDataUrl,
 	prepareExport,
 	exportImageSources,
+	exportDiagramReferences,
+	diagramRenderer: new DiagramRasterizer(),
 	docxGenerator: generateDocx,
 	pdfGenerator: generatePdf,
 	zipPacker: packZip,

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Popover from '$lib/components/ui/popover';
@@ -13,8 +14,11 @@
 		mermaidTokensFor,
 		type MermaidPalette,
 		type MermaidTheme
-	} from './mermaid-rendering.js';
-	import { exportMermaidDiagram, type MermaidExportFormat } from './mermaid-export.js';
+	} from '$lib/client/diagrams/mermaid-rendering';
+	import {
+		exportMermaidDiagram,
+		type MermaidExportFormat
+	} from '$lib/client/diagrams/mermaid-export';
 
 	let { source, fileName = 'diagram' }: { source: string; fileName?: string } = $props();
 
@@ -82,9 +86,9 @@
 				<div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
 					{#each MERMAID_PALETTE_KEYS as key (key)}
 						<Label class="flex items-center gap-2 text-xs font-normal text-muted-foreground">
-							<input
+							<Input
 								type="color"
-								class="size-5 shrink-0 cursor-pointer rounded-sm border border-border bg-transparent"
+								class="size-6 shrink-0 cursor-pointer p-0.5"
 								value={palette[key] ?? preset[key]}
 								aria-label={MERMAID_PALETTE_LABELS[key]}
 								oninput={(event) => {

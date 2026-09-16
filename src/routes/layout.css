@@ -8,6 +8,18 @@
 @custom-variant dark (&:is(.dark *));
 @plugin '@tailwindcss/typography';
 
+/* Product diagram sizing comes from the node's persisted width and canvas zoom. */
+.mermaid-edit-canvas {
+	width: var(--mermaid-pane-width);
+	zoom: var(--mermaid-zoom);
+}
+.mermaid-preview-wrapper {
+	width: var(--mermaid-wrapper-width);
+}
+.mermaid-container svg {
+	width: var(--mermaid-svg-width);
+}
+
 /* ============================================================
    DESIGN SYSTEM TOKENS — see docs/design/design-system.md for rationale
    ============================================================ */

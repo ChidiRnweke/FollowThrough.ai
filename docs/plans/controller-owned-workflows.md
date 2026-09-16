@@ -286,6 +286,16 @@ tool rejected them as unknown input. Both regressions were reproduced. Browser e
 settings updates and queued workspace writes now share the complete model schema. The stored
 partial-overlay schema derives the same field definitions while retaining its read contract.
 
+P15 diagram preparation: the deliverables controller resolves current Mermaid sources and
+authorized draw.io previews before generation, preview, regeneration and bundled exports.
+A focused browser renderer supplies missing PNGs using the same palette rules as the editor.
+An outdated or absent draw.io preview fails explicitly instead of producing an incomplete
+document. Draw.io ownership follows the project, not its optional source-note context.
+Mermaid theme values remain in models; theme behavior is shared through a service. The generic
+editor receives the application diagram view from its host instead of importing product rules.
+Its toolbar now uses one accessible button per action. The production image includes the
+headless browser and copies dependency patches before installation.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

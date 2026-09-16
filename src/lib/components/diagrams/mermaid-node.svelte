@@ -20,18 +20,18 @@
 	import X from '@lucide/svelte/icons/x';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
-	import { NodeViewWrapper } from './index.js';
+	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import {
 		initializeMermaid,
 		renderMermaidOffscreen,
 		sanitizeMermaidSvg
-	} from './mermaid-rendering.js';
-	import MermaidExportMenu from './MermaidExportMenu.svelte';
+	} from '$lib/client/diagrams/mermaid-rendering';
+	import MermaidExportMenu from './mermaid-export-menu.svelte';
 	import { mode as colorMode } from 'mode-watcher';
-	import Tooltip from './Tooltip.svelte';
-	import { setPendingConversionReference } from './commands/diagram-references.js';
-	import { createMediaResize } from './media-resize.svelte.js';
-	import { mermaidPngBlob } from './mermaid-export.js';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { setPendingConversionReference } from '$lib/components/edra/commands/diagram-references.js';
+	import { createMediaResize } from '$lib/components/edra/media-resize.svelte.js';
+	import { mermaidPngBlob } from '$lib/client/diagrams/mermaid-export';
 	import { toast } from 'svelte-sonner';
 
 	const { node, editor, getPos, extension, updateAttributes }: NodeViewProps = $props();
@@ -471,10 +471,10 @@
 			<div class="border-b bg-muted/30 px-3 py-1.5 flex items-center justify-between">
 				<div class="flex items-center gap-2">
 					<Workflow class="size-3.5 text-primary" />
-					<span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+					<span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
 						>Mermaid</span
 					>
-					<span class="text-muted-foreground/50 text-[10px]">{lineCount} lines</span>
+					<span class="text-muted-foreground text-xs">{lineCount} lines</span>
 				</div>
 				<div class="flex items-center gap-1">
 					{#if onRevise}
@@ -500,15 +500,23 @@
 							</Tabs.Trigger>
 						</Tabs.List>
 					</Tabs.Root>
-					<Tooltip tooltip="Copy code">
-						<Button size="icon-sm" variant="ghost" onclick={copyCode} aria-label="Copy code">
-							{#if copied}
-								<Check class="text-green-500" />
-							{:else}
-								<Copy />
-							{/if}
-						</Button>
-					</Tooltip>
+					<Tooltip.Tip text="Copy code">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								size="icon-sm"
+								variant="ghost"
+								onclick={copyCode}
+								aria-label="Copy code"
+							>
+								{#if copied}
+									<Check class="text-brand" />
+								{:else}
+									<Copy />
+								{/if}
+							</Button>
+						{/snippet}
+					</Tooltip.Tip>
 
 					<div class="bg-border mx-1 h-4 w-px"></div>
 
@@ -518,7 +526,7 @@
 			</div>
 			{#if showAiRevision && onRevise}
 				<div class="flex items-start gap-2 border-b bg-muted/20 p-3">
-					<div class="min-w-0 flex-1 space-y-1.5">
+					<div class="min-w-0 flex-1 flex flex-col gap-1.5">
 						<Textarea
 							bind:value={revisionInstruction}
 							onkeydown={handleRevisionKeydown}
@@ -554,16 +562,17 @@
 						class={cn('flex-1 min-h-0 min-w-0 basis-0 relative', mode === 'both' ? 'border-r' : '')}
 					>
 						<!-- audit-allow: no-raw-font-family — A Mermaid source editor; mono is the code face. -->
-						<textarea
+						<Textarea
 							bind:value={editCode}
 							onkeydown={handleEditorKeydown}
 							placeholder="graph TD&#10;  A[Start] --> B[End]"
 							spellcheck={false}
-							class="mermaid-code-editor size-full resize-none border-none bg-muted/20 p-4 font-mono text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40"
-						></textarea>
+							aria-label="Mermaid source"
+							class="mermaid-code-editor size-full field-sizing-fixed resize-none rounded-none border-none p-4 font-mono text-label leading-relaxed"
+						/>
 						<!-- Keyboard hints -->
 						<div
-							class="absolute bottom-2 right-2 flex items-center gap-2 text-[9px] text-muted-foreground/50"
+							class="absolute bottom-2 right-2 flex items-center gap-2 text-xs text-muted-foreground/50"
 						>
 							<span>⌘↵ Apply</span>
 							<span>Esc Cancel</span>
@@ -603,7 +612,7 @@
 									<p class="text-destructive text-xs font-medium">Syntax Error</p>
 									<!-- audit-allow: no-raw-font-family — Parser error output is machine text. -->
 									<p
-										class="text-muted-foreground font-mono text-[10px] leading-relaxed max-h-24 overflow-auto"
+										class="text-muted-foreground font-mono text-xs leading-relaxed max-h-24 overflow-auto"
 									>
 										{error}
 									</p>
@@ -613,14 +622,15 @@
 									<div
 										class="size-5 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary"
 									></div>
-									<span class="text-muted-foreground text-[10px]">Rendering...</span>
+									<span class="text-muted-foreground text-xs">Rendering...</span>
 								</div>
 							{/if}
 							<div
 								bind:this={previewContainer}
-								style={`width: ${paneWidth}px; zoom: ${editZoom / 100}`}
+								style:--mermaid-pane-width={`${paneWidth}px`}
+								style:--mermaid-zoom={editZoom / 100}
 								class={cn(
-									'shrink-0 [&_svg]:max-w-full [&_svg]:h-auto [&_svg]:mx-auto [&_svg]:block',
+									'mermaid-edit-canvas shrink-0 [&_svg]:max-w-full [&_svg]:h-auto [&_svg]:mx-auto [&_svg]:block',
 									error ? 'hidden' : ''
 								)}
 							></div>
@@ -629,39 +639,48 @@
 							<div
 								class="absolute bottom-2 right-2 flex items-center gap-0.5 rounded-full border bg-background/90 p-0.5 backdrop-blur-sm"
 							>
-								<Tooltip tooltip="Zoom out">
-									<Button
-										size="icon-sm"
-										variant="ghost"
-										aria-label="Zoom out"
-										disabled={editZoom <= EDIT_ZOOM_MIN}
-										onclick={() => stepEditZoom(-1)}
-									>
-										<Minus />
-									</Button>
-								</Tooltip>
-								<Tooltip tooltip="Reset to 100%">
-									<Button
-										size="xs"
-										variant="ghost"
-										aria-label="Reset zoom"
-										class="w-12 tabular-nums text-muted-foreground"
-										onclick={() => setEditZoom(100)}
-									>
-										{Math.round(editZoom)}%
-									</Button>
-								</Tooltip>
-								<Tooltip tooltip="Zoom in">
-									<Button
-										size="icon-sm"
-										variant="ghost"
-										aria-label="Zoom in"
-										disabled={editZoom >= EDIT_ZOOM_MAX}
-										onclick={() => stepEditZoom(1)}
-									>
-										<Plus />
-									</Button>
-								</Tooltip>
+								<Tooltip.Tip text="Zoom out">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											size="icon-sm"
+											variant="ghost"
+											aria-label="Zoom out"
+											disabled={editZoom <= EDIT_ZOOM_MIN}
+											onclick={() => stepEditZoom(-1)}
+										>
+											<Minus />
+										</Button>
+									{/snippet}
+								</Tooltip.Tip>
+								<Tooltip.Tip text="Reset to 100%">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											size="xs"
+											variant="ghost"
+											aria-label="Reset zoom"
+											class="w-12 tabular-nums text-muted-foreground"
+											onclick={() => setEditZoom(100)}
+										>
+											{Math.round(editZoom)}%
+										</Button>
+									{/snippet}
+								</Tooltip.Tip>
+								<Tooltip.Tip text="Zoom in">
+									{#snippet children({ props })}
+										<Button
+											{...props}
+											size="icon-sm"
+											variant="ghost"
+											aria-label="Zoom in"
+											disabled={editZoom >= EDIT_ZOOM_MAX}
+											onclick={() => stepEditZoom(1)}
+										>
+											<Plus />
+										</Button>
+									{/snippet}
+								</Tooltip.Tip>
 							</div>
 						{/if}
 					</div>
@@ -672,24 +691,26 @@
 		<!-- Preview Mode -->
 		<div
 			bind:this={previewWrapper}
-			class="relative group/preview"
-			style={`width: ${wrapperWidth}; --mermaid-svg-width: ${svgWidth}`}
+			class="mermaid-preview-wrapper relative group/preview"
+			style:--mermaid-wrapper-width={wrapperWidth}
+			style:--mermaid-svg-width={svgWidth}
 		>
 			{#if !code || code.trim() === ''}
-				<button
-					class="flex w-full items-center gap-2 rounded-lg border border-dashed bg-muted/30 p-4 transition-colors hover:bg-muted/50 min-h-14"
+				<Button
+					variant="outline"
+					class="w-full justify-start border-dashed p-4 min-h-14"
 					onclick={enterEditMode}
 				>
 					<Workflow class="size-4 text-muted-foreground" />
 					<span class="text-muted-foreground text-sm" contenteditable={false}
 						>Click to add a Mermaid diagram</span
 					>
-				</button>
+				</Button>
 			{:else}
 				<div class="border rounded-lg overflow-hidden">
 					<div
 						bind:this={container}
-						class="mermaid-container overflow-x-auto p-6 w-full flex min-h-24 items-center [&_svg]:w-[var(--mermaid-svg-width)] [&_svg]:shrink-0 [&_svg]:mx-auto [&_svg]:max-w-none! [&_svg]:h-auto"
+						class="mermaid-container overflow-x-auto p-6 w-full flex min-h-24 items-center [&_svg]:shrink-0 [&_svg]:mx-auto [&_svg]:max-w-none! [&_svg]:h-auto"
 					></div>
 					{#if error}
 						<div class="border-t bg-destructive/5 px-4 py-2 flex items-center gap-2">
@@ -711,16 +732,19 @@
 								onclick={() => options.onReview?.(pendingDrawioSuggestionId)}>Review</Button
 							>
 						{/if}
-						<Tooltip tooltip="Dismiss conversion">
-							<Button
-								size="icon-sm"
-								variant="ghost"
-								aria-label="Dismiss conversion"
-								onclick={() => void rejectDrawio()}
-							>
-								<X />
-							</Button>
-						</Tooltip>
+						<Tooltip.Tip text="Dismiss conversion">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									size="icon-sm"
+									variant="ghost"
+									aria-label="Dismiss conversion"
+									onclick={() => void rejectDrawio()}
+								>
+									<X />
+								</Button>
+							{/snippet}
+						</Tooltip.Tip>
 					</div>
 				{:else if conversionError}
 					<p
@@ -736,8 +760,7 @@
 						role="button"
 						tabindex="0"
 						aria-label="Resize diagram"
-						class="absolute inset-y-0 z-20 flex w-5 cursor-col-resize items-center justify-start p-2"
-						style="left: 0px"
+						class="absolute inset-y-0 left-0 z-20 flex w-5 cursor-col-resize items-center justify-start p-2"
 						onmousedown={(event: MouseEvent) => mediaResize.startResize(event, 'left')}
 						ontouchstart={(event: TouchEvent) => mediaResize.handleTouchStart(event, 'left')}
 					>
@@ -749,8 +772,7 @@
 						role="button"
 						tabindex="0"
 						aria-label="Resize diagram"
-						class="absolute inset-y-0 z-20 flex w-5 cursor-col-resize items-center justify-end p-2"
-						style="right: 0px"
+						class="absolute inset-y-0 right-0 z-20 flex w-5 cursor-col-resize items-center justify-end p-2"
 						onmousedown={(event: MouseEvent) => mediaResize.startResize(event, 'right')}
 						ontouchstart={(event: TouchEvent) => mediaResize.handleTouchStart(event, 'right')}
 					>
@@ -772,63 +794,83 @@
 								oncancel={options.onCancel ? () => options.onCancel?.('convert') : undefined}
 							/>
 						{:else if options.onConvert && !pendingDrawioSuggestionId}
-							<Tooltip tooltip="Convert to draw.io">
-								<Button
-									size="icon-sm"
-									variant="ghost"
-									onclick={() => void convertToDrawio()}
-									aria-label="Convert to draw.io"
-								>
-									<Shapes class="text-muted-foreground" />
-								</Button>
-							</Tooltip>
+							<Tooltip.Tip text="Convert to draw.io">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										size="icon-sm"
+										variant="ghost"
+										onclick={() => void convertToDrawio()}
+										aria-label="Convert to draw.io"
+									>
+										<Shapes class="text-muted-foreground" />
+									</Button>
+								{/snippet}
+							</Tooltip.Tip>
 						{/if}
 						{#if onRevise}
-							<Tooltip tooltip="Revise with AI">
-								<Button
-									size="icon-sm"
-									variant="ghost"
-									onclick={enterAiRevision}
-									aria-label="Revise with AI"
-								>
-									<Sparkles class="text-muted-foreground" />
-								</Button>
-							</Tooltip>
+							<Tooltip.Tip text="Revise with AI">
+								{#snippet children({ props })}
+									<Button
+										{...props}
+										size="icon-sm"
+										variant="ghost"
+										onclick={enterAiRevision}
+										aria-label="Revise with AI"
+									>
+										<Sparkles class="text-muted-foreground" />
+									</Button>
+								{/snippet}
+							</Tooltip.Tip>
 						{/if}
 						<MermaidExportMenu source={code} />
-						<Tooltip tooltip="Copy Image">
-							<Button
-								size="icon-sm"
-								variant="ghost"
-								onclick={() => void copyImage()}
-								aria-label="Copy diagram as image"
-							>
-								{#if copiedImage}
-									<Check class=" text-green-500" />
-								{:else}
-									<ImageIcon class="text-muted-foreground" />
-								{/if}
-							</Button>
-						</Tooltip>
-						<Tooltip tooltip="Copy Code">
-							<Button size="icon-sm" variant="ghost" onclick={copyCode} aria-label="Copy code">
-								{#if copied}
-									<Check class=" text-green-500" />
-								{:else}
-									<Copy class="text-muted-foreground" />
-								{/if}
-							</Button>
-						</Tooltip>
-						<Tooltip tooltip="Edit Mode">
-							<Button
-								size="icon-sm"
-								variant="ghost"
-								onclick={enterEditMode}
-								aria-label="Edit diagram"
-							>
-								<Pencil class="text-muted-foreground" />
-							</Button>
-						</Tooltip>
+						<Tooltip.Tip text="Copy Image">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									size="icon-sm"
+									variant="ghost"
+									onclick={() => void copyImage()}
+									aria-label="Copy diagram as image"
+								>
+									{#if copiedImage}
+										<Check class=" text-brand" />
+									{:else}
+										<ImageIcon class="text-muted-foreground" />
+									{/if}
+								</Button>
+							{/snippet}
+						</Tooltip.Tip>
+						<Tooltip.Tip text="Copy Code">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									size="icon-sm"
+									variant="ghost"
+									onclick={copyCode}
+									aria-label="Copy code"
+								>
+									{#if copied}
+										<Check class=" text-brand" />
+									{:else}
+										<Copy class="text-muted-foreground" />
+									{/if}
+								</Button>
+							{/snippet}
+						</Tooltip.Tip>
+						<Tooltip.Tip text="Edit Mode">
+							{#snippet children({ props })}
+								<Button
+									{...props}
+									size="icon-sm"
+									variant="ghost"
+									onclick={enterEditMode}
+									aria-label="Edit diagram"
+								>
+									<Pencil class="text-muted-foreground" />
+								</Button>
+							{/snippet}
+						</Tooltip.Tip>
 					</div>
 				{/if}
 			{/if}

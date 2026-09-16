@@ -6,7 +6,8 @@ import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import {
 	prepareExport,
-	exportImageSources
+	exportImageSources,
+	exportDiagramReferences
 } from '$lib/server/services/deliverables/export-preparation';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import { packZip } from '$lib/server/services/deliverables/bundle';
@@ -43,6 +44,7 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			provenanceRecorder: provenance,
 			prepareExport,
 			exportImageSources,
+			exportDiagramReferences,
 			fetchImage: fetchRemoteDataUrl,
 			docxGenerator: async () => Buffer.from('docx'),
 			pdfGenerator: async () => Buffer.from('pdf'),
