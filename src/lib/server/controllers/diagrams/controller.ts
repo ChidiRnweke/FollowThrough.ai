@@ -22,6 +22,9 @@ import {
 	diagramRevisionModel
 } from '$lib/server/services/diagrams/submission-validation';
 import type { DiagramGenerator } from '$lib/server/services/diagrams/generation';
+import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -156,14 +159,6 @@ export interface DiagramsController {
 	): Promise<AgentRunReceipt>;
 }
 
-interface AgentContextBuilder {
-	build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId; conversationId?: ConversationId }
-	): Promise<AgentRunContext>;
-}
-
 interface ConversationJournal {
 	createWorkflow(
 		actor: ActorContext,
@@ -230,7 +225,10 @@ type DiagramWorkflowObserver = <T>(
 ) => Promise<T>;
 
 export interface DiagramAgentDependencies {
-	readonly contextBuilder: AgentContextBuilder;
+	readonly contextFormatter: AgentContext;
+	readonly contextNotes: NoteReader;
+	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
+	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
 	readonly conversations: ConversationJournal;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
@@ -595,9 +593,7 @@ export class Diagrams implements DiagramsController {
 			const context: WorkflowRunContext = {
 				kind: 'diagram',
 				state: 'prepared',
-				context: await this.dependencies.generation.contextBuilder.build(actor, input, {
-					provenanceId: provenance.id
-				}),
+				context: await this.buildDiagramContext(actor, input),
 				conversationId: conversation.id,
 				effectiveModel: model,
 				executionMode: 'auto_accept',
@@ -686,6 +682,22 @@ export class Diagrams implements DiagramsController {
 			throw error;
 		}
 	}
+	private async buildDiagramContext(
+		actor: ActorContext,
+		input: RunAgentInput
+	): Promise<AgentRunContext> {
+		const deps = this.dependencies.generation;
+		const current = input.noteId
+			? { kind: 'note' as const, note: await deps.contextNotes.get(actor, input.noteId) }
+			: { kind: 'no_current_note' as const };
+		const base = deps.contextFormatter.base(input, current);
+		const [skills, profileMemory] = await Promise.all([
+			deps.contextSkills.listEnabled(actor, base.projectId),
+			deps.contextMemory.list(actor, {})
+		]);
+		return deps.contextFormatter.build(input, { base, skills, profileMemory, contextNotes: [] });
+	}
+
 	private prompt(task: DiagramTask): string {
 		if (task.operation === 'generate')
 			return `Create an intelligent Mermaid diagram from this selected text:\n\n${task.selection.text}${task.instruction ? `\n\nAdditional direction: ${task.instruction}` : ''}`;

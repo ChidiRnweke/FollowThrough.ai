@@ -266,6 +266,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const skills = skillCapability.library;
 	const provisionedSkills = skillCapability.provisioned;
 	const diagramCapability = createDiagramsCapability({
+		contextNotes: notes,
+		contextSkills: provisionedSkills,
+		contextMemory: memory,
 		apiKey: openRouterApiKey,
 		baseURL: openRouterBaseURL,
 		appURL,

@@ -22,16 +22,7 @@ import type {
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import {
-	noteBuilder,
-	testActor,
-	testConversationId,
-	testNoteId,
-	testProjectId,
-	testProvenanceId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-import { BaseAgentContext } from './base-context';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentReasoningEventMapper,
 	AgentToolEventMapper,
@@ -794,20 +785,6 @@ describe('Agent reasoning event invariants', () => {
 			})
 		);
 		expect(event).toEqual({ type: 'reasoning_delta', text: 'Step two.' });
-	});
-});
-
-describe('Agent context invariants', () => {
-	it('derives the active project from the current note', async () => {
-		const notes = new InMemoryNoteContent();
-		notes.notes = [noteBuilder()];
-		const agent = new BaseAgentContext(notes);
-		const context = await agent.build(
-			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Summarize this note' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(context.projectId).toBe(testProjectId());
 	});
 });
 

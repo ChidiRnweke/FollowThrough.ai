@@ -1,10 +1,9 @@
+import { agentContextFixture } from '$lib/testing/agent/fixtures/context';
 import { describe, expect, it } from 'vitest';
 import type { Skill } from '$lib/models/skills';
-import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
 import {
 	appContextBuilder,
+	memoryEntryBuilder,
 	noteBuilder,
 	projectBuilder,
 	testActor,
@@ -13,16 +12,8 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId } from '$lib/models/notes';
-import { BaseAgentContext } from './base-context';
-import { AgentContext } from './context';
+import type { Note } from '$lib/models/notes';
 import type { AgentRunContext } from '$lib/models/agent';
-
-/** The slice of the note reader `AgentContext` depends on. */
-interface NoteReader {
-	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
-}
 
 const skill = (project = testProjectId()): Skill<Note> => ({
 	note: noteBuilder({
@@ -40,15 +31,63 @@ const skill = (project = testProjectId()): Skill<Note> => ({
 const catalog = (context: AgentRunContext) => context.skills;
 
 const setup = async (skillProject = testProjectId()) => {
-	const notes = new InMemoryNoteContent();
-	notes.notes = [noteBuilder()];
-	const skills = new InMemorySkills();
-	skills.skills = [skill(skillProject)];
-	const builder = new AgentContext(new BaseAgentContext(notes), skills, notes);
-	return { builder, skills, notes };
+	const fixture = agentContextFixture();
+	fixture.skills.skills = [skill(skillProject)];
+	return fixture;
 };
 
 describe('Agent grounding invariants', () => {
+	it('includes shared profile memory in a prepared run', async () => {
+		const { builder, memory } = await setup();
+		memory.entries = [
+			memoryEntryBuilder({ projectId: undefined, content: 'Prefer concise answers.' })
+		];
+		const context = await builder.build(
+			testActor(),
+			{ conversationId: testConversationId(), prompt: 'Help' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.userMemory).toEqual(['Prefer concise answers.']);
+	});
+
+	it('excludes private profile memory from the prepared run', async () => {
+		const { builder, memory } = await setup();
+		memory.entries = [memoryEntryBuilder({ projectId: undefined, shareWithAgents: false })];
+		const context = await builder.build(
+			testActor(),
+			{ conversationId: testConversationId(), prompt: 'Help' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.userMemory).toBeUndefined();
+	});
+
+	it('leaves project memory for explicit retrieval', async () => {
+		const { builder, memory } = await setup();
+		memory.entries = [memoryEntryBuilder()];
+		const context = await builder.build(
+			testActor(),
+			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Help' },
+			{ provenanceId: testProvenanceId() }
+		);
+		expect(context.userMemory).toBeUndefined();
+	});
+
+	it('persists a failed run when a required attached note is missing', async () => {
+		const { builder, runs } = await setup();
+		await builder
+			.build(
+				testActor(),
+				{
+					conversationId: testConversationId(),
+					prompt: 'Compare these',
+					contextNoteIds: [testNoteId(9)]
+				},
+				{ provenanceId: testProvenanceId() }
+			)
+			.catch(() => undefined);
+		expect(runs.runs.map((run) => run.status)).toEqual(['failed']);
+	});
+
 	it('retains every explicitly requested note from a large folder', async () => {
 		const { builder, notes } = await setup();
 		const attached = Array.from({ length: 80 }, (_, index) =>
@@ -314,16 +353,8 @@ describe('Agent grounding invariants', () => {
 
 	// Preserve operational failures; an unavailable store does not prove deletion.
 	it('fails the turn when a context note cannot be read at all', async () => {
-		const notes = new InMemoryNoteContent();
-		notes.notes = [noteBuilder()];
-		const unreachable: NoteReader = {
-			get: () => Promise.reject(new Error('The note store is unreachable.'))
-		};
-		const builder = new AgentContext(
-			new BaseAgentContext(notes),
-			new InMemorySkills(),
-			unreachable
-		);
+		const { builder, notes } = await setup();
+		notes.readFailure = new Error('The note store is unreachable.');
 		await expect(
 			builder.build(
 				testActor(),
@@ -356,17 +387,9 @@ describe('Agent grounding invariants', () => {
 describe('Scope staged before the user moved screens', () => {
 	/** The staged note lives in a project the user has since navigated away from. */
 	const resolved = async () => {
-		const notes = new InMemoryNoteContent();
+		const { builder, notes, projects } = await setup();
 		notes.notes = [noteBuilder({ id: testNoteId(2), title: 'Migration plan' })];
-		const projects = new InMemoryProjects();
 		projects.projects = [projectBuilder({ id: testProjectId(2), name: 'Project Beta' })];
-		const builder = new AgentContext(
-			new BaseAgentContext(),
-			new InMemorySkills(),
-			notes,
-			undefined,
-			projects
-		);
 		const context = await builder.build(
 			testActor(),
 			{
@@ -377,14 +400,11 @@ describe('Scope staged before the user moved screens', () => {
 			},
 			{ provenanceId: testProvenanceId() }
 		);
-		return (context.appContext as { requestedScope?: { note: string; noteTitle?: string } })
-			.requestedScope;
+		return context.appContext?.requestedScope;
 	};
 
 	it('names both sides of the divergence for the agent', async () => {
-		expect(await resolved()).toMatchObject({
-			note: expect.stringContaining('Project Beta') as unknown as string
-		});
+		expect((await resolved())?.note).toContain('Project Beta');
 	});
 
 	it('resolves the staged note title rather than leaving a bare id', async () => {
