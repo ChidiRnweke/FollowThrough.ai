@@ -1,4 +1,9 @@
-import type { ProvenanceOrigin, SourceAnchor, SelectionOrigin } from '$lib/models/provenance';
+import type {
+	Provenance,
+	ProvenanceOrigin,
+	SourceAnchor,
+	SelectionOrigin
+} from '$lib/models/provenance';
 import { storedMemoryChangePayloadSchema, type MemoryChangePayload } from '$lib/models/memory';
 import { z } from 'zod';
 
@@ -402,6 +407,11 @@ export interface SuggestionView {
 	readonly origin: ProvenanceOrigin;
 }
 
+/** Resolved records used to present a proposal. The controller chooses its presentation. */
+export interface SuggestionContext extends Pick<SuggestionView, 'suggestion' | 'note' | 'anchor'> {
+	readonly provenance: Provenance;
+}
+
 export interface ListSuggestionsInput {
 	readonly status: SuggestionStatus;
 }
@@ -461,16 +471,4 @@ export function proposalFromSelection(
 				payload: { ...proposal.payload, ...source, noteId: origin.note.id }
 			};
 	}
-}
-
-export function assembleSuggestionView(
-	suggestion: Suggestion,
-	facts: Omit<SuggestionView, 'suggestion'>
-): SuggestionView {
-	return {
-		suggestion,
-		...(facts.note ? { note: { id: facts.note.id, title: facts.note.title } } : {}),
-		...(facts.anchor ? { anchor: facts.anchor } : {}),
-		origin: facts.origin
-	};
 }
