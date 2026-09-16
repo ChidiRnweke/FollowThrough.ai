@@ -18,7 +18,7 @@ const setup = async (suffix: string) => {
 		documentKind: 'skill'
 	});
 	const seeded = { ...source, note };
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const { library } = createSkillsCapability({
 		db: database,
 		projects: new ProjectRecords(database),
@@ -33,6 +33,7 @@ const setup = async (suffix: string) => {
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
 			skillEditor: library,
 			skillUsageLister: library,
 			transactionRunner

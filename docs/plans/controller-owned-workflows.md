@@ -363,6 +363,14 @@ service. The unused duplicate attachment-path validator is removed; its regressi
 the actual attachment upload service. Skill metadata decisions, identity/history policy and the
 remaining workspace-mutation model behavior still require their separate global refactor.
 
+Workspace transactions: all synchronized-write controllers now own their transaction, prepare the
+version guard, perform their own domain operation, and complete the durable receipt. Workspace
+cancellation also owns its transaction in the controller. WorkspaceMutationReceipts only uses actual
+receipt and resource repositories; SyncMutationTransactions and its controller callback are removed.
+Retry policy remains explicit and preserves the database-only setting for deferred indexing. Replay,
+cancellation and rollback tests now execute the Notes and Workspace controllers directly. Durable
+selection actions, settlement callbacks and the remaining model behavior are still unfinished.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

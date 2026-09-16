@@ -82,7 +82,10 @@ export class Workspace implements WorkspaceController {
 		return this.dependencies.syncChanges.pullPage(actor, since);
 	}
 	cancelMutation(actor: ActorContext, input: WorkspaceWriteCancellation) {
-		return this.dependencies.writeRecovery.cancel(actor, input);
+		return this.dependencies.transactionRunner.run(
+			() => this.dependencies.writeRecovery.cancel(actor, input),
+			{ retry: 'database-only' }
+		);
 	}
 
 	readResource(actor: ActorContext, identity: WorkspaceResourceIdentity, etag: SyncEtag | null) {

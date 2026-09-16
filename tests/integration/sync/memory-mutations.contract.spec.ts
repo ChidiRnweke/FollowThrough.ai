@@ -17,7 +17,7 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const { library } = createMemoryCapability({
 		db: database,
 		projects: new ProjectRecords(database),
@@ -28,6 +28,7 @@ const setup = async (suffix: string) => {
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
 			memoryCreator: library,
 			memoryEditor: library,
 			memoryDeleter: library,

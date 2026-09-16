@@ -15,12 +15,14 @@ import { actor, context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const settings = new ExportSettingsRecords(database);
 	const artifacts = new ArtifactLibrary(new InMemoryArtifactRepository(), settings);
 	const controller = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
 			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
+			transactionRunner,
 			exportSettingsWriter: artifacts
 		})
 	);

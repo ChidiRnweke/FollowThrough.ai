@@ -2,27 +2,23 @@ import type { Database } from '$lib/server/db';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
-import { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
-import type { AtomicOperation } from '$lib/models/workspace';
+import { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 
 export const createSyncCapability = ({
 	db,
-	transactionRunner,
 	deferEmbedding = false
 }: {
 	readonly db: Database;
-	readonly transactionRunner: AtomicOperation;
 	readonly deferEmbedding?: boolean;
 }) => {
 	const objects = new WorkspaceSyncObjects(db);
 	return {
 		changes: new WorkspaceSyncChanges(db),
 		objects,
-		mutations: new SyncMutationTransactions({
-			retry: deferEmbedding ? 'database-only' : 'never',
+		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
+		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,
-			mutationReceipts: new WorkspaceSyncReceipts(db),
-			transactionRunner
+			mutationReceipts: new WorkspaceSyncReceipts(db)
 		})
 	};
 };

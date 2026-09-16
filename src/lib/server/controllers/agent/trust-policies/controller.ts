@@ -1,8 +1,9 @@
+import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	TrustPolicyMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import { ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -27,19 +28,39 @@ export interface TrustPoliciesController {
 	update(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<UpdateTrustPolicyOutput>;
 }
 export interface TrustPoliciesDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	transactionRunner: AtomicOperation;
+	syncRetry: 'database-only' | 'never';
 	trustPolicyStore: TrustPolicyStore;
 }
 export class TrustPolicies implements TrustPoliciesController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: TrustPolicyMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async () => {
-			if (input.command.userId !== actor.userId)
-				throw new ValidationError('The preferences belong to another account');
-			await this.update(actor, input.command);
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: TrustPolicyMutationRequest
+	): Promise<void> {
+		if (input.command.userId !== actor.userId)
+			throw new ValidationError('The preferences belong to another account');
+		await this.update(actor, input.command);
 	}
 	constructor(private readonly dependencies: TrustPoliciesDependencies) {}
 	async list(actor: ActorContext): Promise<GetTrustPoliciesOutput> {

@@ -72,6 +72,7 @@ export class InMemoryNoteContent
 	}
 
 	notes: Note[] = [];
+	saveFailure: Error | undefined;
 	/** Snapshots taken by `record`, oldest first — named apart from the `revisions` reader. */
 	recordedRevisions: NoteRevision[] = [];
 	anchors: SourceAnchor[] = [];
@@ -139,6 +140,7 @@ export class InMemoryNoteContent
 	}
 
 	async save(actor: ActorContext, note: Note): Promise<Note> {
+		if (this.saveFailure) throw this.saveFailure;
 		if (note.userId !== actor.userId) throw new OwnershipError('Cannot save another user’s note');
 		const current = this.notes.find(
 			(candidate) => candidate.id === note.id && candidate.userId === actor.userId
