@@ -20,7 +20,7 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder({ name: INBOX_PROJECT_NAME, role: 'inbox' })];
 	const notes = new InMemoryNoteRepository();
-	const skills = new InMemorySkillRepository();
+	const skills = new InMemorySkillRepository(notes);
 	return {
 		notes,
 		skills,
@@ -55,7 +55,7 @@ const setupLegacyFollowThrough = async () => {
 			? {
 					...skill,
 					note,
-					name: 'FollowThrough',
+
 					slug: 'followthrough',
 					description: 'Discover and use FollowThrough actions safely.',
 					triggerHints: ['create', 'update', 'organize', 'plan', 'follow through'],
@@ -75,7 +75,7 @@ describe('Built-in skill provisioning invariants', () => {
 		const { provisioner, skills } = setup();
 		await provisioner.ensure(testActor());
 		await provisioner.ensure(testActor());
-		expect(skills.skills.map((skill) => skill.name)).toEqual([
+		expect(skills.skills.map((skill) => skill.note.title)).toEqual([
 			'FollowThrough',
 			'Settings',
 			'Diagramming'

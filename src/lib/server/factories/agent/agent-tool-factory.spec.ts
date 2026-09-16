@@ -1,4 +1,5 @@
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
@@ -792,29 +793,8 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	const skillFixture = (body = 'Number every finding.') => {
-		const note = noteBuilder({
-			id: crypto.randomUUID() as never,
-			kind: 'skill',
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
-			} as never
-		});
-		const view = {
-			skill: {
-				note,
-				name: 'Compliance format',
-				description: 'Formats responses for compliance review',
-				triggerHints: ['compliance', 'audit']
-			},
-			usages: [{ usage: { id: 'usage-1' } }, { usage: { id: 'usage-2' } }]
-		};
-		const factory = {
-			skills: () => ({
-				get: async () => view,
-				loadForAgent: async () => view
-			})
-		} as unknown as ControllerFactory;
+		const { note, controller } = loadedSkillFixture(body);
+		const factory = capabilityDependencies<ControllerFactory>({ skills: () => controller });
 		const definitions = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Use a skill' },

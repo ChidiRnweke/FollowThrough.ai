@@ -22,7 +22,7 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const skills = new InMemorySkillRepository();
+	const skills = new InMemorySkillRepository(notes);
 	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
@@ -38,7 +38,7 @@ const setup = () => {
 			anchorRepairer: catalog,
 			noteIndexer: content,
 			noteLinkReconciler: content,
-			transactionRunner: new InMemoryTransactionRunner([])
+			transactionRunner: new InMemoryTransactionRunner([notes, skills])
 		})
 	);
 	return { controller, service, notes, skills, catalog, content };
@@ -68,7 +68,7 @@ describe('Skill restoration', () => {
 		skills.skills = [
 			{
 				note: current,
-				name: current.title,
+
 				description: 'Instructions',
 				triggerHints: ['instruction'],
 				isEnabled: true

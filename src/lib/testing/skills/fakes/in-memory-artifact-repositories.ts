@@ -21,6 +21,7 @@ import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagra
 import type { NoteRelationshipRepository } from '$lib/server/repositories/relationships/relationships';
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
+import type { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 
 export class InMemoryRelationshipRepository implements NoteRelationshipRepository {
 	relationships: NoteRelationship[] = [];
@@ -243,6 +244,7 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 }
 
 export class InMemorySkillRepository implements SkillRepository {
+	constructor(private readonly notes: InMemoryNoteRepository) {}
 	writeFailure: Error | undefined;
 	// Unit transactions run sequentially; PostgreSQL contracts verify concurrent locking.
 	async lockBuiltInProvisioning(_actor: ActorContext): Promise<void> {}
@@ -257,18 +259,23 @@ export class InMemorySkillRepository implements SkillRepository {
 	skills: Skill<Note>[] = [];
 	usages: SkillUsage[] = [];
 	async findByNoteId(actor: ActorContext, noteId: NoteId) {
-		return this.skills.find((item) => item.note.id === noteId && item.note.userId === actor.userId);
+		const skill = this.skills.find((item) => item.note.id === noteId);
+		const note = await this.notes.findById(actor, noteId);
+		return skill && note ? { ...skill, note } : undefined;
 	}
 	async listEnabled(actor: ActorContext): Promise<readonly SkillSummary[]> {
 		return (await this.listAll(actor)).filter((skill) => skill.isEnabled);
 	}
 	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
-		return this.skills
-			.filter((item) => item.note.userId === actor.userId)
+		const joined = await Promise.all(
+			this.skills.map((item) => this.findByNoteId(actor, item.note.id))
+		);
+		return joined
+			.filter((item) => item !== undefined)
 			.map((item) => ({
 				noteId: item.note.id,
 				projectId: item.note.projectId,
-				name: item.name,
+				name: item.note.title,
 				slug: item.slug,
 				description: item.description,
 				triggerHints: item.triggerHints,

@@ -525,7 +525,11 @@ export const skillMetadataWrite = (
 	command: { kind: 'updateSkill', noteId: entry.noteId, ...patch },
 	local: {
 		type: 'skills',
-		value: { ...entry, ...applySkillMetadataEdit(entry, patch) }
+		value: {
+			...entry,
+			...applySkillMetadataEdit(entry, patch),
+			name: patch.displayName?.trim() || entry.name
+		}
 	},
 	coalesce: null,
 	references: []

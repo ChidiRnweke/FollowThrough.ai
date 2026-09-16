@@ -256,8 +256,7 @@ export class Skills implements SkillsController {
 			await this.dependencies.revisionRecorder.record(actor, note);
 			return this.dependencies.skillEditor.commitEdit(actor, {
 				...current,
-				note,
-				name: note.title
+				note
 			});
 		});
 		return {
@@ -273,7 +272,7 @@ export class Skills implements SkillsController {
 			const prepared = await this.dependencies.skillEditor.prepareEdit(actor, input);
 			if (prepared.kind === 'document') validatePortableSkill(prepared.manifest);
 			const note =
-				prepared.kind === 'document'
+				prepared.kind !== 'metadata'
 					? await this.saveDocument(actor, prepared.document)
 					: prepared.skill.note;
 			return this.dependencies.skillEditor.commitEdit(actor, { ...prepared.skill, note });

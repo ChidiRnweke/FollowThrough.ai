@@ -50,7 +50,7 @@ describe('Create skill invariants', () => {
 			name: 'ADR writing',
 			projectId: testProjectId()
 		});
-		expect(output.skill.name).toBe('ADR writing');
+		expect(output.skill.note.title).toBe('ADR writing');
 	});
 
 	it('inserts a skill record for the new note', async () => {

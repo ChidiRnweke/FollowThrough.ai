@@ -12,11 +12,15 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const skills = new InMemorySkillRepository();
 	const notes = new InMemoryNoteRepository();
+	const skills = new InMemorySkillRepository(notes);
 	const provenance = new InMemoryProvenanceRepository();
 	notes.notes = [
-		noteBuilder({ plainText: 'Write decisions clearly.' }),
+		noteBuilder({
+			kind: 'skill',
+			title: 'Decision writing',
+			plainText: 'Write decisions clearly.'
+		}),
 		noteBuilder({ id: testNoteId(2), title: 'Context' })
 	];
 	provenance.provenance = [
@@ -53,8 +57,8 @@ describe('Skill management invariants', () => {
 		const { service, skills } = setup();
 		skills.skills = [
 			{
-				note: noteBuilder({ kind: 'skill' }),
-				name: 'Decision writing',
+				note: noteBuilder({ kind: 'skill', title: 'Decision writing' }),
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
 				isEnabled: true
@@ -72,8 +76,8 @@ describe('Skill management invariants', () => {
 		const { service, skills, notes } = setup();
 		skills.skills = [
 			{
-				note: noteBuilder({ kind: 'skill' }),
-				name: 'Decision writing',
+				note: noteBuilder({ kind: 'skill', title: 'Decision writing' }),
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
 				isEnabled: true
@@ -103,7 +107,7 @@ describe('Skill management invariants', () => {
 		skills.skills = [
 			{
 				note: skillNote,
-				name: 'Decision writing',
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
 				isEnabled: true
@@ -129,7 +133,7 @@ describe('Skill management invariants', () => {
 		skills.skills = [
 			{
 				note: skillNote,
-				name: 'Decision writing',
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
 				isEnabled: true
@@ -155,7 +159,7 @@ describe('Skill management invariants', () => {
 		skills.skills = [
 			{
 				note: skillNote,
-				name: 'Decision writing',
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
 				isEnabled: true
@@ -181,7 +185,7 @@ describe('Skill management invariants', () => {
 		skills.skills = [
 			{
 				note: skillNote,
-				name: 'Decision writing',
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
 				isEnabled: true

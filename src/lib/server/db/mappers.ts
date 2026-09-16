@@ -254,7 +254,6 @@ export const toSkill = (
 	skill: typeof schema.skills.$inferSelect
 ): Skill<Note> => ({
 	note: toNote(note),
-	name: skill.name,
 	slug: skill.slug,
 	description: skill.description,
 	triggerHints: skill.triggerHints,

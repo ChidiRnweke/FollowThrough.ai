@@ -102,7 +102,9 @@ export class WorkspaceViews {
 	skill(noteId: NoteId): WorkspaceSkill | null {
 		const note = this.get('notes', noteId);
 		const metadata = this.get('skills', noteId);
-		return note && metadata && note.kind === 'skill' ? { ...metadata, note } : null;
+		return note && metadata && note.kind === 'skill'
+			? { ...metadata, name: note.title, note }
+			: null;
 	}
 
 	skills(projectId?: ProjectId): readonly SkillSummary[] {
@@ -114,6 +116,7 @@ export class WorkspaceViews {
 			return [
 				{
 					...skill,
+					name: note.title,
 					projectId: note.projectId,
 					isPinned: projectId
 						? pins.some((pin) => pin.projectId === projectId && pin.skillNoteId === skill.noteId)

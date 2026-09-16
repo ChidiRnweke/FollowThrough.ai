@@ -20,9 +20,9 @@ const skill = (project = testProjectId()): Skill<Note> => ({
 		id: testNoteId(3),
 		projectId: project,
 		kind: 'skill',
+		title: 'Decision records',
 		plainText: 'Always state the decision and consequences.'
 	}),
-	name: 'Decision records',
 	description: 'Create architecture decision records',
 	triggerHints: ['decision', 'ADR'],
 	isEnabled: true
@@ -244,15 +244,13 @@ describe('Agent grounding invariants', () => {
 		const { builder, skills } = await setup();
 		const pinned = {
 			...skill(),
-			note: noteBuilder({ id: testNoteId(4), kind: 'skill' }),
-			name: 'Zzz pinned'
+			note: noteBuilder({ id: testNoteId(4), kind: 'skill', title: 'Zzz pinned' })
 		};
 		skills.skills = [
 			pinned,
 			...Array.from({ length: 200 }, (_, index) => ({
 				...skill(),
-				note: noteBuilder({ id: testNoteId(100 + index), kind: 'skill' }),
-				name: `Filler ${index}`,
+				note: noteBuilder({ id: testNoteId(100 + index), kind: 'skill', title: `Filler ${index}` }),
 				description: 'x'.repeat(400)
 			}))
 		];

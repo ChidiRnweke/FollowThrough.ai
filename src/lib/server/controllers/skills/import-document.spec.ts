@@ -24,7 +24,7 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const skills = new InMemorySkillRepository();
+	const skills = new InMemorySkillRepository(notes);
 	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
@@ -40,7 +40,7 @@ const setup = () => {
 			anchorRepairer: catalog,
 			noteIndexer: content,
 			noteLinkReconciler: content,
-			transactionRunner: new InMemoryTransactionRunner([])
+			transactionRunner: new InMemoryTransactionRunner([notes, skills])
 		})
 	);
 	return { controller, service, notes, skills, catalog, content };
@@ -52,7 +52,7 @@ const importSkill = () => {
 	state.skills.skills = [
 		{
 			note,
-			name: note.title,
+
 			slug: 'decision-writing',
 			description: 'Writes decisions',
 			triggerHints: [],
@@ -73,6 +73,52 @@ const input: SkillEditInput = {
 };
 
 describe('Skill document imports', () => {
+	it('reads the current note title in the skill list after a document rename', async () => {
+		const { catalog, service, note } = importSkill();
+		await catalog.save(testActor(), { ...note, title: 'Release decisions' });
+		expect((await service.listAll(testActor())).map((skill) => skill.name)).toEqual([
+			'Release decisions'
+		]);
+	});
+	it('keeps a title change unpublished and preserves the portable skill name', async () => {
+		const { controller, notes, note } = importSkill();
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			displayName: 'Release decisions'
+		});
+		expect({
+			slug: skill.slug,
+			revision: skill.note.currentRevision,
+			published: skill.note.publishedRevision,
+			history: notes.revisions
+		}).toEqual({ slug: 'decision-writing', revision: 2, published: 0, history: [] });
+	});
+	it('rolls back the renamed document when its metadata write fails', async () => {
+		const { controller, notes, skills, note } = importSkill();
+		skills.writeFailure = new Error('Metadata write failed');
+		await controller
+			.update(testActor(), { noteId: note.id, displayName: 'Release decisions' })
+			.then(
+				() => {
+					throw new Error('Expected metadata failure');
+				},
+				(error: Error) => {
+					if (error.message !== 'Metadata write failed') throw error;
+				}
+			);
+		expect(notes.notes).toEqual([note]);
+	});
+	it('rejects an empty display name', async () => {
+		const { controller, note } = importSkill();
+		await expect(
+			controller.update(testActor(), { noteId: note.id, displayName: '  ' })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+	it('renames the skill note when its display name changes', async () => {
+		const { controller, notes, note } = importSkill();
+		await controller.update(testActor(), { noteId: note.id, displayName: 'Release decisions' });
+		expect(notes.notes[0].title).toBe('Release decisions');
+	});
 	it('does not save instructions when their portable metadata is incomplete', async () => {
 		const { controller, notes } = importSkill();
 		const original = structuredClone(notes.notes);
@@ -93,10 +139,11 @@ describe('Skill document imports', () => {
 		expect(notes.notes).toEqual(original);
 	});
 	it('rejects an imported portable name already used by another skill', async () => {
-		const { controller, skills } = importSkill();
+		const { controller, skills, notes } = importSkill();
+		const other = noteBuilder({ id: testNoteId(2), kind: 'skill', title: 'Another skill' });
+		notes.notes.push(other);
 		skills.skills.push({
-			note: noteBuilder({ id: testNoteId(2), kind: 'skill' }),
-			name: 'Another skill',
+			note: other,
 			slug: 'already-used',
 			description: 'Existing instructions',
 			triggerHints: [],
