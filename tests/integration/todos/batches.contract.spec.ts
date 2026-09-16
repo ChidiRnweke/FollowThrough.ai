@@ -23,6 +23,8 @@ const setup = async (suffix: string) => {
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
 			todoCreator: capability.catalog,
+			todoEditor: capability.catalog,
+			todoContextReader: capability.catalog,
 			todoBatchReceipts: capability.batchReceipts,
 			transactionRunner
 		})
@@ -35,7 +37,7 @@ const setup = async (suffix: string) => {
 			{ title: 'Second task', responsibility: 'mine' }
 		]
 	});
-	return { ...seeded, controller, input, catalog: capability.catalog };
+	return { ...seeded, controller, input };
 };
 
 describe('durable task batch transactions', () => {
@@ -93,9 +95,9 @@ describe('durable task batch transactions', () => {
 		});
 	});
 	it('returns the original outcome after tasks are edited and the original response is lost', async () => {
-		const { owner, controller, input, catalog } = await setup('9263');
+		const { owner, controller, input } = await setup('9263');
 		const first = await controller.createBatch(owner, input);
-		await catalog.update(owner, { todoId: first.todos[0]!.id, title: 'Later edit' });
+		await controller.update(owner, { todoId: first.todos[0]!.id, title: 'Later edit' });
 		expect(await controller.createBatch(owner, input)).toEqual(first);
 	});
 	it('rejects a different batch under an existing request ID', async () => {

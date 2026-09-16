@@ -11,7 +11,17 @@ export class TodoRecords implements TodoRepository {
 	constructor(private readonly database: Database) {}
 
 	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
-		const [row] = await this.database
+		const [row] = await this.activeTask(actor, id);
+		return row ? toTodo(row.todo) : undefined;
+	}
+
+	async findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
+		const [row] = await this.activeTask(actor, id).for('update', { of: schema.todos });
+		return row ? toTodo(row.todo) : undefined;
+	}
+
+	private activeTask(actor: ActorContext, id: TodoId) {
+		return this.database
 			.select({ todo: schema.todos })
 			.from(schema.todos)
 			.innerJoin(schema.projects, eq(schema.projects.id, schema.todos.projectId))
@@ -23,7 +33,6 @@ export class TodoRecords implements TodoRepository {
 					isNull(schema.projects.archivedAt)
 				)
 			);
-		return row ? toTodo(row.todo) : undefined;
 	}
 
 	/**

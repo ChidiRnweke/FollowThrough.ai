@@ -1,3 +1,4 @@
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 import { TodoCatalog } from '$lib/server/services/todos/catalog';
@@ -36,7 +37,11 @@ it('clearing a linked note restores the extraction origin in the returned task v
 		new InMemoryProvenanceRepository()
 	);
 	const controller = new Todos(
-		capabilityDependencies<TodosDependencies>({ todoEditor: catalog, todoContextReader: catalog })
+		capabilityDependencies<TodosDependencies>({
+			todoEditor: catalog,
+			todoContextReader: catalog,
+			transactionRunner: new InMemoryTransactionRunner([tasks])
+		})
 	);
 	const result = await controller.update(testActor(), { todoId: task.id, linkedNoteId: null });
 	expect({

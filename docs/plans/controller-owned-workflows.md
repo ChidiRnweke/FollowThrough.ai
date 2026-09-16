@@ -601,6 +601,13 @@ and updates now require an active task. The shared fakes enforce the same condit
 PostgreSQL regressions fail before this fix: the stale write reports success, changes the title and
 clears deletion. The guarded write must leave the original title and deletion time intact.
 
+Task edit ownership and concurrency: Todos owns the read, shared edit decision, persistence and
+returned view inside one transaction. TodoCatalog reads an active task under a row lock and persists
+the resolved value. Offline commands use the same edit service. Models no longer apply task edits;
+creation policy remains open. Edit tests moved from the catalog to the real controller and catalog.
+A real PostgreSQL regression holds the task row until two competing edits reach it. Before the fix,
+one edit overwrites the other; after locking before the read, title and description changes survive.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

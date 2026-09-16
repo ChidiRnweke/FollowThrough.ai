@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTodoEdit } from './index';
+import { applyTodoEdit } from './edits';
 import { todoBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('local todo edits', () => {
