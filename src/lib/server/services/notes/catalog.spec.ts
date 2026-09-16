@@ -108,20 +108,6 @@ describe('Note management invariants', () => {
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
-	it('rejects selection offsets outside the note', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder({ plainText: 'short' })];
-		await expect(
-			service.create(testActor(), {
-				noteId: testNoteId(),
-				revision: 1,
-				from: 0,
-				to: 99,
-				text: 'short'
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
-	});
-
 	it('archives an active note', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
@@ -211,20 +197,6 @@ describe('Note management invariants', () => {
 		await expect(service.archive(testActor(2), testNoteId())).rejects.toMatchObject({
 			code: 'NOT_FOUND'
 		});
-	});
-
-	it('rejects selection text that does not match its offsets', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder({ plainText: 'text' })];
-		await expect(
-			service.create(testActor(), {
-				noteId: testNoteId(),
-				revision: 1,
-				from: 0,
-				to: 4,
-				text: 'Other'
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
 	it('leaves an ambiguous anchor unchanged during repair', async () => {

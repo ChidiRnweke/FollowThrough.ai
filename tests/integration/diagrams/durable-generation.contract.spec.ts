@@ -74,7 +74,7 @@ const setup = async (suffix: string) => {
 			provenance: notes.provenance
 		},
 		transactionRunner,
-		anchorCreator: notes.catalog,
+		selectionOrigins: notes.selectionOrigins,
 		drawioXmlValidator: new DrawioXmlValidator(),
 		suggestionCreator: suggestions.inbox,
 		noteActionRequests: requests,

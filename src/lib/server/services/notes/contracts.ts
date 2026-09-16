@@ -92,9 +92,6 @@ export interface NoteImporter {
 export interface NoteExporter {
 	export(actor: ActorContext, noteId: NoteId): Promise<string>;
 }
-export interface SelectionAnchorCreator {
-	create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor>;
-}
 export interface SourceAnchorResolver {
 	resolve(
 		actor: ActorContext,
