@@ -3,10 +3,14 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
+import {
+	References,
+	type ReferencesDependencies
+} from '$lib/server/controllers/references/controller';
+import { ReferenceRanking } from '$lib/server/services/references/ranking';
+import type { Url } from '$lib/models/references';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
@@ -18,10 +22,7 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { isTerminalAgentRunStatus, type AgentRunId } from '$lib/models/agent';
-import {
-	InMemoryPromiseExtractor,
-	InMemoryTrustPolicyEvaluator
-} from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemoryReferencePipeline } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, seedNote } from '../database-harness';
 
@@ -37,20 +38,13 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
 	const projects = new ProjectRecords(database);
 	const notes = createNotesCapability({ db: database, projects });
-	const todo = createTodosCapability({
-		db: database,
-		projects,
-		notes: notes.repository,
-		anchors: notes.anchors,
-		provenance: notes.provenanceRepository
-	});
 	const suggestions = createSuggestionsCapability({
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const text = 'I will send it soon.';
+	const text = 'Use OAuth';
 	const note = await notes.catalog.save(seeded.owner, {
 		...seeded.note,
 		plainText: text,
@@ -67,27 +61,27 @@ const setup = async (suffix: string) => {
 	const events = new AgentRunEventRecords(database);
 	const requests = new SelectionRequests(runs, events, new ConversationRecords(database));
 	const settlements = new RunSettlements(runs, events);
-	const extractor = new InMemoryPromiseExtractor();
-	extractor.candidates = [
-		{ action: 'Send it', responsibility: 'mine', strength: 'explicit', confidence: 95 }
+	const finder = new InMemoryReferencePipeline();
+	finder.candidates = [
+		{
+			url: 'https://www.rfc-editor.org/rfc/rfc6749' as Url,
+			title: 'OAuth standard',
+			tier: 'standard',
+			relevanceNote: 'Defines OAuth',
+			confidence: 95
+		}
 	];
-	const trust = new InMemoryTrustPolicyEvaluator();
-	trust.autoAccept = true;
-	const dependencies = capabilityDependencies<TodosDependencies>({
+	const dependencies: ReferencesDependencies = {
 		transactionRunner,
 		selectionRequests: requests,
-		promiseExtractor: extractor,
-		promiseRules: todo.promiseRules,
-		promiseGeneration: { kind: 'model', model: 'test/model' },
+		referenceFinder: finder,
+		referenceRanker: new ReferenceRanking(),
+		referenceModel: 'test/model',
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox,
-		suggestionAccepter: suggestions.inbox,
-		suggestionEffects: suggestions.effects,
-		todoCreator: todo.catalog,
-		trustPolicyEvaluator: trust
-	});
+		suggestionCreator: suggestions.inbox
+	};
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
@@ -98,16 +92,16 @@ const setup = async (suffix: string) => {
 			eventBus: { notify: () => {} }
 		})
 	);
-	const controller = new Todos(dependencies);
+	const controller = new References(dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
 			requests.prepare(seeded.owner, {
 				requestId: input.requestId,
 				context: {
-					kind: 'promise_extraction',
+					kind: 'reference_search',
 					selection: input.selection,
-					generation: dependencies.promiseGeneration
+					model: dependencies.referenceModel
 				}
 			})
 		);
@@ -124,7 +118,7 @@ const setup = async (suffix: string) => {
 		runs,
 		events,
 		requests,
-		extractor,
+		finder,
 		agent,
 		dependencies,
 		controller,
@@ -133,50 +127,50 @@ const setup = async (suffix: string) => {
 	};
 };
 
-it('commits one extraction for simultaneous duplicate submissions on separate connections', async () => {
-	const state = await setup('12501');
+it('commits one reference search for simultaneous duplicate submissions on separate connections', async () => {
+	const state = await setup('12901');
 	const [first, second] = await Promise.all([
-		state.controller.startExtractPromises(state.owner, state.input),
-		state.controller.startExtractPromises(state.owner, state.input)
+		state.controller.startSuggestFromSelection(state.owner, state.input),
+		state.controller.startSuggestFromSelection(state.owner, state.input)
 	]);
 	await state.finished(first.runId);
 	const [counts] =
-		await context.client`select (select count(*)::int from agent_runs where user_id = ${state.owner.userId}) as runs, (select count(*)::int from conversations where user_id = ${state.owner.userId}) as conversations, (select count(*)::int from todos where user_id = ${state.owner.userId}) as todos`;
+		await context.client`select (select count(*)::int from agent_runs where user_id = ${state.owner.userId}) as runs, (select count(*)::int from conversations where user_id = ${state.owner.userId}) as conversations, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions`;
 	expect({ sameRun: first.runId === second.runId, counts }).toEqual({
 		sameRun: true,
-		counts: { runs: 1, conversations: 1, todos: 1 }
+		counts: { runs: 1, conversations: 1, suggestions: 1 }
 	});
 });
 
-it('keeps the database free of proposals when cancellation beats the extractor result', async () => {
-	const state = await setup('12502');
+it('keeps the database free of proposals when cancellation beats the finder result', async () => {
+	const state = await setup('12902');
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
-	state.extractor.completion = gate.promise;
-	const execution = state.controller.executePromiseRun(state.owner, receipt.runId);
+	state.finder.completion = gate.promise;
+	const execution = state.controller.executeReferenceRun(state.owner, receipt.runId);
 	try {
-		await state.extractor.started.promise;
+		await state.finder.started.promise;
 		await state.agent.cancel(state.owner, receipt.runId);
 	} finally {
 		gate.resolve();
 	}
 	await execution;
 	const [counts] =
-		await context.client`select (select count(*)::int from todos where user_id = ${state.owner.userId}) as todos, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
+		await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 	expect({
 		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
 		counts
-	}).toEqual({ status: 'cancelled', counts: { todos: 0, suggestions: 0, anchors: 0 } });
+	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
 
-it('rolls back accepted tasks when the database refuses the extraction result event', async () => {
-	const state = await setup('12503');
+it('rolls back reference proposals and anchors when the result event fails', async () => {
+	const state = await setup('12903');
 	const receipt = await state.prepare();
-	await context.client`alter table agent_run_events add constraint promise_result_failure check (event->>'type' <> 'workflow_result') not valid`;
+	await context.client`alter table agent_run_events add constraint reference_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'reference')) not valid`;
 	try {
-		await state.controller.executePromiseRun(state.owner, receipt.runId);
+		await state.controller.executeReferenceRun(state.owner, receipt.runId);
 		const [counts] =
-			await context.client`select (select count(*)::int from todos where user_id = ${state.owner.userId}) as todos, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions`;
+			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
 			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
 			counts,
@@ -185,18 +179,18 @@ it('rolls back accepted tasks when the database refuses the extraction result ev
 			)
 		}).toEqual({
 			status: 'failed',
-			counts: { todos: 0, suggestions: 0 },
+			counts: { suggestions: 0, anchors: 0 },
 			events: ['run_queued', 'run_started', 'failed']
 		});
 	} finally {
-		await context.client`alter table agent_run_events drop constraint promise_result_failure`;
+		await context.client`alter table agent_run_events drop constraint reference_result_failure`;
 	}
 });
 
-it('reconstructs a queued extraction after the submitting controller has been discarded', async () => {
-	const state = await setup('12504');
+it('reconstructs a queued reference search after its submitting controller has been discarded', async () => {
+	const state = await setup('12904');
 	const receipt = await state.prepare();
-	await new Todos(state.dependencies).recoverQueuedPromiseRuns();
+	await new References(state.dependencies).recoverQueuedReferenceRuns();
 	await state.finished(receipt.runId);
 	expect(
 		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>
@@ -204,5 +198,5 @@ it('reconstructs a queued extraction after the submitting controller has been di
 				? [record.event.action]
 				: []
 		)
-	).toEqual(['promises']);
+	).toEqual(['reference']);
 });

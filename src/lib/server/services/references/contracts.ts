@@ -8,11 +8,11 @@ import type {
 } from '$lib/models/references';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 
-export interface ReferenceSearchOptions {
-	readonly model?: string;
-	/** Aborts the web-search call when the user cancels the run it belongs to. */
-	readonly signal?: AbortSignal;
-}
+import type { ReferenceSearchOptions } from '$lib/server/repositories/references/web-research';
+export type {
+	ReferenceSearchOptions,
+	WebReferenceClient
+} from '$lib/server/repositories/references/web-research';
 
 export interface ReferenceFinder {
 	find(
@@ -21,18 +21,8 @@ export interface ReferenceFinder {
 		options?: ReferenceSearchOptions
 	): Promise<readonly ReferenceCandidate[]>;
 }
-export interface WebReferenceClient {
-	search(
-		selectionText: string,
-		options?: ReferenceSearchOptions
-	): Promise<readonly ReferenceCandidate[] | undefined>;
-}
 export interface ReferenceRanker {
-	rank(
-		actor: ActorContext,
-		selection: TextSelection,
-		candidates: readonly ReferenceCandidate[]
-	): Promise<readonly ReferenceCandidate[]>;
+	rank(candidates: readonly ReferenceCandidate[]): readonly ReferenceCandidate[];
 }
 export interface ReferenceCreator {
 	create(actor: ActorContext, input: CreateReferenceInput): Promise<ExternalReference>;

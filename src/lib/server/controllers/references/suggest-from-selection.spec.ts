@@ -1,29 +1,10 @@
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import type { ReferenceCandidate, Url } from '$lib/models/references';
-import type { TextSelection } from '$lib/models/notes';
-import { References } from '$lib/server/controllers/references/controller';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import {
-	InMemoryProvenanceRecorder,
-	InMemoryReferencePipeline
-} from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryWorkflowRunner } from '$lib/testing/agent/fakes/in-memory-workflow-runner';
-import {
-	noteBuilder,
-	testActor,
-	testNoteId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-
-const selection: TextSelection = {
-	noteId: testNoteId(),
-	revision: 1,
-	from: 0,
-	to: 9,
-	text: 'Use OAuth'
-};
+	referenceSearchFixture as setup,
+	referenceSelection as selection
+} from '$lib/testing/references/fixtures/search';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const reference = (
 	title: string,
@@ -36,29 +17,6 @@ const reference = (
 	relevanceNote: `${title} is relevant`,
 	confidence
 });
-
-const setup = () => {
-	const content = new InMemoryNoteContent();
-	content.notes = [noteBuilder({ plainText: selection.text })];
-	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
-	const references = new InMemoryReferencePipeline();
-	const transactionRunner = new InMemoryTransactionRunner([content, provenance, suggestions]);
-	return {
-		content,
-		suggestions,
-		provenance,
-		references,
-		reference: new References({
-			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-			referenceFinder: references,
-			referenceRanker: references,
-			suggestionCreator: suggestions,
-			transactionRunner,
-			workflowRunner: new InMemoryWorkflowRunner()
-		})
-	};
-};
 
 describe('Reference workflow invariants', () => {
 	it('returns an honest empty outcome when search finds nothing', async () => {

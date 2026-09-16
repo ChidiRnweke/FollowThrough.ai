@@ -1,5 +1,5 @@
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { PromiseRequests } from '$lib/server/services/agent/runs/promise-requests';
+import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
 import { OpenRouter } from '@openrouter/sdk';
 import { normalizeLanguageModelId, webSearchOptionsFromEnvironment } from '$lib/models/agent';
 import type { Database } from '$lib/server/db';
@@ -68,7 +68,7 @@ export interface AgentCapability {
 	readonly context: AgentContext;
 	readonly runner: AgentReasoning;
 	readonly settlements: RunSettlements;
-	readonly promiseRequests: PromiseRequests;
+	readonly selectionRequests: SelectionRequests;
 	readonly eventBus: AgentEvents;
 	/** Runs the editor's note actions as cancellable, resumable agent runs. */
 	readonly workflowRunner: WorkflowRunner;
@@ -141,7 +141,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		}),
 		runner,
 		settlements,
-		promiseRequests: new PromiseRequests(runs, runEvents, conversationRepository),
+		selectionRequests: new SelectionRequests(runs, runEvents, conversationRepository),
 		eventBus
 	};
 };

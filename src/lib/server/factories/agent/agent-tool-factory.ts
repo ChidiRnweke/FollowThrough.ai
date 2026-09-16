@@ -372,6 +372,14 @@ export const agentToolCoverage = {
 	},
 	references: {
 		suggestFromSelection: { kind: 'proposal', tools: ['find_references'] },
+		executeReferenceRun: {
+			kind: 'excluded',
+			reason: 'The References controller executes a stored editor request.'
+		},
+		recoverQueuedReferenceRuns: {
+			kind: 'excluded',
+			reason: 'Startup recovers committed reference searches.'
+		},
 		startSuggestFromSelection: {
 			kind: 'excluded',
 			reason:

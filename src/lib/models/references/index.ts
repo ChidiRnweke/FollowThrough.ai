@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -13,6 +15,30 @@ type ProvenanceId = Brand<string, 'ProvenanceId'>;
 type DateTime = Brand<string, 'DateTime'>;
 
 export type Url = Brand<string, 'Url'>;
+
+export interface ReferenceSource {
+	readonly url: Url;
+	readonly hostname: string;
+	readonly title?: string;
+	readonly content?: string;
+}
+
+const openRouterCitationSchema = z.looseObject({
+	type: z.string().optional(),
+	url: z.string().optional(),
+	title: z.string().optional(),
+	content: z.string().optional()
+});
+
+export const openRouterReferenceOutputSchema = z.array(
+	z.looseObject({
+		type: z.string().optional(),
+		action: z.looseObject({ sources: z.array(openRouterCitationSchema).optional() }).optional(),
+		content: z
+			.array(z.looseObject({ annotations: z.array(openRouterCitationSchema).optional() }))
+			.optional()
+	})
+);
 
 interface TextSelection {
 	readonly noteId: NoteId;
@@ -72,6 +98,28 @@ export interface ReferenceCandidate {
 export interface FindReferencesInput {
 	readonly selection: TextSelection;
 }
+
+export interface StartFindReferencesInput extends FindReferencesInput {
+	readonly requestId: string;
+}
+
+export const startFindReferencesSchema = z
+	.object({
+		requestId: z.string().uuid(),
+		selection: z
+			.object({
+				noteId: z
+					.string()
+					.uuid()
+					.transform((value) => value as NoteId),
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+	})
+	.strict() satisfies z.ZodType<StartFindReferencesInput>;
 
 /** `nothing_relevant` is a real outcome, not an empty list: the anchor is still recorded so the search is auditable even when it found nothing worth suggesting. */
 export type FindReferencesOutput<Proposal> =
