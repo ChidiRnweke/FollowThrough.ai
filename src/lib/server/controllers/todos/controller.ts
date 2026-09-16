@@ -2,7 +2,6 @@ import type { SuggestionEffectService } from '$lib/server/services/suggestions/c
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
-import { applyTodoEdit } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	BoardPdfExportResult,
@@ -33,7 +32,6 @@ import type {
 	TodoEditor,
 	TodoLister,
 	TodoReader,
-	TodoStatusChanger,
 	TodoViewAssembler
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
@@ -59,8 +57,7 @@ export interface TodosController {
 	/** Create a todo. */
 	create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }>;
 	/**
-	 * Apply a partial edit to a todo: merges only the supplied fields, then applies a
-	 * status change when the status differs from the current one.
+	 * Validate and persist the supplied fields and status as one complete edit.
 	 *
 	 * @throws InvalidGeneratedContentError if no edit is supplied at all — an update
 	 * that changes nothing is a caller bug, not a no-op.
@@ -95,7 +92,6 @@ export interface TodosDependencies {
 	todoReader: TodoReader;
 	todoEditor: TodoEditor;
 	todoDeleter: TodoDeleter;
-	todoStatusChanger: TodoStatusChanger;
 	selectionOrigins: SelectionOriginService;
 	promiseExtractor: PromiseExtractor;
 	suggestionCreator: SuggestionCreator;
@@ -115,8 +111,6 @@ export class Todos implements TodosController {
 			switch (command.kind) {
 				case 'createTodo':
 					await this.create(actor, command);
-					if (command.status && command.status !== 'open')
-						await this.update(actor, { todoId: command.id, status: command.status });
 					break;
 				case 'updateTodo': {
 					const { kind, ...edits } = command;
@@ -158,18 +152,7 @@ export class Todos implements TodosController {
 		if (Object.keys(input).every((key) => key === 'todoId')) {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
-		let todo = await this.dependencies.todoReader.get(actor, input.todoId);
-		if (Object.keys(input).some((key) => key !== 'todoId' && key !== 'status')) {
-			const { status, ...fields } = input;
-			void status;
-			todo = await this.dependencies.todoEditor.update(
-				actor,
-				applyTodoEdit(todo, fields, todo.updatedAt)
-			);
-		}
-		if (input.status !== undefined && input.status !== todo.status) {
-			todo = await this.dependencies.todoStatusChanger.change(actor, input.todoId, input.status);
-		}
+		const todo = await this.dependencies.todoEditor.update(actor, input);
 		const [view] = await this.dependencies.todoViewAssembler.assemble(actor, [todo]);
 		return { todo, view: view! };
 	}

@@ -1,9 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
+import type { Todo, TodoId, TodoListFilter, TodoStatus } from '$lib/models/todos';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
 
 export class InMemoryTodoRepository implements TodoRepository {
 	todos: Todo[] = [];
+	updateFailures = new Map<TodoStatus, Error>();
 
 	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
 		return this.todos.find(
@@ -44,6 +45,8 @@ export class InMemoryTodoRepository implements TodoRepository {
 		return todo;
 	}
 	async update(_actor: ActorContext, todo: Todo): Promise<Todo> {
+		const failure = this.updateFailures.get(todo.status);
+		if (failure) throw failure;
 		this.todos = this.todos.map((item) => (item.id === todo.id ? todo : item));
 		return todo;
 	}
