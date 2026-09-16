@@ -355,6 +355,14 @@ Failed metadata writes roll back the Inbox, notes and revisions. BuiltInSkillLib
 BuiltInSkills now uses only actual repositories and its load method never provisions. Skill manifest
 coordination, durable selection workflows and the remaining model families are still unfinished.
 
+Skill document boundaries: SKILL.md YAML parsing now belongs to the remote import reader, with its
+Zod frontmatter object in the skill model. Document edits carry either parsed manifest values or
+instruction text, together with their required base revision. SkillLibrary no longer receives a
+codec or reparses its own serialized output. Browser and server export use one shared serialization
+service. The unused duplicate attachment-path validator is removed; its regression now exercises
+the actual attachment upload service. Skill metadata decisions, identity/history policy and the
+remaining workspace-mutation model behavior still require their separate global refactor.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

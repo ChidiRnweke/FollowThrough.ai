@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { SkillManifestCodec } from '$lib/server/services/skills/manifest';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -24,12 +23,7 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository();
-	const service = new SkillLibrary(
-		skills,
-		notes,
-		new InMemoryProvenanceRepository(),
-		new SkillManifestCodec()
-	);
+	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(

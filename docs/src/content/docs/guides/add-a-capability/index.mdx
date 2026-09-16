@@ -67,14 +67,9 @@ The layering rules themselves are explained in [Architecture](/FollowThrough.ai/
    ```ts
    export const createSkillsCapability = (input: SkillsCapabilityInput): SkillsCapability => {
    	const repository = new SkillRecords(input.db);
-   	const library = new SkillLibrary(
-   		repository,
-   		input.notes,
-   		input.provenance,
-   		new SkillManifestCodec()
-   	);
+   	const library = new SkillLibrary(repository, input.notes, input.provenance);
    	// …
-   	return { library, builtIns, provisioned: new BuiltInSkillLibrary(builtIns, library) };
+   	return { library, builtIns };
    };
    ```
 

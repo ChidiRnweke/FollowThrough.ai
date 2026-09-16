@@ -5,7 +5,6 @@ import { WorkspaceViews } from '$lib/controllers/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { SkillManifestCodec } from '$lib/server/services/skills/manifest';
 import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
@@ -78,8 +77,7 @@ it('shows the same profile and visible-project memory attention from server and 
 			skillFinder: new SkillLibrary(
 				new InMemorySkillRepository(),
 				new InMemoryNoteRepository(),
-				new InMemoryProvenanceRepository(),
-				new SkillManifestCodec()
+				new InMemoryProvenanceRepository()
 			)
 		})
 	);

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { SkillLibrary } from './library';
-import { SkillManifestCodec } from './manifest';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -34,7 +33,7 @@ const setup = () => {
 	return {
 		skills,
 		notes,
-		service: new SkillLibrary(skills, notes, provenance, new SkillManifestCodec())
+		service: new SkillLibrary(skills, notes, provenance)
 	};
 };
 
