@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	Artifact,
 	ArtifactId,
@@ -6,7 +7,7 @@ import type {
 	ListArtifactsParams,
 	TemplateId
 } from '$lib/models/deliverables';
-import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
+import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type { ArtifactRepository, TemplateRepository } from '$lib/server/repositories/deliverables';
 import type {
 	IAttachmentStorage,
@@ -67,8 +68,26 @@ export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotP
 
 export class InMemoryTemplateRepository implements TemplateRepository, SnapshotParticipant {
 	templates: ProjectTemplate[] = [];
+	uploads: TemplateUpload[] = [];
+	insertFailure?: Error;
+	async insertUpload(_actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
+		this.uploads.push(upload);
+		return upload;
+	}
+	async findUpload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload | undefined> {
+		return this.uploads.find((upload) => upload.id === id && upload.userId === actor.userId);
+	}
+	findUploadForUpdate(actor: ActorContext, id: TemplateId) {
+		return this.findUpload(actor, id);
+	}
+	async deleteUpload(actor: ActorContext, id: TemplateId): Promise<void> {
+		this.uploads = this.uploads.filter(
+			(upload) => upload.id !== id || upload.userId !== actor.userId
+		);
+	}
 
 	async insert(_actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
+		if (this.insertFailure) throw this.insertFailure;
 		this.templates.push(template);
 		return template;
 	}
@@ -103,14 +122,18 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 
 	snapshot(): RestoreSnapshot {
 		const templates = structuredClone(this.templates);
+		const uploads = structuredClone(this.uploads);
 		return () => {
 			this.templates = templates;
+			this.uploads = uploads;
 		};
 	}
 }
 
 export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotParticipant {
 	objects = new Map<string, { data: Uint8Array; mediaType: string; checksumSha256?: string }>();
+	putFailure?: Error;
+	removeFailure?: Error;
 
 	async createUploadUrl(input: {
 		objectKey: string;
@@ -132,6 +155,7 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 	}
 
 	async put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void> {
+		if (this.putFailure) throw this.putFailure;
 		this.objects.set(objectKey, { data: new Uint8Array(data), mediaType });
 	}
 
@@ -145,7 +169,11 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 	}
 
 	async read(objectKey: string, maximumBytes: number): Promise<Uint8Array> {
-		return (this.objects.get(objectKey)?.data ?? new Uint8Array()).slice(0, maximumBytes);
+		const object = this.objects.get(objectKey);
+		if (!object) throw new NotFoundError('Stored object not found');
+		if (object.data.byteLength > maximumBytes)
+			throw new ValidationError('Stored object exceeds the read limit');
+		return new Uint8Array(object.data);
 	}
 
 	async promote(sourceKey: string, destinationKey: string): Promise<void> {
@@ -155,6 +183,7 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 	}
 
 	async remove(objectKey: string): Promise<void> {
+		if (this.removeFailure) throw this.removeFailure;
 		this.objects.delete(objectKey);
 	}
 

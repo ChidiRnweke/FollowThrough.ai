@@ -2,35 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { ExtractedTemplateStyles, TemplateId } from '$lib/models/deliverables';
-import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
+import type { ProjectId, TemplateUpload } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { TemplateRepository } from '$lib/server/repositories/deliverables';
-import type { TransactionRunner } from '$lib/server/repositories/workspace/transaction';
-interface TemplateStorage {
-	createUploadUrl(input: {
-		objectKey: string;
-		mediaType: string;
-		byteSize: number;
-		checksumSha256: string;
-		expiresInSeconds: number;
-	}): Promise<string>;
-	stat(objectKey: string): Promise<{ byteSize: number; checksumSha256?: string }>;
-	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
-	promote(sourceKey: string, destinationKey: string): Promise<void>;
-	remove(objectKey: string): Promise<void>;
-}
-
-const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class DocumentTemplates {
 	constructor(
-		private readonly storage: TemplateStorage,
-		private readonly templateRepo: TemplateRepository,
-		private readonly transactionRunner: TransactionRunner,
-		private readonly styleExtractor: (buffer: Buffer) => Promise<ExtractedTemplateStyles>
+		private readonly repository: TemplateRepository,
+		private readonly now: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}
 
-	async initiateUpload(
+	async reserveUpload(
 		actor: ActorContext,
 		input: {
 			projectId: ProjectId;
@@ -39,98 +21,61 @@ export class DocumentTemplates {
 			byteSize: number;
 			checksumSha256: string;
 		}
-	): Promise<{
-		templateId: TemplateId;
-		uploadUrl: string;
-		requiredHeaders: Record<string, string>;
-	}> {
+	): Promise<TemplateUpload> {
 		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
 			throw new ValidationError('Template must be at least 1 byte');
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Template checksum must be a SHA-256 hex digest');
-
-		const templateId = randomUUID() as TemplateId;
-		const timestamp = now();
-		const objectKey = `staging/${actor.userId}/templates/${templateId}`;
-
-		const template: ProjectTemplate = {
-			id: templateId,
+		const id = randomUUID() as TemplateId;
+		return this.repository.insertUpload(actor, {
+			...input,
+			id,
 			userId: actor.userId,
-			projectId: input.projectId,
-			name: input.name,
+			objectKey: `staging/${actor.userId}/templates/${id}`,
+			checksumSha256: input.checksumSha256.toLowerCase(),
+			createdAt: this.now()
+		});
+	}
+
+	async upload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload> {
+		const upload = await this.repository.findUpload(actor, id);
+		if (!upload) throw new NotFoundError('Template upload not found. Upload the file again.');
+		return upload;
+	}
+	lockUpload(actor: ActorContext, id: TemplateId) {
+		return this.repository.findUploadForUpdate(actor, id);
+	}
+	finishUpload(actor: ActorContext, id: TemplateId) {
+		return this.repository.deleteUpload(actor, id);
+	}
+	find(actor: ActorContext, id: TemplateId) {
+		return this.repository.findById(actor, id);
+	}
+	list(actor: ActorContext, projectId: ProjectId) {
+		return this.repository.listByProject(actor, projectId);
+	}
+	async delete(actor: ActorContext, id: TemplateId): Promise<void> {
+		if (!(await this.repository.findById(actor, id))) throw new NotFoundError('Template not found');
+		await this.repository.delete(actor, id);
+	}
+	store(
+		actor: ActorContext,
+		upload: TemplateUpload,
+		objectKey: string,
+		extractedStyles: ExtractedTemplateStyles
+	) {
+		return this.repository.insert(actor, {
+			id: upload.id,
+			userId: actor.userId,
+			projectId: upload.projectId,
+			name: upload.name,
+			mediaType: upload.mediaType,
+			byteSize: upload.byteSize,
 			objectKey,
-			mediaType:
-				input.mediaType ||
-				'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-			byteSize: input.byteSize,
+			extractedStyles,
 			isDefault: false,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		};
-
-		await this.transactionRunner.run(async () => {
-			await this.templateRepo.insert(actor, template);
+			createdAt: upload.createdAt,
+			updatedAt: this.now()
 		});
-
-		const uploadUrl = await this.storage.createUploadUrl({
-			objectKey,
-			mediaType: template.mediaType,
-			byteSize: template.byteSize,
-			checksumSha256: input.checksumSha256,
-			expiresInSeconds: 600
-		});
-
-		return {
-			templateId,
-			uploadUrl,
-			requiredHeaders: {
-				'content-type': template.mediaType,
-				'x-amz-meta-sha256': input.checksumSha256.toLowerCase()
-			}
-		};
-	}
-
-	async completeUpload(actor: ActorContext, templateId: TemplateId): Promise<ProjectTemplate> {
-		const template = await this.templateRepo.findById(actor, templateId);
-		if (!template) throw new NotFoundError('Template not found');
-
-		const stored = await this.storage.stat(template.objectKey);
-		if (!stored || stored.byteSize === 0)
-			throw new ValidationError('Uploaded template could not be verified');
-
-		const destinationKey = `projects/${template.projectId}/templates/${templateId}`;
-		await this.storage.promote(template.objectKey, destinationKey);
-
-		const buffer = await this.storage.read(destinationKey, 50 * 1024 * 1024);
-		const styles = await this.styleExtractor(Buffer.from(buffer));
-
-		const updated = await this.templateRepo.update(actor, {
-			...template,
-			objectKey: destinationKey,
-			byteSize: stored.byteSize,
-			extractedStyles: styles,
-			isDefault: template.isDefault,
-			updatedAt: now()
-		});
-
-		return updated;
-	}
-
-	async list(actor: ActorContext, projectId: ProjectId): Promise<readonly ProjectTemplate[]> {
-		return this.templateRepo.listByProject(actor, projectId);
-	}
-
-	async delete(actor: ActorContext, templateId: TemplateId): Promise<void> {
-		const template = await this.templateRepo.findById(actor, templateId);
-		if (!template) throw new NotFoundError('Template not found');
-		await this.templateRepo.delete(actor, templateId);
-	}
-
-	async extractStyles(actor: ActorContext, templateId: TemplateId) {
-		const template = await this.templateRepo.findById(actor, templateId);
-		if (!template) throw new NotFoundError('Template not found');
-		if (template.extractedStyles) return template.extractedStyles;
-		const buffer = await this.storage.read(template.objectKey, 50 * 1024 * 1024);
-		return this.styleExtractor(Buffer.from(buffer));
 	}
 }

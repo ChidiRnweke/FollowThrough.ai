@@ -1,5 +1,19 @@
 import AdmZip from 'adm-zip';
+import { createHash } from 'node:crypto';
+import { ValidationError } from '$lib/errors';
+import type { TemplateUpload } from '$lib/models/projects';
 import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
+
+export async function verifiedTemplateStyles(
+	upload: TemplateUpload,
+	bytes: Uint8Array
+): Promise<ExtractedTemplateStyles> {
+	if (bytes.byteLength !== upload.byteSize)
+		throw new ValidationError('Uploaded template size does not match the reservation');
+	if (createHash('sha256').update(bytes).digest('hex') !== upload.checksumSha256)
+		throw new ValidationError('Uploaded template checksum does not match the reservation');
+	return extractTemplateStyles(Buffer.from(bytes));
+}
 
 interface HeadingStyle {
 	name: string;
@@ -125,6 +139,7 @@ export async function extractTemplateStyles(docxBuffer: Buffer): Promise<Extract
 
 	const stylesEntry = zip.getEntry('word/styles.xml');
 	const documentEntry = zip.getEntry('word/document.xml');
+	if (!documentEntry) throw new ValidationError('The template must be a DOCX document');
 	const stylesXml = stylesEntry ? stylesEntry.getData().toString('utf8') : '';
 	const documentXml = documentEntry ? documentEntry.getData().toString('utf8') : '';
 	const headerImages: string[] = [];

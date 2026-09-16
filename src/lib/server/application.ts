@@ -427,9 +427,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		deliverables: {
 			syncMutations: synchronization.mutations,
-			templateUploader: templates,
-			templateLister: templates,
-			templateDeleter: templates,
+			templates,
+			templateStorage: deliverables.templateStorage,
+			templateStyles: deliverables.templateStyles,
 			documentGenerator: artifacts,
 			bundleGenerator: artifacts,
 			documentPreviewer: artifacts,

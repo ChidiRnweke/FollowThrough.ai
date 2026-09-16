@@ -101,10 +101,23 @@ export interface ProjectTemplate {
 	readonly objectKey: string;
 	readonly mediaType: string;
 	readonly byteSize: number;
-	readonly extractedStyles?: ProjectTemplateStyles;
+	readonly extractedStyles: ProjectTemplateStyles;
 	readonly isDefault: boolean;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+}
+
+/** A reserved upload is not yet a template that can generate a document. */
+export interface TemplateUpload {
+	readonly id: TemplateId;
+	readonly userId: UserId;
+	readonly projectId: ProjectId;
+	readonly name: string;
+	readonly objectKey: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+	readonly createdAt: DateTime;
 }
 
 /** One entry in the project's document tree; folders nest children, notes never do. */
