@@ -90,11 +90,12 @@
 	import { toast } from 'svelte-sonner';
 	import {
 		selectRange,
-		selectionClipboardItem,
+		clipboardSource,
 		selectionMarkdown,
 		selectionPlainText,
 		type SelectedRange
 	} from '$lib/components/edra/commands/clipboard-payload';
+	import { noteClipboard } from '$lib/stores/notes/clipboard';
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
@@ -357,6 +358,21 @@
 	const editor = createEditor(
 		{
 			ariaLabel: 'Note body',
+			onCut: async (selection) => {
+				const report = await noteClipboard.copy(selection);
+				if (report.kind !== 'complete')
+					toast.warning(
+						'The selection was kept in the note because it could not be copied completely.'
+					);
+				return report.kind === 'complete';
+			},
+			onCutChanged: () =>
+				toast.warning(
+					'Copied the selection, but kept it in the note because the note changed during copying.'
+				),
+			onCopy: (selection) => {
+				void noteClipboard.copy(selection);
+			},
 			onTocUpdate: (headings) => {
 				onoutline?.(outlineFrom(headings));
 				queueMeasure();
@@ -595,7 +611,7 @@
 		// A direct call, not a `copy` event, so it misses the editor's own handler —
 		// it shares the payload builder instead, and pastes the same pictures.
 		try {
-			await navigator.clipboard.write([selectionClipboardItem(state)]);
+			await noteClipboard.copy(clipboardSource(state));
 			// audit-allow: silent-catch — formatted clipboard write failure is reported while the selection remains intact.
 		} catch {
 			toast.error('The clipboard could not be written');
