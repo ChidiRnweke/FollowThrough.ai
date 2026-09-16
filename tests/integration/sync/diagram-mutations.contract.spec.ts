@@ -82,7 +82,7 @@ const setup = async (suffix: string) => {
 
 describe('diagram edits through the shared mutation boundary', () => {
 	it('rolls back both the draft and its staged search rows after an indexing failure', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('9381');
+		const { owner, controller, diagram, search, faults } = await setup('9781');
 		const before = await search.listForDiagram(owner, diagram.id);
 		faults.afterIndex = true;
 		await controller
@@ -98,7 +98,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ diagram, search: before });
 	});
 	it('rolls back a trash move and the removed search rows after an indexing failure', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('9382');
+		const { owner, controller, diagram, search, faults } = await setup('9782');
 		const before = await search.listForDiagram(owner, diagram.id);
 		faults.afterIndex = true;
 		await controller.archiveProjectDiagram(owner, { diagramId: diagram.id }).catch(() => undefined);
@@ -108,7 +108,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 		}).toEqual({ diagram, search: before });
 	});
 	it('retains a trashed diagram and its absent search rows when restoration fails', async () => {
-		const { owner, controller, diagram, search, faults } = await setup('9383');
+		const { owner, controller, diagram, search, faults } = await setup('9783');
 		const archived = await controller.archiveProjectDiagram(owner, { diagramId: diagram.id });
 		faults.afterIndex = true;
 		await controller.restoreProjectDiagram(owner, { diagramId: diagram.id }).catch(() => undefined);
