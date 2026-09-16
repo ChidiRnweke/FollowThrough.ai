@@ -1,5 +1,5 @@
 import { decideIndexPlan, type IndexPlan } from '$lib/models/knowledge-search';
-import { NotFoundError } from '$lib/errors';
+import { InvalidGeneratedContentError, NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { Attachment, ContentHash } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
@@ -10,11 +10,11 @@ import type {
 	IndexSource,
 	RetrievalIndexRepository
 } from '$lib/server/repositories/knowledge-search';
-import {
-	embedInStableBatches,
-	type EmbeddingBatch,
-	type EmbeddingClient
-} from '$lib/server/repositories/knowledge-search/embedding-batches';
+import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
+interface EmbeddingClient {
+	readonly model: string;
+	embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch>;
+}
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 
 interface NoteReader {
@@ -198,11 +198,14 @@ const applyIndex = async (
 
 	const embedded =
 		!defer && missingIndexes.length
-			? await embedInStableBatches(
-					embeddingClient,
-					missingIndexes.map(({ index }) => `${embedPrefix}\n${contents[index]!}`)
-				)
+			? (
+					await embeddingClient.embed(
+						missingIndexes.map(({ index }) => `${embedPrefix}\n${contents[index]!}`)
+					)
+				).vectors
 			: undefined;
+	if (embedded && embedded.length !== missingIndexes.length)
+		throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
 	const generated = new Map(
 		embedded ? missingIndexes.map(({ hash }, index) => [hash, embedded[index]!]) : []
 	);

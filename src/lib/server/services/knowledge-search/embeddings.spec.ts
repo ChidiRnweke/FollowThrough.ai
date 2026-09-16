@@ -32,6 +32,23 @@ const embedder = (responder: FakeEmbeddingResponder, model?: string): Embeddings
 	new Embeddings('test-key', { client: responder, ...(model === undefined ? {} : { model }) });
 
 describe('Embeddings', () => {
+	it('rejects duplicate provider indexes instead of pairing vectors with the wrong input', async () => {
+		const responder = new FakeEmbeddingResponder();
+		responder.next.result = [
+			{ index: 0, embedding: [1] },
+			{ index: 0, embedding: [2] }
+		];
+		await expect(embedder(responder).embed(['a', 'b'])).rejects.toThrow(
+			InvalidGeneratedContentError
+		);
+	});
+
+	it('rejects indexes outside the input positions', async () => {
+		const responder = new FakeEmbeddingResponder();
+		responder.next.result = [{ index: 1, embedding: [1] }];
+		await expect(embedder(responder).embed(['a'])).rejects.toThrow(InvalidGeneratedContentError);
+	});
+
 	it('sorts provider vectors by index regardless of arrival order', async () => {
 		const responder = new FakeEmbeddingResponder();
 		responder.next.result = [

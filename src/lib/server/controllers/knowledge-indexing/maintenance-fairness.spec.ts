@@ -1,5 +1,6 @@
+import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { expect, it } from 'vitest';
-import { KnowledgeIndexMaintenance } from './index-maintenance';
+import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -23,8 +24,8 @@ const setup = async () => {
 			})
 		]);
 	}
-	const worker = new KnowledgeIndexMaintenance(
-		repository,
+	const worker = new EmbeddingMaintenance(
+		new IndexBacklog(repository),
 		client,
 		new InMemoryTransactionRunner([repository]),
 		{ maxSourcesPerTick: 2, logger: { error: () => {}, log: () => {} } }

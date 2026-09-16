@@ -78,7 +78,7 @@ describe('Postgres deferred embedding invariants', () => {
 		...(embedded ? { embedding: vector, embeddingModel: 'contract-model' } : {})
 	});
 	// The supersede/hold/retire lifecycle is proven at the unit layer by
-	// services/knowledge-search/index-maintenance.spec.ts against the in-memory
+	// controllers/knowledge-indexing/index-maintenance.spec.ts against the in-memory
 	// search repository. This file keeps the two SQL-fidelity facts no fake can
 	// prove: the cross-actor sweep attribution and the per-actor pending read
 	// scope. One end-to-end supersede round-trip through real SQL is covered by

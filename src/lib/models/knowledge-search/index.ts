@@ -12,6 +12,18 @@ type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 export type SearchDocumentId = Brand<string, 'SearchDocumentId'>;
 
+/** A source whose stored chunks still need embeddings. */
+export interface PendingIndexSource {
+	readonly userId: Brand<string, 'UserId'>;
+	readonly source: IndexSource;
+	readonly cursor: string;
+}
+
+export interface EmbeddedChunk {
+	readonly id: SearchDocumentId;
+	readonly embedding: readonly number[];
+}
+
 export const searchDocumentIdSchema = z.uuid().transform((value) => value as SearchDocumentId);
 
 type AttachmentId = Brand<string, 'AttachmentId'>;
