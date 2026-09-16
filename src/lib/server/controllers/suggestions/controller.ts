@@ -1,3 +1,9 @@
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import {
+	diagramIndexNoteId,
+	type ContentIndex
+} from '$lib/server/services/knowledge-search/indexing';
 import type {
 	DiagramWriter,
 	DrawioXmlContentValidator,
@@ -127,8 +133,16 @@ export interface SuggestionsDependencies {
 	sourceNotes: NoteReader;
 	drawioLabels: Pick<DrawioLabelExtractor, 'extract'>;
 	suggestionEffects: SuggestionEffectService;
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	memoryIndexer: MemoryIndexer;
-	diagramIndexer: { index(actor: ActorContext, diagram: Diagram): Promise<void> };
+	diagramIndexer: {
+		index(
+			actor: ActorContext,
+			diagram: Diagram,
+			context: DiagramIndexContext
+		): Promise<IndexingResult>;
+	};
 	diagramWriter: DiagramWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
@@ -354,9 +368,30 @@ export class Suggestions implements SuggestionsController {
 	): Promise<void> {
 		for (const record of records) {
 			if (record.type === 'memory_entries')
-				await this.dependencies.memoryIndexer.index(actor, record.value);
-			if (record.type === 'diagrams')
-				await this.dependencies.diagramIndexer.index(actor, record.value);
+				await this.finishIndex(
+					actor,
+					await this.dependencies.memoryIndexer.index(actor, record.value)
+				);
+			if (record.type === 'diagrams') await this.indexDiagram(actor, record.value);
 		}
+	}
+	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
+		const noteId = diagramIndexNoteId(diagram);
+		const context: DiagramIndexContext =
+			noteId === undefined
+				? { kind: 'standalone' }
+				: { kind: 'note', title: (await this.dependencies.sourceNotes.get(actor, noteId)).title };
+		await this.finishIndex(
+			actor,
+			await this.dependencies.diagramIndexer.index(actor, diagram, context)
+		);
+	}
+
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }

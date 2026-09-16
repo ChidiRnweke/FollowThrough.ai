@@ -21,7 +21,7 @@ const setup = async (suffix: string) => {
 	const search = new KnowledgeIndexRecords(database);
 	const index = new ContentIndex(
 		search,
-		new InMemoryEmbeddingClient(),
+		new InMemoryEmbeddingClient().model,
 		new TokenAwareChunker(),
 		true
 	).notes;
@@ -43,9 +43,10 @@ const setup = async (suffix: string) => {
 			noteLinkReconciler: effects,
 			noteIndexer: {
 				index: async (actor, note) => {
-					await index.index(actor, note);
+					const result = await index.index(actor, note);
 					if (faults.secondIndex && note.id === second.note.id)
 						throw new Error('Second index write failed');
+					return result;
 				}
 			}
 		})

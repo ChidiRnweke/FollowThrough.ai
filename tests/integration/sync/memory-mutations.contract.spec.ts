@@ -23,6 +23,8 @@ const setup = async (suffix: string) => {
 		projects: new ProjectRecords(database),
 		provenance: new ProvenanceRecords(database)
 	});
+	const indexEmbeddings = new InMemoryEmbeddingClient();
+	const indexWriter = new ContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			syncMutations: sync.mutations,
@@ -30,8 +32,9 @@ const setup = async (suffix: string) => {
 			memoryEditor: library,
 			memoryDeleter: library,
 			transactionRunner,
-			memoryIndexer: new ContentIndex(new InMemorySearchRepository(), new InMemoryEmbeddingClient())
-				.memories
+			memoryIndexer: indexWriter.memories,
+			indexEmbeddings,
+			indexWriter
 		})
 	);
 	return { ...seeded, controller, sync };

@@ -18,6 +18,8 @@ Every save of a note, diagram, memory entry, or processed attachment changes wha
 - **Controllers**: `src/lib/server/controllers/knowledge-search/controller.ts`: the `Retrieval` controller, the boundary the agent's `search` tool calls.
 - **Repositories**: `src/lib/server/repositories/knowledge-search/retrieval-index.ts` (contract) and `postgres/search.ts` (`KnowledgeIndexRecords`, all Drizzle/SQL).
 
+Immediate indexing is coordinated by the note, skill, memory, diagram and suggestion controllers. `ContentIndex` prepares chunks and reuses stored vectors using a model-name value. If vectors are missing, it returns a `needs_embeddings` value; the controller calls `Embeddings` and then completes storage. Deferred indexing stages chunks directly for the worker. Diagram controllers resolve source-note titles before preparing chunks. Models contain the indexing values and schemas, not the plan decision or workflow.
+
 Persistence is the `search_chunks` table (`src/lib/server/db/schema/registry.ts:864`): a pgvector `halfvec(3072)` embedding column, a `search_chunks_single_source` check constraint (each chunk belongs to one note, diagram, memory entry or attachment), and `search_chunks_pending_idx`, a partial index on `user_id WHERE embedding IS NULL`. That index is the backfill queue, so backlog scans stay proportional to the backlog. A `supersededAt` timestamp marks chunks a newer revision has replaced but whose replacements are not yet embedded.
 
 ## Indexing
@@ -27,6 +29,7 @@ Persistence is the `search_chunks` table (`src/lib/server/db/schema/registry.ts:
 One algorithm, `applyIndex` (`indexing.ts:235`), serves all four source types:
 
 - Chunks are keyed by content hash (SHA-256 over content plus title/section metadata), so an edit only re-embeds the chunks that actually changed: but only if the stored vector came from the current embedding model (`indexing.ts:254`).
+- Repeated text remains part of the document. Equal final paragraphs are not discarded, and repeated chunks retain distinct stored IDs across edits.
 - Each chunk is embedded with a prefix (the note title, the attachment path, or `Diagram in <note>`) so the vector carries its context.
 - When `deferEmbedding` is set, chunks are staged without vectors and previously embedded rows the new revision dropped are marked superseded, not deleted, so semantic search never goes blind mid-rewrite. Lexical search excludes superseded rows, since their text is out of date (`postgres/search.ts:264`), while semantic search keeps answering from them. `deferEmbedding` is on in production (`production-factory.ts:28`; `DEFER_EMBEDDING=false` restores inline embedding) and off by default in `createApplication`, so runners without a worker (evals, tests) stay consistent the moment a write returns. Attachment chunks are always staged for background embedding. Their full text is available to literal search before vectors are ready.
 - Removal is never deferred: an archived note, emptied diagram, or deleted memory entry drops out of the index immediately. Memory entries without a project, or not shared with agents, never enter the index at all: they are injected into agent context directly (see [memory](/FollowThrough.ai/subsystems/memory/)).

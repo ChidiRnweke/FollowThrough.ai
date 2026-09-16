@@ -1,3 +1,5 @@
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import {
@@ -9,12 +11,15 @@ import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = (drawio = false) => {
+	const sourceNotes = new InMemoryNoteContent();
+	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagrams();
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
+				diagramSourceNotes: sourceNotes,
 				diagramFinder: diagrams,
 				mermaidReviser: diagrams,
 				mermaidRenderer: diagrams,

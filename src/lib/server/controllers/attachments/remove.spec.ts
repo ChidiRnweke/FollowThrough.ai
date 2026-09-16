@@ -13,7 +13,7 @@ describe('attachment search removal', () => {
 		await process(attachment);
 		const controller = new Attachments({
 			attachments: service,
-			attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient()).attachments,
+			attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model).attachments,
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		});
 		await controller.removeById(testActor(), attachment.attachment.id);

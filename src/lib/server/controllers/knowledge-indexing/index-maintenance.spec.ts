@@ -12,7 +12,7 @@ import type { TransactionRunner } from '$lib/server/repositories/workspace';
 const immediateTransactions: TransactionRunner = { run: (work) => work() };
 
 const deferredIndexer = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
-	new ContentIndex(repository, client, new TokenAwareChunker(200, 0), true).notes;
+	new ContentIndex(repository, client.model, new TokenAwareChunker(200, 0), true).notes;
 
 const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
 	new EmbeddingMaintenance(new IndexBacklog(repository), client, immediateTransactions, {

@@ -313,6 +313,16 @@ out-of-range provider indexes now fail instead of assigning vectors to the wrong
 fairness, search-continuity and concurrent-edit coverage moves with the workflow. ContentIndex still
 needs its separate orchestration and model-plan cleanup; this slice does not complete indexing.
 
+Content indexing: note, skill, memory, diagram and suggestion controllers now coordinate prepared
+chunks, embedding generation and index completion. ContentIndex receives the model name, never an
+embedding service. Diagram controllers resolve source-note titles before indexing; its factory no
+longer injects a note repository into an indexer. The last knowledge-search model decision moves
+into the focused indexing service. Immediate writes still finish their vectors before returning;
+deferred writes keep the durable pending queue. Existing transaction boundaries remain in place.
+Regression tests reproduce and fix dropped identical final paragraphs and reused chunk IDs when
+identical content appears more than once. Agent context, provisioning, diagram authoring, durable
+selection workflows and the other model families remain unfinished.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

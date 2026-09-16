@@ -89,7 +89,13 @@ describe('Proposal effect coordination', () => {
 		const suggestions = new InMemorySuggestions();
 		const effects = new InMemorySuggestionEffects();
 		const search = new InMemorySearchRepository();
-		const indexer = new ContentIndex(search, new InMemoryEmbeddingClient()).memories;
+		const indexWriter = new ContentIndex(
+			search,
+			new InMemoryEmbeddingClient().model,
+			undefined,
+			true
+		);
+		const indexer = indexWriter.memories;
 		const before = memoryEntryBuilder();
 		const deleted = { ...before, deletedAt: testNow };
 		const replacement = memoryEntryBuilder({

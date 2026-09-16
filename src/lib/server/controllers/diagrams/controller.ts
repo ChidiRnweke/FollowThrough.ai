@@ -1,6 +1,14 @@
+import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import {
+	diagramIndexNoteId,
+	type ContentIndex
+} from '$lib/server/services/knowledge-search/indexing';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
+	Diagram,
 	DrawioDiagram,
 	ConvertInlineMermaidInput,
 	ConvertInlineMermaidOutput,
@@ -148,6 +156,9 @@ export interface DiagramsDependencies {
 	textExtractor: DiagramTextExtractor;
 	drawioTextExtractor: DiagramTextExtractor;
 	diagramWriter: DiagramWriter;
+	diagramSourceNotes: NoteReader;
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	diagramIndexer: DiagramIndexer;
 	drawioCreator: DrawioDiagramCreator;
 	workflowRunner: WorkflowRunStarter;
@@ -299,7 +310,7 @@ export class Diagrams implements DiagramsController {
 		});
 		if (diagram.kind !== 'drawio')
 			throw new UnsupportedDiagramOperationError('Expected a draw.io diagram after saving');
-		await this.dependencies.diagramIndexer.index(actor, diagram);
+		await this.indexDiagram(actor, diagram);
 		return { diagram };
 	}
 
@@ -322,7 +333,7 @@ export class Diagrams implements DiagramsController {
 			renderedSvg,
 			searchableText
 		})) as MermaidDiagram;
-		await this.dependencies.diagramIndexer.index(actor, saved);
+		await this.indexDiagram(actor, saved);
 		return { diagram: saved };
 	}
 
@@ -366,5 +377,27 @@ export class Diagrams implements DiagramsController {
 			});
 		});
 		return { source, suggestion };
+	}
+	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
+		const noteId = diagramIndexNoteId(diagram);
+		const context: DiagramIndexContext =
+			noteId === undefined
+				? { kind: 'standalone' }
+				: {
+						kind: 'note',
+						title: (await this.dependencies.diagramSourceNotes.get(actor, noteId)).title
+					};
+		await this.finishIndex(
+			actor,
+			await this.dependencies.diagramIndexer.index(actor, diagram, context)
+		);
+	}
+
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }

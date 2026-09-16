@@ -27,7 +27,7 @@ describe('complete attachment search', () => {
 		const attachment = view('text/plain', 'report.txt').attachment;
 		await new ContentIndex(
 			repository,
-			new InMemoryEmbeddingClient(),
+			new InMemoryEmbeddingClient().model,
 			new TokenAwareChunker(700, 50)
 		).attachments.index(testActor(), attachment, text);
 		const matches = await repository.search(testActor(), 'amberfalcon', 10);
@@ -53,11 +53,11 @@ describe('complete attachment search', () => {
 			}
 		};
 		const client = new Embeddings('test-key', { client: provider, model: 'test-embedding' });
-		await new ContentIndex(repository, client, new TokenAwareChunker(700, 50)).attachments.index(
-			testActor(),
-			view('text/plain').attachment,
-			text
-		);
+		await new ContentIndex(
+			repository,
+			client.model,
+			new TokenAwareChunker(700, 50)
+		).attachments.index(testActor(), view('text/plain').attachment, text);
 		await new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			client,

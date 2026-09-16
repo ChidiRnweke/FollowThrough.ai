@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
@@ -24,6 +26,8 @@ import {
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 const setup = () => {
+	const sourceNotes = new InMemoryNoteContent();
+	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
 	const projects = new InMemoryProjects();
 	// A diagram is created in a project, and creating one verifies the project is
@@ -40,6 +44,7 @@ const setup = () => {
 		diagrams,
 		controller: new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
+				diagramSourceNotes: sourceNotes,
 				diagramFinder: library,
 				diagramDraftWriter: library,
 				diagramConversations: library,
@@ -47,7 +52,7 @@ const setup = () => {
 				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
-				diagramIndexer: { index: async () => {} },
+				diagramIndexer: { index: async () => ({ kind: 'stored' }) },
 				drawioXmlValidator: { validate: (source: string) => source },
 				drawioTextExtractor: { extract: async () => 'Ingest Index Answer' }
 			})

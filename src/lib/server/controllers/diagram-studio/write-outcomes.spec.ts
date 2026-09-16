@@ -1,3 +1,5 @@
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
@@ -18,6 +20,8 @@ import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { diagramEtag } from '$lib/models/diagrams';
 
 const setup = () => {
+	const sourceNotes = new InMemoryNoteContent();
+	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
 	const index = new InMemoryDiagrams();
 	const library = new DiagramLibrary(
@@ -29,6 +33,7 @@ const setup = () => {
 	);
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
+			diagramSourceNotes: sourceNotes,
 			diagramFinder: library,
 			diagramDraftWriter: library,
 			diagramRenamer: library,

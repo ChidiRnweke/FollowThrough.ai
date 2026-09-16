@@ -1,3 +1,5 @@
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import {
@@ -18,12 +20,15 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 const CLEAN_SVG = '<svg xmlns="http://www.w3.org/2000/svg"><text>API</text></svg>';
 
 const setup = (kind: 'drawio' | 'mermaid' = 'drawio') => {
+	const sourceNotes = new InMemoryNoteContent();
+	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagrams();
 	const diagram =
 		kind === 'drawio' ? drawioBuilder({ source: VALID_DRAWIO_XML }) : mermaidBuilder();
 	diagrams.diagrams = [diagram];
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			diagramSourceNotes: sourceNotes,
 			diagramFinder: diagrams,
 			diagramIndexer: diagrams,
 			diagramWriter: diagrams,

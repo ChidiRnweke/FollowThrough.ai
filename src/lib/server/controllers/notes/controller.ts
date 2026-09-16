@@ -1,3 +1,6 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	assembleNoteView,
 	applyNotePatch,
@@ -341,6 +344,8 @@ export interface NotesDependencies {
 	revisionReader: NoteRevisionReader;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }
@@ -680,7 +685,7 @@ export class Notes implements NotesController {
 				note,
 				collectNoteLinkTargets(note.document)
 			);
-			await this.dependencies.noteIndexer.index(actor, note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});
 	}
@@ -724,7 +729,7 @@ export class Notes implements NotesController {
 				restored,
 				collectNoteLinkTargets(restored.document)
 			);
-			await this.dependencies.noteIndexer.index(actor, restored);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
 			return { note: restored, etag: noteEtag(restored) };
 		});
 	}
@@ -782,21 +787,21 @@ export class Notes implements NotesController {
 			});
 			// Deliberately no revision: history is bounded, and a title correction should not
 			// evict a snapshot of the body somebody may still want back.
-			await this.dependencies.noteIndexer.index(actor, note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
 	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteArchiver.archive(actor, input.noteId);
-			await this.dependencies.noteIndexer.index(actor, note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
 	async restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.noteArchiver.restore(actor, input.noteId);
-			await this.dependencies.noteIndexer.index(actor, note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
@@ -944,9 +949,16 @@ export class Notes implements NotesController {
 				restored,
 				collectNoteLinkTargets(restored.document)
 			);
-			await this.dependencies.noteIndexer.index(actor, restored);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
 			return { note: restored, etag: noteEtag(restored) };
 		});
+	}
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }
 
