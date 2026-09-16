@@ -74,7 +74,9 @@ export const controllerSurfaces = {
 	},
 	references: {
 		suggestFromSelection: true,
-		startSuggestFromSelection: true
+		startSuggestFromSelection: true,
+		executeReferenceRun: true,
+		recoverQueuedReferenceRuns: true
 	},
 	diagrams: {
 		generateMermaid: true,

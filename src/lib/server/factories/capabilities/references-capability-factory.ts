@@ -7,6 +7,8 @@ import type {
 import { ReferenceRecords } from '$lib/server/repositories/references/postgres/references';
 import { ReferenceLibrary } from '$lib/server/services/references/library';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
+import { ReferenceResearch } from '$lib/server/repositories/references/web-research';
+import { ReferenceRanking } from '$lib/server/services/references/ranking';
 import type { ReferenceFinder } from '$lib/server/services/references/contracts';
 import { operationObserver } from '$lib/server/services/telemetry';
 import { normalizeLanguageModelId } from '$lib/models/agent';
@@ -24,6 +26,8 @@ export interface ReferencesCapabilityInput {
 }
 
 export interface ReferencesCapability {
+	readonly ranking: ReferenceRanking;
+	readonly model: string;
 	readonly library: ReferenceLibrary;
 	readonly finder: ReferenceFinder;
 }
@@ -31,6 +35,8 @@ export interface ReferencesCapability {
 export const createReferencesCapability = (
 	input: ReferencesCapabilityInput
 ): ReferencesCapability => ({
+	ranking: new ReferenceRanking(),
+	model: normalizeLanguageModelId(input.defaultModel),
 	library: new ReferenceLibrary(
 		new ReferenceRecords(input.db),
 		input.notes,
@@ -39,11 +45,12 @@ export const createReferencesCapability = (
 	),
 	finder:
 		input.finder ??
-		new ReferenceDiscovery({
-			apiKey: input.openRouterApiKey,
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			defaultModel: normalizeLanguageModelId(input.defaultModel),
-			observer: operationObserver
-		})
+		new ReferenceDiscovery(
+			new ReferenceResearch(input.openRouterApiKey, {
+				baseURL: input.openRouterBaseURL,
+				appURL: input.appURL,
+				defaultModel: normalizeLanguageModelId(input.defaultModel),
+				observer: operationObserver
+			})
+		)
 });

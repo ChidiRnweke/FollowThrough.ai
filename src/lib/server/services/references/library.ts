@@ -3,12 +3,11 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateReferenceInput,
 	ExternalReference,
-	ReferenceCandidate,
 	ReferenceId,
 	ReferenceView
 } from '$lib/models/references';
 import type { DateTime } from '$lib/models/workspace';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId } from '$lib/models/notes';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
@@ -60,16 +59,6 @@ export class ReferenceLibrary {
 					: undefined;
 				return assembleReferenceView(reference, { anchor });
 			})
-		);
-	}
-	async rank(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		candidates: readonly ReferenceCandidate[]
-	): Promise<readonly ReferenceCandidate[]> {
-		const weight = { official: 0, standard: 1, vendor: 2, community: 3 };
-		return [...new Map(candidates.map((candidate) => [candidate.url, candidate])).values()].sort(
-			(left, right) => weight[left.tier] - weight[right.tier] || right.confidence - left.confidence
 		);
 	}
 }

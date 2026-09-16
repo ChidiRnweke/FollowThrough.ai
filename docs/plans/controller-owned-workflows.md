@@ -456,6 +456,18 @@ without casting unknown records to never. Native session-storage regressions cov
 another account clearing its actions, unscoped legacy records and corrupt account records. Legacy
 unscoped entries are not assigned to a signed-in account because they carry no ownership evidence.
 
+Reference search runs: References now owns durable submission, execution, cancellation settlement and
+queued recovery. Promise extraction and reference search share SelectionRequests for request identity
+and persisted input, with no executable callbacks. SelectionSubmissions retains browser retry identity
+per account and action. Reference searches retain their selection and chosen model; the controller
+performs provider work before the transaction that claims completion, writes proposals and records the
+result. The provider adapter parses citations at the repository boundary. ReferenceDiscovery assigns
+source tiers and confidence, and ReferenceRanking owns ordering. Tests use the actual ranking service
+instead of copying its rules into a fake. Missing credentials now fail explicitly, and valid provider
+sources are no longer cut off after six entries. PostgreSQL covers concurrent duplicate submission,
+cancellation without writes, result-event rollback and queued reconstruction. Relationship and diagram
+actions still require the same durable ownership migration; the global refactor remains open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

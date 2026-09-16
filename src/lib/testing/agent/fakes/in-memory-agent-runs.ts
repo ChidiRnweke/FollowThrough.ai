@@ -1,8 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { WorkflowAgentRun } from '$lib/models/agent';
-import type { ExtractPromisesOutput } from '$lib/models/todos';
-import type { TodoSuggestion } from '$lib/models/suggestions';
-import { promiseExtractionEvent } from '$lib/server/repositories/agent/stored-values';
+import type { SelectionActionResult } from '$lib/server/repositories/agent/agent-runs';
+import { selectionActionEvent } from '$lib/server/repositories/agent/stored-values';
 import type {
 	AgentEvent,
 	AgentRun,
@@ -231,11 +230,11 @@ export class InMemoryAgentRunPersistence
 		);
 	}
 
-	appendPromiseResult(
+	appendSelectionResult(
 		runId: AgentRunId,
-		result: ExtractPromisesOutput<TodoSuggestion>
+		result: SelectionActionResult
 	): Promise<AgentRunEventRecord> {
-		return this.append(runId, 1, promiseExtractionEvent(result));
+		return this.append(runId, 1, selectionActionEvent(result));
 	}
 
 	async listInterrupted(): Promise<readonly AgentRun[]> {

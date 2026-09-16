@@ -50,9 +50,9 @@ import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-
 import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
 import type { PromiseGeneration } from '$lib/models/agent';
 import {
-	DuplicatePromiseRequest,
-	type PromiseRequests
-} from '$lib/server/services/agent/runs/promise-requests';
+	DuplicateSelectionRequest,
+	type SelectionRequests
+} from '$lib/server/services/agent/runs/selection-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
 import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
@@ -132,7 +132,7 @@ export interface TodosDependencies {
 	markdownToContent: typeof noteContentFromMarkdown;
 	exportPreparer: typeof prepareExport;
 	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
-	promiseRequests: PromiseRequests;
+	selectionRequests: SelectionRequests;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 	promiseGeneration: PromiseGeneration;
@@ -263,14 +263,23 @@ export class Todos implements TodosController {
 		actor: ActorContext,
 		input: StartExtractPromisesInput
 	): Promise<AgentRunReceipt> {
+		const request = {
+			requestId: input.requestId,
+			context: {
+				kind: 'promise_extraction' as const,
+				generation: this.dependencies.promiseGeneration,
+				selection: input.selection,
+				...(input.responsibility ? { responsibility: input.responsibility } : {})
+			}
+		};
 		let receipt: AgentRunReceipt;
 		try {
 			receipt = await this.dependencies.transactionRunner.run(() =>
-				this.dependencies.promiseRequests.prepare(actor, input, this.dependencies.promiseGeneration)
+				this.dependencies.selectionRequests.prepare(actor, request)
 			);
 		} catch (error) {
-			if (!(error instanceof DuplicatePromiseRequest)) throw error;
-			receipt = await this.dependencies.promiseRequests.existing(actor, input);
+			if (!(error instanceof DuplicateSelectionRequest)) throw error;
+			receipt = await this.dependencies.selectionRequests.existing(actor, request);
 		}
 		this.dependencies.runEvents.notify(receipt.runId);
 		if (receipt.status === 'queued') this.launchPromiseRun(actor, receipt.runId);
@@ -285,14 +294,14 @@ export class Todos implements TodosController {
 	}
 
 	async recoverQueuedPromiseRuns(): Promise<number> {
-		const queued = await this.dependencies.promiseRequests.queued();
+		const queued = await this.dependencies.selectionRequests.queued('promise_extraction');
 		for (const run of queued) this.launchPromiseRun(run.actor, run.runId);
 		return queued.length;
 	}
 
 	async executePromiseRun(actor: ActorContext, runId: AgentRunId): Promise<void> {
 		const run = await this.dependencies.transactionRunner.run(() =>
-			this.dependencies.promiseRequests.claim(actor, runId)
+			this.dependencies.selectionRequests.claim(actor, runId, 'promise_extraction')
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
@@ -316,7 +325,10 @@ export class Todos implements TodosController {
 				});
 				if (claim.kind === 'lost') return false;
 				const result = await this.saveExtractedPromises(actor, input, candidates);
-				await this.dependencies.promiseRequests.recordResult(runId, result);
+				await this.dependencies.selectionRequests.recordResult(runId, {
+					action: 'promises',
+					result
+				});
 				await this.dependencies.runSettlements.complete(claim);
 				return true;
 			});

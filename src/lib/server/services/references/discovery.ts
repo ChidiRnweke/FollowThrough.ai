@@ -1,99 +1,11 @@
-import OpenAI from 'openai';
-import { z } from 'zod';
 import type { ActorContext } from '$lib/models/identity';
-import {
-	openRouterWebSearchTool,
-	REFERENCE_WEB_SEARCH_DEFAULTS,
-	webSearchOptionsFromEnvironment
-} from '$lib/models/agent';
-import type { ReferenceCandidate, Url } from '$lib/models/references';
+import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { TextSelection } from '$lib/models/notes';
+import type {
+	WebReferenceClient,
+	ReferenceSearchOptions
+} from '$lib/server/repositories/references/web-research';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
-import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
-import type { OperationObserver } from '$lib/models/telemetry';
-const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
-
-const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
-
-export interface ReferenceSearchOptions {
-	readonly model?: string;
-	/** Aborts the web-search call when the user cancels the run it belongs to. */
-	readonly signal?: AbortSignal;
-}
-
-export interface IWebReferenceResearch {
-	search(
-		selectionText: string,
-		options?: ReferenceSearchOptions
-	): Promise<readonly ReferenceCandidate[] | undefined>;
-}
-
-export interface IReferenceDiscovery {
-	find(
-		actor: ActorContext,
-		selection: TextSelection,
-		options?: ReferenceSearchOptions
-	): Promise<readonly ReferenceCandidate[]>;
-}
-
-const createLanguageModelClient = (
-	apiKey: string,
-	options: { baseURL?: string; appURL?: string } = {}
-): OpenAI =>
-	new OpenAI({
-		apiKey,
-		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
-		fetch: withWebResearch(
-			globalThis.fetch,
-			openRouterWebSearchTool(
-				webSearchOptionsFromEnvironment(process.env),
-				REFERENCE_WEB_SEARCH_DEFAULTS
-			)
-		),
-		defaultHeaders: {
-			'HTTP-Referer': options.appURL ?? 'http://localhost:5173',
-			'X-OpenRouter-Title': 'FollowThrough'
-		}
-	});
-
-const REFERENCE_PROMPT = `Search the web for sources that directly support or clarify the selected architecture text.
-Prefer standards and official documentation, then vendor documentation, then community sources.
-Perform one focused search and cite no more than six directly relevant sources.
-Do not write a guide or tutorial. Cite every source so its citation metadata is included in the response.
-Return no sources when nothing is sufficiently relevant. Do not pad the result.`;
-
-interface OpenRouterCitation {
-	readonly type?: string;
-	readonly url?: string;
-	readonly title?: string;
-	readonly content?: string;
-}
-
-interface OpenRouterOutputItem {
-	readonly type?: string;
-	readonly action?: {
-		readonly sources?: readonly OpenRouterCitation[];
-	};
-	readonly content?: readonly {
-		readonly annotations?: readonly OpenRouterCitation[];
-	}[];
-}
-
-const openRouterCitationSchema: z.ZodType<OpenRouterCitation> = z.looseObject({
-	type: z.string().optional(),
-	url: z.string().optional(),
-	title: z.string().optional(),
-	content: z.string().optional()
-});
-const openRouterOutputSchema: z.ZodType<readonly OpenRouterOutputItem[]> = z.array(
-	z.looseObject({
-		type: z.string().optional(),
-		action: z.looseObject({ sources: z.array(openRouterCitationSchema).optional() }).optional(),
-		content: z
-			.array(z.looseObject({ annotations: z.array(openRouterCitationSchema).optional() }))
-			.optional()
-	})
-);
 
 const STANDARD_HOSTS = [
 	'rfc-editor.org',
@@ -108,8 +20,8 @@ const STANDARD_HOSTS = [
 const hostMatches = (hostname: string, domain: string): boolean =>
 	hostname === domain || hostname.endsWith(`.${domain}`);
 
-const referenceTier = (url: URL): ReferenceCandidate['tier'] => {
-	const hostname = url.hostname.toLowerCase();
+const referenceTier = (source: ReferenceSource): ReferenceCandidate['tier'] => {
+	const hostname = source.hostname.toLowerCase();
 	if (STANDARD_HOSTS.some((domain) => hostMatches(hostname, domain))) return 'standard';
 	if (hostname.endsWith('.gov') || hostname.includes('.gov.')) return 'official';
 	if (/^(docs?|developers?|learn|support|cloud)\./.test(hostname)) return 'vendor';
@@ -130,17 +42,13 @@ const compactExcerpt = (value: string | undefined): string | undefined => {
 };
 
 const candidateFromCitation = (
-	citation: OpenRouterCitation,
+	citation: ReferenceSource,
 	selectionText: string
-): ReferenceCandidate | undefined => {
-	if (!citation.url) return undefined;
-	if (!URL.canParse(citation.url)) return undefined;
-	const parsed = new URL(citation.url);
-	if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return undefined;
-	const tier = referenceTier(parsed);
+): ReferenceCandidate => {
+	const tier = referenceTier(citation);
 	return {
-		url: parsed.href as Url,
-		title: citation.title?.trim() || parsed.hostname,
+		url: citation.url,
+		title: citation.title?.trim() || citation.hostname,
 		tier,
 		relevanceNote:
 			compactExcerpt(citation.content) ??
@@ -149,115 +57,28 @@ const candidateFromCitation = (
 	};
 };
 
-const referenceCandidatesFrom = (
-	output: readonly OpenRouterOutputItem[],
-	selectionText: string
-): readonly ReferenceCandidate[] => {
-	const citations = output.flatMap(
-		(item) =>
-			item.content?.flatMap((content) =>
-				(content.annotations ?? []).filter((annotation) => annotation.type === 'url_citation')
-			) ?? []
-	);
-	const searchSources = output.flatMap((item) => item.action?.sources ?? []);
-	const seen = new Set<string>();
-	const references: ReferenceCandidate[] = [];
-	for (const citation of [...citations, ...searchSources]) {
-		const candidate = candidateFromCitation(citation, selectionText);
-		if (!candidate || seen.has(candidate.url)) continue;
-		seen.add(candidate.url);
-		references.push(candidate);
-		if (references.length === 6) break;
-	}
-	return references;
-};
-
-interface ReferenceResearchOptions {
-	readonly baseURL?: string;
-	readonly appURL?: string;
-	readonly defaultModel?: string;
-	readonly observer?: OperationObserver;
-}
-
-export class ReferenceResearch implements IWebReferenceResearch {
-	private readonly client: OpenAI;
-	private readonly defaultModel: string;
-	private readonly observer: OperationObserver;
-
-	constructor(apiKey: string, options: ReferenceResearchOptions = {}) {
-		this.defaultModel = options.defaultModel ?? DEFAULT_GENERATION_MODEL;
-		this.client = createLanguageModelClient(apiKey, options);
-		this.observer = options.observer ?? directObserver;
-	}
-
-	async search(
-		selectionText: string,
-		options: ReferenceSearchOptions = {}
-	): Promise<readonly ReferenceCandidate[] | undefined> {
-		const model = options.model ?? this.defaultModel;
-		return this.observer.run(
-			'reference.search',
-			{ input: selectionText, metadata: { model }, tags: ['reference', 'web-search'] },
-			async () => {
-				const response = await this.client.responses.create(
-					{
-						model,
-						input: [
-							{ role: 'system', content: REFERENCE_PROMPT },
-							{ role: 'user', content: selectionText }
-						]
-					},
-					options.signal ? { signal: options.signal } : undefined
-				);
-				return referenceCandidatesFrom(
-					openRouterOutputSchema.parse(response.output),
-					selectionText
-				);
-			},
-			(results) => JSON.stringify(results)
-		);
-	}
-}
-
-export class ReferenceDiscovery implements IReferenceDiscovery {
-	private readonly client?: IWebReferenceResearch;
-
-	constructor(
-		options: {
-			client?: IWebReferenceResearch;
-			apiKey?: string;
-			baseURL?: string;
-			appURL?: string;
-			defaultModel?: string;
-			observer?: OperationObserver;
-		} = {}
-	) {
-		const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY;
-		this.client =
-			options.client ??
-			(apiKey
-				? new ReferenceResearch(apiKey, {
-						baseURL: options.baseURL ?? process.env.OPENROUTER_BASE_URL,
-						appURL: options.appURL ?? process.env.ORIGIN,
-						defaultModel: options.defaultModel ?? process.env.OPENROUTER_DEFAULT_MODEL,
-						observer: options.observer
-					})
-				: undefined);
-	}
-
+/** Domain ranking metadata for sources returned by the web provider. */
+export class ReferenceDiscovery {
+	constructor(private readonly client: WebReferenceClient) {}
 	async find(
 		_actor: ActorContext,
 		selection: TextSelection,
 		options: ReferenceSearchOptions = {}
 	): Promise<readonly ReferenceCandidate[]> {
-		if (!this.client) return [];
 		try {
-			const references = await this.client.search(selection.text, options);
-			if (!references)
+			const sources = await this.client.search(selection.text, options);
+			if (!sources)
 				throw new InvalidGeneratedContentError('The provider returned no usable reference output');
-			return references;
+			const seen = new Set<string>();
+			return sources.flatMap((source) => {
+				if (seen.has(source.url)) return [];
+				seen.add(source.url);
+				return [candidateFromCitation(source, selection.text)];
+			});
 		} catch (error) {
-			if (error instanceof InvalidGeneratedContentError) throw error;
+			if (options.signal?.aborted) throw error;
+			if (error instanceof InvalidGeneratedContentError || error instanceof ExternalServiceError)
+				throw error;
 			throw new ExternalServiceError('Reference search failed', {
 				cause: error instanceof Error ? error.message : String(error)
 			});
