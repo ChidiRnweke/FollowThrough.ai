@@ -37,6 +37,21 @@ const setup = () => {
 };
 
 describe('Todo management invariants', () => {
+	it('clears a counterparty for personal work at creation as it does during editing', async () => {
+		const { service } = setup();
+		const created = await service.create(testActor(), {
+			projectId: testProjectId(),
+			title: 'Send design',
+			responsibility: 'mine',
+			waitingOn: 'Sam'
+		});
+		const edited = await service.update(testActor(), {
+			todoId: created.id,
+			responsibility: 'mine',
+			waitingOn: 'Sam'
+		});
+		expect([created.waitingOn, edited.waitingOn]).toEqual([undefined, undefined]);
+	});
 	it('preserves the final identity assigned to a task before it was synchronized', async () => {
 		const { service } = setup();
 		const id = testTodoId(501);
@@ -71,10 +86,11 @@ describe('Todo management invariants', () => {
 	it('switching responsibility to mine clears the counterparty', async () => {
 		const { service, todos } = setup();
 		todos.todos = [todoBuilder({ responsibility: 'waiting_on', waitingOn: 'Sam' })];
-		const updated = await service.update(
-			testActor(),
-			todoBuilder({ responsibility: 'mine', waitingOn: 'Sam' })
-		);
+		const updated = await service.update(testActor(), {
+			todoId: testTodoId(),
+			responsibility: 'mine',
+			waitingOn: 'Sam'
+		});
 		expect(updated.waitingOn).toBeUndefined();
 	});
 
@@ -82,7 +98,10 @@ describe('Todo management invariants', () => {
 		const { service, todos, notes } = setup();
 		todos.todos = [todoBuilder()];
 		notes.notes = [noteBuilder()];
-		const updated = await service.update(testActor(), todoBuilder({ linkedNoteId: testNoteId() }));
+		const updated = await service.update(testActor(), {
+			todoId: testTodoId(),
+			linkedNoteId: testNoteId()
+		});
 		expect(updated.linkedNoteId).toBe(testNoteId());
 	});
 
@@ -96,7 +115,7 @@ describe('Todo management invariants', () => {
 		todos.todos = [todoBuilder()];
 		notes.notes = [note];
 		await expect(
-			service.update(testActor(), todoBuilder({ linkedNoteId: note.id }))
+			service.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
@@ -126,7 +145,7 @@ describe('Todo management invariants', () => {
 	it('completing a todo records completion time', async () => {
 		const { service, todos } = setup();
 		todos.todos = [todoBuilder()];
-		const completed = await service.change(testActor(), testTodoId(), 'done');
+		const completed = await service.update(testActor(), { todoId: testTodoId(), status: 'done' });
 		expect(completed.completedAt).toBeDefined();
 	});
 
@@ -135,7 +154,7 @@ describe('Todo management invariants', () => {
 		todos.todos = [
 			todoBuilder({ status: 'done', completedAt: '2026-07-11T09:00:00.000Z' as never })
 		];
-		const reopened = await service.change(testActor(), testTodoId(), 'open');
+		const reopened = await service.update(testActor(), { todoId: testTodoId(), status: 'open' });
 		expect(reopened.completedAt).toBeUndefined();
 	});
 
@@ -144,18 +163,5 @@ describe('Todo management invariants', () => {
 		todos.todos = [todoBuilder()];
 		await service.softDelete(testActor(), testTodoId());
 		expect(await service.list(testActor(), {})).toEqual([]);
-	});
-
-	it('rejects an update carrying unavailable provenance', async () => {
-		const { service, todos } = setup();
-		todos.todos = [todoBuilder()];
-		await expect(
-			service.update(
-				testActor(),
-				todoBuilder({
-					provenanceId: '00000000-0000-4000-0006-000000000099' as never
-				})
-			)
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 });

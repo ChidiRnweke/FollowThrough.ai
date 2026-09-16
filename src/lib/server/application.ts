@@ -300,7 +300,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoReader: todos,
 			todoEditor: todos,
 			todoDeleter: todos,
-			todoStatusChanger: todos,
 			selectionOrigins: noteCapability.selectionOrigins,
 			promiseExtractor: todoCapability.promiseExtractor,
 			suggestionCreator: suggestions,

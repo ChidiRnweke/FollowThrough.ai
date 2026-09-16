@@ -72,6 +72,7 @@ export interface Todo {
 
 export interface CreateTodoInput {
 	readonly id?: TodoId;
+	readonly status?: TodoStatus;
 	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly description?: string;
@@ -300,7 +301,7 @@ export function assembleTodoView(
 
 /** Produce the initial task state without generating identities or writing storage. */
 export function decideTodoCreation(
-	input: CreateTodoInput & { readonly status?: TodoStatus },
+	input: CreateTodoInput,
 	context: { readonly id: TodoId; readonly userId: UserId; readonly timestamp: DateTime }
 ): { kind: 'invalid'; message: string } | { kind: 'create'; todo: Todo } {
 	const title = input.title.trim();
@@ -313,7 +314,9 @@ export function decideTodoCreation(
 		...(input.description !== undefined ? { description: input.description } : {}),
 		status: input.status ?? 'open',
 		responsibility: input.responsibility,
-		...(input.waitingOn?.trim() ? { waitingOn: input.waitingOn.trim() } : {}),
+		...(input.responsibility === 'waiting_on' && input.waitingOn?.trim()
+			? { waitingOn: input.waitingOn.trim() }
+			: {}),
 		...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
 		...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
 		...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),

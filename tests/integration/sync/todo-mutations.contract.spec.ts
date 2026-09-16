@@ -28,7 +28,6 @@ const setup = async (suffix: string) => {
 			todoCreator: catalog,
 			todoReader: catalog,
 			todoEditor: catalog,
-			todoStatusChanger: catalog,
 			todoViewAssembler: catalog,
 			todoDeleter: catalog
 		})
@@ -37,6 +36,94 @@ const setup = async (suffix: string) => {
 };
 
 describe('offline todo writes through the versioned boundary', () => {
+	it('persists explicit clears for nullable task fields', async () => {
+		const { owner, project, note, controller } = await setup('9256');
+		const { todo } = await controller.create(owner, {
+			projectId: project.id,
+			title: 'Original',
+			description: 'Context',
+			dueDate: '2026-09-20' as never,
+			responsibility: 'waiting_on',
+			waitingOn: 'Sam'
+		});
+		await controller.update(owner, {
+			todoId: todo.id,
+			linkedNoteId: note.id,
+			priority: 'high',
+			category: 'Client'
+		});
+		await controller.update(owner, {
+			todoId: todo.id,
+			description: null,
+			dueDate: null,
+			waitingOn: null,
+			linkedNoteId: null,
+			priority: null,
+			category: null
+		});
+		const stored = (await controller.get(owner, { todoId: todo.id })).todo;
+		expect([
+			stored.description,
+			stored.dueDate,
+			stored.waitingOn,
+			stored.linkedNoteId,
+			stored.priority,
+			stored.category
+		]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]);
+	});
+	it('persists a combined task edit with its completion time and cleared counterparty', async () => {
+		const { owner, project, controller } = await setup('9253');
+		const { todo } = await controller.create(owner, {
+			projectId: project.id,
+			title: 'Original',
+			responsibility: 'waiting_on',
+			waitingOn: 'Sam'
+		});
+		const result = await controller.update(owner, {
+			todoId: todo.id,
+			title: 'Finished',
+			status: 'done',
+			responsibility: 'mine'
+		});
+		const stored = (await controller.get(owner, { todoId: todo.id })).todo;
+		expect({
+			title: stored.title,
+			status: stored.status,
+			waitingOn: stored.waitingOn,
+			completedAt: stored.completedAt,
+			updatedAt: stored.updatedAt
+		}).toEqual({
+			title: 'Finished',
+			status: 'done',
+			waitingOn: undefined,
+			completedAt: result.todo.updatedAt,
+			updatedAt: result.todo.updatedAt
+		});
+	});
+	it('rejects an invalid linked note without persisting the other fields', async () => {
+		const { owner, project, controller } = await setup('9254');
+		const other = await seedNote('9255', owner);
+		const { todo } = await controller.create(owner, {
+			projectId: project.id,
+			title: 'Original',
+			responsibility: 'mine'
+		});
+		const result = await controller
+			.update(owner, {
+				todoId: todo.id,
+				title: 'Changed',
+				status: 'done',
+				linkedNoteId: other.note.id
+			})
+			.then(
+				() => 'saved',
+				(error: Error) => error.message
+			);
+		expect({ result, stored: (await controller.get(owner, { todoId: todo.id })).todo }).toEqual({
+			result: 'Todo linked note was not found',
+			stored: todo
+		});
+	});
 	it('preserves a client-created identity and its requested board column across retries', async () => {
 		const { owner, project, controller } = await setup('9251');
 		const id = crypto.randomUUID() as TodoId;
