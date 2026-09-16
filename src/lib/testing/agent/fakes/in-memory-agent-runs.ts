@@ -220,6 +220,11 @@ export class InMemoryAgentRunPersistence
 	}
 
 	failedEvent?: AgentEvent['type'];
+	async listQueuedAgents(): Promise<readonly ResolvedAgentRun[]> {
+		return this.runs.filter(
+			(run): run is ResolvedAgentRun => run.kind === 'agent' && run.status === 'queued'
+		);
+	}
 	async listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]> {
 		return this.runs.filter(
 			(run): run is WorkflowAgentRun => run.kind === 'workflow' && run.status === 'queued'
