@@ -7,6 +7,14 @@ import type { SourceAnchorRepository } from '$lib/server/repositories/provenance
 import { NotFoundError } from '$lib/errors';
 
 export class InMemoryNoteRepository implements NoteRepository {
+	insertFailures = new Set<string>();
+	saveFailures = new Set<string>();
+	snapshot(): () => void {
+		const notes = structuredClone(this.notes);
+		return () => {
+			this.notes = notes;
+		};
+	}
 	notes: Note[] = [];
 	revisions: NoteRevision[] = [];
 	restoredAttachmentSnapshots: NoteRevision['id'][] = [];
@@ -71,6 +79,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 	}
 
 	async insert(_actor: ActorContext, note: Note): Promise<Note> {
+		if (this.insertFailures.has(note.title)) throw new Error('Note could not be stored');
 		void _actor;
 		this.notes.push(note);
 		return note;
@@ -87,6 +96,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 		note: Note,
 		expectedRevision: number
 	): Promise<Note | undefined> {
+		if (this.saveFailures.has(note.title)) throw new Error('Note body could not be stored');
 		if (this.failNextConditionalUpdate) {
 			this.failNextConditionalUpdate = false;
 			return undefined;

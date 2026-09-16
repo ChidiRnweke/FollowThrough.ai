@@ -35,6 +35,7 @@ reports the failure.
 
 ## Evidence
 
-- `src/lib/server/controllers/imports/controller.ts` documents and implements partial import.
-- `src/lib/server/controllers/imports/import.spec.ts` checks partly broken archives.
+- `Notes.importMarkdownArchive` owns the partial import alongside ordinary note writes.
+- `src/lib/server/controllers/notes/import.spec.ts` checks partly broken archives, blocked
+  descendants, and independent successful branches.
 - The controller uses separate passes for identities and note bodies.

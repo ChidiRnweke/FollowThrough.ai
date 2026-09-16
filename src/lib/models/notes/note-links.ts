@@ -86,12 +86,3 @@ export const collectNoteLinkTargets = (document: ProseMirrorDocument): readonly 
  * Supports `[[Title|shown text]]`, keeping the shown text as the link label.
  */
 export const WIKI_LINK_PATTERN = /\[\[([^\]|\n]+?)(?:\|([^\]\n]+?))?\]\]/g;
-
-export const resolveWikiLinks = (markdown: string, titles: ReadonlyMap<string, NoteId>): string =>
-	markdown.replace(WIKI_LINK_PATTERN, (whole, rawTitle: string, rawLabel?: string) => {
-		const noteId = titles.get(rawTitle.trim().toLowerCase());
-		const label = (rawLabel ?? rawTitle).trim();
-		// An unresolved link stays as the author wrote it: inventing a dead link would be
-		// worse than leaving text that still says what was meant.
-		return noteId ? `[${label}](note:${noteId})` : whole;
-	});

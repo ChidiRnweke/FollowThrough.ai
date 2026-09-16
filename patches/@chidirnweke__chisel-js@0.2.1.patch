@@ -2,7 +2,15 @@ diff --git a/dist/main.js b/dist/main.js
 index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..a61beef2fb9d2a7606c42b2ee3d2cbc4cc9e0dc4 100755
 --- a/dist/main.js
 +++ b/dist/main.js
-@@ -9087,6 +9087,12 @@ class ImportBoundaryService {
+@@ -8333,6 +8333,7 @@ var LAYER_MATCHERS = [
+   [/^src\/lib\/testing\//, Layer.TESTS],
+   [/^src\/hooks\.(server\.)?(ts|js)$/, Layer.HOOKS],
+   [/\.remote\.(ts|js)$/, Layer.REMOTE],
++  [/^src\/lib\/remote\/.*\.server\.(ts|js)$/, Layer.REMOTE],
+   [/^src\/routes\/.*\+.*\.server\.(ts|js)$/, Layer.ROUTES],
+   [/^src\/routes\/.*\+server\.(ts|js)$/, Layer.ROUTES],
+   [/^src\/routes\//, Layer.COMPONENTS],
+@@ -9087,6 +9088,12 @@ class ImportBoundaryService {
      const importedLayer = layers.get(edge.imported);
      if (importedLayer === undefined)
        return [];
@@ -15,7 +23,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..a61beef2fb9d2a7606c42b2ee3d2cbc4
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9208,8 +9214,6 @@ function fixFor(importer, imported) {
+@@ -9208,8 +9215,6 @@ function fixFor(importer, imported) {
  var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
  var SERVER_ROOT_FILE_RE = /^src\/lib\/server\/([^/]*[Ff]actory|application|config|index)\.(ts|js)$/;
  var MISPLACED_LAYER_DIRS = [
