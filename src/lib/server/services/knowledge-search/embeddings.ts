@@ -1,10 +1,13 @@
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
+import { EMBEDDING_BATCH_TOKENS } from '$lib/models/knowledge-search/embeddings';
+import { getEncoding, type Tiktoken } from 'js-tiktoken';
 import { getEmbeddingAttributes } from '@arizeai/openinference-core';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import OpenAI from 'openai';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
+let encoding: Tiktoken | undefined;
 
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;
@@ -73,6 +76,31 @@ export class Embeddings implements IEmbeddings {
 	}
 
 	async embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch> {
+		const tokenizer = (encoding ??= getEncoding('cl100k_base'));
+		const vectors: (readonly number[])[] = [];
+		let batch: string[] = [];
+		let tokens = 0;
+		const flush = async () => {
+			if (!batch.length) return;
+			const result = await this.embedBatch(batch, signal);
+			vectors.push(...result.vectors);
+			batch = [];
+			tokens = 0;
+		};
+		for (const content of contents) {
+			const count = tokenizer.encode(content).length;
+			if (batch.length && tokens + count > EMBEDDING_BATCH_TOKENS) await flush();
+			batch.push(content);
+			tokens += count;
+		}
+		await flush();
+		return { model: this.model, vectors };
+	}
+
+	private async embedBatch(
+		contents: readonly string[],
+		signal?: AbortSignal
+	): Promise<EmbeddingBatch> {
 		try {
 			return await this.observer.run(
 				'embedding.batch',
@@ -91,13 +119,16 @@ export class Embeddings implements IEmbeddings {
 						{ model: this.model, input: [...contents] },
 						{ signal }
 					);
-					const vectors = [...response.data]
-						.sort((a, b) => a.index - b.index)
-						.map((item) => item.embedding);
-					if (vectors.length !== contents.length)
+					const ordered = [...response.data].sort((a, b) => a.index - b.index);
+					if (ordered.length !== contents.length)
 						throw new InvalidGeneratedContentError(
 							'Embedding result count did not match input count'
 						);
+					if (ordered.some((item, index) => item.index !== index))
+						throw new InvalidGeneratedContentError(
+							'Embedding result indexes did not match input positions'
+						);
+					const vectors = ordered.map((item) => item.embedding);
 					return { model: this.model, vectors };
 				},
 				(result) => JSON.stringify({ model: result.model, vectorCount: result.vectors.length })

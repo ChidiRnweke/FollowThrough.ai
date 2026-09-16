@@ -1,16 +1,12 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { SearchDocument } from '$lib/models/knowledge-search';
-import type {
-	EmbeddedChunk,
-	IndexSource,
-	PendingIndexSource,
-	RetrievalIndexRepository
-} from '$lib/server/repositories/knowledge-search';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import {
-	embedInStableBatches,
-	type EmbeddingClient
-} from '$lib/server/repositories/knowledge-search/embedding-batches';
+import type { EmbeddedChunk, IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
+import { InvalidGeneratedContentError } from '$lib/errors';
+
+interface TransactionRunner {
+	run<T>(work: () => Promise<T>): Promise<T>;
+}
 
 interface ScheduledTask {
 	readonly name: string;
@@ -27,16 +23,6 @@ export interface EmbeddingBackfillOptions {
 }
 
 /**
- * Chunks are embedded together with the context their indexer prefixed, so a
- * backfilled vector is identical to the one an inline embed would have produced.
- * Attachments key off their full path; everything else off its source title.
- */
-const embedInputFor = (document: SearchDocument): string => {
-	const prefix = document.attachmentId ? document.attachmentPath : document.sourceTitle;
-	return prefix ? `${prefix}\n${document.content}` : document.content;
-};
-
-/**
  * Fills in the vectors that the write path deliberately skipped.
  *
  * There is no job table: the queue is `search_chunks` rows with no embedding, so
@@ -44,7 +30,7 @@ const embedInputFor = (document: SearchDocument): string => {
  * for the next one. Failures are per-source — one poisoned document must not
  * stall every other user's index.
  */
-export class KnowledgeIndexMaintenance implements ScheduledTask {
+export class EmbeddingMaintenance implements ScheduledTask {
 	readonly name = 'embedding-backfill';
 	readonly intervalMs: number;
 	private readonly maxSourcesPerTick: number;
@@ -52,8 +38,8 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 	private after: string | undefined;
 
 	constructor(
-		private readonly repository: RetrievalIndexRepository,
-		private readonly embeddingClient: EmbeddingClient,
+		private readonly backlog: IndexBacklog,
+		private readonly embeddingClient: IEmbeddings,
 		private readonly transactions: TransactionRunner,
 		options: EmbeddingBackfillOptions = {}
 	) {
@@ -63,10 +49,10 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 	}
 
 	async run(): Promise<void> {
-		let pending = await this.repository.listPendingSources(this.maxSourcesPerTick, this.after);
+		let pending = await this.backlog.listSources(this.maxSourcesPerTick, this.after);
 		if (!pending.length && this.after !== undefined) {
 			this.after = undefined;
-			pending = await this.repository.listPendingSources(this.maxSourcesPerTick);
+			pending = await this.backlog.listSources(this.maxSourcesPerTick);
 		}
 		if (!pending.length) return;
 
@@ -95,20 +81,22 @@ export class KnowledgeIndexMaintenance implements ScheduledTask {
 
 	private async backfill(entry: PendingIndexSource): Promise<number> {
 		const actor: ActorContext = { userId: entry.userId };
-		const documents = await this.repository.listPending(actor, entry.source);
+		const documents = await this.backlog.read(actor, entry.source);
 		if (!documents.length) return 0;
 
 		// Embedding happens outside the transaction: it is a network call to a third
 		// party, and holding row locks across it is the very thing this worker exists
 		// to stop the request path from doing.
-		const vectors = await embedInStableBatches(this.embeddingClient, documents.map(embedInputFor));
+		const batch = await this.embeddingClient.embed(documents.map((document) => document.input));
+		if (batch.vectors.length !== documents.length)
+			throw new InvalidGeneratedContentError('Embedding result count did not match chunk count');
 		const embedded: EmbeddedChunk[] = documents.map((document, index) => ({
 			id: document.id,
-			embedding: vectors[index]!
+			embedding: batch.vectors[index]!
 		}));
 
 		await this.transactions.run(() =>
-			this.repository.completePending(actor, entry.source, embedded, this.embeddingClient.model)
+			this.backlog.complete(actor, entry.source, embedded, batch.model)
 		);
 		return embedded.length;
 	}

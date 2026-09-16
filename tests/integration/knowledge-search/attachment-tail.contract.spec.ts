@@ -1,8 +1,9 @@
+import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Attachment, AttachmentId, AttachmentVersionId } from '$lib/models/attachments';
 import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
-import { KnowledgeIndexMaintenance } from '$lib/server/services/knowledge-search/index-maintenance';
+import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -80,7 +81,11 @@ describe('attachment search tail in PostgreSQL', () => {
 
 	it('returns the tail as the nearest semantic result after backfill', async () => {
 		const { owner, project, attachment, repository, transaction } = await setup('9742');
-		await new KnowledgeIndexMaintenance(repository, client, transaction.transactionRunner).run();
+		await new EmbeddingMaintenance(
+			new IndexBacklog(repository),
+			client,
+			transaction.transactionRunner
+		).run();
 		const matches = await repository.searchByEmbedding(owner, vector(true), 1, project.id);
 		expect(
 			matches.map(({ document }) => ({

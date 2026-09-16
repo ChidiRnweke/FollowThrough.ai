@@ -35,6 +35,6 @@ We will keep this design while the durable record itself fully describes the wor
 
 ## Evidence
 
-- `KnowledgeIndexMaintenance` scans chunks without embeddings.
+- `EmbeddingMaintenance` scans chunks without embeddings.
 - `search_chunks_pending_idx` indexes the pending backlog.
 - Maintenance tests check retries, per-source failure isolation, and completed work.
