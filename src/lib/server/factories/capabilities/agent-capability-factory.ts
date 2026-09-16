@@ -37,7 +37,7 @@ import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { ProjectCatalog } from '$lib/server/services/projects/catalog';
-import type { BuiltInSkillLibrary } from '$lib/server/services/skills/built-ins';
+import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
 import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog-factory';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
@@ -51,7 +51,8 @@ export interface AgentCapabilityInput {
 	readonly controllers: () => ProductionControllerFactory;
 	readonly toolRetriever: ToolRetriever;
 	readonly notes: NoteCatalog;
-	readonly skills: BuiltInSkillLibrary;
+	readonly skills: SkillFinder;
+	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	readonly projects: ProjectCatalog;
 	readonly memory: MemoryLibrary;
 	readonly provenance: ProvenanceRecorder;
@@ -132,6 +133,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		contextFormatter: context,
 		contextNotes: input.notes,
 		contextSkills: input.skills,
+		builtInSkills: input.builtInSkills,
 		contextMemory: input.memory,
 		contextProjects: input.projects,
 		contextConversations: conversations,

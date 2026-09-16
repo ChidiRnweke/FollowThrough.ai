@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { Workspace, type WorkspaceDependencies } from './controller';
 import { WorkspaceViews } from '$lib/controllers/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
@@ -68,6 +69,7 @@ it('shows the same profile and visible-project memory attention from server and 
 	);
 	const server = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			...builtInSkillsFixture(),
 			userReader: new UserDirectory(users),
 			projectLister: projects,
 			noteTreeReader: new InMemoryNoteContent(),

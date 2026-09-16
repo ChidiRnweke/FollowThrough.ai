@@ -1,4 +1,5 @@
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +22,7 @@ const setup = (drawio = false) => {
 		diagrams,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
+				transactionRunner: new InMemoryTransactionRunner([]),
 				diagramSourceNotes: sourceNotes,
 				diagramFinder: diagrams,
 				...generation,
