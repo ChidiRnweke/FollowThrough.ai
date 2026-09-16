@@ -296,24 +296,23 @@ describe('Agent grounding invariants', () => {
 		expect((await oversizedContext())?.tokenCount).toBeGreaterThan(4000);
 	});
 
-	it('skips context notes that cannot be loaded', async () => {
+	it('asks for missing attached context to be removed instead of answering with fewer notes', async () => {
 		const { builder } = await setup();
-		const context = await builder.build(
-			testActor(),
-			{
-				conversationId: testConversationId(),
-				noteId: testNoteId(),
-				prompt: 'Draft an ADR',
-				contextNoteIds: [testNoteId(9)]
-			},
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(context.contextNotes).toEqual([]);
+		await expect(
+			builder.build(
+				testActor(),
+				{
+					conversationId: testConversationId(),
+					noteId: testNoteId(),
+					prompt: 'Compare the attached notes',
+					contextNoteIds: [testNoteId(), testNoteId(9)]
+				},
+				{ provenanceId: testProvenanceId() }
+			)
+		).rejects.toThrow('An attached note is no longer available. Remove it from context and retry.');
 	});
 
-	// The other half of the rule the skip depends on: a reader that is failing is
-	// not a note that is gone, and quietly dropping it would answer the user with a
-	// thinner context than they attached and never say so.
+	// Preserve operational failures; an unavailable store does not prove deletion.
 	it('fails the turn when a context note cannot be read at all', async () => {
 		const notes = new InMemoryNoteContent();
 		notes.notes = [noteBuilder()];
