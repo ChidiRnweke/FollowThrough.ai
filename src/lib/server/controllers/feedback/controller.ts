@@ -1,18 +1,13 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { AppContextSnapshotV1 } from '$lib/models/workspace';
-/** A user-submitted feedback report: free text, the URL it was filed from, and an app-context snapshot to reproduce the issue. */
-export interface FeedbackReport {
-	readonly body: string;
-	readonly url: string;
-	readonly appContext: AppContextSnapshotV1;
-}
+import type { FeedbackReport } from '$lib/models/feedback';
 interface FeedbackWriter {
 	create(actor: ActorContext, report: FeedbackReport): Promise<void>;
 }
 
 /**
- * Application boundary for user-submitted feedback. Minimal on purpose — feedback is
- * fire-and-forget and must never block or fail the action it was filed from.
+ * Submission succeeds only after the report is stored. Storage failures reach the
+ * feedback dialog, which retains the report for retry. Submission is independent
+ * of the workspace action the user is reporting.
  */
 export interface FeedbackController {
 	/** Persist a feedback report for later triage. */
