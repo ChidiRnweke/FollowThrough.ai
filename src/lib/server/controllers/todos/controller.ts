@@ -48,7 +48,7 @@ import type {
 } from '$lib/server/services/todos/contracts';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
-import type { PromiseGeneration } from '$lib/models/agent';
+import type { SelectionGeneration } from '$lib/models/agent';
 import {
 	DuplicateSelectionRequest,
 	type SelectionRequests
@@ -135,7 +135,7 @@ export interface TodosDependencies {
 	selectionRequests: SelectionRequests;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
-	promiseGeneration: PromiseGeneration;
+	promiseGeneration: SelectionGeneration;
 	promiseRules: IPromiseRules;
 }
 export class Todos implements TodosController {
@@ -399,7 +399,7 @@ export class Todos implements TodosController {
 	private extractCandidates(
 		actor: ActorContext,
 		input: ExtractPromisesInput,
-		generation: PromiseGeneration,
+		generation: SelectionGeneration,
 		requestedAt: DateTime,
 		signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {

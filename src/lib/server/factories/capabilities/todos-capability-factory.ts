@@ -14,7 +14,7 @@ import {
 	PromiseDiscovery
 } from '$lib/server/services/todos/promise-discovery';
 import { DEFAULT_PROMISE_MODEL } from '$lib/models/todos';
-import type { PromiseGeneration } from '$lib/models/agent';
+import type { SelectionGeneration } from '$lib/models/agent';
 import { DeterministicPromiseExtractor } from '$lib/server/services/todos/promise-rules';
 import { operationObserver } from '$lib/server/services/telemetry';
 
@@ -31,7 +31,7 @@ export interface TodosCapability {
 	readonly batchReceipts: TodoBatchReceipts;
 	readonly promiseExtractor: PromiseDiscovery;
 	readonly promiseRules: DeterministicPromiseExtractor;
-	readonly promiseGeneration: PromiseGeneration;
+	readonly promiseGeneration: SelectionGeneration;
 }
 
 export const createTodosCapability = (input: TodosCapabilityInput): TodosCapability => ({

@@ -7,20 +7,15 @@ import type {
 	RelationshipClassification
 } from '$lib/models/relationships';
 import type { Note, NoteId, NoteRelationship } from '$lib/models/notes';
+export type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
 
 export interface RelationshipClassifier {
 	classify(
 		sourceText: string,
 		targetText: string,
+		model: string,
 		signal?: AbortSignal
 	): Promise<RelationshipClassification>;
-}
-export interface StructuredRelationshipClient {
-	classify(
-		sourceText: string,
-		targetText: string,
-		signal?: AbortSignal
-	): Promise<RelationshipClassification | undefined>;
 }
 export interface RelationshipCreator {
 	create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship>;

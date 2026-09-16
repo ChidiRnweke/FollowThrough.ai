@@ -21,8 +21,8 @@ export class SelectionOrigins {
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async validate(actor: ActorContext, selection: TextSelection): Promise<void> {
-		await this.selectedNote(actor, selection);
+	async validate(actor: ActorContext, selection: TextSelection): Promise<Note> {
+		return this.selectedNote(actor, selection);
 	}
 	private async selectedNote(actor: ActorContext, selection: TextSelection): Promise<Note> {
 		const note = await this.notes.findById(actor, selection.noteId);

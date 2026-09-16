@@ -364,6 +364,14 @@ export const agentToolCoverage = {
 	},
 	relationships: {
 		suggestFromSelection: { kind: 'proposal', tools: ['relate_selection'] },
+		executeRelatedNoteRun: {
+			kind: 'excluded',
+			reason: 'The Relationships controller executes a saved related-note request.'
+		},
+		recoverQueuedRelatedNoteRuns: {
+			kind: 'excluded',
+			reason: 'Startup resumes queued related-note searches.'
+		},
 		startSuggestFromSelection: {
 			kind: 'excluded',
 			reason:

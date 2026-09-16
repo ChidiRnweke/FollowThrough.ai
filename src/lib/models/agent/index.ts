@@ -419,12 +419,17 @@ export interface AgentRunContext extends BaseAgentContextData {
 	readonly skills: AgentSkillCatalog;
 }
 
-export type PromiseGeneration =
+export type SelectionGeneration =
 	{ readonly kind: 'rules' } | { readonly kind: 'model'; readonly model: string };
+
+export const selectionGenerationSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('rules') }).strict(),
+	z.object({ kind: z.literal('model'), model: z.string().min(1) }).strict()
+]) satisfies z.ZodType<SelectionGeneration>;
 
 export interface PromiseExtractionRunContext {
 	readonly kind: 'promise_extraction';
-	readonly generation: PromiseGeneration;
+	readonly generation: SelectionGeneration;
 	readonly selection: TextSelection;
 	readonly responsibility?: 'mine' | 'waiting_on';
 }
@@ -435,7 +440,14 @@ export interface ReferenceSearchRunContext {
 	readonly selection: TextSelection;
 }
 
-export type SelectionActionRunContext = PromiseExtractionRunContext | ReferenceSearchRunContext;
+export interface RelatedNoteRunContext {
+	readonly kind: 'related_notes';
+	readonly generation: SelectionGeneration;
+	readonly selection: TextSelection;
+}
+
+export type SelectionActionRunContext =
+	PromiseExtractionRunContext | ReferenceSearchRunContext | RelatedNoteRunContext;
 
 export interface SelectionActionRequest {
 	readonly requestId: string;
@@ -1634,6 +1646,13 @@ const preparedDiagramRunContextSchema = z
 export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
 	z
 		.object({
+			kind: z.literal('related_notes'),
+			generation: selectionGenerationSchema,
+			selection: textSelectionSchema
+		})
+		.strict(),
+	z
+		.object({
 			kind: z.literal('reference_search'),
 			model: z.string().min(1),
 			selection: textSelectionSchema
@@ -1642,10 +1661,7 @@ export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
 	z
 		.object({
 			kind: z.literal('promise_extraction'),
-			generation: z.discriminatedUnion('kind', [
-				z.object({ kind: z.literal('rules') }).strict(),
-				z.object({ kind: z.literal('model'), model: z.string().min(1) }).strict()
-			]),
+			generation: selectionGenerationSchema,
 			selection: textSelectionSchema,
 			responsibility: z.enum(['mine', 'waiting_on']).optional()
 		})
