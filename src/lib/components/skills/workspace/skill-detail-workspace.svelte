@@ -19,7 +19,7 @@
 	import { toast } from 'svelte-sonner';
 	import { importSkillMarkdown } from '$lib/remote/skills/skills.remote';
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
-	import { serializeSkillManifest } from '$lib/models/skills';
+	import { serializeSkillManifest } from '$lib/services/skills/manifest';
 	import type { WorkspaceSkill } from '$lib/models/workspace-views';
 	import { parseProseMirrorDocument, type Note } from '$lib/models/notes';
 

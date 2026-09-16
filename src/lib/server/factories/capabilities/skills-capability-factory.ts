@@ -6,7 +6,6 @@ import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { SkillManifestCodec } from '$lib/server/services/skills/manifest';
 
 export interface SkillsCapabilityInput {
 	readonly db: Database;
@@ -22,12 +21,7 @@ export interface SkillsCapability {
 
 export const createSkillsCapability = (input: SkillsCapabilityInput): SkillsCapability => {
 	const repository = new SkillRecords(input.db);
-	const library = new SkillLibrary(
-		repository,
-		input.notes,
-		input.provenance,
-		new SkillManifestCodec()
-	);
+	const library = new SkillLibrary(repository, input.notes, input.provenance);
 	const builtIns = new BuiltInSkills(input.projects, input.notes, repository, {
 		active: BUILT_INS,
 		retired: RETIRED_BUILT_INS

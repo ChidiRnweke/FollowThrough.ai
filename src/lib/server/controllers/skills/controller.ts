@@ -1,4 +1,5 @@
 import type { IndexingResult } from '$lib/models/knowledge-search';
+import { serializeSkillManifest, validatePortableSkill } from '$lib/services/skills/manifest';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note } from '$lib/models/notes';
@@ -248,9 +249,11 @@ export class Skills implements SkillsController {
 	): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
 			const prepared = await this.dependencies.skillEditor.prepareEdit(actor, input);
-			const note = prepared.document
-				? await this.saveDocument(actor, prepared.document)
-				: prepared.skill.note;
+			if (prepared.kind === 'document') validatePortableSkill(prepared.manifest);
+			const note =
+				prepared.kind === 'document'
+					? await this.saveDocument(actor, prepared.document)
+					: prepared.skill.note;
 			return this.dependencies.skillEditor.commitEdit(actor, { ...prepared.skill, note });
 		});
 		return { skill, usages: await this.dependencies.skillUsageLister.list(actor, input.noteId) };
@@ -267,8 +270,9 @@ export class Skills implements SkillsController {
 		return note;
 	}
 
-	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string> {
-		return this.dependencies.skillEditor.serialize(actor, input.noteId);
+	async serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string> {
+		const manifest = await this.dependencies.skillEditor.manifest(actor, input.noteId);
+		return serializeSkillManifest(manifest);
 	}
 	setPinned(
 		actor: ActorContext,

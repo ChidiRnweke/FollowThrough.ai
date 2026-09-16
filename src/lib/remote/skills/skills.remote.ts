@@ -3,6 +3,8 @@ import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
 import type { NoteId } from '$lib/models/notes';
+import { readSkillManifest } from './manifest-reader.server';
+import { skillFrontmatterSchema } from '$lib/models/skills';
 
 const noteId = z.string().uuid();
 
@@ -10,13 +12,21 @@ export const saveSkillDraft = command(
 	z.object({
 		noteId,
 		baseRevision: z.number().int().positive(),
-		description: z.string(),
+		description: skillFrontmatterSchema.shape.description,
 		instructions: z.string()
 	}),
 	async (input) => {
 		await AppFactory.controllers()
 			.skills()
-			.update(requestActor(), { ...input, noteId: input.noteId as NoteId });
+			.update(requestActor(), {
+				noteId: input.noteId as NoteId,
+				description: input.description,
+				content: {
+					kind: 'instructions',
+					text: input.instructions,
+					baseRevision: input.baseRevision
+				}
+			});
 		return { saved: true };
 	}
 );
@@ -28,8 +38,11 @@ export const importSkillMarkdown = command(
 			.skills()
 			.update(requestActor(), {
 				noteId: input.noteId as NoteId,
-				raw: input.raw,
-				baseRevision: input.baseRevision
+				content: {
+					kind: 'manifest',
+					manifest: readSkillManifest(input.raw),
+					baseRevision: input.baseRevision
+				}
 			});
 		return { saved: true };
 	}

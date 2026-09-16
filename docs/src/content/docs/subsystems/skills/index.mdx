@@ -6,7 +6,7 @@ description: User-defined, versioned, pinnable instruction sets, stored as notes
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-A skill is a reusable instruction set the agent loads on cue. The instruction text lives in an ordinary note with `kind: 'skill'`; everything the agent uses to decide _whether_ to load it (name, slug, description, trigger hints, enable flag) lives in a `skills` row keyed by that note's ID. The agent never sees full skill text up front: `AgentContext` packs summaries into a 16,000-character catalog in the system prompt, and the model pulls the full instructions with the locked `load_skill` tool, which records a usage row as a side effect. Versioning comes free from the notes subsystem, pinning is per project, and three built-in skills provision themselves on first listing.
+A skill is a reusable instruction set the agent loads on cue. The instruction text lives in an ordinary note with `kind: 'skill'`; everything the agent uses to decide _whether_ to load it (name, slug, description, trigger hints, enable flag) lives in a `skills` row keyed by that note's ID. The agent never sees full skill text up front: `AgentContext` packs summaries into a 16,000-character catalog in the system prompt, and the model pulls the full instructions with the locked `load_skill` tool, which records a usage row as a side effect. Versioning comes from the notes subsystem, pinning is per project, and controllers install three built-in skills before their first use.
 
 Skills are the user-facing half of how the agent grounds itself; see [using the agent](/FollowThrough.ai/using/the-agent/) for what loading a skill looks like from the chat side.
 
@@ -17,7 +17,8 @@ Two problems fall out of "let users write their own agent instructions." First, 
 ## Where things live
 
 - **Models**: `src/lib/models/skills/index.ts`: `Skill` (the note plus its metadata), `SkillSummary` (the advertised projection: name, slug, description, trigger hints, `allowImplicitInvocation`, `isEnabled`, pin state), `SkillManifest` (the portable SKILL.md form), `SkillUsage` (one record per agent load).
-- **Services**: `src/lib/server/services/skills/`: `SkillLibrary` (`library.ts`) implements every contract in `contracts.ts`; `SkillManifestCodec` (`manifest.ts`) parses and serializes SKILL.md; `BuiltInSkills` and the `BuiltInSkillLibrary` wrapper (`built-ins.ts`) provision the shipped skills from `built-in-definitions.ts`.
+- **Services**: `src/lib/server/services/skills/`: `SkillLibrary` reads and edits skill metadata against repositories; `BuiltInSkills` installs the shipped definitions. Controllers explicitly invoke installation inside a transaction before dependent reads. `src/lib/services/skills/manifest.ts` serializes portable SKILL.md for both browser and server.
+- **Import boundary**: `src/lib/remote/skills/manifest-reader.server.ts` reads YAML and validates it with the frontmatter schema in `models/skills`. Services receive a parsed manifest or instruction edit, with a required base revision for either document change.
 - **Controllers**: `src/lib/server/controllers/skills/controller.ts`: `Skills` is the public surface: listing, editing, versioning, pinning, and the agent-facing `loadForAgent`, which is `get` plus a usage record.
 - **Repositories**: `src/lib/server/repositories/skills/postgres/skills.ts`: `SkillRecords` owns all SQL over three tables and maps rows to models on the way out.
 
@@ -32,7 +33,7 @@ The user-facing surface is small: `/skills` lists the catalog and `/skills/[id]`
 
 Skills reuse the notes subsystem for everything that already works there: the document, revision history, autosave, sync. The `skills` table (`src/lib/server/db/schema/registry.ts:408`) uses the note ID as its primary key with cascade delete, so deleting the note deletes the skill row with it. `project_skill_pins` is a composite-key join table, and pinning is idempotent (`onConflictDoNothing`). `skill_usages` keeps `contextNoteId` and `provenanceId` as set-null references, so usage history survives deletion of the note a skill was applied against. Every read joins through projects and excludes archived ones.
 
-`SkillManifestCodec` parses SKILL.md as YAML frontmatter (`name`, `description`, optional `license`, `compatibility`, `metadata`) followed by the instruction body. Limits are enforced by zod: slugs are lowercase-hyphenated and at most 64 characters, descriptions at most 1024, compatibility at most 500 (`manifest.ts`). The reserved metadata key `followthrough.allow-implicit-invocation` maps to `allowImplicitInvocation: false` and is stripped from user metadata on parse: it is a flag riding in metadata, not user data.
+The import boundary parses SKILL.md as YAML frontmatter (`name`, `description`, optional `license`, `compatibility`, `metadata`) followed by the instruction body. The model schema requires lowercase-hyphenated slugs of at most 64 characters, descriptions of at most 1024, and compatibility text of at most 500. The reserved metadata key `followthrough.allow-implicit-invocation` maps to `allowImplicitInvocation: false` and is stripped from user metadata on parse.
 
 ## How the agent discovers and loads a skill
 
@@ -41,7 +42,7 @@ Discovery is a two-step design: summaries are cheap and always advertised; full 
 <Mermaid
 	source={`
 flowchart LR
-	ensure["BuiltInSkillLibrary.ensure"] --> catalog["AgentContext: listEnabled"]
+	ensure["controller: provision built-ins in a transaction"] --> catalog["controller: load enabled skills"]
 	catalog --> filter["keep: enabled and (implicit or requested)"]
 	filter --> order["order: requested → pinned → alphabetical"]
 	order --> prompt["&lt;skills&gt; section, 16,000-char budget"]
@@ -50,7 +51,7 @@ flowchart LR
 `}
 />
 
-1. `AgentContext` (`src/lib/server/services/agent/runs/context.ts:78`) calls `listEnabled` on the provisioned finder, then keeps skills that are enabled and either allow implicit invocation or were explicitly requested by name, slug, or note ID (`context.ts:125`).
+1. The agent execution controller provisions built-ins in a transaction and loads enabled skills. `AgentContext` formats those values, keeping skills that allow implicit invocation or were explicitly requested by name, slug, or note ID.
 2. The catalog is ordered requested → pinned in the current project → alphabetical, then packed into a 16,000-character JSON budget (`SKILL_CATALOG_BUDGET`, `context.ts:43`). Requested and pinned entries are never dropped; when the rest overflow, the catalog is marked truncated and the prompt says the remainder is reachable through `list_skills`. Ordering is deterministic so the prompt is stable between runs.
 3. `reasoning.ts:514` renders the catalog as a `<skills>` section in the system prompt, explicitly tagged as untrusted data, with the instruction to call `load_skill` for whatever applies.
 4. `load_skill` calls `SkillsController.loadForAgent`, which is `get` plus a side effect: a `skill_usages` row linking the skill to the run's provenance record and the note it was applied against (`controller.ts:98`). That write is what makes "which skills actually get used" answerable later.
@@ -71,13 +72,13 @@ Every `SkillsController` method is classified in `agentToolCoverage` (`src/lib/s
 
 ## Built-in skills
 
-Three built-ins ship in `built-in-definitions.ts`, FollowThrough (the product guide), Settings, and Diagramming, plus verbatim retired bodies of earlier releases. `BuiltInSkills.ensure` provisions them into the user's default project, repairs their kind/project/archived state, and adopts a legacy note titled "followthrough" if one exists.
+Three built-ins ship in `built-in-definitions.ts`: FollowThrough (the product guide), Settings, and Diagramming, plus verbatim retired bodies of earlier releases. `BuiltInSkills.ensure` finds or creates the Inbox by its role, installs missing definitions there, and repairs invalid project placement, kind, and archived state. Built-in keys identify existing installations.
 
-Upgrades are conservative: a stored built-in is replaced by a newer definition only when it still matches a retired release byte-for-byte and was never published: an install the user never edited (`built-ins.ts:133`). Any user edit pins the skill to its current content forever. Retired bodies are never edited in place, because they exist to recognize those installs.
+Upgrades replace a stored built-in only when its title, instruction text and metadata still match a retired release. Publication status and revision numbers do not prevent an untouched installation from upgrading. Edited content is preserved. Retired bodies are never edited in place, because they identify these installations.
 
-`BuiltInSkillLibrary` wraps the plain finder and calls `ensure` before every `listEnabled`/`listAll`, so built-ins simply appear. The diagramming pipeline is the one consumer that loads a built-in by key (`load(actor, 'diagramming')` in `src/lib/server/services/diagrams/authoring.ts:387`) and that load refuses a skill the user has disabled. The Diagramming definition sets `allowImplicitInvocation: false`, so it is advertised to the agent only when explicitly requested.
+Skills, workspace, agent execution and diagram controllers explicitly call `ensure` inside a transaction. An account-level lock serializes concurrent installation. Initial browser synchronization provisions before reading its first page. Loading a built-in by key only reads and rejects disabled skills. The Diagramming definition sets `allowImplicitInvocation: false`, so it is advertised to the agent only when explicitly requested.
 
-Composition lives in `createSkillsCapability` (`src/lib/server/factories/capabilities/skills-capability-factory.ts`): one repository wired into `SkillLibrary`, `BuiltInSkills`, and the `BuiltInSkillLibrary` wrapper. In `application.ts` the controller's `skillFinder` is the provisioned wrapper (built-ins ensured on every listing) while editing, usage, and versioning go straight to the plain library.
+Composition lives in `createSkillsCapability` (`src/lib/server/factories/capabilities/skills-capability-factory.ts`). It wires actual repositories into `SkillLibrary` and `BuiltInSkills`. Controllers receive these separate collaborators; skill reads have no provisioning side effect.
 
 ## What holds
 

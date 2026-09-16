@@ -7,6 +7,7 @@ import type {
 	SkillSummary,
 	SkillUsageView,
 	SkillManifest,
+	SkillEditInput,
 	PreparedSkillEdit
 } from '$lib/models/skills';
 
@@ -24,22 +25,9 @@ export interface SkillFinder {
 }
 
 export interface SkillEditor {
-	prepareEdit(
-		actor: ActorContext,
-		input: {
-			noteId: NoteId;
-			displayName?: string;
-			description?: string;
-			raw?: string;
-			instructions?: string;
-			baseRevision?: number;
-			manifest?: SkillManifest;
-			triggerHints?: readonly string[];
-			isEnabled?: boolean;
-		}
-	): Promise<PreparedSkillEdit<Note>>;
+	prepareEdit(actor: ActorContext, input: SkillEditInput): Promise<PreparedSkillEdit<Note>>;
 	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
-	serialize(actor: ActorContext, noteId: NoteId): Promise<string>;
+	manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest>;
 	setPinned(
 		actor: ActorContext,
 		noteId: NoteId,

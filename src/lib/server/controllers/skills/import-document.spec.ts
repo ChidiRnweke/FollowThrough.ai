@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { SkillManifestCodec } from '$lib/server/services/skills/manifest';
+import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
+import type { SkillEditInput } from '$lib/models/skills';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -24,12 +25,7 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository();
-	const service = new SkillLibrary(
-		skills,
-		notes,
-		new InMemoryProvenanceRepository(),
-		new SkillManifestCodec()
-	);
+	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
@@ -65,13 +61,58 @@ const importSkill = () => {
 	];
 	return { ...state, note };
 };
-const input = {
-	baseRevision: 1,
+const input: SkillEditInput = {
 	noteId: testNoteId(),
-	raw: '---\nname: decision-writing\ndescription: Writes decisions\n---\nWrite a decision and explain its consequences.'
+	content: {
+		kind: 'manifest',
+		baseRevision: 1,
+		manifest: readSkillManifest(
+			'---\nname: decision-writing\ndescription: Writes decisions\n---\nWrite a decision and explain its consequences.'
+		)
+	}
 };
 
 describe('Skill document imports', () => {
+	it('does not save instructions when their portable metadata is incomplete', async () => {
+		const { controller, notes } = importSkill();
+		const original = structuredClone(notes.notes);
+		await controller
+			.update(testActor(), {
+				noteId: input.noteId,
+				description: 'x'.repeat(1025),
+				content: { kind: 'instructions', text: 'Replacement body', baseRevision: 1 }
+			})
+			.then(
+				() => {
+					throw new Error('Expected invalid portable metadata');
+				},
+				(error: Error) => {
+					if (!error.message.includes('Invalid SKILL.md')) throw error;
+				}
+			);
+		expect(notes.notes).toEqual(original);
+	});
+	it('rejects an imported portable name already used by another skill', async () => {
+		const { controller, skills } = importSkill();
+		skills.skills.push({
+			note: noteBuilder({ id: testNoteId(2), kind: 'skill' }),
+			name: 'Another skill',
+			slug: 'already-used',
+			description: 'Existing instructions',
+			triggerHints: [],
+			isEnabled: true
+		});
+		await expect(
+			controller.update(testActor(), {
+				noteId: input.noteId,
+				content: {
+					kind: 'manifest',
+					baseRevision: 1,
+					manifest: readSkillManifest('---\nname: already-used\ndescription: Imported\n---\nBody')
+				}
+			})
+		).rejects.toThrow('A skill with this portable name already exists');
+	});
 	it('saves imported instructions as an unpublished draft without a snapshot', async () => {
 		const { controller, notes } = importSkill();
 		const result = await controller.update(testActor(), input);
@@ -130,8 +171,7 @@ describe('Skill document imports', () => {
 		const { controller } = importSkill();
 		const result = await controller.update(testActor(), {
 			noteId: input.noteId,
-			baseRevision: 1,
-			instructions: 'Wizard instructions',
+			content: { kind: 'instructions', text: 'Wizard instructions', baseRevision: 1 },
 			description: 'Wizard description'
 		});
 		expect({ description: result.skill.description, text: result.skill.note.plainText }).toEqual({
