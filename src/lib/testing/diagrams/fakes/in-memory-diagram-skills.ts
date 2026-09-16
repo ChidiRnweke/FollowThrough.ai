@@ -1,3 +1,4 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram, DiagramId, DrawioDiagram, MermaidDiagram } from '$lib/models/diagrams';
 import type { Note, TextSelection } from '$lib/models/notes';
@@ -152,10 +153,11 @@ export class InMemoryDiagrams
 		return diagram;
 	}
 
-	async index(_actor: ActorContext, diagram: Diagram): Promise<void> {
+	async index(_actor: ActorContext, diagram: Diagram): Promise<IndexingResult> {
 		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
 		void _actor;
 		this.indexedIds.push(diagram.id);
+		return { kind: 'stored' };
 	}
 }
 

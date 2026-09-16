@@ -1,3 +1,4 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
@@ -237,11 +238,12 @@ export class InMemoryNoteContent
 		return this.anchors.filter((anchor) => anchor.noteId === note.id);
 	}
 
-	async index(actor: ActorContext, note: Note): Promise<void> {
+	async index(actor: ActorContext, note: Note): Promise<IndexingResult> {
 		if (this.failIndex || this.failIndexFor.has(note.id))
 			throw new ExternalServiceError('Indexing failed');
 		if (note.userId !== actor.userId) throw new OwnershipError('Cannot index another user’s note');
 		this.indexedNoteIds = [...this.indexedNoteIds.filter((noteId) => noteId !== note.id), note.id];
+		return { kind: 'stored' };
 	}
 
 	snapshot(): RestoreSnapshot {

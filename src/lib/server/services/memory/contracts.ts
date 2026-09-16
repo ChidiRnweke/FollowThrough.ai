@@ -1,3 +1,4 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -35,5 +36,5 @@ export interface MemoryChanges {
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
 }
 export interface MemoryIndexer {
-	index(actor: ActorContext, entry: MemoryEntry): Promise<void>;
+	index(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult>;
 }

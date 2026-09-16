@@ -1,3 +1,10 @@
+import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import {
+	diagramIndexNoteId,
+	type ContentIndex
+} from '$lib/server/services/knowledge-search/indexing';
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type {
 	DiagramMutationRequest,
@@ -208,6 +215,9 @@ export interface DiagramStudioDependencies {
 	diagramDeleter: DiagramDeleter;
 	diagramArchiver: DiagramArchiver;
 	diagramWriter: DiagramWriter;
+	diagramSourceNotes: NoteReader;
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	diagramIndexer: DiagramIndexer;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
@@ -297,7 +307,7 @@ export class DiagramStudio implements DiagramStudioController {
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
-		await this.dependencies.diagramIndexer.index(actor, diagram);
+		await this.indexDiagram(actor, diagram);
 		return { diagramId: diagram.id, ...(input.title ? { title: input.title } : {}) };
 	}
 
@@ -430,7 +440,7 @@ export class DiagramStudio implements DiagramStudioController {
 			});
 			if (diagram.kind !== 'drawio')
 				throw new UnsupportedDiagramOperationError('Expected a draw.io diagram after saving');
-			await this.dependencies.diagramIndexer.index(actor, diagram);
+			await this.indexDiagram(actor, diagram);
 			return { diagram };
 		});
 	}
@@ -450,7 +460,7 @@ export class DiagramStudio implements DiagramStudioController {
 					searchableText,
 					input.baseEtag
 				);
-				await this.dependencies.diagramIndexer.index(actor, diagram);
+				await this.indexDiagram(actor, diagram);
 				return diagram;
 			})
 		);
@@ -473,7 +483,7 @@ export class DiagramStudio implements DiagramStudioController {
 					searchableText,
 					input.baseEtag
 				);
-				await this.dependencies.diagramIndexer.index(actor, diagram);
+				await this.indexDiagram(actor, diagram);
 				return diagram;
 			})
 		);
@@ -524,7 +534,7 @@ export class DiagramStudio implements DiagramStudioController {
 					input.revisionId,
 					input.baseEtag
 				);
-				await this.dependencies.diagramIndexer.index(actor, diagram);
+				await this.indexDiagram(actor, diagram);
 				return diagram;
 			})
 		);
@@ -566,7 +576,7 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<Diagram> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const archived = await this.dependencies.diagramArchiver.archive(actor, input.diagramId);
-			await this.dependencies.diagramIndexer.index(actor, archived);
+			await this.indexDiagram(actor, archived);
 			return archived;
 		});
 	}
@@ -577,7 +587,7 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<Diagram> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const restored = await this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
-			await this.dependencies.diagramIndexer.index(actor, restored);
+			await this.indexDiagram(actor, restored);
 			return restored;
 		});
 	}
@@ -591,5 +601,27 @@ export class DiagramStudio implements DiagramStudioController {
 
 	countDiagramReferences(actor: ActorContext, input: CountDiagramReferencesInput): Promise<number> {
 		return this.dependencies.diagramReferences.countReferencingNotes(actor, input.diagramId);
+	}
+	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
+		const noteId = diagramIndexNoteId(diagram);
+		const context: DiagramIndexContext =
+			noteId === undefined
+				? { kind: 'standalone' }
+				: {
+						kind: 'note',
+						title: (await this.dependencies.diagramSourceNotes.get(actor, noteId)).title
+					};
+		await this.finishIndex(
+			actor,
+			await this.dependencies.diagramIndexer.index(actor, diagram, context)
+		);
+	}
+
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }

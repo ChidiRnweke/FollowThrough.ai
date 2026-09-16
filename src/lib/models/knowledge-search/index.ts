@@ -113,7 +113,15 @@ export interface IndexContent {
 export type IndexPlan =
 	| { readonly kind: 'remove'; readonly source: IndexSource }
 	| ({ readonly kind: 'index' } & IndexContent);
-export const decideIndexPlan = (content: IndexContent): IndexPlan =>
-	content.contents.length
-		? { kind: 'index', ...content }
-		: { kind: 'remove', source: content.source };
+export type IndexingResult =
+	| { readonly kind: 'stored' }
+	| {
+			readonly kind: 'needs_embeddings';
+			readonly source: IndexSource;
+			readonly documents: readonly SearchDocument[];
+			readonly missing: readonly { readonly id: SearchDocumentId; readonly input: string }[];
+			readonly model: string;
+	  };
+
+export type DiagramIndexContext =
+	{ readonly kind: 'standalone' } | { readonly kind: 'note'; readonly title: string };

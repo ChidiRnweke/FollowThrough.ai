@@ -1,3 +1,4 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -104,7 +105,7 @@ export interface SourceAnchorRepairer {
 	repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]>;
 }
 export interface NoteIndexer {
-	index(actor: ActorContext, note: Note): Promise<void>;
+	index(actor: ActorContext, note: Note): Promise<IndexingResult>;
 }
 
 export interface SelectionOriginService {

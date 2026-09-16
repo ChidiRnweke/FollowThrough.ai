@@ -63,12 +63,15 @@ const setup = () => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
-	const memoryIndexer = new ContentIndex(search, new InMemoryEmbeddingClient()).memories;
+	const indexEmbeddings = new InMemoryEmbeddingClient();
+	const indexWriter = new ContentIndex(search, indexEmbeddings.model);
 	const memory = new MemoryLibrary(entries, projects, provenanceRepository);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			memoryLister: memory,
-			memoryIndexer,
+			memoryIndexer: indexWriter.memories,
+			indexEmbeddings,
+			indexWriter,
 			memoryCreator: memory,
 			memoryEditor: memory,
 			memoryDeleter: memory,

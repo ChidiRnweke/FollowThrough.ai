@@ -1,3 +1,5 @@
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import {
@@ -15,11 +17,14 @@ import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-build
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 const setup = () => {
+	const sourceNotes = new InMemoryNoteContent();
+	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagrams();
 	const original = drawioBuilder();
 	diagrams.diagrams = [original];
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
+			diagramSourceNotes: sourceNotes,
 			diagramFinder: diagrams,
 			diagramWriter: diagrams,
 			diagramIndexer: diagrams,

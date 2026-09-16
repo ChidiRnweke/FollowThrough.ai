@@ -1,3 +1,4 @@
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
@@ -174,7 +175,11 @@ export interface DiagramArchiver {
 	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]>;
 }
 export interface DiagramIndexer {
-	index(actor: ActorContext, diagram: Diagram): Promise<void>;
+	index(
+		actor: ActorContext,
+		diagram: Diagram,
+		context: DiagramIndexContext
+	): Promise<IndexingResult>;
 }
 /** Parses Mermaid source and throws when it will not render. */
 export interface MermaidSourceValidator {
