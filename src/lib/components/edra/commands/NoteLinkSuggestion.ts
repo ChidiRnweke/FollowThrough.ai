@@ -13,7 +13,7 @@ export interface NoteLinkTarget {
  * nothing in the editor claimed it — the app's other `@` lives in the chat composer, a
  * separate surface. The cost is that `@` occurs in prose (addresses, handles), so the
  * trigger only fires at a word start and gives up silently when nothing matches. Imported
- * `[[Wiki Links]]` are resolved by the importer instead; see `resolveWikiLinks`.
+ * `[[Wiki Links]]` are resolved by the importer instead; see `resolveArchiveLinks`.
  */
 
 export const noteLinkSuggestionKey = new PluginKey('noteLinkSuggestion');

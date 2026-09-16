@@ -27,6 +27,7 @@ export const controllerSurfaces = {
 		move: true
 	},
 	notes: {
+		importMarkdownArchive: true,
 		prepareChange: true,
 		applyReviewedChange: true,
 		synchronize: true,
@@ -215,9 +216,6 @@ export const controllerSurfaces = {
 	},
 	inlineSuggestions: {
 		suggest: true
-	},
-	imports: {
-		importMarkdownArchive: true
 	},
 	feedback: {
 		submit: true

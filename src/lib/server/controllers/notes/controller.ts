@@ -18,6 +18,20 @@ import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/w
 import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
 import type { ActorContext } from '$lib/models/identity';
 import type {
+	ImportMarkdownArchiveInput,
+	ImportMarkdownArchiveOutput,
+	ArchiveNoteReference,
+	ArchiveLinkIssue,
+	ParsedMarkdownNote
+} from '$lib/models/projects';
+import {
+	resolveArchiveLinks,
+	indexArchiveReferences,
+	uniqueTitleIn,
+	unmappedFrontmatterKeys
+} from '$lib/server/services/notes/import';
+import type { FolderCreator } from '$lib/server/services/projects/contracts';
+import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
 	CompareNoteRevisionsInput,
@@ -43,6 +57,7 @@ import type {
 	RestoreNoteRevisionInput,
 	RestoreNoteRevisionOutput,
 	Note,
+	NoteId,
 	NoteDocument,
 	NoteRevision,
 	NoteSearchOptions,
@@ -121,6 +136,10 @@ import type {
  * runner so a save and its link/index side effects commit atomically.
  */
 export interface NotesController {
+	importMarkdownArchive(
+		actor: ActorContext,
+		input: ImportMarkdownArchiveInput
+	): Promise<ImportMarkdownArchiveOutput>;
 	prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview>;
 	applyReviewedChange(
 		actor: ActorContext,
@@ -289,6 +308,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	folderCreator: FolderCreator;
 	markdown: NoteMarkdown;
 	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	noteReader: NoteReader;
@@ -331,7 +351,117 @@ const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
 	);
 };
 
+async function importAttempt<T>(
+	work: () => Promise<T>
+): Promise<{ kind: 'success'; value: T } | { kind: 'failure'; message: string }> {
+	try {
+		return { kind: 'success', value: await work() };
+	} catch (error) {
+		return {
+			kind: 'failure',
+			message: error instanceof Error ? error.message : 'Could not be imported.'
+		};
+	}
+}
+
+function importedFolderId(folders: ReadonlyMap<string, NoteId>, path: string): NoteId {
+	const id = folders.get(path);
+	if (!id) throw new Error(`Imported parent folder is missing: ${path}`);
+	return id;
+}
+
 export class Notes implements NotesController {
+	/** Import keeps independent successes and uses the ordinary note write consequences. */
+	async importMarkdownArchive(
+		actor: ActorContext,
+		input: ImportMarkdownArchiveInput
+	): Promise<ImportMarkdownArchiveOutput> {
+		const failed: { path: string; message: string }[] = [];
+		const folders = new Map<string, NoteId>();
+		const blocked = new Set<string>();
+		const paths = new Set<string>();
+		for (const note of input.notes)
+			for (let depth = 1; depth <= note.folders.length; depth++)
+				paths.add(note.folders.slice(0, depth).join('/'));
+		for (const path of [...paths].sort((a, b) => a.split('/').length - b.split('/').length)) {
+			const parts = path.split('/');
+			const parentPath = parts.slice(0, -1).join('/');
+			if (blocked.has(parentPath)) {
+				blocked.add(path);
+				failed.push({ path, message: `Parent folder ${parentPath} could not be imported.` });
+				continue;
+			}
+			const parentId = parentPath ? importedFolderId(folders, parentPath) : input.parentId;
+			const result = await importAttempt(() =>
+				this.dependencies.folderCreator.createFolder(actor, {
+					projectId: input.projectId,
+					name: parts.at(-1)!,
+					...(parentId ? { parentId } : {})
+				})
+			);
+			if (result.kind === 'failure') {
+				blocked.add(path);
+				failed.push({ path, message: result.message });
+			} else folders.set(path, result.value.id);
+		}
+
+		const takenByFolder = new Map<string, Set<string>>();
+		const pending: { note: ParsedMarkdownNote; created: Note }[] = [];
+		const references: ArchiveNoteReference[] = [];
+		for (const note of input.notes) {
+			const folderPath = note.folders.join('/');
+			if (blocked.has(folderPath)) {
+				failed.push({
+					path: note.path,
+					message: `Destination folder ${folderPath} could not be imported.`
+				});
+				references.push({ path: note.path, title: note.title, outcome: { kind: 'failed' } });
+				continue;
+			}
+			const parentId = folderPath ? importedFolderId(folders, folderPath) : input.parentId;
+			const taken = takenByFolder.get(folderPath) ?? new Set<string>();
+			takenByFolder.set(folderPath, taken);
+			const result = await importAttempt(() =>
+				this.create(actor, {
+					projectId: input.projectId,
+					title: uniqueTitleIn(taken, note.title),
+					...(parentId ? { parentId } : {})
+				})
+			);
+			if (result.kind === 'failure') {
+				failed.push({ path: note.path, message: result.message });
+				references.push({ path: note.path, title: note.title, outcome: { kind: 'failed' } });
+			} else {
+				pending.push({ note, created: result.value.note });
+				references.push({
+					path: note.path,
+					title: note.title,
+					outcome: { kind: 'created', id: result.value.note.id }
+				});
+			}
+		}
+		const unresolvedLinks: ArchiveLinkIssue[] = [];
+		const referenceIndex = indexArchiveReferences(references);
+		for (const { note, created } of pending) {
+			if (!note.markdown.trim()) continue;
+			const resolved = resolveArchiveLinks(note, referenceIndex);
+			unresolvedLinks.push(...resolved.issues);
+			const result = await importAttempt(() =>
+				this.save(actor, {
+					note: { ...created, ...this.dependencies.markdown.read(resolved.markdown) }
+				})
+			);
+			if (result.kind === 'failure') failed.push({ path: note.path, message: result.message });
+		}
+		return {
+			importedNoteIds: pending.map(({ created }) => created.id),
+			createdFolderIds: [...folders.values()],
+			skipped: input.skipped,
+			failed,
+			unmappedFrontmatterKeys: unmappedFrontmatterKeys(input.notes),
+			unresolvedLinks
+		};
+	}
 	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult> {
 		return this.dependencies.syncMutations.run(actor, input, async (current) => {
 			const command = input.command;

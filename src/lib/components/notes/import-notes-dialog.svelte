@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { z } from 'zod';
-	import type { ImportMarkdownArchiveOutput, ProjectId } from '$lib/models/projects';
+	import type {
+		ImportMarkdownArchiveOutput,
+		ProjectId,
+		ArchiveLinkIssue
+	} from '$lib/models/projects';
 	import { importMarkdownArchiveOutputSchema } from '$lib/models/projects';
 	import type { NoteId } from '$lib/models/notes';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -10,6 +14,12 @@
 
 	/** Mirrors DEFAULT_ARCHIVE_LIMITS server-side, so the reject happens before the upload. */
 	const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
+	const linkIssueMessages: Record<ArchiveLinkIssue['reason'], string> = {
+		ambiguous: 'More than one note matches. Choose the intended note.',
+		missing: 'No matching note exists in this archive.',
+		unavailable: 'The target note could not be imported.',
+		unsupported: 'Heading links need to be connected manually.'
+	};
 
 	let {
 		open = $bindable(false),
@@ -114,6 +124,26 @@
 								<li>
 									<span class="font-medium">{failure.path}</span>
 									<span class="text-muted-foreground"> — {failure.message}</span>
+								</li>
+							{/each}
+						</ul>
+					</section>
+				{/if}
+
+				{#if report.unresolvedLinks.length > 0}
+					<section class="flex flex-col gap-2">
+						<h3 class="eyebrow">Links left unresolved</h3>
+						<p class="text-xs text-muted-foreground">
+							These links remain as written in the imported notes.
+						</p>
+						<ul class="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs">
+							{#each report.unresolvedLinks as issue (issue)}
+								<li>
+									<span class="font-medium">{issue.path}: [[{issue.target}]]</span><span
+										class="text-muted-foreground"
+									>
+										— {linkIssueMessages[issue.reason]}</span
+									>
 								</li>
 							{/each}
 						</ul>

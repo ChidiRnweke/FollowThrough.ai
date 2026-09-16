@@ -6,6 +6,11 @@ import type { ProjectId } from '$lib/models/projects';
 import { ValidationError } from '$lib/errors';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import type { RequestHandler } from './$types';
+import {
+	readMarkdownArchive,
+	parseMarkdownNote,
+	describeArchiveRejection
+} from '$lib/remote/notes/archive-reader.server';
 
 const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 
@@ -16,8 +21,7 @@ const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
  * flow: a `File` this size does not travel well through a remote function, and the zip is
  * a throwaway — putting it in the attachments table would pollute a user-facing list and
  * leave an object in storage that nothing ever reads again. The byte source is handed to
- * the controller as a `Uint8Array`, so moving to presigned uploads later touches this
- * file alone.
+ * the upload reader at this boundary. The controller receives parsed note entries.
  */
 
 const id = z.string().uuid();
@@ -47,13 +51,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json({ message: 'Choose a project to import into.' }, { status: 400 });
 
 	try {
+		const archive = readMarkdownArchive(new Uint8Array(await file.arrayBuffer()));
+		if (!archive.ok) throw new ValidationError(describeArchiveRejection(archive.rejection));
 		const report = await AppFactory.controllers()
-			.imports()
+			.notes()
 			.importMarkdownArchive(AppFactory.actor(locals), {
 				projectId: fields.data.projectId as ProjectId,
 				...(fields.data.parentId ? { parentId: fields.data.parentId as NoteId } : {}),
-				archive: new Uint8Array(await file.arrayBuffer()),
-				fileName: file.name
+				notes: archive.result.entries.map(parseMarkdownNote),
+				skipped: archive.result.skipped
 			});
 		return json(report);
 	} catch (error) {

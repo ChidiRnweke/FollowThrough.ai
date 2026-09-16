@@ -155,9 +155,16 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   Legacy incomplete rows remain preserved and require re-upload because their checksum was not
   recorded. Eighteen PostgreSQL deliverable contracts and the full 3,607-test suite pass.
   Regeneration assets and artifact/provenance atomicity remain open.
+- P16: archive links resolve against paths and unique titles across all parsed entries,
+  including failed entries. Ambiguous and unavailable targets remain literal and appear in
+  the import report. Failed folders block descendants while independent branches continue.
+  The notes controller owns the workflow; the upload boundary reads ZIP/frontmatter and
+  services resolve links. Actual before/after controller results and component captures show
+  a duplicate-title link changing from a silently selected note to an explicit warning.
+  All 3,604 unit tests, type checking, lint, architecture audits, and docs checks pass.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.
-- P09–P11, P13, P16, P18–P23: reconcile current code against the detailed assessment and
+- P09–P11, P13, P18–P23: reconcile current code against the detailed assessment and
   complete outstanding behavior and evidence. No completion is inferred from file placement.
 
 ## Validation principles
