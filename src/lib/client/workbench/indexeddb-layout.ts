@@ -1,29 +1,5 @@
-import type { TabId } from '$lib/stores/workbench/tab-ref';
-
-/** Persists tab layout only. Resource bodies and writes live in the shared synchronization database. */
-export interface WorkbenchLayoutRecord {
-	readonly id: 'current';
-	/**
-	 * Tab ids, which a note tab spells as its bare uuid and a chat tab prefixes
-	 * with `chat:`. Records written before chat tabs existed hold plain uuids and
-	 * read back unchanged, so no version bump is needed.
-	 */
-	readonly openTabs: readonly TabId[];
-	readonly focusedNoteId: TabId | null;
-	readonly pinnedTabs: readonly TabId[];
-	/** LRU ordering of recently-focused tabs, most-recent first. */
-	readonly recentlyUsed: readonly TabId[];
-	/** Whether the user has collapsed the global tab strip.  Display preference. */
-	readonly stripHidden: boolean;
-	/**
-	 * Width of the secondary (split) pane as a fraction of 1, used only when
-	 * `splitNoteId` is active in the URL.  Display preference — the URL's
-	 * `?split=` carries which note is split, while this number carries the
-	 * ratio the user last preferred.  Missing on older records; treated as
-	 * 0.5 (default) on read.
-	 */
-	readonly splitRatio: number;
-}
+import { workbenchLayoutSchema, type WorkbenchLayoutRecord } from '$lib/models/workbench';
+export type { WorkbenchLayoutRecord } from '$lib/models/workbench';
 
 const STORE_NAME = 'workspace';
 const RECORD_KEY = 'current';
@@ -57,17 +33,31 @@ const transactionDone = (transaction: IDBTransaction): Promise<void> =>
 
 export class IndexedDbWorkbenchLayout {
 	private database?: Promise<IDBDatabase>;
+	private connection?: IDBDatabase;
+	private closed = false;
+	readonly databaseName: string;
 
-	constructor(private readonly databaseName = 'followthrough-note-sync') {}
+	constructor(accountId: string, prefix = 'followthrough-workbench') {
+		if (!accountId) throw new Error('An account is required to store workbench tabs');
+		this.databaseName = `${prefix}:${encodeURIComponent(accountId)}`;
+	}
 
 	async get(): Promise<WorkbenchLayoutRecord | undefined> {
 		const database = await this.open();
 		const transaction = database.transaction(STORE_NAME, 'readonly');
-		const stored = await requestResult<WorkbenchLayoutRecord | undefined>(
+		const done = transactionDone(transaction);
+		const stored = await requestResult<unknown>(
 			transaction.objectStore(STORE_NAME).get(RECORD_KEY)
 		);
-		await transactionDone(transaction);
-		return stored;
+		await done;
+		if (this.closed) throw new Error('Workbench storage is closed');
+		if (stored === undefined) return undefined;
+		const parsed = workbenchLayoutSchema.safeParse(stored);
+		if (!parsed.success)
+			throw new Error(
+				'Saved tabs could not be read. The stored layout was retained; open notes from the sidebar to rebuild the working set.'
+			);
+		return parsed.data;
 	}
 
 	async put(record: WorkbenchLayoutRecord): Promise<void> {
@@ -85,35 +75,34 @@ export class IndexedDbWorkbenchLayout {
 	}
 
 	close(): void {
-		void this.database?.then((database) => database.close());
-		this.database = undefined;
+		this.closed = true;
+		this.connection?.close();
 	}
 
 	private open(): Promise<IDBDatabase> {
+		if (this.closed) return Promise.reject(new Error('Workbench storage is closed'));
 		this.database ??= new Promise((resolve, reject) => {
 			if (typeof indexedDB === 'undefined') {
 				reject(new Error('Device storage is unavailable'));
 				return;
 			}
-			// Version three retains shell layout while excluding the retired note writer.
-			const request = indexedDB.open(this.databaseName, 3);
+			const request = indexedDB.open(this.databaseName, 1);
 			request.onupgradeneeded = () => {
 				const database = request.result;
-				// Whichever repo triggers the v1→v2 upgrade owns the full
-				// schema.  Keep both stores in sync so that opening either
-				// repository first produces the same database layout.
 				if (!database.objectStoreNames.contains(STORE_NAME)) {
 					database.createObjectStore(STORE_NAME, { keyPath: 'id' });
 				}
-				if (!database.objectStoreNames.contains('note-sync-records')) {
-					database.createObjectStore('note-sync-records', { keyPath: 'key' });
-				}
 			};
 			request.onsuccess = () => {
-				request.result.onversionchange = () => {
+				if (this.closed) {
 					request.result.close();
-					this.database = undefined;
+					reject(new Error('Workbench storage is closed'));
+					return;
+				}
+				request.result.onversionchange = () => {
+					this.close();
 				};
+				this.connection = request.result;
 				resolve(request.result);
 			};
 			request.onerror = () => reject(request.error ?? new Error('Could not open device storage'));
