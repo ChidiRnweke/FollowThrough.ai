@@ -2,7 +2,8 @@ import type { ActorContext } from '$lib/models/identity';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
-import { AgentRunLifecycle } from '$lib/server/controllers/agent-execution/controller';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -35,7 +36,7 @@ export const agentContextFixture = () => {
 		events: runs,
 		decisions: runs,
 		sessions,
-		transactions,
+		transactionRunner: transactions,
 		settlements: new RunSettlements(runs, runs),
 		contextFormatter: new AgentContext(),
 		contextNotes: notes,
@@ -45,11 +46,11 @@ export const agentContextFixture = () => {
 		contextMemory: memory,
 		contextConversations: journal,
 		provenance: new InMemoryProvenanceRecorder(),
-		conversations: journal,
+		conversationJournal: journal,
 		runner: new InMemoryAgentRunner(),
 		eventBus: new AgentEvents()
 	};
-	const controller = new AgentRunLifecycle(dependencies);
+	const controller = new Agent(capabilityDependencies<AgentDependencies>(dependencies));
 	const builder = {
 		async build(actor: ActorContext, input: RunAgentInput, origin: { provenanceId: ProvenanceId }) {
 			if (!(await conversations.findById(actor, input.conversationId))) {

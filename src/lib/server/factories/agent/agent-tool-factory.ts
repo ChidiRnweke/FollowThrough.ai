@@ -1,3 +1,4 @@
+import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
@@ -123,6 +124,7 @@ export interface ToolAccessPolicy {
 }
 
 interface CoveredAgentControllers {
+	readonly agent: AgentController;
 	readonly agentFiles: AgentFilesController;
 	readonly workspace: WorkspaceController;
 	readonly projects: ProjectsController;
@@ -154,6 +156,68 @@ const STUDIO_GESTURE =
 	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
 
 export const agentToolCoverage = {
+	agent: {
+		execute: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		finishCancellation: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		failRun: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		recoverInterruptedRuns: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		submit: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		getRun: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		listRunEvents: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		decide: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		decideMany: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		cancel: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		retry: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		listSessions: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		renameSession: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		deleteSession: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		}
+	},
 	agentFiles: {
 		ls: { kind: 'read', tools: ['ls'] },
 		grep: { kind: 'read', tools: ['grep'] },
