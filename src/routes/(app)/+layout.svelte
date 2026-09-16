@@ -16,7 +16,7 @@
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
-	import { effectiveSidebarWidth } from '$lib/models/workspace';
+	import { effectiveSidebarWidth } from '$lib/services/workspace/sidebar-width';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { Button } from '$lib/components/ui/button';

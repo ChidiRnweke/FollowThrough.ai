@@ -250,6 +250,13 @@ explicitly attached notes disappears. Context loading now fails with an actionab
 the missing note identity; operational read failures retain their original error. This closes the
 silent omission path. Agent-context service orchestration remains pending the global migration.
 
+Global models: sidebar models now hold only width values and constraints. Cookie interpretation
+lives at the browser boundary; a shared service owns preferred-width clamping and viewport space
+allocation. Project export models hold tree/entry shapes; a focused service flattens selected trees
+into archive paths. Model-picker labels, effective-model display and query matching also live
+in one focused service; their model file retains value types. Existing behavior tests move with
+their implementations.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

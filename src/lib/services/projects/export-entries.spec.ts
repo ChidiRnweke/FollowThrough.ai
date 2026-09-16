@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ExportTreeNode } from './export-entries';
+import type { ExportTreeNode } from '$lib/models/projects';
 import { projectExportEntries } from './export-entries';
 
 const note = (title: string, kind = 'note'): ExportTreeNode => ({

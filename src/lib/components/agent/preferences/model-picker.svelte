@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { AgentModel } from '$lib/models/agent';
-	import { modelMetaLine, shortModelName } from '$lib/models/agent/model-label';
+	import { modelMetaLine, shortModelName } from '$lib/services/agent/model-label';
 	import { Button } from '$lib/components/ui/button';
 	import * as Command from '$lib/components/ui/command';
 	import * as Popover from '$lib/components/ui/popover';

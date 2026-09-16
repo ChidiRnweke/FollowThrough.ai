@@ -16,7 +16,7 @@
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/models/projects';
+	import { projectExportEntries } from '$lib/services/projects/export-entries';
 	import {
 		sectionNumberingLevelFor,
 		sectionNumberingOverrideFor,

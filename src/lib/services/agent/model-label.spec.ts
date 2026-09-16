@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { NamedModel } from '$lib/models/agent/model-label';
 import {
 	compactContextLength,
 	effectiveModel,
 	modelMatchesQuery,
 	modelMetaLine,
-	shortModelName,
-	type NamedModel
+	shortModelName
 } from './model-label';
 
 const sonnet: NamedModel = {
