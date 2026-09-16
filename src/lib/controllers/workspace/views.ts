@@ -1,3 +1,4 @@
+import { assembleNoteView } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
 import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
@@ -25,7 +26,7 @@ import {
 import type { LocalDate } from '$lib/models/workspace';
 import { assembleTodoView, type Todo, type TodoListFilter, type TodoView } from '$lib/models/todos';
 import { assembleProjectTree, type ProjectId, type ProjectView } from '$lib/models/projects';
-import { assembleNoteView, sectionNumberingView, type NoteId } from '$lib/models/notes';
+import { sectionNumberingView, type NoteId } from '$lib/models/notes';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';

@@ -531,6 +531,12 @@ a stored slug ending in a hyphen. Export then rejected its own generated name. G
 trim separators after truncation too. The service-to-export regression fails before the change and
 passes after it. Existing stored portable names are not renamed by this fix.
 
+Note view and revision-token ownership: shared note presentation owns noteEtag, noteMatchesEtag and
+assembleNoteView. Controllers apply those rules for server and downloaded views. The unused
+noteSyncContentEquals helper and its obsolete test are removed. Workspace operation receipts, not
+matching content, establish whether an offline operation applied. The note subsystem documentation
+now describes the active workspace protocol instead of the removed NoteSyncCoordinator.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

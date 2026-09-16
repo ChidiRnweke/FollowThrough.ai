@@ -16,7 +16,7 @@ import type { ApiTokensController } from '$lib/server/controllers/api-tokens/con
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/models/notes';
+import { noteEtag } from '$lib/services/notes/presentation';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
 	appContextBuilder,

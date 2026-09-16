@@ -1,3 +1,4 @@
+import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -8,7 +9,6 @@ import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
-	assembleNoteView,
 	applyNotePatch,
 	describeNotePatchFailure,
 	type NoteChangeRequest,
@@ -92,8 +92,6 @@ import {
 	MAX_NOTE_DOCUMENTS,
 	collectNoteLinkTargets,
 	diffNoteRevisionTexts,
-	noteEtag,
-	noteMatchesEtag,
 	sectionNumberingView
 } from '$lib/models/notes';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';

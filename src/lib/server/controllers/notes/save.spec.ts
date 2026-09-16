@@ -10,7 +10,7 @@ import {
 	testAnchorId,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteEtag } from '$lib/models/notes';
+import { noteEtag } from '$lib/services/notes/presentation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = () => {

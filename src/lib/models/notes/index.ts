@@ -155,20 +155,6 @@ export interface SetNoteSectionNumberingOutput {
 	readonly sectionNumbering: SectionNumberingView;
 }
 
-export const noteEtag = (note: Pick<Note, 'id' | 'currentRevision'>): NoteEtag =>
-	`note:${note.id}:r${note.currentRevision}` as NoteEtag;
-
-export const noteMatchesEtag = (
-	note: Pick<Note, 'id' | 'currentRevision'>,
-	etag: NoteEtag
-): boolean => noteEtag(note) === etag;
-
-export const noteSyncContentEquals = (left: Note, right: Note): boolean =>
-	left.title === right.title &&
-	left.plainText === right.plainText &&
-	left.isPinned === right.isPinned &&
-	JSON.stringify(left.document) === JSON.stringify(right.document);
-
 export interface SaveNoteInput {
 	readonly note: Note;
 }
@@ -211,13 +197,6 @@ export interface NoteView<Backlink, Reference, Diagram, Task, Proposal> {
 	readonly pendingSuggestions: readonly Proposal[];
 	/** The note's section-numbering cascade, resolved by the controller across note, project and app. */
 	readonly sectionNumbering: SectionNumberingView;
-}
-
-/** Assemble the same note surface from server records or downloaded records. */
-export function assembleNoteView<Backlink, Reference, Diagram, Task, Proposal>(
-	facts: Omit<NoteView<Backlink, Reference, Diagram, Task, Proposal>, 'etag'>
-): NoteView<Backlink, Reference, Diagram, Task, Proposal> {
-	return { ...facts, etag: noteEtag(facts.note) };
 }
 
 export interface GetNoteViewInput {
