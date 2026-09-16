@@ -7,10 +7,8 @@ import type { Skill, SkillSummary } from '$lib/models/skills';
 import { NotFoundError } from '$lib/errors';
 import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
 import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/contracts';
-import type {
-	ToolDescriptor,
-	ToolRetriever
-} from '$lib/server/services/agent/tools/tool-retriever';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 
 export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];

@@ -590,7 +590,12 @@ describe('Postgres tool-embedding repository invariants', () => {
 
 	it('ranks by cosine distance to the query', async () => {
 		const repository = new ToolEmbeddingRecords(context.db);
-		const ranked = await repository.rankByVector(basis(0), ['contract_beta', 'contract_alpha'], 10);
+		const ranked = await repository.rankByVector(
+			basis(0),
+			['contract_beta', 'contract_alpha'],
+			10,
+			'contract-model'
+		);
 		expect(ranked).toEqual(['contract_alpha', 'contract_beta']);
 	});
 
@@ -599,7 +604,8 @@ describe('Postgres tool-embedding repository invariants', () => {
 		const ranked = await repository.rankByVector(
 			basis(0),
 			['contract_beta', 'contract_alpha', 'contract_not_seeded'],
-			1
+			1,
+			'contract-model'
 		);
 		expect(ranked).toEqual(['contract_alpha']);
 	});
@@ -609,6 +615,16 @@ describe('Postgres tool-embedding repository invariants', () => {
 		await repository.upsert([row('contract_alpha', basis(2), 'hash-v2')]);
 		const updated = (await repository.list()).find((entry) => entry.name === 'contract_alpha');
 		expect(updated?.contentHash).toBe('hash-v2');
+	});
+
+	it('excludes stored vectors from a different embedding model', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		await repository.upsert([
+			{ ...row('contract_other_model', basis(0)), embeddingModel: 'previous-model' }
+		]);
+		expect(
+			await repository.rankByVector(basis(0), ['contract_other_model'], 10, 'contract-model')
+		).toEqual([]);
 	});
 
 	it('drops tools that left the catalog', async () => {

@@ -1,4 +1,4 @@
-import { asc, cosineDistance, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, eq, asc, cosineDistance, inArray, notInArray, sql } from 'drizzle-orm';
 import type {
 	StoredToolEmbedding,
 	ToolEmbeddingRepository,
@@ -59,14 +59,20 @@ export class ToolEmbeddingRecords implements ToolEmbeddingRepository {
 	async rankByVector(
 		queryVector: readonly number[],
 		names: readonly string[],
-		limit: number
+		limit: number,
+		model: string
 	): Promise<string[]> {
 		if (names.length === 0 || limit === 0) return [];
 		const distance = cosineDistance(schema.toolEmbeddings.embedding, [...queryVector]);
 		const rows = await this.database
 			.select({ name: schema.toolEmbeddings.name })
 			.from(schema.toolEmbeddings)
-			.where(inArray(schema.toolEmbeddings.name, [...names]))
+			.where(
+				and(
+					inArray(schema.toolEmbeddings.name, [...names]),
+					eq(schema.toolEmbeddings.embeddingModel, model)
+				)
+			)
 			.orderBy(asc(distance))
 			.limit(limit);
 		return rows.map((row) => row.name);

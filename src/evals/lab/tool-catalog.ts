@@ -1,8 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import {
-	EmbeddedToolRetriever,
-	type ToolDescriptor
-} from '$lib/server/services/agent/tools/tool-retriever';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
 import type { Lab } from './application';
 
@@ -28,6 +25,5 @@ export async function rankToolsForGoal(
 	goal: string,
 	limit = 5
 ): Promise<readonly string[]> {
-	const retriever = new EmbeddedToolRetriever(lab.embeddingClient);
-	return retriever.retrieve(toolCatalog(), goal, limit);
+	return lab.toolRetriever.retrieve(toolCatalog(), goal, limit);
 }

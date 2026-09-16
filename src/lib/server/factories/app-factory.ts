@@ -5,7 +5,7 @@ import { createProductionFactory, type ProductionApplication } from './productio
 import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
 import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';
 import type { ProvenanceRecorder } from '../services/notes/provenance';
-import type { ToolRetriever } from '../services/agent/tools/tool-retriever';
+import type { ToolRetriever } from '../controllers/tool-discovery/controller';
 import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
 import { SignIn, type ISignIn } from '$lib/server/controllers/identity/controller';
 import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';

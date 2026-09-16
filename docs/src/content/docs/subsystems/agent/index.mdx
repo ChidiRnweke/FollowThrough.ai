@@ -23,6 +23,10 @@ The second principle follows from the classifications: **agents propose, users a
 
 ## The tool catalog
 
+`ToolDiscovery` coordinates query embeddings and stored tool ranking for both the in-app agent and MCP. `ToolCatalogIndex` owns catalog drift and stored vectors. Ranking accepts only vectors from the active embedding model. A missing query vector or an incomplete seed fails explicitly; it does not produce an empty or partial discovery result.
+
+The same controller seeds tool embeddings during deployment and evaluation setup. It generates changed vectors before opening a transaction, then writes replacements and removes retired tools atomically. An unchanged catalog requires no provider request. Tool-discovery evaluations use the same stored-vector path as production.
+
 The in-app agent gets a context-reducing surface. Frequently used grounding and editing tools are registered directly, including `ls`, `grep`, and read-only `sed`. Everything else stays out of the prompt until `search_tools` returns its exact name and input schema; the harness then promotes that real, flat-schema tool for the next generation. Large notes, attachments, diagram sources, published note versions, and persisted tool results are addressed as virtual files rather than repeated inside tool results or replay.
 
 <Mermaid

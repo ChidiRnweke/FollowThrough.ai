@@ -1,3 +1,4 @@
+import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type { Database } from '$lib/server/db';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -20,9 +21,9 @@ import {
 	type ISearchQueryGeneration
 } from '$lib/server/services/knowledge-search/query-generation';
 import {
-	PgToolRetriever,
+	ToolDiscovery,
 	type ToolRetriever
-} from '$lib/server/services/agent/tools/tool-retriever';
+} from '$lib/server/controllers/tool-discovery/controller';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
@@ -100,7 +101,11 @@ export const createKnowledgeSearchCapability = (
 		repository,
 		indexWriter: index,
 		embeddingClient,
-		toolRetriever: new PgToolRetriever(embeddingClient, new ToolEmbeddingRecords(input.db)),
+		toolRetriever: new ToolDiscovery(
+			new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
+			embeddingClient,
+			input.transactionRunner
+		),
 		finalize: ({ preferences }) => ({
 			preferences,
 			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {
