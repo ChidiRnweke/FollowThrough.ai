@@ -39,4 +39,5 @@ ADR when the user-facing search contract stays the same.
 - `TokenAwareChunker` preserves paragraphs and uses overlap.
 - Indexers add source titles and paths to embedding input.
 - Indexing tests protect chunk and context behavior.
-- `docs/architecture/suspicious-findings.md` tracks the attachment 50-chunk truncation.
+- `docs/architecture/attachment-search.md` records removal of the attachment cutoff and repair
+  of historical truncated indexes.

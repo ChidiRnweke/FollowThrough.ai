@@ -145,7 +145,10 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   Server-side missing-note exclusions still need explicit treatment
   during the context-orchestration correction; the old warning-only skip is not resolved here.
 - P14: durable claims and recovery landed in #64; this stack moves extraction and image
-  enrichment into the processing controller. Verify the remaining search-tail finding separately.
+  enrichment into the processing controller. Attachment indexing now stages every accepted chunk;
+  bounded embedding batches preserve tail content. The worker repairs historical truncated indexes
+  from saved extraction without another provider request. Seven PostgreSQL processing/search
+  contracts, the full 3,599-test suite, type checking, architecture audits, lint, and docs checks pass.
 - P15: export preparation landed in #65; verify the other export findings separately.
 - P17: controller-owned draw.io writes implemented in this stack; deletion policy and other
   diagram findings remain to be checked.

@@ -29,8 +29,6 @@ export type { EmbeddingBatch, EmbeddingClient };
 
 const DEFAULT_TARGET_TOKENS = 2400;
 const DEFAULT_OVERLAP_TOKENS = 480;
-/** Long documents are indexed head-first rather than in full; the rest is reported as truncated. */
-const ATTACHMENT_CHUNK_LIMIT = 50;
 const MEMORY_SOURCE_TITLE = 'Project memory';
 
 export class TokenAwareChunker implements ContentChunker {
@@ -269,13 +267,8 @@ export class ContentIndex {
 			})
 		);
 	}
-	async indexAttachment(
-		actor: ActorContext,
-		attachment: Attachment,
-		text: string
-	): Promise<{ truncated: boolean }> {
-		const all = this.chunker.chunk(text);
-		const contents = all.slice(0, ATTACHMENT_CHUNK_LIMIT);
+	async indexAttachment(actor: ActorContext, attachment: Attachment, text: string): Promise<void> {
+		const contents = this.chunker.chunk(text);
 		const sourceTitle = attachment.path.split('/').at(-1) ?? attachment.path;
 		await this.apply(
 			actor,
@@ -295,7 +288,6 @@ export class ContentIndex {
 			}),
 			true
 		);
-		return { truncated: all.length > contents.length };
 	}
 	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<void> {
 		// User-profile entries (no project) are injected into agent context directly and

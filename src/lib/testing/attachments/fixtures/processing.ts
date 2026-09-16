@@ -2,7 +2,7 @@ import { AttachmentLibrary } from '$lib/server/services/attachments/library';
 import { AttachmentContent } from '$lib/server/services/attachments/content';
 import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemorySearchRepository,
 	InMemoryEmbeddingClient
@@ -19,7 +19,7 @@ import {
 } from '../fakes/processing';
 import { InMemoryAttachmentClaims } from '../fakes/claims';
 import type { AttachmentView } from '$lib/models/attachments';
-export const setupAttachments = () => {
+export const setupAttachments = (chunker = new TokenAwareChunker()) => {
 	const repository = new InMemoryAttachmentRepository();
 	const notes = new InMemoryNoteRepository();
 	const search = new InMemorySearchRepository();
@@ -50,7 +50,7 @@ export const setupAttachments = () => {
 				updatedAt: testNow
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient()).attachments,
+		indexer: new ContentIndex(search, new InMemoryEmbeddingClient(), chunker).attachments,
 		transactionRunner: new InMemoryTransactionRunner([repository, search]),
 		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
 		logger: { error: () => {} }

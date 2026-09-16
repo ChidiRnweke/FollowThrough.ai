@@ -7,7 +7,7 @@ import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/p
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import {
 	InMemoryTextParser,
@@ -28,7 +28,7 @@ const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
-const setup = async (suffix: string) => {
+const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 	const owner = actor(suffix);
 	await new UserRecords(context.db).ensureLocal(owner);
 	const { note } = await seedNote(suffix, owner);
@@ -88,7 +88,7 @@ const setup = async (suffix: string) => {
 				updatedAt: now
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient()).attachments,
+		indexer: new ContentIndex(search, new InMemoryEmbeddingClient(), chunker).attachments,
 		transactionRunner: transaction.transactionRunner,
 		visionModel: 'test/model',
 		logger: { error: () => {} }
@@ -96,6 +96,34 @@ const setup = async (suffix: string) => {
 	return { owner, records, search, view, parser, worker, finalize, transaction };
 };
 describe('attachment processing persistence', () => {
+	it('recovers an old truncated index from saved extraction without parsing again', async () => {
+		const { owner, records, search, view, parser, worker } = await setup(
+			'9751',
+			new TokenAwareChunker(30, 5)
+		);
+		const text =
+			Array.from(
+				{ length: 60 },
+				(_, index) => `Section ${index}. ${'Document evidence. '.repeat(10)}`
+			).join('\n\n') + '\n\nRecovery marker amberfalcon.';
+		await records.updateVersion(owner, {
+			...view.version,
+			processingStatus: 'partial',
+			parserKind: 'text',
+			extractedText: text
+		});
+		parser.beforeParse = async () => {
+			throw new Error('Parsing is unavailable');
+		};
+		await worker.run();
+		const saved = await records.findById(owner, view.attachment.id);
+		const matches = await search.search(owner, 'amberfalcon', 10, view.attachment.projectId);
+		expect({
+			status: saved?.version.processingStatus,
+			tail: matches.map(({ document }) => document.chunkIndex >= 50)
+		}).toEqual({ status: 'ready', tail: [true] });
+	});
+
 	it('rescans interrupted versions and saves searchable text', async () => {
 		const { owner, records, search, view, worker, transaction } = await setup('9711');
 		await transaction.transactionRunner.run(() =>

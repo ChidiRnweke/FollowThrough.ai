@@ -12,12 +12,12 @@ export interface EmbeddingBatch {
 }
 
 const EMBEDDING_BATCH_TOKENS = 30_000;
-const countTokens = (value: string): number => getEncoding('cl100k_base').encode(value).length;
 
 export const embedInStableBatches = async (
 	client: EmbeddingClient,
 	contents: readonly string[]
 ): Promise<readonly (readonly number[])[]> => {
+	const encoding = getEncoding('cl100k_base');
 	const vectors: (readonly number[])[] = [];
 	let batch: string[] = [];
 	let tokens = 0;
@@ -31,7 +31,7 @@ export const embedInStableBatches = async (
 		tokens = 0;
 	};
 	for (const content of contents) {
-		const count = countTokens(content);
+		const count = encoding.encode(content).length;
 		if (batch.length && tokens + count > EMBEDDING_BATCH_TOKENS) await flush();
 		batch.push(content);
 		tokens += count;
