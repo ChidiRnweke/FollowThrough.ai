@@ -487,6 +487,17 @@ a failed proposal and the retained revision after failed indexing. PostgreSQL co
 proposal and completion write failures. The duplicate outer workflow and durable diagram input
 migration remain open P11 work.
 
+Durable diagram actions: Diagrams now saves generation, inline Mermaid revision and draw.io
+conversion input before execution. The same run owns its provenance, provider execution, saved output,
+result event and completion. Queued requests resume from stored input and model choice; running work
+interrupted by a restart still fails explicitly. Prepared context retains request identity, so a lost
+receipt can be retrieved even when the model catalog is unavailable. Browser request identity is
+account-scoped and lasts until a receipt is acknowledged. NoteActionRequests replaces SelectionRequests
+as the shared persistence service for all four note-action controllers. WorkflowRunner, its callback
+port and its fake are removed. Their receipt, success, failure and cancellation tests are replaced by
+controller behavior tests and PostgreSQL contracts for actual diagrams and proposal storage.
+The remaining global model ownership and content-change review stays open.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

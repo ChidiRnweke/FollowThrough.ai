@@ -1,7 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { WorkflowAgentRun } from '$lib/models/agent';
-import type { SelectionActionResult } from '$lib/server/repositories/agent/agent-runs';
-import { selectionActionEvent } from '$lib/server/repositories/agent/stored-values';
+import type { NoteActionResult } from '$lib/server/repositories/agent/agent-runs';
+import { noteActionEvent } from '$lib/server/repositories/agent/stored-values';
 import type {
 	AgentEvent,
 	AgentRun,
@@ -230,11 +230,11 @@ export class InMemoryAgentRunPersistence
 		);
 	}
 
-	appendSelectionResult(
+	appendNoteActionResult(
 		runId: AgentRunId,
-		result: SelectionActionResult
+		result: NoteActionResult
 	): Promise<AgentRunEventRecord> {
-		return this.append(runId, 1, selectionActionEvent(result));
+		return this.append(runId, 1, noteActionEvent(result));
 	}
 
 	async listInterrupted(): Promise<readonly AgentRun[]> {

@@ -3,12 +3,7 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import {
-	References,
-	type ReferencesDependencies
-} from '$lib/server/controllers/references/controller';
-import { ReferenceRanking } from '$lib/server/services/references/ranking';
-import type { Url } from '$lib/models/references';
+import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
@@ -19,10 +14,17 @@ import {
 	AgentRunDecisionRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { isTerminalAgentRunStatus, type AgentRunId } from '$lib/models/agent';
-import { InMemoryReferencePipeline } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import {
+	isTerminalAgentRunStatus,
+	type AgentRunId,
+	type DiagramActionInput
+} from '$lib/models/agent';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, seedNote } from '../database-harness';
 
@@ -36,15 +38,14 @@ const setup = async (suffix: string) => {
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
 	const { database, transactionRunner } = createTransactionContext(drizzle(client, { schema }));
-	const projects = new ProjectRecords(database);
-	const notes = createNotesCapability({ db: database, projects });
+	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
 	const suggestions = createSuggestionsCapability({
 		db: database,
 		notes: notes.repository,
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const text = 'Use OAuth';
+	const text = 'Service A calls Service B';
 	const note = await notes.catalog.save(seeded.owner, {
 		...seeded.note,
 		plainText: text,
@@ -57,31 +58,29 @@ const setup = async (suffix: string) => {
 		to: text.length,
 		text
 	};
+	const fixture = diagramGenerationFixture();
 	const runs = new AgentRunRecords(database);
 	const events = new AgentRunEventRecords(database);
-	const requests = new NoteActionRequests(runs, events, new ConversationRecords(database));
+	const conversations = new ConversationRecords(database);
+	const requests = new NoteActionRequests(runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
-	const finder = new InMemoryReferencePipeline();
-	finder.candidates = [
-		{
-			url: 'https://www.rfc-editor.org/rfc/rfc6749' as Url,
-			title: 'OAuth standard',
-			tier: 'standard',
-			relevanceNote: 'Defines OAuth',
-			confidence: 95
-		}
-	];
-	const dependencies: ReferencesDependencies = {
+	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		...fixture,
+		generation: {
+			...fixture.generation,
+			contextNotes: notes.catalog,
+			conversations: new ConversationArchive(conversations),
+			runs: new AgentRunLedger(runs),
+			provenance: notes.provenance
+		},
 		transactionRunner,
+		anchorCreator: notes.catalog,
+		drawioXmlValidator: new DrawioXmlValidator(),
+		suggestionCreator: suggestions.inbox,
 		noteActionRequests: requests,
-		referenceFinder: finder,
-		referenceRanker: new ReferenceRanking(),
-		referenceModel: 'test/model',
 		runSettlements: settlements,
-		runEvents: { notify: () => {} },
-		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox
-	};
+		runEvents: { notify: () => {} }
+	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
@@ -92,64 +91,66 @@ const setup = async (suffix: string) => {
 			eventBus: { notify: () => {} }
 		})
 	);
-	const controller = new References(dependencies);
-	const input = { requestId: crypto.randomUUID(), selection };
-	const prepare = () =>
+	const prepare = (input: DiagramActionInput = { operation: 'generate', selection }) =>
 		transactionRunner.run(() =>
 			requests.prepare(seeded.owner, {
-				requestId: input.requestId,
-				context: {
-					kind: 'reference_search',
-					selection: input.selection,
-					model: dependencies.referenceModel
-				}
+				requestId: crypto.randomUUID(),
+				context: { kind: 'diagram_action', model: 'test/model', input }
 			})
 		);
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
 			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Run has not settled');
+			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Diagram has not settled');
 		});
 	};
 	return {
 		...seeded,
 		note,
-		input,
+		selection,
 		runs,
 		events,
-		requests,
-		finder,
-		agent,
 		dependencies,
-		controller,
+		agent,
 		prepare,
-		finished
+		finished,
+		provider: fixture.provider,
+		models: fixture.models,
+		controller: new Diagrams(dependencies)
 	};
 };
 
-it('commits one reference search for simultaneous duplicate submissions on separate connections', async () => {
-	const state = await setup('12901');
-	const [first, second] = await Promise.all([
-		state.controller.startSuggestFromSelection(state.owner, state.input),
-		state.controller.startSuggestFromSelection(state.owner, state.input)
+it('creates one diagram run and proposal for concurrent duplicate submissions', async () => {
+	const state = await setup('13201');
+	const input = { requestId: crypto.randomUUID(), selection: state.selection };
+	const receipts = await Promise.all([
+		state.controller.startGenerateMermaid(state.owner, input),
+		state.controller.startGenerateMermaid(state.owner, input)
 	]);
-	await state.finished(first.runId);
+	await state.finished(receipts[0].runId);
+	state.models.failure = new Error('Model catalog is offline');
+	const repeated = await state.controller.startGenerateMermaid(state.owner, input);
 	const [counts] =
 		await context.client`select (select count(*)::int from agent_runs where user_id = ${state.owner.userId}) as runs, (select count(*)::int from conversations where user_id = ${state.owner.userId}) as conversations, (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions`;
-	expect({ sameRun: first.runId === second.runId, counts }).toEqual({
+	expect({
+		sameRun: receipts[0].runId === receipts[1].runId && repeated.runId === receipts[0].runId,
+		status: repeated.status,
+		counts
+	}).toEqual({
 		sameRun: true,
+		status: 'completed',
 		counts: { runs: 1, conversations: 1, suggestions: 1 }
 	});
 });
 
-it('keeps the database free of proposals when cancellation beats the finder result', async () => {
-	const state = await setup('12902');
+it('saves no diagram proposal after cancellation during provider execution', async () => {
+	const state = await setup('13202');
 	const receipt = await state.prepare();
 	const gate = Promise.withResolvers<void>();
-	state.finder.completion = gate.promise;
-	const execution = state.controller.executeReferenceRun(state.owner, receipt.runId);
+	state.provider.completion = gate.promise;
+	const execution = state.controller.executeDiagramRun(state.owner, receipt.runId);
 	try {
-		await state.finder.started.promise;
+		await state.provider.started.promise;
 		await state.agent.cancel(state.owner, receipt.runId);
 	} finally {
 		gate.resolve();
@@ -163,40 +164,36 @@ it('keeps the database free of proposals when cancellation beats the finder resu
 	}).toEqual({ status: 'cancelled', counts: { suggestions: 0, anchors: 0 } });
 });
 
-it('rolls back reference proposals and anchors when the result event fails', async () => {
-	const state = await setup('12903');
+it('rolls back the generated diagram when result-event storage fails', async () => {
+	const state = await setup('13203');
 	const receipt = await state.prepare();
-	await context.client`alter table agent_run_events add constraint reference_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'reference')) not valid`;
+	await context.client`alter table agent_run_events add constraint diagram_result_failure check (not (event->>'type' = 'workflow_result' and event->>'action' = 'diagram')) not valid`;
 	try {
-		await state.controller.executeReferenceRun(state.owner, receipt.runId);
+		await state.controller.executeDiagramRun(state.owner, receipt.runId);
 		const [counts] =
 			await context.client`select (select count(*)::int from suggestions where user_id = ${state.owner.userId}) as suggestions, (select count(*)::int from source_anchors where note_id = ${state.note.id}) as anchors`;
 		expect({
 			status: (await state.runs.findById(state.owner, receipt.runId))?.status,
-			counts,
-			events: (await state.events.replay(state.owner, receipt.runId, '0')).map((record) =>
-				record.kind === 'readable' ? record.event.type : record.kind
-			)
-		}).toEqual({
-			status: 'failed',
-			counts: { suggestions: 0, anchors: 0 },
-			events: ['run_queued', 'run_started', 'failed']
-		});
+			counts
+		}).toEqual({ status: 'failed', counts: { suggestions: 0, anchors: 0 } });
 	} finally {
-		await context.client`alter table agent_run_events drop constraint reference_result_failure`;
+		await context.client`alter table agent_run_events drop constraint diagram_result_failure`;
 	}
 });
 
-it('reconstructs a queued reference search after its submitting controller has been discarded', async () => {
-	const state = await setup('12904');
-	const receipt = await state.prepare();
-	await new References(state.dependencies).recoverQueuedReferenceRuns();
+it('resumes a queued draw.io conversion from its persisted source after reconstruction', async () => {
+	const state = await setup('13204');
+	const receipt = await state.prepare({
+		operation: 'convert',
+		noteId: state.note.id,
+		source: 'flowchart LR\nA --> B'
+	});
+	await new Diagrams(state.dependencies).recoverQueuedDiagramRuns();
 	await state.finished(receipt.runId);
-	expect(
-		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>
-			record.kind === 'readable' && record.event.type === 'workflow_result'
-				? [record.event.action]
-				: []
-		)
-	).toEqual(['reference']);
+	const rows =
+		await context.client`select payload->>'kind' as kind from suggestions where user_id = ${state.owner.userId}`;
+	expect({
+		status: (await state.runs.findById(state.owner, receipt.runId))?.status,
+		proposals: rows.map((row) => row.kind)
+	}).toEqual({ status: 'completed', proposals: ['drawio'] });
 });

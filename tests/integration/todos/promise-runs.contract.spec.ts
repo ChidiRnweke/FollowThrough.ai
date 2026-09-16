@@ -15,7 +15,7 @@ import {
 	AgentRunDecisionRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
-import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { isTerminalAgentRunStatus, type AgentRunId } from '$lib/models/agent';
 import {
@@ -65,7 +65,7 @@ const setup = async (suffix: string) => {
 	};
 	const runs = new AgentRunRecords(database);
 	const events = new AgentRunEventRecords(database);
-	const requests = new SelectionRequests(runs, events, new ConversationRecords(database));
+	const requests = new NoteActionRequests(runs, events, new ConversationRecords(database));
 	const settlements = new RunSettlements(runs, events);
 	const extractor = new InMemoryPromiseExtractor();
 	extractor.candidates = [
@@ -75,7 +75,7 @@ const setup = async (suffix: string) => {
 	trust.autoAccept = true;
 	const dependencies = capabilityDependencies<TodosDependencies>({
 		transactionRunner,
-		selectionRequests: requests,
+		noteActionRequests: requests,
 		promiseExtractor: extractor,
 		promiseRules: todo.promiseRules,
 		promiseGeneration: { kind: 'model', model: 'test/model' },

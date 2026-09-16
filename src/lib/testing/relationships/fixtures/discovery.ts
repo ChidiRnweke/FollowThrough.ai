@@ -6,7 +6,7 @@ import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/con
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import { RelationshipRules } from '$lib/server/services/relationships/rules';
-import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import {
 	InMemorySearchRepository,
@@ -57,7 +57,7 @@ export const relatedNoteFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new SelectionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(runs, runs, conversations);
 	const dependencies: RelationshipsDependencies = {
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 		knowledgeLookup: new KnowledgeLookup(repository),
@@ -68,7 +68,7 @@ export const relatedNoteFixture = () => {
 		relationshipGeneration: { kind: 'model', model: 'test/model' },
 		suggestionCreator: suggestions,
 		transactionRunner: transactions,
-		selectionRequests: requests,
+		noteActionRequests: requests,
 		runSettlements: settlements,
 		runEvents: { notify: () => {} }
 	};

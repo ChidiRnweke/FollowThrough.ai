@@ -254,12 +254,10 @@ produce.
         `workflow_result.result` carry `AgentPayload`. The persisted JSON shape does not change.
         `ConversationArchive` no longer re-reads an already-read value, and the spec that fed it a
         function-valued output went with that: the fixture described a row no producer can build.
-  - [x] `WorkflowRunTask<Result>` stays unconstrained, deliberately. `Result extends AgentPayload`
-        is what it looks like it wants, but the tasks return domain outputs — `FindReferencesOutput`,
-        `GenerateMermaidDiagramOutput` — that are JSON-shaped and still not assignable to an index
-        signature, so satisfying it meant putting one on each of those domain types. The read moved
-        to `WorkflowRunner.execute` instead, where a domain result becomes wire JSON, and a result
-        that cannot be represented settles the run as failed.
+  - [x] Note-action controllers produce the typed `NoteActionResult` union. The event repository
+        converts those domain outputs into wire JSON through `noteActionEvent` at the storage
+        boundary. A result that cannot be represented fails its transaction. The callback-based
+        `WorkflowRunTask` and `WorkflowRunner` were removed; domain models need no JSON index signature.
   - [x] Three `no-cast-probe` violations retired: the two `createdAt` probes in `filterCreated`,
         which indexed a value whose type already said it was JSON, and the range cast in
         `temporal`'s refinement, where the generic shape leaves zod inferring a union that no

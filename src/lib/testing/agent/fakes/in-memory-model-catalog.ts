@@ -4,7 +4,9 @@ import { ValidationError } from '$lib/errors';
 
 export class InMemoryModelCatalog implements AgentModelCatalog {
 	models: AgentModel[] = [];
+	failure: Error | undefined;
 	async list(): Promise<readonly AgentModel[]> {
+		if (this.failure) throw this.failure;
 		return this.models;
 	}
 	async assertSelectable(modelId: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import { SelectionRequests } from '$lib/server/services/agent/runs/selection-requests';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { DeterministicPromiseExtractor } from '$lib/server/services/todos/promise-rules';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
@@ -48,13 +48,13 @@ export const promiseExtractionFixture = () => {
 		conversations
 	]);
 	const settlements = new RunSettlements(runs, runs);
-	const requests = new SelectionRequests(runs, runs, conversations);
+	const requests = new NoteActionRequests(runs, runs, conversations);
 	const dependencies = capabilityDependencies<TodosDependencies>({
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 		promiseExtractor: extractor,
 		promiseRules: new DeterministicPromiseExtractor(),
 		promiseGeneration: { kind: 'model', model: 'test/model' },
-		selectionRequests: requests,
+		noteActionRequests: requests,
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		suggestionCreator: suggestions,

@@ -13,6 +13,7 @@ import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submis
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
+import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryDiagramGeneration } from '$lib/testing/diagrams/fakes/in-memory-generation';
@@ -26,6 +27,18 @@ export const diagramGenerationFixture = () => {
 	const skills = builtInSkillsFixture();
 	const provider = new InMemoryDiagramGeneration();
 	const provenance = new InMemoryProvenanceRecorder();
+	const models = new InMemoryModelCatalog();
+	models.models = [
+		{
+			id: 'test/model',
+			name: 'Test model',
+			provider: 'test',
+			supportsTools: true,
+			supportsVision: false,
+			recommended: false,
+			capabilities: ['tools']
+		}
+	];
 	const generation: DiagramAgentDependencies = {
 		contextFormatter: new AgentContext(),
 		contextNotes: notes,
@@ -33,21 +46,7 @@ export const diagramGenerationFixture = () => {
 		contextMemory: new InMemoryMemoryEntryRepository(),
 		conversations: new ConversationArchive(conversations),
 		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
-		models: {
-			async list() {
-				return [
-					{
-						id: 'test/model',
-						name: 'Test model',
-						provider: 'test',
-						supportsTools: true,
-						supportsVision: false,
-						recommended: false,
-						capabilities: ['tools']
-					}
-				];
-			}
-		},
+		models,
 		runs: new AgentRunLedger(persistence),
 		provenance,
 		builtInSkills: skills.builtInSkills,
@@ -59,6 +58,7 @@ export const diagramGenerationFixture = () => {
 		generator: provider
 	};
 	return {
+		models,
 		generation,
 		provider,
 		persistence,
