@@ -1,45 +1,4 @@
-/**
- * What a proofreading pass produces, stated independently of the checker behind
- * it. Harper hands back WebAssembly handles whose memory it owns; everything
- * above this line works with plain data, so nothing outside the adapter has to
- * know a linter can be freed out from under it, and a different checker could be
- * swapped in without touching the editor.
- */
-
-/** One offered fix, already reduced to the text the flagged span becomes. */
-export interface ProofreadSuggestion {
-	/** What the menu shows. */
-	readonly label: string;
-	/** What the flagged span becomes when this is applied. Empty means delete it. */
-	readonly replacement: string;
-}
-
-export interface ProofreadIssue {
-	/** Character offset into the linted text, inclusive. */
-	readonly start: number;
-	/** Character offset into the linted text, exclusive. */
-	readonly end: number;
-	/** Plain-language description of the problem. */
-	readonly message: string;
-	/** The checker's own category — `Spelling`, `Grammar`, `Style`, … */
-	readonly kind: string;
-	/** The offending text itself, so a decoration can be matched back to a word. */
-	readonly text: string;
-	readonly suggestions: readonly ProofreadSuggestion[];
-}
-
-/** Lints a run of prose. Implemented by the Harper adapter and by the test fake. */
-export interface ProofreadLinter {
-	/**
-	 * Do whatever loading is needed before the first lint. Optional to call —
-	 * `lint` completes it regardless — but calling it while the user is reading
-	 * moves a multi-megabyte download off the first keystroke.
-	 */
-	setup(): Promise<void>;
-	lint(text: string): Promise<readonly ProofreadIssue[]>;
-	/** Teach the checker a word so it stops being flagged. */
-	addWord(word: string): Promise<void>;
-}
+import type { ProofreadIssue, ProofreadSuggestion } from '$lib/models/proofreading';
 
 /**
  * The categories that mean "this is not a word" rather than "this could be

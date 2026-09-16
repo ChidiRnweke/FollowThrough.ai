@@ -3,7 +3,7 @@
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import DiffViewer from './diff-viewer.svelte';
 	import ChatMermaid from './chat-mermaid.svelte';
-	import { chatMarkdownSegments, renderMarkdown } from '$lib/models/markdown';
+	import { chatMarkdownSegments, renderMarkdown } from '$lib/client/markdown/rendering';
 
 	let { content, surface = 'neutral' }: { content: string; surface?: 'neutral' | 'brand' } =
 		$props();
@@ -44,7 +44,7 @@
 				<ChatMermaid source={segment.content} />
 			{:else}
 				{@const rendered = renderMarkdown(segment.content)}
-				{#if rendered.ok}
+				{#if rendered.kind === 'rendered'}
 					{#if rendered.html}
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -- Marked output is sanitized by DOMPurify above. -->
 						{@html rendered.html}

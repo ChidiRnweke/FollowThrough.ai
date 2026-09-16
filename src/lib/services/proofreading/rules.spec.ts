@@ -1,12 +1,12 @@
+import type { ProofreadIssue } from '$lib/models/proofreading';
 import { describe, expect, it } from 'vitest';
 import {
 	dictionaryWordFor,
 	isSpellingIssue,
 	normalizeDictionaryWord,
 	proofreadSuggestion,
-	withoutIgnoredWords,
-	type ProofreadIssue
-} from './proofreading';
+	withoutIgnoredWords
+} from './rules';
 
 const issue = (overrides: Partial<ProofreadIssue> = {}): ProofreadIssue => ({
 	start: 0,

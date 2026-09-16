@@ -1,11 +1,8 @@
 import { HarperLinter } from '$lib/client/proofreading/harper-linter';
 import { SvelteSet } from 'svelte/reactivity';
-import {
-	normalizeDictionaryWord,
-	withoutIgnoredWords,
-	type ProofreadIssue,
-	type ProofreadLinter
-} from '$lib/models/proofreading';
+import { normalizeDictionaryWord, withoutIgnoredWords } from '$lib/services/proofreading/rules';
+import type { ProofreadIssue } from '$lib/models/proofreading';
+import type { ProofreadLinter } from '$lib/services/proofreading/contracts';
 
 const ENABLED_KEY = 'followthrough.proofreading.enabled';
 const DICTIONARY_KEY = 'followthrough.proofreading.dictionary';

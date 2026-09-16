@@ -227,6 +227,12 @@ model/service/controller rule to every slice. Do not stop when the layer moves a
   drain remain unchanged. Worker orchestration and remaining operational-contract corrections
   still belong to the outstanding global work.
   All 3,688 unit tests, 253 PostgreSQL contracts and local quality checks pass.
+- Global models: markdown models now contain render-result and segment values only; Marked and
+  DOMPurify run in a browser adapter. Proofreading models contain issue/suggestion values only;
+  dictionary rules live in a focused shared service and the linter port lives with service
+  contracts. Failed rendering returns an explicit failure value with the original text. The
+  native-browser sanitizer/fallback tests now run in the regular unit gate.
+  All 3,694 unit tests, ten mounted-chat browser tests and local quality checks pass.
 
 ## Validation principles
 
