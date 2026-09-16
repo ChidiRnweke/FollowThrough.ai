@@ -13,8 +13,8 @@ import type {
 import type { TrustPolicyStore } from '$lib/server/services/agent/runs/tool-trust';
 
 /**
- * Application boundary for trust policies: the rules deciding which agent tool calls and
- * suggestion types are auto-approved versus gated on explicit user approval.
+ * Application boundary for auto-accepting extracted task and memory proposals.
+ * Chat tool approval is controlled separately by execution mode.
  */
 export interface TrustPoliciesController {
 	synchronize(
@@ -23,7 +23,7 @@ export interface TrustPoliciesController {
 	): Promise<WorkspaceMutationResult>;
 	/** List the current trust policies. */
 	list(actor: ActorContext): Promise<GetTrustPoliciesOutput>;
-	/** Upsert a trust policy, replacing the previous rule for the same scope and tool. */
+	/** Replace the user's auto-accept rule for one supported proposal workflow. */
 	update(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<UpdateTrustPolicyOutput>;
 }
 export interface TrustPoliciesDependencies {

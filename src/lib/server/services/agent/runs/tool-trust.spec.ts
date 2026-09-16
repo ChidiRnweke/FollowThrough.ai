@@ -8,9 +8,52 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 describe('Trust policy invariants', () => {
-	it('returns a default policy for every pipeline', async () => {
+	it('lists only proposal workflows with effective auto-accept behavior', async () => {
 		const service = new ToolTrust(new InMemoryTrustPolicyRepository());
-		expect(await service.list(testActor())).toHaveLength(5);
+		expect((await service.list(testActor())).map((policy) => policy.pipeline)).toEqual([
+			'extract_promises',
+			'memory'
+		]);
+	});
+	it.each(['relate', 'reference', 'agent'] as const)(
+		'rejects changes to the ineffective %s policy',
+		async (pipeline) => {
+			const service = new ToolTrust(new InMemoryTrustPolicyRepository());
+			await expect(
+				service.upsert(testActor(), { pipeline, autoAcceptEnabled: true })
+			).rejects.toMatchObject({ code: 'VALIDATION' });
+		}
+	);
+	it.each(['relate', 'reference', 'agent'] as const)(
+		'does not authorize acceptance through a legacy %s setting',
+		async (pipeline) => {
+			const repository = new InMemoryTrustPolicyRepository();
+			repository.policies = [
+				{
+					userId: testActor().userId,
+					pipeline,
+					autoAcceptEnabled: true,
+					createdAt: testNow,
+					updatedAt: testNow
+				}
+			];
+			expect(
+				await new ToolTrust(repository).shouldAutoAccept(testActor(), pipeline, suggestionBuilder())
+			).toBe(false);
+		}
+	);
+	it('preserves historical policy records without presenting them as effective controls', async () => {
+		const repository = new InMemoryTrustPolicyRepository();
+		const legacy = {
+			userId: testActor().userId,
+			pipeline: 'agent' as const,
+			autoAcceptEnabled: true,
+			createdAt: testNow,
+			updatedAt: testNow
+		};
+		repository.policies = [legacy];
+		await new ToolTrust(repository).list(testActor());
+		expect(repository.policies).toEqual([legacy]);
 	});
 	it('includes a memory pipeline policy', async () => {
 		const service = new ToolTrust(new InMemoryTrustPolicyRepository());
@@ -39,7 +82,7 @@ describe('Trust policy invariants', () => {
 		repository.policies = [
 			{
 				userId: testActor().userId,
-				pipeline: 'relate',
+				pipeline: 'extract_promises',
 				autoAcceptEnabled: true,
 				minimumConfidence: 80 as never,
 				createdAt: testNow,
@@ -50,10 +93,25 @@ describe('Trust policy invariants', () => {
 		expect(
 			await service.shouldAutoAccept(
 				testActor(),
-				'relate',
+				'extract_promises',
 				suggestionBuilder({ confidence: 70 as never })
 			)
 		).toBe(false);
+	});
+	it('accepts a supported proposal exactly at the confidence threshold', async () => {
+		const service = new ToolTrust(new InMemoryTrustPolicyRepository());
+		await service.upsert(testActor(), {
+			pipeline: 'extract_promises',
+			autoAcceptEnabled: true,
+			minimumConfidence: 80 as never
+		});
+		expect(
+			await service.shouldAutoAccept(
+				testActor(),
+				'extract_promises',
+				suggestionBuilder({ confidence: 80 as never })
+			)
+		).toBe(true);
 	});
 
 	it('does not reuse another pipeline policy', async () => {

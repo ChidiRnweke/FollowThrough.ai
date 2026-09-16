@@ -2,6 +2,7 @@
 import { tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
+import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
 import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
@@ -2118,7 +2119,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			toolDescription('update_trust_policy'),
 			'mutation',
 			z.object({
-				pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
+				pipeline: z.enum(PROPOSAL_AUTO_ACCEPT_PIPELINES),
 				autoAcceptEnabled: z.boolean(),
 				minimumConfidence: confidence
 					.optional()
