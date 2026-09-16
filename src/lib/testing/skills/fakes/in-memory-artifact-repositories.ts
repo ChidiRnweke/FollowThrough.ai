@@ -237,6 +237,17 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 }
 
 export class InMemorySkillRepository implements SkillRepository {
+	writeFailure: Error | undefined;
+	// Unit transactions run sequentially; PostgreSQL contracts verify concurrent locking.
+	async lockBuiltInProvisioning(_actor: ActorContext): Promise<void> {}
+	snapshot(): () => void {
+		const skills = structuredClone(this.skills);
+		const usages = structuredClone(this.usages);
+		return () => {
+			this.skills = skills;
+			this.usages = usages;
+		};
+	}
 	skills: Skill<Note>[] = [];
 	usages: SkillUsage[] = [];
 	async findByNoteId(actor: ActorContext, noteId: NoteId) {
@@ -257,10 +268,12 @@ export class InMemorySkillRepository implements SkillRepository {
 			}));
 	}
 	async insert(_actor: ActorContext, skill: Skill<Note>) {
+		if (this.writeFailure) throw this.writeFailure;
 		this.skills.push(skill);
 		return skill;
 	}
 	async update(_actor: ActorContext, skill: Skill<Note>) {
+		if (this.writeFailure) throw this.writeFailure;
 		this.skills = this.skills.map((item) => (item.note.id === skill.note.id ? skill : item));
 		return skill;
 	}

@@ -37,6 +37,7 @@ import type {
 } from '$lib/server/services/notes/contracts';
 import type {
 	SkillCreator,
+	BuiltInSkillProvisioner,
 	SkillFinder,
 	SkillUsageLister,
 	SkillUsageRecorder,
@@ -95,6 +96,7 @@ export interface SkillsController {
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	syncMutations: Pick<SyncMutationTransactions, 'run'>;
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
@@ -129,6 +131,9 @@ export class Skills implements SkillsController {
 
 	constructor(private readonly dependencies: SkillsDependencies) {}
 	async list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
+		await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.builtInSkills.ensure(actor)
+		);
 		return { skills: await this.dependencies.skillFinder.listAll(actor, input?.projectId) };
 	}
 	async get(actor: ActorContext, input: GetSkillViewInput): Promise<SkillView<Note>> {

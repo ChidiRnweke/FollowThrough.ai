@@ -1,4 +1,5 @@
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -104,6 +105,7 @@ const setup = <T extends { execute: (input: never) => AsyncIterable<AgentExecuti
 		contextFormatter: new AgentContext(),
 		contextNotes: new InMemoryNoteContent(),
 		contextSkills: new InMemorySkills(),
+		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: new InMemoryProjects(),
 		contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
 		contextConversations: new ConversationArchive(new InMemoryConversationRepository()),

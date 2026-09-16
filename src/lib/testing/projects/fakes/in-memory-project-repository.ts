@@ -32,6 +32,14 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 	folderFailures = new Set<string>();
 	private nextProject = 100;
 	private nextEntry = 100;
+	snapshot(): () => void {
+		const projects = structuredClone(this.projects);
+		const entries = structuredClone(this.entries);
+		return () => {
+			this.projects = projects;
+			this.entries = entries;
+		};
+	}
 
 	async insert(actor: ActorContext, input: CreateProjectInput): Promise<Project> {
 		if (
@@ -47,6 +55,7 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 			id: input.id ?? testProjectId(this.nextProject++),
 			userId: actor.userId,
 			name: input.name,
+			role: input.role ?? 'workspace',
 			description: input.description
 		});
 		this.projects.push(project);

@@ -2,21 +2,13 @@ import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
 import type { Project, ProjectId } from '$lib/models/projects';
-import type { Skill, SkillSummary } from '$lib/models/skills';
+import type { Skill } from '$lib/models/skills';
 import { INBOX_PROJECT_NAME } from '$lib/models/projects';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
-export interface BuiltInSkillDefinition {
-	readonly key: string;
-	readonly name: string;
-	readonly description: string;
-	readonly instructions: string;
-	readonly triggerHints: readonly string[];
-	readonly version?: string;
-	readonly allowImplicitInvocation?: boolean;
-}
+import type { BuiltInSkillDefinition } from '$lib/models/skills/built-ins';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -31,7 +23,9 @@ export class BuiltInSkills {
 		}
 	) {}
 
+	/** The calling controller owns the transaction for installation and its lock. */
 	async ensure(actor: ActorContext): Promise<void> {
+		await this.skills.lockBuiltInProvisioning(actor);
 		const inbox = await this.ensureInbox(actor);
 		const projects = await this.projects.listActive(actor);
 		const activeProjectIds = new Set(projects.map((project) => project.id));
@@ -56,7 +50,6 @@ export class BuiltInSkills {
 	}
 
 	async load(actor: ActorContext, key: string): Promise<Skill<Note>> {
-		await this.ensure(actor);
 		const note = await this.notes.findByBuiltInKey(actor, key);
 		if (!note) throw new NotFoundError(`Built-in skill "${key}" was not found`);
 		const skill = await this.skills.findByNoteId(actor, note.id);
@@ -237,33 +230,3 @@ export class BuiltInSkills {
 		};
 	}
 }
-
-interface SkillCollection {
-	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
-}
-
-export class BuiltInSkillLibrary {
-	constructor(
-		private readonly provisioner: BuiltInSkillProvisioner,
-		private readonly delegate: SkillCollection
-	) {}
-
-	async listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		await this.provisioner.ensure(actor);
-		return this.delegate.listEnabled(actor, projectId);
-	}
-
-	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		await this.provisioner.ensure(actor);
-		return this.delegate.listAll(actor, projectId);
-	}
-
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
-		return this.delegate.load(actor, noteId);
-	}
-}
-
-export type BuiltInSkillProvisioner = Pick<BuiltInSkills, 'ensure' | 'load'>;
-export type BuiltInSkillFinder = Pick<BuiltInSkillLibrary, 'listEnabled' | 'listAll' | 'load'>;

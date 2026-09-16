@@ -202,7 +202,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		controllers: () => controllerFactory,
 		toolRetriever,
 		notes,
-		skills: skillCapability.provisioned,
+		skills: skillCapability.library,
+		builtInSkills: skillCapability.builtIns,
 		projects,
 		memory,
 		provenance,
@@ -264,10 +265,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const referenceFinder = referenceCapability.finder;
 	const suggestions = suggestionCapability.inbox;
 	const skills = skillCapability.library;
-	const provisionedSkills = skillCapability.provisioned;
 	const diagramCapability = createDiagramsCapability({
 		contextNotes: notes,
-		contextSkills: provisionedSkills,
+		contextSkills: skills,
 		contextMemory: memory,
 		apiKey: openRouterApiKey,
 		baseURL: openRouterBaseURL,
@@ -464,7 +464,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
-			skillFinder: provisionedSkills,
+			skillFinder: skills,
+			builtInSkills: skillCapability.builtIns,
 			skillUsageLister: skills,
 			skillUsageRecorder: skills,
 			revisionRecorder: notes,
@@ -487,7 +488,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			userReader: identity.userReader,
 			projectLister: projects,
 			noteTreeReader: notes,
-			skillFinder: provisionedSkills,
+			skillFinder: skills,
+			builtInSkills: skillCapability.builtIns,
+			transactionRunner,
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
 			todoLister: todos,

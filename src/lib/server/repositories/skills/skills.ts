@@ -5,6 +5,8 @@ import type { ProjectId } from '$lib/models/projects';
 import type { Skill, SkillSummary, SkillUsage } from '$lib/models/skills';
 /** Skills are notes with metadata, so `insert`/`update` operate on the metadata row only; the note body goes through the notes repository. */
 export interface SkillRepository {
+	/** Serialize built-in installation until the enclosing transaction ends. */
+	lockBuiltInProvisioning(actor: ActorContext): Promise<void>;
 	findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined>;
 	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
 	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;

@@ -11,8 +11,12 @@ export class InMemoryNoteRepository implements NoteRepository {
 	saveFailures = new Set<string>();
 	snapshot(): () => void {
 		const notes = structuredClone(this.notes);
+		const revisions = structuredClone(this.revisions);
+		const restoredAttachmentSnapshots = [...this.restoredAttachmentSnapshots];
 		return () => {
 			this.notes = notes;
+			this.revisions = revisions;
+			this.restoredAttachmentSnapshots = restoredAttachmentSnapshots;
 		};
 	}
 	notes: Note[] = [];

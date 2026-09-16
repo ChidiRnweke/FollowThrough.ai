@@ -21,7 +21,8 @@ import { pendingMemoryNotifications } from '$lib/services/memory/attention';
 import { assembleToday } from '$lib/services/workspace/today';
 import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
 import type { ProjectLister } from '$lib/server/services/projects/contracts';
-import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import type {
 	SuggestionExpirer,
 	SuggestionLister
@@ -55,6 +56,8 @@ export interface WorkspaceController {
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
+	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
+	transactionRunner: TransactionRunner;
 	writeRecovery: SyncWriteRecovery;
 	syncChanges: SyncChangeReader;
 	syncObjects: SyncObjectReader;
@@ -71,7 +74,11 @@ export interface WorkspaceDependencies {
 
 export class Workspace implements WorkspaceController {
 	constructor(private readonly dependencies: WorkspaceDependencies) {}
-	pullChangePage(actor: ActorContext, since: SyncCursor) {
+	async pullChangePage(actor: ActorContext, since: SyncCursor) {
+		if (since === '0')
+			await this.dependencies.transactionRunner.run(() =>
+				this.dependencies.builtInSkills.ensure(actor)
+			);
 		return this.dependencies.syncChanges.pullPage(actor, since);
 	}
 	cancelMutation(actor: ActorContext, input: WorkspaceWriteCancellation) {
@@ -82,6 +89,9 @@ export class Workspace implements WorkspaceController {
 		return this.dependencies.syncObjects.read(actor, identity, etag);
 	}
 	async getShellContext(actor: ActorContext): Promise<ShellContext> {
+		await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.builtInSkills.ensure(actor)
+		);
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const [user, projects, noteTree, skills, pendingSuggestions] = await Promise.all([
 			this.dependencies.userReader.get(actor),

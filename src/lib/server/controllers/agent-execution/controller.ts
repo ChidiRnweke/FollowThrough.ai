@@ -3,7 +3,7 @@ import type { ActorContext } from '$lib/models/identity';
 import { AgentProviderFailure, NotFoundError } from '$lib/errors';
 import type { AgentContext } from '$lib/server/services/agent/runs/context';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
-import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -99,6 +99,7 @@ export interface AgentRunExecutorDependencies {
 	readonly contextFormatter: AgentContext;
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
+	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
 	readonly contextProjects: ProjectReader;
 	readonly contextConversations: Pick<ConversationArchive, 'get'>;
@@ -312,6 +313,7 @@ export class AgentRunLifecycle {
 	}
 
 	private async buildContext(actor: ActorContext, input: RunAgentInput): Promise<AgentRunContext> {
+		await this.deps.transactions.run(() => this.deps.builtInSkills.ensure(actor));
 		const current = input.noteId
 			? { kind: 'note' as const, note: await this.deps.contextNotes.get(actor, input.noteId) }
 			: { kind: 'no_current_note' as const };

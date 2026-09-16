@@ -12,6 +12,11 @@ import { toSkill } from '$lib/server/db/mappers';
 
 export class SkillRecords implements SkillRepository {
 	constructor(private readonly database: Database) {}
+	async lockBuiltInProvisioning(actor: ActorContext): Promise<void> {
+		await this.database.execute(
+			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext('built-in-skills'))`
+		);
+	}
 	async findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes, skill: schema.skills })

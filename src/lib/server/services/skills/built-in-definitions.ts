@@ -1,6 +1,6 @@
 /**
  * Built-in skill content. Definitions are data only — provisioning logic lives
- * in provisioning.ts.
+ * in built-ins.ts.
  *
  * Retired versions below are kept verbatim so an install that still holds the
  * old text can be recognised as unmodified and upgraded. Never edit a retired
@@ -8,26 +8,9 @@
  */
 
 import type { AppSurfaceKind } from '$lib/models/workspace/app-context';
+import type { BuiltInSkillDefinition as Definition } from '$lib/models/skills/built-ins';
 
-export interface BuiltInSkillDefinition {
-	readonly key: string;
-	readonly name: string;
-	readonly description: string;
-	readonly instructions: string;
-	readonly triggerHints: readonly string[];
-	readonly allowImplicitInvocation: boolean;
-	readonly version?: string;
-	/**
-	 * Screens that ask for this skill on the user's behalf.
-	 *
-	 * A skill with `allowImplicitInvocation: false` is only advertised when it is
-	 * requested, which leaves the screens that exist *for* it unable to get it. The
-	 * skill naming its own screens keeps that knowledge here, beside the skill,
-	 * rather than as a screen name and a skill name hard-coded facing each other in
-	 * the agent controller.
-	 */
-	readonly surfaces?: readonly AppSurfaceKind[];
-}
+type BuiltInSkillDefinition = Definition<AppSurfaceKind>;
 
 const FOLLOWTHROUGH_V1: BuiltInSkillDefinition = {
 	key: 'followthrough',

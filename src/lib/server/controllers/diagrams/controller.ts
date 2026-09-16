@@ -236,7 +236,10 @@ export interface DiagramAgentDependencies {
 	readonly provenance: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 	};
-	readonly builtInSkills: { load(actor: ActorContext, key: string): Promise<Skill<Note>> };
+	readonly builtInSkills: {
+		ensure(actor: ActorContext): Promise<void>;
+		load(actor: ActorContext, key: string): Promise<Skill<Note>>;
+	};
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
 	readonly resolveModel: DiagramModelResolver;
@@ -533,6 +536,9 @@ export class Diagrams implements DiagramsController {
 		if (task.operation === 'convert' && !task.source.trim())
 			throw new ValidationError('Mermaid source is required for draw.io conversion.');
 
+		await this.dependencies.transactionRunner.run(() =>
+			this.dependencies.generation.builtInSkills.ensure(actor)
+		);
 		const diagramming = await this.dependencies.generation.builtInSkills.load(actor, 'diagramming');
 		const conversation = await this.dependencies.generation.conversations.createWorkflow(actor, {
 			title:

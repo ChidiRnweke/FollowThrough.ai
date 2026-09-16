@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { Workspace, type WorkspaceDependencies } from './controller';
 import type { LocalDate } from '$lib/models/workspace';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
@@ -35,7 +36,10 @@ it('reports expiry failure before returning shell attention', async () => {
 	const proposals = new InMemorySuggestionReader();
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Workspace(
-		capabilityDependencies<WorkspaceDependencies>({ suggestionExpirer: proposals })
+		capabilityDependencies<WorkspaceDependencies>({
+			...builtInSkillsFixture(),
+			suggestionExpirer: proposals
+		})
 	);
 	await expect(controller.getShellContext(testActor())).rejects.toThrow(
 		'Expiry storage is unavailable'

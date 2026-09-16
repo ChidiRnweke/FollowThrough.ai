@@ -347,7 +347,13 @@ BaseAgentContext and its separate builder ports are removed. Selection normaliza
 token thresholds and scope descriptions share the same formatter. Context tests now execute durable
 runs; missing attached notes still fail with an actionable message, and storage failures stay visible.
 Shared profile facts remain standing context, while private facts and project memory remain excluded.
-Built-in provisioning hidden behind skill reads remains the next separate ownership concern.
+Built-in provisioning was then separated from skill reads. Skills, workspace, agent execution and
+diagram controllers now invoke installation explicitly inside a transaction. The repository holds
+an actor-scoped transaction lock so concurrent first reads share one installation. Initial browser
+synchronization provisions before reading its page, and the shell reads projects after installation.
+Failed metadata writes roll back the Inbox, notes and revisions. BuiltInSkillLibrary is removed;
+BuiltInSkills now uses only actual repositories and its load method never provisions. Skill manifest
+coordination, durable selection workflows and the remaining model families are still unfinished.
 
 ## Validation principles
 
