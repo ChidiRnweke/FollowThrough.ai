@@ -1,10 +1,10 @@
-import type { IndexSource } from '$lib/models/knowledge-search';
-import type { ActorContext, UserId } from '$lib/models/identity';
+import type { IndexSource, PendingIndexSource, EmbeddedChunk } from '$lib/models/knowledge-search';
+import type { ActorContext } from '$lib/models/identity';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { SearchDocument, SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
+import type { SearchDocument, SearchMatch } from '$lib/models/knowledge-search';
 import type { AttachmentId } from '$lib/models/attachments';
 
 /**
@@ -12,19 +12,7 @@ import type { AttachmentId } from '$lib/models/attachments';
  * exactly one source, and staging, completion, and deletion are all scoped by it.
  * Diagram chunks also carry their note, so `note` deliberately excludes them.
  */
-export type { IndexSource } from '$lib/models/knowledge-search';
-/** A source with chunks awaiting embeddings, as discovered by the backfill worker. */
-export interface PendingIndexSource {
-	readonly userId: UserId;
-	readonly source: IndexSource;
-	readonly cursor: string;
-}
-
-/** One chunk's freshly computed vector, ready to be written back. */
-export interface EmbeddedChunk {
-	readonly id: SearchDocumentId;
-	readonly embedding: readonly number[];
-}
+export type { IndexSource, PendingIndexSource, EmbeddedChunk } from '$lib/models/knowledge-search';
 export interface CreatedRange {
 	readonly createdAfter?: string;
 	readonly createdBefore?: string;

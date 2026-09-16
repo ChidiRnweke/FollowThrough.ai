@@ -35,5 +35,5 @@ the old chunks.
 ## Evidence
 
 - `search_chunks.supersededAt` marks old embedded chunks.
-- `KnowledgeIndexMaintenance` completes pending embeddings before retiring old rows.
+- `EmbeddingMaintenance` completes pending embeddings before retiring old rows.
 - `index-maintenance.spec.ts` checks search continuity and the mid-backfill edit race.

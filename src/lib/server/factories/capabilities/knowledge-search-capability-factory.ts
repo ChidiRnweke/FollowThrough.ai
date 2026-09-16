@@ -1,7 +1,8 @@
+import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type { Database } from '$lib/server/db';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { KnowledgeIndexMaintenance } from '$lib/server/services/knowledge-search/index-maintenance';
+import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	ContentIndex,
 	retrievalChunkerFromEnv
@@ -51,7 +52,7 @@ export interface KnowledgeSearchCapability {
 	readonly memoryIndexer: ContentIndex['memories'];
 	readonly lookup: KnowledgeLookup;
 	readonly relationshipClassifier: RelationshipDiscovery;
-	readonly maintenance: KnowledgeIndexMaintenance;
+	readonly maintenance: EmbeddingMaintenance;
 	readonly toolRetriever: ToolRetriever;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
@@ -117,8 +118,8 @@ export const createKnowledgeSearchCapability = (
 		memoryIndexer: index.memories,
 		lookup: new KnowledgeLookup(repository),
 		relationshipClassifier: new RelationshipDiscovery({ observer: operationObserver }),
-		maintenance: new KnowledgeIndexMaintenance(
-			repository,
+		maintenance: new EmbeddingMaintenance(
+			new IndexBacklog(repository),
 			embeddingClient,
 			input.transactionRunner,
 			{

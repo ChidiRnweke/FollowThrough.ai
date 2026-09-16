@@ -306,6 +306,13 @@ set, including sets smaller than eight. ADR 0036's explicit vector-order fallbac
 failure remains intact. AgentContext, provisioning, indexing and durable selection workflows still
 need their own ownership changes.
 
+Embedding maintenance: the scheduled controller now coordinates the pending queue, embedding provider
+and transaction boundary. IndexBacklog owns stored pending reads and completion. Provider batching
+moves out of the repository helper into Embeddings, preserving every accepted chunk. Duplicate or
+out-of-range provider indexes now fail instead of assigning vectors to the wrong content. Existing
+fairness, search-continuity and concurrent-edit coverage moves with the workflow. ContentIndex still
+needs its separate orchestration and model-plan cleanup; this slice does not complete indexing.
+
 ## Validation principles
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that

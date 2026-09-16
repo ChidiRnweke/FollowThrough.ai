@@ -1,7 +1,12 @@
+import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
-import { ContentIndex, TokenAwareChunker, retrievalEncoding } from './indexing';
-import { KnowledgeIndexMaintenance } from './index-maintenance';
-import type { EmbeddingClient } from './contracts';
+import {
+	ContentIndex,
+	TokenAwareChunker,
+	retrievalEncoding
+} from '$lib/server/services/knowledge-search/indexing';
+import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import { Embeddings, type EmbeddingClient } from '$lib/server/services/knowledge-search/embeddings';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -37,22 +42,24 @@ describe('complete attachment search', () => {
 	it('embeds the complete document in bounded batches without dropping its tail', async () => {
 		const repository = new InMemorySearchRepository();
 		const batchTokens: number[] = [];
-		const client: EmbeddingClient = {
-			model: 'test-embedding',
-			embed: async (contents) => {
-				batchTokens.push(
-					contents.reduce((sum, content) => sum + retrievalEncoding().encode(content).length, 0)
-				);
-				return { model: 'test-embedding', vectors: contents.map(() => [1, 0, 0]) };
+		const provider: EmbeddingClient = {
+			embeddings: {
+				create: async ({ input: contents }) => {
+					batchTokens.push(
+						contents.reduce((sum, content) => sum + retrievalEncoding().encode(content).length, 0)
+					);
+					return { data: contents.map((_, index) => ({ index, embedding: [1, 0, 0] })) };
+				}
 			}
 		};
+		const client = new Embeddings('test-key', { client: provider, model: 'test-embedding' });
 		await new ContentIndex(repository, client, new TokenAwareChunker(700, 50)).attachments.index(
 			testActor(),
 			view('text/plain').attachment,
 			text
 		);
-		await new KnowledgeIndexMaintenance(
-			repository,
+		await new EmbeddingMaintenance(
+			new IndexBacklog(repository),
 			client,
 			new InMemoryTransactionRunner([repository]),
 			{
