@@ -15,11 +15,17 @@
 	} = $props();
 
 	const value = $derived(policy.autoAcceptEnabled ? 'auto' : 'review');
+	const labels = {
+		...pipelineLabels,
+		extract_promises: 'Extracted tasks',
+		memory: 'Memory changes'
+	};
 	const descriptions: Record<string, string> = {
 		extract_promises: 'Commitments found in your notes',
 		relate: 'Backlinks between related notes',
 		reference: 'External references for a selection',
-		agent: 'Changes proposed in chat'
+		agent: 'Changes proposed in chat',
+		memory: 'Proposed additions, changes, and removals of memory'
 	};
 
 	function changed(next: string | string[]): void {
@@ -36,12 +42,12 @@
 
 <Field.Field orientation="responsive">
 	<Field.Content>
-		<Field.Title>{pipelineLabels[policy.pipeline]}</Field.Title>
+		<Field.Title>{labels[policy.pipeline]}</Field.Title>
 		<Field.Description>{descriptions[policy.pipeline]}</Field.Description>
 		{#if policy.autoAcceptEnabled && policy.minimumConfidence !== undefined}
 			<p class="provenance-caption pt-1">
-				Auto-accepts above {policy.minimumConfidence}% confidence. Auto-accepted items stay visibly
-				AI-made and are one click to revert.
+				Auto-accepts at or above {policy.minimumConfidence}% confidence. Auto-accepted proposals
+				remain visible and can be reverted.
 			</p>
 		{/if}
 	</Field.Content>
@@ -51,7 +57,7 @@
 		{value}
 		{disabled}
 		onValueChange={changed}
-		aria-label="Trust policy for {pipelineLabels[policy.pipeline]}"
+		aria-label="Trust policy for {labels[policy.pipeline]}"
 	>
 		<ToggleGroup.Item value="review">Review first</ToggleGroup.Item>
 		<ToggleGroup.Item value="auto">Auto-accept</ToggleGroup.Item>

@@ -1,8 +1,8 @@
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
 import type { PipelineKind, TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
-import type { TrustPolicyStore } from '$lib/server/services/agent/runs/tool-trust';
+import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
+import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { TrustPolicies, type TrustPoliciesDependencies } from './controller';
 
@@ -15,41 +15,30 @@ const policy = (overrides: Partial<TrustPolicy> = {}): TrustPolicy => ({
 	...overrides
 });
 
-class FakeTrustPolicyStore implements TrustPolicyStore {
-	policies: TrustPolicy[] = [policy()];
-
-	async list(actor: ActorContext): Promise<readonly TrustPolicy[]> {
-		return this.policies.filter((candidate) => candidate.userId === actor.userId);
-	}
-
-	async upsert(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<TrustPolicy> {
-		const updated = policy({
-			userId: actor.userId,
-			pipeline: input.pipeline,
-			autoAcceptEnabled: input.autoAcceptEnabled,
-			minimumConfidence: input.minimumConfidence
-		});
-		this.policies = [
-			...this.policies.filter(
-				(candidate) => candidate.userId !== actor.userId || candidate.pipeline !== input.pipeline
-			),
-			updated
-		];
-		return updated;
-	}
-}
-
 describe('trust policy controller behavior', () => {
 	it('returns the actor’s policy collection', async () => {
-		const trustPolicyStore = new FakeTrustPolicyStore();
+		const repository = new InMemoryTrustPolicyRepository();
+		repository.policies = [
+			policy({ userId: testActor(2).userId, autoAcceptEnabled: true }),
+			policy()
+		];
+		const trustPolicyStore = new ToolTrust(repository);
 		const controller = new TrustPolicies(
 			capabilityDependencies<TrustPoliciesDependencies>({ trustPolicyStore })
 		);
-		expect(await controller.list(testActor())).toEqual({ policies: [policy()] });
+		expect(
+			(await controller.list(testActor())).policies.map(({ pipeline, autoAcceptEnabled }) => ({
+				pipeline,
+				autoAcceptEnabled
+			}))
+		).toEqual([
+			{ pipeline: 'extract_promises', autoAcceptEnabled: false },
+			{ pipeline: 'memory', autoAcceptEnabled: false }
+		]);
 	});
 
 	it('returns the updated policy', async () => {
-		const trustPolicyStore = new FakeTrustPolicyStore();
+		const trustPolicyStore = new ToolTrust(new InMemoryTrustPolicyRepository());
 		const controller = new TrustPolicies(
 			capabilityDependencies<TrustPoliciesDependencies>({ trustPolicyStore })
 		);

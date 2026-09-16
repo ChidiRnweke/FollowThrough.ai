@@ -9,7 +9,7 @@ import Screenshot from '../../../../components/screenshot.astro';
 
 Settings is not a capability of its own. It is three thin controllers under `src/lib/server/controllers/agent/` (`settings/`, `tool-preferences/`, `trust-policies/`) plus the `/settings` page that renders them. What holds it together is a single resolution rule: a per-user setting that is absent means "use the deployment default," and the deployment default is always an environment value pulled through the secrets backend, never a constant buried in a service. Two writers, the settings page and the agent's own tools, land on the same controllers, so every limit is enforced exactly once.
 
-Every knob the agent runs under (model choice, execution mode, web-search caps, tool availability, auto-accept policy) is overridable per user and per project, with the deployment's environment as the floor. The user-facing angle is covered in [using the agent](/FollowThrough.ai/using/the-agent/), and the review model trust policies plug into is explained in [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/).
+Settings include deployment defaults, user preferences, and project-specific tool overrides. Proposal auto-accept policies belong to the user. The user-facing angle is covered in [using the agent](/FollowThrough.ai/using/the-agent/), and the review model is explained in [agents propose, users accept](/FollowThrough.ai/explanation/agents-propose-users-accept/).
 
 ## Why this subsystem exists
 
@@ -68,11 +68,20 @@ A disabled tool disappears entirely: from chat, from tool search, and from any c
 
 ## Trust policies
 
-A trust policy (`TrustPolicy`) says, per pipeline, whether its suggestions auto-accept or wait for review: `extract_promises`, `relate`, `reference`, `agent`, `memory`. `ToolTrust.list()` materializes all five with `autoAcceptEnabled: false` even when nothing is stored (`tool-trust.ts:29`), so the UI always renders five rows. An update is an upsert keyed on `(userId, pipeline)`: it replaces the previous rule for that pipeline and preserves `createdAt`.
+A proposal auto-accept policy controls extracted tasks (`extract_promises`) or memory changes (`memory`). These are the two workflows that consult the policy before applying proposals. `ToolTrust.list()` returns these policies with review required by default. An update replaces the user's rule for that workflow and preserves its creation time.
 
-The evaluator (`shouldAutoAccept`, `tool-trust.ts:60`) requires the policy to be enabled and, when a `minimumConfidence` is set, the suggestion's confidence to meet it. The threshold is a whole percent 0–100, matching the confidence stored on suggestions and validated on the `update_trust_policy` tool input. One invariant callers rely on: **the `reference` pipeline never auto-accepts**, whatever is stored (`tool-trust.ts:65`).
+The evaluator requires the policy to be enabled and, when a minimum confidence is set, the proposal's confidence to meet or exceed it. Confidence is an integer percentage from 0 to 100. The agent's `update_trust_policy` tool can set this threshold; the UI preserves and displays it.
 
-The evaluator is consulted where suggestions are created: today the promise-extraction path in the todos controller (`src/lib/server/controllers/todos/controller.ts:190`) and the memory proposal path (`src/lib/server/controllers/memory/controller.ts:128`). The settings UI toggles review/auto-accept per pipeline; a confidence threshold can be set through the agent's `update_trust_policy` tool, and the UI preserves and displays it ("Auto-accepts above N% confidence").
+The former `relate`, `reference`, and `agent` policy controls had no effective auto-accept consumer. They are no longer offered. Historical rows remain stored, but the evaluator never authorizes acceptance through them. Updates to those policy kinds fail with an explicit explanation, including old queued workspace commands. External references and note links continue to require proposal review.
+
+| Control                     | Effect                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| Tool availability           | Enables or disables a tool, with project overrides and the locked recovery set.               |
+| Tool discovery              | Finds tools the agent may request; it does not grant permission to use them.                  |
+| Chat execution mode         | Decides whether a mutating tool call asks for approval.                                       |
+| Proposal auto-accept policy | Applies extracted task or memory proposals automatically when the configured conditions hold. |
+
+Chat execution mode does not replace proposal review, and proposal policies do not enable disabled tools.
 
 ## Where defaults come from
 

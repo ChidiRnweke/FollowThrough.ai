@@ -1,6 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { PipelineKind, TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
+import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
+import { ValidationError } from '$lib/errors';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TrustPolicyRepository } from '$lib/server/repositories/agent';
 export interface TrustPolicyEvaluator {
@@ -15,13 +17,7 @@ export interface TrustPolicyStore {
 	upsert(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<TrustPolicy>;
 }
 
-const pipelines: readonly PipelineKind[] = [
-	'extract_promises',
-	'relate',
-	'reference',
-	'agent',
-	'memory'
-];
+const supported = new Set<PipelineKind>(PROPOSAL_AUTO_ACCEPT_PIPELINES);
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
@@ -30,7 +26,7 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 		const stored = new Map(
 			(await this.policies.list(actor)).map((policy) => [policy.pipeline, policy])
 		);
-		return pipelines.map(
+		return PROPOSAL_AUTO_ACCEPT_PIPELINES.map(
 			(pipeline) =>
 				stored.get(pipeline) ?? {
 					userId: actor.userId,
@@ -42,6 +38,10 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 		);
 	}
 	async upsert(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<TrustPolicy> {
+		if (!supported.has(input.pipeline))
+			throw new ValidationError(
+				'Auto-accept policies apply only to extracted tasks and memory proposals. Chat tool approvals use the chat execution mode; note links and external references require review.'
+			);
 		const existing = await this.policies.find(actor, input.pipeline);
 		const timestamp = now();
 		return this.policies.upsert(actor, {
@@ -60,7 +60,7 @@ export class ToolTrust implements TrustPolicyStore, TrustPolicyEvaluator {
 		pipeline: PipelineKind,
 		suggestion: Suggestion
 	): Promise<boolean> {
-		if (pipeline === 'reference') return false;
+		if (!supported.has(pipeline)) return false;
 		const policy = (await this.list(actor)).find((item) => item.pipeline === pipeline);
 		return Boolean(
 			policy?.autoAcceptEnabled &&
