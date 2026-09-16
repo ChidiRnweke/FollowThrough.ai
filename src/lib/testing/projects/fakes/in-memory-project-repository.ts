@@ -22,7 +22,14 @@ import {
 
 export class InMemoryProjectRepository implements ProjectRepository, ProjectTreeRepository {
 	projects: Project[] = [];
-	entries: Note[] = [];
+	constructor(private readonly entriesStore: { notes: Note[] } = { notes: [] }) {}
+	get entries(): Note[] {
+		return this.entriesStore.notes;
+	}
+	set entries(value: Note[]) {
+		this.entriesStore.notes = value;
+	}
+	folderFailures = new Set<string>();
 	private nextProject = 100;
 	private nextEntry = 100;
 
@@ -129,6 +136,7 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		input: CreateFolderInput,
 		position: number
 	): Promise<Note> {
+		if (this.folderFailures.has(input.name)) throw new Error('Folder could not be stored');
 		const folder = noteBuilder({
 			id: input.id ?? testNoteId(this.nextEntry++),
 			userId: actor.userId,

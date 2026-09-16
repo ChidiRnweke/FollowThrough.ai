@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@chidirnweke/chisel-js@0.2.1':
-    hash: 2ca3410db3194bfb1a891b9dc47c027c53b460e6431b333a5ebcf3ea2ca37b50
+    hash: 136d1e65979856c3ddb7af13cb680ba7d893cd28fd0060d2e1245bb2dc828b06
     path: patches/@chidirnweke__chisel-js@0.2.1.patch
 
 importers:
@@ -232,7 +232,7 @@ importers:
         version: 1.2.0
       '@chidirnweke/chisel-js':
         specifier: ^0.2.1
-        version: 0.2.1(patch_hash=2ca3410db3194bfb1a891b9dc47c027c53b460e6431b333a5ebcf3ea2ca37b50)(@typescript-eslint/types@8.63.0)
+        version: 0.2.1(patch_hash=136d1e65979856c3ddb7af13cb680ba7d893cd28fd0060d2e1245bb2dc828b06)(@typescript-eslint/types@8.63.0)
       '@commitlint/cli':
         specifier: ^21.2.2
         version: 21.2.2(@types/node@22.20.1)(conventional-commits-parser@7.1.2)(typescript@6.0.3)
@@ -8281,7 +8281,7 @@ snapshots:
 
   '@chevrotain/types@11.1.2': {}
 
-  '@chidirnweke/chisel-js@0.2.1(patch_hash=2ca3410db3194bfb1a891b9dc47c027c53b460e6431b333a5ebcf3ea2ca37b50)(@typescript-eslint/types@8.63.0)':
+  '@chidirnweke/chisel-js@0.2.1(patch_hash=136d1e65979856c3ddb7af13cb680ba7d893cd28fd0060d2e1245bb2dc828b06)(@typescript-eslint/types@8.63.0)':
     dependencies:
       chalk: 5.6.2
       commander: 15.0.0

@@ -1,235 +1,83 @@
-import AdmZip from 'adm-zip';
-import { parse as parseYaml } from 'yaml';
+import type {
+	ParsedMarkdownNote,
+	ArchiveNoteReference,
+	ArchiveLinkIssue,
+	ArchiveReferenceIndex
+} from '$lib/models/projects';
+import { WIKI_LINK_PATTERN } from '$lib/models/notes';
 
-/**
- * Reading a zip of Markdown notes.
- *
- * Pure: unzipping, validating and parsing only, with no controllers and no database, so
- * the parts that decide what a file becomes — and the parts that refuse a hostile archive
- * — are testable without a workspace.
- *
- * `adm-zip` offers no protection of its own. It will hand back an entry whose path escapes
- * the archive root and will happily decompress a small archive into gigabytes, so every
- * limit here is enforced against the *declared* uncompressed size before any entry is
- * read.
- */
-
-export interface ArchiveEntry {
-	/** Normalised, root-relative, no leading slash. */
-	readonly path: string;
-	readonly segments: readonly string[];
-	readonly text: string;
-}
-
-export interface ParsedMarkdownNote {
-	readonly path: string;
-	/** Folder segments above the note, root-relative. */
-	readonly folders: readonly string[];
-	readonly title: string;
-	/** Frontmatter removed; the body otherwise kept as written. */
-	readonly markdown: string;
-	readonly frontmatterKeys: readonly string[];
-}
-
-export interface ArchiveLimits {
-	readonly maxTotalBytes: number;
-	readonly maxEntries: number;
-	readonly maxFileBytes: number;
-	readonly maxDepth: number;
-}
-
-export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
-	maxTotalBytes: 25 * 1024 * 1024,
-	maxEntries: 2000,
-	maxFileBytes: 1024 * 1024,
-	maxDepth: 8
-};
-
-export type ArchiveRejection =
-	| { readonly reason: 'not_a_zip' }
-	| { readonly reason: 'too_large'; readonly bytes: number; readonly limit: number }
-	| { readonly reason: 'too_many_entries'; readonly entries: number; readonly limit: number }
-	| { readonly reason: 'unsafe_path'; readonly path: string };
-
-export interface ArchiveSkip {
-	readonly path: string;
-	readonly reason: string;
-}
-
-export interface ArchiveReadResult {
-	readonly entries: readonly ArchiveEntry[];
-	readonly skipped: readonly ArchiveSkip[];
-}
-
-export type ReadArchiveOutcome =
-	| { readonly ok: true; readonly result: ArchiveReadResult }
-	| { readonly ok: false; readonly rejection: ArchiveRejection };
-
-const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdx'];
-
-const isMarkdown = (path: string): boolean =>
-	MARKDOWN_EXTENSIONS.some((extension) => path.toLowerCase().endsWith(extension));
-
-/**
- * Root-relative path, or undefined when the entry tries to escape.
- *
- * Backslashes are folded to `/` because archives written on Windows use them as
- * separators, which would otherwise smuggle a `..\..` past a `/`-only check.
- *
- * Exported so the guard can be tested against the names a hostile archive carries:
- * `adm-zip`'s *writer* strips traversal from a name as it packs it, so a malicious
- * archive cannot be constructed with `addFile` — only its reader hands such names back.
- */
-export const archiveEntryPath = (raw: string): string | undefined => {
-	const normalised = raw.replace(/\\/g, '/').replace(/^\/+/, '');
-	const segments = normalised.split('/').filter((segment) => segment !== '' && segment !== '.');
-	if (segments.length === 0) return undefined;
-	if (segments.some((segment) => segment === '..')) return undefined;
-	return segments.join('/');
-};
-
-const IGNORED_PREFIXES = ['__MACOSX/', '.git/', '.obsidian/', '.trash/'];
-
-const isIgnored = (path: string): boolean => {
-	if (IGNORED_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
-	// Dotfiles and dot-directories anywhere in the path.
-	return path.split('/').some((segment) => segment.startsWith('.'));
-};
-
-export const readMarkdownArchive = (
-	archive: Uint8Array,
-	limits: ArchiveLimits = DEFAULT_ARCHIVE_LIMITS
-): ReadArchiveOutcome => {
-	let zip: AdmZip;
-	try {
-		zip = new AdmZip(Buffer.from(archive));
-	} catch {
-		return { ok: false, rejection: { reason: 'not_a_zip' } };
+const archivePathKey = (value: string): string | undefined => {
+	const segments: string[] = [];
+	for (const part of value.replace(/\\/g, '/').split('/')) {
+		if (!part || part === '.') continue;
+		if (part === '..') {
+			if (!segments.length) return undefined;
+			segments.pop();
+		} else segments.push(part);
 	}
-
-	let raw: AdmZip.IZipEntry[];
-	try {
-		raw = zip.getEntries();
-	} catch {
-		return { ok: false, rejection: { reason: 'not_a_zip' } };
-	}
-
-	const files = raw.filter((entry) => !entry.isDirectory);
-	if (files.length > limits.maxEntries)
-		return {
-			ok: false,
-			rejection: { reason: 'too_many_entries', entries: files.length, limit: limits.maxEntries }
-		};
-
-	// Declared sizes, checked before decompressing anything: a zip bomb is small on disk
-	// and enormous once expanded, so reading first and measuring after is the trap.
-	const declaredTotal = files.reduce((total, entry) => total + (entry.header?.size ?? 0), 0);
-	if (declaredTotal > limits.maxTotalBytes)
-		return {
-			ok: false,
-			rejection: { reason: 'too_large', bytes: declaredTotal, limit: limits.maxTotalBytes }
-		};
-
-	const entries: ArchiveEntry[] = [];
-	const skipped: ArchiveSkip[] = [];
-
-	for (const entry of files) {
-		const path = archiveEntryPath(entry.entryName);
-		if (!path) return { ok: false, rejection: { reason: 'unsafe_path', path: entry.entryName } };
-		if (isIgnored(path)) continue;
-		if (!isMarkdown(path)) {
-			skipped.push({ path, reason: 'Not a Markdown file' });
-			continue;
-		}
-		const segments = path.split('/');
-		if (segments.length - 1 > limits.maxDepth) {
-			skipped.push({ path, reason: `Nested deeper than ${limits.maxDepth} folders` });
-			continue;
-		}
-		if ((entry.header?.size ?? 0) > limits.maxFileBytes) {
-			skipped.push({ path, reason: 'Larger than the per-file limit' });
-			continue;
-		}
-		let text: string;
-		try {
-			text = zip.readAsText(entry);
-			// audit-allow: silent-catch — unreadable entries are returned explicitly in ArchiveResult.skipped with their path and reason.
-		} catch {
-			skipped.push({ path, reason: 'Could not be read' });
-			continue;
-		}
-		entries.push({ path, segments, text });
-	}
-
-	return { ok: true, result: { entries, skipped } };
+	return segments
+		.join('/')
+		.replace(/\.(?:md|markdown|mdx)$/i, '')
+		.normalize('NFC')
+		.toLowerCase();
 };
 
-interface Frontmatter {
-	readonly keys: readonly string[];
-	readonly body: string;
+/** Prepare once for the archive, rather than scanning every entry for every link. */
+export function indexArchiveReferences(
+	references: readonly ArchiveNoteReference[]
+): ArchiveReferenceIndex {
+	const paths = new Map<string, ArchiveNoteReference[]>();
+	const titles = new Map<string, ArchiveNoteReference[]>();
+	for (const reference of references) {
+		const path = archivePathKey(reference.path);
+		const title = reference.title
+			.replace(/\.(?:md|markdown|mdx)$/i, '')
+			.normalize('NFC')
+			.toLowerCase();
+		if (path === undefined) throw new Error('Invalid archive reference identity');
+		paths.set(path, [...(paths.get(path) ?? []), reference]);
+		titles.set(title, [...(titles.get(title) ?? []), reference]);
+	}
+	return { paths, titles };
 }
 
-/**
- * The keys a frontmatter block declares, or the news that it declares none.
- *
- * `corrupt` covers both ways a block can fail to name any: YAML that will not
- * parse, and YAML that parses to something other than a mapping. They are one
- * answer here, because the
- * caller does the same thing with both: strip the block and record no keys.
- * Only the first used to be an exception, and it escaped `splitFrontmatter`
- * entirely \u2014 so one file with a malformed block failed the import it was part
- * of, rather than being imported with its frontmatter stripped like every other
- * file whose frontmatter says nothing usable.
- */
-type FrontmatterBlock =
-	{ readonly kind: 'keys'; readonly keys: readonly string[] } | { readonly kind: 'corrupt' };
-
-const frontmatterBlock = (block: string): FrontmatterBlock => {
-	try {
-		const parsed: unknown = parseYaml(block);
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
-			return { kind: 'corrupt' };
-		return { kind: 'keys', keys: Object.keys(parsed) };
-	} catch {
-		return { kind: 'corrupt' };
-	}
-};
-
-/** Split and parse a leading YAML frontmatter block, tolerating a malformed one. */
-export const splitFrontmatter = (source: string): Frontmatter => {
-	const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(source);
-	if (!match) return { keys: [], body: source };
-	const body = source.slice(match[0].length);
-	// Stripped either way: a reader who sees `: : :` at the top of their note has
-	// been shown the delimiter's contents, which is worse than showing nothing.
-	const parsed = frontmatterBlock(match[1]!);
-	return { keys: parsed.kind === 'keys' ? parsed.keys : [], body };
-};
-
-const titleFromFileName = (fileName: string): string => {
-	const withoutExtension = fileName.replace(/\.(md|markdown|mdx)$/i, '');
-	return withoutExtension.replace(/[-_]+/g, ' ').trim() || 'Untitled';
-};
-
-/**
- * The file name names the note, never the document's own frontmatter or headings.
- *
- * Imported notes keep the name the user already knows them by on disk; a leading
- * heading is the document's first line, so it stays in the body rather than being
- * promoted to the title and stripped.
- */
-export const parseMarkdownNote = (entry: ArchiveEntry): ParsedMarkdownNote => {
-	const frontmatter = splitFrontmatter(entry.text);
-	const fileName = entry.segments[entry.segments.length - 1];
-	const folders = entry.segments.slice(0, -1);
-	return {
-		path: entry.path,
-		folders,
-		title: titleFromFileName(fileName),
-		markdown: frontmatter.body.trimStart(),
-		frontmatterKeys: frontmatter.keys
-	};
-};
+/** Resolve against archive identities, including entries whose creation failed. */
+export function resolveArchiveLinks(
+	note: ParsedMarkdownNote,
+	references: ArchiveReferenceIndex
+): { markdown: string; issues: ArchiveLinkIssue[] } {
+	const issues: ArchiveLinkIssue[] = [];
+	const markdown = note.markdown.replace(
+		WIKI_LINK_PATTERN,
+		(whole, rawTarget: string, rawLabel?: string) => {
+			const target = rawTarget.trim();
+			if (target.includes('#')) {
+				issues.push({ path: note.path, target, reason: 'unsupported' });
+				return whole;
+			}
+			const qualified = /[/\\]/.test(target);
+			const key = archivePathKey(
+				/^\.\.?[/\\]/.test(target) ? `${note.folders.join('/')}/${target}` : target
+			);
+			const matches =
+				key === undefined
+					? []
+					: ((qualified ? references.paths : references.titles).get(key) ?? []);
+			const candidate = matches[0];
+			if (matches.length !== 1 || !candidate || candidate.outcome.kind !== 'created') {
+				issues.push({
+					path: note.path,
+					target,
+					reason: matches.length > 1 ? 'ambiguous' : candidate ? 'unavailable' : 'missing'
+				});
+				return whole;
+			}
+			const label = (rawLabel ?? rawTarget).trim().replace(/[\\[\]]/g, '\\$&');
+			return `[${label}](note:${candidate.outcome.id})`;
+		}
+	);
+	return { markdown, issues };
+}
 
 /** Frontmatter keys the importer does not map, so the report can name what was left. */
 export const unmappedFrontmatterKeys = (
@@ -258,17 +106,4 @@ export const uniqueTitleIn = (taken: Set<string>, title: string): string => {
 	const unique = `${title} (${suffix})`;
 	taken.add(unique);
 	return unique;
-};
-
-export const describeArchiveRejection = (rejection: ArchiveRejection): string => {
-	switch (rejection.reason) {
-		case 'not_a_zip':
-			return 'That file is not a readable zip archive.';
-		case 'too_large':
-			return `The archive expands to ${Math.round(rejection.bytes / 1024 / 1024)} MB, over the ${Math.round(rejection.limit / 1024 / 1024)} MB limit.`;
-		case 'too_many_entries':
-			return `The archive holds ${rejection.entries} files, over the ${rejection.limit} limit.`;
-		case 'unsafe_path':
-			return `The archive contains an unsafe path (${rejection.path}) and was not imported.`;
-	}
 };

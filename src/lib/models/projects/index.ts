@@ -156,12 +156,37 @@ export interface GetProjectOutput {
 	readonly tree: readonly ProjectTreeNode[];
 }
 
+export interface ParsedMarkdownNote {
+	readonly path: string;
+	readonly folders: readonly string[];
+	readonly title: string;
+	readonly markdown: string;
+	readonly frontmatterKeys: readonly string[];
+}
+
 export interface ImportMarkdownArchiveInput {
 	readonly projectId: ProjectId;
 	/** Import under an existing folder rather than at the project root. */
 	readonly parentId?: NoteId;
-	readonly archive: Uint8Array;
-	readonly fileName: string;
+	readonly notes: readonly ParsedMarkdownNote[];
+	readonly skipped: readonly { readonly path: string; readonly reason: string }[];
+}
+
+export interface ArchiveLinkIssue {
+	readonly path: string;
+	readonly target: string;
+	readonly reason: 'missing' | 'ambiguous' | 'unavailable' | 'unsupported';
+}
+
+export interface ArchiveNoteReference {
+	readonly path: string;
+	readonly title: string;
+	readonly outcome: { readonly kind: 'created'; readonly id: NoteId } | { readonly kind: 'failed' };
+}
+
+export interface ArchiveReferenceIndex {
+	readonly paths: ReadonlyMap<string, readonly ArchiveNoteReference[]>;
+	readonly titles: ReadonlyMap<string, readonly ArchiveNoteReference[]>;
 }
 
 /**
@@ -180,6 +205,7 @@ export interface ImportMarkdownArchiveOutput {
 	readonly failed: readonly { readonly path: string; readonly message: string }[];
 	/** Frontmatter the importer had nowhere to put, so it is named rather than dropped. */
 	readonly unmappedFrontmatterKeys: readonly string[];
+	readonly unresolvedLinks: readonly ArchiveLinkIssue[];
 }
 
 /**
@@ -196,7 +222,14 @@ export const importMarkdownArchiveOutputSchema = z.object({
 	createdFolderIds: z.array(z.uuid().transform((value) => value as NoteId)),
 	skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
 	failed: z.array(z.object({ path: z.string(), message: z.string() })),
-	unmappedFrontmatterKeys: z.array(z.string())
+	unmappedFrontmatterKeys: z.array(z.string()),
+	unresolvedLinks: z.array(
+		z.object({
+			path: z.string(),
+			target: z.string(),
+			reason: z.enum(['missing', 'ambiguous', 'unavailable', 'unsupported'])
+		})
+	)
 });
 
 export interface CreateFolderInput {

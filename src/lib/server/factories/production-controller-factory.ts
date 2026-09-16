@@ -25,7 +25,6 @@ import {
 	type DiagramStudioDependencies
 } from '../controllers/diagram-studio/controller';
 import { Feedback, type FeedbackDependencies } from '../controllers/feedback/controller';
-import { NoteImportsController } from '../controllers/imports/controller';
 import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
@@ -239,16 +238,6 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'feedback',
 			new Feedback(this.dependencies.feedback),
 			controllerSurfaces.feedback
-		);
-	}
-	// Composes the notes and projects controllers rather than taking repositories of its
-	// own: an import is a batch of ordinary creates, and going through the controllers
-	// keeps indexing and anchor repair on the same path a hand-made note takes.
-	imports() {
-		return instrumentedController(
-			'imports',
-			new NoteImportsController({ notes: this.notes(), projects: this.projects() }),
-			controllerSurfaces.imports
 		);
 	}
 }

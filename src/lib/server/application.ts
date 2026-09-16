@@ -473,6 +473,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoViewAssembler: todos
 		},
 		notes: {
+			folderCreator: projects,
 			markdown: noteCapability.markdown,
 			syncMutations: synchronization.mutations,
 			noteReader: notes,

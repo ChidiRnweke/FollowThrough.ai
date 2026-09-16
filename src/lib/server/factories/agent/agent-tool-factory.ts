@@ -203,6 +203,10 @@ export const agentToolCoverage = {
 		}
 	},
 	notes: {
+		importMarkdownArchive: {
+			kind: 'excluded',
+			reason: 'Archive imports require a user-supplied multipart file.'
+		},
 		synchronize: {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
