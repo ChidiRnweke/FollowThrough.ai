@@ -954,7 +954,7 @@ const knownNodeSchema = z.lazy(() =>
  * to {@link ProseMirrorUnknownNode}; only the message differs, and the message
  * is the whole value of the arm to whoever has to fix it.
  */
-const KNOWN_NODE_TYPES: ReadonlySet<string> = new Set([
+export const KNOWN_NODE_TYPES: ReadonlySet<string> = new Set([
 	'text',
 	'paragraph',
 	'heading',

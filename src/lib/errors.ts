@@ -123,6 +123,71 @@ export const DOMAIN_ERROR_STATUS: Record<DomainErrorCode, number> = {
 export const domainErrorStatus = (error: unknown): number | undefined =>
 	error instanceof DomainError ? DOMAIN_ERROR_STATUS[error.code] : undefined;
 
+/**
+ * What a caller that can act on a failure should do next (ADR 0035).
+ *
+ * Total over the code union for the same reason {@link DOMAIN_ERROR_STATUS} is: a new
+ * failure code is a type error until someone has decided what a caller does about it.
+ * Each entry names an action, because advice that does not is advice the caller cannot
+ * follow.
+ */
+export const DOMAIN_ERROR_ADVICE: Record<DomainErrorCode, string> = {
+	VALIDATION: 'Read the failure, correct the arguments it names, and call the tool again.',
+	OWNERSHIP:
+		'This belongs to someone else. Do not retry it. Tell the user what you could not reach.',
+	NOT_FOUND:
+		'Nothing exists with that identifier. Search for it and call the tool again with an identifier the search returned.',
+	CONFLICT:
+		'Something else changed this first. Read it with a read tool, then base a new call on what you read.',
+	STALE_REVISION:
+		'This changed after you read it. Read it again and submit a new call against its current revision.',
+	INVALID_TRANSITION:
+		'The change is not legal from the current state. Read the current state and choose a change that is.',
+	EXPIRED_SUGGESTION: 'The suggestion no longer exists. Produce a new one before you act on it.',
+	UNSUPPORTED_DIAGRAM_OPERATION:
+		'This diagram does not support that operation. Read the diagram and choose an operation it supports.',
+	EXTERNAL_SERVICE:
+		'An upstream service failed, not your call. Retrying it once may work. Tell the user if it keeps failing.',
+	INVALID_GENERATED_CONTENT:
+		'The generated content did not meet its contract. Generate it again, more simply.'
+};
+
+/**
+ * A fault that is ours, not the caller's.
+ *
+ * Anything that is not a {@link DomainError} reached the boundary unplanned, so its
+ * message describes our internals and not the caller's request. A model handed one of
+ * those cannot act on it: a `ZodError` naming `content[12]` of a document it never
+ * authored reads as an argument it should fix, and it will try, and it will fail the same
+ * way. Production showed exactly that, six times in five minutes. So the caller is told
+ * the truth instead, and the detail goes to the operator through boundary logging.
+ */
+const INTERNAL_FAULT: FailureReport = {
+	message:
+		'The application failed while handling this call. The fault is ours, not your arguments.',
+	advice:
+		'Do not retry this call. Changing the arguments will not change the result. Tell the user what you were trying to do, then continue with the rest of the task or stop.'
+};
+
+/** What the caller is told a failure was, and what it should do about it. */
+export interface FailureReport {
+	readonly message: string;
+	readonly advice: string;
+}
+
+/**
+ * Render a failure for a caller that decides what happens next.
+ *
+ * Advice comes from the failure, never from a constant: ADR 0035 requires that it be
+ * based on resolved state, and the difference between "fix your arguments" and "this is
+ * not something your arguments can fix" is the difference between a caller that recovers
+ * and one that loops.
+ */
+export const failureReport = (error: unknown): FailureReport =>
+	error instanceof DomainError
+		? { message: error.message, advice: DOMAIN_ERROR_ADVICE[error.code] }
+		: INTERNAL_FAULT;
+
 /** Flatten an error and its `cause` chain into one log line. */
 export function describeError(error: unknown): string {
 	const parts: string[] = [];

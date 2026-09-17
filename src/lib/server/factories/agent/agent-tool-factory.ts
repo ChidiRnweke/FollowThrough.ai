@@ -1,5 +1,5 @@
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
-import { tool, type Tool } from '@openai/agents';
+import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
 import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
@@ -45,7 +45,13 @@ import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
-import { DomainError, NotFoundError, ValidationError } from '$lib/errors';
+import {
+	DOMAIN_ERROR_ADVICE,
+	DomainError,
+	NotFoundError,
+	ValidationError,
+	failureReport
+} from '$lib/errors';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -772,6 +778,18 @@ export interface AgentToolDefinition {
 type Definition = AgentToolDefinition;
 
 /**
+ * Zod issues as a sentence the model can act on.
+ *
+ * The raw `ZodError` message is a JSON dump of issue objects. A model handed one has to
+ * guess which of its arguments the paths refer to, and the schema's own refinement text —
+ * the part actually written for it — is buried inside.
+ */
+const describeIssues = (error: z.ZodError): string =>
+	error.issues
+		.map((issue) => (issue.path.length > 0 ? `${issue.path.join('.')}: ` : '') + issue.message)
+		.join('; ');
+
+/**
  * Parse the tool's own parameter schema and carry the result to the seam as the
  * wire type, so no interface below the factory sees an open-keyed record. The
  * provider hands every call's arguments down as already-JSON, and zod validates
@@ -787,7 +805,13 @@ type Definition = AgentToolDefinition;
  * comment could do no more than ask nobody to write one.
  */
 const parseArguments = (schema: z.ZodObject, input: unknown): AgentPayloadObject => {
-	const parsed: unknown = schema.parse(input);
+	const result = schema.safeParse(input);
+	// A `ValidationError` rather than the raw `ZodError`: these are the model's own
+	// arguments failing the tool's own schema, so the failure is the model's to fix and
+	// must be classified as such. A bare `ZodError` is indistinguishable from one thrown
+	// deep inside the application, which is a failure no argument can fix.
+	if (!result.success) throw new ValidationError(describeIssues(result.error));
+	const parsed: unknown = result.data;
 	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
 		throw new Error('Tool arguments must parse to an object');
 	const read = readAgentPayloadObject(parsed);
@@ -1079,6 +1103,37 @@ const readStoredNoteReview = (content: string): NoteChangeReview => {
 	}
 };
 
+/**
+ * The failure a tool hands back to the model, with advice drawn from the fault itself.
+ *
+ * Three kinds, and telling them apart is the whole point. A `ModelBehaviorError` is the
+ * SDK saying the model's own call was malformed — `InvalidToolInputError` for arguments
+ * that failed the tool's schema extends it — so its message names what the model sent and
+ * is repeated verbatim. A `DomainError` is a refusal the product wrote for the model.
+ * Anything else is our fault, and saying so is what stops the model from rewriting
+ * arguments that were never wrong.
+ */
+const agentToolFailure = (error: unknown): ToolFailure => {
+	if (error instanceof ModelBehaviorError)
+		return toolFailure(error.message, { recovery: DOMAIN_ERROR_ADVICE.VALIDATION });
+	const report = failureReport(error);
+	return toolFailure(report.message, { recovery: report.advice });
+};
+
+/**
+ * Preparation answers with a failure, never by throwing.
+ *
+ * This runs inside `needsApproval`, which sits outside the runner's `errorFunction`, so a
+ * throw here does not become a tool result — it aborts the whole turn, and the model is
+ * never told anything at all. That is how a schema mismatch in the Markdown converter
+ * became six identical retries in production: each attempt killed its turn, so there was
+ * never a failure for the agent to read and correct.
+ *
+ * A `DomainError` keeps its own message, which is written for the model. Anything else is
+ * our fault and is reported as one, so the model is not advised to fix arguments that
+ * were never the problem. Neither branch is silent: the boundary logging already recorded
+ * the original error before it reached here.
+ */
 const prepareNoteReview = async (
 	factory: ControllerFactory,
 	actor: ActorContext,
@@ -1088,7 +1143,8 @@ const prepareNoteReview = async (
 		return await factory.notes().prepareChange(actor, input);
 	} catch (error) {
 		if (error instanceof DomainError) return { kind: 'failure', problems: [error.message] };
-		throw error;
+		const report = failureReport(error);
+		return { kind: 'failure', problems: [report.message, report.advice] };
 	}
 };
 
@@ -1366,13 +1422,9 @@ export class AgentTools {
 			// by that prefix to decide which calls the model still needs to re-read.
 			// `recovery` because a bare message left the model guessing — it re-sent
 			// the same rejected document twice rather than inspecting what it sent.
-			errorFunction: (_context, error) =>
-				JSON.stringify(
-					toolFailure(error instanceof Error ? error.message : String(error), {
-						recovery:
-							'Read the failure and fix the arguments before retrying. Retrying the same arguments will fail the same way.'
-					})
-				),
+			// Both fields come from `failureReport`, so the advice follows the failure
+			// rather than telling every caller to fix arguments that may not be at fault.
+			errorFunction: (_context, error) => JSON.stringify(agentToolFailure(error)),
 			execute: async (input, _runContext, details) => {
 				const args = parseArguments(definition.parameters, input);
 				// The id is passed through or omitted, never coerced. It was

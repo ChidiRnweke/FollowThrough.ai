@@ -7,8 +7,17 @@ import {
 	type AgentExecutionMode
 } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
+import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import {
+	noteContentFromMarkdown,
+	noteMarkdownFromContent
+} from '$lib/server/services/notes/markdown';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	noteBuilder,
@@ -192,5 +201,102 @@ describe('Revision-bound note tool approvals', () => {
 		expect(await fixture.invoke(fixture.registry([pending]), call)).toMatchObject({
 			code: 'STALE_REVIEW'
 		});
+	});
+});
+
+/**
+ * Preparation runs inside `needsApproval`, which sits outside the runner's
+ * `errorFunction`. A throw there is not turned into a tool result: it aborts the whole
+ * turn, so the model is told nothing and cannot correct anything. That is what happened
+ * in production when the Markdown converter and the note schema drifted apart — the agent
+ * re-sent the same save six times in five minutes because every attempt killed its turn
+ * before a failure could reach it.
+ */
+describe('A note change that fails while it is being prepared', () => {
+	const faulty = () => {
+		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.'), title: 'Release' });
+		const content = new InMemoryNoteContent();
+		content.notes = [note];
+		const controller = new Notes(
+			capabilityDependencies<NotesDependencies>({
+				markdown: {
+					read: () => {
+						throw new TypeError('document.content[12] is not writable');
+					},
+					write: noteMarkdownFromContent
+				},
+				noteReader: content,
+				noteEditor: content,
+				anchorRepairer: content,
+				noteLinkReconciler: content,
+				noteIndexer: content,
+				transactionRunner: new InMemoryTransactionRunner([content])
+			})
+		);
+		const tools = new AgentTools(
+			capabilityDependencies<ControllerFactory>({ notes: () => controller }),
+			testActor(),
+			'approval_required',
+			{
+				provenanceId: testProvenanceId(),
+				input: { conversationId: testConversationId(), prompt: 'Rewrite the note' },
+				model: 'test-model'
+			},
+			{ execute: (_call, action) => action() },
+			new InMemoryToolRetriever(),
+			{ isEnabled: () => true },
+			[]
+		);
+		const args = { noteId: note.id, markdown: '# Plan\n\n---\n\nBody.\n' };
+		const tool = tools.tools().find((item) => item.name === 'save_note');
+		if (!tool || tool.type !== 'function') throw new Error('Expected the save_note tool');
+		return { tool, args, callId: 'note-save-1' };
+	};
+
+	it('does not abort the turn', async () => {
+		const { tool, args, callId } = faulty();
+		await expect(tool.needsApproval(context(), args, callId)).resolves.toBe(false);
+	});
+
+	it('returns a failure the model can read', async () => {
+		const { tool, args, callId } = faulty();
+		await tool.needsApproval(context(), args, callId);
+		const result = await tool.invoke(context(), JSON.stringify(args), {
+			toolCall: {
+				type: 'function_call',
+				name: 'save_note',
+				callId,
+				arguments: JSON.stringify(args)
+			}
+		});
+		expect(readToolFailure(result)).toBeDefined();
+	});
+
+	it('tells the model its arguments are not at fault', async () => {
+		const { tool, args, callId } = faulty();
+		await tool.needsApproval(context(), args, callId);
+		const result = await tool.invoke(context(), JSON.stringify(args), {
+			toolCall: {
+				type: 'function_call',
+				name: 'save_note',
+				callId,
+				arguments: JSON.stringify(args)
+			}
+		});
+		expect(JSON.stringify(result)).toContain('The fault is ours, not your arguments.');
+	});
+
+	it('does not leak the internal error text to the model', async () => {
+		const { tool, args, callId } = faulty();
+		await tool.needsApproval(context(), args, callId);
+		const result = await tool.invoke(context(), JSON.stringify(args), {
+			toolCall: {
+				type: 'function_call',
+				name: 'save_note',
+				callId,
+				arguments: JSON.stringify(args)
+			}
+		});
+		expect(JSON.stringify(result)).not.toContain('is not writable');
 	});
 });

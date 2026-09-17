@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findProseMirrorDocumentIssue, type ProseMirrorDocument } from '$lib/models/notes';
+import {
+	KNOWN_NODE_TYPES,
+	findProseMirrorDocumentIssue,
+	parseProseMirrorDocument,
+	type ProseMirrorDocument
+} from '$lib/models/notes';
 import { noteContentFromMarkdown, noteMarkdownFromContent } from './markdown';
 
 const formatted = noteContentFromMarkdown(
@@ -253,5 +258,105 @@ describe('Note links in a round trip', () => {
 			]
 		});
 		expect(JSON.stringify(roundTrip(external))).not.toContain('noteLink');
+	});
+});
+
+/**
+ * A rule has no children, and the note schema says so: `horizontalRule` is declared as
+ * `{ type: 'horizontalRule' }` and nothing else. The Markdown parser attaches an empty
+ * `content` to every block it builds, so for five weeks every note body containing `---`
+ * was rejected at the write boundary. In production the agent retried the same save six
+ * times in five minutes: the rejection reached it as a raw schema error about document
+ * nodes it had never authored, and no argument it could change would have helped.
+ */
+describe('Markdown that carries a horizontal rule', () => {
+	it.each([
+		['three dashes', '# Plan\n\nIntro.\n\n---\n\n## Next\n\nMore.\n'],
+		['three asterisks', 'before\n\n***\n\nafter\n'],
+		['three underscores', 'before\n\n___\n\nafter\n']
+	])('accepts a rule written as %s', (_label, source) => {
+		expect(() => noteContentFromMarkdown(source)).not.toThrow();
+	});
+
+	it('keeps the rule as a rule rather than dropping it', () => {
+		expect(noteContentFromMarkdown('before\n\n---\n\nafter\n').document.content?.[1]).toStrictEqual(
+			{ type: 'horizontalRule' }
+		);
+	});
+});
+
+/**
+ * The corpus above this one grew a case per bug and had no case for a rule, so the drift
+ * between the converter and the schema went unseen until it reached a user. Keying the
+ * corpus to the schema's own set of node types is what stops that repeating: a node type
+ * added to `KNOWN_NODE_TYPES` fails here until someone writes a fixture for it.
+ */
+const NODE_FIXTURES: Readonly<Record<string, unknown>> = {
+	text: paragraph('plain'),
+	paragraph: paragraph('plain'),
+	heading: { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'H' }] },
+	blockquote: { type: 'blockquote', content: [paragraph('quoted')] },
+	bulletList: { type: 'bulletList', content: [{ type: 'listItem', content: [paragraph('a')] }] },
+	orderedList: { type: 'orderedList', content: [{ type: 'listItem', content: [paragraph('a')] }] },
+	listItem: { type: 'bulletList', content: [{ type: 'listItem', content: [paragraph('a')] }] },
+	taskList: { type: 'taskList', content: [{ type: 'taskItem', content: [paragraph('a')] }] },
+	taskItem: { type: 'taskList', content: [{ type: 'taskItem', content: [paragraph('a')] }] },
+	codeBlock: {
+		type: 'codeBlock',
+		attrs: { language: 'ts' },
+		content: [{ type: 'text', text: 'const a = 1;' }]
+	},
+	table: {
+		type: 'table',
+		content: [
+			{ type: 'tableRow', content: [{ type: 'tableHeader', content: [paragraph('Name')] }] },
+			{ type: 'tableRow', content: [{ type: 'tableCell', content: [paragraph('Ada')] }] }
+		]
+	},
+	tableRow: {
+		type: 'table',
+		content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [paragraph('Ada')] }] }]
+	},
+	tableCell: {
+		type: 'table',
+		content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [paragraph('Ada')] }] }]
+	},
+	tableHeader: {
+		type: 'table',
+		content: [
+			{ type: 'tableRow', content: [{ type: 'tableHeader', content: [paragraph('Name')] }] }
+		]
+	},
+	horizontalRule: { type: 'horizontalRule' },
+	hardBreak: { type: 'paragraph', content: [{ type: 'text', text: 'a' }, { type: 'hardBreak' }] },
+	image: { type: 'image', attrs: { src: '/diagram.png', alt: 'plan' } },
+	video: { type: 'video', attrs: { src: '/clip.mp4' } },
+	audio: { type: 'audio', attrs: { src: '/clip.mp3' } },
+	iframe: { type: 'iframe', attrs: { src: 'https://example.com' } },
+	mermaid: {
+		type: 'mermaid',
+		attrs: { width: '100%' },
+		content: [{ type: 'text', text: 'graph TD' }]
+	},
+	drawio: { type: 'drawio', attrs: { diagramId: 'diagram-7' } },
+	todoNode: { type: 'todoNode', attrs: { todoId: 'todo-3' } },
+	callout: { type: 'callout', attrs: { emoji: '💡' }, content: [paragraph('mind this')] },
+	blockMath: { type: 'blockMath', attrs: { latex: 'x^2' } },
+	inlineMath: {
+		type: 'paragraph',
+		content: [
+			{ type: 'text', text: 'so ' },
+			{ type: 'inlineMath', attrs: { latex: 'x^2' } }
+		]
+	}
+};
+
+describe('Every node type the schema knows', () => {
+	it('has a round-trip fixture', () => {
+		expect([...KNOWN_NODE_TYPES].filter((type) => !(type in NODE_FIXTURES))).toStrictEqual([]);
+	});
+
+	it.each([...KNOWN_NODE_TYPES])('round-trips %s into a writable document', (type) => {
+		expect(() => parseProseMirrorDocument(roundTrip(docOf(NODE_FIXTURES[type])))).not.toThrow();
 	});
 });
