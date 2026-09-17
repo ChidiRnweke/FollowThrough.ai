@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.11](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.10...v0.5.11) (2026-09-17)
+
+
+### Continuous Integration
+
+* gate setup-node cache behind the release-only filter ([#153](https://github.com/ChidiRnweke/FollowThrough.ai/issues/153)) ([4289d54](https://github.com/ChidiRnweke/FollowThrough.ai/commit/4289d541fbbbfe0d1ced93425962cb444dc4b959))
+* skip heavy checks on release-only PRs and drop sync-pwa from PRs ([#149](https://github.com/ChidiRnweke/FollowThrough.ai/issues/149)) ([3ee1585](https://github.com/ChidiRnweke/FollowThrough.ai/commit/3ee158563148be6f3bbfd6b1aab0e0520950a839))
+
 ## [0.5.10](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.9...v0.5.10) (2026-09-15)
 
 
