@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.11](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.10...v0.5.11) (2026-09-17)
+
+
+### Continuous Integration
+
+* skip heavy checks on release-only PRs and drop sync-pwa from PRs ([#149](https://github.com/ChidiRnweke/FollowThrough.ai/issues/149)) ([3ee1585](https://github.com/ChidiRnweke/FollowThrough.ai/commit/3ee158563148be6f3bbfd6b1aab0e0520950a839))
+
 ## [0.5.10](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.9...v0.5.10) (2026-09-15)
 
 
