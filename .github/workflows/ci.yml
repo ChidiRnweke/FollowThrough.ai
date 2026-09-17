@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  # dorny/paths-filter fetches the changed-files list from the REST API on PRs.
+  pull-requests: read
 
 env:
   # The app boots against plain environment variables; nothing here talks to
@@ -23,6 +25,27 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      # Release-please PRs touch only CHANGELOG.md, the release manifest and the
+      # package.json version. The ruleset requires this check to report a result on
+      # every PR, so skip the heavy steps but still finish the job green when nothing
+      # behavioral changed.
+      - if: github.event_name == 'pull_request'
+        id: release-only
+        uses: dorny/paths-filter@v3
+        with:
+          # 'every' makes the negatives real exclusions: a changed file counts as
+          # behavioral only when it matches '**' and is not one of the release-managed
+          # files. package.json is skipped because release-please bumps the version there;
+          # a real dependency change also updates pnpm-lock.yaml, which stays behavioral.
+          predicate-quantifier: 'every'
+          filters: |
+            behavioral:
+              - '**'
+              - '!CHANGELOG.md'
+              - '!.release-please-manifest.json'
+              - '!package.json'
+      - if: github.event_name == 'pull_request' && steps.release-only.outputs.behavioral == 'false'
+        run: echo "Only release-managed files changed; skipping quality checks"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.30.1
@@ -30,17 +53,37 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm check
-      - run: pnpm test:architecture
-      - run: pnpm docs:check
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm lint
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm check
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm test:architecture
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm docs:check
 
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - if: github.event_name == 'pull_request'
+        id: release-only
+        uses: dorny/paths-filter@v3
+        with:
+          # 'every' makes the negatives real exclusions: a changed file counts as
+          # behavioral only when it matches '**' and is neither release-managed file.
+          predicate-quantifier: 'every'
+          filters: |
+            behavioral:
+              - '**'
+              - '!CHANGELOG.md'
+              - '!.release-please-manifest.json'
+              - '!package.json'
+      - if: github.event_name == 'pull_request' && steps.release-only.outputs.behavioral == 'false'
+        run: echo "Only release-managed files changed; skipping unit tests"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.30.1
@@ -52,16 +95,35 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:unit
-      - run: pnpm test:browser:full
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm test:unit
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm test:browser:full
 
   contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - if: github.event_name == 'pull_request'
+        id: release-only
+        uses: dorny/paths-filter@v3
+        with:
+          # 'every' makes the negatives real exclusions: a changed file counts as
+          # behavioral only when it matches '**' and is neither release-managed file.
+          predicate-quantifier: 'every'
+          filters: |
+            behavioral:
+              - '**'
+              - '!CHANGELOG.md'
+              - '!.release-please-manifest.json'
+              - '!package.json'
+      - if: github.event_name == 'pull_request' && steps.release-only.outputs.behavioral == 'false'
+        run: echo "Only release-managed files changed; skipping contracts"
       - uses: pnpm/action-setup@v4
         with:
           version: 10.30.1
@@ -69,10 +131,15 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test:contracts
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
+        run: pnpm test:contracts
 
+  # Not a required merge check: run it only after merge to master to catch
+  # offline-synchronization regressions that the faster PR gates miss.
   sync-pwa:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
