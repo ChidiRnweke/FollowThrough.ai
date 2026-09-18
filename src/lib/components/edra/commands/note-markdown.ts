@@ -32,33 +32,26 @@ interface SerializableDocument {
 }
 
 /**
- * Drop a `content` key that carries no children, everywhere in the tree.
+ * Give a node the shape ProseMirror itself serializes: no `content` or `marks` key when
+ * there are none.
  *
- * The Markdown parser attaches `content` to every block it builds, including the ones
- * ProseMirror defines as childless, and for those it attaches the key holding
- * `undefined`. A key present holding `undefined` is not an absent key: `.strict()` reads
- * it as one more field it did not expect. So the note schema, which declares a rule as
- * `{ type: 'horizontalRule' }` and nothing else, rejected every body containing `---`.
- * In production the agent retried the same save six times in five minutes against a
- * schema error no argument of its own could fix.
- *
- * Applied to the parser's output before it is parsed, so the document that leaves this
- * module is already the shape the note schema describes. The document root keeps its own
- * `content`: an empty note is a state the product has, and `{ type: 'doc', content: [] }`
- * is how it is stored.
+ * The Markdown parser writes both keys onto nodes that have none, holding `undefined` or
+ * `[]`. The note schema is strict, and it declares leaf nodes without `content`. So every
+ * rule, audio and iframe node in agent Markdown failed the write parse.
  */
-const withoutEmptyContent = (value: JSONContent): JSONContent => {
-	const { content, ...rest } = value;
-	const children = content?.map(withoutEmptyContent);
-	return children === undefined || children.length === 0 ? rest : { ...rest, content: children };
-};
+const canonicalNode = ({ content, marks, ...node }: JSONContent): JSONContent => ({
+	...node,
+	...(marks === undefined || marks.length === 0 ? {} : { marks }),
+	...(content === undefined || content.length === 0 ? {} : { content: content.map(canonicalNode) })
+});
 
 /** Convert a compact Markdown payload into the editor's persisted note content. */
 export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => {
 	const parsed = markdown.parse(source);
+	// The root keeps its `content`: an empty note is stored as `{ type: 'doc', content: [] }`.
 	const document = parseEdraDocument({
-		...withoutEmptyContent(parsed),
-		content: (parsed.content ?? []).map(withoutEmptyContent)
+		...parsed,
+		content: (parsed.content ?? []).map(canonicalNode)
 	});
 	return {
 		document,

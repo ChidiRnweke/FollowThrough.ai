@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-	KNOWN_NODE_TYPES,
 	findProseMirrorDocumentIssue,
-	parseProseMirrorDocument,
-	type ProseMirrorDocument
+	type ProseMirrorDocument,
+	type ProseMirrorNode
 } from '$lib/models/notes';
 import { noteContentFromMarkdown, noteMarkdownFromContent } from './markdown';
 
@@ -262,101 +261,94 @@ describe('Note links in a round trip', () => {
 });
 
 /**
- * A rule has no children, and the note schema says so: `horizontalRule` is declared as
- * `{ type: 'horizontalRule' }` and nothing else. The Markdown parser attaches an empty
- * `content` to every block it builds, so for five weeks every note body containing `---`
- * was rejected at the write boundary. In production the agent retried the same save six
- * times in five minutes: the rejection reached it as a raw schema error about document
- * nodes it had never authored, and no argument it could change would have helped.
+ * Every node type the note schema models must survive a Markdown round trip unchanged.
+ *
+ * The strict note schema (2026-08-30) was never checked against the converter's output.
+ * The corpus above grew one case per bug, so nothing covered a rule, audio or an iframe.
+ * All three failed the write parse, and an agent could not save a note that held one.
+ * The fixtures are keyed by the node union, so a new node type does not compile until
+ * it has a case here.
  */
-describe('Markdown that carries a horizontal rule', () => {
-	it.each([
-		['three dashes', '# Plan\n\nIntro.\n\n---\n\n## Next\n\nMore.\n'],
-		['three asterisks', 'before\n\n***\n\nafter\n'],
-		['three underscores', 'before\n\n___\n\nafter\n']
-	])('accepts a rule written as %s', (_label, source) => {
-		expect(() => noteContentFromMarkdown(source)).not.toThrow();
-	});
+type ModelledNodeType = Exclude<ProseMirrorNode['type'], 'unknown'>;
 
-	it('keeps the rule as a rule rather than dropping it', () => {
-		expect(noteContentFromMarkdown('before\n\n---\n\nafter\n').document.content?.[1]).toStrictEqual(
-			{ type: 'horizontalRule' }
-		);
-	});
+const text = (value: string): ProseMirrorNode => ({ type: 'text', text: value });
+const para = (value: string): ProseMirrorNode => ({ type: 'paragraph', content: [text(value)] });
+const listOf = (type: 'bulletList' | 'orderedList'): ProseMirrorNode => ({
+	type,
+	content: [{ type: 'listItem', content: [para('item')] }]
 });
+const taskList: ProseMirrorNode = {
+	type: 'taskList',
+	content: [{ type: 'taskItem', attrs: { checked: true }, content: [para('ship it')] }]
+};
+const table: ProseMirrorNode = {
+	type: 'table',
+	content: [
+		{ type: 'tableRow', content: [{ type: 'tableHeader', content: [para('Name')] }] },
+		{ type: 'tableRow', content: [{ type: 'tableCell', content: [para('Ada')] }] }
+	]
+};
 
-/**
- * The corpus above this one grew a case per bug and had no case for a rule, so the drift
- * between the converter and the schema went unseen until it reached a user. Keying the
- * corpus to the schema's own set of node types is what stops that repeating: a node type
- * added to `KNOWN_NODE_TYPES` fails here until someone writes a fixture for it.
- */
-const NODE_FIXTURES: Readonly<Record<string, unknown>> = {
-	text: paragraph('plain'),
-	paragraph: paragraph('plain'),
-	heading: { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'H' }] },
-	blockquote: { type: 'blockquote', content: [paragraph('quoted')] },
-	bulletList: { type: 'bulletList', content: [{ type: 'listItem', content: [paragraph('a')] }] },
-	orderedList: { type: 'orderedList', content: [{ type: 'listItem', content: [paragraph('a')] }] },
-	listItem: { type: 'bulletList', content: [{ type: 'listItem', content: [paragraph('a')] }] },
-	taskList: { type: 'taskList', content: [{ type: 'taskItem', content: [paragraph('a')] }] },
-	taskItem: { type: 'taskList', content: [{ type: 'taskItem', content: [paragraph('a')] }] },
-	codeBlock: {
-		type: 'codeBlock',
-		attrs: { language: 'ts' },
-		content: [{ type: 'text', text: 'const a = 1;' }]
-	},
-	table: {
-		type: 'table',
-		content: [
-			{ type: 'tableRow', content: [{ type: 'tableHeader', content: [paragraph('Name')] }] },
-			{ type: 'tableRow', content: [{ type: 'tableCell', content: [paragraph('Ada')] }] }
-		]
-	},
-	tableRow: {
-		type: 'table',
-		content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [paragraph('Ada')] }] }]
-	},
-	tableCell: {
-		type: 'table',
-		content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [paragraph('Ada')] }] }]
-	},
-	tableHeader: {
-		type: 'table',
-		content: [
-			{ type: 'tableRow', content: [{ type: 'tableHeader', content: [paragraph('Name')] }] }
-		]
-	},
+const NODE_FIXTURES: Readonly<Record<ModelledNodeType, ProseMirrorNode>> = {
+	text: para('plain'),
+	paragraph: para('plain'),
+	heading: { type: 'heading', attrs: { level: 2 }, content: [text('Heading')] },
+	blockquote: { type: 'blockquote', content: [para('quoted')] },
+	bulletList: listOf('bulletList'),
+	orderedList: listOf('orderedList'),
+	listItem: listOf('bulletList'),
+	taskList,
+	taskItem: taskList,
+	codeBlock: { type: 'codeBlock', attrs: { language: 'ts' }, content: [text('const a = 1;')] },
+	table,
+	tableRow: table,
+	tableCell: table,
+	tableHeader: table,
 	horizontalRule: { type: 'horizontalRule' },
-	hardBreak: { type: 'paragraph', content: [{ type: 'text', text: 'a' }, { type: 'hardBreak' }] },
-	image: { type: 'image', attrs: { src: '/diagram.png', alt: 'plan' } },
+	hardBreak: { type: 'paragraph', content: [text('a'), { type: 'hardBreak' }, text('b')] },
+	image: { type: 'image', attrs: { src: '/plan.png', alt: 'plan', title: null } },
 	video: { type: 'video', attrs: { src: '/clip.mp4' } },
 	audio: { type: 'audio', attrs: { src: '/clip.mp3' } },
 	iframe: { type: 'iframe', attrs: { src: 'https://example.com' } },
-	mermaid: {
-		type: 'mermaid',
-		attrs: { width: '100%' },
-		content: [{ type: 'text', text: 'graph TD' }]
-	},
+	mermaid: { type: 'mermaid', attrs: { width: '100%' }, content: [text('graph TD')] },
 	drawio: { type: 'drawio', attrs: { diagramId: 'diagram-7' } },
 	todoNode: { type: 'todoNode', attrs: { todoId: 'todo-3' } },
-	callout: { type: 'callout', attrs: { emoji: '💡' }, content: [paragraph('mind this')] },
+	callout: { type: 'callout', attrs: { emoji: '💡' }, content: [para('mind this')] },
 	blockMath: { type: 'blockMath', attrs: { latex: 'x^2' } },
 	inlineMath: {
 		type: 'paragraph',
-		content: [
-			{ type: 'text', text: 'so ' },
-			{ type: 'inlineMath', attrs: { latex: 'x^2' } }
-		]
+		content: [text('so '), { type: 'inlineMath', attrs: { latex: 'x^2' } }]
 	}
 };
 
-describe('Every node type the schema knows', () => {
-	it('has a round-trip fixture', () => {
-		expect([...KNOWN_NODE_TYPES].filter((type) => !(type in NODE_FIXTURES))).toStrictEqual([]);
-	});
+/**
+ * Markdown has no video syntax. The serializer writes a video as `![](src)`, which parses
+ * back as an image. That loss predates the strict schema, and it is tracked separately.
+ */
+const KNOWN_LOSSY: ReadonlySet<string> = new Set<ModelledNodeType>(['video']);
 
-	it.each([...KNOWN_NODE_TYPES])('round-trips %s into a writable document', (type) => {
-		expect(() => parseProseMirrorDocument(roundTrip(docOf(NODE_FIXTURES[type])))).not.toThrow();
+describe('Every node type the note schema models', () => {
+	it.each(Object.entries(NODE_FIXTURES).filter(([type]) => !KNOWN_LOSSY.has(type)))(
+		'round-trips %s through Markdown unchanged',
+		(_type, node) => {
+			expect(roundTrip({ type: 'doc', content: [node] })).toStrictEqual({
+				type: 'doc',
+				content: [node]
+			});
+		}
+	);
+});
+
+describe('Markdown that carries a horizontal rule', () => {
+	it.each([
+		['three dashes', 'before\n\n---\n\nafter\n'],
+		['three asterisks', 'before\n\n***\n\nafter\n'],
+		['three underscores', 'before\n\n___\n\nafter\n']
+	])('parses a rule written as %s', (_label, source) => {
+		expect(noteContentFromMarkdown(source).document.content).toStrictEqual([
+			para('before'),
+			{ type: 'horizontalRule' },
+			para('after')
+		]);
 	});
 });
