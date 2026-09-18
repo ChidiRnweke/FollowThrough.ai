@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { findProseMirrorDocumentIssue, type ProseMirrorDocument } from '$lib/models/notes';
+import {
+	findProseMirrorDocumentIssue,
+	type ProseMirrorDocument,
+	type ProseMirrorNode
+} from '$lib/models/notes';
 import { noteContentFromMarkdown, noteMarkdownFromContent } from './markdown';
 
 const formatted = noteContentFromMarkdown(
@@ -253,5 +257,98 @@ describe('Note links in a round trip', () => {
 			]
 		});
 		expect(JSON.stringify(roundTrip(external))).not.toContain('noteLink');
+	});
+});
+
+/**
+ * Every node type the note schema models must survive a Markdown round trip unchanged.
+ *
+ * The strict note schema (2026-08-30) was never checked against the converter's output.
+ * The corpus above grew one case per bug, so nothing covered a rule, audio or an iframe.
+ * All three failed the write parse, and an agent could not save a note that held one.
+ * The fixtures are keyed by the node union, so a new node type does not compile until
+ * it has a case here.
+ */
+type ModelledNodeType = Exclude<ProseMirrorNode['type'], 'unknown'>;
+
+const text = (value: string): ProseMirrorNode => ({ type: 'text', text: value });
+const para = (value: string): ProseMirrorNode => ({ type: 'paragraph', content: [text(value)] });
+const listOf = (type: 'bulletList' | 'orderedList'): ProseMirrorNode => ({
+	type,
+	content: [{ type: 'listItem', content: [para('item')] }]
+});
+const taskList: ProseMirrorNode = {
+	type: 'taskList',
+	content: [{ type: 'taskItem', attrs: { checked: true }, content: [para('ship it')] }]
+};
+const table: ProseMirrorNode = {
+	type: 'table',
+	content: [
+		{ type: 'tableRow', content: [{ type: 'tableHeader', content: [para('Name')] }] },
+		{ type: 'tableRow', content: [{ type: 'tableCell', content: [para('Ada')] }] }
+	]
+};
+
+const NODE_FIXTURES: Readonly<Record<ModelledNodeType, ProseMirrorNode>> = {
+	text: para('plain'),
+	paragraph: para('plain'),
+	heading: { type: 'heading', attrs: { level: 2 }, content: [text('Heading')] },
+	blockquote: { type: 'blockquote', content: [para('quoted')] },
+	bulletList: listOf('bulletList'),
+	orderedList: listOf('orderedList'),
+	listItem: listOf('bulletList'),
+	taskList,
+	taskItem: taskList,
+	codeBlock: { type: 'codeBlock', attrs: { language: 'ts' }, content: [text('const a = 1;')] },
+	table,
+	tableRow: table,
+	tableCell: table,
+	tableHeader: table,
+	horizontalRule: { type: 'horizontalRule' },
+	hardBreak: { type: 'paragraph', content: [text('a'), { type: 'hardBreak' }, text('b')] },
+	image: { type: 'image', attrs: { src: '/plan.png', alt: 'plan', title: null } },
+	video: { type: 'video', attrs: { src: '/clip.mp4' } },
+	audio: { type: 'audio', attrs: { src: '/clip.mp3' } },
+	iframe: { type: 'iframe', attrs: { src: 'https://example.com' } },
+	mermaid: { type: 'mermaid', attrs: { width: '100%' }, content: [text('graph TD')] },
+	drawio: { type: 'drawio', attrs: { diagramId: 'diagram-7' } },
+	todoNode: { type: 'todoNode', attrs: { todoId: 'todo-3' } },
+	callout: { type: 'callout', attrs: { emoji: '💡' }, content: [para('mind this')] },
+	blockMath: { type: 'blockMath', attrs: { latex: 'x^2' } },
+	inlineMath: {
+		type: 'paragraph',
+		content: [text('so '), { type: 'inlineMath', attrs: { latex: 'x^2' } }]
+	}
+};
+
+/**
+ * Markdown has no video syntax. The serializer writes a video as `![](src)`, which parses
+ * back as an image. That loss predates the strict schema, and it is tracked separately.
+ */
+const KNOWN_LOSSY: ReadonlySet<string> = new Set<ModelledNodeType>(['video']);
+
+describe('Every node type the note schema models', () => {
+	it.each(Object.entries(NODE_FIXTURES).filter(([type]) => !KNOWN_LOSSY.has(type)))(
+		'round-trips %s through Markdown unchanged',
+		(_type, node) => {
+			expect(roundTrip({ type: 'doc', content: [node] })).toStrictEqual({
+				type: 'doc',
+				content: [node]
+			});
+		}
+	);
+});
+
+describe('Markdown that carries a horizontal rule', () => {
+	it.each([
+		['three dashes', 'before\n\n---\n\nafter\n'],
+		['three asterisks', 'before\n\n***\n\nafter\n'],
+		['three underscores', 'before\n\n___\n\nafter\n']
+	])('parses a rule written as %s', (_label, source) => {
+		expect(noteContentFromMarkdown(source).document.content).toStrictEqual([
+			para('before'),
+			{ type: 'horizontalRule' },
+			para('after')
+		]);
 	});
 });

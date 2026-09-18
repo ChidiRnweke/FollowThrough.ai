@@ -8,7 +8,12 @@ import {
 	ValidationError
 } from '$lib/errors';
 import type { DomainErrorCode } from '$lib/errors';
-import { DOMAIN_ERROR_STATUS, domainErrorStatus } from './errors';
+import {
+	DOMAIN_ERROR_ADVICE,
+	DOMAIN_ERROR_STATUS,
+	domainErrorStatus,
+	failureReport
+} from './errors';
 
 const ALL_CODES: readonly DomainErrorCode[] = [
 	'VALIDATION',
@@ -98,5 +103,55 @@ describe('userFacingMessage', () => {
 
 	it("uses a thrown Error's message", () => {
 		expect(userFacingMessage(new Error('boom'), 'fallback')).toBe('boom');
+	});
+});
+
+/**
+ * Advice that does not name an action is advice a caller cannot follow, and a constant
+ * string is not advice at all. The agent loop is the caller this exists for: it reads the
+ * failure, and what it does next is decided by what the failure told it to do.
+ */
+describe('failureReport', () => {
+	it.each(ALL_CODES)('gives %s advice of its own', (code) => {
+		expect(DOMAIN_ERROR_ADVICE[code].length).toBeGreaterThan(0);
+	});
+
+	it('gives each code distinct advice', () => {
+		expect(new Set(ALL_CODES.map((code) => DOMAIN_ERROR_ADVICE[code])).size).toBe(ALL_CODES.length);
+	});
+
+	it("keeps a domain failure's own message, which is written for the caller", () => {
+		expect(failureReport(new NotFoundError('No note has that id')).message).toBe(
+			'No note has that id'
+		);
+	});
+
+	it('advises a search after a missing record rather than a retry', () => {
+		expect(failureReport(new NotFoundError('gone')).advice).toContain('Search for it');
+	});
+
+	it('advises a re-read after a conflict rather than a retry', () => {
+		expect(failureReport(new ConflictError('changed')).advice).toContain('read');
+	});
+
+	/**
+	 * The production incident in one assertion. A `ZodError` raised inside note
+	 * preparation was handed to the model as though its arguments were wrong. They were
+	 * not, so it corrected them, six times, and every correction failed identically.
+	 */
+	it('tells a caller that an internal fault is not its arguments', () => {
+		expect(failureReport(new TypeError('content[12] is not writable')).advice).toContain(
+			'Do not retry this call'
+		);
+	});
+
+	it('does not repeat an internal error message to the caller', () => {
+		expect(failureReport(new TypeError('content[12] is not writable')).message).not.toContain(
+			'content[12]'
+		);
+	});
+
+	it('treats a thrown non-Error as an internal fault too', () => {
+		expect(failureReport('something odd').advice).toContain('Do not retry this call');
 	});
 });

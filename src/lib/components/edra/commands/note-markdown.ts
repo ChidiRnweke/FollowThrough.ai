@@ -1,4 +1,4 @@
-import { generateText } from '@tiptap/core';
+import { generateText, type JSONContent } from '@tiptap/core';
 import { MarkdownManager } from '@tiptap/markdown';
 import { noteMarkdownExtensions } from './markdown-extensions.js';
 import { editorContent, parseEdraDocument, type EdraDocument } from './document.js';
@@ -31,10 +31,28 @@ interface SerializableDocument {
 	readonly content?: readonly SerializableDocumentNode[];
 }
 
+/**
+ * Give a node the shape ProseMirror itself serializes: no `content` or `marks` key when
+ * there are none.
+ *
+ * The Markdown parser writes both keys onto nodes that have none, holding `undefined` or
+ * `[]`. The note schema is strict, and it declares leaf nodes without `content`. So every
+ * rule, audio and iframe node in agent Markdown failed the write parse.
+ */
+const canonicalNode = ({ content, marks, ...node }: JSONContent): JSONContent => ({
+	...node,
+	...(marks === undefined || marks.length === 0 ? {} : { marks }),
+	...(content === undefined || content.length === 0 ? {} : { content: content.map(canonicalNode) })
+});
+
 /** Convert a compact Markdown payload into the editor's persisted note content. */
 export const noteContentFromMarkdown = (source: string): NoteMarkdownContent => {
 	const parsed = markdown.parse(source);
-	const document = parseEdraDocument(parsed);
+	// The root keeps its `content`: an empty note is stored as `{ type: 'doc', content: [] }`.
+	const document = parseEdraDocument({
+		...parsed,
+		content: (parsed.content ?? []).map(canonicalNode)
+	});
 	return {
 		document,
 		plainText: generateText(parsed, extensions, { blockSeparator: '\n\n' })
