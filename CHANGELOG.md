@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.12](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.11...v0.5.12) (2026-09-18)
+
+
+### Bug Fixes
+
+* **agent:** give a failed tool call advice the model can act on ([#155](https://github.com/ChidiRnweke/FollowThrough.ai/issues/155)) ([ba507c5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ba507c5da2c5ff59724e9192e326384ae1dd829c))
+
 ## [0.5.11](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.10...v0.5.11) (2026-09-17)
 
 
