@@ -41,7 +41,7 @@ Parsing happens only in named parse zones:
   items;
 - the client event and storage readers, for server events and persisted browser state.
 
-A schema lives next to the type it produces in `src/lib/models/`, as pure logic with no I/O. A
+A schema lives next to the type it produces in `src/lib/models/`, with no I/O. A
 service or controller never parses: it receives narrow values from the remote functions above it
 and from repositories or provider adapters below it.
 
