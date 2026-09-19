@@ -86,8 +86,6 @@ Move behavior out of every model domain. Keep schemas and their inferred types b
 - [ ] Add model-content and concrete-wiring audit regression cases. No baseline of new violations.
 - [ ] Update AGENTS, architecture guidance, ADR placement, and assessment dispositions to reflect
       the user's rule. Preserve historical findings as historical evidence.
-      AGENTS, the reference layer map, ADR 0037 and ADR 0041 now place shared rules in services.
-      Assessment dispositions and a model-content audit rule remain open until the migration ends.
 - [ ] Inspect all remaining service constructors/factory assignments and model declarations;
       record each unresolved concern rather than declaring the global correction complete.
 - [ ] Run lint, type checks, architecture audits, full node/browser tests, contracts, docs and
