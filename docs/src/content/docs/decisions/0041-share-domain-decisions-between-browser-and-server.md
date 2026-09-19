@@ -5,7 +5,11 @@ description: Prevent browser and server implementations from making different de
 
 ## Status
 
-Accepted.
+Accepted. Revised on 2026-09-19.
+
+The first version placed each shared rule in a model as a pure function. The revision moves shared
+rules into shared services. Models now hold only values, types, schemas and constructors. The
+guarantees of this decision are unchanged.
 
 ## Context
 
@@ -25,17 +29,23 @@ has already shown the edit.
 
 ## Decision
 
-We chose to implement each shared domain rule as a pure function. The browser and server call the
-same function with the facts they have resolved. The function returns the proposed change; it does
-not read storage, write records or call another feature. The server resolves authoritative facts
-and computes the change again before saving it.
+We chose to implement each shared domain rule once, in a shared service under
+`src/lib/services/<domain>/`. The browser and server call the same service with the facts they have
+resolved. The rule returns the proposed change. It does not read storage, write records or call
+another feature. The server resolves authoritative facts and computes the change again before
+saving it.
 
-Each function takes only the facts needed for its decision. Placement rules, for example, need
+Models do not hold these rules. A model holds values, types, Zod schemas and constructors only. It
+has no business functions, procedural readers, runtime state or workflow classes. A rule in a model
+couples every consumer of a type to that rule. It also hides which layer owns the decision. Rules
+that only the server applies live in `src/lib/server/services/<domain>/`.
+
+Each rule takes only the facts needed for its decision. Placement rules, for example, need
 entry identities, parents and sibling order; they do not need document bodies. When a decision
 requires a complete inventory, the caller must establish completeness. An incomplete offline cache
 cannot stand in for an empty collection.
 
-Services perform storage work around these rules. Controllers continue to coordinate consequences
+Server services perform storage work around these rules. Controllers continue to coordinate consequences
 across features and own their transactions, as described in ADR 0007. The durable queue and conflict
 review retain the synchronization contract in ADR 0040.
 
@@ -49,11 +59,15 @@ for different behavior, such as PDF and DOCX layout, or make server-only actions
 - Callers must provide explicit facts and establish whether required collections are complete.
 - Some offline actions must wait for missing facts. The browser retains the user's draft.
 - Shared rules reduce duplicated decisions but do not remove conflict checks or server validation.
+- The owner of a rule is visible from its import. A consumer that needs only a type does not
+  depend on a rule.
 
 ## Evidence
 
-- `src/lib/models/todos/index.ts` defines `applyTodoEdit`, which is reused by browser command
-  preparation and the task controller.
+- `src/lib/services/memory/edits.ts` defines memory creation and edit rules. The Memory controller
+  and browser command preparation both use them.
+- `src/lib/services/notes/creation.ts` validates new notes and folders. The Notes, Projects and
+  Skills controllers and browser command preparation all use it.
 - `src/lib/controllers/workspace/commands.ts` prepares optimistic commands from cached records.
 - `src/lib/server/services/notes/catalog.ts` checks current records for note lifecycle operations.
 - ADR 0040 defines the durable command queue and review of conflicting edits.
