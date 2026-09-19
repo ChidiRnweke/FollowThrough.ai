@@ -9,13 +9,13 @@ API pages for every module in that layer.
 
 ## The five layers
 
-| Layer                                         | Holds                                                                   | Entry point                |
-| --------------------------------------------- | ----------------------------------------------------------------------- | -------------------------- |
-| [Models](/reference/models/)                  | Pure types and logic shared by client and server. No I/O, no framework. | `/reference/models/`       |
-| [Repositories](/reference/repositories/)      | Server-only data access against the database.                           | `/reference/repositories/` |
-| [Services](/reference/services/)              | Server-only business logic on top of repositories.                      | `/reference/services/`     |
-| [Controllers](/reference/controllers/)        | Orchestration across services; the only cross-service seam.             | `/reference/controllers/`  |
-| [Capability factories](/reference/factories/) | Wiring that exposes collaborators to controllers and the agent.         | `/reference/factories/`    |
+| Layer                                         | Holds                                                           | Entry point                |
+| --------------------------------------------- | --------------------------------------------------------------- | -------------------------- |
+| [Models](/reference/models/)                  | Values, types, Zod schemas and constructors. No business logic. | `/reference/models/`       |
+| [Repositories](/reference/repositories/)      | Server-only data access against the database.                   | `/reference/repositories/` |
+| [Services](/reference/services/)              | Business logic on top of repositories.                          | `/reference/services/`     |
+| [Controllers](/reference/controllers/)        | Orchestration across services; the only cross-service seam.     | `/reference/controllers/`  |
+| [Capability factories](/reference/factories/) | Wiring that exposes collaborators to controllers and the agent. | `/reference/factories/`    |
 
 ## How the layers relate
 
