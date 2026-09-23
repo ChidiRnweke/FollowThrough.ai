@@ -1,63 +1,25 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	AgentExecutionMode,
 	AgentRun,
 	AgentRunId,
-	ConversationId,
-	PendingAgentDecision,
-	WorkflowRunContext
+	AgentRunStatus,
+	WorkflowAgentRun,
+	WorkflowSettlementWrite
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
-import { NotFoundError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
-const now = (): DateTime => new Date().toISOString() as DateTime;
-
-export interface AgentRunStore {
-	create(
-		actor: ActorContext,
-		input: {
-			conversationId: ConversationId;
-			model: string;
-			executionMode: AgentExecutionMode;
-			contextSnapshot: WorkflowRunContext;
-			retryOfRunId?: AgentRunId;
-		}
-	): Promise<AgentRun>;
-	get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
-	getLatestForConversation(actor: ActorContext, conversationId: ConversationId): Promise<AgentRun>;
-
-	pause(
-		actor: ActorContext,
-		runId: AgentRunId,
-		serializedState: string,
-		pendingDecisions: readonly PendingAgentDecision[]
-	): Promise<AgentRun>;
-	complete(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
-	fail(
-		actor: ActorContext,
-		runId: AgentRunId,
-		failure: string,
-		providerErrorCode?: string
-	): Promise<AgentRun>;
-	cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
-}
-
-export class AgentRunLedger implements AgentRunStore {
+/** Direct workflow run values. Controllers own creation and publication transactions. */
+export class AgentRunLedger {
 	constructor(private readonly repository: AgentRunRepository) {}
 
-	create(
+	prepareCreation(
 		actor: ActorContext,
-		input: {
-			conversationId: ConversationId;
-			model: string;
-			executionMode: AgentExecutionMode;
-			contextSnapshot: WorkflowRunContext;
-			retryOfRunId?: AgentRunId;
-		}
-	): Promise<AgentRun> {
-		const timestamp = now();
-		return this.repository.insert(actor, {
+		input: Pick<WorkflowAgentRun, 'conversationId' | 'model' | 'executionMode' | 'contextSnapshot'>,
+		timestamp: DateTime
+	): WorkflowAgentRun {
+		return {
 			kind: 'workflow',
 			id: crypto.randomUUID() as AgentRunId,
 			userId: actor.userId,
@@ -67,77 +29,53 @@ export class AgentRunLedger implements AgentRunStore {
 			pendingDecisions: [],
 			definitionVersion: 2,
 			createdAt: timestamp,
-			updatedAt: timestamp
-		});
+			updatedAt: timestamp,
+			startedAt: timestamp
+		};
 	}
 
-	async get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
-		const run = await this.repository.findById(actor, runId);
+	persistCreated(actor: ActorContext, run: WorkflowAgentRun): Promise<AgentRun> {
+		return this.repository.insert(actor, run);
+	}
+
+	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun> {
+		const run = await this.repository.findForWrite(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
+		if (run.kind !== 'workflow') throw new ValidationError('The run is not a workflow');
 		return run;
 	}
 
-	async getLatestForConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<AgentRun> {
-		const run = await this.repository.findLatestByConversation(actor, conversationId);
-		if (!run) throw new NotFoundError('Agent run was not found');
-		return run;
-	}
-
-	async pause(
-		actor: ActorContext,
-		runId: AgentRunId,
-		serializedState: string,
-		pendingDecisions: readonly PendingAgentDecision[]
-	): Promise<AgentRun> {
-		const run = await this.get(actor, runId);
-		return this.repository.update(actor, {
-			...run,
-			status: 'awaiting_approval',
-			serializedState,
-			pendingDecisions,
-			updatedAt: now()
-		});
-	}
-
-	async complete(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
-		const run = await this.get(actor, runId);
-		return this.repository.update(actor, {
-			...run,
+	prepareCompletion(status: AgentRunStatus, timestamp: DateTime): WorkflowSettlementWrite {
+		if (status !== 'running') throw new ValidationError('The workflow run is no longer running');
+		return {
 			status: 'completed',
-			serializedState: undefined,
-			pendingDecisions: [],
-			updatedAt: now()
-		});
+			finishedAt: timestamp,
+			updatedAt: timestamp,
+			serializedState: null,
+			pendingDecisions: []
+		};
 	}
 
-	async fail(
-		actor: ActorContext,
-		runId: AgentRunId,
+	prepareFailure(
+		status: AgentRunStatus,
 		failure: string,
-		providerErrorCode?: string
-	): Promise<AgentRun> {
-		const run = await this.get(actor, runId);
-		return this.repository.update(actor, {
-			...run,
+		timestamp: DateTime
+	): WorkflowSettlementWrite | null {
+		if (status !== 'running') return null;
+		return {
 			status: 'failed',
 			failure,
-			providerErrorCode,
-			pendingDecisions: [],
-			updatedAt: now()
-		});
+			finishedAt: timestamp,
+			updatedAt: timestamp,
+			pendingDecisions: []
+		};
 	}
 
-	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
-		const run = await this.get(actor, runId);
-		return this.repository.update(actor, {
-			...run,
-			status: 'cancelled',
-			failure: 'The request was cancelled',
-			pendingDecisions: [],
-			updatedAt: now()
-		});
+	persistSettlement(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowSettlementWrite
+	): Promise<WorkflowAgentRun> {
+		return this.repository.updateWorkflowSettlement(actor, runId, change);
 	}
 }

@@ -567,6 +567,15 @@ export interface WorkflowAgentRun extends AgentRunBase {
 }
 
 export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
+export type WorkflowSettlementWrite = {
+	readonly finishedAt: DateTime;
+	readonly updatedAt: DateTime;
+	readonly pendingDecisions: readonly [];
+} & (
+	| { readonly status: 'completed'; readonly serializedState: null }
+	| { readonly status: 'failed'; readonly failure: string }
+);
+
 export interface WorkflowContextWrite {
 	readonly contextSnapshot: WorkflowRunContext;
 	readonly updatedAt: DateTime;

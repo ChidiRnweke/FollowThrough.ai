@@ -7,7 +7,6 @@ import {
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
@@ -17,7 +16,6 @@ const setup = (drawio = false) => {
 	const generation = diagramGenerationFixture();
 	const diagrams = new InMemoryDiagrams();
 	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
@@ -28,7 +26,12 @@ const setup = (drawio = false) => {
 				...generation,
 				drawioXmlValidator: new DrawioXmlValidator(),
 				suggestionCreator: suggestions,
-				transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
+				transactionRunner: new InMemoryTransactionRunner([
+					suggestions,
+					generation.provenance,
+					generation.persistence,
+					generation.conversations
+				])
 			})
 		)
 	};

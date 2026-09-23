@@ -33,6 +33,7 @@ PostgreSQL contracts verify cancellation winning the context row lock, actor iso
 persistence retaining lifecycle fields. Existing publication and durable-generation contracts use the
 new context owner with their transaction-bound repositories.
 
-AgentRunLedger still owns direct run creation/completion/failure. Its unused capabilities, general run
-transition rules and chat preparation remain separate assessment work. This slice does not close the
-agent/diagram families. The dependent PR records observed verification results.
+The subsequent [direct-run disposition](direct-diagram-runs.md) covers creation/completion/failure
+ownership and unused ledger capabilities. General run transition rules and chat preparation remain
+separate assessment work. This slice does not close the agent/diagram families. The dependent PR
+records observed verification results.

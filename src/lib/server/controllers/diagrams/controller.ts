@@ -20,7 +20,7 @@ import type {
 } from '$lib/models/agent';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import type { AgentRunStore } from '$lib/server/services/agent/runs/ledger';
+import type { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import {
 	assertRenderedPng,
 	diagramRevisionModel
@@ -210,7 +210,15 @@ export interface DiagramAgentDependencies {
 	>;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
-	readonly runs: Pick<AgentRunStore, 'create' | 'complete' | 'fail'>;
+	readonly runs: Pick<
+		AgentRunLedger,
+		| 'prepareCreation'
+		| 'persistCreated'
+		| 'getForWrite'
+		| 'prepareCompletion'
+		| 'prepareFailure'
+		| 'persistSettlement'
+	>;
 	readonly runContext: Pick<DiagramRunContext, 'getForWrite' | 'prepare' | 'persist'>;
 	readonly provenance: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
@@ -693,18 +701,9 @@ export class Diagrams implements DiagramsController {
 		const renderedPngDataUrl = task.operation === 'revise' ? task.renderedPngDataUrl : undefined;
 		this.validateDiagramTask(task);
 
-		const conversation = await this.dependencies.generation.conversations.createWorkflow(actor, {
-			title:
-				task.operation === 'generate'
-					? 'Generate Mermaid diagram'
-					: task.operation === 'revise'
-						? 'Revise Mermaid diagram'
-						: 'Convert Mermaid to draw.io',
-			contextNoteId: task.noteId
-		});
 		const preferences = await this.dependencies.generation.preferences.get(actor);
 		const configuredModel = this.dependencies.generation.resolveModel(
-			conversation,
+			{},
 			preferences,
 			this.dependencies.generation.defaultModel
 		);
@@ -717,31 +716,57 @@ export class Diagrams implements DiagramsController {
 			renderedPngDataUrl,
 			preferences.defaultVisionModel ?? this.dependencies.generation.defaultVisionModel
 		);
-		const run = await this.dependencies.generation.runs.create(actor, {
-			conversationId: conversation.id,
-			model,
-			executionMode: 'auto_accept',
-			contextSnapshot: {
-				kind: 'diagram',
-				state: 'unprepared',
-				operation: task.operation,
-				noteId: task.noteId
-			}
+		const run = await this.dependencies.transactionRunner.run(async () => {
+			const conversation = await this.dependencies.generation.conversations.createWorkflow(actor, {
+				title:
+					task.operation === 'generate'
+						? 'Generate Mermaid diagram'
+						: task.operation === 'revise'
+							? 'Revise Mermaid diagram'
+							: 'Convert Mermaid to draw.io',
+				contextNoteId: task.noteId
+			});
+			const prepared = this.dependencies.generation.runs.prepareCreation(
+				actor,
+				{
+					conversationId: conversation.id,
+					model,
+					executionMode: 'auto_accept',
+					contextSnapshot: {
+						kind: 'diagram',
+						state: 'unprepared',
+						operation: task.operation,
+						noteId: task.noteId
+					}
+				},
+				this.dependencies.now()
+			);
+			return this.dependencies.generation.runs.persistCreated(actor, prepared);
 		});
 		try {
 			const draft = await this.generateForRun(actor, task, run);
 			task.signal?.throwIfAborted();
 			return await this.dependencies.transactionRunner.run(async () => {
+				const current = await this.dependencies.generation.runs.getForWrite(actor, run.id);
+				const change = this.dependencies.generation.runs.prepareCompletion(
+					current.status,
+					this.dependencies.now()
+				);
 				const result = await publish(draft);
-				await this.dependencies.generation.runs.complete(actor, run.id);
+				await this.dependencies.generation.runs.persistSettlement(actor, run.id, change);
 				return result;
 			});
 		} catch (error) {
-			await this.dependencies.generation.runs.fail(
-				actor,
-				run.id,
-				error instanceof Error ? error.message : String(error)
-			);
+			await this.dependencies.transactionRunner.run(async () => {
+				const current = await this.dependencies.generation.runs.getForWrite(actor, run.id);
+				const change = this.dependencies.generation.runs.prepareFailure(
+					current.status,
+					error instanceof Error ? error.message : String(error),
+					this.dependencies.now()
+				);
+				if (change)
+					await this.dependencies.generation.runs.persistSettlement(actor, run.id, change);
+			});
 			throw error;
 		}
 	}

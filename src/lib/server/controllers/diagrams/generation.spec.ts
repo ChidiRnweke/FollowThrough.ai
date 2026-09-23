@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { durableDiagramFixture } from '$lib/testing/diagrams/fixtures/durable-generation';
 
 const setup = () => {
 	const fixture = diagramGenerationFixture();
@@ -16,7 +17,11 @@ const setup = () => {
 			...fixture,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			suggestionCreator: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([suggestions, fixture.persistence])
+			transactionRunner: new InMemoryTransactionRunner([
+				suggestions,
+				fixture.persistence,
+				fixture.conversations
+			])
 		})
 	);
 	return { ...fixture, controller, suggestions };
@@ -29,6 +34,64 @@ const revision = {
 };
 
 describe('Diagram generation run settlement', () => {
+	it('keeps a cancelled direct run from publishing a late diagram', async () => {
+		const state = durableDiagramFixture();
+		const gate = Promise.withResolvers<void>();
+		state.provider.completion = gate.promise;
+		const execution = state.controller
+			.convertInlineMermaid(testActor(), { noteId: testNoteId(), source: revision.source })
+			.catch((error) => {
+				if (!(error instanceof Error) || error.message !== 'The workflow run is no longer running')
+					throw error;
+				return { kind: 'failure' as const };
+			});
+		try {
+			await state.provider.started.promise;
+			await state.agent.cancel(testActor(), state.persistence.runs[0].id);
+		} finally {
+			gate.resolve();
+		}
+		await execution;
+		expect({
+			status: state.persistence.runs[0].status,
+			suggestions: state.suggestions.suggestions
+		}).toEqual({ status: 'cancelled', suggestions: [] });
+	});
+
+	it('preserves the provider failure when cancellation has already settled the direct run', async () => {
+		const state = durableDiagramFixture();
+		const gate = Promise.withResolvers<void>();
+		state.provider.completion = gate.promise;
+		state.provider.failure = new Error('Provider disconnected');
+		const execution = state.controller.reviseInlineMermaid(testActor(), revision).catch((error) => {
+			if (!(error instanceof Error)) throw error;
+			return { kind: 'failure' as const, message: error.message };
+		});
+		try {
+			await state.provider.started.promise;
+			await state.agent.cancel(testActor(), state.persistence.runs[0].id);
+		} finally {
+			gate.resolve();
+		}
+		expect(await execution).toEqual({ kind: 'failure', message: 'Provider disconnected' });
+	});
+	it('does not leave a conversation when model lookup fails before generation', async () => {
+		const { controller, conversations, models } = setup();
+		models.failure = new Error('Catalog unavailable');
+		await controller.reviseInlineMermaid(testActor(), revision).catch((error) => {
+			if (!(error instanceof Error) || error.message !== 'Catalog unavailable') throw error;
+			return { kind: 'failure' as const };
+		});
+		expect(conversations.conversations).toEqual([]);
+	});
+
+	it('records the start and finish times of a completed direct run', async () => {
+		const { controller, persistence } = setup();
+		await controller.reviseInlineMermaid(testActor(), revision);
+		expect(
+			persistence.runs.map((run) => ({ startedAt: run.startedAt, finishedAt: run.finishedAt }))
+		).toEqual([{ startedAt: testNow, finishedAt: testNow }]);
+	});
 	it('fails the run when the generated draw.io proposal cannot be saved', async () => {
 		const { controller, persistence, suggestions } = setup();
 		suggestions.failCreation = true;
