@@ -82,6 +82,30 @@ describe('Task edit rules', () => {
 		});
 		expect(updated.linkedNoteId).toBe(testNoteId());
 	});
+	it('completes an existing task after its linked note is archived', async () => {
+		const { controller, todos, notes } = setup();
+		todos.todos = [todoBuilder()];
+		const note = noteBuilder();
+		notes.notes = [note];
+		await controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id });
+		notes.notes = [{ ...note, archivedAt: '2026-09-23T10:00:00.000Z' as never }];
+		const { todo } = await controller.update(testActor(), { todoId: testTodoId(), status: 'done' });
+		expect({ status: todo.status, linkedNoteId: todo.linkedNoteId }).toEqual({
+			status: 'done',
+			linkedNoteId: note.id
+		});
+	});
+	it('still refuses explicitly assigning an archived note that was linked earlier', async () => {
+		const { controller, todos, notes } = setup();
+		todos.todos = [todoBuilder()];
+		const note = noteBuilder();
+		notes.notes = [note];
+		await controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id });
+		notes.notes = [{ ...note, archivedAt: '2026-09-23T10:00:00.000Z' as never }];
+		await expect(
+			controller.update(testActor(), { todoId: testTodoId(), linkedNoteId: note.id })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	});
 	it.each([
 		['another project', noteBuilder({ projectId: testProjectId(2) })],
 		['a folder', noteBuilder({ kind: 'folder' })],
