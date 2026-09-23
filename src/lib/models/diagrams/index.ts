@@ -11,6 +11,26 @@ export type DiagramId = Brand<string, 'DiagramId'>;
 export type DiagramRevisionId = Brand<string, 'DiagramRevisionId'>;
 export type DiagramEtag = Brand<string, 'DiagramEtag'>;
 
+export type DiagramRevisionChange =
+	| { readonly kind: 'save'; readonly source: string; readonly searchableText: string }
+	| { readonly kind: 'rename'; readonly title: string }
+	| {
+			readonly kind: 'restore';
+			readonly revision: Pick<DiagramRevision, 'title' | 'source' | 'searchableText'>;
+	  }
+	| {
+			readonly kind: 'publish';
+			readonly source: string;
+			readonly renderedSvg: string;
+			readonly searchableText: string;
+	  };
+
+export interface DiagramRevisionWrite {
+	readonly diagram: DrawioDiagram;
+	readonly expectedRevision: number;
+	readonly expectedPublishedRevision: number;
+}
+
 /** A stored diagram-tool result, read without deciding which canvas is current. */
 export type CanvasSessionResult =
 	| { readonly kind: 'written'; readonly diagramId: DiagramId }

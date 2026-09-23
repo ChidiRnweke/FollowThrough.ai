@@ -23,8 +23,9 @@ own local revision handling.
 
 applyNoteDraftEdit and sameNoteDraft leave models for the shared edit service. Skills checks its
 import base against the prepared document in the controller, so SkillLibrary no longer imports the
-comparison rule. The generic revision decision still has diagram-service callers and remains an
-explicit follow-up; this slice does not claim completion of revision ownership or publication races.
+comparison rule. The subsequent [diagram-revision slice](diagram-revisions.md) removes the generic
+revision decision and keeps the distinct note and diagram retry rules with their owners. Publication
+races remain a separate review item.
 
 ## Test dispositions and remaining review
 

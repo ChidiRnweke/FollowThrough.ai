@@ -217,9 +217,9 @@ export class DiagramRecords implements DiagramRepository {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
-				title: diagram.title,
+				title: diagram.title ?? null,
 				source: diagram.source,
-				renderedSvg: diagram.renderedSvg,
+				renderedSvg: diagram.renderedSvg ?? null,
 				searchableText: diagram.searchableText,
 				currentRevision: diagram.currentRevision,
 				publishedRevision: diagram.publishedRevision,

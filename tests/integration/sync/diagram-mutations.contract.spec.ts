@@ -25,7 +25,7 @@ import { context, seedNote } from '../database-harness';
 
 const source =
 	'<mxfile><diagram name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Offline edit" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="30" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>';
-const setup = async (suffix: string) => {
+const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
@@ -40,6 +40,7 @@ const setup = async (suffix: string) => {
 		projects.repository
 	);
 	const diagram = drawioBuilder({
+		title: title ?? undefined,
 		id: crypto.randomUUID() as DiagramId,
 		userId: seeded.owner.userId,
 		projectId: seeded.project.id,
@@ -63,7 +64,7 @@ const setup = async (suffix: string) => {
 			diagramFinder: library,
 			diagramSourceNotes: notes.catalog,
 			diagramDraftWriter: library,
-			diagramRenamer: library,
+			diagramRevisionReader: library,
 			diagramTrash: library,
 			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
@@ -84,6 +85,53 @@ const setup = async (suffix: string) => {
 };
 
 describe('diagram edits through the shared mutation boundary', () => {
+	it('clears the saved title when restoring an untitled publication', async () => {
+		const { owner, controller, diagram } = await setup('18401', null);
+		const published = await controller.publishProjectDiagram(owner, {
+			diagramId: diagram.id,
+			source,
+			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+			baseEtag: diagramEtag(diagram)
+		});
+		if (published.outcome !== 'saved') throw new Error('Expected publication');
+		const { revisions } = await controller.listDiagramRevisions(owner, { diagramId: diagram.id });
+		const revision = revisions[0];
+		if (!revision) throw new Error('Expected a publication snapshot');
+		const renamed = await controller.renameProjectDiagram(owner, {
+			diagramId: diagram.id,
+			title: 'Later title',
+			baseEtag: published.etag
+		});
+		if (renamed.outcome !== 'saved') throw new Error('Expected rename');
+		const restored = await controller.restoreDiagramRevision(owner, {
+			diagramId: diagram.id,
+			revisionId: revision.id,
+			baseEtag: renamed.etag
+		});
+		if (restored.outcome !== 'saved') throw new Error('Expected restoration');
+		const [row] = await context.client`select title from diagrams where id = ${diagram.id}`;
+		expect({ returned: restored.diagram.title, stored: row?.title }).toEqual({
+			returned: undefined,
+			stored: null
+		});
+	});
+
+	it('rolls back a rename and its search rows when indexing fails', async () => {
+		const { owner, controller, diagram, search, faults } = await setup('18402');
+		const before = await search.listForDiagram(owner, diagram.id);
+		faults.afterIndex = true;
+		await controller
+			.renameProjectDiagram(owner, {
+				diagramId: diagram.id,
+				title: 'New indexed title',
+				baseEtag: diagramEtag(diagram)
+			})
+			.catch(() => ({ kind: 'failure' }));
+		expect({
+			diagram: await controller.getProjectDiagram(owner, { diagramId: diagram.id }),
+			search: await search.listForDiagram(owner, diagram.id)
+		}).toEqual({ diagram, search: before });
+	});
 	it('rolls back both the draft and its staged search rows after an indexing failure', async () => {
 		const { owner, controller, diagram, search, faults } = await setup('9781');
 		const before = await search.listForDiagram(owner, diagram.id);

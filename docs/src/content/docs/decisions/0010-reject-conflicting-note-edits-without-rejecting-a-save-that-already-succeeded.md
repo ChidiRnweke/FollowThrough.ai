@@ -68,8 +68,9 @@ present in the note is unchanged; a different result against a stale base requir
   resource versions, cancellation and rollback when a receipt cannot be stored.
 - `src/lib/components/shared/workspace-write-review.svelte.spec.ts` checks conflict comparison
   and protects dependent edits from an outdated discard decision.
-- `src/lib/models/notes/index.ts` and `src/lib/models/diagrams/index.ts` build the base version the
+- `src/lib/services/notes/presentation.ts` and `src/lib/models/diagrams/index.ts` build the base version the
   same way, in `noteEtag` and `diagramEtag`.
 - `src/lib/server/controllers/diagram-studio/controller.ts` takes a base version on
   `saveProjectDiagramDraft`, `publishProjectDiagram`, and the agent's `editDiagram`.
-- `src/lib/server/services/diagrams/library.ts` rejects a stale base version on a diagram write.
+- `src/lib/services/diagrams/editing.ts` decides diagram revision writes; DiagramStudio applies it
+  after a locked read and commits publication snapshots and search changes in its transaction.

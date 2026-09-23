@@ -374,7 +374,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramLister: diagrams,
 			diagramConversations: diagrams,
 			diagramReferences: diagrams,
-			diagramRenamer: diagrams,
 			diagramDraftWriter: diagrams,
 			diagramRevisionReader: diagrams,
 			diagramTrash: diagrams,

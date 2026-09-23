@@ -44,7 +44,6 @@ const setup = () => {
 			diagramSourceNotes: sourceNotes,
 			diagramFinder: library,
 			diagramDraftWriter: library,
-			diagramRenamer: library,
 			diagramTrash: library,
 			now: () => timestamp,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),

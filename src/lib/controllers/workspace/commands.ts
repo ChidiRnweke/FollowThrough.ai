@@ -3,7 +3,7 @@ import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import { decideProjectDetails } from '$lib/services/projects/details';
-import { decideRevisionWrite } from '$lib/models/revisions';
+import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
 import type {
@@ -425,14 +425,13 @@ export const prepareWorkspaceCommand = (
 		case 'publishDiagram': {
 			const diagram = value('diagrams');
 			if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
-			const decision = decideRevisionWrite(
+			const decision = decideDiagramRevision(
 				{
 					kind: command.kind === 'saveDiagram' ? 'save' : 'publish',
 					baseMatches: true,
 					contentChanged: diagram.source !== command.source
 				},
-				diagram,
-				{ acceptUnchangedRetry: true }
+				diagram
 			);
 			if (decision.kind === 'conflict') throw new Error('The diagram changed since it was loaded');
 			const revision =
