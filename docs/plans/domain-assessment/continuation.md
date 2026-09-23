@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #185](https://github.com/ChidiRnweke/FollowThrough.ai/pull/185) passed all required checks,
+including [quality, unit/browser, PostgreSQL publication contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35884778949).
+It remains open on the dependent stack.
+
+The [Mermaid revision disposition](mermaid-revisions.md) covers peer edits and archives during
+generation. Remaining general diagram writes and obsolete controller surfaces still need review.
+
 [PR #184](https://github.com/ChidiRnweke/FollowThrough.ai/pull/184) passed all required checks,
 including [quality, unit/browser, PostgreSQL revision/rename contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35883902639).
 It remains open on the dependent stack.
