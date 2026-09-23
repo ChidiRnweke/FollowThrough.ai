@@ -393,7 +393,9 @@ export class WorkspaceViews {
 		};
 	}
 
-	todo(todo: Todo): TodoView {
+	todo(todo: Todo): TodoView | null {
+		const project = this.get('projects', todo.projectId);
+		if (todo.deletedAt || !project || project.archivedAt) return null;
 		const anchor = todo.sourceAnchorId
 			? this.get('source_anchors', todo.sourceAnchorId)
 			: undefined;
@@ -408,7 +410,6 @@ export class WorkspaceViews {
 		});
 	}
 	todos(filter: TodoListFilter = {}): readonly TodoView[] {
-		const projects = new Set(this.projects.map((project) => project.id));
 		const anchors = new Set(
 			this.all('source_anchors')
 				.filter((anchor) => anchor.noteId === filter.noteId)
@@ -417,8 +418,6 @@ export class WorkspaceViews {
 		return this.all('todos')
 			.filter(
 				(todo) =>
-					!todo.deletedAt &&
-					projects.has(todo.projectId) &&
 					(!filter.projectId || todo.projectId === filter.projectId) &&
 					(!filter.status || todo.status === filter.status) &&
 					(!filter.responsibility || todo.responsibility === filter.responsibility) &&
@@ -435,7 +434,10 @@ export class WorkspaceViews {
 				}
 				return b.updatedAt.localeCompare(a.updatedAt);
 			})
-			.map((todo) => this.todo(todo));
+			.flatMap((todo) => {
+				const view = this.todo(todo);
+				return view ? [view] : [];
+			});
 	}
 	get categories(): readonly string[] {
 		return [
