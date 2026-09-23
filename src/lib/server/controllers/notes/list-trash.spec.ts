@@ -25,7 +25,7 @@ const setup = () => {
 	const indexer = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteArchiver: service,
+			noteTrash: service,
 			noteTrashReader: service,
 			noteIndexer: indexer,
 			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }

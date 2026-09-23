@@ -556,7 +556,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionExpirer: suggestions,
 			suggestionContextReader: suggestions,
 			noteEditor: notes,
-			noteArchiver: notes,
+			noteTrash: notes,
 			noteTrashReader: notes,
 			notePurger: notes,
 			attachmentRestorer: notes,

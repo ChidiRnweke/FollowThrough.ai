@@ -31,7 +31,7 @@ const setup = async (suffix: string) => {
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
 			noteReader: catalog,
-			noteArchiver: catalog,
+			noteTrash: catalog,
 			noteEditor: catalog,
 			noteSectionNumbering: catalog,
 			noteCreation: catalog,
@@ -180,7 +180,7 @@ describe('guarded note trash actions', () => {
 	});
 	it('restores the guarded note through the owning trash rules', async () => {
 		const { owner, note, controller, synchronization, catalog } = await setup('9108');
-		await catalog.archive(owner, note.id);
+		await controller.archive(owner, { noteId: note.id });
 		const current = await synchronization.objects.read(
 			owner,
 			{ type: 'notes', id: [note.id] },

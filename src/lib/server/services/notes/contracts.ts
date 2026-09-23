@@ -32,10 +32,6 @@ export interface NoteTextSearcher {
 export interface NoteEditor {
 	save(actor: ActorContext, note: Note): Promise<Note>;
 }
-export interface NoteArchiver {
-	archive(actor: ActorContext, noteId: NoteId): Promise<Note>;
-	restore(actor: ActorContext, noteId: NoteId): Promise<Note>;
-}
 export interface NoteSectionNumberingEditor {
 	setSectionNumbering(actor: ActorContext, input: SetNoteSectionNumberingInput): Promise<Note>;
 }
