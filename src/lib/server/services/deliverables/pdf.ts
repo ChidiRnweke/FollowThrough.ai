@@ -23,7 +23,7 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares, headingSpacingPt } from '$lib/models/deliverables';
+import { columnShares } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
@@ -196,6 +196,7 @@ interface ConversionContext {
 	readonly usableHeight: number;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
 	readonly bodyFont: string;
 }
@@ -389,7 +390,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 		case 'heading': {
 			const level = Math.min(node.attrs?.level ?? 1, 6);
 			const sizes = [18, 16, 14, 13, 12, 11];
-			const spacing = headingSpacingPt(level);
+			const spacing = context.headingSpacing.get(level);
 			return {
 				text: withFontRuns({ text: collectText(node) }, context.bodyFont),
 				fontSize: sizes[level - 1],
@@ -536,6 +537,7 @@ export async function generatePdf(input: PreparedExport): Promise<Buffer> {
 		usableHeight,
 		images,
 		diagrams,
+		headingSpacing: input.headingSpacing,
 		bodyFont
 	};
 

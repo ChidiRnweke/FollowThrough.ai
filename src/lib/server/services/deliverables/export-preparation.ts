@@ -68,6 +68,12 @@ export function prepareExport(input: ExportInput): PreparedExport {
 		...(input.styles ? { styles: input.styles } : {}),
 		settings: input.settings ?? defaultExportSettings,
 		images,
-		diagrams
+		diagrams,
+		// Match the editor's blank line around h1/h2. Deeper headings retain the
+		// renderer's native spacing. Values are points; DOCX converts to twips.
+		headingSpacing: new Map([
+			[1, { before: 18, after: 18 }],
+			[2, { before: 15, after: 15 }]
+		])
 	};
 }

@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #190](https://github.com/ChidiRnweke/FollowThrough.ai/pull/190) passed all required checks,
+including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35890155796).
+It remains open on the dependent stack.
+
+The [export-typography disposition](export-typography.md) resolves common heading spacing in the
+existing preparation owner. PDF and DOCX consume the same required resolved values.
+
 [PR #189](https://github.com/ChidiRnweke/FollowThrough.ai/pull/189) passed all required checks,
 including [quality, unit/browser label parity, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35889311627).
 It remains open on the dependent stack.

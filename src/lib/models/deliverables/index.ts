@@ -24,6 +24,11 @@ export interface ExportDiagramRaster {
 
 export type PreparedDiagram = { kind: 'raster' | 'vector'; data: string; size?: DiagramSize };
 
+export interface ExportHeadingSpacing {
+	readonly before: number;
+	readonly after: number;
+}
+
 export interface PreparedExport extends Omit<
 	ExportInput,
 	'settings' | 'images' | keyof DiagramRenders
@@ -31,6 +36,8 @@ export interface PreparedExport extends Omit<
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	/** Explicit common overrides; other heading levels keep each format's native spacing. */
+	readonly headingSpacing: ReadonlyMap<number, ExportHeadingSpacing>;
 }
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -220,27 +227,6 @@ export function svgViewBoxSize(svg: string): DiagramSize | undefined {
 	const viewBox = values.map(Number);
 	if (!viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) return undefined;
 	return { width: viewBox[2]!, height: viewBox[3]! };
-}
-
-/**
- * Vertical spacing around a heading in an exported document, mirroring the
- * editor's double-spaced titles.
- *
- * The editor gives a title a full blank line's worth of space on either side —
- * an h1 more than an h2 — so a heading never reads as glued to the body text.
- * Exports carry the same rhythm. Values are in points; a DOCX generator converts
- * them to twips. Deeper headings keep the tight rhythm and return `undefined`,
- * so each generator falls back to its own previous behaviour for them.
- */
-export function headingSpacingPt(level: number): { before: number; after: number } | undefined {
-	switch (level) {
-		case 1:
-			return { before: 18, after: 18 };
-		case 2:
-			return { before: 15, after: 15 };
-		default:
-			return undefined;
-	}
 }
 
 /**

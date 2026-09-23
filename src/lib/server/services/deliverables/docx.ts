@@ -32,7 +32,7 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares, headingSpacingPt } from '$lib/models/deliverables';
+import { columnShares } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 const HEADING_LEVELS = [
@@ -78,6 +78,7 @@ interface DocxContext {
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Printable width in CSS pixels, for image and diagram sizing. */
 	readonly contentWidthPx: number;
 	readonly blockquoteDepth: number;
@@ -432,7 +433,7 @@ function convertNode(
 			const level = Math.min(node.attrs?.level ?? 1, 6);
 			const text = collectText(node);
 			const h = headingFont(ctx.styles, level);
-			const spacing = headingSpacingPt(level);
+			const spacing = ctx.headingSpacing.get(level);
 			results.push(
 				new Paragraph({
 					heading: HEADING_LEVELS[level - 1],
@@ -568,6 +569,7 @@ export async function generateDocx(input: PreparedExport): Promise<Buffer> {
 		settings,
 		images,
 		diagrams,
+		headingSpacing: input.headingSpacing,
 		contentWidthPx:
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
 			PX_PER_INCH,
