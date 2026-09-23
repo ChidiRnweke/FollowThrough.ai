@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Diagram revisions: DiagramStudio owns locked reads, shared edit decisions, guarded writes,
+publication snapshots and indexing, including rename. See the
+[disposition](domain-assessment/diagram-revisions.md).
+
 Note saves: Notes and Skills own locked reads, shared draft preparation and resolved persistence
 inside their transactions. The catalog and fake no longer decide revision changes. See the
 [disposition](domain-assessment/note-save.md).

@@ -1,55 +1,24 @@
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
-import { DiagramStudio, type DiagramStudioDependencies } from './controller';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
-import {
-	InMemoryAnchorRepository,
-	InMemoryNoteRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import {
-	drawioBuilder,
-	InMemoryDiagrams
-} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { diagramEtag } from '$lib/models/diagrams';
-
-const setup = () => {
-	const sourceNotes = new InMemoryNoteContent();
-	sourceNotes.notes = [noteBuilder()];
-	const diagrams = new InMemoryDiagramRepository();
-	const index = new InMemoryDiagrams();
-	const library = new DiagramLibrary(
-		diagrams,
-		new InMemoryNoteRepository(),
-		new InMemoryAnchorRepository(),
-		new InMemoryProvenanceRepository(),
-		new InMemoryProjectRepository()
-	);
-	const controller = new DiagramStudio(
-		capabilityDependencies<DiagramStudioDependencies>({
-			diagramSourceNotes: sourceNotes,
-			diagramFinder: library,
-			diagramDraftWriter: library,
-			diagramRenamer: library,
-			diagramTrash: library,
-			now: () => drawioBuilder().createdAt,
-			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
-			diagramIndexer: index,
-			drawioXmlValidator: { validate: (source) => source },
-			drawioTextExtractor: { extract: async () => 'labels' },
-			drawioSvgSanitizer: { sanitize: (svg) => svg }
-		})
-	);
-	return { diagrams, controller, index };
-};
+import { diagramRevisionFixture as setup } from '$lib/testing/diagrams/fixtures/revision-editing';
 
 describe('Diagram write outcomes', () => {
+	it('rolls back a rename when updating its search entries fails', async () => {
+		const { diagrams, controller, index } = setup();
+		const original = drawioBuilder();
+		diagrams.diagrams = [original];
+		index.failIndex = true;
+		await controller
+			.renameProjectDiagram(testActor(), {
+				diagramId: original.id,
+				title: 'Renamed diagram',
+				baseEtag: diagramEtag(original)
+			})
+			.catch(() => ({ kind: 'failure' }));
+		expect(diagrams.diagrams).toEqual([original]);
+	});
 	it('retains the original draft when indexing its replacement fails', async () => {
 		const { diagrams, controller, index } = setup();
 		const original = drawioBuilder();

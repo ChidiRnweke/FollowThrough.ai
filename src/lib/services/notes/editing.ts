@@ -1,6 +1,5 @@
 import { findProseMirrorDocumentIssue, type Note, type NoteSaveWrite } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { decideRevisionWrite } from '$lib/models/revisions';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 
 /** Apply authored fields while retaining the revision the editor actually observed. */
@@ -47,24 +46,15 @@ export function prepareNoteSave(
 		(candidate.plainText.trim() || candidate.document.content?.length)
 	)
 		throw new ValidationError('Folders cannot contain authored document content');
-	const decision = decideRevisionWrite(
-		{
-			kind: 'save',
-			baseMatches: candidate.currentRevision === current.currentRevision,
-			contentChanged: !sameNoteDraft(current, candidate)
-		},
-		current,
-		{ acceptUnchangedRetry: false }
-	);
-	if (decision.kind === 'conflict')
+	if (candidate.currentRevision !== current.currentRevision)
 		throw new StaleRevisionError('The note has changed since it was loaded');
-	if (decision.kind === 'unchanged') return { kind: 'unchanged', note: current };
+	if (sameNoteDraft(current, candidate)) return { kind: 'unchanged', note: current };
 	return {
 		kind: 'write',
 		write: {
 			note: {
 				...applyNoteDraftEdit(current, candidate, timestamp),
-				currentRevision: decision.currentRevision
+				currentRevision: current.currentRevision + 1
 			},
 			expectedRevision: current.currentRevision
 		}

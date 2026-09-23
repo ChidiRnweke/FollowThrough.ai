@@ -1,3 +1,5 @@
+import { prepareDiagramWrite } from '$lib/services/diagrams/editing';
+import type { DiagramRevisionChange } from '$lib/models/diagrams';
 import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/trash';
 import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -63,7 +65,6 @@ import type {
 	DiagramLister,
 	DiagramReferenceCounter,
 	DiagramRevisionReader,
-	DiagramRenamer,
 	DiagramTextExtractor,
 	DiagramWriter,
 	DrawioSvgPreviewSanitizer,
@@ -212,7 +213,6 @@ export interface DiagramStudioDependencies {
 	diagramLister: DiagramLister;
 	diagramConversations: DiagramConversationFinder;
 	diagramReferences: DiagramReferenceCounter;
-	diagramRenamer: DiagramRenamer;
 	diagramDraftWriter: DiagramDraftWriter;
 	diagramRevisionReader: DiagramRevisionReader;
 	diagramTrash: Pick<
@@ -476,13 +476,11 @@ export class DiagramStudio implements DiagramStudioController {
 			this.dependencies.transactionRunner.run(async () => {
 				const source = this.dependencies.drawioXmlValidator.validate(input.source);
 				const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
-				const diagram = await this.dependencies.diagramDraftWriter.saveDraftSource(
-					actor,
-					input.diagramId,
+				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
+					kind: 'save',
 					source,
-					searchableText,
-					input.baseEtag
-				);
+					searchableText
+				});
 				await this.indexDiagram(actor, diagram);
 				return diagram;
 			})
@@ -498,14 +496,12 @@ export class DiagramStudio implements DiagramStudioController {
 				const source = this.dependencies.drawioXmlValidator.validate(input.source);
 				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
 				const searchableText = await this.dependencies.drawioTextExtractor.extract({ source });
-				const diagram = await this.dependencies.diagramDraftWriter.publish(
-					actor,
-					input.diagramId,
+				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
+					kind: 'publish',
 					source,
 					renderedSvg,
-					searchableText,
-					input.baseEtag
-				);
+					searchableText
+				});
 				await this.indexDiagram(actor, diagram);
 				return diagram;
 			})
@@ -551,12 +547,15 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<RestoreDiagramRevisionOutput> {
 		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
 			this.dependencies.transactionRunner.run(async () => {
-				const diagram = await this.dependencies.diagramDraftWriter.restore(
+				const revision = await this.dependencies.diagramRevisionReader.revision(
 					actor,
 					input.diagramId,
-					input.revisionId,
-					input.baseEtag
+					input.revisionId
 				);
+				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
+					kind: 'restore',
+					revision
+				});
 				await this.indexDiagram(actor, diagram);
 				return diagram;
 			})
@@ -568,8 +567,31 @@ export class DiagramStudio implements DiagramStudioController {
 		input: RenameProjectDiagramInput
 	): Promise<DiagramWriteOutcome> {
 		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
-			this.dependencies.diagramRenamer.rename(actor, input.diagramId, input.title, input.baseEtag)
+			this.dependencies.transactionRunner.run(async () => {
+				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
+					kind: 'rename',
+					title: input.title
+				});
+				await this.indexDiagram(actor, diagram);
+				return diagram;
+			})
 		);
+	}
+
+	private async writeRevision(
+		actor: ActorContext,
+		diagramId: DiagramId,
+		baseEtag: DiagramEtag,
+		change: DiagramRevisionChange
+	): Promise<DrawioDiagram> {
+		const current = await this.dependencies.diagramDraftWriter.getForWrite(actor, diagramId);
+		const decision = prepareDiagramWrite(current, change, baseEtag, this.dependencies.now());
+		if (decision.kind === 'unchanged') return decision.diagram;
+		const saved = await this.dependencies.diagramDraftWriter.persistEdit(actor, decision.write);
+		if (!saved) throw new StaleRevisionError('The diagram changed while it was being saved');
+		if (change.kind === 'publish')
+			await this.dependencies.diagramDraftWriter.recordRevision(actor, saved);
+		return saved;
 	}
 
 	private async writeOutcome(
