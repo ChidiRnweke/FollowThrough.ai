@@ -115,6 +115,48 @@ const setup = () => {
 };
 
 describe('Suggestion lifecycle invariants', () => {
+	it('normalizes accepted task content and resolves its actor and completion time', async () => {
+		const { suggestions, artifacts, accept } = setup();
+		suggestions.suggestions = [
+			suggestionBuilder({
+				payload: {
+					projectId: testProjectId(),
+					title: '  Send the design  ',
+					responsibility: 'mine',
+					waitingOn: 'Sam',
+					status: 'done'
+				}
+			})
+		];
+		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
+		expect(artifacts.artifacts).toEqual([
+			expect.objectContaining({
+				title: 'Send the design',
+				userId: testActor().userId,
+				projectId: testProjectId(),
+				status: 'done',
+				completedAt: testNow,
+				createdAt: testNow,
+				updatedAt: testNow
+			})
+		]);
+	});
+	it('clears the counterparty when accepting personal work', async () => {
+		const { suggestions, artifacts, accept } = setup();
+		suggestions.suggestions = [
+			suggestionBuilder({
+				payload: {
+					projectId: testProjectId(),
+					title: 'Send the design',
+					responsibility: 'mine',
+					waitingOn: 'Sam'
+				}
+			})
+		];
+		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
+		expect(artifacts.artifacts[0]?.waitingOn).toBeUndefined();
+	});
+
 	it('accepting a proposal transitions it to accepted', async () => {
 		const { suggestions, accept } = setup();
 		suggestions.suggestions = [suggestionBuilder()];

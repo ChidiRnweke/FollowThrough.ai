@@ -32,6 +32,13 @@ const setup = () => {
 };
 
 describe('Todo management invariants', () => {
+	it('rejects a resolved task belonging to another actor', async () => {
+		const { service } = setup();
+		await expect(
+			service.create(testActor(), todoBuilder({ userId: testActor(2).userId }))
+		).rejects.toMatchObject({ code: 'OWNERSHIP' });
+	});
+
 	it('deleted todos disappear from active lists', async () => {
 		const { service, todos } = setup();
 		todos.todos = [todoBuilder()];
