@@ -39,6 +39,14 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #194](https://github.com/ChidiRnweke/FollowThrough.ai/pull/194) contains
+[permanent note deletion](note-deletion.md). Local focused tests passed 29 files and 263 tests;
+the full unit suite passed 434 files and 4,050 tests. Lint, type checks, architecture audits and
+documentation checks passed. All required checks passed, including
+[quality, unit/browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35895034747).
+Its implementation remains open. The next slice records
+[built-in note repair and upgrades](built-in-note-writes.md).
+
 [PR #193](https://github.com/ChidiRnweke/FollowThrough.ai/pull/193) contains
 [project tree transaction coordination](project-tree-transactions.md). Local focused tests passed
 43 files and 344 tests; the full unit suite passed 433 files and 4,046 tests. Lint, type checks,

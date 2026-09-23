@@ -4,7 +4,8 @@ import type {
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
-	NotePublicationWrite
+	NotePublicationWrite,
+	NoteBuiltInRepairWrite
 } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
@@ -52,6 +53,34 @@ export class InMemoryNoteRepository implements NoteRepository {
 			position: note.position,
 			updatedAt: note.updatedAt
 		});
+	}
+
+	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
+		return this.findByBuiltInKey(actor, key);
+	}
+
+	async repairBuiltIn(
+		actor: ActorContext,
+		write: NoteBuiltInRepairWrite
+	): Promise<Note | undefined> {
+		const current = this.notes.find(
+			(note) =>
+				note.id === write.noteId &&
+				note.userId === actor.userId &&
+				note.builtInKey === write.builtInKey
+		);
+		if (!current) return undefined;
+		const repaired: Note = {
+			...current,
+			projectId: write.projectId,
+			parentId: write.parentId,
+			position: write.position,
+			kind: write.kind,
+			archivedAt: undefined,
+			updatedAt: write.updatedAt
+		};
+		this.notes = this.notes.map((note) => (note.id === current.id ? repaired : note));
+		return repaired;
 	}
 
 	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {

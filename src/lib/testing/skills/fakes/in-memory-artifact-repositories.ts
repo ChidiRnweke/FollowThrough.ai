@@ -286,6 +286,9 @@ export class InMemorySkillRepository implements SkillRepository {
 	}
 	skills: Skill<Note>[] = [];
 	usages: SkillUsage[] = [];
+	findForWrite(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
+		return this.findByNoteId(actor, noteId);
+	}
 	async findByNoteId(actor: ActorContext, noteId: NoteId) {
 		const skill = this.skills.find((item) => item.note.id === noteId);
 		const note = await this.notes.findById(actor, noteId);

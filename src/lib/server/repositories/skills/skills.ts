@@ -7,6 +7,7 @@ import type { Skill, SkillSummary, SkillUsage } from '$lib/models/skills';
 export interface SkillRepository {
 	/** Serialize built-in installation until the enclosing transaction ends. */
 	lockBuiltInProvisioning(actor: ActorContext): Promise<void>;
+	findForWrite(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined>;
 	findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined>;
 	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
 	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
