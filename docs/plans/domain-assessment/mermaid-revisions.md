@@ -15,11 +15,11 @@ Existing rendered-output, title preservation and indexing rollback tests remain 
 
 Mermaid has no draw.io document revision counter. The rule therefore compares its authored base
 and update timestamp; it does not invent a document revision or change the public request. The
-existing general update is safe here because it receives the authoritative locked row, but its
-remaining callers and replacement with narrower persistence values still need disposition.
+subsequent [content-persistence slice](diagram-content.md) replaces the general update with a
+resolved content write while preserving this authoritative lock and base check.
 The broad fake replaced archive and provenance fields, while PostgreSQL's general update kept
 those fields. The archive regression therefore also exposed a fake mismatch: production could
 change archived content, while the fake additionally restored it. Both now refuse publication.
-Persisting generation provenance and aligning these remaining persistence implementations are open.
-Legacy draw.io controller methods and reviewed suggestion content writes remain separate work.
+The content-persistence slice saves generation provenance and aligns those persistence implementations.
+The [legacy-write disposition](diagram-legacy-writes.md) retires the unused draw.io controller methods.
 This slice does not complete the diagram family or the repository assessment.

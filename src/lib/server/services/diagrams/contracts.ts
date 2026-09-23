@@ -3,6 +3,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
 	DiagramRevisionWrite,
 	DiagramRevision,
@@ -61,7 +62,7 @@ export interface DiagramLister {
 }
 export interface DiagramWriter {
 	create(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
-	update(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
+	persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram>;
 }
 /** Finds the diagram a studio conversation already produced, so promotion stays idempotent. */
 export interface DiagramConversationFinder {

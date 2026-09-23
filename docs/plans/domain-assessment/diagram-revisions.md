@@ -34,5 +34,6 @@ an unchanged save waiting behind a concurrent archive. The previous archive-lock
 
 ADR 0010 still defines safe retries and authoritative conflict views. No public command or response
 shape changes or database migration are needed. The PR records observed validation. The subsequent
-[note-publication slice](note-publication.md) covers that workflow. Legacy whole-diagram updates,
-folder lifecycle races and the wider assessment remain open.
+[note-publication slice](note-publication.md) covers that workflow. The
+[content-persistence slice](diagram-content.md) replaces the remaining general diagram update.
+Folder lifecycle races and the wider assessment remain open.

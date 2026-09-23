@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #187](https://github.com/ChidiRnweke/FollowThrough.ai/pull/187) passed all required checks,
+including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35887084121).
+It remains open on the dependent stack.
+
+The [diagram content disposition](diagram-content.md) replaces the remaining general update,
+persists generated provenance and aligns fake persistence with PostgreSQL.
+
 [PR #186](https://github.com/ChidiRnweke/FollowThrough.ai/pull/186) passed all required checks,
 including [quality, unit/browser, PostgreSQL Mermaid publication races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35886073293).
 It remains open on the dependent stack.

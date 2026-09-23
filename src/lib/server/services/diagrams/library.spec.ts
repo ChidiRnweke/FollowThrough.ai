@@ -46,37 +46,6 @@ describe('Diagram management invariants', () => {
 		).rejects.toThrow('same project');
 	});
 
-	it('rejects moving a diagram into another account’s project', async () => {
-		const { service, projects, diagrams } = setup();
-		const foreign = projectBuilder({ id: testProjectId(2), userId: testActor(2).userId });
-		projects.projects.push(foreign);
-		const diagram = mermaidBuilder();
-		diagrams.diagrams = [diagram];
-		await expect(
-			service.update(testActor(), { ...diagram, projectId: foreign.id })
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-
-	it('preserves a valid source note when updating an owned diagram', async () => {
-		const { service, diagrams } = setup();
-		const diagram = mermaidBuilder();
-		diagrams.diagrams = [diagram];
-		const updated = { ...diagram, title: 'Revised architecture' };
-		await service.update(testActor(), updated);
-		expect(await service.get(testActor(), diagram.id)).toEqual(updated);
-	});
-
-	it('rejects changing a diagram source to a note from another project', async () => {
-		const { service, diagrams, notes, projects } = setup();
-		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
-		const otherNote = noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) });
-		notes.notes.push(otherNote);
-		const diagram = mermaidBuilder();
-		diagrams.diagrams = [diagram];
-		await expect(
-			service.update(testActor(), { ...diagram, sourceNoteId: otherNote.id })
-		).rejects.toThrow('same project');
-	});
 	it('rejects a diagram for a missing note', async () => {
 		const { service } = setup();
 		await expect(

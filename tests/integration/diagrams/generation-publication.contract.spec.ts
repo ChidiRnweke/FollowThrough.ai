@@ -162,6 +162,33 @@ it.each([
 	}
 );
 
+it('persists the provenance of a generated Mermaid revision', async () => {
+	const state = await setup('18801');
+	const diagram = await state.records.insert(
+		state.owner,
+		mermaidBuilder({
+			id: crypto.randomUUID() as DiagramId,
+			userId: state.owner.userId,
+			projectId: state.project.id,
+			sourceNoteId: state.note.id,
+			provenanceId: undefined
+		})
+	);
+	const result = await state.controller.reviseMermaid(state.owner, {
+		diagramId: diagram.id,
+		instruction: 'add queue'
+	});
+	const [provenance] = await context.client<
+		{ id: string }[]
+	>`select id from provenance where user_id = ${state.owner.userId}`;
+	if (!provenance) throw new Error('Generation provenance was not recorded');
+	const saved = await state.records.findById(state.owner, diagram.id);
+	expect({ returned: result.diagram.provenanceId, stored: saved?.provenanceId }).toEqual({
+		returned: provenance.id,
+		stored: provenance.id
+	});
+});
+
 it('rolls back conversation creation when the direct run cannot be inserted', async () => {
 	const state = await setup('17401');
 	await context.client`alter table agent_runs add constraint reject_direct_run_test check (user_id <> '10000000-0000-4000-8000-000000017401') not valid`;

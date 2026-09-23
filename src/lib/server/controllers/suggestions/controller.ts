@@ -252,8 +252,12 @@ export class Suggestions implements SuggestionsController {
 					...created.after.value,
 					source
 				});
-				const diagram = await this.dependencies.diagramWriter.update(actor, {
-					...created.after.value,
+				const diagram = await this.dependencies.diagramWriter.persistContent(actor, {
+					kind: 'drawio',
+					diagramId: created.after.value.id,
+					expectedUpdatedAt: created.after.value.updatedAt,
+					expectedRevision: created.after.value.currentRevision,
+					expectedPublishedRevision: created.after.value.publishedRevision,
 					source,
 					renderedSvg,
 					searchableText,
