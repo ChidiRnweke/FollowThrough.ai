@@ -274,6 +274,7 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 export class InMemorySkillRepository implements SkillRepository {
 	constructor(private readonly notes: InMemoryNoteRepository) {}
 	writeFailure: Error | undefined;
+	usageReadFailure: Error | undefined;
 	// Unit transactions run sequentially; PostgreSQL contracts verify concurrent locking.
 	async lockCatalog(_actor: ActorContext): Promise<void> {}
 	snapshot(): () => void {
@@ -306,6 +307,7 @@ export class InMemorySkillRepository implements SkillRepository {
 		);
 		return joined
 			.filter((item) => item !== undefined)
+			.filter((item) => item.note.archivedAt === undefined)
 			.map((item) => ({
 				noteId: item.note.id,
 				projectId: item.note.projectId,
@@ -352,11 +354,16 @@ export class InMemorySkillRepository implements SkillRepository {
 		);
 		if (pinned) this.pins.push({ projectId, skillNoteId: noteId });
 	}
-	async recordUsage(_actor: ActorContext, usage: SkillUsage) {
+	async recordUsage(actor: ActorContext, usage: SkillUsage) {
+		if (this.writeFailure) throw this.writeFailure;
+		if (!(await this.findByNoteId(actor, usage.skillNoteId)))
+			throw new NotFoundError('Skill was not found');
 		this.usages.push(usage);
 		return usage;
 	}
-	async listUsages(_actor: ActorContext, noteId: NoteId) {
+	async listUsages(actor: ActorContext, noteId: NoteId) {
+		if (this.usageReadFailure) throw this.usageReadFailure;
+		if (!(await this.findByNoteId(actor, noteId))) throw new NotFoundError('Skill was not found');
 		return this.usages.filter((item) => item.skillNoteId === noteId);
 	}
 }

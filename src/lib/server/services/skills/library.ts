@@ -70,7 +70,7 @@ export class SkillLibrary {
 	}
 	async load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
 		const skill = await this.skills.findByNoteId(actor, noteId);
-		if (!skill) throw new NotFoundError('Skill was not found');
+		if (!skill || skill.note.archivedAt) throw new NotFoundError('Skill was not found');
 		return skill;
 	}
 	async record(

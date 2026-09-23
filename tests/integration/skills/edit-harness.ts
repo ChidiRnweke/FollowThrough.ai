@@ -42,6 +42,7 @@ export const skillController = (database: Database, transactionRunner: Transacti
 			skillEditor: library,
 			skillPinWriter: new SkillPins(projects, notes, skills),
 			skillUsageLister: library,
+			skillUsageRecorder: library,
 			noteEditor: catalog,
 			revisionReader: catalog,
 			revisionRecorder: catalog,
