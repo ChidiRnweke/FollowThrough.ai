@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Web research: Agent freezes effective settings before persistence and supplies complete execution
+inputs. Reference discovery receives a resolved provider tool. AgentSettings owns bootstrap metadata.
+See the [disposition](domain-assessment/web-research.md).
+
 Run images: the image service owns shared budgets and the frozen reader choice. Agent supplies
 catalog facts and sends a resolved image mode to the provider runner. See the
 [disposition](domain-assessment/run-images.md).

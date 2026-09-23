@@ -7,18 +7,20 @@ export const workspaceAccountCookieName = 'workspace_account';
 export const workspaceBootstrapSchema = z.object({
 	accountId: resourceDataSchemas.users.shape.id,
 	agentDefaults: z.object({ chatModelId: z.string().min(1), visionModelId: z.string().min(1) }),
-	agentModels: z.array(
-		z.object({
-			id: z.string(),
-			name: z.string(),
-			provider: z.string(),
-			contextLength: z.number().optional(),
-			supportsTools: z.boolean(),
-			supportsVision: z.boolean(),
-			recommended: z.boolean(),
-			capabilities: z.array(z.string())
-		})
-	),
+	agentModels: z
+		.array(
+			z.object({
+				id: z.string(),
+				name: z.string(),
+				provider: z.string(),
+				contextLength: z.number().optional(),
+				supportsTools: z.boolean(),
+				supportsVision: z.boolean(),
+				recommended: z.boolean(),
+				capabilities: z.array(z.string()).readonly()
+			})
+		)
+		.readonly(),
 	numericDefaults: z.object({
 		webSearchMaxResults: z.number().int().positive(),
 		webSearchMaxTotalResults: z.number().int().positive(),

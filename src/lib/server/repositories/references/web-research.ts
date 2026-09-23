@@ -4,11 +4,7 @@ import {
 	type ReferenceSource,
 	type Url
 } from '$lib/models/references';
-import {
-	openRouterWebSearchTool,
-	REFERENCE_WEB_SEARCH_DEFAULTS,
-	webSearchOptionsFromEnvironment
-} from '$lib/models/agent';
+import type { WebResearchTool } from '$lib/models/agent';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
 import type { OperationObserver } from '$lib/models/telemetry';
 import { ExternalServiceError } from '$lib/errors';
@@ -38,6 +34,7 @@ export class ReferenceResearch implements WebReferenceClient {
 			readonly baseURL: string;
 			readonly appURL: string;
 			readonly defaultModel: string;
+			readonly searchTool: WebResearchTool;
 			readonly observer: OperationObserver;
 		}
 	) {}
@@ -52,13 +49,7 @@ export class ReferenceResearch implements WebReferenceClient {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.options.baseURL,
-			fetch: withWebResearch(
-				globalThis.fetch,
-				openRouterWebSearchTool(
-					webSearchOptionsFromEnvironment(process.env),
-					REFERENCE_WEB_SEARCH_DEFAULTS
-				)
-			),
+			fetch: withWebResearch(globalThis.fetch, this.options.searchTool),
 			defaultHeaders: { 'HTTP-Referer': this.options.appURL, 'X-OpenRouter-Title': 'FollowThrough' }
 		});
 		return this.options.observer.run(

@@ -414,6 +414,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions
 		},
 		agent: {
+			webSearchDefaults: agentCapability.webSearchDefaults,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			conversationJournal,
@@ -443,6 +444,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenance
 		},
 		agentSettings: {
+			webSearchDefaults: agentCapability.webSearchDefaults,
+			agentAvailable: agentCapability.agentAvailable,
 			now: agentCapability.now,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,

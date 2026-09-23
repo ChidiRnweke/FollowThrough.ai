@@ -1,4 +1,4 @@
-import { openRouterWebSearchTool, type WebResearchTool } from '$lib/models/agent';
+import type { WebResearchTool } from '$lib/models/agent';
 import { z } from 'zod';
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -20,7 +20,7 @@ const appendWebSearchTool = (body: string, tool: WebResearchTool): string => {
 
 /** Adds OpenRouter's server-side search tool at the HTTP boundary for both supported generation protocols. */
 export const withWebResearch =
-	(delegate: Fetch = globalThis.fetch, tool: WebResearchTool = openRouterWebSearchTool()): Fetch =>
+	(delegate: Fetch, tool: WebResearchTool): Fetch =>
 	async (input, init) => {
 		const pathname = requestUrl(input).pathname;
 		if (

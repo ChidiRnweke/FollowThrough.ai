@@ -1,3 +1,6 @@
+import { openRouterWebSearchTool, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
+import { resolveWebResearch } from '$lib/services/agent/web-research';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type {
@@ -48,6 +51,12 @@ export const createReferencesCapability = (
 		new ReferenceDiscovery(
 			new ReferenceResearch(input.openRouterApiKey, {
 				baseURL: input.openRouterBaseURL,
+				searchTool: openRouterWebSearchTool(
+					resolveWebResearch(
+						webSearchOptionsFromEnvironment(process.env),
+						REFERENCE_WEB_SEARCH_DEFAULTS
+					)
+				),
 				appURL: input.appURL,
 				defaultModel: normalizeLanguageModelId(input.defaultModel),
 				observer: operationObserver

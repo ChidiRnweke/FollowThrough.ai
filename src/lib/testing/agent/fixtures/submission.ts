@@ -1,4 +1,5 @@
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import type { WebResearchSettings } from '$lib/models/agent';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { agentContextFixture } from '$lib/testing/agent/fixtures/context';
@@ -10,7 +11,11 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 
 export const agentSubmissionFixture = (
 	phase: 'queued' | 'running' | 'approval' | 'abortable' = 'queued',
-	configuration: { readonly defaultModel?: string; readonly defaultVisionModel?: string } = {}
+	configuration: {
+		readonly defaultModel?: string;
+		readonly defaultVisionModel?: string;
+		readonly webSearchDefaults?: WebResearchSettings;
+	} = {}
 ) => {
 	const { dependencies, runs } = agentContextFixture();
 	const { sessions, runner } = dependencies;
@@ -34,13 +39,16 @@ export const agentSubmissionFixture = (
 	);
 	const journal = new ConversationArchive(conversations);
 	const models = new InMemoryModelCatalog();
+	const preferenceRecords = new InMemoryAgentPreferencesRepository();
+	const preferences = new AgentPreferenceCatalog(preferenceRecords);
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			...dependencies,
 			conversationJournal: journal,
 			contextConversations: journal,
 			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
-			preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
+			preferences,
+			webSearchDefaults: configuration.webSearchDefaults ?? dependencies.webSearchDefaults,
 			models,
 			defaultModel: configuration.defaultModel ?? 'openai/test-model',
 			defaultVisionModel: configuration.defaultVisionModel ?? 'openai/test-vision-model'
@@ -49,6 +57,8 @@ export const agentSubmissionFixture = (
 	return {
 		controller,
 		models,
+		preferences,
+		preferenceRecords,
 		conversations,
 		runs,
 		sessions,
