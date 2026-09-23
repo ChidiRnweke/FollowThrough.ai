@@ -10,6 +10,7 @@ import {
 	projectBuilder,
 	testActor,
 	testProjectId,
+	testNow,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -41,6 +42,26 @@ const setup = () => {
 };
 
 describe('Board PDF export', () => {
+	it.each([
+		['missing', []],
+		['archived', [projectBuilder({ archivedAt: testNow })]],
+		['foreign', [projectBuilder({ userId: testActor(2).userId })]]
+	])(
+		'refuses a selected %s project instead of producing an all-projects export',
+		async (_kind, rows) => {
+			const { projects, service } = setup();
+			projects.projects = rows;
+			await expect(
+				service.exportBoardPdf(testActor(), { projectId: testProjectId() })
+			).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		}
+	);
+	it('exports an empty active project under its own name', async () => {
+		const { projects, service } = setup();
+		projects.projects = [projectBuilder({ name: 'Launch' })];
+		const result = await service.exportBoardPdf(testActor(), { projectId: testProjectId() });
+		expect(result.filename).toMatch(/^kanban-launch-\d{4}-\d{2}-\d{2}\.pdf$/);
+	});
 	it('builds the exported markdown from the listed todos', async () => {
 		const { todos, markdownSources, service } = setup();
 		todos.todos = [todoBuilder({ title: 'Send the design' })];
@@ -49,7 +70,8 @@ describe('Board PDF export', () => {
 	});
 
 	it('passes the filter through to the todo catalog', async () => {
-		const { todos, markdownSources, service } = setup();
+		const { todos, projects, markdownSources, service } = setup();
+		projects.projects = [projectBuilder()];
 		todos.todos = [
 			todoBuilder({ title: 'Kept' }),
 			todoBuilder({ id: testTodoId(2), title: 'Filtered out', projectId: testProjectId(2) })

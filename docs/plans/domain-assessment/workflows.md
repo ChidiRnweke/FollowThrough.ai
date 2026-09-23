@@ -151,8 +151,8 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W09.14 Extract commitments from selected passages.
 - [ ] W09.15 Preserve task provenance through source changes.
 - [ ] W09.16 Attach screenshots to descriptions.
-- [ ] W09.17 Export boards as Markdown.
-- [ ] W09.18 Export boards as PDF.
+- [x] W09.17 Export boards as Markdown. [Current export disposition](task-exports.md); implementation remains on the open stack.
+- [x] W09.18 Export boards as PDF. [Current export disposition](task-exports.md); implementation remains on the open stack.
 
 ## 10 — Suggestions, relationships, and references
 

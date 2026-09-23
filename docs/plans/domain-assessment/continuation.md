@@ -39,6 +39,18 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #213](https://github.com/ChidiRnweke/FollowThrough.ai/pull/213) retires the unused embedded
+task insertion command, verifies passive preview references and records four task surface workflows.
+Focused regressions passed five files and 59 tests; the full local unit suite passed 444 files and
+4,099 tests. All required checks passed, including
+[full browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35920660793).
+
+The [task export review](task-exports.md) reconciles W09.17 and W09.18 and fixes an observed
+missing-project fallback. Missing, archived and foreign selections now fail instead of producing an
+all-projects PDF. Empty active projects remain valid. Three regressions failed before the fix;
+focused regressions passed three files and 46 tests. Extraction, source changes and screenshots
+remain separate assessment items.
+
 [PR #212](https://github.com/ChidiRnweke/FollowThrough.ai/pull/212) requires the resolved task
 deletion time and records seven task command workflow dispositions. The full local unit suite
 passed 444 files and 4,099 tests. All required checks passed, including
