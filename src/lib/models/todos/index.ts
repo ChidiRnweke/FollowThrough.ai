@@ -48,7 +48,7 @@ export const promiseExtractionSchema = z.object({
 			ownerName: z.string().nullable(),
 			responsibility: z.enum(['mine', 'waiting_on']),
 			dueDateVerbatim: z.string().nullable(),
-			resolvedDueDate: z.string().nullable(),
+			resolvedDueDate: z.iso.date().nullable(),
 			strength: z.enum(['explicit', 'implied', 'tentative']),
 			confidence: z.number().int().min(0).max(100)
 		})

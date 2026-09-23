@@ -10,19 +10,7 @@ export interface PromiseExtractor {
 		signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]>;
 }
-export interface StructuredPromiseResult {
-	readonly action: string;
-	readonly ownerName: string | null;
-	readonly responsibility: 'mine' | 'waiting_on';
-	readonly dueDateVerbatim: string | null;
-	readonly resolvedDueDate: string | null;
-	readonly strength: 'explicit' | 'implied' | 'tentative';
-	readonly confidence: number;
-}
-export interface StructuredPromiseClient {
-	extract(
-		text: string,
-		context: PromiseModelContext,
-		signal?: AbortSignal
-	): Promise<readonly StructuredPromiseResult[] | undefined>;
-}
+export type {
+	StructuredPromiseResult,
+	StructuredPromiseClient
+} from '$lib/server/repositories/todos/classification';

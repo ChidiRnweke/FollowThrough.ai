@@ -39,6 +39,16 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #204](https://github.com/ChidiRnweke/FollowThrough.ai/pull/204) preserves
+[extracted commitment owners](promise-owners.md) through review and automatic acceptance.
+Focused regressions passed 17 files and 134 tests; the full local unit suite passed 439 files and
+4,073 tests. All required checks passed, including
+[both new durable-run storage cases, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35910479107).
+
+Current task reconciliation also reproduced invalid resolved dates crossing the provider boundary.
+The [date boundary disposition](promise-date-boundary.md) records the local SDK evidence and
+narrowed repository result. Overall task review remains open.
+
 [PR #203](https://github.com/ChidiRnweke/FollowThrough.ai/pull/203) makes
 [skill loads and usage recording atomic](skill-loads.md) and excludes archived skills from server
 discovery. Focused regressions passed 13 files and 168 tests; the full local unit suite passed
