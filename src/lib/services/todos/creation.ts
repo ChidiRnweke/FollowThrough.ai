@@ -8,13 +8,12 @@ export function decideTodoCreation(
 ): { kind: 'invalid'; message: string } | { kind: 'create'; todo: Todo } {
 	const title = input.title.trim();
 	if (!title) return { kind: 'invalid', message: 'Todo title is required' };
-	const todo: Todo = {
+	const fields = {
 		id: context.id,
 		userId: context.userId,
 		projectId: input.projectId,
 		title,
 		...(input.description !== undefined ? { description: input.description } : {}),
-		status: input.status ?? 'open',
 		responsibility: input.responsibility,
 		...(input.responsibility === 'waiting_on' && input.waitingOn?.trim()
 			? { waitingOn: input.waitingOn.trim() }
@@ -24,9 +23,13 @@ export function decideTodoCreation(
 		...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
 		...(input.sourceAnchorId !== undefined ? { sourceAnchorId: input.sourceAnchorId } : {}),
 		...(input.provenanceId !== undefined ? { provenanceId: input.provenanceId } : {}),
-		...(input.status === 'done' ? { completedAt: context.timestamp } : {}),
 		createdAt: context.timestamp,
 		updatedAt: context.timestamp
 	};
+	const status = input.status ?? 'open';
+	const todo: Todo =
+		status === 'done'
+			? { ...fields, status, completedAt: context.timestamp }
+			: { ...fields, status };
 	return { kind: 'create', todo };
 }

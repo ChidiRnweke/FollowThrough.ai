@@ -9,7 +9,7 @@ import {
 	type ApplicationEffect,
 	type RecordedChange
 } from '$lib/models/proposal-effects';
-import { resourceDataSchemas } from '$lib/models/workspace-records';
+import { resourceDataSchemas, todoRecordFields } from '$lib/models/workspace-records';
 import type { ApplicationEffectRepository, AppliedRecord } from '../application-effects';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { InvalidTransitionError } from '$lib/errors';
@@ -147,7 +147,9 @@ export class SuggestionEffectRecords implements ApplicationEffectRepository {
 						}
 					: record.type === 'references'
 						? resourceDataSchemas.references.omit({ projectId: true }).shape
-						: resourceDataSchemas[record.type].shape;
+						: record.type === 'todos'
+							? todoRecordFields
+							: resourceDataSchemas[record.type].shape;
 			const allFields = Object.keys(shape).filter((key) => key !== 'id' && key !== 'userId');
 			const names = sql.join(
 				allFields.map((key) => sql.identifier(column(key))),

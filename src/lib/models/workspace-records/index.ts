@@ -1,4 +1,5 @@
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type { Todo } from '$lib/models/todos';
 import { z } from 'zod';
 import { syncEtagSchema } from '$lib/models/sync';
 import { storedDocumentSchema } from '$lib/models/notes';
@@ -58,7 +59,7 @@ export const projectRecordSchema = z.object({
 	...timestamps
 });
 
-export const todoRecordSchema = z.object({
+export const todoRecordFields = {
 	id: id<'TodoId'>(),
 	...projectOwned,
 	title: z.string(),
@@ -80,7 +81,15 @@ export const todoRecordSchema = z.object({
 	completedAt: instant.optional(),
 	deletedAt: instant.optional(),
 	...timestamps
-});
+};
+export const todoRecordSchema: z.ZodType<Todo> = z.discriminatedUnion('status', [
+	z.object({ ...todoRecordFields, status: z.literal('done'), completedAt: instant }),
+	z.object({
+		...todoRecordFields,
+		status: todoRecordFields.status.exclude(['done']),
+		completedAt: z.undefined().optional()
+	})
+]);
 
 const diagramFields = {
 	id: id<'DiagramId'>(),
