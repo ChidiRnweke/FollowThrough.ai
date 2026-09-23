@@ -1,3 +1,4 @@
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { prepareRunImages } from './images';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
@@ -81,7 +82,6 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 				new AgentReplayVirtualizer(new InMemoryAgentFiles())
 			),
 		undefined,
-		{},
 		() => provider
 	);
 	const execute = async (signal = new AbortController().signal, input = request) => {
@@ -91,6 +91,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 			run: { ...run, inputSnapshot: input },
 			request: input,
 			imageInput: prepareRunImages(input),
+			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			context,
 			signal,
 			toolExecutor: { execute: async (_input, action) => action() }

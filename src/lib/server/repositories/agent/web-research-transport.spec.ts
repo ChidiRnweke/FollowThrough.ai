@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { openRouterWebSearchTool, webSearchOptionsFromEnvironment } from '$lib/models/agent';
+import { openRouterWebSearchTool, CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { withWebResearch } from './web-research-transport';
 
 class RecordingFetch {
@@ -14,7 +14,10 @@ class RecordingFetch {
 describe('OpenRouter web search transport', () => {
 	it('preserves function tools when web search is enabled', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(recorder.fetch);
+		const fetch = withWebResearch(
+			recorder.fetch,
+			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
+		);
 		await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			body: JSON.stringify({ tools: [{ type: 'function', function: { name: 'get_project' } }] })
@@ -32,10 +35,13 @@ describe('OpenRouter web search transport', () => {
 
 	it('does not duplicate an existing web search tool', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(recorder.fetch);
+		const fetch = withWebResearch(
+			recorder.fetch,
+			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
+		);
 		await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
-			body: JSON.stringify({ tools: [openRouterWebSearchTool()] })
+			body: JSON.stringify({ tools: [openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)] })
 		});
 		const tools = (recorder.body as { tools: unknown[] }).tools;
 		expect(tools).toHaveLength(1);
@@ -43,66 +49,29 @@ describe('OpenRouter web search transport', () => {
 
 	it('adds web search to Responses API requests', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(recorder.fetch);
+		const fetch = withWebResearch(
+			recorder.fetch,
+			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
+		);
 		await fetch('https://openrouter.ai/api/v1/responses', {
 			method: 'POST',
 			body: JSON.stringify({ model: 'openai/gpt-5.6', input: 'Research this' })
 		});
-		expect(recorder.body).toMatchObject({ tools: [openRouterWebSearchTool()] });
+		expect(recorder.body).toMatchObject({
+			tools: [openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)]
+		});
 	});
 
 	it('leaves non-chat requests unchanged', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(recorder.fetch);
+		const fetch = withWebResearch(
+			recorder.fetch,
+			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
+		);
 		await fetch('https://openrouter.ai/api/v1/models', {
 			method: 'POST',
 			body: JSON.stringify({ request: 'unchanged' })
 		});
 		expect(recorder.body).toEqual({ request: 'unchanged' });
-	});
-});
-
-describe('Reading web search settings from the environment', () => {
-	it('retrieves page content by default rather than the model’s own snippets', () => {
-		expect(openRouterWebSearchTool().parameters.engine).toBe('exa');
-	});
-
-	it('uses the larger chat research budget by default', () => {
-		expect(openRouterWebSearchTool().parameters).toEqual({
-			engine: 'exa',
-			max_results: 20,
-			max_total_results: 40
-		});
-	});
-
-	it('honours a configured engine', () => {
-		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_ENGINE: 'perplexity' })).toEqual(
-			{ engine: 'perplexity' }
-		);
-	});
-
-	/** A typo in one setting must not take web search offline. */
-	it('ignores an engine it does not recognise', () => {
-		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_ENGINE: 'gogle' })).toEqual({});
-	});
-
-	it('honours a configured result cap', () => {
-		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_MAX_RESULTS: '12' })).toEqual({
-			maxResults: 12
-		});
-	});
-
-	it('ignores a non-numeric result cap', () => {
-		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_MAX_RESULTS: 'lots' })).toEqual(
-			{}
-		);
-	});
-
-	it('ignores a zero result cap rather than disabling search', () => {
-		expect(webSearchOptionsFromEnvironment({ OPENROUTER_WEB_SEARCH_MAX_RESULTS: '0' })).toEqual({});
-	});
-
-	it('falls back to the defaults when nothing is configured', () => {
-		expect(webSearchOptionsFromEnvironment({})).toEqual({});
 	});
 });

@@ -163,7 +163,7 @@ export const controllerSurfaces = {
 		updatePreferences: true,
 		listModels: true,
 		resolveDefaults: true,
-		deploymentDefaults: true
+		bootstrap: true
 	},
 	userSettings: {
 		synchronize: true,

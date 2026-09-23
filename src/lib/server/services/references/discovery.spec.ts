@@ -1,3 +1,4 @@
+import { openRouterWebSearchTool, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import type { Url } from '$lib/models/references';
@@ -71,6 +72,7 @@ describe('Reference discovery', () => {
 	it('reports missing configuration instead of claiming there are no relevant sources', async () => {
 		const finder = new ReferenceDiscovery(
 			new ReferenceResearch('', {
+				searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 				baseURL: 'http://127.0.0.1:9',
 				appURL: 'https://followthrough.test',
 				defaultModel: 'test/model',

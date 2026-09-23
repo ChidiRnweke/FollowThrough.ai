@@ -7,6 +7,7 @@ import type {
 	AgentRunDecisionRecord,
 	AgentRunId,
 	AgentRunImages,
+	WebResearchSettings,
 	Conversation,
 	ConversationId,
 	ConversationImageInput,
@@ -49,6 +50,7 @@ export interface AgentRunner {
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
 		readonly imageInput: AgentRunImages;
+		readonly webSearch: WebResearchSettings;
 		readonly context: AgentRunContext;
 		/** Decisions to apply before resuming, one per parked tool call. */
 		readonly decisions?: readonly AgentRunDecisionRecord[];

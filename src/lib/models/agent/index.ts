@@ -251,13 +251,13 @@ export interface WebResearchOptions {
 	readonly maxTotalResults?: number;
 }
 
-export interface WebResearchDefaults {
-	readonly engine: NonNullable<WebResearchOptions['engine']>;
+export interface WebResearchSettings {
+	readonly engine: WebSearchEngine;
 	readonly maxResults: number;
 	readonly maxTotalResults: number;
 }
 
-export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
+export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 	engine: 'exa',
 	maxResults: 20,
 	maxTotalResults: 40
@@ -272,7 +272,7 @@ export const normalizeLanguageModelId = (modelId: string): string => {
 	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
 };
 
-export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
+export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 	engine: 'exa',
 	maxResults: 8,
 	maxTotalResults: 16
@@ -281,44 +281,18 @@ export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
 export interface WebResearchTool {
 	readonly type: 'openrouter:web_search';
 	readonly parameters: {
-		readonly engine: NonNullable<WebResearchOptions['engine']>;
+		readonly engine: WebSearchEngine;
 		readonly max_results: number;
 		readonly max_total_results: number;
 	};
 }
 
-const webSearchEngineFrom = (value: string | undefined): WebSearchEngine | undefined =>
-	webSearchEngines.includes(value as WebSearchEngine) ? (value as WebSearchEngine) : undefined;
-
-const positiveWebSearchIntegerFrom = (value: string | undefined): number | undefined => {
-	const parsed = Number(value);
-	return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-};
-
-export const webSearchOptionsFromEnvironment = (
-	environment: Readonly<Record<string, string | undefined>>
-): WebResearchOptions => {
-	const engine = webSearchEngineFrom(environment.OPENROUTER_WEB_SEARCH_ENGINE);
-	const maxResults = positiveWebSearchIntegerFrom(environment.OPENROUTER_WEB_SEARCH_MAX_RESULTS);
-	const maxTotalResults = positiveWebSearchIntegerFrom(
-		environment.OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS
-	);
-	return {
-		...(engine ? { engine } : {}),
-		...(maxResults ? { maxResults } : {}),
-		...(maxTotalResults ? { maxTotalResults } : {})
-	};
-};
-
-export const openRouterWebSearchTool = (
-	options: WebResearchOptions = {},
-	defaults: WebResearchDefaults = CHAT_WEB_SEARCH_DEFAULTS
-): WebResearchTool => ({
+export const openRouterWebSearchTool = (options: WebResearchSettings): WebResearchTool => ({
 	type: 'openrouter:web_search',
 	parameters: {
-		engine: options.engine ?? defaults.engine,
-		max_results: options.maxResults ?? defaults.maxResults,
-		max_total_results: options.maxTotalResults ?? defaults.maxTotalResults
+		engine: options.engine,
+		max_results: options.maxResults,
+		max_total_results: options.maxTotalResults
 	}
 });
 

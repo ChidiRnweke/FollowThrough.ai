@@ -14,7 +14,9 @@ selection leave models. The unused server resolveMaxTurns and resolveWebSearchOp
 removed after checking all source/test callers. Agent.freezeInput still owns those active choices;
 their removal changes no run input. Execution-mode resolution remains server owned.
 
-Workspace bootstrap delegates configured chat catalog completion to AgentSettings.listModels. The
+Workspace bootstrap initially delegated configured chat catalog completion to AgentSettings.listModels.
+The subsequent [web-research slice](web-research.md) delegates the full bootstrap to AgentSettings.bootstrap.
+The
 remote no longer constructs synthetic catalog entries. A chat default also declared as the vision
 default retains both capabilities; the old bootstrap always marked its synthetic chat entry as unable
 to read images. Provider metadata continues to take precedence when present.

@@ -6,7 +6,13 @@ import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
-import { normalizeLanguageModelId, webSearchOptionsFromEnvironment } from '$lib/models/agent';
+import {
+	normalizeLanguageModelId,
+	CHAT_WEB_SEARCH_DEFAULTS,
+	type WebResearchSettings
+} from '$lib/models/agent';
+import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
+import { resolveWebResearch } from '$lib/services/agent/web-research';
 import type { Database } from '$lib/server/db';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import {
@@ -57,6 +63,8 @@ export interface AgentCapabilityInput {
 
 export interface AgentCapability {
 	readonly now: () => DateTime;
+	readonly webSearchDefaults: WebResearchSettings;
+	readonly agentAvailable: boolean;
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceCatalog;
 	readonly models: AgentModelCatalog;
@@ -114,11 +122,15 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				conversationId,
 				new AgentReplayVirtualizer(input.files)
 			),
-		traceAgentTurn,
-		webSearchOptionsFromEnvironment(process.env)
+		traceAgentTurn
 	);
 
 	return {
+		webSearchDefaults: resolveWebResearch(
+			webSearchOptionsFromEnvironment(process.env),
+			CHAT_WEB_SEARCH_DEFAULTS
+		),
+		agentAvailable: Boolean(input.openRouterApiKey.trim()),
 		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		preferences,

@@ -78,9 +78,16 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [web-research disposition](web-research.md) covers frozen settings, configuration boundaries,
+reference transport and bootstrap ownership. Provider session representation still needs review.
+
+[PR #180](https://github.com/ChidiRnweke/FollowThrough.ai/pull/180) passed all required checks,
+including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35877558164).
+It remains open on the dependent stack.
+
 The [run-images disposition](run-images.md) records native/fallback selection, shared channel budgets
-and explicit runner inputs. Web research configuration and remaining agent declarations still need
-review.
+and explicit runner inputs. Web research configuration is covered above; remaining agent declarations
+still need review.
 
 [PR #179](https://github.com/ChidiRnweke/FollowThrough.ai/pull/179) passed all required checks,
 including [quality, unit/browser, PostgreSQL output reconstruction and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35875779030).

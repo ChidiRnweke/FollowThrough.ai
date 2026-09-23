@@ -1,3 +1,4 @@
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { PendingAgentDecision } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import {
@@ -487,6 +488,7 @@ describe('Agent runtime boundary', () => {
 			actor: testActor(),
 			run,
 			imageInput: { kind: 'none' },
+			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			request: { conversationId: run.conversationId, prompt: 'Help' },
 			context: run.contextSnapshot!,
 			signal: new AbortController().signal,
@@ -906,6 +908,7 @@ describe('Agent turn span lifecycle', () => {
 				actor: testActor(),
 				run,
 				imageInput: { kind: 'none' },
+				webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 				request: { conversationId: run.conversationId, prompt: 'Save this note' },
 				context: run.contextSnapshot!,
 				signal: new AbortController().signal,
@@ -951,6 +954,7 @@ describe('Agent turn span lifecycle', () => {
 			actor: testActor(),
 			run: parked,
 			imageInput: { kind: 'none' },
+			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			request: { conversationId: run.conversationId, prompt: 'Save this note' },
 			context: parked.contextSnapshot!,
 			signal: new AbortController().signal,

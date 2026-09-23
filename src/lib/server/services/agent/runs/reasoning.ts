@@ -26,7 +26,7 @@ import {
 	type ProviderToolOutput,
 	type RunAgentInput,
 	type ToolClassification,
-	type WebResearchOptions
+	type WebResearchSettings
 } from '$lib/models/agent';
 import {
 	readAgentToolName,
@@ -463,9 +463,8 @@ export class AgentReasoning {
 			throw new Error('Conversation sessions are not configured');
 		},
 		private readonly observeTurn: AgentTurnObserver = directTurnObserver,
-		private readonly webSearchDefaults: WebResearchOptions = {},
 		private readonly createProvider: (
-			options: WebResearchOptions
+			options: WebResearchSettings
 		) => Pick<OpenAIProvider, 'getModel' | 'close'> = (options) => this.provider(options)
 	) {}
 
@@ -474,6 +473,7 @@ export class AgentReasoning {
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
 		readonly imageInput: AgentRunImages;
+		readonly webSearch: WebResearchSettings;
 		readonly context: AgentRunContext;
 		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
@@ -484,6 +484,7 @@ export class AgentReasoning {
 			run,
 			request,
 			imageInput,
+			webSearch,
 			context,
 			decisions = [],
 			signal,
@@ -496,7 +497,7 @@ export class AgentReasoning {
 				'CONFIGURATION',
 				false
 			);
-		const provider = this.createProvider({ ...this.webSearchDefaults, ...request.webSearch });
+		const provider = this.createProvider(webSearch);
 		const preparation = new AbortController();
 		const preparationSignal = AbortSignal.any([signal, preparation.signal]);
 		try {
@@ -731,7 +732,7 @@ export class AgentReasoning {
 		});
 	}
 
-	private provider(webSearch: WebResearchOptions): OpenAIProvider {
+	private provider(webSearch: WebResearchSettings): OpenAIProvider {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.baseURL,

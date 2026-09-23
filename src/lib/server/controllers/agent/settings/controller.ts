@@ -1,3 +1,5 @@
+import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
+import { DEFAULT_AGENT_MAX_TURNS, type WebResearchSettings } from '$lib/models/agent';
 import {
 	configuredAgentModels,
 	configuredChatModels,
@@ -75,7 +77,7 @@ export interface AgentSettingsController {
 	 * a model the run does not use.
 	 */
 	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
-	deploymentDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
+	bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap>;
 }
 
 export interface AgentSettingsDependencies {
@@ -89,6 +91,8 @@ export interface AgentSettingsDependencies {
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
+	webSearchDefaults: WebResearchSettings;
+	agentAvailable: boolean;
 }
 
 export class AgentSettings implements AgentSettingsController {
@@ -169,9 +173,20 @@ export class AgentSettings implements AgentSettingsController {
 		return configuredChatModels(await this.dependencies.models.list(), this.modelDefaults());
 	}
 
-	async deploymentDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
-		void actor;
-		return this.modelDefaults();
+	async bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap> {
+		const agentDefaults = this.modelDefaults();
+		const agentModels = configuredChatModels(await this.dependencies.models.list(), agentDefaults);
+		return {
+			accountId: actor.userId,
+			agentDefaults,
+			agentModels,
+			numericDefaults: {
+				webSearchMaxResults: this.dependencies.webSearchDefaults.maxResults,
+				webSearchMaxTotalResults: this.dependencies.webSearchDefaults.maxTotalResults,
+				agentMaxTurns: DEFAULT_AGENT_MAX_TURNS
+			},
+			agentAvailable: this.dependencies.agentAvailable
+		};
 	}
 
 	private modelDefaults(): AgentModelDefaults {
