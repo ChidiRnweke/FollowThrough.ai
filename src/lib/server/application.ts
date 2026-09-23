@@ -561,7 +561,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteEditor: notes,
 			noteTrash: notes,
 			noteTrashReader: notes,
-			notePurger: notes,
+			noteDeletion: notes,
 			attachmentRestorer: notes,
 			notePublisher: notes,
 			revisionRecorder: notes,
