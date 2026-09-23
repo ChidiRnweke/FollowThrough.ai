@@ -24,6 +24,9 @@ const skill = (project = testProjectId()): Skill<Note> => ({
 		plainText: 'Always state the decision and consequences.'
 	}),
 	description: 'Create architecture decision records',
+	slug: 'decision-records',
+	metadata: {},
+	allowImplicitInvocation: true,
 	triggerHints: ['decision', 'ADR'],
 	isEnabled: true
 });

@@ -14,6 +14,8 @@ const seedSkill = async (suffix: string) => {
 		slug: `skill-${suffix}`,
 		description: 'Initial description',
 		triggerHints: [],
+		metadata: {},
+		allowImplicitInvocation: true,
 		isEnabled: true
 	});
 	return { ...seeded, note };

@@ -71,6 +71,9 @@ describe('Skill restoration', () => {
 
 				description: 'Instructions',
 				triggerHints: ['instruction'],
+				slug: 'instructions',
+				metadata: {},
+				allowImplicitInvocation: true,
 				isEnabled: true
 			}
 		];

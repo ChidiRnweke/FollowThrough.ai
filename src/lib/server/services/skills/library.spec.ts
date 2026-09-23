@@ -75,6 +75,9 @@ describe('Skill management invariants', () => {
 
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
+				slug: 'decision-writing',
+				metadata: {},
+				allowImplicitInvocation: true,
 				isEnabled: true
 			}
 		];
@@ -94,6 +97,9 @@ describe('Skill management invariants', () => {
 
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
+				slug: 'decision-writing',
+				metadata: {},
+				allowImplicitInvocation: true,
 				isEnabled: true
 			}
 		];

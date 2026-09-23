@@ -39,6 +39,13 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #198](https://github.com/ChidiRnweke/FollowThrough.ai/pull/198) resolves
+[active Inbox lifecycle](inbox-lifecycle.md). Focused regressions passed 21 files and 96 tests;
+the full local unit suite passed 436 files and 4,056 tests. Lint, type checks, architecture audits and
+documentation checks passed. All required checks passed, including
+[quality, unit/browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35903013438).
+The next slice addresses [resolved skill metadata persistence](skill-metadata-persistence.md).
+
 [PR #197](https://github.com/ChidiRnweke/FollowThrough.ai/pull/197) addresses
 [skill edits and restoration](skill-edits.md). Focused skill tests passed 15 files and 75 tests;
 remote/offline metadata tests passed 2 files and 8 tests. The full local unit suite passed 435 files

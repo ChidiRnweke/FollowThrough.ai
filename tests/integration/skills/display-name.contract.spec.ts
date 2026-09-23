@@ -52,6 +52,8 @@ const setup = async (suffix: string) => {
 		slug: 'release-checklist',
 		description: 'Release instructions',
 		triggerHints: [],
+		metadata: {},
+		allowImplicitInvocation: true,
 		isEnabled: true
 	});
 	return {

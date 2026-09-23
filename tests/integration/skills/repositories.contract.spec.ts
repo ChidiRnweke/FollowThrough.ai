@@ -27,6 +27,9 @@ describe('Postgres skill repository invariants', () => {
 			note,
 			description: 'Contract',
 			triggerHints: ['contract'],
+			slug: 'contract-skill',
+			metadata: {},
+			allowImplicitInvocation: true,
 			isEnabled: true
 		});
 		const usage = await repository.recordUsage(owner, {
@@ -44,6 +47,9 @@ describe('Postgres skill repository invariants', () => {
 			note,
 			description: 'Contract',
 			triggerHints: ['contract'],
+			slug: 'contract-skill',
+			metadata: {},
+			allowImplicitInvocation: true,
 			isEnabled: true
 		});
 		await new ProjectRecords(context.db).archive(owner, project.id);
