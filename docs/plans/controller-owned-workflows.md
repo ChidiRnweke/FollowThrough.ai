@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Conversation canvas: the storage boundary decodes diagram-tool results into typed values.
+PresentedCanvasSource selects the latest successful write; DiagramStudio reads the current saved
+diagram. See the [disposition](domain-assessment/canvas-results.md).
+
 Web research: Agent freezes effective settings before persistence and supplies complete execution
 inputs. Reference discovery receives a resolved provider tool. AgentSettings owns bootstrap metadata.
 See the [disposition](domain-assessment/web-research.md).
