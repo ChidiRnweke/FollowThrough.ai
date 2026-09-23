@@ -31,7 +31,12 @@ import type {
 	UpdateTodoInput,
 	UpdateTodoOutput
 } from '$lib/models/todos';
-import { InvalidGeneratedContentError, InvalidTransitionError, ValidationError } from '$lib/errors';
+import {
+	InvalidGeneratedContentError,
+	InvalidTransitionError,
+	NotFoundError,
+	ValidationError
+} from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
@@ -211,12 +216,14 @@ export class Todos implements TodosController {
 			this.dependencies.todoLister.list(actor, filter),
 			this.dependencies.projectLister.list(actor)
 		]);
+		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
+		if (filter.projectId && projectName === undefined)
+			throw new NotFoundError('Todo project was not found');
 		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
 		const views = contexts.map((context) => assembleTodoView(context.todo, context));
-		const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 		const generatedAt = new Date();
-		const projectName = filter.projectId ? projectNames.get(filter.projectId) : undefined;
-		const title = projectName ? `${projectName} todos` : 'Todos';
+		const title = projectName !== undefined ? `${projectName} todos` : 'Todos';
 		const { document } = this.dependencies.markdownToContent(
 			boardMarkdown(views, { title, generatedAt, projectNames })
 		);
