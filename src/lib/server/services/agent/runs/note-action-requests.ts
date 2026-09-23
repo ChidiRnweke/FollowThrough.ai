@@ -149,11 +149,15 @@ export class NoteActionRequests {
 		const run = await this.runs.findById(actor, runId);
 		if (!run || run.kind !== 'workflow' || run.contextSnapshot.kind !== kind)
 			throw new NotFoundError('The note action run was not found');
-		const claimed = await this.runs.transition(runId, 'queued', 'running', {
-			startedAt: new Date().toISOString() as DateTime
+		const timestamp = new Date().toISOString() as DateTime;
+		const claimed = await this.runs.claimWorkflow(runId, {
+			expected: 'queued',
+			status: 'running',
+			startedAt: timestamp,
+			updatedAt: timestamp
 		});
 		if (!claimed) return undefined;
-		if (claimed.kind !== 'workflow' || claimed.contextSnapshot.kind !== kind)
+		if (claimed.contextSnapshot.kind !== kind)
 			throw new ValidationError('The claimed run belongs to a different note action');
 		await this.events.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
 		if (claimed.contextSnapshot.kind === 'promise_extraction')

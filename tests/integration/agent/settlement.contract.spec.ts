@@ -1,3 +1,4 @@
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { describe, expect, it } from 'vitest';
@@ -59,6 +60,7 @@ const setup = async (suffix: string) => {
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
+			checkpoints: new RunCheckpoints(runs),
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,
@@ -83,6 +85,102 @@ const setup = async (suffix: string) => {
 };
 
 describe('atomic execution settlement', () => {
+	it('does not publish a checkpoint after another execution cancels the run', async () => {
+		const { owner, runs, events, sessions, run, runner, controller } = await setup('17701');
+		runner.events = [];
+		runner.outcome = {
+			type: 'approval_checkpoint',
+			serializedState: 'provider-checkpoint',
+			pendingDecisions: [
+				{ callId: 'create-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+			],
+			sessionItems: [{ type: 'user_message', content: 'Must not be saved' }]
+		};
+		const completion = Promise.withResolvers<void>();
+		runner.completion = completion.promise;
+		const execution = controller.execute(run.id, new AbortController().signal);
+		try {
+			await runner.started.promise;
+			await controller.cancel(owner, run.id);
+		} finally {
+			completion.resolve();
+		}
+		const outcome = await execution;
+		const saved = await runs.findById(owner, run.id);
+		expect({
+			outcome,
+			status: saved?.status,
+			checkpoint: saved?.serializedState,
+			pending: saved?.pendingDecisions,
+			session: await sessions.list(owner, run.conversationId),
+			events: (await events.replay(owner, run.id, '0')).map((record) =>
+				record.kind === 'readable' ? record.event.type : record.kind
+			)
+		}).toEqual({
+			outcome: 'cancelled',
+			status: 'cancelled',
+			checkpoint: undefined,
+			pending: [],
+			session: [],
+			events: ['run_started', 'cancelled']
+		});
+	});
+
+	it('rolls back the checkpoint and session when approval publication fails', async () => {
+		const { owner, runs, events, sessions, run, runner, controller } = await setup('17702');
+		runner.events = [];
+		runner.outcome = {
+			type: 'approval_checkpoint',
+			serializedState: 'provider-checkpoint',
+			pendingDecisions: [
+				{ callId: 'create-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+			],
+			sessionItems: [{ type: 'user_message', content: 'Must roll back' }]
+		};
+		await context.client`create function reject_contract_checkpoint() returns trigger language plpgsql as $$
+ begin
+  if NEW.event->>'type' = 'approval_required' and exists (
+   select 1 from agent_runs where id = NEW.run_id and request_id = 'settlement-contract-17702'
+  ) then raise exception 'Approval publication failed' using errcode = '23514'; end if;
+  return NEW;
+ end $$`;
+		await context.client`create trigger reject_contract_checkpoint before insert on agent_run_events for each row execute function reject_contract_checkpoint()`;
+		try {
+			await controller.execute(run.id, new AbortController().signal).then(
+				() => {
+					throw new Error('Expected approval publication failure');
+				},
+				(error) => {
+					if (
+						!(error instanceof Error) ||
+						!(error.cause instanceof Error) ||
+						!error.cause.message.includes('Approval publication failed')
+					)
+						throw error;
+				}
+			);
+		} finally {
+			await context.client`drop trigger reject_contract_checkpoint on agent_run_events`;
+			await context.client`drop function reject_contract_checkpoint()`;
+		}
+		const saved = await runs.findById(owner, run.id);
+		expect({
+			status: saved?.status,
+			checkpoint: saved?.serializedState,
+			pending: saved?.pendingDecisions,
+			session: await sessions.list(owner, run.conversationId),
+			events: (await events.replay(owner, run.id, '0')).map((record) =>
+				record.kind === 'readable' ? record.event.type : record.kind
+			)
+		}).toEqual({
+			status: 'running',
+			checkpoint: undefined,
+			pending: [],
+			session: [],
+			events: ['run_started']
+		});
+	});
+
 	it('records one completion when competing workers execute the same run', async () => {
 		const { owner, runs, events, run, controller, conversations } = await setup('9611');
 		await Promise.all([

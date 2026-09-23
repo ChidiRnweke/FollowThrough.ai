@@ -1,3 +1,4 @@
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -65,6 +66,7 @@ export interface AgentCapability {
 	readonly cancellations: RunCancellation;
 	readonly approvals: RunApprovals;
 	readonly preparation: RunPreparation;
+	readonly checkpoints: RunCheckpoints;
 	readonly runLedger: AgentRunLedger;
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
@@ -127,6 +129,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		cancellations: new RunCancellation(runs),
 		approvals: new RunApprovals(runs),
 		preparation: new RunPreparation(runs),
+		checkpoints: new RunCheckpoints(runs),
 		runLedger,
 		runEvents,
 		runDecisions,

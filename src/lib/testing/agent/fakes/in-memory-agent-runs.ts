@@ -15,6 +15,8 @@ import type {
 	WorkflowSettlementWrite,
 	AgentProvenanceWrite,
 	AgentContextWrite,
+	RunClaimWrite,
+	AgentCheckpointWrite,
 	PreparedAgentRun,
 	ConversationId,
 	ResolvedAgentRun,
@@ -163,28 +165,53 @@ export class InMemoryAgentRunPersistence
 		return updated;
 	}
 
-	async transitionAgent(
+	async claimAgent(
 		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<ResolvedAgentRun> = {}
+		change: RunClaimWrite
 	): Promise<ResolvedAgentRun | undefined> {
-		if (from === 'queued' && to === 'running') await this.executionClaim;
-		const fromStatuses = Array.isArray(from) ? from : [from];
-		for (const status of fromStatuses) assertAgentRunTransition(status, to);
+		await this.executionClaim;
 		const run = this.runs.find(
 			(candidate): candidate is ResolvedAgentRun =>
-				candidate.kind === 'agent' &&
-				candidate.id === runId &&
-				(fromStatuses as string[]).includes(candidate.status)
+				candidate.kind === 'agent' && candidate.id === runId && candidate.status === change.expected
 		);
 		if (!run) return undefined;
-		const updated: ResolvedAgentRun = {
-			...run,
-			...patch,
-			status: to,
-			updatedAt: new Date().toISOString() as DateTime
-		};
+		const { expected: _expected, ...values } = change;
+		void _expected;
+		const updated = { ...run, ...values };
+		this.replace(updated);
+		return updated;
+	}
+
+	async claimWorkflow(
+		runId: AgentRunId,
+		change: RunClaimWrite
+	): Promise<WorkflowAgentRun | undefined> {
+		const run = this.runs.find(
+			(candidate): candidate is WorkflowAgentRun =>
+				candidate.kind === 'workflow' &&
+				candidate.id === runId &&
+				candidate.status === change.expected
+		);
+		if (!run) return undefined;
+		const { expected: _expected, ...values } = change;
+		void _expected;
+		const updated = { ...run, ...values };
+		this.replace(updated);
+		return updated;
+	}
+
+	async checkpointAgent(
+		runId: AgentRunId,
+		change: AgentCheckpointWrite
+	): Promise<ResolvedAgentRun | undefined> {
+		const run = this.runs.find(
+			(candidate): candidate is ResolvedAgentRun =>
+				candidate.kind === 'agent' && candidate.id === runId && candidate.status === change.expected
+		);
+		if (!run) return undefined;
+		const { expected: _expected, traceparent, ...values } = change;
+		void _expected;
+		const updated = { ...run, ...values, traceparent: traceparent ?? undefined };
 		this.replace(updated);
 		return updated;
 	}

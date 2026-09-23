@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Run claims and approval checkpoints: owning services supply resolved writes; repositories enforce
+the run kind and expected state. Agent commits checkpoints with sessions and approval publication.
+See the [disposition](domain-assessment/run-claims-checkpoints.md).
+
 Pending run calls: Agent journals and clears abandoned calls in the settlement transaction. Terminal
 responses read the saved run, including queued-after-review cancellation. Whole-run replacement is
 removed. See the [disposition](domain-assessment/run-pending-cleanup.md).

@@ -1,3 +1,4 @@
+import type { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import {
 	RunPreparationCancelled,
 	type RunPreparation
@@ -214,6 +215,7 @@ export interface AgentDependencies {
 	runs: AgentRunRepository;
 	cancellations: Pick<RunCancellation, 'getForWrite' | 'plan' | 'persist'>;
 	approvals: Pick<RunApprovals, 'getForWrite' | 'plan' | 'persist'>;
+	checkpoints: Pick<RunCheckpoints, 'prepare' | 'persist'>;
 	preparation: Pick<
 		RunPreparation,
 		'claim' | 'getForWrite' | 'provenance' | 'context' | 'persistProvenance' | 'persistContext'
@@ -808,19 +810,8 @@ export class Agent implements AgentController {
 				if (update.type === 'approval_checkpoint') {
 					let parked: AgentRun | undefined;
 					await this.dependencies.transactionRunner.run(async () => {
-						parked = await this.dependencies.runs.transition(
-							run.id,
-							'running',
-							'awaiting_approval',
-							{
-								serializedState: update.serializedState,
-								// Carried across the park so the resumed turn joins this run's
-								// trace rather than opening a second one for the same request.
-								...(update.traceparent ? { traceparent: update.traceparent } : {}),
-								pendingDecisions: update.pendingDecisions,
-								updatedAt: new Date().toISOString() as DateTime
-							}
-						);
+						const change = this.dependencies.checkpoints.prepare(run, update, now());
+						parked = await this.dependencies.checkpoints.persist(run.id, change);
 						if (!parked) return;
 						await this.dependencies.sessions.replace(run.conversationId, update.sessionItems);
 						for (const decision of decisions)

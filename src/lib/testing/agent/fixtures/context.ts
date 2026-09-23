@@ -1,3 +1,4 @@
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -38,6 +39,7 @@ export const agentContextFixture = () => {
 		runs,
 		cancellations: new RunCancellation(runs),
 		preparation: new RunPreparation(runs),
+		checkpoints: new RunCheckpoints(runs),
 		approvals: new RunApprovals(runs),
 		events: runs,
 		decisions: runs,

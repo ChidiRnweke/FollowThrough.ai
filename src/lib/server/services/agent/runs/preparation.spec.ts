@@ -36,9 +36,14 @@ const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' =
 it('claims a queued chat run at the supplied start time', async () => {
 	const { run, preparation } = await setup('queued');
 	const claimed = await preparation.claim(run.id, testNow);
-	expect({ status: claimed?.status, startedAt: claimed?.startedAt }).toEqual({
+	expect({
+		status: claimed?.status,
+		startedAt: claimed?.startedAt,
+		updatedAt: claimed?.updatedAt
+	}).toEqual({
 		status: 'running',
-		startedAt: testNow
+		startedAt: testNow,
+		updatedAt: testNow
 	});
 });
 

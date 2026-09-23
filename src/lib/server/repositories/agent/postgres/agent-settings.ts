@@ -12,6 +12,8 @@ import type {
 	WorkflowSettlementWrite,
 	AgentProvenanceWrite,
 	AgentContextWrite,
+	RunClaimWrite,
+	AgentCheckpointWrite,
 	PreparedAgentRun,
 	AgentSessionItem,
 	ConversationId,
@@ -468,13 +470,62 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
-	async transitionAgent(
+	async claimAgent(
 		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<ResolvedAgentRun> = {}
+		change: RunClaimWrite
 	): Promise<ResolvedAgentRun | undefined> {
-		const row = await this.transitionRow(runId, from, to, patch, 'agent');
+		const row = await this.claimRow(runId, change, 'agent');
+		return row ? toResolvedRun(row) : undefined;
+	}
+
+	async claimWorkflow(
+		runId: AgentRunId,
+		change: RunClaimWrite
+	): Promise<WorkflowAgentRun | undefined> {
+		const row = await this.claimRow(runId, change, 'workflow');
+		return row ? toWorkflowRun(row) : undefined;
+	}
+
+	private async claimRow(runId: AgentRunId, change: RunClaimWrite, kind: AgentRun['kind']) {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: change.status,
+				startedAt: new Date(change.startedAt),
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.kind, kind),
+					eq(schema.agentRuns.status, change.expected)
+				)
+			)
+			.returning();
+		return row;
+	}
+
+	async checkpointAgent(
+		runId: AgentRunId,
+		change: AgentCheckpointWrite
+	): Promise<ResolvedAgentRun | undefined> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: change.status,
+				serializedState: change.serializedState,
+				pendingDecisions: change.pendingDecisions,
+				traceparent: change.traceparent,
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.kind, 'agent'),
+					eq(schema.agentRuns.status, change.expected)
+				)
+			)
+			.returning();
 		return row ? toResolvedRun(row) : undefined;
 	}
 

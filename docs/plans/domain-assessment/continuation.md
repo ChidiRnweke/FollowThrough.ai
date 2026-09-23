@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [claim/checkpoint disposition](run-claims-checkpoints.md) records explicit write ownership and
+atomic approval publication. Terminal settlement still uses the generic transition API.
+
+[PR #176](https://github.com/ChidiRnweke/FollowThrough.ai/pull/176) passed all required checks,
+including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35871771564).
+It remains open on the dependent stack.
+
 The [pending-call cleanup disposition](run-pending-cleanup.md) records corrected terminal snapshots,
 queued-checkpoint cleanup and removal of whole-run replacement. Generic transitions remain unresolved.
 

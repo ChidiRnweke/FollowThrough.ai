@@ -1,3 +1,4 @@
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -73,6 +74,7 @@ const approvalController = (db: typeof context.db) => {
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
+			checkpoints: new RunCheckpoints(runs),
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
 			eventBus: { notify: () => {} }
