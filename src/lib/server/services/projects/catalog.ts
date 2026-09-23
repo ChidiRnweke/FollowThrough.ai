@@ -10,7 +10,7 @@ import type {
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError } from '$lib/errors';
 import type {
 	ProjectRepository,
 	ProjectTreeRepository
@@ -58,15 +58,17 @@ export class ProjectCatalog {
 		return this.tree.list(actor, projectId);
 	}
 
-	async move(actor: ActorContext, input: MoveProjectEntryInput): Promise<Note> {
-		await this.get(actor, input.projectId);
-		const decision = decideProjectEntryMove(input, await this.tree.list(actor, input.projectId));
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		await this.tree.persistOrder(actor, decision.changes);
-		return { ...decision.entry, parentId: decision.parentId, position: decision.position };
+	async readForMove(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
+		const project = await this.projects.findForWrite(actor, projectId);
+		if (!project) throw new NotFoundError('Project was not found');
+		return this.tree.list(actor, projectId);
+	}
+
+	persistOrder(
+		actor: ActorContext,
+		entries: readonly { id: NoteId; parentId: NoteId | undefined; position: number }[]
+	): Promise<void> {
+		return this.tree.persistOrder(actor, entries);
 	}
 }
 

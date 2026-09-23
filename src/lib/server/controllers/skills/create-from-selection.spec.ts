@@ -38,7 +38,7 @@ const setup = () => {
 			noteLinkReconciler: notes,
 			noteIndexer: notes,
 			skillCreator: skills,
-			transactionRunner: new InMemoryTransactionRunner([notes, provenance, skills])
+			transactionRunner: new InMemoryTransactionRunner([notes, provenance, skills, repository])
 		})
 	);
 	return { controller, notes, skills, provenance, repository };
@@ -75,6 +75,12 @@ describe('Create skill workflow invariants', () => {
 		skills.failCreation = true;
 		await controller.createFromSelection(testActor(), input).catch(() => undefined);
 		expect(notes.anchors).toEqual([]);
+	});
+	it('rolls back the new note when skill creation fails', async () => {
+		const { controller, repository, skills } = setup();
+		skills.failCreation = true;
+		await controller.createFromSelection(testActor(), input).catch(() => undefined);
+		expect(repository.notes.map((note) => note.id)).toEqual([testNoteId()]);
 	});
 	it('creates the skill document in the source project', async () => {
 		const { controller, skills } = setup();

@@ -80,11 +80,17 @@ export class NoteCatalog {
 		return note;
 	}
 
+	private async lockTreeForNote(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const candidate = await this.get(actor, noteId);
+		await this.resolveProject(actor, candidate.projectId);
+		return this.lockedNote(actor, noteId);
+	}
+
 	async archiveFacts(
 		actor: ActorContext,
 		noteId: NoteId
 	): Promise<{ note: Note; hasActiveChildren: boolean }> {
-		const note = await this.lockedNote(actor, noteId);
+		const note = await this.lockTreeForNote(actor, noteId);
 		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
 		return { note, hasActiveChildren: active.some((entry) => entry.parentId === noteId) };
 	}
@@ -93,7 +99,7 @@ export class NoteCatalog {
 		actor: ActorContext,
 		noteId: NoteId
 	): Promise<{ note: Note; parent: Note | null; rootSiblingCount: number }> {
-		const note = await this.lockedNote(actor, noteId);
+		const note = await this.lockTreeForNote(actor, noteId);
 		const parent = note.parentId ? await this.notes.findForWrite(actor, note.parentId) : undefined;
 		return {
 			note,
@@ -325,7 +331,7 @@ export class NoteCatalog {
 		actor: ActorContext,
 		projectId: Note['projectId']
 	): Promise<Project> {
-		const project = await this.projects.findById(actor, projectId);
+		const project = await this.projects.findForWrite(actor, projectId);
 		if (!project) throw new NotFoundError('Project was not found', { projectId });
 		return project;
 	}

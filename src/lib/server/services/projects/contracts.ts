@@ -1,14 +1,13 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateProjectInput,
-	MoveProjectEntryInput,
 	Project,
 	ProjectId,
 	ProjectDetails,
 	RenameProjectInput,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
-import type { Note } from '$lib/models/notes';
+import type { Note, NoteId } from '$lib/models/notes';
 
 export interface ProjectCreator {
 	create(actor: ActorContext, input: CreateProjectInput & ProjectDetails): Promise<Project>;
@@ -35,6 +34,10 @@ export interface ProjectTreeReader {
 	readEntries(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
 }
 
-export interface ProjectEntryMover {
-	move(actor: ActorContext, input: MoveProjectEntryInput): Promise<Note>;
+export interface ProjectTreeWriter {
+	readForMove(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
+	persistOrder(
+		actor: ActorContext,
+		entries: readonly { id: NoteId; parentId: NoteId | undefined; position: number }[]
+	): Promise<void>;
 }

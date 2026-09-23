@@ -67,6 +67,21 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		return row ? toProject(row) : undefined;
 	}
 
+	async findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.projects)
+			.where(
+				and(
+					eq(schema.projects.id, projectId),
+					eq(schema.projects.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			)
+			.for('update');
+		return row ? toProject(row) : undefined;
+	}
+
 	async findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
 		const [row] = await this.database
 			.select()

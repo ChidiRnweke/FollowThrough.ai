@@ -1,3 +1,4 @@
+import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
@@ -32,7 +33,7 @@ import type {
 import type {
 	ProjectCreator,
 	ProjectEditor,
-	ProjectEntryMover,
+	ProjectTreeWriter,
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
@@ -41,8 +42,8 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 
 /**
  * Application boundary for projects and their folder tree: listing, loading, creating,
- * renaming, archiving, and moving entries. The move is the only write that needs atomic
- * cross-entry bookkeeping, so it alone runs through the transaction runner.
+ * renaming, archiving, and moving entries. Creation and placement hold the project
+ * lock while reading the tree and persisting its resolved changes.
  */
 export interface ProjectsController {
 	synchronize(actor: ActorContext, input: ProjectMutationRequest): Promise<WorkspaceMutationResult>;
@@ -76,7 +77,7 @@ export interface ProjectsDependencies {
 	projectEditor: ProjectEditor;
 	projectTreeReader: ProjectTreeReader;
 	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
-	entryMover: ProjectEntryMover;
+	entryWriter: ProjectTreeWriter;
 	transactionRunner: TransactionRunner;
 }
 
@@ -182,30 +183,41 @@ export class Projects implements ProjectsController {
 		actor: ActorContext,
 		input: CreateFolderInput
 	): Promise<CreateFolderOutput<Note>> {
-		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-		const decision = decideNoteCreation(
-			{
-				id: input.id ?? (crypto.randomUUID() as NoteId),
-				title: input.name,
-				parentId: input.parentId,
-				kind: 'folder'
-			},
-			facts,
-			new Date().toISOString() as DateTime
-		);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return { folder: await this.dependencies.noteCreation.insert(actor, decision.note) };
+		return this.dependencies.transactionRunner.run(async () => {
+			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+			const decision = decideNoteCreation(
+				{
+					id: input.id ?? (crypto.randomUUID() as NoteId),
+					title: input.name,
+					parentId: input.parentId,
+					kind: 'folder'
+				},
+				facts,
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') {
+				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+				throw new ValidationError(decision.message);
+			}
+			return { folder: await this.dependencies.noteCreation.insert(actor, decision.note) };
+		});
 	}
 
 	async move(
 		actor: ActorContext,
 		input: MoveProjectEntryInput
 	): Promise<MoveProjectEntryOutput<Note>> {
-		return this.dependencies.transactionRunner.run(async () => ({
-			entry: await this.dependencies.entryMover.move(actor, input)
-		}));
+		return this.dependencies.transactionRunner.run(async () => {
+			const entries = await this.dependencies.entryWriter.readForMove(actor, input.projectId);
+			const decision = decideProjectEntryMove(input, entries);
+			if (decision.kind === 'invalid') {
+				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+				throw new ValidationError(decision.message);
+			}
+			await this.dependencies.entryWriter.persistOrder(actor, decision.changes);
+			return {
+				entry: { ...decision.entry, parentId: decision.parentId, position: decision.position }
+			};
+		});
 	}
 }

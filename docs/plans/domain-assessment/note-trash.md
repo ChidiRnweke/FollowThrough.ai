@@ -35,5 +35,6 @@ restoration waits and verifies placement at the root. Locking-read contracts cov
 and archived projects. Local focused results and CI results are recorded in the PR.
 
 This records archive/restore ownership, not completion of every trash workflow. Concurrent creation
-or movement into a folder and project lifecycle races still need a review across those writers.
+or movement into a folder and project lifecycle coordination continue in
+[project tree transactions](project-tree-transactions.md).
 Permanent deletion, trash listing and revision restoration retain separate owners and dispositions.

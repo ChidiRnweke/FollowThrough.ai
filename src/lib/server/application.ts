@@ -603,7 +603,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			projectEditor: projects,
 			projectTreeReader: projects,
 			noteCreation: notes,
-			entryMover: projects,
+			entryWriter: projects,
 			transactionRunner
 		},
 		retrieval: {

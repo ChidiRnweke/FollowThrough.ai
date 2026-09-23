@@ -643,22 +643,24 @@ export class Notes implements NotesController {
 		input: CreateNoteInput,
 		kind: 'note' | 'folder'
 	): Promise<Note> {
-		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-		const decision = decideNoteCreation(
-			{
-				id: input.id ?? (crypto.randomUUID() as NoteId),
-				title: input.title,
-				parentId: input.parentId,
-				kind: kind
-			},
-			facts,
-			new Date().toISOString() as DateTime
-		);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return this.dependencies.noteCreation.insert(actor, decision.note);
+		return this.dependencies.transactionRunner.run(async () => {
+			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+			const decision = decideNoteCreation(
+				{
+					id: input.id ?? (crypto.randomUUID() as NoteId),
+					title: input.title,
+					parentId: input.parentId,
+					kind: kind
+				},
+				facts,
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') {
+				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+				throw new ValidationError(decision.message);
+			}
+			return this.dependencies.noteCreation.insert(actor, decision.note);
+		});
 	}
 
 	/** Resolve a body proposal once; later approval never reruns the requested patch. */
