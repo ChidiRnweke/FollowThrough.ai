@@ -513,6 +513,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteIndexer,
 			noteLinkReconciler: relationships,
 			skillEditor: skills,
+			skillPinWriter: skillCapability.pins,
 			selectionOrigins: noteCapability.selectionOrigins,
 			skillCreator: skills,
 			noteCreation: notes,

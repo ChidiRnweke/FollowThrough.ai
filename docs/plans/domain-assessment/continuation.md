@@ -39,6 +39,12 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #199](https://github.com/ChidiRnweke/FollowThrough.ai/pull/199) resolves
+[skill metadata persistence](skill-metadata-persistence.md). Focused regressions passed 17 files
+and 106 tests; the full local unit suite passed 436 files and 4,057 tests. All required checks passed,
+including [PostgreSQL contracts and full browser tests](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35904019727).
+The next slice addresses [skill pin ownership and catalog scope](skill-pins.md).
+
 [PR #198](https://github.com/ChidiRnweke/FollowThrough.ai/pull/198) resolves
 [active Inbox lifecycle](inbox-lifecycle.md). Focused regressions passed 21 files and 96 tests;
 the full local unit suite passed 436 files and 4,056 tests. Lint, type checks, architecture audits and

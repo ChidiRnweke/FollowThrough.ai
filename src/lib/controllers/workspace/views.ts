@@ -116,7 +116,7 @@ export class WorkspaceViews {
 		const pins = this.all('project_skill_pins');
 		return this.all('skills').flatMap((skill) => {
 			const note = notes.get(skill.noteId);
-			if (!note || (projectId && note.projectId !== projectId)) return [];
+			if (!note) return [];
 			return [
 				{
 					...skill,
@@ -124,7 +124,7 @@ export class WorkspaceViews {
 					projectId: note.projectId,
 					isPinned: projectId
 						? pins.some((pin) => pin.projectId === projectId && pin.skillNoteId === skill.noteId)
-						: note.isPinned
+						: false
 				}
 			];
 		});

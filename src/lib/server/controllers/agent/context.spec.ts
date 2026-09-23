@@ -275,7 +275,7 @@ describe('Agent grounding invariants', () => {
 				description: 'x'.repeat(400)
 			}))
 		];
-		skills.pinnedNoteIds = [pinned.note.id];
+		skills.pins = [{ projectId: testProjectId(), skillNoteId: pinned.note.id }];
 		const context = await builder.build(
 			testActor(),
 			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Anything at all' },

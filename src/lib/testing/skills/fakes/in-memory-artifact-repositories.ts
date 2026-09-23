@@ -279,13 +279,16 @@ export class InMemorySkillRepository implements SkillRepository {
 	snapshot(): () => void {
 		const skills = structuredClone(this.skills);
 		const usages = structuredClone(this.usages);
+		const pins = structuredClone(this.pins);
 		return () => {
 			this.skills = skills;
 			this.usages = usages;
+			this.pins = pins;
 		};
 	}
 	skills: Skill<Note>[] = [];
 	usages: SkillUsage[] = [];
+	pins: { projectId: ProjectId; skillNoteId: NoteId }[] = [];
 	findForWrite(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
 		return this.findByNoteId(actor, noteId);
 	}
@@ -294,10 +297,10 @@ export class InMemorySkillRepository implements SkillRepository {
 		const note = await this.notes.findById(actor, noteId);
 		return skill && note ? { ...skill, note } : undefined;
 	}
-	async listEnabled(actor: ActorContext): Promise<readonly SkillSummary[]> {
-		return (await this.listAll(actor)).filter((skill) => skill.isEnabled);
+	async listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		return (await this.listAll(actor, projectId)).filter((skill) => skill.isEnabled);
 	}
-	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
+	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		const joined = await Promise.all(
 			this.skills.map((item) => this.findByNoteId(actor, item.note.id))
 		);
@@ -311,6 +314,9 @@ export class InMemorySkillRepository implements SkillRepository {
 				description: item.description,
 				triggerHints: item.triggerHints,
 				allowImplicitInvocation: item.allowImplicitInvocation,
+				isPinned: this.pins.some(
+					(pin) => pin.projectId === projectId && pin.skillNoteId === item.note.id
+				),
 				isEnabled: item.isEnabled
 			}));
 	}
@@ -334,7 +340,18 @@ export class InMemorySkillRepository implements SkillRepository {
 		this.skills = this.skills.map((item) => (item.note.id === note.id ? stored : item));
 		return stored;
 	}
-	async setPinned(): Promise<void> {}
+	async setPinned(
+		actor: ActorContext,
+		noteId: NoteId,
+		projectId: ProjectId,
+		pinned: boolean
+	): Promise<void> {
+		if (!(await this.findByNoteId(actor, noteId))) throw new NotFoundError('Skill was not found');
+		this.pins = this.pins.filter(
+			(pin) => pin.projectId !== projectId || pin.skillNoteId !== noteId
+		);
+		if (pinned) this.pins.push({ projectId, skillNoteId: noteId });
+	}
 	async recordUsage(_actor: ActorContext, usage: SkillUsage) {
 		this.usages.push(usage);
 		return usage;

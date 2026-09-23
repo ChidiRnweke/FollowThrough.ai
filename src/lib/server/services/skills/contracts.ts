@@ -8,7 +8,8 @@ import type {
 	SkillUsageView,
 	SkillManifest,
 	SkillEditInput,
-	PreparedSkillEdit
+	PreparedSkillEdit,
+	SkillPinChange
 } from '$lib/models/skills';
 
 export interface SkillCreator {
@@ -33,12 +34,10 @@ export interface SkillEditor {
 	): Promise<PreparedSkillEdit<Note>>;
 	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
 	manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest>;
-	setPinned(
-		actor: ActorContext,
-		noteId: NoteId,
-		projectId: ProjectId,
-		pinned: boolean
-	): Promise<void>;
+}
+export interface SkillPinWriter {
+	prepare(actor: ActorContext, input: SkillPinChange): Promise<SkillPinChange>;
+	persist(actor: ActorContext, change: SkillPinChange): Promise<void>;
 }
 export interface SkillUsageRecorder {
 	record(

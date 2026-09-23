@@ -90,9 +90,18 @@ export type SkillSummary = Pick<
 > & {
 	readonly name: string;
 	readonly noteId: NoteId;
-	readonly projectId?: ProjectId;
-	readonly isPinned?: boolean;
+	/** The project storing the instruction note, independent of the catalog's pin context. */
+	readonly projectId: ProjectId;
+	/** The selected project's pin; false for an unscoped catalog. */
+	readonly isPinned: boolean;
 };
+
+/** Set whether a skill leads the catalog in one project. This is separate from the note's pin. */
+export interface SkillPinChange {
+	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly pinned: boolean;
+}
 
 /** Recorded every time the agent loads a skill's full instructions, so "which skills actually get used" is answerable later. Reads via `get_skill` don't create one. */
 export interface SkillUsage {
