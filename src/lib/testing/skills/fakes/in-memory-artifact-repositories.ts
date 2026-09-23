@@ -4,6 +4,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
 	DiagramRevision,
 	DiagramRevisionId,
@@ -170,9 +171,34 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 		this.diagrams.push(diagram);
 		return diagram;
 	}
-	async update(_actor: ActorContext, diagram: Diagram) {
-		this.diagrams = this.diagrams.map((item) => (item.id === diagram.id ? diagram : item));
-		return diagram;
+	async updateContent(
+		actor: ActorContext,
+		write: DiagramContentWrite
+	): Promise<Diagram | undefined> {
+		const current = this.diagrams.find(
+			(item) => item.id === write.diagramId && item.userId === actor.userId
+		);
+		if (
+			!current ||
+			current.kind !== write.kind ||
+			current.archivedAt ||
+			current.updatedAt !== write.expectedUpdatedAt ||
+			(write.kind === 'drawio' &&
+				(current.kind !== 'drawio' ||
+					current.currentRevision !== write.expectedRevision ||
+					current.publishedRevision !== write.expectedPublishedRevision))
+		)
+			return undefined;
+		const saved: Diagram = {
+			...current,
+			source: write.source,
+			renderedSvg: write.renderedSvg,
+			searchableText: write.searchableText,
+			updatedAt: write.updatedAt,
+			...(write.kind === 'mermaid' ? { title: write.title, provenanceId: write.provenanceId } : {})
+		};
+		this.diagrams = this.diagrams.map((item) => (item.id === saved.id ? saved : item));
+		return saved;
 	}
 	async updateIfRevision(
 		_actor: ActorContext,
@@ -190,7 +216,7 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 			current.publishedRevision !== expectedPublishedRevision
 		)
 			return undefined;
-		await this.update(_actor, diagram);
+		this.diagrams = this.diagrams.map((item) => (item.id === diagram.id ? diagram : item));
 		return diagram;
 	}
 	async insertRevision(_actor: ActorContext, revision: DiagramRevision) {

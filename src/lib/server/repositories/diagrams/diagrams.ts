@@ -1,6 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
 	DiagramRevision,
 	DiagramRevisionId,
@@ -48,7 +49,7 @@ export interface DiagramRepository {
 		params?: ListProjectDiagramsParams
 	): Promise<number>;
 	insert(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
-	update(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
+	updateContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram | undefined>;
 	updateIfRevision(
 		actor: ActorContext,
 		diagram: DrawioDiagram,

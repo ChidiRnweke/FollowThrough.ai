@@ -108,6 +108,30 @@ export interface DrawioDiagram extends DiagramBase {
 
 export type Diagram = MermaidDiagram | DrawioDiagram;
 
+interface DiagramContentFields {
+	readonly diagramId: DiagramId;
+	readonly source: string;
+	readonly renderedSvg: string;
+	readonly searchableText: string;
+	readonly expectedUpdatedAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+/** Resolved content for generated Mermaid or a newly accepted draw.io conversion. */
+export type DiagramContentWrite = DiagramContentFields &
+	(
+		| {
+				readonly kind: 'mermaid';
+				readonly title: string | undefined;
+				readonly provenanceId: ProvenanceId;
+		  }
+		| {
+				readonly kind: 'drawio';
+				readonly expectedRevision: number;
+				readonly expectedPublishedRevision: number;
+		  }
+	);
+
 export interface DiagramRevision {
 	readonly id: DiagramRevisionId;
 	readonly diagramId: DiagramId;

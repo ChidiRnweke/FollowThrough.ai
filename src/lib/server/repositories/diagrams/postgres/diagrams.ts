@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, ilike, isNotNull, isNull, or, sql } from 'dr
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
 	DiagramRevision,
 	DiagramRevisionId,
@@ -186,27 +187,38 @@ export class DiagramRecords implements DiagramRepository {
 			.returning();
 		return toDiagram(row!);
 	}
-	async update(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
+	async updateContent(
+		actor: ActorContext,
+		write: DiagramContentWrite
+	): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
-				title: diagram.title,
-				source: diagram.source,
-				renderedSvg: diagram.renderedSvg,
-				searchableText: diagram.searchableText,
-				...(diagram.kind === 'drawio'
-					? {
-							currentRevision: diagram.currentRevision,
-							publishedRevision: diagram.publishedRevision,
-							publishedAt: diagram.publishedAt ? new Date(diagram.publishedAt) : null
-						}
-					: {}),
-				updatedAt: new Date(diagram.updatedAt)
+				source: write.source,
+				renderedSvg: write.renderedSvg,
+				searchableText: write.searchableText,
+				updatedAt: new Date(write.updatedAt),
+				...(write.kind === 'mermaid'
+					? { title: write.title ?? null, provenanceId: write.provenanceId }
+					: {})
 			})
-			.where(and(eq(schema.diagrams.id, diagram.id), eq(schema.diagrams.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.diagrams.id, write.diagramId),
+					eq(schema.diagrams.userId, actor.userId),
+					eq(schema.diagrams.kind, write.kind),
+					isNull(schema.diagrams.archivedAt),
+					eq(schema.diagrams.updatedAt, new Date(write.expectedUpdatedAt)),
+					...(write.kind === 'drawio'
+						? [
+								eq(schema.diagrams.currentRevision, write.expectedRevision),
+								eq(schema.diagrams.publishedRevision, write.expectedPublishedRevision)
+							]
+						: [])
+				)
+			)
 			.returning();
-		if (!row) throw new NotFoundError('Diagram was not found');
-		return toDiagram(row);
+		return row ? toDiagram(row) : undefined;
 	}
 	async updateIfRevision(
 		actor: ActorContext,

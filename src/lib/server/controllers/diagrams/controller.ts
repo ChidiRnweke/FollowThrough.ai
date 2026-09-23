@@ -557,8 +557,14 @@ export class Diagrams implements DiagramsController {
 				const revised = prepareMermaidRevision(current, existing, draft, this.dependencies.now());
 				const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
 				const searchableText = await this.dependencies.textExtractor.extract(revised);
-				const saved = await this.dependencies.diagramWriter.update(actor, {
-					...revised,
+				const saved = await this.dependencies.diagramWriter.persistContent(actor, {
+					kind: 'mermaid',
+					diagramId: revised.id,
+					title: revised.title,
+					source: revised.source,
+					provenanceId: draft.provenanceId,
+					expectedUpdatedAt: current.updatedAt,
+					updatedAt: revised.updatedAt,
 					renderedSvg,
 					searchableText
 				});
