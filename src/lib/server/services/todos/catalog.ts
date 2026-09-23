@@ -66,9 +66,6 @@ export class TodoCatalog {
 	listCategories(actor: ActorContext): Promise<readonly string[]> {
 		return this.todos.listCategories(actor);
 	}
-	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]> {
-		return this.list(actor, { dueBefore: through as TodoListFilter['dueBefore'] });
-	}
 	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
 		return this.list(actor, { responsibility: 'waiting_on' });
 	}

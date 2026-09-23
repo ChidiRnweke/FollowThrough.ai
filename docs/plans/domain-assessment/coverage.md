@@ -29,6 +29,10 @@ paths is not zero unreviewed behavior. No repository-wide semantic certification
 
 ## Model namespace register
 
+Current declaration dispositions for the task namespace are recorded in
+[the task model review](task-values.md). The historical counts below remain unchanged. Workflow
+coverage is separate: the category and list-read dispositions close only W09.07 and W09.09.
+
 Each exported model declaration is enumerated in the JSON. This table gives its semantic review home;
 it does not rubber-stamp optional-field combinations or constructor behavior.
 
