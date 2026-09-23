@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Run images: the image service owns shared budgets and the frozen reader choice. Agent supplies
+catalog facts and sends a resolved image mode to the provider runner. See the
+[disposition](domain-assessment/run-images.md).
+
 Run output: repositories read ordered attempt events; the run-output service reconstructs text and
 reasoning boundaries. Agent journals the resolved segments in its settlement transaction. See the
 [disposition](domain-assessment/run-output.md).

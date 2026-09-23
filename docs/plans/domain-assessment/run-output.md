@@ -26,5 +26,6 @@ that verify saved text/reasoning, ordering and distinct cursors, plus PostgreSQL
 
 Add a PostgreSQL contract that reads one attempt among other run/attempt events, retains an unreadable
 row and reconstructs separate output on each side with the correct cursors. The PR records observed
-validation. Provider session encoding, image preparation and remaining agent declarations still need
-their own dispositions; this is not a complete P17 assessment.
+validation. The subsequent [run-images disposition](run-images.md) covers image preparation. Provider
+session encoding and remaining agent declarations still need their own dispositions; this is not a
+complete P17 assessment.

@@ -1,3 +1,8 @@
+import {
+	prepareRunImages,
+	validateRunImages,
+	freezeImageReader
+} from '$lib/server/services/agent/runs/images';
 import { segmentOutput } from '$lib/server/services/agent/runs/output';
 import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
 import type { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -35,7 +40,6 @@ import type {
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { allImages } from '$lib/models/agent';
 import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
@@ -625,18 +629,7 @@ export class Agent implements AgentController {
 		input: SubmitAgentRunInput,
 		preferences: AgentPreferences
 	): StagedAgentRunInput {
-		// Both channels share one budget: they end up in the same request.
-		const images = allImages(input);
-		if (images.length > 4) throw new ValidationError('Attach at most four images.');
-		const imageBytes = images.reduce((sum, image) => {
-			if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType))
-				throw new ValidationError('Chat images must be PNG, JPEG, or WebP.');
-			if (!image.dataUrl.startsWith(`data:${image.mediaType};base64,`))
-				throw new ValidationError('Chat image content does not match its media type.');
-			return sum + Buffer.byteLength(image.dataUrl.split(',')[1] ?? '', 'base64');
-		}, 0);
-		if (imageBytes > 10 * 1024 * 1024)
-			throw new ValidationError('Chat images must be 10 MiB combined or less.');
+		validateRunImages(input);
 		const contextProjectId =
 			input.appContext?.currentProject?.id ?? input.appContext?.activeResource?.projectId;
 		const contextNoteId =
@@ -715,8 +708,8 @@ export class Agent implements AgentController {
 	 *
 	 * Otherwise the user's default (or the deployment's) is attached, which is
 	 * what stops images from being silently dropped by a model that cannot read
-	 * them. A catalogue lookup that fails falls through to describing: a wasted
-	 * caption call is recoverable, a discarded image is not.
+	 * them. Catalogue failures propagate; trusted deployment roles fill only
+	 * catalogue omissions and do not overwrite known provider capabilities.
 	 */
 	private async withImageReader(
 		runInput: RunAgentInput,
@@ -726,20 +719,17 @@ export class Agent implements AgentController {
 	): Promise<RunAgentInput> {
 		// Context images need a model that can see just as much as attachments do;
 		// ignoring them here would silently drop the render on a text-only model.
-		if (allImages(runInput).length === 0) return runInput;
-		const models = await this.dependencies.models.list();
-		if (models.find((candidate) => candidate.id === chatModel)?.supportsVision) {
-			const { visionModelOverride: _discarded, ...rest } = runInput;
-			return rest;
-		}
-		return {
-			...runInput,
-			visionModelOverride: resolveVisionModel(
-				conversation,
-				preferences,
-				this.dependencies.defaultVisionModel
-			)
-		};
+		if (prepareRunImages(runInput).kind === 'none') return runInput;
+		const models = configuredAgentModels(await this.dependencies.models.list(), {
+			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
+			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
+		});
+		return freezeImageReader(
+			runInput,
+			models,
+			chatModel,
+			resolveVisionModel(conversation, preferences, this.dependencies.defaultVisionModel)
+		);
 	}
 
 	private async requireRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
@@ -810,6 +800,7 @@ export class Agent implements AgentController {
 				actor,
 				run,
 				request,
+				imageInput: prepareRunImages(request),
 				context: run.contextSnapshot,
 				...(decisions.length > 0 ? { decisions } : {}),
 				signal,
