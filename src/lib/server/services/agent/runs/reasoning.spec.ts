@@ -110,6 +110,7 @@ const run: PreparedAgentRun = {
 };
 
 const sessions = {
+	listCanvasResults: async () => [],
 	list: async () => [],
 	append: async () => undefined,
 	pop: async () => undefined,
