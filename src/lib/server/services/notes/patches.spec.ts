@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyNotePatch, type NoteEdit } from './index';
+import { applyNotePatch } from './patches';
+import type { NoteEdit } from '$lib/models/notes';
 
 const body = '# Plan\n\nShip the thing.\n\nThen ship it again.\n';
 
