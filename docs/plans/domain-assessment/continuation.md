@@ -78,13 +78,20 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #178](https://github.com/ChidiRnweke/FollowThrough.ai/pull/178) passed all required checks,
+including [quality, unit/browser, PostgreSQL settlement/stream contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35875005430).
+It remains open on the dependent stack.
+
+The [run-output disposition](run-output.md) moves reconstruction out of event persistence. Provider
+session encoding, image preparation and remaining agent declarations still require review.
+
 [PR #177](https://github.com/ChidiRnweke/FollowThrough.ai/pull/177) passed all required checks,
 including [quality, unit/browser, PostgreSQL checkpoint contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35873158609).
 It remains open on the dependent stack.
 
 The [terminal-settlement disposition](run-terminal-settlement.md) replaces the remaining generic
 transition API and fixes PostgreSQL checkpoint clearing. Event-output reconstruction and the wider
-P17 workflow/declaration review remain unresolved.
+P17 workflow/declaration review were identified separately; output reconstruction is covered above.
 
 The [claim/checkpoint disposition](run-claims-checkpoints.md) records explicit write ownership and
 atomic approval publication. The terminal-settlement slice completes that API replacement.
