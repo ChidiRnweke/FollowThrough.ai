@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Run cancellation: Agent owns the transaction, actor-scoped row lock and immediate terminal event.
+RunCancellation decides resolved cancellation fields; persistence does not choose transitions.
+Repeated cancellation is idempotent. See the [disposition](domain-assessment/run-cancellation.md).
+
 Agent model choice: browser defaults, settings, chat, diagrams and attachment processing use the
 shared selection owner. Controllers validate requested roles against provider facts plus trusted
 deployment choices. Provider fetching and caching remain server owned. See the

@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import type { ActorContext } from '$lib/models/identity';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
@@ -33,6 +34,7 @@ export const agentContextFixture = () => {
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
 	const dependencies = {
 		runs,
+		cancellations: new RunCancellation(runs),
 		events: runs,
 		decisions: runs,
 		sessions,

@@ -50,6 +50,16 @@ const awaitingApproval = async (pendingDecisions: readonly PendingAgentDecision[
 };
 
 describe('durable agent submission', () => {
+	it('records queued cancellation once when the request is repeated', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: crypto.randomUUID(),
+			input: 'Wait for cancellation'
+		});
+		await controller.cancel(testActor(), receipt.runId);
+		await controller.cancel(testActor(), receipt.runId);
+		expect(runs.events.filter((record) => record.event.type === 'cancelled')).toHaveLength(1);
+	});
 	it('returns a queued receipt before provider execution', async () => {
 		const { controller } = setup();
 		const receipt = await controller.submit(testActor(), {
@@ -309,6 +319,33 @@ describe('resubmitting an edited question', () => {
 });
 
 describe('durable agent lifecycle commands', () => {
+	it('does not let another actor cancel a queued run', async () => {
+		const { controller } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: crypto.randomUUID(),
+			input: 'Private request'
+		});
+		await expect(controller.cancel(testActor(2), receipt.runId)).rejects.toThrow('not found');
+	});
+
+	it('rolls back queued cancellation when its event cannot be stored', async () => {
+		const { controller, runs } = setup();
+		const receipt = await controller.submit(testActor(), {
+			requestId: crypto.randomUUID(),
+			input: 'Cancel atomically'
+		});
+		runs.failedEvent = 'cancelled';
+		try {
+			await controller.cancel(testActor(), receipt.runId).catch((error: Error) => {
+				if (error.message !== 'Event storage unavailable') throw error;
+				return { kind: 'failure' as const };
+			});
+			expect(runs.runs.find((run) => run.id === receipt.runId)?.status).toBe('queued');
+		} finally {
+			runs.failedEvent = undefined;
+		}
+	});
+
 	it('cancels a queued run immediately', async () => {
 		const { controller } = setup();
 		const receipt = await controller.submit(testActor(), {

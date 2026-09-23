@@ -1,3 +1,4 @@
+import type { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type {
 	ConversationMutationRequest,
@@ -206,6 +207,7 @@ export interface AgentDependencies {
 	models: AgentModelCatalog;
 	/** Run records: idempotent inserts, lookups by id/request id, cancellation and requeue. */
 	runs: AgentRunRepository;
+	cancellations: Pick<RunCancellation, 'getForWrite' | 'plan' | 'persist'>;
 	/** The append-only event log per run that clients poll via cursors. */
 	events: AgentRunEventRepository;
 	/** Recorded approvals and rejections for pending tool calls. */
@@ -451,7 +453,10 @@ export class Agent implements AgentController {
 
 	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
 		const run = await this.dependencies.transactionRunner.run(async () => {
-			const requested = await this.dependencies.runs.requestCancellation(actor, runId, now());
+			const current = await this.dependencies.cancellations.getForWrite(actor, runId);
+			const change = this.dependencies.cancellations.plan(current.status, now());
+			if (!change) return current;
+			const requested = await this.dependencies.cancellations.persist(actor, runId, change);
 			if (requested.status === 'cancelled')
 				await this.dependencies.events.append(requested.id, 0, {
 					type: 'cancelled',

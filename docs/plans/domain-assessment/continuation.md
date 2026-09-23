@@ -78,6 +78,14 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [run-cancellation disposition](run-cancellation.md) records a reproduced duplicate terminal event,
+controller-owned locked cancellation and concurrency/rollback coverage. Approval requeue and general
+run transitions remain unresolved.
+
+[PR #170](https://github.com/ChidiRnweke/FollowThrough.ai/pull/170) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35863719473).
+Its model-choice implementation remains open on the dependent stack.
+
 The model-choice slice shares precedence rules and fixes rejection of explicitly selected deployment
 defaults omitted by the provider catalog. It retains role checks, provider metadata and loud lookup
 failure. See the [model-choice disposition](agent-model-choice.md).

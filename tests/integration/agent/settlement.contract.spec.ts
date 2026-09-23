@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -55,6 +56,7 @@ const setup = async (suffix: string) => {
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
+			cancellations: new RunCancellation(runs),
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,
@@ -65,7 +67,17 @@ const setup = async (suffix: string) => {
 			eventBus: { notify: () => {} }
 		})
 	);
-	return { owner, runs, events, sessions, run, runner, controller, conversations };
+	return {
+		owner,
+		runs,
+		events,
+		sessions,
+		run,
+		runner,
+		controller,
+		conversations,
+		transactionRunner: transaction.transactionRunner
+	};
 };
 
 describe('atomic execution settlement', () => {
@@ -88,13 +100,19 @@ describe('atomic execution settlement', () => {
 		});
 	});
 	it('publishes only cancellation after cancellation wins against execution', async () => {
-		const { owner, runs, events, run, runner, controller } = await setup('9612');
+		const { owner, runs, events, run, runner, controller, transactionRunner } = await setup('9612');
 		runner.events = [];
 		const completion = Promise.withResolvers<void>();
 		runner.completion = completion.promise;
 		const execution = controller.execute(run.id, new AbortController().signal);
 		await runner.started.promise;
-		await runs.requestCancellation(owner, run.id, now);
+		await transactionRunner.run(async () => {
+			const cancellations = new RunCancellation(runs);
+			const current = await cancellations.getForWrite(owner, run.id);
+			const change = cancellations.plan(current.status, now);
+			if (!change) throw new Error('Expected an active run');
+			await cancellations.persist(owner, run.id, change);
+		});
 		completion.resolve();
 		await Promise.all([execution, controller.finishCancellation(run.id)]);
 		expect({
