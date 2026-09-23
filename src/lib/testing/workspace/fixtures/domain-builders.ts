@@ -180,12 +180,12 @@ export const memoryEntryBuilder = (overrides: Partial<MemoryEntry> = {}): Memory
 export const anchorBuilder = (overrides: Partial<SourceAnchor> = {}): SourceAnchor => ({
 	id: testAnchorId(),
 	noteId: testNoteId(),
-	from: 0,
-	to: 4,
 	quote: 'Send',
 	revision: 1,
 	createdAt: testNow,
-	...overrides
+	...overrides,
+	from: overrides.from ?? 0,
+	to: overrides.to ?? 4
 });
 
 export const appContextBuilder = (

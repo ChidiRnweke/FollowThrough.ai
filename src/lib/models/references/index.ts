@@ -1,3 +1,4 @@
+import type { SourceAnchor } from '$lib/models/provenance';
 import { z } from 'zod';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -49,19 +50,6 @@ interface TextSelection {
 }
 
 export type ReferenceTier = 'official' | 'standard' | 'vendor' | 'community';
-
-interface SourceAnchor {
-	readonly id: SourceAnchorId;
-	readonly noteId: NoteId;
-	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
-	readonly quote: string;
-	readonly prefix?: string;
-	readonly suffix?: string;
-	readonly revision: number;
-	readonly createdAt: DateTime;
-}
 
 /** A ranked external link attached to a note, always tied back to the selection that proposed it. */
 export interface ExternalReference {

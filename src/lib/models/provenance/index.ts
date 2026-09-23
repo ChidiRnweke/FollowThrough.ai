@@ -29,18 +29,46 @@ export type ProducerKind = 'user' | 'pipeline' | 'agent';
  * (re-pointed), not recomputed from scratch, when a note is edited, so a still-unique
  * quote keeps its anchor even as surrounding text changes.
  */
-export interface SourceAnchor {
+interface SourceAnchorFields {
 	readonly id: SourceAnchorId;
 	readonly noteId: NoteId;
 	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
 	readonly quote: string;
 	readonly prefix?: string;
 	readonly suffix?: string;
 	readonly revision: number;
 	readonly createdAt: DateTime;
 }
+
+/** Offsets are one recorded range: both ends exist, or neither does. */
+export type SourceAnchor = SourceAnchorFields &
+	({ readonly from: number; readonly to: number } | { readonly from?: never; readonly to?: never });
+
+export const sourceAnchorFields = {
+	id: z.uuid().transform((value) => value as SourceAnchorId),
+	noteId: z.uuid().transform((value) => value as NoteId),
+	nodeId: z.string().optional(),
+	from: z.number().int().nonnegative().optional(),
+	to: z.number().int().nonnegative().optional(),
+	quote: z.string(),
+	prefix: z.string().optional(),
+	suffix: z.string().optional(),
+	revision: z.number().int(),
+	createdAt: z.iso
+		.datetime({ offset: true })
+		.transform((value) => new Date(value).toISOString() as DateTime)
+};
+
+export const sourceAnchorSchema: z.ZodType<SourceAnchor> = z.union([
+	z
+		.object({
+			...sourceAnchorFields,
+			from: sourceAnchorFields.from.unwrap(),
+			to: sourceAnchorFields.to.unwrap()
+		})
+		.refine((range) => range.from <= range.to, 'Anchor end must follow its start'),
+	z.object({ ...sourceAnchorFields, from: z.undefined().optional(), to: z.undefined().optional() })
+]);
 
 /**
  * Who or what produced something, and how. Every suggestion, memory change, and

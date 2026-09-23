@@ -10,7 +10,12 @@ import {
 	type NoteRelationship,
 	type NoteRevision
 } from '$lib/models/notes';
-import { provenanceSchema, type Provenance, type SourceAnchor } from '$lib/models/provenance';
+import {
+	provenanceSchema,
+	sourceAnchorSchema,
+	type Provenance,
+	type SourceAnchor
+} from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
 import { skillMetadataSchema } from '$lib/models/skills';
@@ -87,7 +92,7 @@ export const toRevision = (row: typeof schema.noteRevisions.$inferSelect): NoteR
 	});
 
 export const toAnchor = (row: typeof schema.sourceAnchors.$inferSelect): SourceAnchor =>
-	domain<SourceAnchor>({
+	sourceAnchorSchema.parse({
 		id: row.id,
 		noteId: row.noteId,
 		nodeId: row.nodeId ?? undefined,

@@ -39,6 +39,14 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #206](https://github.com/ChidiRnweke/FollowThrough.ai/pull/206) enforces
+[task completion values](task-completion-values.md). Focused regressions passed 16 files and 120
+tests; the full local unit suite passed 441 files and 4,083 tests. All required checks passed,
+including [malformed storage and rollback contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35913315844).
+
+The [source-anchor disposition](source-anchor-values.md) records the next boundary correction:
+offsets form a complete valid range or are both absent. Overall workflow reconciliation remains open.
+
 [PR #205](https://github.com/ChidiRnweke/FollowThrough.ai/pull/205) validates resolved promise dates
 at the provider boundary. Focused regressions passed 14 files and 105 tests; the full local unit
 suite passed 440 files and 4,079 tests. All required checks passed, including

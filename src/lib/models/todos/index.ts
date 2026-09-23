@@ -1,4 +1,4 @@
-import type { Provenance } from '$lib/models/provenance';
+import type { SourceAnchor, Provenance } from '$lib/models/provenance';
 import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -54,19 +54,6 @@ export const promiseExtractionSchema = z.object({
 		})
 	)
 });
-
-interface SourceAnchor {
-	readonly id: SourceAnchorId;
-	readonly noteId: NoteId;
-	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
-	readonly quote: string;
-	readonly prefix?: string;
-	readonly suffix?: string;
-	readonly revision: number;
-	readonly createdAt: DateTime;
-}
 
 interface TodoFields {
 	readonly id: TodoId;
