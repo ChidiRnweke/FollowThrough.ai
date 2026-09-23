@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, type SQL } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
 import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
 import { NotFoundError } from '$lib/errors';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
@@ -177,10 +178,10 @@ export class TodoRecords implements TodoRepository {
 		return toTodo(row);
 	}
 
-	async softDelete(actor: ActorContext, id: TodoId, deletedAt: Todo['deletedAt']): Promise<void> {
+	async softDelete(actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void> {
 		const [row] = await this.database
 			.update(schema.todos)
-			.set({ deletedAt: deletedAt ? new Date(deletedAt) : new Date() })
+			.set({ deletedAt: new Date(deletedAt) })
 			.where(and(eq(schema.todos.id, id), eq(schema.todos.userId, actor.userId)))
 			.returning({ id: schema.todos.id });
 		if (!row) throw new NotFoundError('Todo was not found');

@@ -39,6 +39,16 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #211](https://github.com/ChidiRnweke/FollowThrough.ai/pull/211) hides task details after
+project archival, with matched actual-component captures and three previously failing regressions.
+The full local unit suite passed 444 files and 4,099 tests. All required checks passed, including
+[full browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35918900933).
+
+The [task command review](task-commands.md) reconciles W09.01–W09.06 and W09.08. Task deletion
+persistence now requires the timestamp already resolved by its service. This removes an unsupported
+optional input with different PostgreSQL/fake behavior. Focused regressions passed eight files and
+65 tests. The other task workflows and the repository-wide assessment remain open.
+
 [PR #210](https://github.com/ChidiRnweke/FollowThrough.ai/pull/210) retires unused task read
 contracts and records category/list workflow and model declaration dispositions. The full local
 unit suite passed 443 files and 4,095 tests. All required checks passed, including
