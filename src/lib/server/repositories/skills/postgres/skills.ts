@@ -73,7 +73,13 @@ export class SkillRecords implements SkillRepository {
 							)
 						: sql<boolean>`false`
 				)
-				.where(and(eq(schema.notes.userId, actor.userId), isNull(schema.projects.archivedAt)))
+				.where(
+					and(
+						eq(schema.notes.userId, actor.userId),
+						isNull(schema.projects.archivedAt),
+						isNull(schema.notes.archivedAt)
+					)
+				)
 				.orderBy(asc(schema.notes.title))
 		).map(({ note, skill, pin }) => ({
 			noteId: note.id as NoteId,
