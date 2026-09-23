@@ -171,13 +171,12 @@ export interface GetSkillViewInput {
 	readonly noteId: NoteId;
 }
 
-/** A document edit includes the portable metadata whose validity its controller must check. */
+/** The skill holds the candidate note in every arm; document edits also carry portable validation input. */
 export type PreparedSkillEdit<Document> =
 	| { readonly kind: 'metadata'; readonly skill: Skill<Document> }
-	| { readonly kind: 'title'; readonly skill: Skill<Document>; readonly document: Document }
+	| { readonly kind: 'title'; readonly skill: Skill<Document> }
 	| {
 			readonly kind: 'document';
 			readonly skill: Skill<Document>;
-			readonly document: Document;
 			readonly manifest: SkillManifest;
 	  };

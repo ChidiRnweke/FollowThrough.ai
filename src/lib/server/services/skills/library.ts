@@ -124,7 +124,10 @@ export class SkillLibrary {
 		if (!input.content) {
 			return displayName === current.note.title
 				? { kind: 'metadata', skill: current }
-				: { kind: 'title', skill: current, document: { ...current.note, title: displayName } };
+				: {
+						kind: 'title',
+						skill: { ...current, note: { ...current.note, title: displayName } }
+					};
 		}
 		const manifest =
 			input.content.kind === 'manifest'
@@ -153,7 +156,6 @@ export class SkillLibrary {
 		};
 
 		return {
-			document: note,
 			kind: 'document',
 			manifest,
 			skill: {

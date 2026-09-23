@@ -20,13 +20,21 @@ catalog has no project pin context and returns false. A selected project joins i
 excluding skills stored in other active projects. WorkspaceViews now follows that same rule.
 The repository and agent fakes retain pins by project rather than by note alone.
 
+The public mutation entry is set_skill_pinned in agent-tool-factory, classified as a mutation in
+AgentToolCoverage and forwarded to Skills.setPinned. MCP uses the same tool definitions. There is
+no separate remote pin command or offline pin mutation to reconcile. The replicated join records
+feed WorkspaceViews. The existing tool-factory test retains the mutation classification; controller
+and storage tests establish the resulting state. W12.12 is assessed, with delivery still on open PR #200.
+
 ## Evidence and limits
 
 Three workspace tests cover global, selected-project and unrelated-project projections. Two failed
 against the previous projection and all three pass after the change. Six controller tests cover
 idempotence, independent pins and lifecycle guards. Five PostgreSQL contracts cover stored scope,
-archive races, provisioning and the note-indexing lock cycle. Contract execution requires CI because
-the local Docker service is unavailable; do not treat their presence as an observed pass.
+archive races, provisioning and the note-indexing lock cycle. The
+[PostgreSQL contract job](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35906703676/job/107336072881)
+passed on PR #200, including those races and the existing project-tree contracts. The local Docker
+service is unavailable, so this is CI evidence rather than a local database run.
 
 The committed before/after images render the real SkillCatalog with WorkspaceViews and application
 CSS through the surface fixture route. Both use a 1200 by 600 light viewport and a 1080-pixel content

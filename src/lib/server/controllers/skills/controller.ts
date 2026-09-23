@@ -300,13 +300,13 @@ export class Skills implements SkillsController {
 				if (
 					input.content &&
 					input.content.baseRevision !== current.note.currentRevision &&
-					!sameNoteDraft(current.note, prepared.document)
+					!sameNoteDraft(current.note, prepared.skill.note)
 				)
 					throw new StaleRevisionError('The skill document has changed since it was loaded');
 			}
 			const note =
 				prepared.kind !== 'metadata'
-					? await this.saveDocument(actor, prepared.document)
+					? await this.saveDocument(actor, prepared.skill.note)
 					: prepared.skill.note;
 			return this.dependencies.skillEditor.commitEdit(actor, { ...prepared.skill, note });
 		});
