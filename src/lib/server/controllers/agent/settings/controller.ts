@@ -1,5 +1,6 @@
+import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
 import { mutationResource } from '$lib/services/workspace/commands';
-import type { AtomicOperation } from '$lib/models/workspace';
+import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	AgentPreferenceMutationRequest,
 	WorkspaceMutationResult
@@ -14,7 +15,7 @@ import {
 	resolveDefaultAgentModel,
 	resolveDefaultVisionModel,
 	type AgentModelCatalog,
-	type AgentPreferencesStore
+	type AgentPreferenceCatalog
 } from '$lib/server/services/agent/runs/preferences';
 
 /**
@@ -76,7 +77,8 @@ export interface AgentSettingsDependencies {
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
-	preferences: AgentPreferencesStore;
+	preferences: Pick<AgentPreferenceCatalog, 'get' | 'getForWrite' | 'defaults' | 'persist'>;
+	now: () => DateTime;
 	models: AgentModelCatalog;
 	/** Deployment fallback chat model when the user has not chosen one. */
 	defaultModel: string;
@@ -126,12 +128,12 @@ export class AgentSettings implements AgentSettingsController {
 	): Promise<AgentPreferences> {
 		if (input.defaultModel) await this.dependencies.models.assertSelectable(input.defaultModel);
 		if (input.defaultVisionModel)
-			await this.dependencies.models.assertVisionSelectable?.(input.defaultVisionModel);
+			await this.dependencies.models.assertVisionSelectable(input.defaultVisionModel);
 		if (input.attachmentVisionModel)
-			await this.dependencies.models.assertVisionSelectable?.(input.attachmentVisionModel);
+			await this.dependencies.models.assertVisionSelectable(input.attachmentVisionModel);
 		// Inline completion never calls tools, so it is checked for existence only.
 		if (input.inlineModel)
-			await this.dependencies.models.assertGenerationSelectable?.(input.inlineModel);
+			await this.dependencies.models.assertGenerationSelectable(input.inlineModel);
 		// Both the settings form and the agent's own `update_agent_preferences`
 		// land here, so this is the one place the limits have to hold.
 		if (input.webSearchEngine && !webSearchEngines.includes(input.webSearchEngine))
@@ -139,7 +141,13 @@ export class AgentSettings implements AgentSettingsController {
 		assertRange('Web search results', input.webSearchMaxResults, 1, 50);
 		assertRange('Total web search results', input.webSearchMaxTotalResults, 1, 100);
 		assertRange('Agent turn limit', input.agentMaxTurns, 1, 50);
-		return this.dependencies.preferences.update(actor, input);
+		return this.dependencies.transactionRunner.run(async () => {
+			const stored = await this.dependencies.preferences.getForWrite(actor);
+			const timestamp = this.dependencies.now();
+			const current = stored ?? this.dependencies.preferences.defaults(actor, timestamp);
+			const preferences = applyAgentPreferenceUpdate(current, input, timestamp);
+			return this.dependencies.preferences.persist(actor, preferences);
+		});
 	}
 
 	listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {

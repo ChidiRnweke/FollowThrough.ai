@@ -48,4 +48,6 @@ Observed local and CI results are recorded in the dependent PR and continuation 
 
 Local validation passed 23 focused files and 187 tests, then all 413 unit files and 3,910 tests.
 Lint, type checks, architecture audits and documentation checks passed; docs report one existing hint.
-PostgreSQL contract results are pending CI because the local Docker socket remains unresponsive.
+[PR #168 CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35860550944) passed
+PostgreSQL contracts, quality, full browser/unit tests and sync PWA. Commit and PR title checks also
+passed. PostgreSQL evidence comes from CI because the local Docker socket remains unresponsive.

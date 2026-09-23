@@ -1,50 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
-import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
-import type {
-	AgentModelCatalog,
-	AgentPreferencesStore
-} from '$lib/server/services/agent/runs/preferences';
+import type { DateTime } from '$lib/models/workspace';
+import { agentPreferenceWrite } from '$lib/controllers/workspace/commands';
+import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
+import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { AgentSettings, type AgentSettingsDependencies } from './controller';
 
-class FakeAgentPreferencesStore implements AgentPreferencesStore {
-	preferences: AgentPreferences = {
+/** What the deployment falls back to when the user has chosen nothing. */
+const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
+const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
+const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
+
+const setup = () => {
+	const repository = new InMemoryAgentPreferencesRepository();
+	repository.entries.set(testActor().userId, {
 		userId: testActor().userId,
 		executionMode: 'approval_required',
 		inlineSuggestionsEnabled: true,
 		createdAt: testNow,
 		updatedAt: testNow
-	};
-
-	async get(_actor: ActorContext): Promise<AgentPreferences> {
-		void _actor;
-		return this.preferences;
-	}
-
-	async update(
-		_actor: ActorContext,
-		input: UpdateAgentPreferencesInput
-	): Promise<AgentPreferences> {
-		this.preferences = {
-			...this.preferences,
-			...(input.defaultModel === null
-				? { defaultModel: undefined }
-				: input.defaultModel
-					? { defaultModel: input.defaultModel }
-					: {}),
-			...(input.executionMode ? { executionMode: input.executionMode } : {}),
-			...(input.inlineSuggestionsEnabled === undefined
-				? {}
-				: { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled })
-		};
-		return this.preferences;
-	}
-}
-
-class FakeAgentModelCatalog implements AgentModelCatalog {
-	models: AgentModel[] = [
+	});
+	const preferences = new AgentPreferenceCatalog(repository);
+	const models = new InMemoryModelCatalog();
+	models.models = [
 		{
 			id: 'vendor/tool-model',
 			name: 'Tool model',
@@ -55,30 +36,15 @@ class FakeAgentModelCatalog implements AgentModelCatalog {
 			capabilities: ['tools']
 		}
 	];
-
-	async list(): Promise<readonly AgentModel[]> {
-		return this.models;
-	}
-
-	async assertSelectable(modelId: string): Promise<void> {
-		if (!this.models.some((model) => model.id === modelId))
-			throw new Error('Model is not selectable');
-	}
-}
-
-/** What the deployment falls back to when the user has chosen nothing. */
-const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
-const DEPLOYMENT_VISION_MODEL = 'mistral/pixtral-large';
-
-const setup = () => {
-	const preferences = new FakeAgentPreferencesStore();
-	const models = new FakeAgentModelCatalog();
 	return {
 		preferences,
+		repository,
 		models,
 		controller: new AgentSettings(
 			capabilityDependencies<AgentSettingsDependencies>({
 				preferences,
+				transactionRunner: new InMemoryTransactionRunner([repository]),
+				now: () => timestamp,
 				models,
 				defaultModel: DEPLOYMENT_CHAT_MODEL,
 				defaultVisionModel: DEPLOYMENT_VISION_MODEL
@@ -88,9 +54,75 @@ const setup = () => {
 };
 
 describe('agent settings controller behavior', () => {
+	it('creates the first preferences with one timestamp and the requested settings', async () => {
+		const { controller, repository } = setup();
+		repository.entries.clear();
+		expect(
+			await controller.updatePreferences(testActor(), { inlineSuggestionsEnabled: false })
+		).toEqual({
+			userId: testActor().userId,
+			executionMode: 'approval_required',
+			inlineSuggestionsEnabled: false,
+			createdAt: timestamp,
+			updatedAt: timestamp
+		});
+	});
+	it.each(['defaultVisionModel', 'attachmentVisionModel'] as const)(
+		'rejects a non-vision model for %s',
+		async (field) => {
+			const { controller } = setup();
+			await expect(
+				controller.updatePreferences(testActor(), { [field]: 'vendor/tool-model' })
+			).rejects.toThrow('cannot read images');
+		}
+	);
+	it('allows a catalog model without tool support for inline completion', async () => {
+		const { controller, models } = setup();
+		models.models.push({
+			id: 'vendor/completion',
+			name: 'Completion',
+			provider: 'vendor',
+			supportsTools: false,
+			supportsVision: false,
+			recommended: false,
+			capabilities: []
+		});
+		expect(
+			(await controller.updatePreferences(testActor(), { inlineModel: 'vendor/completion' }))
+				.inlineModel
+		).toBe('vendor/completion');
+	});
+	it('rejects an unavailable inline model', async () => {
+		const { controller } = setup();
+		await expect(
+			controller.updatePreferences(testActor(), { inlineModel: 'vendor/missing' })
+		).rejects.toThrow('unavailable');
+	});
+	it('matches offline nullable edits while retaining unrelated fields', async () => {
+		const { controller, repository, preferences } = setup();
+		const current = {
+			...(await preferences.get(testActor())),
+			defaultModel: 'vendor/old',
+			webSearchMaxResults: 12
+		};
+		repository.entries.set(testActor().userId, current);
+		const patch = { defaultModel: null, inlineSuggestionsEnabled: false };
+		const saved = await controller.updatePreferences(testActor(), patch);
+		expect({ type: 'agent_preferences', value: saved }).toEqual(
+			agentPreferenceWrite(current, patch, timestamp).local
+		);
+	});
+	it('keeps another account’s preferences separate', async () => {
+		const { controller, preferences } = setup();
+		const original = await preferences.get(testActor());
+		await controller.updatePreferences(testActor(2), { inlineSuggestionsEnabled: false });
+		expect(await controller.getPreferences(testActor())).toEqual(original);
+	});
 	it('returns the persisted preferences', async () => {
 		const { controller, preferences } = setup();
-		expect(await controller.getPreferences(testActor())).toEqual(preferences.preferences);
+		expect(await controller.getPreferences(testActor())).toEqual(
+			await preferences.get(testActor())
+		);
 	});
 
 	it('returns the selectable model catalog', async () => {
@@ -110,7 +142,7 @@ describe('agent settings controller behavior', () => {
 		const { controller } = setup();
 		await expect(
 			controller.updatePreferences(testActor(), { defaultModel: 'missing/model' })
-		).rejects.toThrow('Model is not selectable');
+		).rejects.toThrow('unavailable or does not support tools');
 	});
 });
 

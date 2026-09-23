@@ -9,6 +9,8 @@ import type {
 /** Per-user resolution floor. Absent means every setting falls back to the deployment's environment default, never a hard-coded literal. */
 export interface AgentPreferencesRepository {
 	get(actor: ActorContext): Promise<AgentPreferences | undefined>;
+	/** Serialize both first creation and subsequent edits within the caller transaction. */
+	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined>;
 	upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences>;
 }
 

@@ -439,6 +439,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenance
 		},
 		agentSettings: {
+			now: agentCapability.now,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,

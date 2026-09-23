@@ -12,7 +12,8 @@ import type {
 	CreateMemoryEntryInput,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
-import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
+import type { UpdateAgentPreferencesInput } from '$lib/models/agent';
+import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
 import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/trash';
 import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -167,10 +168,11 @@ export const skillMetadataWrite = (
 
 export const agentPreferenceWrite = (
 	entry: WorkspaceValues['agent_preferences'],
-	patch: UpdateAgentPreferencesInput
+	patch: UpdateAgentPreferencesInput,
+	timestamp: DateTime
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
 	command: { kind: 'updateAgentPreferences', userId: entry.userId, patch },
-	local: { type: 'agent_preferences', value: applyAgentPreferenceUpdate(entry, patch) },
+	local: { type: 'agent_preferences', value: applyAgentPreferenceUpdate(entry, patch, timestamp) },
 	coalesce: null,
 	references: []
 });
@@ -353,7 +355,7 @@ export const prepareWorkspaceCommand = (
 			return skillMetadataWrite(value('skills'), patch);
 		}
 		case 'updateAgentPreferences':
-			return agentPreferenceWrite(value('agent_preferences'), command.patch);
+			return agentPreferenceWrite(value('agent_preferences'), command.patch, now);
 		case 'updateUserPreferences':
 			return content({
 				type: 'user_preferences',

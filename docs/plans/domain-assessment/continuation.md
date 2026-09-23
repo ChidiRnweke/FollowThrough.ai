@@ -78,6 +78,14 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The agent preference slice removes the service-owned read-apply-write workflow. It serializes first
+creation and later edits, shares timestamp/nullable edit rules with offline commands and requires model
+capability validation. See the [agent-preference disposition](agent-preferences.md).
+
+[PR #168](https://github.com/ChidiRnweke/FollowThrough.ai/pull/168) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35860550944).
+Its diagram trash implementation remains open on the dependent stack.
+
 The diagram trash slice continues P17 with controller-owned transactions, actor-scoped row locks,
 shared browser/server transitions and targeted persistence. See the
 [diagram-trash disposition](diagram-trash.md) for entry paths and test decisions.
