@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { z } from 'zod';
-import { cachedSnapshot, syncEtag } from '$lib/models/sync';
+import { syncEtag } from '$lib/models/sync';
+import { cachedSnapshot } from '$lib/services/sync/state';
 import { requestValue } from './database';
 import {
 	DexieWorkspaceRepository,

@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
+import { type WriteDraft, type WriteReceipt } from '$lib/models/outbox';
 import {
 	appendWrite,
 	settleWrite,
 	acknowledgeWrite,
 	beginWrite,
-	retainWriteReceipt,
-	type WriteDraft,
-	type WriteReceipt
-} from './index';
+	retainWriteReceipt
+} from '$lib/services/sync/state';
 
 const firstId = '10000000-0000-4000-8000-000000000001';
 const secondId = '10000000-0000-4000-8000-000000000002';

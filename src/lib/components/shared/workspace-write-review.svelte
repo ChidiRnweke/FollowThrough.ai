@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
-	import { dependentWrites, type OutboxEntry } from '$lib/models/outbox';
+	import { type OutboxEntry } from '$lib/models/outbox';
+	import { dependentWrites } from '$lib/services/sync/state';
 	import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 	import type { WorkspaceRecord } from '$lib/models/workspace-records';
 	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';

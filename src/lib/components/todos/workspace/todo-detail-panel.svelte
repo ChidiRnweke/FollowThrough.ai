@@ -18,7 +18,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { TodoId } from '$lib/models/todos';
-	import { accessMessage } from '$lib/models/sync';
+	import { accessMessage } from '$lib/services/sync/state';
 
 	let {
 		todoId,

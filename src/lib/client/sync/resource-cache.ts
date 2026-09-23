@@ -1,17 +1,19 @@
 import {
-	accessCache,
-	receiveResource,
-	resourceVersion,
 	type ResourceDeletion,
 	initialSyncCursor,
 	type SyncCursor,
 	type SyncEtag,
 	type ResourceState,
-	resourceCurrent,
 	type CacheAccess,
 	type TransferState,
 	type SyncSnapshot
 } from '$lib/models/sync';
+import {
+	accessCache,
+	receiveResource,
+	resourceVersion,
+	resourceCurrent
+} from '$lib/services/sync/state';
 import type {
 	CacheCommit,
 	StoredCache,

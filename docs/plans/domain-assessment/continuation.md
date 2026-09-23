@@ -111,8 +111,16 @@ and the old loose document views are removed. The editor's link-target value typ
 All checks passed on [#164](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35856890560),
 including the new note-edit/archive and parent-archive/restoration PostgreSQL races.
 
-The [note-comparison disposition](note-comparison.md) records separate shared owners for version
+[PR #166](https://github.com/ChidiRnweke/FollowThrough.ai/pull/166) contains the
+[note-comparison disposition](note-comparison.md) and separate shared owners for version
 review and live revision highlights, typed document inputs and paired comparison titles.
+
+All checks passed on [#165](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35857611509),
+including PostgreSQL contracts, full browser tests and PWA checks.
+
+The [synchronization-state disposition](sync-state.md) records shared queue/cache rule ownership,
+separate indicator presentation and removal of unused granular ancestry repair. Existing persistence
+and transport boundaries retain the ADR 0040 protocol.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.

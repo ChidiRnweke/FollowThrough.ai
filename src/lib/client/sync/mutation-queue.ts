@@ -2,13 +2,12 @@ import { WorkspaceSyncRuntime } from './workspace-runtime';
 import type { SynchronizationResult } from './contracts';
 import type { SyncScheduler } from './scheduler';
 import {
-	dependentWrites,
-	nextWrite,
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteReceipt,
 	type WriteOutcome
 } from '$lib/models/outbox';
+import { dependentWrites, nextWrite } from '$lib/services/sync/state';
 import type { OutboxProjection, OutboxRepository, OutboxTransport } from './outbox-contracts';
 import { OutboxAccountChangedError } from './outbox-contracts';
 

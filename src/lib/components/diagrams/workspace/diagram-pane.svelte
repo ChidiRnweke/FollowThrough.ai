@@ -2,7 +2,7 @@
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/models/diagrams';
-	import { accessMessage } from '$lib/models/sync';
+	import { accessMessage } from '$lib/services/sync/state';
 	import type {
 		DiagramId,
 		DiagramRevisionId,

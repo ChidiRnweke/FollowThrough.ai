@@ -5,7 +5,7 @@
 	import CloudDownload from '@lucide/svelte/icons/cloud-download';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-	import { syncIndicator } from '$lib/models/sync';
+	import { syncIndicator } from '$lib/services/sync/indicator';
 	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
