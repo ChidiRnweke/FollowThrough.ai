@@ -39,10 +39,20 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #197](https://github.com/ChidiRnweke/FollowThrough.ai/pull/197) addresses
+[skill edits and restoration](skill-edits.md). Focused skill tests passed 15 files and 75 tests;
+remote/offline metadata tests passed 2 files and 8 tests. The full local unit suite passed 435 files
+and 4,054 tests. Lint, type checks, architecture audits and documentation checks passed. All required
+checks passed, including
+[quality, unit/browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35902022859).
+The next slice resolves [active Inbox lifecycle](inbox-lifecycle.md).
+
 [PR #196](https://github.com/ChidiRnweke/FollowThrough.ai/pull/196) retires
 [whole-note persistence](note-write-retirement.md). Focused regressions passed 38 files and 323 tests;
 the full local unit suite passed 435 files and 4,053 tests. Lint, type checks, architecture audits and
-documentation checks passed. Required CI is being tracked. The next slice addresses
+documentation checks passed. All required checks passed, including
+[quality, unit/browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35901659391).
+The next slice addresses
 [skill edits and restoration](skill-edits.md).
 
 [PR #195](https://github.com/ChidiRnweke/FollowThrough.ai/pull/195) contains

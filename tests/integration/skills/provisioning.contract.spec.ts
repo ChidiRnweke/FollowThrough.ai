@@ -15,7 +15,8 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context } from '../database-harness';
+import { actor, context, now } from '../database-harness';
+import type { NoteId } from '$lib/models/notes';
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -89,4 +90,69 @@ it('includes built-in skills and their Inbox in the first browser synchronizatio
 			.map((record) => record.type)
 			.sort()
 	).toEqual(['projects', 'skills', 'skills', 'skills']);
+});
+
+it('provisions one replacement Inbox after archive without moving ordinary content', async () => {
+	const state = setup();
+	const owner = actor('19801');
+	const initial = await state.skills.list(owner);
+	const previous = (await state.projects.findInbox(owner))!;
+	const ordinary = await state.notes.insert(owner, {
+		id: crypto.randomUUID() as NoteId,
+		userId: owner.userId,
+		projectId: previous.id,
+		kind: 'note',
+		position: 3,
+		title: 'Archived project content',
+		document: { type: 'doc', content: [] },
+		plainText: '',
+		currentRevision: 1,
+		publishedRevision: 0,
+		isPinned: false,
+		createdAt: now,
+		updatedAt: now
+	});
+	await state.projects.archive(owner, previous.id);
+	const results = await Promise.all([state.skills.list(owner), state.skills.list(owner)]);
+	const replacement = (await state.projects.findInbox(owner))!;
+	const [archived] = await context.client<{ archived: boolean }[]>`
+		select archived_at is not null as archived from projects where id = ${previous.id}`;
+	const [stored] = await context.client<{ projectId: string; archived: boolean }[]>`
+		select project_id as "projectId", archived_at is not null as archived from notes where id = ${ordinary.id}`;
+	expect({
+		replaced: replacement.id !== previous.id,
+		activeInboxes: (await state.projects.listActive(owner)).filter(
+			(project) => project.role === 'inbox'
+		).length,
+		catalogs: results.map((result) => result.skills.map((skill) => skill.noteId).sort()),
+		archived: archived?.archived,
+		ordinary: stored,
+		visibleOrdinary: await state.notes.findById(owner, ordinary.id),
+		builtInProjects: [
+			...new Set((await state.notes.listActive(owner)).map((note) => note.projectId))
+		]
+	}).toEqual({
+		replaced: true,
+		activeInboxes: 1,
+		catalogs: Array.from({ length: 2 }, () => initial.skills.map((skill) => skill.noteId).sort()),
+		archived: true,
+		ordinary: { projectId: previous.id, archived: false },
+		visibleOrdinary: undefined,
+		builtInProjects: [replacement.id]
+	});
+});
+
+it('keeps an existing project named Inbox when choosing the replacement name', async () => {
+	const state = setup();
+	const owner = actor('19802');
+	await state.skills.list(owner);
+	const previous = (await state.projects.findInbox(owner))!;
+	await state.projects.update(owner, { projectId: previous.id, name: 'Old captures' });
+	const ordinary = await state.projects.insert(owner, { name: 'inbox', role: 'workspace' });
+	await state.projects.archive(owner, previous.id);
+	await state.skills.list(owner);
+	expect({
+		inbox: await state.projects.findInbox(owner),
+		ordinary: await state.projects.findById(owner, ordinary.id)
+	}).toMatchObject({ inbox: { name: 'Inbox (2)', role: 'inbox' }, ordinary });
 });
