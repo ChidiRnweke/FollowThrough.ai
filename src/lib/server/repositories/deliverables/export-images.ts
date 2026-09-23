@@ -1,17 +1,13 @@
 import { createHash } from 'node:crypto';
-import { svgViewBoxSize } from '$lib/models/deliverables';
 
 /**
- * Helpers shared by the PDF and DOCX generators: mermaid source hashing, SVG
- * sizing, and remote-image fetching. Both formats embed the same browser-rendered
+ * Helpers shared by the PDF and DOCX generators: mermaid source hashing
+ * and remote-image fetching. Both formats embed the same browser-rendered
  * diagrams and fetched images, so the fetching and hashing live here exactly once.
  */
 
 export const mermaidSourceHash = (source: string): string =>
 	createHash('sha256').update(source, 'utf8').digest('hex');
-
-/** Natural size of an SVG, from its viewBox. The parse is shared with the browser. */
-export const svgDimensions = svgViewBoxSize;
 
 const IMAGE_FETCH_TIMEOUT_MS = 8000;
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;

@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { columnShares } from './index';
 
 describe('columnShares', () => {
+	it('preserves relative widths when their finite values overflow the sum', () => {
+		expect(columnShares([[1e308], [1e308]], 2)).toEqual([0.5, 0.5]);
+	});
+
 	it('divides the declared widths into shares of one', () => {
 		expect(columnShares([[60], [20], [20]], 3)).toEqual([0.6, 0.2, 0.2]);
 	});

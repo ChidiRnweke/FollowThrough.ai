@@ -6,6 +6,15 @@ const document: ProseMirrorDocument = {
 	content: [{ type: 'image', attrs: { src: '/api/attachments/file/content' } }]
 };
 describe('shared export preparation', () => {
+	it('retains SVG dimensions written with scientific notation and comma separators', () => {
+		const prepared = prepareExport({
+			title: 'Export',
+			notes: [],
+			diagramSvgs: { diagram: "<svg viewBox='0,0,1e2,5e1'/>" }
+		});
+		expect(prepared.diagrams.get('diagram')?.size).toEqual({ width: 100, height: 50 });
+	});
+
 	it('retains resolved attachment images for every renderer', async () => {
 		const prepared = await prepareExport({
 			title: 'Export',

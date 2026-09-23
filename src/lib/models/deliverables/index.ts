@@ -212,11 +212,14 @@ export interface DiagramSize {
  * to it for any caller that still ships the full markup.
  */
 export function svgViewBoxSize(svg: string): DiagramSize | undefined {
-	const viewBox = /viewBox="([\d.\s-]+)"/.exec(svg)?.[1]?.trim().split(/\s+/).map(Number);
-	if (viewBox?.length === 4 && viewBox[2]! > 0 && viewBox[3]! > 0) {
-		return { width: viewBox[2]!, height: viewBox[3]! };
-	}
-	return undefined;
+	const attribute = /(?:^|\s)viewBox\s*=\s*(["'])([^"']*)\1/.exec(svg)?.[2];
+	if (attribute === undefined) return undefined;
+	const values = attribute.trim().split(/\s*,\s*|\s+/);
+	const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+	if (values.length !== 4 || !values.every((value) => number.test(value))) return undefined;
+	const viewBox = values.map(Number);
+	if (!viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) return undefined;
+	return { width: viewBox[2]!, height: viewBox[3]! };
 }
 
 /**
@@ -267,7 +270,12 @@ export const columnShares = (
 		widths.push(width);
 	}
 	const total = widths.reduce((sum, width) => sum + width, 0);
-	return widths.map((width) => width / total);
+	if (Number.isFinite(total)) return widths.map((width) => width / total);
+	// Scaling first preserves finite ratios when adding valid widths overflows.
+	const maximum = widths.reduce((largest, width) => Math.max(largest, width), 0);
+	const scaled = widths.map((width) => width / maximum);
+	const scaledTotal = scaled.reduce((sum, width) => sum + width, 0);
+	return scaled.map((width) => width / scaledTotal);
 };
 
 /**
