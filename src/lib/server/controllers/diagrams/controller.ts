@@ -43,12 +43,8 @@ import type { DiagramSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
-	DrawioDiagram,
 	ConvertInlineMermaidInput,
 	ConvertInlineMermaidOutput,
-	GetDrawioDiagramInput,
-	SaveDrawioDiagramInput,
-	SaveDrawioDiagramOutput,
 	GenerateMermaidDiagramInput,
 	GenerateMermaidDiagramOutput,
 	PromoteDiagramInput,
@@ -61,7 +57,7 @@ import type {
 	StartReviseInlineMermaidInput,
 	StartConvertInlineMermaidInput
 } from '$lib/models/diagrams';
-import { NotFoundError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
+import { UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramFinder,
@@ -70,8 +66,7 @@ import type {
 	DiagramTextExtractor,
 	DiagramWriter,
 	MermaidDiagramRenderer,
-	DrawioXmlContentValidator,
-	DrawioSvgPreviewSanitizer
+	DrawioXmlContentValidator
 } from '$lib/server/services/diagrams/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import {
@@ -87,9 +82,8 @@ import type { SuggestionCreator } from '$lib/server/services/suggestions/contrac
 
 /**
  * Application boundary for diagrams: generating and revising Mermaid diagrams from a
- * selection, converting between Mermaid and draw.io, and editing persisted draw.io
- * diagrams. Agent-generated diagrams arrive as suggestions; only the draw.io editing
- * surface writes straight to a persisted diagram.
+ * selection and converting between Mermaid and draw.io. New diagrams arrive as
+ * suggestions. Revision of an existing Mermaid diagram publishes against its generation base.
  */
 export interface DiagramsController {
 	/**
@@ -128,18 +122,6 @@ export interface DiagramsController {
 		input: ConvertInlineMermaidInput,
 		signal?: AbortSignal
 	): Promise<ConvertInlineMermaidOutput<DiagramSuggestion>>;
-	/**
-	 * Fetch a draw.io diagram for editing.
-	 *
-	 * @throws NotFoundError if the diagram is not in the given note; throws
-	 * UnsupportedDiagramOperationError if it is not draw.io.
-	 */
-	getDrawio(actor: ActorContext, input: GetDrawioDiagramInput): Promise<DrawioDiagram>;
-	/**
-	 * Persist an edited draw.io diagram: validate the XML, sanitize the SVG preview,
-	 * re-extract searchable text, write, and re-index in one transaction.
-	 */
-	saveDrawio(actor: ActorContext, input: SaveDrawioDiagramInput): Promise<SaveDrawioDiagramOutput>;
 	/**
 	 * Promote a Mermaid diagram to a draw.io diagram, creating a suggestion the user can
 	 * accept to replace the Mermaid original.
@@ -267,10 +249,8 @@ export interface DiagramsDependencies {
 	mermaidValidator: MermaidSourceValidator;
 	now: () => DateTime;
 	drawioXmlValidator: DrawioXmlContentValidator;
-	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	mermaidRenderer: MermaidDiagramRenderer;
 	textExtractor: DiagramTextExtractor;
-	drawioTextExtractor: DiagramTextExtractor;
 	diagramWriter: DiagramWriter;
 	diagramSourceNotes: NoteReader;
 	indexEmbeddings: IEmbeddings;
@@ -553,45 +533,6 @@ export class Diagrams implements DiagramsController {
 			payload: { noteId, ...diagram }
 		});
 		return { suggestion };
-	}
-
-	async getDrawio(actor: ActorContext, input: GetDrawioDiagramInput): Promise<DrawioDiagram> {
-		const diagram = await this.dependencies.diagramFinder.get(actor, input.diagramId);
-		if (diagram.sourceNoteId !== input.noteId) throw new NotFoundError('Diagram was not found');
-		if (diagram.kind !== 'drawio')
-			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
-		return diagram;
-	}
-
-	saveDrawio(actor: ActorContext, input: SaveDrawioDiagramInput): Promise<SaveDrawioDiagramOutput> {
-		return this.dependencies.transactionRunner.run(async () =>
-			this.writeDrawio(actor, await this.getDrawio(actor, input), input)
-		);
-	}
-
-	/** Validate, sanitize, re-extract and re-index one draw.io diagram. */
-	private async writeDrawio(
-		actor: ActorContext,
-		current: DrawioDiagram,
-		input: { readonly source: string; readonly renderedSvg: string }
-	): Promise<SaveDrawioDiagramOutput> {
-		const source = this.dependencies.drawioXmlValidator.validate(input.source);
-		const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-		const searchableText = await this.dependencies.drawioTextExtractor.extract({
-			...current,
-			source
-		});
-		const diagram = await this.dependencies.diagramWriter.update(actor, {
-			...current,
-			source,
-			renderedSvg,
-			searchableText,
-			updatedAt: this.dependencies.now()
-		});
-		if (diagram.kind !== 'drawio')
-			throw new UnsupportedDiagramOperationError('Expected a draw.io diagram after saving');
-		await this.indexDiagram(actor, diagram);
-		return { diagram };
 	}
 
 	async reviseMermaid(
