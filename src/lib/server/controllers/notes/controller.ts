@@ -23,7 +23,7 @@ import {
 	type ApplyReviewedNoteChangeOutput
 } from '$lib/models/notes';
 import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
-import { applyNoteDraftEdit } from '$lib/models/notes';
+import { applyNoteDraftEdit, prepareNoteSave } from '$lib/services/notes/editing';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
 import type { Diagram } from '$lib/models/diagrams';
@@ -752,9 +752,17 @@ export class Notes implements NotesController {
 		}
 	}
 
+	private async persistEditedNote(actor: ActorContext, candidate: Note): Promise<Note> {
+		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
+		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		return decision.kind === 'unchanged'
+			? decision.note
+			: this.dependencies.noteEditor.persistEdit(actor, decision.write);
+	}
+
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteEditor.save(actor, input.note);
+			const note = await this.persistEditedNote(actor, input.note);
 			const anchors = await this.dependencies.anchorRepairer.repairForNote(actor, note);
 			// In the same transaction as the save, beside anchor repair: the note's links are
 			// derived from the document that just landed, so a committed body with stale
@@ -791,7 +799,7 @@ export class Notes implements NotesController {
 				throw new NotFoundError('No published version exists for this note', {
 					noteId: input.noteId
 				});
-			const restored = await this.dependencies.noteEditor.save(actor, {
+			const restored = await this.persistEditedNote(actor, {
 				...note,
 				title: revision.title,
 				document: revision.document,
@@ -860,7 +868,7 @@ export class Notes implements NotesController {
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.noteReader.get(actor, input.noteId);
-			const note = await this.dependencies.noteEditor.save(actor, {
+			const note = await this.persistEditedNote(actor, {
 				...current,
 				title: input.title
 			});
@@ -1025,7 +1033,7 @@ export class Notes implements NotesController {
 					noteId: input.noteId,
 					revisionId: input.revisionId
 				});
-			const restored = await this.dependencies.noteEditor.save(actor, {
+			const restored = await this.persistEditedNote(actor, {
 				...note,
 				title: revision.title,
 				document: revision.document,

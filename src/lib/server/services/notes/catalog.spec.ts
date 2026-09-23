@@ -25,16 +25,6 @@ const setup = () => {
 };
 
 describe('Note management invariants', () => {
-	it('rejects a stale save without replacing the note', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder({ currentRevision: 2 })];
-		await expect(
-			service.save(testActor(), noteBuilder({ currentRevision: 1 }))
-		).rejects.toMatchObject({
-			code: 'STALE_REVISION'
-		});
-	});
-
 	it('does not expose skill documents in note listings', async () => {
 		const { service, notes } = setup();
 		notes.notes = [
@@ -44,46 +34,6 @@ describe('Note management invariants', () => {
 		];
 		const listed = await service.list(testActor());
 		expect(listed.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
-	});
-
-	it('does not increment a no-op save', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder()];
-		const saved = await service.save(testActor(), noteBuilder());
-		expect(saved.currentRevision).toBe(1);
-	});
-
-	it('increments a meaningful save exactly once', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder()];
-		const saved = await service.save(testActor(), noteBuilder({ title: 'Changed' }));
-		expect(saved.currentRevision).toBe(2);
-	});
-
-	it('rejects a save that loses the atomic revision race', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder()];
-		notes.failNextConditionalUpdate = true;
-		await expect(
-			service.save(testActor(), noteBuilder({ title: 'Changed' }))
-		).rejects.toMatchObject({
-			code: 'STALE_REVISION'
-		});
-	});
-
-	it('saves even when the client sends stale position', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder({ position: 0 })];
-		const saved = await service.save(testActor(), noteBuilder({ position: 1 }));
-		expect(saved).toBeDefined();
-	});
-
-	it('rejects authored content in a folder', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder({ kind: 'folder' })];
-		await expect(
-			service.save(testActor(), noteBuilder({ kind: 'folder', plainText: 'content' }))
-		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
 	// Publishing is the only thing that writes history, so the cap is enforced there.

@@ -78,6 +78,15 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #182](https://github.com/ChidiRnweke/FollowThrough.ai/pull/182) passed all required checks on its
+corrected head, including [quality, unit/browser, PostgreSQL canvas contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35881623469).
+The first contract run found conversation-ID collisions in the new fixtures; fresh UUIDs fixed that
+test setup. The PR remains open on the dependent stack.
+
+The [note-save disposition](note-save.md) covers locked draft writes through Notes and Skills, shared
+authored-field rules and resolved persistence. Diagram revision ownership and note publication remain
+separate review items.
+
 [PR #181](https://github.com/ChidiRnweke/FollowThrough.ai/pull/181) passed all required checks,
 including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35879911330).
 It remains open on the dependent stack.
