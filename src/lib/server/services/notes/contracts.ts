@@ -3,6 +3,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
 	NoteSaveWrite,
+	NotePublicationWrite,
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
@@ -75,7 +76,8 @@ export interface NoteTrashReader {
 	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly TrashedNote[]>;
 }
 export interface NotePublisher {
-	markPublished(actor: ActorContext, noteId: NoteId): Promise<Note>;
+	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note>;
+	persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note>;
 }
 export interface NoteImporter {
 	import(actor: ActorContext, markdown: string): Promise<Note>;
