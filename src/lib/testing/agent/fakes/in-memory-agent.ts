@@ -1,6 +1,6 @@
 import type { Note } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentEvent, AgentExecutionUpdate } from '$lib/models/agent';
+import type { AgentEvent, AgentExecutionUpdate, WebResearchSettings } from '$lib/models/agent';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill, SkillSummary } from '$lib/models/skills';
@@ -15,6 +15,7 @@ export class InMemoryAgentRunner implements AgentRunner {
 	readonly started = Promise.withResolvers<void>();
 	completion: Promise<void> = Promise.resolve();
 	readonly signals: AbortSignal[] = [];
+	readonly researchSettings: WebResearchSettings[] = [];
 	abortable = false;
 	outcome: Extract<AgentExecutionUpdate, { type: 'completed' | 'approval_checkpoint' }> = {
 		type: 'completed',
@@ -25,6 +26,7 @@ export class InMemoryAgentRunner implements AgentRunner {
 		input: Parameters<AgentRunner['execute']>[0]
 	): AsyncIterable<AgentExecutionUpdate> {
 		this.signals.push(input.signal);
+		this.researchSettings.push(input.webSearch);
 		this.started.resolve();
 		for (const event of this.events) yield { type: 'event', event };
 		const aborted = Promise.withResolvers<void>();

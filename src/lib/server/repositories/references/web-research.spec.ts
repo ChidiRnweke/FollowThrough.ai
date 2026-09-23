@@ -1,3 +1,4 @@
+import { openRouterWebSearchTool, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import type { TextSelection } from '$lib/models/notes';
@@ -105,6 +106,7 @@ describe('Web reference client boundary', () => {
 			]
 		});
 		const client = new ReferenceResearch('local-key', {
+			searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'test/model',
@@ -123,6 +125,7 @@ describe('Web reference client boundary', () => {
 	it('sends the OpenRouter server tool with the selected model', async () => {
 		const local = await startResponseServer();
 		const client = new ReferenceResearch('local-key', {
+			searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'openai/gpt-5.6',
@@ -153,6 +156,7 @@ describe('Web reference client boundary', () => {
 	it('maps native OpenRouter citation annotations to references', async () => {
 		const local = await startResponseServer();
 		const client = new ReferenceResearch('local-key', {
+			searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'test/model',
@@ -171,6 +175,37 @@ describe('Web reference client boundary', () => {
 			title: result.title,
 			hostname: 'www.rfc-editor.org',
 			content: result.relevanceNote
+		});
+	});
+	it('sends the resolved research settings without choosing new defaults in transport', async () => {
+		const local = await startResponseServer();
+		const client = new ReferenceResearch('local-key', {
+			searchTool: openRouterWebSearchTool({
+				engine: 'perplexity',
+				maxResults: 3,
+				maxTotalResults: 7
+			}),
+			baseURL: local.url,
+			appURL: 'https://followthrough.test',
+			defaultModel: 'test/model',
+			observer: { run: (_name, _context, operation) => operation() }
+		});
+		try {
+			await client.search(selection.text);
+		} finally {
+			await new Promise<void>((resolve, reject) =>
+				local.server.close((error) => (error ? reject(error) : resolve()))
+			);
+		}
+		expect(local.request()).toMatchObject({
+			body: {
+				tools: [
+					{
+						type: 'openrouter:web_search',
+						parameters: { engine: 'perplexity', max_results: 3, max_total_results: 7 }
+					}
+				]
+			}
 		});
 	});
 });

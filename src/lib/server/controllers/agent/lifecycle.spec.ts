@@ -1,3 +1,4 @@
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -106,6 +107,7 @@ const setup = <T extends AgentRunner>(
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
+			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
 			events: runs,
 			decisions: runs,
 			sessions,

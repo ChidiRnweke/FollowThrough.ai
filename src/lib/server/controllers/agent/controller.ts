@@ -1,3 +1,4 @@
+import { resolveWebResearch } from '$lib/services/agent/web-research';
 import {
 	prepareRunImages,
 	validateRunImages,
@@ -21,6 +22,7 @@ import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/m
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
+	WebResearchSettings,
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
@@ -244,6 +246,7 @@ export interface AgentDependencies {
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
+	webSearchDefaults: WebResearchSettings;
 
 	readonly settlements: RunSettlement;
 
@@ -654,15 +657,17 @@ export class Agent implements AgentController {
 				...skillsForSurface(input.appContext?.surface?.kind)
 			])
 		];
-		// Only the fields the user actually set travel; an empty object would
-		// otherwise override the deployment defaults with nothing.
-		const webSearch = {
-			...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
-			...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
-			...(preferences.webSearchMaxTotalResults
-				? { maxTotalResults: preferences.webSearchMaxTotalResults }
-				: {})
-		};
+		// Freeze effective settings so later deployment changes cannot alter a resumed turn.
+		const webSearch = resolveWebResearch(
+			{
+				...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
+				...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
+				...(preferences.webSearchMaxTotalResults
+					? { maxTotalResults: preferences.webSearchMaxTotalResults }
+					: {})
+			},
+			this.dependencies.webSearchDefaults
+		);
 		return {
 			requestId: input.requestId,
 			prompt: input.input,
@@ -693,7 +698,7 @@ export class Agent implements AgentController {
 			...(input.visionModel !== undefined ? { visionModelOverride: input.visionModel } : {}),
 			...(input.mode !== undefined ? { executionModeOverride: input.mode } : {}),
 			...(preferences.agentMaxTurns ? { maxTurns: preferences.agentMaxTurns } : {}),
-			...(Object.keys(webSearch).length > 0 ? { webSearch } : {})
+			webSearch
 		};
 	}
 
@@ -801,6 +806,7 @@ export class Agent implements AgentController {
 				run,
 				request,
 				imageInput: prepareRunImages(request),
+				webSearch: resolveWebResearch(request.webSearch ?? {}, this.dependencies.webSearchDefaults),
 				context: run.contextSnapshot,
 				...(decisions.length > 0 ? { decisions } : {}),
 				signal,

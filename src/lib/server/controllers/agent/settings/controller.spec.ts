@@ -1,3 +1,4 @@
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { DateTime } from '$lib/models/workspace';
 import { agentPreferenceWrite } from '$lib/controllers/workspace/commands';
@@ -43,6 +44,8 @@ const setup = () => {
 		controller: new AgentSettings(
 			capabilityDependencies<AgentSettingsDependencies>({
 				preferences,
+				webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+				agentAvailable: true,
 				transactionRunner: new InMemoryTransactionRunner([repository]),
 				now: () => timestamp,
 				models,
@@ -224,7 +227,7 @@ describe('offline bootstrap deployment defaults', () => {
 	it('keeps deployment models independent of the users current overrides', async () => {
 		const { controller } = setup();
 		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
-		expect(await controller.deploymentDefaults(testActor())).toEqual({
+		expect((await controller.bootstrap(testActor())).agentDefaults).toEqual({
 			chatModelId: DEPLOYMENT_CHAT_MODEL,
 			visionModelId: DEPLOYMENT_VISION_MODEL
 		});

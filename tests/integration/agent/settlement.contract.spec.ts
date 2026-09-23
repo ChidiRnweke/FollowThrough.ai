@@ -1,3 +1,4 @@
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -63,6 +64,7 @@ const setup = async (suffix: string) => {
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
+			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,

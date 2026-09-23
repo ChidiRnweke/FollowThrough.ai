@@ -628,7 +628,7 @@ export const agentToolCoverage = {
 	},
 	agentSettings: {
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
-		deploymentDefaults: {
+		bootstrap: {
 			kind: 'excluded',
 			reason:
 				'Deployment metadata for the offline app bootstrap; user overrides are synchronized separately.'
