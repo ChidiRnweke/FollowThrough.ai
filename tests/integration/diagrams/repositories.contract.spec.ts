@@ -37,9 +37,9 @@ describe('Project-owned diagram persistence invariants', () => {
 			owner,
 			diagram('489', { userId: owner.userId, projectId: project.id })
 		);
-		await repository.setArchived(owner, stored.id, true);
+		await repository.updateTrash(owner, { ...stored, archivedAt: now });
 		await repository.findById(owner, stored.id);
-		await repository.setArchived(owner, stored.id, false);
+		await repository.updateTrash(owner, stored);
 		const removed = await repository.deleteArchived(owner, stored.id);
 		expect({ removed, diagram: (await repository.findById(owner, stored.id))?.id }).toEqual({
 			removed: false,
@@ -65,7 +65,7 @@ describe('Project-owned diagram persistence invariants', () => {
 			content: [{ type: 'drawio', attrs: { diagramId: stored.id } }]
 		};
 		await notes.update(owner, { ...note, document });
-		await repository.setArchived(owner, stored.id, true);
+		await repository.updateTrash(owner, { ...stored, archivedAt: now });
 		await repository.deleteArchived(owner, stored.id);
 		expect({
 			diagram: await repository.findById(owner, stored.id),

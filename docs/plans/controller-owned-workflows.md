@@ -6,6 +6,11 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Diagram trash: DiagramStudio owns locked reads, the shared transition rule, resolved persistence
+and indexing in its transaction. Archive and restore share timestamps with offline commands.
+Permanent deletion retains the trash guard and saved note references. See the
+[disposition](domain-assessment/diagram-trash.md).
+
 This work applies the user's correction to the domain assessment and note pilot:
 
 - Models contain values, types, and Zod schemas only. They contain no business functions,

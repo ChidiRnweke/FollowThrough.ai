@@ -78,6 +78,14 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The diagram trash slice continues P17 with controller-owned transactions, actor-scoped row locks,
+shared browser/server transitions and targeted persistence. See the
+[diagram-trash disposition](diagram-trash.md) for entry paths and test decisions.
+
+[PR #167](https://github.com/ChidiRnweke/FollowThrough.ai/pull/167) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35859106685).
+Its implementation remains open on the dependent stack.
+
 [PR #161](https://github.com/ChidiRnweke/FollowThrough.ai/pull/161) contains the
 [note-change preparation disposition](note-change-preparation.md) and implementation:
 targeted replacement and revision-text comparison now belong to focused server services. The

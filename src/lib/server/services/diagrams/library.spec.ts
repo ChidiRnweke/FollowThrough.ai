@@ -58,13 +58,6 @@ describe('Diagram management invariants', () => {
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
-	it('requires trashing a diagram before permanent deletion', async () => {
-		const { service, diagrams } = setup();
-		const diagram = mermaidBuilder();
-		diagrams.diagrams = [diagram];
-		await expect(service.delete(testActor(), diagram.id)).rejects.toThrow('not in the trash');
-	});
-
 	it('preserves a valid source note when updating an owned diagram', async () => {
 		const { service, diagrams } = setup();
 		const diagram = mermaidBuilder();
@@ -112,14 +105,6 @@ describe('Diagram management invariants', () => {
 		await expect(
 			service.create(testActor(), mermaidBuilder({ projectId: foreign.id }))
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-
-	it('deletes an owned diagram after it is trashed', async () => {
-		const { service, diagrams } = setup();
-		diagrams.diagrams = [mermaidBuilder()];
-		await service.archive(testActor(), mermaidBuilder().id);
-		await service.delete(testActor(), mermaidBuilder().id);
-		expect(diagrams.diagrams).toEqual([]);
 	});
 
 	// A studio diagram is authored in a conversation and owned by its project, so
