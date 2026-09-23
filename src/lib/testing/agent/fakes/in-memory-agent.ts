@@ -4,6 +4,7 @@ import type { AgentEvent, AgentExecutionUpdate, WebResearchSettings } from '$lib
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill, SkillSummary } from '$lib/models/skills';
+import type { ProjectId } from '$lib/models/projects';
 import { NotFoundError } from '$lib/errors';
 import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
 import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/contracts';
@@ -87,34 +88,39 @@ export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
 
 export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 	skills: Skill<Note>[] = [];
-	pinnedNoteIds: NoteId[] = [];
+	pins: { projectId: ProjectId; skillNoteId: NoteId }[] = [];
 	usages: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }[] = [];
 
-	private summarize(skill: Skill<Note>): SkillSummary {
+	private summarize(skill: Skill<Note>, projectId: ProjectId | undefined): SkillSummary {
 		return {
 			noteId: skill.note.id,
+			projectId: skill.note.projectId,
 			name: skill.note.title,
 			slug: skill.slug,
 			description: skill.description,
 			triggerHints: skill.triggerHints,
 			allowImplicitInvocation: skill.allowImplicitInvocation,
 			isEnabled: skill.isEnabled,
-			isPinned: this.pinnedNoteIds.includes(skill.note.id)
+			isPinned: this.pins.some(
+				(pin) => pin.projectId === projectId && pin.skillNoteId === skill.note.id
+			)
 		};
 	}
 
-	async listEnabled(_actor: ActorContext): Promise<readonly SkillSummary[]> {
+	async listEnabled(_actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		void _actor;
-		return this.skills.filter((skill) => skill.isEnabled).map((skill) => this.summarize(skill));
+		return this.skills
+			.filter((skill) => skill.isEnabled)
+			.map((skill) => this.summarize(skill, projectId));
 	}
-	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
-		const enabled = await this.listEnabled(actor);
+	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		const enabled = await this.listEnabled(actor, projectId);
 		const enabledIds = new Set(enabled.map((skill) => skill.noteId));
 		return [
 			...enabled,
 			...this.skills
 				.filter((skill) => !enabledIds.has(skill.note.id))
-				.map((skill) => this.summarize(skill))
+				.map((skill) => this.summarize(skill, projectId))
 		];
 	}
 

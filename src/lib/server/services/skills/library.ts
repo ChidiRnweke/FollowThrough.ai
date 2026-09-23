@@ -189,13 +189,4 @@ export class SkillLibrary {
 			instructions: skill.note.plainText
 		};
 	}
-
-	setPinned(
-		actor: ActorContext,
-		noteId: NoteId,
-		projectId: ProjectId,
-		pinned: boolean
-	): Promise<void> {
-		return this.skills.setPinned(actor, noteId, projectId, pinned);
-	}
 }

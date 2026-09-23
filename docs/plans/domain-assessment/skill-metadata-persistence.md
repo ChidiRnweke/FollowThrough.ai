@@ -37,9 +37,10 @@ the repository no longer generates names or fills business defaults.
   invocation policy. The controller's document-base validation and transaction remain unchanged.
 - W12.03 and W12.01 creation/installation supply the complete metadata value before storage. Duplicate
   insertions fail; update does not recreate a row lost after a stale read.
-- SkillSummary inherits the required portable name and invocation flag. Its project/pin optionality,
-  PreparedSkillEdit's duplicate document payload, pin/usage workflows and portable-name concurrency
-  still need separate review. This is not a complete disposition of the skill namespace.
+- SkillSummary inherits the required portable name and invocation flag. Its project/pin optionality
+  and pin workflow are reviewed in [skill pins](skill-pins.md). PreparedSkillEdit's duplicate document
+  payload, usage workflows and portable-name concurrency still need separate review. This is not a
+  complete disposition of the skill namespace.
 
 ## Tests retained and added
 
