@@ -53,6 +53,10 @@ export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 		);
 		const registration = syncRegistrations.find((item) => item.type === identity.type);
 		if (!registration) throw new Error(`No synchronization registration for ${identity.type}`);
+		// Skill metadata and its title trigger share the note-before-metadata order with domain edits.
+		if (identity.type === 'skills')
+			await this.db.execute(sql`select 1 from notes
+				where id = ${identity.id[0]} and user_id = ${actor.userId} for update`);
 		// Lock the source row, not just its metadata: domain writers also lock that row.
 		// The resource advisory lock covers the absent-row case for offline creations.
 		await this.db.execute(sql`select 1 from ${sql.identifier(identity.type)} r

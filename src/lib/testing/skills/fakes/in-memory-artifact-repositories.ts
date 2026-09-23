@@ -275,7 +275,7 @@ export class InMemorySkillRepository implements SkillRepository {
 	constructor(private readonly notes: InMemoryNoteRepository) {}
 	writeFailure: Error | undefined;
 	// Unit transactions run sequentially; PostgreSQL contracts verify concurrent locking.
-	async lockBuiltInProvisioning(_actor: ActorContext): Promise<void> {}
+	async lockCatalog(_actor: ActorContext): Promise<void> {}
 	snapshot(): () => void {
 		const skills = structuredClone(this.skills);
 		const usages = structuredClone(this.usages);
