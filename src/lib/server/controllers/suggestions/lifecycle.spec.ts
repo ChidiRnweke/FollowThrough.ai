@@ -115,7 +115,7 @@ const setup = () => {
 };
 
 describe('Suggestion lifecycle invariants', () => {
-	it('normalizes accepted task content and resolves its actor and completion time', async () => {
+	it('normalizes accepted task content and resolves its actor and timestamps', async () => {
 		const { suggestions, artifacts, accept } = setup();
 		suggestions.suggestions = [
 			suggestionBuilder({
@@ -123,8 +123,7 @@ describe('Suggestion lifecycle invariants', () => {
 					projectId: testProjectId(),
 					title: '  Send the design  ',
 					responsibility: 'mine',
-					waitingOn: 'Sam',
-					status: 'done'
+					waitingOn: 'Sam'
 				}
 			})
 		];
@@ -134,8 +133,7 @@ describe('Suggestion lifecycle invariants', () => {
 				title: 'Send the design',
 				userId: testActor().userId,
 				projectId: testProjectId(),
-				status: 'done',
-				completedAt: testNow,
+				status: 'open',
 				createdAt: testNow,
 				updatedAt: testNow
 			})
