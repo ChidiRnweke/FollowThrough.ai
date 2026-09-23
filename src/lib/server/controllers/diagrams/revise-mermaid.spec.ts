@@ -21,6 +21,7 @@ const setup = (drawio = false) => {
 	return {
 		diagrams,
 		persistence: generation.persistence,
+		provider: generation.provider,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
 				transactionRunner: new InMemoryTransactionRunner([
@@ -41,6 +42,43 @@ const setup = (drawio = false) => {
 };
 
 describe('Revise Mermaid workflow invariants', () => {
+	it.each(['edit', 'archive'] as const)(
+		'preserves a peer %s made during generation',
+		async (change) => {
+			const { controller, diagrams, provider, persistence } = setup();
+			const completion = Promise.withResolvers<void>();
+			provider.completion = completion.promise;
+			const pending = controller
+				.reviseMermaid(testActor(), {
+					diagramId: mermaidBuilder().id,
+					instruction: 'add queue'
+				})
+				.then(
+					() => 'saved',
+					() => 'rejected'
+				);
+			await provider.started.promise;
+			const peer =
+				change === 'edit'
+					? { ...mermaidBuilder(), source: 'flowchart LR\nPeer --> Edit' }
+					: { ...mermaidBuilder(), archivedAt: mermaidBuilder().updatedAt };
+			diagrams.diagrams = [peer];
+			completion.resolve();
+			const outcome = await pending;
+			expect({
+				outcome,
+				diagrams: diagrams.diagrams,
+				indexed: diagrams.indexedIds,
+				runs: persistence.runs.map((run) => run.status)
+			}).toEqual({
+				outcome: 'rejected',
+				diagrams: [peer],
+				indexed: [],
+				runs: ['failed']
+			});
+		}
+	);
+
 	it('rolls back the revision and fails its run when indexing fails', async () => {
 		const { controller, diagrams, persistence } = setup();
 		const original = structuredClone(diagrams.diagrams);

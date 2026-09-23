@@ -1,4 +1,6 @@
 import type { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
+import { prepareMermaidRevision } from '$lib/server/services/diagrams/mermaid-revision';
+import type { DiagramDraftWriter } from '$lib/server/services/diagrams/contracts';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { Skill } from '$lib/models/skills';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
@@ -49,7 +51,6 @@ import type {
 	SaveDrawioDiagramOutput,
 	GenerateMermaidDiagramInput,
 	GenerateMermaidDiagramOutput,
-	MermaidDiagram,
 	PromoteDiagramInput,
 	PromoteDiagramOutput,
 	ReviseMermaidDiagramInput,
@@ -262,7 +263,7 @@ export interface DiagramsDependencies {
 	selectionOrigins: Pick<SelectionOriginService, 'resolve'>;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	diagramFinder: DiagramFinder;
+	diagramFinder: DiagramFinder & Pick<DiagramDraftWriter, 'getForWrite'>;
 	mermaidValidator: MermaidSourceValidator;
 	now: () => DateTime;
 	drawioXmlValidator: DrawioXmlContentValidator;
@@ -611,20 +612,17 @@ export class Diagrams implements DiagramsController {
 				instruction: input.instruction
 			},
 			async (draft) => {
-				const revised: MermaidDiagram = {
-					...existing,
-					...(draft.title ? { title: draft.title } : {}),
-					source: draft.source,
-					provenanceId: draft.provenanceId,
-					updatedAt: this.dependencies.now()
-				};
+				const current = await this.dependencies.diagramFinder.getForWrite(actor, existing.id);
+				const revised = prepareMermaidRevision(current, existing, draft, this.dependencies.now());
 				const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
 				const searchableText = await this.dependencies.textExtractor.extract(revised);
-				const saved = (await this.dependencies.diagramWriter.update(actor, {
+				const saved = await this.dependencies.diagramWriter.update(actor, {
 					...revised,
 					renderedSvg,
 					searchableText
-				})) as MermaidDiagram;
+				});
+				if (saved.kind !== 'mermaid')
+					throw new UnsupportedDiagramOperationError('Expected a Mermaid diagram after saving');
 				await this.indexDiagram(actor, saved);
 				return { diagram: saved };
 			}

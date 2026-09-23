@@ -90,6 +90,10 @@ export class InMemoryDiagrams
 		return diagram;
 	}
 
+	getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
+		return this.get(actor, diagramId);
+	}
+
 	async render(source: string): Promise<string> {
 		return `<svg>${source}</svg>`;
 	}
