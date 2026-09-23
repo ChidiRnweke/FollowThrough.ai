@@ -4,10 +4,8 @@ import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import {
-	AgentPreferenceCatalog,
-	resolveAgentModel
-} from '$lib/server/services/agent/runs/preferences';
+import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import { resolveAgentModel } from '$lib/services/agent/model-selection';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
 import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';

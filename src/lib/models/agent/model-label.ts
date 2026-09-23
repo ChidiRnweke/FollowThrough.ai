@@ -10,8 +10,8 @@ export interface NamedModel {
 /**
  * The models a conversation inherits when it chooses none of its own.
  *
- * Resolved on the server, because the last link in that chain is deployment
- * configuration: a client that guessed would name a model no run uses.
+ * The server supplies deployment configuration. Shared selection rules resolve
+ * it with account preferences in both the browser and the server.
  */
 export interface AgentModelDefaults {
 	readonly chatModelId: string;
@@ -22,7 +22,7 @@ export interface AgentModelDefaults {
  * The model a conversation will actually run on, and where the choice came from.
  *
  * Two arms rather than a source beside an optional id: `defaultModelId` is
- * resolved on the server and always present, so "no model" is not a state that
+ * resolved before presentation and always present, so "no model" is not a state that
  * can be reached. The distinction is the whole point of showing this — naming a
  * model without saying whether this chat chose it is what left readers unable to
  * tell their own choice from the workspace's.

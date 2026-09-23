@@ -6,6 +6,11 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Agent model choice: browser defaults, settings, chat, diagrams and attachment processing use the
+shared selection owner. Controllers validate requested roles against provider facts plus trusted
+deployment choices. Provider fetching and caching remain server owned. See the
+[disposition](domain-assessment/agent-model-choice.md).
+
 Agent preference writes: AgentSettings owns the transaction, authoritative resource lock, shared
 partial edit and resolved persistence. First writes and later edits use the same lock as sync.
 See the [disposition](domain-assessment/agent-preferences.md).

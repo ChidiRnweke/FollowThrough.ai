@@ -1,13 +1,12 @@
+import {
+	configuredAgentModels,
+	resolveDefaultAgentModel,
+	resolveDefaultVisionModel
+} from '$lib/services/agent/model-selection';
 import type { ShellContext } from '$lib/client/shell/views';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 
-import {
-	normalizeLanguageModelId,
-	configuredAgentModels,
-	type AgentModel,
-	type AgentPreferenceValues,
-	type Conversation
-} from '$lib/models/agent';
+import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import {
 	readStoredBootstrap,
@@ -135,11 +134,13 @@ const begin = async (): Promise<WorkspaceSession> => {
 		},
 		get agentDefaults() {
 			return {
-				chatModelId: normalizeLanguageModelId(
-					this.preferences.defaultModel ?? this.bootstrap.agentDefaults.chatModelId
+				chatModelId: resolveDefaultAgentModel(
+					this.preferences,
+					this.bootstrap.agentDefaults.chatModelId
 				),
-				visionModelId: normalizeLanguageModelId(
-					this.preferences.defaultVisionModel ?? this.bootstrap.agentDefaults.visionModelId
+				visionModelId: resolveDefaultVisionModel(
+					this.preferences,
+					this.bootstrap.agentDefaults.visionModelId
 				)
 			};
 		},
