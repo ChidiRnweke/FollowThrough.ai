@@ -38,21 +38,25 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
-For #158, local lint, type checks, architecture audits and documentation checks passed before the
-last test additions. The unit suite passed 411 files and 3,895 tests. The final focused complete-edit
-suite passed 7 tests, including three added browser/server parity cases. CI caught a nullable access
-in that added test; the correction is being validated separately.
+For #158, local lint, type checks, architecture audits and documentation checks passed. The unit
+suite passed 411 files and 3,895 tests before three added parity cases. The final complete-edit suite
+passed all 7 tests. After correcting a nullable access in that test, local type checks and architecture
+audits passed again.
 
-The [PostgreSQL contract job](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35826949089/job/107070669140)
-passed 52 files and 293 tests. The concurrent-edit scenario holds a task row while independent title
-and description edits wait; both changes survive. Deleted identity reads, deleted locking reads and
-stale writes remain rejected. Local contract attempts could not start because the Docker socket did
-not answer; the full local contract command was stopped after 30 seconds without test results.
+[CI on the final edit head](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35827417884)
+passed quality, unit (including full browser tests) and PostgreSQL contracts. `commitlint` and
+`pr-title` also passed. The PostgreSQL suite passed 52 files and 293 tests. The concurrent-edit scenario
+holds a task row while independent title and description edits wait; both changes survive. Deleted
+identity reads, deleted locking reads and stale writes remain rejected.
+
+Local contract attempts on both slices could not start because the Docker socket did not answer;
+each full local contract command was stopped after 30 seconds without test results. CI provides the
+PostgreSQL evidence.
 
 The creation slice's focused controller and service regressions passed 21 files and 143 tests.
 They cover offline parity, blank-title rejection, actor and project ownership, completion timestamps,
-suggestion acceptance, and batch rollback and retry behavior. Full checks and current CI results will
-be recorded before delivery.
+suggestion acceptance, and batch rollback and retry behavior. The full unit suite passed 412 files and 3,907 tests. The full browser suite passed 73 files and
+588 tests. Final quality checks and current CI results will be recorded before delivery.
 
 ## Unresolved
 
