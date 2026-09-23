@@ -39,6 +39,12 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #200](https://github.com/ChidiRnweke/FollowThrough.ai/pull/200) resolves
+[skill pin scope and transaction ownership](skill-pins.md). Focused regressions passed 22 files
+and 152 tests; the full local unit suite passed 438 files and 4,066 tests. All required checks passed,
+including [PostgreSQL races, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35906703676).
+The next slice resolves the prepared candidate note and records [skill value dispositions](skill-values.md).
+
 [PR #199](https://github.com/ChidiRnweke/FollowThrough.ai/pull/199) resolves
 [skill metadata persistence](skill-metadata-persistence.md). Focused regressions passed 17 files
 and 106 tests; the full local unit suite passed 436 files and 4,057 tests. All required checks passed,

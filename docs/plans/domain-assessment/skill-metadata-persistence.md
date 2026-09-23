@@ -38,8 +38,8 @@ the repository no longer generates names or fills business defaults.
 - W12.03 and W12.01 creation/installation supply the complete metadata value before storage. Duplicate
   insertions fail; update does not recreate a row lost after a stale read.
 - SkillSummary inherits the required portable name and invocation flag. Its project/pin optionality
-  and pin workflow are reviewed in [skill pins](skill-pins.md). PreparedSkillEdit's duplicate document
-  payload, usage workflows and portable-name concurrency still need separate review. This is not a
+  and pin workflow are reviewed in [skill pins](skill-pins.md). PreparedSkillEdit and the remaining
+  declarations are reviewed in [skill values](skill-values.md). Usage workflows and portable-name concurrency still need separate review. This is not a
   complete disposition of the skill namespace.
 
 ## Tests retained and added
