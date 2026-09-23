@@ -48,6 +48,7 @@ connection reaches a database lock. Assertions inspect the saved state or return
 They do not count repository calls. Storage contracts are verified in CI; Docker is unavailable in
 the current local environment.
 
-This continues the skill edit and version workflows. Skill creation defaults, portable-name conflict
-handling, pin/usage writes, repository upsert semantics and complete declaration dispositions still
-need separate review. This slice does not establish repository-wide completion.
+This continues the skill edit and version workflows. [Resolved metadata persistence](skill-metadata-persistence.md)
+removes repository defaults and upsert semantics. Portable-name conflict handling, pin/usage writes
+and complete declaration dispositions still need separate review. This slice does not establish
+repository-wide completion.

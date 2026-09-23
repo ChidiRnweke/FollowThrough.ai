@@ -2,7 +2,7 @@ import { stringify } from 'yaml';
 import { SKILL_PORTABLE_LIMITS, SKILL_PORTABLE_NAME, type SkillManifest } from '$lib/models/skills';
 import { ValidationError } from '$lib/errors';
 
-/** Stored metadata can be incomplete while a skill is being authored. Portable documents cannot. */
+/** Check portable field constraints before export or document replacement. */
 export function validatePortableSkill(manifest: SkillManifest): void {
 	if (!SKILL_PORTABLE_NAME.test(manifest.slug) || manifest.slug.length > SKILL_PORTABLE_LIMITS.slug)
 		throw new ValidationError('Invalid SKILL.md: use a portable lowercase skill name');

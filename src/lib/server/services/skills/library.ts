@@ -180,12 +180,12 @@ export class SkillLibrary {
 
 	private portable(skill: Skill<Note>): SkillManifest {
 		return {
-			slug: skill.slug ?? slug(skill.note.title),
+			slug: skill.slug,
 			description: skill.description,
 			...(skill.license ? { license: skill.license } : {}),
 			...(skill.compatibility ? { compatibility: skill.compatibility } : {}),
-			metadata: skill.metadata ?? {},
-			allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
+			metadata: skill.metadata,
+			allowImplicitInvocation: skill.allowImplicitInvocation,
 			instructions: skill.note.plainText
 		};
 	}

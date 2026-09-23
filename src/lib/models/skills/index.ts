@@ -22,13 +22,13 @@ interface TextSelection {
 /** A skill is a note plus metadata: the instruction text lives in `note`, everything the agent uses to decide whether to load it lives alongside it. */
 export interface Skill<Document> {
 	readonly note: Document;
-	readonly slug?: string;
+	readonly slug: string;
 	readonly description: string;
 	readonly triggerHints: readonly string[];
 	readonly license?: string;
 	readonly compatibility?: string;
-	readonly metadata?: Readonly<Record<string, string>>;
-	readonly allowImplicitInvocation?: boolean;
+	readonly metadata: Readonly<Record<string, string>>;
+	readonly allowImplicitInvocation: boolean;
 	readonly isEnabled: boolean;
 }
 
