@@ -1,4 +1,4 @@
-import type { DateTime, LocalDate } from '$lib/models/workspace';
+import type { DateTime } from '$lib/models/workspace';
 import type { MemoryEntryType } from '$lib/models/memory';
 import type { PipelineKind } from '$lib/models/agent';
 import type { ProvenanceOrigin } from '$lib/models/provenance';
@@ -210,16 +210,11 @@ export function formatBytes(bytes: number): string {
 	return `${rounded} ${byteUnits[exponent]}`;
 }
 
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 const dateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
 	day: 'numeric',
 	month: 'short',
 	year: 'numeric'
 });
-
-export function formatDate(date: LocalDate): string {
-	return dateFormatter.format(new Date(date));
-}
 
 export function formatDateTime(dateTime: DateTime): string {
 	return dateTimeFormatter.format(new Date(dateTime));
@@ -250,4 +245,4 @@ export function provenanceCaption(origin: ProvenanceOrigin, sourceTitle?: string
 	return parts.filter((part): part is string => part !== undefined).join(' · ');
 }
 
-export { todayLocalDate } from '$lib/client/todos/local-date';
+export { todayLocalDate, formatLocalDate as formatDate } from '$lib/client/todos/local-date';
