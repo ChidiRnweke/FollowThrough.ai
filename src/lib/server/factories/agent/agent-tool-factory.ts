@@ -413,11 +413,6 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Inline draw.io conversion is scoped to the note editor review workflow.'
 		},
-		getDrawio: {
-			kind: 'excluded',
-			reason: 'The note-scoped draw.io editor loads its own diagram.'
-		},
-		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
 		promote: { kind: 'proposal', tools: ['promote_diagram'] },
 		startGenerateMermaid: {
 			kind: 'excluded',
@@ -479,10 +474,6 @@ export const agentToolCoverage = {
 		deleteProjectDiagram: {
 			kind: 'excluded',
 			reason: 'Deleting a diagram can break notes that render it; it stays a confirmed user action.'
-		},
-		saveProjectDrawio: {
-			kind: 'excluded',
-			reason: 'The studio canvas owns explicit saves; the agent does not drive the draw.io embed.'
 		},
 		countDiagramReferences: {
 			kind: 'excluded',

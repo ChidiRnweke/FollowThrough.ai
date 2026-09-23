@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #186](https://github.com/ChidiRnweke/FollowThrough.ai/pull/186) passed all required checks,
+including [quality, unit/browser, PostgreSQL Mermaid publication races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35886073293).
+It remains open on the dependent stack.
+
+The [retired diagram-write disposition](diagram-legacy-writes.md) removes unused last-save-wins
+surfaces and moves their useful guarantees to the active revision/publication API.
+
 [PR #185](https://github.com/ChidiRnweke/FollowThrough.ai/pull/185) passed all required checks,
 including [quality, unit/browser, PostgreSQL publication contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35884778949).
 It remains open on the dependent stack.
