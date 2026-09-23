@@ -135,14 +135,14 @@ from [the execution plan](../domain-assessment-plan.md).
 
 ## 09 — Tasks and commitments
 
-- [ ] W09.01 Create individual tasks.
-- [ ] W09.02 Create task batches.
-- [ ] W09.03 Create tasks through quick entry.
-- [ ] W09.04 Edit task text and descriptions.
-- [ ] W09.05 Change status and completion.
-- [ ] W09.06 Set responsibility, priority, category, and due date.
+- [x] W09.01 Create individual tasks. [Current command disposition](task-commands.md); implementation remains on the open stack.
+- [x] W09.02 Create task batches. [Current command disposition](task-commands.md); implementation remains on the open stack.
+- [x] W09.03 Create tasks through quick entry. [Current command disposition](task-commands.md); implementation remains on the open stack.
+- [x] W09.04 Edit task text and descriptions. [Current command disposition](task-commands.md); implementation remains on the open stack.
+- [x] W09.05 Change status and completion. [Current command disposition](task-commands.md); implementation remains on the open stack.
+- [x] W09.06 Set responsibility, priority, category, and due date. [Current command disposition](task-commands.md); implementation remains on the open stack.
 - [x] W09.07 Discover and reuse categories. [Current callers, values and retained evidence](task-reads.md); implementation remains on the open stack.
-- [ ] W09.08 Delete tasks.
+- [x] W09.08 Delete tasks. [Current command disposition](task-commands.md); implementation remains on the open stack.
 - [x] W09.09 List, filter, sort, and count tasks. [Ownership and boundary disposition](task-reads.md); implementation remains on the open stack.
 - [ ] W09.10 View tasks as a board or table.
 - [ ] W09.11 Move tasks between board statuses.

@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError } from '$lib/errors';
 import type { Todo, TodoId, TodoListFilter, TodoStatus } from '$lib/models/todos';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
@@ -69,7 +70,7 @@ export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipa
 		this.todos = this.todos.map((item) => (item.id === todo.id ? todo : item));
 		return todo;
 	}
-	async softDelete(_actor: ActorContext, id: TodoId, deletedAt: Todo['deletedAt']): Promise<void> {
+	async softDelete(_actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void> {
 		this.todos = this.todos.map((todo) => (todo.id === id ? { ...todo, deletedAt } : todo));
 	}
 }
