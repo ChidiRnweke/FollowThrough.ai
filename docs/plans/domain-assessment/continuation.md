@@ -39,6 +39,11 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #191](https://github.com/ChidiRnweke/FollowThrough.ai/pull/191) passed all required checks,
+including [quality, unit/browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35890893695).
+Its export typography implementation remains open. The next slice records
+[editor content recovery and retained document value queries](editor-content.md).
+
 For #158, local lint, type checks, architecture audits and documentation checks passed. The unit
 suite passed 411 files and 3,895 tests before three added parity cases. The final complete-edit suite
 passed all 7 tests. After correcting a nullable access in that test, local type checks and architecture
