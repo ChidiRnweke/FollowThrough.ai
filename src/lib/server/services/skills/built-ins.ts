@@ -50,9 +50,12 @@ export class BuiltInSkills {
 	 */
 	private async ensureInbox(actor: ActorContext, projects: readonly Project[]): Promise<Project> {
 		const existing = projects.find((project) => project.role === 'inbox');
-		return (
-			existing ?? (await this.projects.insert(actor, { name: INBOX_PROJECT_NAME, role: 'inbox' }))
-		);
+		if (existing) return existing;
+		const names = new Set(projects.map((project) => project.name.toLowerCase()));
+		let name = INBOX_PROJECT_NAME;
+		for (let suffix = 2; names.has(name.toLowerCase()); suffix++)
+			name = `${INBOX_PROJECT_NAME} (${suffix})`;
+		return this.projects.insert(actor, { name, role: 'inbox' });
 	}
 
 	async load(actor: ActorContext, key: string): Promise<Skill<Note>> {

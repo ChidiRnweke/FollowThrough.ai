@@ -41,7 +41,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 			if (isUniqueViolation(error, PROJECT_NAME_CONSTRAINT))
 				throw new ConflictError('An active project with this name already exists');
 			if (isUniqueViolation(error, PROJECT_INBOX_CONSTRAINT))
-				throw new ConflictError('This workspace already has an inbox');
+				throw new ConflictError('This workspace already has an active inbox');
 			throw error;
 		}
 	}
@@ -51,7 +51,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 	 *
 	 * Not by name: the name is the user's to change, and matching on it is what
 	 * let a renamed project stop being the inbox while a new one silently became
-	 * it. Absent only before provisioning has run.
+	 * it. Absent before provisioning or after the previous Inbox is archived.
 	 */
 	async findInbox(actor: ActorContext): Promise<Project | undefined> {
 		const [row] = await this.database
