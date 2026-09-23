@@ -33,5 +33,6 @@ bug. Resolve the product meaning and actual producer before inventing deadlines,
 policy or marking W10.05 reconciled.
 
 Focused regressions passed ten files and 62 tests. The full local unit suite passed 445 files and
-4,113 tests. Lint, final type checks, architecture audits and documentation checks passed. The new
-PostgreSQL contracts await required CI because local PostgreSQL is unavailable.
+4,113 tests. Lint, final type checks, architecture audits and documentation checks passed. Local PostgreSQL was
+unavailable. Required CI results, including the new PostgreSQL contracts, are tracked on
+[PR #218](https://github.com/ChidiRnweke/FollowThrough.ai/pull/218).
