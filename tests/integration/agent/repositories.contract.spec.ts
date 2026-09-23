@@ -567,7 +567,7 @@ describe('Postgres agent session repository invariants', () => {
 		const owner = actor(suffix);
 		await new UserRecords(context.db).ensureLocal(owner);
 		const conversation = await new ConversationRecords(context.db).insert(owner, {
-			id: `20000000-0000-4000-8000-0000000000${suffix}` as ConversationId,
+			id: crypto.randomUUID() as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
 			createdAt: now,
