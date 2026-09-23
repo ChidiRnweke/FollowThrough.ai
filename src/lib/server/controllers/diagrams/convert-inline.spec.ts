@@ -2,7 +2,6 @@ import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generat
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -15,7 +14,6 @@ import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 const setup = () => {
 	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
 	const generation = diagramGenerationFixture();
 	const converter = generation.provider;
 	const controller = new Diagrams(
@@ -23,7 +21,12 @@ const setup = () => {
 			...generation,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			suggestionCreator: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
+			transactionRunner: new InMemoryTransactionRunner([
+				suggestions,
+				generation.provenance,
+				generation.persistence,
+				generation.conversations
+			])
 		})
 	);
 	return { controller, converter, suggestions };

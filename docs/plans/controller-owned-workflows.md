@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Direct diagram runs: Diagrams owns atomic conversation/run creation and locked publication/settlement.
+The ledger resolves values; repositories persist targeted fields. See the
+[disposition](domain-assessment/direct-diagram-runs.md).
+
 Diagram run context: Diagrams owns the short write transaction. DiagramRunContext resolves prepared
 context from the locked running workflow; persistence touches no lifecycle fields. See the
 [disposition](domain-assessment/diagram-run-context.md).

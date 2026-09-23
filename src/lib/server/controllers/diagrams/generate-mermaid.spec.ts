@@ -24,7 +24,13 @@ const setup = () => {
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,
 			suggestionCreator: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([notes, provenance, suggestions])
+			transactionRunner: new InMemoryTransactionRunner([
+				notes,
+				provenance,
+				suggestions,
+				generation.persistence,
+				generation.conversations
+			])
 		})
 	);
 	return { controller, notes, suggestions };

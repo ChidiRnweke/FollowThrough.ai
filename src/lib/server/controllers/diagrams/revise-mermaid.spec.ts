@@ -23,7 +23,11 @@ const setup = (drawio = false) => {
 		persistence: generation.persistence,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
-				transactionRunner: new InMemoryTransactionRunner([diagrams, generation.persistence]),
+				transactionRunner: new InMemoryTransactionRunner([
+					diagrams,
+					generation.persistence,
+					generation.conversations
+				]),
 				diagramSourceNotes: sourceNotes,
 				diagramFinder: diagrams,
 				...generation,

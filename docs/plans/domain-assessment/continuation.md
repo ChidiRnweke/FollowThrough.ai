@@ -78,9 +78,17 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [direct diagram run disposition](direct-diagram-runs.md) records atomic creation, locked
+publication/settlement, lifecycle timestamps and removal of unused ledger capabilities. Chat
+preparation and generic run transitions remain unresolved.
+
+[PR #173](https://github.com/ChidiRnweke/FollowThrough.ai/pull/173) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35867425253).
+Its diagram context implementation remains open on the dependent stack.
+
 The [diagram-run context disposition](diagram-run-context.md) replaces the ledger's whole-run context
-update with controller-owned locking and targeted persistence. General run transitions, chat
-preparation and direct diagram run settlement remain unresolved.
+update with controller-owned locking and targeted persistence. The subsequent direct-run slice
+covers settlement; general run transitions and chat preparation remain unresolved.
 
 [PR #172](https://github.com/ChidiRnweke/FollowThrough.ai/pull/172) passed all required checks,
 including [quality, full browser/unit tests, PostgreSQL races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35866176971).
