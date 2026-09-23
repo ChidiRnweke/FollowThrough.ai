@@ -39,3 +39,8 @@ it('rejects a stale edit without restoring a deleted task', async () => {
 		deleted: now
 	});
 });
+
+it('does not return a deleted task through the locking edit read', async () => {
+	const { owner, repository, task } = await setup('14803', 14803);
+	expect(await repository.findForUpdate(owner, task.id)).toBeUndefined();
+});
