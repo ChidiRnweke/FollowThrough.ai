@@ -39,6 +39,23 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+The original two-PR task-ownership increment is complete. The exact heads of
+[#158](https://github.com/ChidiRnweke/FollowThrough.ai/pull/158) (`6cbf9d53`) and
+[#159](https://github.com/ChidiRnweke/FollowThrough.ai/pull/159) (`6fac0f20`) were rechecked on
+2026-09-23: every required check passed and both PRs remain open. This does not mean the wider
+repository assessment is complete or authorize merging the inherited stack.
+
+[PR #217](https://github.com/ChidiRnweke/FollowThrough.ai/pull/217) preserves successfully extracted
+empty attachment text. All required checks passed, including the new
+[PostgreSQL regressions, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35924353744).
+
+The [task suggestion date boundary](suggestion-dates.md) rejects malformed stored calendar dates
+without making neighboring valid proposals unreadable. Five mapper regressions failed before the
+fix. Focused regressions passed ten files and 62 tests; the full local unit suite passed 445 files
+and 4,113 tests. Lint, final type checks, architecture audits and documentation checks passed. Required
+CI results are tracked on [PR #218](https://github.com/ChidiRnweke/FollowThrough.ai/pull/218).
+Suggestion workflow reconciliation and the wider assessment remain open.
+
 [PR #216](https://github.com/ChidiRnweke/FollowThrough.ai/pull/216) checks task availability before
 screenshot completion and listing. All required checks passed, including
 [PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35923715656).
