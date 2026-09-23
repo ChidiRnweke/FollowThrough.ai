@@ -12,6 +12,7 @@ import { ConversationRecords } from '$lib/server/repositories/agent/postgres/con
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { actor, context, now, seedProvenance } from '../database-harness';
@@ -53,6 +54,7 @@ const cancellationController = (db: typeof context.db) => {
 	return new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
+			conversationJournal: new ConversationArchive(new ConversationRecords(database)),
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
@@ -117,6 +119,41 @@ it('stores one terminal event when two connections cancel the same queued run', 
 		await writer.close();
 	}
 });
+
+it.each(['awaiting_approval', 'queued'] as const)(
+	'returns cleared approvals after cancelling a %s checkpoint',
+	async (status) => {
+		const { owner, run } = await seed(status === 'queued' ? '17602' : '17601');
+		const records = new AgentRunRecords(context.db);
+		await records.transition(run.id, 'queued', 'running', { startedAt: now });
+		await records.transition(run.id, 'running', 'awaiting_approval', {
+			serializedState: 'provider-checkpoint',
+			pendingDecisions: [
+				{
+					callId: 'call-cleared',
+					toolName: 'archive_note',
+					arguments: { noteId: '40000000-0000-4000-8000-000000017601' }
+				}
+			]
+		});
+		if (status === 'queued') {
+			await new AgentRunDecisionRecords(context.db).record(owner, {
+				runId: run.id,
+				callId: 'call-cleared',
+				decision: 'approve'
+			});
+			await records.transition(run.id, 'awaiting_approval', 'queued');
+		}
+		const snapshot = await cancellationController(context.db).cancel(owner, run.id);
+		const stored = await records.findById(owner, run.id);
+		expect({
+			status: snapshot.run.status,
+			run: snapshot.run.pendingDecisions,
+			cards: snapshot.pendingDecisions,
+			stored: stored?.pendingDecisions
+		}).toEqual({ status: 'cancelled', run: [], cards: [], stored: [] });
+	}
+);
 
 it('does not expose another actor’s run through the locking read', async () => {
 	const { run } = await seed('17103');

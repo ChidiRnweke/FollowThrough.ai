@@ -78,9 +78,17 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [pending-call cleanup disposition](run-pending-cleanup.md) records corrected terminal snapshots,
+queued-checkpoint cleanup and removal of whole-run replacement. Generic transitions remain unresolved.
+
+[PR #175](https://github.com/ChidiRnweke/FollowThrough.ai/pull/175) passed all required checks in
+[CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35870333337), including PostgreSQL
+contracts and full browser tests. The first unit job hit an IndexedDB cleanup failure; the unchanged
+browser file passed all 13 tests locally, and the failed job passed on retry. The PR remains open.
+
 The [chat-preparation disposition](agent-preparation.md) records targeted locked writes, atomic
-context/start events and cancellation without a local abort signal. Pending-call abandonment and
-generic run transitions remain unresolved.
+context/start events and cancellation without a local abort signal. The subsequent cleanup slice
+covers pending-call abandonment; generic run transitions remain unresolved.
 
 [PR #174](https://github.com/ChidiRnweke/FollowThrough.ai/pull/174) passed all required checks,
 including [quality, full browser/unit tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35868931988).

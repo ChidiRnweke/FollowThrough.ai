@@ -1,3 +1,4 @@
+import { NotFoundError } from '$lib/errors';
 import type {
 	AgentRunId,
 	RunSettlementOutcome,
@@ -26,7 +27,9 @@ export class RunSettlements implements RunSettlement {
 		claim: Extract<RunSettlementClaim, { kind: 'claimed' }>
 	): Promise<RunSettlementResult> {
 		for (const event of claim.events) await this.events.append(claim.run.id, 1, event);
-		return { kind: 'settled', run: claim.run };
+		const run = await this.runs.findById({ userId: claim.run.userId }, claim.run.id);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		return { kind: 'settled', run };
 	}
 	private plan(
 		runId: AgentRunId,

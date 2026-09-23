@@ -463,12 +463,18 @@ export class Agent implements AgentController {
 			const change = this.dependencies.cancellations.plan(current.status, now());
 			if (!change) return current;
 			const requested = await this.dependencies.cancellations.persist(actor, runId, change);
-			if (requested.status === 'cancelled')
+			if (requested.status === 'cancelled') {
+				await this.abandonPendingCalls(
+					requested,
+					'The request was cancelled before the tool call ran.'
+				);
 				await this.dependencies.events.append(requested.id, 0, {
 					type: 'cancelled',
 					runId: requested.id,
 					message: 'The request was cancelled before it started'
 				});
+				return this.requireRun(actor, runId);
+			}
 			return requested;
 		});
 		// The abort waits for the commit above: the executor settles the run out of
@@ -889,7 +895,6 @@ export class Agent implements AgentController {
 			const run = settlement.run;
 
 			await this.abandonPendingCalls(run, 'The request was cancelled before you answered.');
-			await this.dependencies.decisions.clearPending(runId);
 
 			return this.dependencies.settlements.complete(settlement);
 		});
@@ -1079,7 +1084,7 @@ export class Agent implements AgentController {
 				},
 				{ runId: run.id }
 			);
-		await this.dependencies.runs.update(actor, { ...run, pendingDecisions: [] });
+		await this.dependencies.decisions.clearPending(run.id);
 	}
 
 	private async persistEvent(

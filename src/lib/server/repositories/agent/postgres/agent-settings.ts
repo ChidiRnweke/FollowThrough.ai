@@ -30,7 +30,7 @@ import {
 	parseRunAgentInput,
 	readPendingDecisions
 } from '../stored-values';
-import { NotFoundError, StaleRevisionError } from '$lib/errors';
+import { NotFoundError } from '$lib/errors';
 import type {
 	AgentPreferencesRepository,
 	AgentRunRepository,
@@ -299,42 +299,6 @@ export class AgentRunRecords implements AgentRunRepository {
 			})
 			.returning();
 		return row ? toRun(row) : undefined;
-	}
-
-	async update(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
-		const current = await this.findById(actor, run.id);
-		if (!current) throw new NotFoundError('Agent run was not found');
-		if (current.status !== run.status) assertAgentRunTransition(current.status, run.status);
-		const [row] = await this.database
-			.update(schema.agentRuns)
-			.set({
-				status: run.status,
-				requestId: run.requestId,
-				cancelRequestedAt: run.cancelRequestedAt ? new Date(run.cancelRequestedAt) : null,
-				startedAt: run.startedAt ? new Date(run.startedAt) : null,
-				finishedAt: run.finishedAt ? new Date(run.finishedAt) : null,
-				provenanceId: run.provenanceId ?? null,
-				serializedState: run.serializedState ?? null,
-				traceparent: run.traceparent ?? null,
-				pendingDecisions: toPendingDecisionRows(run),
-				failure: run.failure ?? null,
-				providerErrorCode: run.providerErrorCode ?? null,
-				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
-				inputSnapshot: run.inputSnapshot,
-				retryOfRunId: run.retryOfRunId,
-				definitionVersion: run.definitionVersion ?? 1,
-				updatedAt: new Date(run.updatedAt)
-			})
-			.where(
-				and(
-					eq(schema.agentRuns.id, run.id),
-					eq(schema.agentRuns.userId, actor.userId),
-					eq(schema.agentRuns.status, current.status)
-				)
-			)
-			.returning();
-		if (!row) throw new StaleRevisionError('Agent run changed while updating');
-		return toRun(row);
 	}
 
 	async updateCancellation(
