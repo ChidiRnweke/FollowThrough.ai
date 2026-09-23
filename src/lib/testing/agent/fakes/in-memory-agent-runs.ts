@@ -13,6 +13,9 @@ import type {
 	RunApprovalWrite,
 	WorkflowContextWrite,
 	WorkflowSettlementWrite,
+	AgentProvenanceWrite,
+	AgentContextWrite,
+	PreparedAgentRun,
 	ConversationId,
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
@@ -200,6 +203,30 @@ export class InMemoryAgentRunPersistence
 		change: RunCancellationWrite
 	): Promise<AgentRun> {
 		const run = await this.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		const updated = { ...run, ...change };
+		this.replace(updated);
+		return updated;
+	}
+
+	async updateAgentProvenance(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun> {
+		const run = await this.findAgentById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		const updated = { ...run, ...change };
+		this.replace(updated);
+		return updated;
+	}
+
+	async updateAgentContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun> {
+		const run = await this.findAgentById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		const updated = { ...run, ...change };
 		this.replace(updated);

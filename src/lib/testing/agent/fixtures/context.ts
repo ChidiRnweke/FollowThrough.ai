@@ -1,3 +1,4 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import type { ActorContext } from '$lib/models/identity';
@@ -36,6 +37,7 @@ export const agentContextFixture = () => {
 	const dependencies = {
 		runs,
 		cancellations: new RunCancellation(runs),
+		preparation: new RunPreparation(runs),
 		approvals: new RunApprovals(runs),
 		events: runs,
 		decisions: runs,

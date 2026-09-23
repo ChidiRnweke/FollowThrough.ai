@@ -10,6 +10,9 @@ import type {
 	RunApprovalWrite,
 	WorkflowContextWrite,
 	WorkflowSettlementWrite,
+	AgentProvenanceWrite,
+	AgentContextWrite,
+	PreparedAgentRun,
 	AgentSessionItem,
 	ConversationId,
 	PersistedSessionItem,
@@ -351,6 +354,51 @@ export class AgentRunRecords implements AgentRunRepository {
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
+	}
+
+	async updateAgentProvenance(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({ provenanceId: change.provenanceId, updatedAt: new Date(change.updatedAt) })
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.kind, 'agent')
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Agent run was not found');
+		return toResolvedRun(row);
+	}
+
+	async updateAgentContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				contextSnapshot: { ...change.contextSnapshot },
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.kind, 'agent')
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Agent run was not found');
+		const run = toResolvedRun(row);
+		if (!run.contextSnapshot) throw new Error('Saved agent context is missing');
+		return { ...run, contextSnapshot: run.contextSnapshot };
 	}
 
 	async updateWorkflowSettlement(

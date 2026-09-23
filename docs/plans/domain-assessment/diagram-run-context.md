@@ -34,6 +34,6 @@ persistence retaining lifecycle fields. Existing publication and durable-generat
 new context owner with their transaction-bound repositories.
 
 The subsequent [direct-run disposition](direct-diagram-runs.md) covers creation/completion/failure
-ownership and unused ledger capabilities. General run transition rules and chat preparation remain
-separate assessment work. This slice does not close the agent/diagram families. The dependent PR
-records observed verification results.
+ownership and unused ledger capabilities. The [chat-preparation disposition](agent-preparation.md)
+covers chat context writes. General run transition rules remain separate assessment work. This slice
+does not close the agent/diagram families. The dependent PR records observed verification results.

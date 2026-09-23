@@ -10,6 +10,9 @@ import type {
 	RunApprovalWrite,
 	WorkflowContextWrite,
 	WorkflowSettlementWrite,
+	AgentProvenanceWrite,
+	AgentContextWrite,
+	PreparedAgentRun,
 	ConversationId,
 	StoredAgentEvent,
 	StoredAgentRunEventRecord
@@ -70,6 +73,16 @@ export interface AgentRunRepository {
 		runId: AgentRunId,
 		change: RunCancellationWrite
 	): Promise<AgentRun>;
+	updateAgentProvenance(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun>;
+	updateAgentContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun>;
 	updateWorkflowSettlement(
 		actor: ActorContext,
 		runId: AgentRunId,

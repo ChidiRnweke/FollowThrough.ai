@@ -1,3 +1,4 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { InMemoryAgentRunner } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -71,6 +72,7 @@ const approvalController = (db: typeof context.db) => {
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
+			preparation: new RunPreparation(runs),
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
 			eventBus: { notify: () => {} }

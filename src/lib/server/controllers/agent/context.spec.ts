@@ -37,6 +37,24 @@ const setup = async (skillProject = testProjectId()) => {
 };
 
 describe('Agent grounding invariants', () => {
+	it('does not retain prepared context when the start event cannot be stored', async () => {
+		const { builder, runs } = await setup();
+		runs.failedEvent = 'run_started';
+		await builder
+			.build(
+				testActor(),
+				{ conversationId: testConversationId(), prompt: 'Help' },
+				{ provenanceId: testProvenanceId() }
+			)
+			.catch((error) => {
+				if (!(error instanceof Error) || error.message !== 'Event storage unavailable') throw error;
+				return { kind: 'failure' as const };
+			});
+		expect({ status: runs.runs[0]?.status, context: runs.runs[0]?.contextSnapshot }).toEqual({
+			status: 'failed',
+			context: undefined
+		});
+	});
 	it('includes shared profile memory in a prepared run', async () => {
 		const { builder, memory } = await setup();
 		memory.entries = [

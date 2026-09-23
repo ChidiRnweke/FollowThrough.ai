@@ -1,3 +1,4 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
@@ -102,6 +103,7 @@ const setup = <T extends AgentRunner>(
 		capabilityDependencies<AgentDependencies>({
 			runs,
 			cancellations: new RunCancellation(runs),
+			preparation: new RunPreparation(runs),
 			events: runs,
 			decisions: runs,
 			sessions,
@@ -329,8 +331,7 @@ describe('finishing a cancellation out of band', () => {
 describe('a cancellation that races preparation', () => {
 	/**
 	 * Freezes the context build so the cancel can land after the run reached
-	 * `running` but before the snapshot write — the window where the write reads
-	 * as an illegal `cancelling → running` update. The signal is never aborted:
+	 * `running` but before the locked context write. The signal is never aborted:
 	 * settlement must not depend on abort timing.
 	 */
 	const racingSetup = () => {
@@ -347,6 +348,16 @@ describe('a cancellation that races preparation', () => {
 		context.runs.runs[0] = unprepared;
 		return { ...context, building: memory.started, release: () => memory.release() };
 	};
+
+	it('reports cancellation already settled by another process before context was ready', async () => {
+		const context = racingSetup();
+		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
+		await context.building;
+		await requestCancellation(context.runs);
+		await context.lifecycle.finishCancellation(testRunId);
+		context.release();
+		expect(await execution).toBe('cancelled');
+	});
 
 	it('settles as cancelled instead of failing the run', async () => {
 		const context = racingSetup();

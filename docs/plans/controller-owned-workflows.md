@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Chat preparation: Agent owns locked provenance writes and atomic context/start-event persistence.
+RunPreparation keeps authoritative frozen facts and identifies cancellation before provider execution.
+See the [disposition](domain-assessment/agent-preparation.md).
+
 Direct diagram runs: Diagrams owns atomic conversation/run creation and locked publication/settlement.
 The ledger resolves values; repositories persist targeted fields. See the
 [disposition](domain-assessment/direct-diagram-runs.md).

@@ -422,6 +422,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			runs: runRepository,
 			cancellations: agentCapability.cancellations,
 			approvals: agentCapability.approvals,
+			preparation: agentCapability.preparation,
 			events: runEvents,
 			decisions: runDecisions,
 			sessions: agentSessions,

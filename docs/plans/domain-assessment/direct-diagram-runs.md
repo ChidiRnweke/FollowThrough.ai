@@ -42,7 +42,8 @@ context and durable cancellation contracts remain in their focused suites.
 
 ## Remaining review
 
-Chat preparation, generic repository transition guards and model lifecycle functions remain separate
-ownership work. Direct workflow publication and durable action submission remain distinct entry paths;
+The subsequent [chat-preparation disposition](agent-preparation.md) covers chat context writes.
+Generic repository transition guards and model lifecycle functions remain separate ownership work.
+Direct workflow publication and durable action submission remain distinct entry paths;
 this slice does not establish completion of the whole agent/diagram family or repository inventory.
 Observed local and CI results are recorded in the dependent PR.
