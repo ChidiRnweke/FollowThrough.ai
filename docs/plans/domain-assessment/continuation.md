@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #181](https://github.com/ChidiRnweke/FollowThrough.ai/pull/181) passed all required checks,
+including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35879911330).
+It remains open on the dependent stack.
+
+The [canvas-result disposition](canvas-results.md) removes payload parsing from canvas selection and
+preserves ordering, account isolation, corruption handling and the unbounded transcript guarantee.
+
 The [web-research disposition](web-research.md) covers frozen settings, configuration boundaries,
 reference transport and bootstrap ownership. Provider session representation still needs review.
 

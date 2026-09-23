@@ -1,4 +1,6 @@
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
+import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { segmentOutput } from '$lib/server/services/agent/runs/output';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
@@ -588,6 +590,51 @@ describe('Postgres agent session repository invariants', () => {
 		await repository.append(owner, conversationId, transcript);
 		expect((await repository.list(owner, conversationId)).map((row) => row.item)).toEqual(
 			transcript
+		);
+	});
+
+	it('recovers the latest saved canvas through ordered persisted results', async () => {
+		const { owner, conversationId } = await seedConversation('85');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [
+			resultItem('create_diagram', 'old', JSON.stringify({ diagramId: testDiagramId(1) })),
+			resultItem('edit_diagram', 'new', JSON.stringify({ diagramId: testDiagramId(2) })),
+			resultItem('edit_diagram', 'failed', JSON.stringify({ failure: 'Stale revision' }))
+		]);
+		expect(await new PresentedCanvasSource(repository).latest(owner, conversationId)).toBe(
+			testDiagramId(2)
+		);
+	});
+
+	it('refuses to read canvas results from another account conversation', async () => {
+		const { owner, conversationId } = await seedConversation('86');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [
+			resultItem('create_diagram', 'call', JSON.stringify({ diagramId: testDiagramId() }))
+		]);
+		await expect(repository.listCanvasResults(actor('87'), conversationId)).rejects.toThrow(
+			'Conversation was not found'
+		);
+	});
+
+	it('fails when canvas selection reaches corrupt persisted output', async () => {
+		const { owner, conversationId } = await seedConversation('88');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [resultItem('edit_diagram', 'corrupt', '{')]);
+		await expect(
+			new PresentedCanvasSource(repository).latest(owner, conversationId)
+		).rejects.toThrow();
+	});
+
+	it('recovers a newer persisted canvas after a superseded corrupt result', async () => {
+		const { owner, conversationId } = await seedConversation('89');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [
+			resultItem('edit_diagram', 'corrupt', '{'),
+			resultItem('create_diagram', 'saved', JSON.stringify({ diagramId: testDiagramId() }))
+		]);
+		expect(await new PresentedCanvasSource(repository).latest(owner, conversationId)).toBe(
+			testDiagramId()
 		);
 	});
 

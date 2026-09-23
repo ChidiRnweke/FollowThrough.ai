@@ -11,6 +11,19 @@ export type DiagramId = Brand<string, 'DiagramId'>;
 export type DiagramRevisionId = Brand<string, 'DiagramRevisionId'>;
 export type DiagramEtag = Brand<string, 'DiagramEtag'>;
 
+/** A stored diagram-tool result, read without deciding which canvas is current. */
+export type CanvasSessionResult =
+	| { readonly kind: 'written'; readonly diagramId: DiagramId }
+	| { readonly kind: 'unrelated' }
+	| { readonly kind: 'corrupt'; readonly reason: string };
+
+export const diagramWriteResultSchema = z.object({
+	diagramId: z
+		.string()
+		.refine((value) => value.trim() !== '')
+		.transform((value) => value as DiagramId)
+});
+
 type ConversationId = Brand<string, 'ConversationId'>;
 
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;

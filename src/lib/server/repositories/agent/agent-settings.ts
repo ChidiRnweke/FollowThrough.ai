@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { CanvasSessionResult } from '$lib/models/diagrams';
 import type {
 	AgentPreferences,
 	AgentSessionItem,
@@ -16,6 +17,11 @@ export interface AgentPreferencesRepository {
 
 /** The provider's serialized session state for a run, persisted so an `awaiting_approval` run survives a restart and resumes from exactly where it stopped. */
 export interface AgentSessionRepository {
+	/** Ordered, actor-owned read projection. No transcript window. */
+	listCanvasResults(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<readonly CanvasSessionResult[]>;
 	list(
 		actor: ActorContext,
 		conversationId: ConversationId,

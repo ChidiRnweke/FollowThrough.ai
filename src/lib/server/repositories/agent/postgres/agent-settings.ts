@@ -1,4 +1,5 @@
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { readCanvasSessionResult } from '../canvas-results';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -563,6 +564,10 @@ const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): Agent
 
 export class AgentSessionRecords implements AgentSessionRepository {
 	constructor(private readonly database: Database) {}
+
+	async listCanvasResults(actor: ActorContext, conversationId: ConversationId) {
+		return (await this.list(actor, conversationId)).map((row) => readCanvasSessionResult(row.item));
+	}
 
 	private async assertOwned(actor: ActorContext, conversationId: ConversationId): Promise<void> {
 		const [owned] = await this.database
