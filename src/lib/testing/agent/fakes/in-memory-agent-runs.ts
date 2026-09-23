@@ -122,14 +122,6 @@ export class InMemoryAgentRunPersistence
 		return owned;
 	}
 
-	async update(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
-		const current = await this.findById(actor, run.id);
-		if (!current) throw new NotFoundError('Agent run was not found');
-		if (current.status !== run.status) assertAgentRunTransition(current.status, run.status);
-		this.replace(run);
-		return run;
-	}
-
 	async transition(
 		runId: AgentRunId,
 		from: AgentRunStatus | readonly AgentRunStatus[],
@@ -372,11 +364,10 @@ export class InMemoryAgentRunPersistence
 		return true;
 	}
 
-	async clearPending(runId: AgentRunId): Promise<boolean> {
+	async clearPending(runId: AgentRunId): Promise<void> {
 		const run = this.runs.find((r) => r.id === runId);
-		if (!run) return false;
+		if (!run) throw new NotFoundError('Agent run was not found');
 		this.replace({ ...run, pendingDecisions: [] });
-		return true;
 	}
 
 	snapshot(): RestoreSnapshot {

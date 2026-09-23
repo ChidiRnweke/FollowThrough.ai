@@ -38,6 +38,7 @@ Settlement and approval contracts wire the new service to their transaction-boun
 
 ## Remaining review
 
-Pending-call abandonment still uses a broad run update, and generic repository transition guards and
-model lifecycle helpers remain for separate review. This slice does not close the full agent family or
-the assessment inventory. The dependent PR records observed local and CI validation.
+The subsequent [pending-call cleanup disposition](run-pending-cleanup.md) removes the remaining broad
+run update. Generic repository transition guards and model lifecycle helpers remain for separate
+review. This slice does not close the full agent family or the assessment inventory. The dependent PR
+records observed local and CI validation.

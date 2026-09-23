@@ -55,7 +55,6 @@ export interface AgentRunRepository {
 	): Promise<AgentRun | undefined>;
 	insert(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
 	insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined>;
-	update(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
 	transition(
 		runId: AgentRunId,
 		from: AgentRunStatus | readonly AgentRunStatus[],
@@ -192,5 +191,5 @@ export interface AgentRunDecisionRepository {
 	 */
 	loadUnconsumed(runId: AgentRunId): Promise<readonly AgentRunDecisionRecord[]>;
 	consume(runId: AgentRunId, callId: string, at: Date): Promise<boolean>;
-	clearPending(runId: AgentRunId): Promise<boolean>;
+	clearPending(runId: AgentRunId): Promise<void>;
 }
