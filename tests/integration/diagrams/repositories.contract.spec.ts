@@ -196,7 +196,9 @@ describe('Project-owned diagram persistence invariants', () => {
 			owner,
 			diagram('421', { userId: owner.userId, projectId: project.id, sourceNoteId: note.id })
 		);
-		await new NoteRecords(context.db).delete(owner, note.id);
+		const notes = new NoteRecords(context.db);
+		await notes.update(owner, { ...note, archivedAt: now });
+		await notes.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, stored.id)).toBeDefined();
 	});
 
@@ -207,7 +209,9 @@ describe('Project-owned diagram persistence invariants', () => {
 			owner,
 			diagram('422', { userId: owner.userId, projectId: project.id, sourceNoteId: note.id })
 		);
-		await new NoteRecords(context.db).delete(owner, note.id);
+		const notes = new NoteRecords(context.db);
+		await notes.update(owner, { ...note, archivedAt: now });
+		await notes.deleteTrashed(owner, note.id);
 		expect((await repository.findById(owner, stored.id))?.sourceNoteId).toBeUndefined();
 	});
 

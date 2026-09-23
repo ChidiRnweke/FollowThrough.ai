@@ -15,6 +15,7 @@ import { NotFoundError } from '$lib/errors';
 export class InMemoryNoteRepository implements NoteRepository {
 	insertFailures = new Set<string>();
 	saveFailures = new Set<string>();
+	deleteFailures = new Set<NoteId>();
 	snapshot(): () => void {
 		const notes = structuredClone(this.notes);
 		const revisions = structuredClone(this.revisions);
@@ -164,12 +165,26 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return note;
 	}
 
-	async delete(actor: ActorContext, id: NoteId): Promise<void> {
-		const owned = this.notes.some((note) => note.id === id && note.userId === actor.userId);
-		if (!owned) return;
-		this.notes = this.notes.filter((note) => note.id !== id);
-		// Revisions cascade from the note in Postgres, so they cannot outlive it here either.
+	async deleteTrashed(
+		actor: ActorContext,
+		id: NoteId
+	): Promise<Pick<Note, 'id' | 'title'> | undefined> {
+		const current = this.notes.find(
+			(note) =>
+				note.id === id && note.userId === actor.userId && note.archivedAt && note.kind !== 'skill'
+		);
+		if (!current) return undefined;
+		if (this.deleteFailures.has(id)) throw new Error('Note could not be deleted');
+		this.notes = this.notes
+			.filter((note) => note.id !== id)
+			.map((note) => {
+				if (note.parentId !== id) return note;
+				const { parentId, ...detached } = note;
+				void parentId;
+				return detached;
+			});
 		this.revisions = this.revisions.filter((revision) => revision.noteId !== id);
+		return { id: current.id, title: current.title };
 	}
 
 	async setSectionNumbering(

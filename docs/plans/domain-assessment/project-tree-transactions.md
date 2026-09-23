@@ -31,7 +31,7 @@ would form a cycle, sibling creation order, creation after project archive and m
 archive. Existing authoritative edit/archive and archive/restore races remain.
 
 This slice covers W03.04, W03.06–W03.07, W04.01 and the placement part of W04.12–W04.13. It does not
-complete those workflow assessments. Permanent deletion and empty-trash races still need the same
-cross-writer review. Built-in skill provisioning still has general note writes; its placement and
+complete those workflow assessments. Permanent deletion and empty-trash races continue in
+[note deletion](note-deletion.md). Built-in skill provisioning still has general note writes; its placement and
 repair semantics need a separate disposition. No database migration or public command change is
 required. These limitations remain implementation work, not user-approved deferrals.

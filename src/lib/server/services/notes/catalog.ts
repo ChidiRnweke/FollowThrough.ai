@@ -18,7 +18,7 @@ import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { TrashedNote } from '$lib/models/notes';
 
 import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
-import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
+import { NotFoundError, OwnershipError, StaleRevisionError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
@@ -141,77 +141,45 @@ export class NoteCatalog {
 			}));
 	}
 
-	async deleteForever(
+	async deletionFacts(
 		actor: ActorContext,
 		noteId: NoteId
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
-		const note = await this.get(actor, noteId);
-		if (!note.archivedAt)
-			throw new ValidationError('Only notes in the trash can be deleted permanently');
-		if (note.kind === 'skill')
-			throw new ValidationError('Skill notes are not deleted from the trash');
-		const trashed = await this.notes.listTrashed(actor, note.projectId);
-		const deleted = await this.purge(actor, this.descendants(trashed, [noteId]));
-		return this.inDeletionOrder(trashed, deleted);
+	): Promise<{ note: Note; trashed: readonly Note[] }> {
+		const note = await this.lockTreeForNote(actor, noteId);
+		return { note, trashed: await this.notes.listTrashed(actor, note.projectId) };
 	}
 
-	async emptyTrash(
+	async trashForDeletion(
 		actor: ActorContext,
 		projectId?: Note['projectId']
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
-		const trashed = await this.notes.listTrashed(actor, projectId);
-		// Skills are filtered out of the trash listing, so they are not something the user
-		// can see they are about to destroy. Emptying the trash empties what is on screen.
-		const visible = trashed.filter((note) => note.kind !== 'skill');
-		const deleted = await this.purge(
-			actor,
-			this.descendants(
-				trashed,
-				visible.map((note) => note.id)
-			)
+	): Promise<readonly Note[]> {
+		const projectIds = projectId
+			? [projectId]
+			: (await this.projects.listActive(actor)).map((project) => project.id).sort();
+		const locked = new Set<Note['projectId']>();
+		for (const id of projectIds) {
+			const project = await this.projects.findForWrite(actor, id);
+			if (project) locked.add(project.id);
+		}
+		if (locked.size === 0) return [];
+		// Preserve trash ordering while excluding projects created after the locked inventory.
+		return (await this.notes.listTrashed(actor, projectId)).filter((note) =>
+			locked.has(note.projectId)
 		);
-		return this.inDeletionOrder(trashed, deleted);
 	}
 
-	/**
-	 * The trashed notes reachable from `roots` through `parentId`, deepest first. A trashed
-	 * folder is deleted with its contents: `notes.parent_id` is `set null` on delete, so
-	 * leaving them behind would silently move them to the project root instead.
-	 */
-	private descendants(trashed: readonly Note[], roots: readonly NoteId[]): readonly NoteId[] {
-		const visible = trashed.filter((note) => note.kind !== 'skill');
-		const ordered: NoteId[] = [];
-		const seen = new Set<NoteId>();
-		const walk = (id: NoteId): void => {
-			if (seen.has(id)) return;
-			seen.add(id);
-			for (const child of visible.filter((note) => note.parentId === id)) walk(child.id);
-			ordered.push(id);
-		};
-		for (const root of roots) walk(root);
-		return ordered;
-	}
-
-	private async purge(actor: ActorContext, ids: readonly NoteId[]): Promise<readonly NoteId[]> {
-		// Sequential rather than concurrent: the ids arrive children-first so that a folder
-		// is never removed while something still points at it.
-		for (const id of ids) await this.notes.delete(actor, id);
-		return ids;
-	}
-
-	/**
-	 * Report the deleted rows in the order they were purged — children before the folder
-	 * that holds them — not in trash-listing order.
-	 */
-	private inDeletionOrder(
-		trashed: readonly Note[],
-		deleted: readonly NoteId[]
-	): readonly Pick<Note, 'id' | 'title'>[] {
-		const byId = new Map(trashed.map((row) => [row.id, row]));
-		return deleted.flatMap((id) => {
-			const row = byId.get(id);
-			return row === undefined ? [] : [{ id, title: row.title }];
-		});
+	async persistDeletion(
+		actor: ActorContext,
+		notes: readonly Pick<Note, 'id' | 'title'>[]
+	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
+		const deleted: Pick<Note, 'id' | 'title'>[] = [];
+		// The resolved order is children first; an unexpected missing/restored row aborts the batch.
+		for (const note of notes) {
+			const result = await this.notes.deleteTrashed(actor, note.id);
+			if (!result) throw new StaleRevisionError('The note left the trash before deletion');
+			deleted.push(result);
+		}
+		return deleted;
 	}
 
 	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
@@ -247,10 +247,22 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row) : undefined;
 	}
 
-	async delete(actor: ActorContext, id: NoteId): Promise<void> {
-		await this.database
+	async deleteTrashed(
+		actor: ActorContext,
+		id: NoteId
+	): Promise<Pick<Note, 'id' | 'title'> | undefined> {
+		const [row] = await this.database
 			.delete(schema.notes)
-			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, actor.userId)));
+			.where(
+				and(
+					eq(schema.notes.id, id),
+					eq(schema.notes.userId, actor.userId),
+					isNotNull(schema.notes.archivedAt),
+					ne(schema.notes.kind, 'skill')
+				)
+			)
+			.returning({ id: schema.notes.id, title: schema.notes.title });
+		return row ? { id: row.id as NoteId, title: row.title } : undefined;
 	}
 
 	async setSectionNumbering(

@@ -1,6 +1,7 @@
 import { noteTrashChange } from '$lib/services/notes/trash';
 import { prepareNotePublication } from '$lib/services/notes/publication';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import { assembleTodoView } from '$lib/services/todos/presentation';
@@ -131,7 +132,6 @@ import type {
 	NoteEditor,
 	NoteIndexer,
 	NotePublisher,
-	NotePurger,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
 	NoteSectionNumberingEditor,
@@ -348,7 +348,7 @@ export interface NotesDependencies {
 	noteLinkReconciler: NoteLinkReconciler;
 	noteTrash: Pick<NoteCatalog, 'archiveFacts' | 'restoreFacts' | 'persistTrash'>;
 	noteTrashReader: NoteTrashReader;
-	notePurger: NotePurger;
+	noteDeletion: Pick<NoteCatalog, 'deletionFacts' | 'trashForDeletion' | 'persistDeletion'>;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
 	revisionReader: NoteRevisionReader;
@@ -920,13 +920,25 @@ export class Notes implements NotesController {
 		// Transactional because a folder is several deletes: a half-purged folder would
 		// leave its contents at the project root with no way back to where they were.
 		return this.dependencies.transactionRunner.run(async () => {
-			const deletedNotes = await this.dependencies.notePurger.deleteForever(actor, input.noteId);
+			const facts = await this.dependencies.noteDeletion.deletionFacts(actor, input.noteId);
+			const decision = prepareNoteDeletion(facts.trashed, { kind: 'one', note: facts.note });
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
+				actor,
+				decision.notes
+			);
 			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
 		});
 	}
 	async emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const deletedNotes = await this.dependencies.notePurger.emptyTrash(actor, input.projectId);
+			const trashed = await this.dependencies.noteDeletion.trashForDeletion(actor, input.projectId);
+			const decision = prepareNoteDeletion(trashed, { kind: 'all' });
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
+				actor,
+				decision.notes
+			);
 			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
 		});
 	}
