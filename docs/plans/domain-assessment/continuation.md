@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #189](https://github.com/ChidiRnweke/FollowThrough.ai/pull/189) passed all required checks,
+including [quality, unit/browser label parity, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35889311627).
+It remains open on the dependent stack.
+
+The [export-geometry disposition](export-geometry.md) retains canonical geometry constructors and
+fixes SVG number parsing and overflowing column normalization. Typography ownership remains separate.
+
 [PR #188](https://github.com/ChidiRnweke/FollowThrough.ai/pull/188) passed all required checks,
 including [quality, unit/browser, PostgreSQL provenance/content contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35888362067).
 It remains open on the dependent stack.
