@@ -60,6 +60,8 @@ const importSkill = () => {
 			slug: 'decision-writing',
 			description: 'Writes decisions',
 			triggerHints: [],
+			metadata: {},
+			allowImplicitInvocation: true,
 			isEnabled: true
 		}
 	];
@@ -77,6 +79,35 @@ const input: SkillEditInput = {
 };
 
 describe('Skill document imports', () => {
+	it('clears omitted portable fields while preserving an explicit invocation policy', async () => {
+		const { controller, skills, note } = importSkill();
+		skills.skills[0] = {
+			...skills.skills[0],
+			license: 'MIT',
+			compatibility: 'Node 22',
+			metadata: { owner: 'author' }
+		};
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			content: {
+				kind: 'manifest',
+				baseRevision: 1,
+				manifest: {
+					slug: 'decision-writing',
+					description: 'Writes decisions',
+					metadata: {},
+					allowImplicitInvocation: false,
+					instructions: 'New instructions'
+				}
+			}
+		});
+		expect({
+			license: skill.license,
+			compatibility: skill.compatibility,
+			metadata: skill.metadata,
+			implicit: skill.allowImplicitInvocation
+		}).toEqual({ license: undefined, compatibility: undefined, metadata: {}, implicit: false });
+	});
 	it('rejects metadata changes to an archived skill', async () => {
 		const { controller, notes, note } = importSkill();
 		notes.notes = [{ ...note, archivedAt: note.updatedAt }];
@@ -185,6 +216,8 @@ describe('Skill document imports', () => {
 			slug: 'already-used',
 			description: 'Existing instructions',
 			triggerHints: [],
+			metadata: {},
+			allowImplicitInvocation: true,
 			isEnabled: true
 		});
 		await expect(

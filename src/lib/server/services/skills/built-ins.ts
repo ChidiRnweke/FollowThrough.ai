@@ -138,7 +138,7 @@ export class BuiltInSkills {
 	 * about authorship.
 	 */
 	private isUntouched(note: Note, skill: Skill<Note>, released: BuiltInSkillDefinition): boolean {
-		const metadata = skill.metadata ?? {};
+		const metadata = skill.metadata;
 		const expected = this.metadata(released);
 		return (
 			note.title === released.name &&

@@ -314,15 +314,25 @@ export class InMemorySkillRepository implements SkillRepository {
 				isEnabled: item.isEnabled
 			}));
 	}
-	async insert(_actor: ActorContext, skill: Skill<Note>) {
+	async insert(actor: ActorContext, skill: Skill<Note>) {
 		if (this.writeFailure) throw this.writeFailure;
-		this.skills.push(skill);
-		return skill;
+		const note = await this.notes.findById(actor, skill.note.id);
+		if (!note) throw new NotFoundError('Skill note was not found');
+		if (this.skills.some((current) => current.note.id === note.id))
+			throw new ConflictError('Skill metadata already exists');
+		const stored = { ...skill, note };
+		this.skills.push(stored);
+		return stored;
 	}
-	async update(_actor: ActorContext, skill: Skill<Note>) {
+	async update(actor: ActorContext, skill: Skill<Note>) {
 		if (this.writeFailure) throw this.writeFailure;
-		this.skills = this.skills.map((item) => (item.note.id === skill.note.id ? skill : item));
-		return skill;
+		const note = await this.notes.findById(actor, skill.note.id);
+		if (!note) throw new NotFoundError('Skill note was not found');
+		if (!this.skills.some((current) => current.note.id === note.id))
+			throw new NotFoundError('Skill was not found');
+		const stored = { ...skill, note };
+		this.skills = this.skills.map((item) => (item.note.id === note.id ? stored : item));
+		return stored;
 	}
 	async setPinned(): Promise<void> {}
 	async recordUsage(_actor: ActorContext, usage: SkillUsage) {

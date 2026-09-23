@@ -28,6 +28,8 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 			slug: 'compliance-format',
 			description: 'Formats responses for compliance review',
 			triggerHints: ['compliance', 'audit'],
+			metadata: {},
+			allowImplicitInvocation: true,
 			isEnabled: true
 		}
 	];

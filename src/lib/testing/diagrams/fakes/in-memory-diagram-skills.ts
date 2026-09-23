@@ -175,7 +175,15 @@ export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 	): Promise<Skill<Note>> {
 		void _actor;
 		if (this.failCreation) throw new ExternalServiceError('Skill creation failed');
-		const skill: Skill<Note> = { note, isEnabled: true, ...input };
+		const skill: Skill<Note> = {
+			note,
+			slug: `skill-${note.id}`,
+			metadata: {},
+			allowImplicitInvocation: true,
+			isEnabled: true,
+			description: input.description,
+			triggerHints: input.triggerHints
+		};
 		this.skills.push(skill);
 		return skill;
 	}

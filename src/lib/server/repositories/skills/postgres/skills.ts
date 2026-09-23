@@ -4,7 +4,8 @@ import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { Skill, SkillSummary, SkillUsage } from '$lib/models/skills';
-import { NotFoundError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
+import { isUniqueViolation } from '$lib/server/db/postgres-errors';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/skills';
@@ -115,46 +116,51 @@ export class SkillRecords implements SkillRepository {
 			);
 	}
 	async insert(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
-		return this.persist(actor, skill);
+		const note = await this.ownedNote(actor, skill.note.id);
+		try {
+			const [row] = await this.database
+				.insert(schema.skills)
+				.values({ noteId: note.id, name: note.title, ...this.metadataValues(skill) })
+				.returning();
+			return toSkill(note, row!);
+		} catch (error) {
+			if (isUniqueViolation(error, 'skills_pkey'))
+				throw new ConflictError('Skill metadata already exists');
+			throw error;
+		}
 	}
+
 	async update(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
-		return this.persist(actor, skill);
+		const note = await this.ownedNote(actor, skill.note.id);
+		const [row] = await this.database
+			.update(schema.skills)
+			.set({ name: note.title, ...this.metadataValues(skill) })
+			.where(eq(schema.skills.noteId, note.id))
+			.returning();
+		if (!row) throw new NotFoundError('Skill was not found');
+		return toSkill(note, row);
 	}
-	private async persist(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
+
+	private metadataValues(skill: Skill<Note>) {
+		return {
+			slug: skill.slug,
+			description: skill.description,
+			triggerHints: [...skill.triggerHints],
+			license: skill.license ?? null,
+			compatibility: skill.compatibility ?? null,
+			metadata: { ...skill.metadata },
+			allowImplicitInvocation: skill.allowImplicitInvocation,
+			isEnabled: skill.isEnabled
+		};
+	}
+
+	private async ownedNote(actor: ActorContext, noteId: NoteId) {
 		const [note] = await this.database
 			.select()
 			.from(schema.notes)
-			.where(and(eq(schema.notes.id, skill.note.id), eq(schema.notes.userId, actor.userId)));
+			.where(and(eq(schema.notes.id, noteId), eq(schema.notes.userId, actor.userId)));
 		if (!note) throw new NotFoundError('Skill note was not found');
-		const [row] = await this.database
-			.insert(schema.skills)
-			.values({
-				noteId: skill.note.id,
-				name: note.title,
-				slug: skill.slug ?? note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-				description: skill.description,
-				triggerHints: [...skill.triggerHints],
-				license: skill.license,
-				compatibility: skill.compatibility,
-				metadata: { ...(skill.metadata ?? {}) },
-				allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
-				isEnabled: skill.isEnabled
-			})
-			.onConflictDoUpdate({
-				target: schema.skills.noteId,
-				set: {
-					slug: skill.slug ?? note.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-					description: skill.description,
-					triggerHints: [...skill.triggerHints],
-					license: skill.license,
-					compatibility: skill.compatibility,
-					metadata: { ...(skill.metadata ?? {}) },
-					allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
-					isEnabled: skill.isEnabled
-				}
-			})
-			.returning();
-		return toSkill(note, row!);
+		return note;
 	}
 	async recordUsage(actor: ActorContext, usage: SkillUsage): Promise<SkillUsage> {
 		if (!(await this.findByNoteId(actor, usage.skillNoteId)))

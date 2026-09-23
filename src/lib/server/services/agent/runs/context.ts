@@ -163,7 +163,7 @@ export class AgentContext {
 		return (
 			requestedNoteIds.has(skill.noteId) ||
 			requestedNames.has(skill.name.toLowerCase()) ||
-			requestedNames.has((skill.slug ?? '').toLowerCase())
+			requestedNames.has(skill.slug.toLowerCase())
 		);
 	}
 
@@ -177,7 +177,7 @@ export class AgentContext {
 		isRequested: (skill: SkillSummary) => boolean
 	): { items: readonly AdvertisedSkill[]; truncated?: true } {
 		const eligible = available.filter(
-			(skill) => skill.isEnabled && (skill.allowImplicitInvocation !== false || isRequested(skill))
+			(skill) => skill.isEnabled && (skill.allowImplicitInvocation || isRequested(skill))
 		);
 		const priority = (skill: SkillSummary): number =>
 			isRequested(skill) ? 0 : skill.isPinned ? 1 : 2;

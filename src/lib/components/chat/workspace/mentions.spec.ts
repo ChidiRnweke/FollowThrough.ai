@@ -19,8 +19,15 @@ const entry = (overrides: Partial<NoteSummary> & Pick<NoteSummary, 'id' | 'title
 		...overrides
 	}) as NoteSummary;
 
-const skill = (name: string, noteId: NoteId): SkillSummary =>
-	({ name, noteId, description: '', triggerHints: [], isEnabled: true }) as SkillSummary;
+const skill = (name: string, noteId: NoteId): SkillSummary => ({
+	name,
+	noteId,
+	slug: `skill-${noteId}`,
+	description: 'Mentionable skill',
+	triggerHints: [],
+	allowImplicitInvocation: true,
+	isEnabled: true
+});
 
 describe('mention query detection', () => {
 	it('reads the word being typed after an @', () => {
