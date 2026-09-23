@@ -9,6 +9,12 @@ export interface TodoReader {
 }
 export interface TodoEditor {
 	getForEdit(actor: ActorContext, todoId: TodoId): Promise<Todo>;
+	/** Validate a requested assignment; existing links can outlive note archival. */
+	validateLinkedNote(
+		actor: ActorContext,
+		noteId: NonNullable<Todo['linkedNoteId']>,
+		projectId: Todo['projectId']
+	): Promise<void>;
 	update(actor: ActorContext, todo: Todo): Promise<Todo>;
 }
 export interface TodoDeleter {

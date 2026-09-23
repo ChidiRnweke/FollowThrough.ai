@@ -46,7 +46,6 @@ export class TodoCatalog {
 	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
 		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot edit another user’s task');
 		if (!todo.title) throw new ValidationError('Todo title is required');
-		if (todo.linkedNoteId) await this.validateLinkedNote(actor, todo.linkedNoteId, todo.projectId);
 		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
@@ -98,7 +97,7 @@ export class TodoCatalog {
 		};
 	}
 
-	private async validateLinkedNote(
+	async validateLinkedNote(
 		actor: ActorContext,
 		noteId: NonNullable<Todo['linkedNoteId']>,
 		projectId: Todo['projectId']
