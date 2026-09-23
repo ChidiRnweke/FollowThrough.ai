@@ -19,6 +19,14 @@ import { toDiagram, toDiagramRevision } from '$lib/server/db/mappers';
 
 export class DiagramRecords implements DiagramRepository {
 	constructor(private readonly database: Database) {}
+	async findForWrite(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.diagrams)
+			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.for('update');
+		return row ? toDiagram(row) : undefined;
+	}
 	async findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.select()
@@ -284,13 +292,16 @@ export class DiagramRecords implements DiagramRepository {
 			);
 		return row ? toDiagramRevision(row) : undefined;
 	}
-	async setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram> {
+	async updateTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
 		const [row] = await this.database
 			.update(schema.diagrams)
-			.set({ archivedAt: archived ? new Date() : null })
-			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.set({
+				archivedAt: diagram.archivedAt ? new Date(diagram.archivedAt) : null,
+				updatedAt: new Date(diagram.updatedAt)
+			})
+			.where(and(eq(schema.diagrams.id, diagram.id), eq(schema.diagrams.userId, actor.userId)))
 			.returning();
-		if (!row) throw new NotFoundError('Diagram was not found', { diagramId: id });
+		if (!row) throw new NotFoundError('Diagram was not found', { diagramId: diagram.id });
 		return toDiagram(row);
 	}
 

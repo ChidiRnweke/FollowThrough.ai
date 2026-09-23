@@ -441,21 +441,6 @@ export interface PromoteDiagramOutput<Proposal> {
 	readonly suggestion: Proposal;
 }
 
-export function decideDiagramTrash(
-	action: 'archive' | 'restore' | 'delete',
-	current: Pick<Diagram, 'archivedAt'>
-): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
-	if (action === 'archive' ? Boolean(current.archivedAt) : !current.archivedAt)
-		return {
-			kind: 'invalid',
-			message:
-				action === 'archive'
-					? 'The diagram is already in the trash'
-					: 'The diagram is not in the trash'
-		};
-	return { kind: 'allowed' };
-}
-
 export interface DrawioRevision {
 	readonly source: string;
 	readonly renderedSvg: string;

@@ -1,3 +1,5 @@
+import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/trash';
+import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
@@ -50,12 +52,10 @@ import type {
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
-import { StaleRevisionError, UnsupportedDiagramOperationError } from '$lib/errors';
+import { StaleRevisionError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramConversationFinder,
-	DiagramArchiver,
-	DiagramDeleter,
 	DiagramDraftWriter,
 	DiagramFinder,
 	DiagramIconSearch,
@@ -215,8 +215,10 @@ export interface DiagramStudioDependencies {
 	diagramRenamer: DiagramRenamer;
 	diagramDraftWriter: DiagramDraftWriter;
 	diagramRevisionReader: DiagramRevisionReader;
-	diagramDeleter: DiagramDeleter;
-	diagramArchiver: DiagramArchiver;
+	diagramTrash: Pick<
+		DiagramLibrary,
+		'getForWrite' | 'persistTrash' | 'deleteArchived' | 'listArchived'
+	>;
 	diagramWriter: DiagramWriter;
 	diagramSourceNotes: NoteReader;
 	indexEmbeddings: IEmbeddings;
@@ -588,7 +590,12 @@ export class DiagramStudio implements DiagramStudioController {
 	}
 
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void> {
-		return this.dependencies.diagramDeleter.delete(actor, input.diagramId);
+		return this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.diagramTrash.getForWrite(actor, input.diagramId);
+			const decision = decideDiagramTrash('delete', current);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			await this.dependencies.diagramTrash.deleteArchived(actor, current.id);
+		});
 	}
 
 	async archiveProjectDiagram(
@@ -596,7 +603,10 @@ export class DiagramStudio implements DiagramStudioController {
 		input: DeleteProjectDiagramInput
 	): Promise<Diagram> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const archived = await this.dependencies.diagramArchiver.archive(actor, input.diagramId);
+			const current = await this.dependencies.diagramTrash.getForWrite(actor, input.diagramId);
+			const decision = diagramTrashChange('archive', current, this.dependencies.now());
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const archived = await this.dependencies.diagramTrash.persistTrash(actor, decision.diagram);
 			await this.indexDiagram(actor, archived);
 			return archived;
 		});
@@ -607,7 +617,10 @@ export class DiagramStudio implements DiagramStudioController {
 		input: DeleteProjectDiagramInput
 	): Promise<Diagram> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const restored = await this.dependencies.diagramArchiver.unarchive(actor, input.diagramId);
+			const current = await this.dependencies.diagramTrash.getForWrite(actor, input.diagramId);
+			const decision = diagramTrashChange('restore', current, this.dependencies.now());
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const restored = await this.dependencies.diagramTrash.persistTrash(actor, decision.diagram);
 			await this.indexDiagram(actor, restored);
 			return restored;
 		});
@@ -617,7 +630,7 @@ export class DiagramStudio implements DiagramStudioController {
 		actor: ActorContext,
 		input: ListTrashedDiagramsInput
 	): Promise<readonly Diagram[]> {
-		return this.dependencies.diagramArchiver.listArchived(actor, input.projectId);
+		return this.dependencies.diagramTrash.listArchived(actor, input.projectId);
 	}
 
 	countDiagramReferences(actor: ActorContext, input: CountDiagramReferencesInput): Promise<number> {
