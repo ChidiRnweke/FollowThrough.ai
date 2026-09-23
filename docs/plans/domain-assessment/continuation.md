@@ -39,6 +39,16 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #209](https://github.com/ChidiRnweke/FollowThrough.ai/pull/209) preserves task edits after
+linked-note archival. Focused regressions passed 17 files and 124 tests; the full local unit suite
+passed 443 files and 4,095 tests. All required checks passed, including
+[four lifecycle PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35916759002).
+
+The [task value review](task-values.md) records a disposition for each current model declaration.
+The [task read review](task-reads.md) reconciles category discovery and list/filter/count paths;
+only W09.07 and W09.09 are newly marked assessed. Unused due/source read contracts are removed.
+Focused regressions passed six files and 47 tests. Detail and embedded-task visibility remain open.
+
 [PR #208](https://github.com/ChidiRnweke/FollowThrough.ai/pull/208) preserves
 [device calendar dates and due-date labels](task-calendar.md), with matched actual-component
 captures. Focused regressions passed five files and 25 tests; the full local unit suite passed 443
