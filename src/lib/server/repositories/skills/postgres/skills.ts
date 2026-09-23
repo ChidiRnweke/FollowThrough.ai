@@ -17,6 +17,22 @@ export class SkillRecords implements SkillRepository {
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext('built-in-skills'))`
 		);
 	}
+	async findForWrite(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
+		const [row] = await this.database
+			.select({ note: schema.notes, skill: schema.skills })
+			.from(schema.skills)
+			.innerJoin(schema.notes, eq(schema.notes.id, schema.skills.noteId))
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+			.where(
+				and(
+					eq(schema.notes.id, noteId),
+					eq(schema.notes.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			)
+			.for('update', { of: schema.skills });
+		return row ? toSkill(row.note, row.skill) : undefined;
+	}
 	async findByNoteId(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
 		const [row] = await this.database
 			.select({ note: schema.notes, skill: schema.skills })

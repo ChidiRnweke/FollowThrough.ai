@@ -5,7 +5,8 @@ import type {
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
-	NotePublicationWrite
+	NotePublicationWrite,
+	NoteBuiltInRepairWrite
 } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
@@ -86,6 +87,40 @@ export class NoteRecords implements NoteRepository {
 			.returning();
 		if (!row) throw new NotFoundError('Note was not found');
 		return toNote(row);
+	}
+
+	async findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.notes)
+			.where(and(eq(schema.notes.userId, actor.userId), eq(schema.notes.builtInKey, key)))
+			.for('update');
+		return row ? toNote(row) : undefined;
+	}
+
+	async repairBuiltIn(
+		actor: ActorContext,
+		write: NoteBuiltInRepairWrite
+	): Promise<Note | undefined> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				projectId: write.projectId,
+				parentId: write.parentId ?? null,
+				position: write.position,
+				kind: write.kind,
+				archivedAt: write.archivedAt,
+				updatedAt: new Date(write.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.notes.id, write.noteId),
+					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.builtInKey, write.builtInKey)
+				)
+			)
+			.returning();
+		return row ? toNote(row) : undefined;
 	}
 
 	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {

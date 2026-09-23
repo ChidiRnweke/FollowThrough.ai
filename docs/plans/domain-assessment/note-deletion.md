@@ -34,6 +34,7 @@ survival, the storage guard and a PostgreSQL-triggered rollback. Add storage pro
 skills. The tree races share a database harness; they still execute real controllers and repositories.
 
 This continues W04.15–W04.16 and the races left open by
-[project tree transactions](project-tree-transactions.md). Built-in repair writes and the remaining
-workflow/declaration inventory still require their separate review. Tests and ownership here do not
+[project tree transactions](project-tree-transactions.md). Built-in repair continues in
+[built-in note writes](built-in-note-writes.md). The remaining workflow/declaration inventory still
+requires its separate review. Tests and ownership here do not
 establish repository-wide assessment completion.
