@@ -445,26 +445,6 @@ export interface ReadProjectDiagramOutput {
 	readonly labels: string;
 }
 
-export interface SaveProjectDrawioInput {
-	readonly diagramId: DiagramId;
-	readonly source: string;
-	readonly renderedSvg: string;
-}
-
-export interface GetDrawioDiagramInput {
-	readonly noteId: NoteId;
-	readonly diagramId: DiagramId;
-}
-
-export interface SaveDrawioDiagramInput extends GetDrawioDiagramInput {
-	readonly source: string;
-	readonly renderedSvg: string;
-}
-
-export interface SaveDrawioDiagramOutput {
-	readonly diagram: DrawioDiagram;
-}
-
 export interface PromoteDiagramInput {
 	readonly diagramId: DiagramId;
 }

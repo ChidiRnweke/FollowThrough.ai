@@ -48,8 +48,6 @@ import type {
 	RestoreDiagramRevisionInput,
 	RestoreDiagramRevisionOutput,
 	SaveProjectDiagramDraftInput,
-	SaveDrawioDiagramOutput,
-	SaveProjectDrawioInput,
 	SearchDiagramIconsInput,
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
@@ -148,16 +146,6 @@ export interface DiagramStudioController {
 	): Promise<ListProjectDiagramsOutput>;
 	/** How many, for a screen that shows the number and none of the diagrams. */
 	countProjectDiagrams(actor: ActorContext, input: ListProjectDiagramsInput): Promise<number>;
-	/**
-	 * Persist an edited studio diagram, which need not sit in any note.
-	 *
-	 * @throws NotFoundError if the actor has no such diagram; throws
-	 * UnsupportedDiagramOperationError if it is not draw.io.
-	 */
-	saveProjectDrawio(
-		actor: ActorContext,
-		input: SaveProjectDrawioInput
-	): Promise<SaveDrawioDiagramOutput>;
 	saveProjectDiagramDraft(
 		actor: ActorContext,
 		input: SaveProjectDiagramDraftInput
@@ -219,7 +207,7 @@ export interface DiagramStudioDependencies {
 		DiagramLibrary,
 		'getForWrite' | 'persistTrash' | 'deleteArchived' | 'listArchived'
 	>;
-	diagramWriter: DiagramWriter;
+	diagramWriter: Pick<DiagramWriter, 'create'>;
 	diagramSourceNotes: NoteReader;
 	indexEmbeddings: IEmbeddings;
 	indexWriter: Pick<ContentIndex, 'complete'>;
@@ -438,34 +426,6 @@ export class DiagramStudio implements DiagramStudioController {
 	countProjectDiagrams(actor: ActorContext, input: ListProjectDiagramsInput): Promise<number> {
 		const { projectId, ...params } = input;
 		return this.dependencies.diagramLister.countForProject(actor, projectId, params);
-	}
-
-	saveProjectDrawio(
-		actor: ActorContext,
-		input: SaveProjectDrawioInput
-	): Promise<SaveDrawioDiagramOutput> {
-		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.diagramFinder.get(actor, input.diagramId);
-			if (current.kind !== 'drawio')
-				throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
-			const source = this.dependencies.drawioXmlValidator.validate(input.source);
-			const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-			const searchableText = await this.dependencies.drawioTextExtractor.extract({
-				...current,
-				source
-			});
-			const diagram = await this.dependencies.diagramWriter.update(actor, {
-				...current,
-				source,
-				renderedSvg,
-				searchableText,
-				updatedAt: this.dependencies.now()
-			});
-			if (diagram.kind !== 'drawio')
-				throw new UnsupportedDiagramOperationError('Expected a draw.io diagram after saving');
-			await this.indexDiagram(actor, diagram);
-			return { diagram };
-		});
 	}
 
 	async saveProjectDiagramDraft(
