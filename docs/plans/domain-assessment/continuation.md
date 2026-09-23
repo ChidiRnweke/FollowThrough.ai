@@ -39,6 +39,16 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #203](https://github.com/ChidiRnweke/FollowThrough.ai/pull/203) makes
+[skill loads and usage recording atomic](skill-loads.md) and excludes archived skills from server
+discovery. Focused regressions passed 13 files and 168 tests; the full local unit suite passed
+439 files and 4,070 tests. All required checks passed, including
+[five new PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35909507971).
+
+Current task review found that extracted waiting-on owners were dropped at proposal creation.
+The [owner disposition](promise-owners.md) records the reproduced loss and the bounded correction;
+it does not close the full task workflow or model review.
+
 [PR #202](https://github.com/ChidiRnweke/FollowThrough.ai/pull/202) serializes
 [catalog name decisions and sync row locks](skill-name-transactions.md). Focused regressions passed
 15 files and 96 tests; the full local unit suite passed 438 files and 4,066 tests. All required checks

@@ -34,7 +34,9 @@ transaction dependency. The repository fake follows actor checks on usage reads 
 
 Five PostgreSQL cases cover cross-project context with a read-only follow-up, context-free loading,
 foreign context, foreign provenance and archived discovery/loading. PostgreSQL execution requires CI
-because Docker is unavailable locally. The response-failure rollback regression uses the transaction
+because Docker is unavailable locally. All five cases passed in
+[PR #203 CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35909507971).
+The response-failure rollback regression uses the transaction
 fake and a repository read failure; it is not represented as an observed PostgreSQL fault injection.
 
 Portable-name legacy collisions, broader catalog ordering and the unresolved restoration-history
