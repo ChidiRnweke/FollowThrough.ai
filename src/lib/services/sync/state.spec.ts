@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
+import { type OutboxEntry, type WriteDraft } from '$lib/models/outbox';
 import {
 	appendWrite,
 	settleWrite,
 	beginWrite,
 	failWrite,
 	acknowledgeWrite,
-	nextWrite,
-	type OutboxEntry,
-	type WriteDraft
-} from './index';
+	nextWrite
+} from '$lib/services/sync/state';
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
 const secondId = 'a0000000-0000-4000-8000-000000000002';

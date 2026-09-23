@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { z } from 'zod';
-import { accessMessage, type CacheAccess } from '$lib/models/sync';
+import { type CacheAccess } from '$lib/models/sync';
+import { accessMessage } from '$lib/services/sync/state';
 
 export const routeResourceId = <T>(schema: z.ZodType<T>, value: string): T => {
 	const parsed = schema.safeParse(value);

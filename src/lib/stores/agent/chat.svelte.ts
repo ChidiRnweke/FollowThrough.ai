@@ -23,7 +23,7 @@ import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
 import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
-import { accessMessage } from '$lib/models/sync';
+import { accessMessage } from '$lib/services/sync/state';
 import {
 	matchToolActivity,
 	mergeToolActivity,

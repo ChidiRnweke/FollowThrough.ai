@@ -1,8 +1,16 @@
 import type { Transaction } from 'dexie';
 import { z } from 'zod';
 import {
-	authoritativeWriteResource,
 	writeReceiptSchema,
+	outboxEntrySchema,
+	type WriteBaseResolution,
+	type OutboxEntry,
+	type WriteDraft,
+	type WriteReceipt,
+	type WriteOutcome
+} from '$lib/models/outbox';
+import {
+	authoritativeWriteResource,
 	retainWriteReceipt,
 	retryConflictedWrite,
 	discardWrites,
@@ -10,16 +18,11 @@ import {
 	beginWrite,
 	failWrite,
 	nextWrite,
-	outboxEntrySchema,
 	settleWrite,
 	resolveWriteBase,
-	type WriteBaseResolution,
-	type OutboxEntry,
-	type WriteDraft,
-	type WriteReceipt,
-	type WriteOutcome
-} from '$lib/models/outbox';
-import { receiveResource, cachedSnapshot } from '$lib/models/sync';
+	receiveResource,
+	cachedSnapshot
+} from '$lib/services/sync/state';
 import {
 	WorkspaceDatabase,
 	WorkspaceStorageError,

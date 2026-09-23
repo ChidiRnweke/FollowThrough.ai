@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag, type ResourceState } from '$lib/models/sync';
-import { appendWrite, localResource, visibleResources, type WriteDraft } from './index';
+import { type WriteDraft } from '$lib/models/outbox';
+import { appendWrite, localResource, visibleResources } from '$lib/services/sync/state';
 
 const draft: WriteDraft<string, string> = {
 	operationId: 'a0000000-0000-4000-8000-000000000001',

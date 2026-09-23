@@ -2,7 +2,7 @@
 	import type { ShellContext } from '$lib/client/shell/views';
 
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { accessMessage } from '$lib/models/sync';
+	import { accessMessage } from '$lib/services/sync/state';
 	import type { NoteId } from '$lib/models/notes';
 	import { Button } from '$lib/components/ui/button';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';

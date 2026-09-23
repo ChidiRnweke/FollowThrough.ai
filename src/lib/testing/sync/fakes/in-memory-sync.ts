@@ -1,11 +1,10 @@
 import {
-	mergeResourceStates,
-	resourceVersion,
 	type SyncSnapshot,
 	type SyncCursor,
 	type SyncPage,
 	type ResourceChange
 } from '$lib/models/sync';
+import { mergeResourceStates, resourceVersion } from '$lib/services/sync/state';
 import type {
 	CacheCommit,
 	CachedRecord,
