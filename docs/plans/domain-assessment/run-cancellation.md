@@ -35,7 +35,8 @@ cancellation in a transaction before competing with completion; it now uses the 
 
 ## Remaining scope
 
-This closes the cancellation request's read-decide-write ownership. Approval requeue, general run
-transitions still exported from models, and the remaining run persistence/service composition need
-separate assessment. It does not establish completion of the agent family or the repository inventory.
+This closes the cancellation request's read-decide-write ownership. Approval requeue is covered by
+the subsequent [run-approval disposition](run-approvals.md). General run transitions still exported
+from models and the remaining run persistence/service composition need separate assessment. This
+does not establish completion of the agent family or the repository inventory.
 Observed validation and delivery status are recorded on the dependent PR and continuation register.

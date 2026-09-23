@@ -10,6 +10,7 @@ import type {
 	AgentRunId,
 	AgentRunStatus,
 	RunCancellationWrite,
+	RunApprovalWrite,
 	ConversationId,
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
@@ -203,15 +204,14 @@ export class InMemoryAgentRunPersistence
 		return updated;
 	}
 
-	async requeueAfterDecision(
+	async updateApproval(
 		actor: ActorContext,
 		runId: AgentRunId,
-		at: DateTime
+		change: RunApprovalWrite
 	): Promise<AgentRun> {
 		const run = await this.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
-		if (run.status === 'queued') return run;
-		const updated: AgentRun = { ...run, status: 'queued', updatedAt: at };
+		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;
 	}

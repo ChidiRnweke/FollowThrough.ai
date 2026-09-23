@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Run approvals: Agent locks the authoritative run before validating a batch, recording decisions,
+persisting a resolved requeue and appending its event. RunApprovals owns the pending-call and state
+rules. See the [disposition](domain-assessment/run-approvals.md).
+
 Run cancellation: Agent owns the transaction, actor-scoped row lock and immediate terminal event.
 RunCancellation decides resolved cancellation fields; persistence does not choose transitions.
 Repeated cancellation is idempotent. See the [disposition](domain-assessment/run-cancellation.md).
