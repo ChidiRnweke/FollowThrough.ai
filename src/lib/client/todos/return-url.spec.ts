@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeReturnUrl } from './client/todos/return-url';
+import { safeReturnUrl } from './return-url';
 
 describe('Todo return navigation', () => {
 	it('keeps a relative application URL', () => {

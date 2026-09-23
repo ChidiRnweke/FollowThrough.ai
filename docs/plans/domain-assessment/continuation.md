@@ -39,6 +39,16 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #212](https://github.com/ChidiRnweke/FollowThrough.ai/pull/212) requires the resolved task
+deletion time and records seven task command workflow dispositions. The full local unit suite
+passed 444 files and 4,099 tests. All required checks passed, including
+[full browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35919728779).
+
+The [task surface review](task-surfaces.md) reconciles W09.10–W09.13. It removes an unused editor
+insertion command while retaining stored task references, moves return-navigation tests to their
+boundary and verifies passive references in actual note previews. Focused regressions passed five
+files and 59 tests. Extraction, provenance, screenshots and exports retain separate review entries.
+
 [PR #211](https://github.com/ChidiRnweke/FollowThrough.ai/pull/211) hides task details after
 project archival, with matched actual-component captures and three previously failing regressions.
 The full local unit suite passed 444 files and 4,099 tests. All required checks passed, including
