@@ -1,5 +1,18 @@
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import postgres from 'postgres';
+import {
+	connectPostgresTestDatabase,
+	type PostgresDatabaseContext
+} from '$lib/server/db/testcontainer';
+import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
+import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import {
+	InMemoryDiagrams,
+	mermaidBuilder
+} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import type { DiagramId } from '$lib/models/diagrams';
+import { DomainError } from '$lib/errors';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { isPermanentWriteConstraint } from '$lib/server/db/postgres-errors';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -23,9 +36,9 @@ import {
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 
-const setup = async (suffix: string) => {
+const setup = async (suffix: string, connection: PostgresDatabaseContext = context) => {
 	const seeded = await seedNote(suffix);
-	const { database, transactionRunner } = createTransactionContext(context.db);
+	const { database, transactionRunner } = createTransactionContext(connection.db);
 	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
 	const suggestions = createSuggestionsCapability({
 		db: database,
@@ -34,9 +47,24 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const fixture = diagramGenerationFixture();
+	const records = new DiagramRecords(database);
+	const library = new DiagramLibrary(
+		records,
+		notes.repository,
+		notes.anchors,
+		notes.provenanceRepository,
+		new ProjectRecords(database)
+	);
+	const diagrams = new InMemoryDiagrams();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
 			...fixture,
+			diagramFinder: library,
+			diagramWriter: library,
+			diagramSourceNotes: notes.catalog,
+			mermaidRenderer: diagrams,
+			textExtractor: diagrams,
+			diagramIndexer: diagrams,
 			generation: {
 				...fixture.generation,
 				contextNotes: notes.catalog,
@@ -50,8 +78,89 @@ const setup = async (suffix: string) => {
 			suggestionCreator: suggestions.inbox
 		})
 	);
-	return { ...seeded, controller, provider: fixture.provider };
+	return { ...seeded, controller, provider: fixture.provider, records };
 };
+
+it.each([
+	{ change: 'edit', suffix: '18601', code: 'STALE_REVISION' },
+	{ change: 'archive', suffix: '18602', code: 'VALIDATION' }
+])(
+	'waits for a peer $change before publishing a Mermaid revision',
+	async ({ change, suffix, code }) => {
+		const writer = connectPostgresTestDatabase(context.url);
+		const blocker = postgres(context.url, { max: 2 });
+		const release = Promise.withResolvers<void>();
+		const generated = Promise.withResolvers<void>();
+		try {
+			const state = await setup(suffix, writer);
+			const diagram = await state.records.insert(
+				state.owner,
+				mermaidBuilder({
+					id: crypto.randomUUID() as DiagramId,
+					userId: state.owner.userId,
+					projectId: state.project.id,
+					sourceNoteId: state.note.id,
+					provenanceId: undefined
+				})
+			);
+			state.provider.completion = generated.promise;
+			const execution = state.controller
+				.reviseMermaid(state.owner, { diagramId: diagram.id, instruction: 'add queue' })
+				.then(
+					() => 'saved',
+					(error) => {
+						if (!(error instanceof DomainError)) throw error;
+						return error.code;
+					}
+				);
+			await state.provider.started.promise;
+			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
+			const locked = Promise.withResolvers<void>();
+			const peer = blocker.begin(async (transaction) => {
+				if (change === 'edit')
+					await transaction`update diagrams set source = 'flowchart LR\nPeer --> Edit' where id = ${diagram.id}`;
+				else await transaction`update diagrams set archived_at = now() where id = ${diagram.id}`;
+				locked.resolve();
+				await release.promise;
+			});
+			try {
+				await locked.promise;
+				generated.resolve();
+				await vi.waitFor(async () => {
+					const waiting =
+						await blocker`select pid from pg_stat_activity where pid = ${backend!.pid} and wait_event_type = 'Lock'`;
+					if (waiting.length !== 1)
+						throw new Error('Publication has not reached the locked diagram');
+				});
+				release.resolve();
+				await peer;
+				const outcome = await execution;
+				const current = await state.records.findById(state.owner, diagram.id);
+				const [run] =
+					await writer.client`select status from agent_runs where user_id = ${state.owner.userId}`;
+				expect({
+					outcome,
+					source: current?.source,
+					archived: Boolean(current?.archivedAt),
+					status: run?.status
+				}).toEqual({
+					outcome: code,
+					source: change === 'edit' ? 'flowchart LR\nPeer --> Edit' : diagram.source,
+					archived: change === 'archive',
+					status: 'failed'
+				});
+			} finally {
+				release.resolve();
+				await peer;
+				await execution;
+			}
+		} finally {
+			release.resolve();
+			generated.resolve();
+			await Promise.all([writer.close(), blocker.end()]);
+		}
+	}
+);
 
 it('rolls back conversation creation when the direct run cannot be inserted', async () => {
 	const state = await setup('17401');
