@@ -46,13 +46,15 @@ export class InMemoryNoteRepository implements NoteRepository {
 		const { archivedAt, parentId, ...rest } = current;
 		void archivedAt;
 		void parentId;
-		return this.update(actor, {
+		const updated: Note = {
 			...rest,
 			...(note.archivedAt ? { archivedAt: note.archivedAt } : {}),
 			...(note.parentId ? { parentId: note.parentId } : {}),
 			position: note.position,
 			updatedAt: note.updatedAt
-		});
+		};
+		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? updated : candidate));
+		return updated;
 	}
 
 	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
@@ -141,12 +143,6 @@ export class InMemoryNoteRepository implements NoteRepository {
 		if (this.insertFailures.has(note.title)) throw new Error('Note could not be stored');
 		void _actor;
 		this.notes.push(note);
-		return note;
-	}
-
-	async update(_actor: ActorContext, note: Note): Promise<Note> {
-		void _actor;
-		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? note : candidate));
 		return note;
 	}
 

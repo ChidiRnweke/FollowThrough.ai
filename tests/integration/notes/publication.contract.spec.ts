@@ -9,13 +9,13 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
+import { replaceNoteFixture, context, seedNote } from '../database-harness';
 
 it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	const seeded = await seedNote('18503');
 	const { owner } = seeded;
 	const records = new NoteRecords(context.db);
-	const note = await records.update(owner, {
+	const note = await replaceNoteFixture({
 		...seeded.note,
 		title: 'Publication rollback contract'
 	});

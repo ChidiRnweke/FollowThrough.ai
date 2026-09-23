@@ -9,7 +9,7 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, seedNote } from '../database-harness';
+import { replaceNoteFixture, actor, context, seedNote } from '../database-harness';
 
 it('restores to the root after a concurrent parent archive commits', async () => {
 	const { owner, note } = await seedNote('16405');
@@ -22,7 +22,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 		document: { type: 'doc', content: [] },
 		plainText: ''
 	});
-	await records.update(owner, { ...note, parentId: parent.id, archivedAt: note.updatedAt });
+	await replaceNoteFixture({ ...note, parentId: parent.id, archivedAt: note.updatedAt });
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);

@@ -8,7 +8,14 @@ import type {
 } from '$lib/models/diagrams';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { actor, context, now, seedNote, seedProvenance } from '../database-harness';
+import {
+	replaceNoteFixture,
+	actor,
+	context,
+	now,
+	seedNote,
+	seedProvenance
+} from '../database-harness';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
@@ -99,7 +106,7 @@ describe('Project-owned diagram persistence invariants', () => {
 			type: 'doc',
 			content: [{ type: 'drawio', attrs: { diagramId: stored.id } }]
 		};
-		await notes.update(owner, { ...note, document });
+		await replaceNoteFixture({ ...note, document });
 		await repository.updateTrash(owner, { ...stored, archivedAt: now });
 		await repository.deleteArchived(owner, stored.id);
 		expect({
@@ -197,7 +204,7 @@ describe('Project-owned diagram persistence invariants', () => {
 			diagram('421', { userId: owner.userId, projectId: project.id, sourceNoteId: note.id })
 		);
 		const notes = new NoteRecords(context.db);
-		await notes.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		await notes.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, stored.id)).toBeDefined();
 	});
@@ -210,7 +217,7 @@ describe('Project-owned diagram persistence invariants', () => {
 			diagram('422', { userId: owner.userId, projectId: project.id, sourceNoteId: note.id })
 		);
 		const notes = new NoteRecords(context.db);
-		await notes.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		await notes.deleteTrashed(owner, note.id);
 		expect((await repository.findById(owner, stored.id))?.sourceNoteId).toBeUndefined();
 	});
@@ -257,7 +264,7 @@ describe('Project-owned diagram persistence invariants', () => {
 				source: '<mxfile />'
 			})
 		);
-		await new NoteRecords(context.db).update(owner, {
+		await replaceNoteFixture({
 			...note,
 			document: {
 				type: 'doc',
@@ -279,7 +286,7 @@ describe('Project-owned diagram persistence invariants', () => {
 				source: '<mxfile />'
 			})
 		);
-		await new NoteRecords(context.db).update(owner, {
+		await replaceNoteFixture({
 			...note,
 			document: {
 				type: 'doc',

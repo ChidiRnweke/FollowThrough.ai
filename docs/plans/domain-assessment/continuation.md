@@ -39,6 +39,15 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #195](https://github.com/ChidiRnweke/FollowThrough.ai/pull/195) contains
+[built-in note repair and guarded upgrades](built-in-note-writes.md). Three regression cases fail
+against the previous implementation and pass with the fix. The full local unit suite passed
+435 files and 4,053 tests; lint, type checks, architecture audits and documentation checks passed.
+All required checks passed, including
+[quality, unit/browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35897326447).
+The next slice retires
+[the general note write](note-write-retirement.md).
+
 [PR #194](https://github.com/ChidiRnweke/FollowThrough.ai/pull/194) contains
 [permanent note deletion](note-deletion.md). Local focused tests passed 29 files and 263 tests;
 the full unit suite passed 434 files and 4,050 tests. Lint, type checks, architecture audits and

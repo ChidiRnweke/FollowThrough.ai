@@ -233,28 +233,6 @@ export class NoteRecords implements NoteRepository {
 		return toNote(row!);
 	}
 
-	async update(actor: ActorContext, note: Note): Promise<Note> {
-		const [row] = await this.database
-			.update(schema.notes)
-			.set({
-				kind: note.kind,
-				title: note.title,
-				document: note.document,
-				plainText: note.plainText,
-				parentId: note.parentId ?? null,
-				position: note.position,
-				isPinned: note.isPinned,
-				currentRevision: note.currentRevision,
-				publishedRevision: note.publishedRevision,
-				publishedAt: note.publishedAt ? new Date(note.publishedAt) : null,
-				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
-				updatedAt: new Date(note.updatedAt)
-			})
-			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, actor.userId)))
-			.returning();
-		return toNote(row!);
-	}
-
 	async updateIfRevision(
 		actor: ActorContext,
 		note: Note,

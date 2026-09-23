@@ -14,7 +14,7 @@ import { SkillLibrary } from '$lib/server/services/skills/library';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, now } from '../database-harness';
+import { replaceNoteFixture, actor, context, now } from '../database-harness';
 
 const currentDefinitions = { active: BUILT_INS, retired: RETIRED_BUILT_INS };
 const controller = (
@@ -73,7 +73,7 @@ it('repairs legacy built-ins from an archived project while preserving authored 
 		document: { type: 'doc', content: [] },
 		plainText: ''
 	});
-	const edited = await notes.update(owner, {
+	const edited = await replaceNoteFixture({
 		...original,
 		parentId: folder.id,
 		title: 'My working guide',

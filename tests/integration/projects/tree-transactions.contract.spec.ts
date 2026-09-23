@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { context, seedNote } from '../database-harness';
+import { replaceNoteFixture, context, seedNote } from '../database-harness';
 import { competingTreeWrites } from '../project-tree-harness';
 
 it('refuses creation into a folder after a concurrent archive commits', async () => {
 	const { owner, note, project } = await seedNote('19301');
-	await new NoteRecords(context.db).update(owner, { ...note, kind: 'folder' });
+	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const result = await competingTreeWrites(
 		async (api) => {
 			await api.notes.archive(owner, { noteId: note.id });
@@ -18,7 +18,7 @@ it('refuses creation into a folder after a concurrent archive commits', async ()
 
 it('refuses archiving a folder after concurrent child creation commits', async () => {
 	const { owner, note, project } = await seedNote('19302');
-	await new NoteRecords(context.db).update(owner, { ...note, kind: 'folder' });
+	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const result = await competingTreeWrites(
 		async (api) => {
 			await api.projects.createFolder(owner, {
@@ -35,7 +35,7 @@ it('refuses archiving a folder after concurrent child creation commits', async (
 it('refuses the second of two moves that would create a folder cycle', async () => {
 	const { owner, note, project } = await seedNote('19303');
 	const records = new NoteRecords(context.db);
-	await records.update(owner, { ...note, kind: 'folder' });
+	await replaceNoteFixture({ ...note, kind: 'folder' });
 	const peer = await records.insert(owner, {
 		...note,
 		id: crypto.randomUUID() as NoteId,

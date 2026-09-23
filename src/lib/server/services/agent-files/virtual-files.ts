@@ -11,7 +11,7 @@ import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { DiagramId } from '$lib/models/diagrams';
-import type { NoteId } from '$lib/models/notes';
+import type { Note, NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
@@ -36,7 +36,7 @@ export interface AgentVirtualFilesDependencies {
 	readonly attachments: AttachmentRepository;
 	readonly diagrams: DiagramRepository;
 	readonly stored: AgentFileRepository;
-	readonly noteMarkdown: (document: Parameters<NoteRepository['update']>[1]['document']) => string;
+	readonly noteMarkdown: (document: Note['document']) => string;
 }
 
 const uuid = z.uuid();
