@@ -621,6 +621,12 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Note reading presentation: reading estimates, outline interpretation and section numbering now
+belong to focused shared services. Server Notes, offline WorkspaceViews and browser components use
+those owners directly. Model files retain values only; component edits change imports, with no
+visible behavior change. The existing service and controller regression assertions are preserved.
+See the [note-reading disposition](domain-assessment/note-reading.md).
+
 Note change preparation: the Notes controller now calls focused server services for targeted
 replacement and compact revision-text comparison. Models retain the request, result and failure
 values only. The exact reviewed base/result, literal replacement behavior and unchanged source

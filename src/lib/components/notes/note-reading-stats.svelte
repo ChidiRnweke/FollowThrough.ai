@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getEditor, useEditorState } from '$lib/components/edra/commands/index.js';
-	import { readingMinutes } from '$lib/models/notes/reading-time';
+	import { readingMinutes } from '$lib/services/notes/reading-time';
 
 	/**
 	 * How much note there is, and how long it takes.

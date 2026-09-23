@@ -78,10 +78,15 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
-The [note-change preparation disposition](note-change-preparation.md) records the following slice:
+[PR #161](https://github.com/ChidiRnweke/FollowThrough.ai/pull/161) contains the
+[note-change preparation disposition](note-change-preparation.md) and implementation:
 targeted replacement and revision-text comparison now belong to focused server services. The
 controller still owns preparation, approval and persistence. Focused regression results are recorded
 in that disposition; the public behavior is unchanged.
+
+The [note-reading disposition](note-reading.md) records the next shared-service slice for reading
+estimates, outlines and section numbering. Browser/server rules stay shared, and model types retain
+their existing meaning. Its focused regression run passes 38 files and 289 tests.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.
