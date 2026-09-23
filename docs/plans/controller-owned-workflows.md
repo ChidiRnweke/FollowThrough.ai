@@ -621,6 +621,10 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Note comparisons: version-review alignment and live revision highlights have separate shared service
+owners and consume the actual document types. Model files retain comparison results only. Title
+comparison takes one optional pair with both values required. See the [disposition](domain-assessment/note-comparison.md).
+
 Authored resource references: note and diagram identity discovery uses one typed shared service;
 attachment removal owns its private embedded-image guard. Remove loose model document views and
 retain the editor's link-target value type. Preserve nested-reference, ordering and removal behavior with

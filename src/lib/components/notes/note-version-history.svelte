@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Note, NoteId, NoteRevision, NoteRevisionSummary } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/models/notes/note-diff';
+	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/services/notes/note-diff';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Badge } from '$lib/components/ui/badge';
@@ -135,8 +135,7 @@
 						<NoteVersionDiff
 							base={selected.document}
 							candidate={note.document}
-							baseTitle={selected.title}
-							candidateTitle={note.title}
+							titles={{ base: selected.title, candidate: note.title }}
 							baseLabel="Previous"
 							baseSublabel={`Published ${formatRelativeTime(selected.createdAt)}`}
 							candidateLabel={hasDraft ? 'Current draft' : 'Current note'}

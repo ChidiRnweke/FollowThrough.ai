@@ -103,9 +103,16 @@ PostgreSQL contracts, full browser tests and PWA checks. Their PRs remain open.
 shared offline rules and targeted persistence under row locks. Its remaining cross-writer race
 review is explicit; this does not close the whole trash family.
 
-The [authored resource-reference disposition](note-resource-references.md) records shared typed
+[PR #165](https://github.com/ChidiRnweke/FollowThrough.ai/pull/165) contains the
+[authored resource-reference disposition](note-resource-references.md) and shared typed
 note/diagram discovery and the attachment-removal guard. Tests move to the responsible services,
 and the old loose document views are removed. The editor's link-target value type is retained.
+
+All checks passed on [#164](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35856890560),
+including the new note-edit/archive and parent-archive/restoration PostgreSQL races.
+
+The [note-comparison disposition](note-comparison.md) records separate shared owners for version
+review and live revision highlights, typed document inputs and paired comparison titles.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.
