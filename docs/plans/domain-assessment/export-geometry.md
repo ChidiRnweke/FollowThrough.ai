@@ -9,7 +9,8 @@ columnShares validates declared column widths and constructs their normalized pr
 and DOCX renderers consume that value in their own units. They choose format-specific automatic
 layout when complete usable widths are absent. This geometry constructor also remains in models.
 Moving it into a service would introduce a service-to-service dependency without changing ownership.
-Heading spacing is a different concern: it chooses export typography and still needs preparation ownership.
+Heading spacing is a different concern: it chooses export typography. The subsequent
+[typography slice](export-typography.md) gives that choice to export preparation.
 
 ## Confirmed fixes and test dispositions
 
