@@ -7,18 +7,28 @@ import {
 } from '$lib/testing/attachments/fakes/in-memory-attachments';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor, testTodoId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { NotFoundError } from '$lib/errors';
+import {
+	testActor,
+	testTodoId,
+	todoBuilder
+} from '$lib/testing/workspace/fixtures/domain-builders';
 
 const UPLOAD_ID = '00000000-0000-4000-8000-0000000000c1' as AttachmentUploadId;
 const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
 
 const setup = () => {
 	const attachments = new InMemoryAttachments();
+	const todos = new InMemoryTodos();
+	todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2) })];
 	return {
 		attachments,
+		todos,
 		controller: new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
 				attachments,
+				todoReader: todos,
 				transactionRunner: new InMemoryTransactionRunner([attachments])
 			})
 		)
@@ -64,5 +74,34 @@ describe('Completing a todo screenshot', () => {
 		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
 		const listed = await controller.listForTodo(testActor(), testTodoId(2));
 		expect(listed).toEqual([]);
+	});
+});
+
+describe('Unavailable screenshot targets', () => {
+	it('rejects completion when the task was deleted after upload reservation', async () => {
+		const { attachments, todos, controller } = setup();
+		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
+		await todos.softDelete(testActor(), testTodoId());
+		await expect(
+			controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId())
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	it('rejects completion for a missing task', async () => {
+		const { attachments, controller } = setup();
+		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
+		await expect(
+			controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId(3))
+		).rejects.toBeInstanceOf(NotFoundError);
+	});
+
+	it('does not list screenshots after task deletion', async () => {
+		const { attachments, todos, controller } = setup();
+		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
+		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
+		await todos.softDelete(testActor(), testTodoId());
+		await expect(controller.listForTodo(testActor(), testTodoId())).rejects.toBeInstanceOf(
+			NotFoundError
+		);
 	});
 });

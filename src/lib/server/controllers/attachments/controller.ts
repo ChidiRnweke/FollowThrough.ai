@@ -4,6 +4,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { TodoReader } from '$lib/server/services/todos/contracts';
 import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
 
 /**
@@ -39,10 +40,8 @@ export interface AttachmentsController {
 	 * Finalize an upload and, in the same transaction, record that a todo's
 	 * description references it.
 	 *
-	 * The link is committed with the attachment rather than through a follow-up
-	 * call, so a screenshot is never observable as a project file that no todo
-	 * claims — the description's image link and the recorded ownership always
-	 * agree.
+	 * Check that the task is available before touching uploaded bytes. The database
+	 * link and attachment commit together; saving the description is a later edit.
 	 */
 	completeForTodo(
 		actor: ActorContext,
@@ -95,6 +94,7 @@ export interface AttachmentsController {
 /** Everything the {@link AttachmentsController} needs: the attachment manager and a transaction runner for atomic mutations. */
 export interface AttachmentsDependencies {
 	attachments: AttachmentManager;
+	todoReader: TodoReader;
 	attachmentIndexer: { remove(actor: ActorContext, attachmentId: AttachmentId): Promise<void> };
 	transactionRunner: TransactionRunner;
 }
@@ -111,6 +111,7 @@ export class Attachments implements AttachmentsController {
 	}
 	completeForTodo(actor: ActorContext, uploadId: AttachmentUploadId, todoId: TodoId) {
 		return this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.todoReader.get(actor, todoId);
 			const completed = await this.dependencies.attachments.complete(actor, uploadId);
 			await this.dependencies.attachments.linkToTodo(actor, completed.attachment.id, todoId);
 			return completed;
@@ -119,7 +120,8 @@ export class Attachments implements AttachmentsController {
 	list(actor: ActorContext, noteId: NoteId) {
 		return this.dependencies.attachments.list(actor, noteId);
 	}
-	listForTodo(actor: ActorContext, todoId: TodoId) {
+	async listForTodo(actor: ActorContext, todoId: TodoId) {
+		await this.dependencies.todoReader.get(actor, todoId);
 		return this.dependencies.attachments.listForTodo(actor, todoId);
 	}
 	listForProject(actor: ActorContext, projectId: ProjectId) {

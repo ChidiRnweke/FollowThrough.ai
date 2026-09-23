@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Attachments } from './controller';
+import { Attachments, type AttachmentsDependencies } from './controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -11,11 +12,14 @@ describe('attachment search removal', () => {
 		const { service, repository, search, process } = setupAttachments();
 		const attachment = view('application/pdf');
 		await process(attachment);
-		const controller = new Attachments({
-			attachments: service,
-			attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model).attachments,
-			transactionRunner: new InMemoryTransactionRunner([repository, search])
-		});
+		const controller = new Attachments(
+			capabilityDependencies<AttachmentsDependencies>({
+				attachments: service,
+				attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model)
+					.attachments,
+				transactionRunner: new InMemoryTransactionRunner([repository, search])
+			})
+		);
 		await controller.removeById(testActor(), attachment.attachment.id);
 		expect({ attachment: repository.found, chunks: search.documents }).toEqual({
 			attachment: undefined,

@@ -69,7 +69,7 @@ facts and outcomes; no test is added solely to mirror removal of the unused comp
 
 ## Remaining coverage
 
-Screenshot completion is W09.16 and has its own attachment ownership/lifecycle boundaries. This review
+Screenshot completion is W09.16 and has [its own disposition](task-screenshots.md) and attachment lifecycle boundaries. This review
 does not substitute task-origin tests for file completion or claim that all repository workflows have
 been reconciled. The implementation PRs remain unmerged.
 

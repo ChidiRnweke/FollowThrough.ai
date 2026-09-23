@@ -466,6 +466,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		attachments: {
 			attachments,
+			todoReader: todos,
 			transactionRunner,
 			attachmentIndexer: knowledgeSearch.attachmentIndexer
 		},
