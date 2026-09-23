@@ -46,5 +46,6 @@ task workflow ownership review; it does not certify the broader attachment lifec
 repository assessment. All implementation PRs remain unmerged.
 
 Focused regressions passed six files and 37 tests. The full local unit suite passed 444 files and
-4,106 tests. Lint, type checks, architecture audits and documentation checks passed. PostgreSQL
-contracts await required CI because the local database environment is unavailable.
+4,106 tests. Lint, type checks, architecture audits and documentation checks passed. All required
+[CI checks passed](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35923715656), including
+the PostgreSQL contracts. The local database environment was unavailable.

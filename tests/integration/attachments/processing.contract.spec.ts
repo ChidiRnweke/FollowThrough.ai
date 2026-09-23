@@ -24,6 +24,12 @@ import type {
 	AttachmentVersionId
 } from '$lib/models/attachments';
 import { actor, context, now, seedNote } from '../database-harness';
+import {
+	AgentVirtualFiles,
+	type AgentVirtualFilesDependencies
+} from '$lib/server/services/agent-files/virtual-files';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
@@ -176,4 +182,39 @@ describe('attachment processing persistence', () => {
 			(await records.findById(owner, view.attachment.id))?.version.processingFailure
 		).toBeUndefined();
 	});
+});
+
+it('preserves successful empty extraction when the version is read back', async () => {
+	const { owner, records, view, parser, worker } = await setup('21701');
+	parser.text = '';
+	await worker.process(owner, view.version.id);
+	expect((await records.findById(owner, view.attachment.id))?.version).toMatchObject({
+		processingStatus: 'ready',
+		parserKind: 'text',
+		extractedText: ''
+	});
+});
+
+it('exposes successfully extracted empty text as an empty agent file', async () => {
+	const { owner, records, view, parser, worker } = await setup('21702');
+	parser.text = '';
+	await worker.process(owner, view.version.id);
+	const files = new AgentVirtualFiles(
+		capabilityDependencies<AgentVirtualFilesDependencies>({
+			attachments: records,
+			stored: new InMemoryAgentFiles()
+		})
+	);
+	const path = `/projects/${view.attachment.projectId}/attachments/${view.attachment.id}.txt`;
+	expect(await files.ls(owner, path)).toMatchObject({
+		kind: 'listed',
+		entries: [{ kind: 'file', path, byteSize: 0, lineCount: 0 }]
+	});
+});
+
+it('does not invent extracted text for a queued attachment', async () => {
+	const { owner, records, view } = await setup('21703');
+	expect(
+		(await records.findById(owner, view.attachment.id))?.version.extractedText
+	).toBeUndefined();
 });

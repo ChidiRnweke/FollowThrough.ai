@@ -54,7 +54,7 @@ const toView = (
 		byteSize: version.byteSize,
 		checksumSha256: version.checksumSha256,
 		...(version.parserKind ? { parserKind: version.parserKind } : {}),
-		...(version.extractedText ? { extractedText: version.extractedText } : {}),
+		...(version.extractedText !== null ? { extractedText: version.extractedText } : {}),
 		processingStatus: version.processingStatus as AttachmentVersion['processingStatus'],
 		...(version.processingFailure ? { processingFailure: version.processingFailure } : {}),
 		...(version.processedAt ? { processedAt: instant(version.processedAt) } : {}),

@@ -39,6 +39,15 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #216](https://github.com/ChidiRnweke/FollowThrough.ai/pull/216) checks task availability before
+screenshot completion and listing. All required checks passed, including
+[PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35923715656).
+All 18 task workflows have current assessment dispositions; their implementation remains unmerged.
+
+The [empty attachment extraction review](attachment-empty-content.md) preserves successful empty
+text at the database boundary so it remains an empty agent file instead of an absent one. Three
+PostgreSQL regressions cover persisted empty content, agent file metadata and unextracted content.
+
 [PR #215](https://github.com/ChidiRnweke/FollowThrough.ai/pull/215) removes an unused source selector
 input and records extraction/source-change dispositions. All required checks passed, including
 [PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35922556861).
