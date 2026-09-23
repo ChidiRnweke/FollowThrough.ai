@@ -33,7 +33,7 @@ afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
 
-const setup = async (suffix: string) => {
+const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const seeded = await seedNote(suffix);
 	const client = postgres(context.url, { max: 4 });
 	clients.push(client);
@@ -53,7 +53,6 @@ const setup = async (suffix: string) => {
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const text = 'I will send it soon.';
 	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
@@ -129,6 +128,7 @@ const setup = async (suffix: string) => {
 		events,
 		requests,
 		extractor,
+		trust,
 		agent,
 		dependencies,
 		controller,
@@ -136,6 +136,39 @@ const setup = async (suffix: string) => {
 		finished
 	};
 };
+
+it.each([
+	{ autoAccept: false, suffix: '20401' },
+	{ autoAccept: true, suffix: '20402' }
+])(
+	'persists the waiting-on owner when automatic acceptance is $autoAccept',
+	async ({ autoAccept, suffix }) => {
+		const state = await setup(suffix, 'Maya will send the draft.');
+		state.extractor.candidates = [
+			{
+				action: 'Send the draft',
+				ownerName: 'Maya',
+				responsibility: 'waiting_on',
+				strength: 'explicit',
+				confidence: 95
+			}
+		];
+		state.trust.autoAccept = autoAccept;
+		const receipt = await state.controller.startExtractPromises(state.owner, state.input);
+		await state.finished(receipt.runId);
+		expect({
+			run: (await state.runs.findById(state.owner, receipt.runId))?.status,
+			proposals:
+				await context.client`select status, payload->>'waitingOn' as waiting_on from suggestions where user_id = ${state.owner.userId}`,
+			tasks:
+				await context.client`select waiting_on from todos where user_id = ${state.owner.userId}`
+		}).toEqual({
+			run: 'completed',
+			proposals: [{ status: autoAccept ? 'accepted' : 'proposed', waiting_on: 'Maya' }],
+			tasks: autoAccept ? [{ waiting_on: 'Maya' }] : []
+		});
+	}
+);
 
 it('commits one extraction for simultaneous duplicate submissions on separate connections', async () => {
 	const state = await setup('12501');

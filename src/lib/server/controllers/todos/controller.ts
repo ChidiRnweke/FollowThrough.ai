@@ -461,6 +461,7 @@ export class Todos implements TodosController {
 					payload: {
 						title: candidate.action,
 						responsibility: candidate.responsibility,
+						waitingOn: candidate.responsibility === 'waiting_on' ? candidate.ownerName : undefined,
 						dueDateVerbatim: candidate.dueDateVerbatim,
 						dueDate: candidate.resolvedDueDate,
 						promiseStrength: candidate.strength

@@ -18,6 +18,44 @@ const candidate = (
 });
 
 describe('Promise extraction orchestration invariants', () => {
+	it.each([false, true])(
+		'preserves the extracted owner when automatic acceptance is %s',
+		async (autoAccept) => {
+			const { content, extractor, trust, controller } = setup();
+			const text = 'Maya will send the draft.';
+			content.notes[0] = {
+				...content.notes[0],
+				plainText: text,
+				document: {
+					type: 'doc',
+					content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+				}
+			};
+			extractor.candidates = [
+				candidate('Send the draft', { responsibility: 'waiting_on', ownerName: 'Maya' })
+			];
+			trust.autoAccept = autoAccept;
+			const result = await controller.extractPromises(testActor(), {
+				selection: { ...selection, text, to: text.length }
+			});
+			expect({
+				proposals: result.suggestions.map((item) => item.payload.waitingOn),
+				tasks: result.createdTodos.map((todo) => todo.waitingOn)
+			}).toEqual({ proposals: ['Maya'], tasks: autoAccept ? ['Maya'] : [] });
+		}
+	);
+
+	it('does not use the current user’s extracted name as a waiting-on party', async () => {
+		const { extractor, trust, controller } = setup();
+		extractor.candidates = [candidate('Send the draft', { ownerName: 'I' })];
+		trust.autoAccept = true;
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect({
+			proposal: result.suggestions[0].payload.waitingOn,
+			task: result.createdTodos[0].waitingOn
+		}).toEqual({ proposal: undefined, task: undefined });
+	});
+
 	it('creates one suggestion for each extracted promise', async () => {
 		const { extractor, controller } = setup();
 		extractor.candidates = [candidate('Send it'), candidate('Review it')];

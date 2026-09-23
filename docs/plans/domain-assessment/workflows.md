@@ -202,7 +202,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W12.13 Browse skill versions.
 - [ ] W12.14 Restore earlier versions.
 - [ ] W12.15 Discover and load skills for execution.
-- [ ] W12.16 Record skill usage.
+- [x] W12.16 Record skill usage. [Ownership, failure and storage evidence](skill-loads.md); implementation remains in open PR #203.
 
 ## 13 — Diagrams
 
