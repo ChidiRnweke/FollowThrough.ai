@@ -114,6 +114,7 @@ export const suggestionPayloadSchemas = {
 			waitingOn: z.string().optional(),
 			dueDate: z
 				.string()
+				.date()
 				.transform((value) => value as LocalDate)
 				.optional(),
 			dueDateVerbatim: z.string().optional(),
@@ -274,10 +275,7 @@ export type StoredSuggestion =
 			readonly reason: string;
 	  };
 
-/**
- * A durable remembered fact. Entries with a project hold project memory; entries
- * without one form the user's profile memory — who they are across all projects.
- */
+/** The task values a proposal can request before acceptance resolves a task identity. */
 interface CreateTodoInput {
 	readonly projectId: ProjectId;
 	readonly title: string;
