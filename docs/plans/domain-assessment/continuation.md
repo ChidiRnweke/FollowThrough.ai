@@ -39,6 +39,14 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #207](https://github.com/ChidiRnweke/FollowThrough.ai/pull/207) validates
+[source-anchor ranges](source-anchor-values.md). Focused regressions passed 37 files and 298 tests;
+the full local unit suite passed 442 files and 4,089 tests. All required checks passed, including
+[the standard type check, five PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35914385627).
+
+The [task calendar disposition](task-calendar.md) records a reproduced UTC/device-date mismatch and
+date-only label shifts, with matched captures of the actual task card. Overall task review remains open.
+
 [PR #206](https://github.com/ChidiRnweke/FollowThrough.ai/pull/206) enforces
 [task completion values](task-completion-values.md). Focused regressions passed 16 files and 120
 tests; the full local unit suite passed 441 files and 4,083 tests. All required checks passed,
