@@ -1,3 +1,4 @@
+import { prepareNoteSave, sameNoteDraft } from '$lib/services/notes/editing';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
@@ -10,7 +11,7 @@ import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddin
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/services/notes/references';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
 import type {
 	SkillMutationRequest,
@@ -293,7 +294,15 @@ export class Skills implements SkillsController {
 				{ ...current, ...metadata },
 				input
 			);
-			if (prepared.kind === 'document') validatePortableSkill(prepared.manifest);
+			if (prepared.kind === 'document') {
+				validatePortableSkill(prepared.manifest);
+				if (
+					input.content &&
+					input.content.baseRevision !== current.note.currentRevision &&
+					!sameNoteDraft(current.note, prepared.document)
+				)
+					throw new StaleRevisionError('The skill document has changed since it was loaded');
+			}
 			const note =
 				prepared.kind !== 'metadata'
 					? await this.saveDocument(actor, prepared.document)
@@ -303,7 +312,12 @@ export class Skills implements SkillsController {
 		return { skill, usages: await this.dependencies.skillUsageLister.list(actor, input.noteId) };
 	}
 	private async saveDocument(actor: ActorContext, candidate: Note): Promise<Note> {
-		const note = await this.dependencies.noteEditor.save(actor, candidate);
+		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
+		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		const note =
+			decision.kind === 'unchanged'
+				? decision.note
+				: await this.dependencies.noteEditor.persistEdit(actor, decision.write);
 		await this.dependencies.anchorRepairer.repairForNote(actor, note);
 		await this.dependencies.noteLinkReconciler.reconcile(
 			actor,

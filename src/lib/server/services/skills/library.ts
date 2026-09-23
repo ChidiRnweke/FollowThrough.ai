@@ -1,4 +1,3 @@
-import { sameNoteDraft } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -14,7 +13,7 @@ import type {
 	SkillUsageId,
 	SkillUsageView
 } from '$lib/models/skills';
-import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
@@ -141,11 +140,7 @@ export class SkillLibrary {
 			},
 			plainText: instructions
 		};
-		if (
-			input.content.baseRevision !== current.note.currentRevision &&
-			!sameNoteDraft(current.note, note)
-		)
-			throw new StaleRevisionError('The skill document has changed since it was loaded');
+
 		return {
 			document: note,
 			kind: 'document',

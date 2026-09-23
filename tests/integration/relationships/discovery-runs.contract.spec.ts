@@ -1,3 +1,4 @@
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
@@ -55,7 +56,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await notes.catalog.save(seeded.owner, {
+	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -83,7 +84,7 @@ const setup = async (suffix: string) => {
 		projectId: seeded.project.id,
 		title: 'Earlier decision'
 	});
-	const savedTarget = await notes.catalog.save(seeded.owner, {
+	const savedTarget = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
 		...target,
 		plainText: targetText,
 		document: {

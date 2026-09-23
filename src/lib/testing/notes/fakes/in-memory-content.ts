@@ -2,6 +2,7 @@ import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
+	NoteSaveWrite,
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
@@ -13,8 +14,7 @@ import {
 	ExternalServiceError,
 	NotFoundError,
 	OwnershipError,
-	StaleRevisionError,
-	ValidationError
+	StaleRevisionError
 } from '$lib/errors';
 import type {
 	NoteAttachmentRestorer,
@@ -117,21 +117,25 @@ export class InMemoryNoteContent
 		}));
 	}
 
-	async save(actor: ActorContext, note: Note): Promise<Note> {
+	async getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note> {
+		if (candidate.userId !== actor.userId)
+			throw new OwnershipError('Cannot save another user’s note');
+		return this.get(actor, candidate.id);
+	}
+
+	async persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note> {
 		if (this.saveFailure) throw this.saveFailure;
-		if (note.userId !== actor.userId) throw new OwnershipError('Cannot save another user’s note');
-		const current = this.notes.find(
-			(candidate) => candidate.id === note.id && candidate.userId === actor.userId
-		);
-		if (!current) throw new NotFoundError('Note was not found');
-		if (!note.title.trim()) throw new ValidationError('Note title is required');
-		if (note.currentRevision !== current.currentRevision)
-			throw new StaleRevisionError('The note has changed since it was loaded');
-		if (this.isUnchanged(current, note)) return current;
+		const current = await this.get(actor, write.note.id);
+		if (current.currentRevision !== write.expectedRevision || current.archivedAt)
+			throw new StaleRevisionError('The note changed while it was being saved');
 		const updated = {
-			...note,
-			title: note.title.trim(),
-			currentRevision: current.currentRevision + 1
+			...current,
+			title: write.note.title,
+			document: write.note.document,
+			plainText: write.note.plainText,
+			isPinned: write.note.isPinned,
+			currentRevision: write.note.currentRevision,
+			updatedAt: write.note.updatedAt
 		};
 		this.notes = this.notes.map((candidate) => (candidate.id === updated.id ? updated : candidate));
 		return updated;
@@ -245,16 +249,5 @@ export class InMemoryNoteContent
 			this.anchors = state.anchors;
 			this.indexedNoteIds = state.indexedNoteIds;
 		};
-	}
-
-	private isUnchanged(current: Note, candidate: Note): boolean {
-		return (
-			current.title === candidate.title &&
-			current.plainText === candidate.plainText &&
-			JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-			current.parentId === candidate.parentId &&
-			current.position === candidate.position &&
-			current.isPinned === candidate.isPinned
-		);
 	}
 }

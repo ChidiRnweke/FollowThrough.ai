@@ -1,3 +1,4 @@
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -71,9 +72,9 @@ describe('Skill display name authority', () => {
 		expect((await records.findByNoteId(owner, note.id))?.note.title).toBe('Ship checklist');
 	});
 	it('publishes both sync resources when the note title changes', async () => {
-		const { owner, note, catalog, journal } = await setup('12202');
+		const { owner, note, catalog, journal, transactionRunner } = await setup('12202');
 		const initial = await journal.pullPage(owner, initialSyncCursor);
-		await catalog.save(owner, { ...note, title: 'Ship checklist' });
+		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
 		const batch = await journal.pullPage(owner, initial.cursor);
 		expect(batch.records).toEqual(
 			expect.arrayContaining([
@@ -89,8 +90,8 @@ describe('Skill display name authority', () => {
 		);
 	});
 	it('keeps the legacy sync name equal to the edited note title', async () => {
-		const { owner, note, catalog } = await setup('12203');
-		await catalog.save(owner, { ...note, title: 'Ship checklist' });
+		const { owner, note, catalog, transactionRunner } = await setup('12203');
+		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
 		expect(await context.client`select name from skills where note_id = ${note.id}`).toEqual([
 			{ name: 'Ship checklist' }
 		]);
@@ -106,7 +107,10 @@ describe('Skill display name authority', () => {
 		const { owner, note, catalog, transactionRunner } = await setup('12205');
 		await transactionRunner
 			.run(async () => {
-				await catalog.save(owner, { ...note, title: 'Ship checklist' });
+				await saveNoteDraft(catalog, transactionRunner, owner, {
+					...note,
+					title: 'Ship checklist'
+				});
 				throw new Error('Reject rename');
 			})
 			.catch(() => ({ kind: 'failure' }));
@@ -119,7 +123,10 @@ describe('Skill display name authority', () => {
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
-				await catalog.save(owner, { ...note, title: 'Ship checklist' });
+				await saveNoteDraft(catalog, transactionRunner, owner, {
+					...note,
+					title: 'Ship checklist'
+				});
 				throw new Error('Reject rename');
 			})
 			.catch(() => ({ kind: 'failure' }));

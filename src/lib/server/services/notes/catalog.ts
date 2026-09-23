@@ -1,9 +1,8 @@
-import { decideRevisionWrite } from '$lib/models/revisions';
-import { sameNoteDraft } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
 	NoteCreationFacts,
+	NoteSaveWrite,
 	Note,
 	NoteId,
 	NoteRevision,
@@ -17,7 +16,7 @@ import type { Project } from '$lib/models/projects';
 import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { TrashedNote } from '$lib/models/notes';
 
-import { NOTE_REVISION_HISTORY_LIMIT, findProseMirrorDocumentIssue } from '$lib/models/notes';
+import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
@@ -54,46 +53,14 @@ export class NoteCatalog {
 		return this.notes.listSearchable(actor, projectId);
 	}
 
-	async save(actor: ActorContext, candidate: Note): Promise<Note> {
+	async getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note> {
 		if (candidate.userId !== actor.userId)
 			throw new OwnershipError('Cannot save another user’s note');
-		const current = await this.get(actor, candidate.id);
-		if (!candidate.title.trim()) throw new ValidationError('Note title is required');
-		const documentIssue = findProseMirrorDocumentIssue(candidate.document);
-		if (documentIssue)
-			throw new ValidationError(
-				`Invalid note document at ${documentIssue.path}: ${documentIssue.message}`
-			);
-		if (current.archivedAt) throw new ValidationError('Archived notes cannot be edited');
-		if (candidate.projectId !== current.projectId || candidate.kind !== current.kind)
-			throw new ValidationError('A save cannot move a note between projects or change its kind');
-		if (
-			candidate.kind === 'folder' &&
-			(candidate.plainText.trim() || candidate.document.content?.length)
-		)
-			throw new ValidationError('Folders cannot contain authored document content');
-		const decision = decideRevisionWrite(
-			{
-				kind: 'save',
-				baseMatches: candidate.currentRevision === current.currentRevision,
-				contentChanged: !sameNoteDraft(current, candidate)
-			},
-			current,
-			{ acceptUnchangedRetry: false }
-		);
-		if (decision.kind === 'conflict')
-			throw new StaleRevisionError('The note has changed since it was loaded');
-		if (decision.kind === 'unchanged') return current;
-		const updated = await this.notes.updateIfRevision(
-			actor,
-			{
-				...candidate,
-				title: candidate.title.trim(),
-				currentRevision: decision.currentRevision,
-				updatedAt: now()
-			},
-			current.currentRevision
-		);
+		return this.lockedNote(actor, candidate.id);
+	}
+
+	async persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note> {
+		const updated = await this.notes.updateIfRevision(actor, write.note, write.expectedRevision);
 		if (!updated) throw new StaleRevisionError('The note changed while it was being saved');
 		return updated;
 	}
