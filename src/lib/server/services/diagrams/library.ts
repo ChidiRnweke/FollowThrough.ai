@@ -1,8 +1,7 @@
-import { decideRevisionWrite } from '$lib/models/revisions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
-	DiagramEtag,
+	DiagramRevisionWrite,
 	DiagramId,
 	DiagramRevision,
 	DiagramRevisionId,
@@ -10,18 +9,11 @@ import type {
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams
 } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/models/diagrams';
 import type { ConversationId } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
-import {
-	NotFoundError,
-	OwnershipError,
-	StaleRevisionError,
-	UnsupportedDiagramOperationError,
-	ValidationError
-} from '$lib/errors';
+import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
@@ -129,142 +121,16 @@ export class DiagramLibrary {
 		await this.get(actor, diagramId);
 		return this.diagrams.countReferencingNotes(actor, diagramId);
 	}
-	private async editable(actor: ActorContext, diagramId: DiagramId): Promise<DrawioDiagram> {
-		const current = await this.get(actor, diagramId);
-		if (current.kind !== 'drawio')
-			throw new UnsupportedDiagramOperationError('Only draw.io diagrams can be edited here');
-		if (current.archivedAt) throw new ValidationError('Archived diagrams cannot be edited');
-		return current;
-	}
-
-	private requireIdentity(diagramId: DiagramId, baseEtag: DiagramEtag): void {
-		if (!baseEtag.startsWith(`diagram:${diagramId}:r`))
-			throw new ValidationError('The base ETag does not describe this diagram');
-	}
-
-	private async writeDraft(
+	persistEdit(
 		actor: ActorContext,
-		current: DrawioDiagram,
-		changed: Omit<DrawioDiagram, 'currentRevision'>,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram> {
-		const decision = decideRevisionWrite(
-			{
-				kind: 'save',
-				baseMatches: diagramEtag(current) === baseEtag,
-				contentChanged: current.source !== changed.source || current.title !== changed.title
-			},
-			current,
-			{ acceptUnchangedRetry: true }
-		);
-		if (decision.kind === 'unchanged') return current;
-		if (decision.kind === 'conflict')
-			throw new StaleRevisionError('The diagram has changed since it was loaded');
-		const updated = await this.diagrams.updateIfRevision(
+		write: DiagramRevisionWrite
+	): Promise<DrawioDiagram | undefined> {
+		return this.diagrams.updateIfRevision(
 			actor,
-			{
-				...changed,
-				currentRevision: decision.currentRevision
-			},
-			current.currentRevision,
-			current.publishedRevision
+			write.diagram,
+			write.expectedRevision,
+			write.expectedPublishedRevision
 		);
-		if (!updated) {
-			const remote = await this.editable(actor, current.id);
-			if (remote.source === changed.source && remote.title === changed.title) return remote;
-			throw new StaleRevisionError('The diagram changed while it was being saved');
-		}
-		return updated;
-	}
-
-	async saveDraftSource(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		source: string,
-		searchableText: string,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram> {
-		this.requireIdentity(diagramId, baseEtag);
-		const current = await this.editable(actor, diagramId);
-		return this.writeDraft(
-			actor,
-			current,
-			{
-				...current,
-				source,
-				searchableText,
-				updatedAt: now()
-			},
-			baseEtag
-		);
-	}
-
-	/** Retitle the working draft; publication remains where it was. */
-	async rename(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		title: string,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram> {
-		this.requireIdentity(diagramId, baseEtag);
-		const current = await this.editable(actor, diagramId);
-		const trimmed = title.trim();
-		if (!trimmed) throw new ValidationError('Diagram title is required');
-		return this.writeDraft(
-			actor,
-			current,
-			{ ...current, title: trimmed, updatedAt: now() },
-			baseEtag
-		);
-	}
-
-	async publish(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		source: string,
-		renderedSvg: string,
-		searchableText: string,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram> {
-		this.requireIdentity(diagramId, baseEtag);
-		const current = await this.editable(actor, diagramId);
-		const decision = decideRevisionWrite(
-			{
-				kind: 'publish',
-				baseMatches: diagramEtag(current) === baseEtag,
-				contentChanged: current.source !== source
-			},
-			current,
-			{ acceptUnchangedRetry: true }
-		);
-		if (decision.kind === 'unchanged') return current;
-		if (decision.kind === 'conflict')
-			throw new StaleRevisionError('The diagram has changed since it was loaded');
-		const revision = decision.currentRevision;
-		const timestamp = now();
-		const published = await this.diagrams.updateIfRevision(
-			actor,
-			{
-				...current,
-				source,
-				renderedSvg,
-				searchableText,
-				currentRevision: revision,
-				publishedRevision: revision,
-				publishedAt: timestamp,
-				updatedAt: timestamp
-			},
-			current.currentRevision,
-			current.publishedRevision
-		);
-		if (!published) {
-			const remote = await this.editable(actor, diagramId);
-			if (remote.currentRevision === remote.publishedRevision && remote.source === source)
-				return remote;
-			throw new StaleRevisionError('The diagram changed while it was being published');
-		}
-		await this.recordRevision(actor, published);
-		return published;
 	}
 
 	async recordRevision(actor: ActorContext, diagram: DrawioDiagram): Promise<DiagramRevision> {
@@ -292,30 +158,5 @@ export class DiagramLibrary {
 		const revision = await this.diagrams.findRevision(actor, diagramId, revisionId);
 		if (!revision) throw new NotFoundError('That version of the diagram is no longer available');
 		return revision;
-	}
-
-	async restore(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		revisionId: DiagramRevisionId,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram> {
-		this.requireIdentity(diagramId, baseEtag);
-		const [current, revision] = await Promise.all([
-			this.editable(actor, diagramId),
-			this.revision(actor, diagramId, revisionId)
-		]);
-		return this.writeDraft(
-			actor,
-			current,
-			{
-				...current,
-				title: revision.title,
-				source: revision.source,
-				searchableText: revision.searchableText,
-				updatedAt: now()
-			},
-			baseEtag
-		);
 	}
 }
