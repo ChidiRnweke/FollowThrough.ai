@@ -39,6 +39,15 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #210](https://github.com/ChidiRnweke/FollowThrough.ai/pull/210) retires unused task read
+contracts and records category/list workflow and model declaration dispositions. The full local
+unit suite passed 443 files and 4,095 tests. All required checks passed, including
+[full browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35918092300).
+
+The [task detail visibility disposition](task-detail-visibility.md) records a reproduced offline
+project-archive defect and matched actual-component captures. Single-task and list projections now
+share task/project visibility. Other detail and embedded-task workflow coverage remains open.
+
 [PR #209](https://github.com/ChidiRnweke/FollowThrough.ai/pull/209) preserves task edits after
 linked-note archival. Focused regressions passed 17 files and 124 tests; the full local unit suite
 passed 443 files and 4,095 tests. All required checks passed, including

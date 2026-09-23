@@ -23,13 +23,10 @@
 	const todoId = $derived(node.attrs.todoId as TodoId | null);
 	const views = $derived(workspaceSession.current?.resources.views);
 	const todo = $derived(todoId && perNote ? views?.get('todos', todoId) : undefined);
-	const view = $derived(todo && !todo.deletedAt ? views?.todo(todo) : undefined);
+	const view = $derived(todo ? views?.todo(todo) : undefined);
 	const done = $derived(view?.todo.status === 'done');
 	const overdue = $derived(
-		view !== undefined &&
-			!done &&
-			view.todo.dueDate !== undefined &&
-			view.todo.dueDate < todayLocalDate()
+		view != null && !done && view.todo.dueDate !== undefined && view.todo.dueDate < todayLocalDate()
 	);
 </script>
 
