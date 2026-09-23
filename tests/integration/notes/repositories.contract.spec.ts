@@ -4,7 +4,7 @@ import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
 import * as schema from '$lib/server/db/schema/registry';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { actor, context, now, seedNote } from '../database-harness';
+import { replaceNoteFixture, actor, context, now, seedNote } from '../database-harness';
 import corpusDocuments from '../../corpus/note-documents.json' with { type: 'json' };
 import { parseProseMirrorDocument } from '$lib/models/notes';
 
@@ -127,7 +127,7 @@ describe('Postgres note repository invariants', () => {
 	it('lists a trashed note in the trash', async () => {
 		const { owner, note } = await seedNote('184');
 		const repository = new NoteRecords(context.db);
-		await repository.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		expect((await repository.listTrashed(owner)).map((entry) => entry.id)).toContain(note.id);
 	});
 	it('keeps active notes out of the trash', async () => {
@@ -141,13 +141,13 @@ describe('Postgres note repository invariants', () => {
 	it('hides a trashed note whose project was archived', async () => {
 		const { owner, project, note } = await seedNote('186');
 		const repository = new NoteRecords(context.db);
-		await repository.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		await new ProjectRecords(context.db).archive(owner, project.id);
 		expect(await repository.listTrashed(owner)).toEqual([]);
 	});
 	it('does not reveal another actor’s trash', async () => {
-		const { owner, note } = await seedNote('187');
-		await new NoteRecords(context.db).update(owner, { ...note, archivedAt: now });
+		const { note } = await seedNote('187');
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		expect(await new NoteRecords(context.db).listTrashed(actor('188'))).toEqual([]);
 	});
 	it('prunes a note’s history down to the newest snapshots', async () => {
@@ -171,21 +171,21 @@ describe('Postgres note repository invariants', () => {
 	it('removes a hard-deleted note from the trash', async () => {
 		const { owner, note } = await seedNote('190');
 		const repository = new NoteRecords(context.db);
-		await repository.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, note.id)).toBeUndefined();
 	});
 	it('does not let one actor hard-delete another actor’s note', async () => {
 		const { owner, note } = await seedNote('191');
 		const repository = new NoteRecords(context.db);
-		const trashed = await repository.update(owner, { ...note, archivedAt: now });
+		const trashed = await replaceNoteFixture({ ...note, archivedAt: now });
 		await repository.deleteTrashed(actor('192'), note.id);
 		expect(await repository.findById(owner, note.id)).toEqual(trashed);
 	});
 	it('refuses storage deletion of a hidden skill in the trash', async () => {
 		const { owner, note } = await seedNote('19407');
 		const repository = new NoteRecords(context.db);
-		const skill = await repository.update(owner, { ...note, kind: 'skill', archivedAt: now });
+		const skill = await replaceNoteFixture({ ...note, kind: 'skill', archivedAt: now });
 		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, note.id)).toEqual(skill);
 	});
@@ -201,7 +201,7 @@ describe('Postgres note repository invariants', () => {
 			plainText: '',
 			createdAt: now
 		});
-		await repository.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.listRevisions(owner, note.id)).toEqual([]);
 	});
@@ -237,7 +237,7 @@ describe('Postgres note repository invariants', () => {
 			plainText: '',
 			createdAt: now
 		});
-		await repository.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, note.id)).toBeUndefined();
 	});
@@ -263,7 +263,7 @@ describe('Postgres note repository invariants', () => {
 	it('keeps trashed notes out of the searchable projection', async () => {
 		const { owner, note } = await seedNote('196');
 		const repository = new NoteRecords(context.db);
-		await repository.update(owner, { ...note, archivedAt: now });
+		await replaceNoteFixture({ ...note, archivedAt: now });
 		expect((await repository.listSearchable(owner)).map((entry) => entry.id)).not.toContain(
 			note.id
 		);
