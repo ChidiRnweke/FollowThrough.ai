@@ -1,3 +1,4 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import type { DateTime } from '$lib/models/workspace';
@@ -63,6 +64,7 @@ export interface AgentCapability {
 	readonly runs: AgentRunRecords;
 	readonly cancellations: RunCancellation;
 	readonly approvals: RunApprovals;
+	readonly preparation: RunPreparation;
 	readonly runLedger: AgentRunLedger;
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
@@ -124,6 +126,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		runs,
 		cancellations: new RunCancellation(runs),
 		approvals: new RunApprovals(runs),
+		preparation: new RunPreparation(runs),
 		runLedger,
 		runEvents,
 		runDecisions,

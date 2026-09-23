@@ -567,6 +567,15 @@ export interface WorkflowAgentRun extends AgentRunBase {
 }
 
 export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
+export interface AgentProvenanceWrite {
+	readonly provenanceId: ProvenanceId;
+	readonly updatedAt: DateTime;
+}
+export interface AgentContextWrite {
+	readonly contextSnapshot: AgentRunContext;
+	readonly updatedAt: DateTime;
+}
+
 export type WorkflowSettlementWrite = {
 	readonly finishedAt: DateTime;
 	readonly updatedAt: DateTime;

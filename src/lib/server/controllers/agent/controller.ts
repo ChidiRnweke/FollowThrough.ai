@@ -1,3 +1,7 @@
+import {
+	RunPreparationCancelled,
+	type RunPreparation
+} from '$lib/server/services/agent/runs/preparation';
 import type { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import type { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -210,6 +214,10 @@ export interface AgentDependencies {
 	runs: AgentRunRepository;
 	cancellations: Pick<RunCancellation, 'getForWrite' | 'plan' | 'persist'>;
 	approvals: Pick<RunApprovals, 'getForWrite' | 'plan' | 'persist'>;
+	preparation: Pick<
+		RunPreparation,
+		'claim' | 'getForWrite' | 'provenance' | 'context' | 'persistProvenance' | 'persistContext'
+	>;
 	/** The append-only event log per run that clients poll via cursors. */
 	events: AgentRunEventRepository;
 	/** Recorded approvals and rejections for pending tool calls. */
@@ -857,13 +865,10 @@ export class Agent implements AgentController {
 			}
 			throw new Error('The agent provider ended without a durable outcome');
 		} catch (error) {
-			// A cancel that lands mid-prepare turns the snapshot write into an
-			// illegal `cancelling → running` update, and the abort can lag the
-			// commit that parked the row. Either way the run is settling, not
-			// failing; `finishCancellation` no-ops for any other status, so a
-			// settled row is what distinguishes the race from a real failure.
+			// Cancellation can win while context is being built, before an abort arrives.
+			// The locked preparation read distinguishes it from a real preparation failure.
 			const settled = await this.finishCancellation(runId);
-			if (signal.aborted || settled) return 'cancelled';
+			if (signal.aborted || settled || error instanceof RunPreparationCancelled) return 'cancelled';
 			throw error;
 		}
 	}
@@ -935,9 +940,7 @@ export class Agent implements AgentController {
 	}
 
 	private async prepare(runId: AgentRunId): Promise<PreparedAgentRun | undefined> {
-		const transitioned = await this.dependencies.runs.transitionAgent(runId, 'queued', 'running', {
-			startedAt: new Date().toISOString() as DateTime
-		});
+		const transitioned = await this.dependencies.preparation.claim(runId, now());
 		if (!transitioned) return undefined;
 		let run = transitioned;
 		const actor: ActorContext = { userId: run.userId };
@@ -951,24 +954,23 @@ export class Agent implements AgentController {
 				model: run.model,
 				metadata: {}
 			});
-			run = { ...run, provenanceId: provenance.id };
-			await this.dependencies.runs.update(actor, run);
+			run = await this.dependencies.transactionRunner.run(async () => {
+				const current = await this.dependencies.preparation.getForWrite(actor, runId);
+				const change = this.dependencies.preparation.provenance(current, provenance.id, now());
+				return this.dependencies.preparation.persistProvenance(actor, runId, change);
+			});
 		}
 
-		if (!run.contextSnapshot) {
-			const context = await this.buildContext(actor, run.inputSnapshot);
-			run = { ...run, contextSnapshot: context };
-			await this.dependencies.runs.update(actor, run);
-		}
-
-		await this.dependencies.events.append(run.id, 1, {
-			type: 'run_started',
-			runId: run.id,
-			attempt: 1
+		const context = run.contextSnapshot ?? (await this.buildContext(actor, run.inputSnapshot));
+		const prepared = await this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.preparation.getForWrite(actor, runId);
+			const change = this.dependencies.preparation.context(current, context, now());
+			const saved = await this.dependencies.preparation.persistContext(actor, runId, change);
+			await this.dependencies.events.append(runId, 1, { type: 'run_started', runId, attempt: 1 });
+			return saved;
 		});
-		this.dependencies.eventBus.notify(run.id);
-
-		return run as PreparedAgentRun;
+		this.dependencies.eventBus.notify(runId);
+		return prepared;
 	}
 
 	private async buildContext(actor: ActorContext, input: RunAgentInput): Promise<AgentRunContext> {
