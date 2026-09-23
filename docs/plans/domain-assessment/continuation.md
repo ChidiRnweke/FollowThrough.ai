@@ -89,9 +89,18 @@ in that disposition; the public behavior is unchanged.
 estimates, outlines and section numbering. Browser/server rules stay shared, and model types retain
 their existing meaning. Its focused regression run passes 38 files and 289 tests.
 
-The [agent tool-recovery disposition](agent-tool-recovery.md) records the next server-rule slice.
+[PR #163](https://github.com/ChidiRnweke/FollowThrough.ai/pull/163) contains the
+[agent tool-recovery disposition](agent-tool-recovery.md) and server-rule slice.
 Name ranking belongs to the recovery formatter; the unused matching API and algorithm-only tests
 are removed. Formatter tests retain the ranking and discovery guarantees.
+
+All checks passed on [#162](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35855343605)
+and [#163](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35855886034), including
+PostgreSQL contracts, full browser tests and PWA checks. Their PRs remain open.
+
+The [note-trash disposition](note-trash.md) records controller-owned archive/restore transitions,
+shared offline rules and targeted persistence under row locks. Its remaining cross-writer race
+review is explicit; this does not close the whole trash family.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.

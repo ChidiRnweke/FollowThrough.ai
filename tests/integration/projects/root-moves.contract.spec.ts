@@ -1,3 +1,5 @@
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -42,10 +44,11 @@ it('keeps a folder at the project root after reloading a completed move', async 
 
 it('restores a note at the root when its previous folder is archived', async () => {
 	const owner = actor('13902');
-	const projects = new ProjectRecords(context.db);
+	const { database, transactionRunner } = createTransactionContext(context.db);
+	const projects = new ProjectRecords(database);
 	const project = await projects.insert(owner, { name: 'Restore at root' });
-	const repository = new NoteRecords(context.db);
-	const catalog = new NoteCatalog(repository, new SourceAnchorRecords(context.db), projects);
+	const repository = new NoteRecords(database);
+	const catalog = new NoteCatalog(repository, new SourceAnchorRecords(database), projects);
 	const creation = noteCreationControllers(catalog);
 	const { folder: parent } = await creation.projects.createFolder(owner, {
 		projectId: project.id,
@@ -56,9 +59,16 @@ it('restores a note at the root when its previous folder is archived', async () 
 		parentId: parent.id,
 		title: 'Restored child'
 	});
-	await catalog.archive(owner, note.id);
-	await catalog.archive(owner, parent.id);
-	await catalog.restore(owner, note.id);
+	const controller = new Notes(
+		capabilityDependencies<NotesDependencies>({
+			noteTrash: catalog,
+			noteIndexer: new InMemoryNoteContent(),
+			transactionRunner
+		})
+	);
+	await controller.archive(owner, { noteId: note.id });
+	await controller.archive(owner, { noteId: parent.id });
+	await controller.restore(owner, { noteId: note.id });
 	expect(await repository.findById(owner, note.id)).toMatchObject({
 		parentId: undefined,
 		archivedAt: undefined
