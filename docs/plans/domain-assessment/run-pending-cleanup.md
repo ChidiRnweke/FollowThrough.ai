@@ -30,5 +30,6 @@ views against the saved row. Existing lifecycle cases retain abandoned-call jour
 settlement, cancellation races and duplicate-event protection. Workflow settlement regressions ensure
 the fresh result read works for chat, diagrams, references, relationships and tasks.
 
-Generic transition methods and model lifecycle helpers remain separate ownership work. This slice
-does not complete the wider workflow inventory. The dependent PR records observed validation.
+The subsequent [terminal-settlement disposition](run-terminal-settlement.md) removes generic
+transition methods and model lifecycle helpers. This slice does not complete the wider workflow
+inventory. The dependent PR records observed validation.

@@ -5,7 +5,7 @@ import type {
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
-	AgentRunStatus,
+	RunSettlementWrite,
 	RunCancellationWrite,
 	RunApprovalWrite,
 	WorkflowContextWrite,
@@ -36,7 +36,7 @@ import type {
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 import type { FindReferencesOutput } from '$lib/models/references';
 
-/** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
+/** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. Conditional writes persist resolved values only while the expected run state still holds. */
 export interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	/** Lock an actor-owned run within the caller transaction. */
@@ -57,12 +57,7 @@ export interface AgentRunRepository {
 	): Promise<AgentRun | undefined>;
 	insert(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
 	insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined>;
-	transition(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch?: Partial<AgentRun>
-	): Promise<AgentRun | undefined>;
+	settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined>;
 	claimAgent(runId: AgentRunId, change: RunClaimWrite): Promise<ResolvedAgentRun | undefined>;
 	claimWorkflow(runId: AgentRunId, change: RunClaimWrite): Promise<WorkflowAgentRun | undefined>;
 	checkpointAgent(

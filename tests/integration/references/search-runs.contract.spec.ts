@@ -1,3 +1,4 @@
+import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { afterAll, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -22,7 +23,7 @@ import {
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { isTerminalAgentRunStatus, type AgentRunId } from '$lib/models/agent';
+import { type AgentRunId } from '$lib/models/agent';
 import { InMemoryReferencePipeline } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, seedNote } from '../database-harness';

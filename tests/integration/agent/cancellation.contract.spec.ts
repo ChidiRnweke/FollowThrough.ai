@@ -1,3 +1,6 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -125,24 +128,36 @@ it.each(['awaiting_approval', 'queued'] as const)(
 	async (status) => {
 		const { owner, run } = await seed(status === 'queued' ? '17602' : '17601');
 		const records = new AgentRunRecords(context.db);
-		await records.transition(run.id, 'queued', 'running', { startedAt: now });
-		await records.transition(run.id, 'running', 'awaiting_approval', {
-			serializedState: 'provider-checkpoint',
-			pendingDecisions: [
+		await new RunPreparation(records).claim(run.id, now);
+		const checkpoints = new RunCheckpoints(records);
+		await checkpoints.persist(
+			run.id,
+			checkpoints.prepare(
+				run,
 				{
-					callId: 'call-cleared',
-					toolName: 'archive_note',
-					arguments: { noteId: '40000000-0000-4000-8000-000000017601' }
-				}
-			]
-		});
+					serializedState: 'provider-checkpoint',
+					pendingDecisions: [
+						{
+							callId: 'call-cleared',
+							toolName: 'archive_note',
+							arguments: { noteId: '40000000-0000-4000-8000-000000017601' }
+						}
+					]
+				},
+				now
+			)
+		);
 		if (status === 'queued') {
 			await new AgentRunDecisionRecords(context.db).record(owner, {
 				runId: run.id,
 				callId: 'call-cleared',
 				decision: 'approve'
 			});
-			await records.transition(run.id, 'awaiting_approval', 'queued');
+			const approvals = new RunApprovals(records);
+			const current = await approvals.getForWrite(owner, run.id);
+			const change = approvals.plan(current, ['call-cleared'], now);
+			if (!change) throw new Error('Expected approval to queue the checkpoint');
+			await approvals.persist(owner, run.id, change);
 		}
 		const snapshot = await cancellationController(context.db).cancel(owner, run.id);
 		const stored = await records.findById(owner, run.id);

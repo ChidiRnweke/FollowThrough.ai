@@ -1,3 +1,4 @@
+import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -21,11 +22,7 @@ import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import {
-	isTerminalAgentRunStatus,
-	type AgentRunId,
-	type DiagramActionInput
-} from '$lib/models/agent';
+import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, seedNote } from '../database-harness';
