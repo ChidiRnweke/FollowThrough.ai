@@ -17,11 +17,11 @@
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
 	import { projectExportEntries } from '$lib/services/projects/export-entries';
+	import { type SectionNumberingLevel } from '$lib/models/notes';
 	import {
 		sectionNumberingLevelFor,
-		sectionNumberingOverrideFor,
-		type SectionNumberingLevel
-	} from '$lib/models/notes';
+		sectionNumberingOverrideFor
+	} from '$lib/services/notes/section-numbering';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();

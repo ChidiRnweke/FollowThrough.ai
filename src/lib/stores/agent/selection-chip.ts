@@ -1,5 +1,5 @@
 import type { TextSelection } from '$lib/models/notes';
-import { countWords } from '$lib/models/notes/reading-time';
+import { countWords } from '$lib/services/notes/reading-time';
 import type { SelectionChip } from '$lib/models/chat';
 export type { SelectionChip } from '$lib/models/chat';
 
