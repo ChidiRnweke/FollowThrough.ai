@@ -203,7 +203,12 @@ export const toDiagramRevision = (
 		createdAt: instant(row.createdAt)
 	});
 
-const suggestionRecord = (row: typeof schema.suggestions.$inferSelect) => ({
+/** JSON stored by older writers is not a resolved proposal until this boundary parses it. */
+type StoredSuggestionRow = Omit<typeof schema.suggestions.$inferSelect, 'payload'> & {
+	readonly payload: unknown;
+};
+
+const suggestionRecord = (row: StoredSuggestionRow) => ({
 	...row,
 	noteId: row.noteId ?? undefined,
 	payload: row.payload,
@@ -216,7 +221,7 @@ const suggestionRecord = (row: typeof schema.suggestions.$inferSelect) => ({
 	updatedAt: instant(row.updatedAt)
 });
 
-export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Suggestion =>
+export const toSuggestion = (row: StoredSuggestionRow): Suggestion =>
 	suggestionSchema.parse(suggestionRecord(row));
 
 /**
@@ -227,9 +232,7 @@ export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Sugge
  * there is a bug worth throwing on. `list` maps many rows, and a throw from one
  * of them is what took `/today` down on the notes side.
  */
-export const toStoredSuggestion = (
-	row: typeof schema.suggestions.$inferSelect
-): StoredSuggestion => {
+export const toStoredSuggestion = (row: StoredSuggestionRow): StoredSuggestion => {
 	const parsed = suggestionSchema.safeParse(suggestionRecord(row));
 	if (!parsed.success)
 		return {

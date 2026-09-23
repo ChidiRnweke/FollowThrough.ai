@@ -22,5 +22,6 @@ and broader repository assessment remain open. The task family has its own compl
 records; open implementation PRs are not merged delivery.
 
 Focused regressions passed 13 files and 77 tests. The full local unit suite passed 444 files and
-4,106 tests. Lint, type checks, architecture audits and documentation checks passed. The new
-PostgreSQL regressions await required CI because local PostgreSQL is unavailable.
+4,106 tests. Lint, type checks, architecture audits and documentation checks passed. All required
+[CI checks passed](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35924353744), including
+the three new PostgreSQL regressions. Local PostgreSQL was unavailable.
