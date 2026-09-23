@@ -1,3 +1,4 @@
+import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { assembleTodoView } from '$lib/services/todos/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -30,7 +31,7 @@ import type {
 	UpdateTodoInput,
 	UpdateTodoOutput
 } from '$lib/models/todos';
-import { InvalidGeneratedContentError, InvalidTransitionError } from '$lib/errors';
+import { InvalidGeneratedContentError, InvalidTransitionError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
@@ -231,8 +232,13 @@ export class Todos implements TodosController {
 		};
 	}
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
-		const todo = await this.dependencies.todoCreator.create(actor, input);
-		return { todo };
+		const decision = decideTodoCreation(input, {
+			id: input.id ?? (crypto.randomUUID() as TodoId),
+			userId: actor.userId,
+			timestamp: this.clock()
+		});
+		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+		return { todo: await this.dependencies.todoCreator.create(actor, decision.todo) };
 	}
 	async update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput> {
 		if (Object.keys(input).every((key) => key === 'todoId')) {
@@ -254,10 +260,12 @@ export class Todos implements TodosController {
 				const todos: Todo[] = [];
 				for (const item of input.todos) {
 					todos.push(
-						await this.dependencies.todoCreator.create(actor, {
-							...item,
-							projectId: input.projectId
-						})
+						(
+							await this.create(actor, {
+								...item,
+								projectId: input.projectId
+							})
+						).todo
 					);
 				}
 				const result = { todos };
@@ -467,7 +475,7 @@ export class Todos implements TodosController {
 					suggestion
 				)
 			) {
-				const todo = await this.dependencies.todoCreator.create(actor, suggestion.payload);
+				const { todo } = await this.create(actor, suggestion.payload);
 				await this.dependencies.suggestionEffects.record(actor, suggestion.id, [
 					{ kind: 'created', after: { type: 'todos', value: todo } }
 				]);

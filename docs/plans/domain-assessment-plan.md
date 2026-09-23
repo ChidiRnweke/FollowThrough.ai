@@ -1,5 +1,9 @@
 # Repository-wide domain assessment and implementation handoff
 
+Current delivery state is recorded in [the continuation register](domain-assessment/continuation.md).
+The findings and unchecked backlog below describe the original assessment snapshot; they are not a
+claim that later implementation is absent or that open PRs have merged.
+
 ## Read this first after a context reset
 
 The user wants to remove accidental complexity across the codebase by recovering a coherent domain

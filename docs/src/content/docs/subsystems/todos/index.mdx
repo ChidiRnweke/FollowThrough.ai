@@ -49,7 +49,7 @@ flowchart LR
 
 Two details worth knowing:
 
-- The suggestion's payload **is** a `CreateTodoInput` (see `TodoSuggestion` in the models), so accepting it later is literally `TodoCatalog.create(payload)`: every create validation re-runs at accept time.
+- A task suggestion carries a `CreateTodoInput`. At acceptance, the Suggestions controller applies the shared creation rule and asks TodoCatalog to persist the resolved task. Project, anchor and provenance checks run against current records.
 - The suggestion gets `noteId`, the anchor, and the provenance id; the payload additionally bakes in `sourceAnchorId` and `provenanceId`, so the todo created on accept keeps the full chain.
 
 ### Scoring and extraction
@@ -61,7 +61,16 @@ The controller depends on a `PromiseExtractor` contract with two implementations
 
 Auto-accept is decided per suggestion by `ToolTrust.shouldAutoAccept` (`src/lib/server/services/agent/runs/tool-trust.ts`): the user's trust policy for `extract_promises` must have auto-accept enabled, and the suggestion's confidence must clear the policy's `minimumConfidence` when one is set. The default policy is `autoAcceptEnabled: false`, so extraction proposes unless the user opted in.
 
-## Kanban and status semantics
+## Task creation
+
+Task and suggestion controllers apply `services/todos/creation.ts` before persistence. Direct
+creation, durable batches, automatic acceptance and reviewed acceptance use that same rule. It
+normalizes the title, keeps caller-assigned identities and resolves the initial status, counterparty
+and completion time. Offline commands apply the same rule with their recorded identity and time.
+TodoCatalog checks ownership and referenced records before inserting the resolved task. Models hold
+values, request types and Zod schemas only.
+
+## Task edits and status semantics
 
 `TodoStatus` is `backlog | open | in_progress | done | cancelled`. A board drag is a task edit.
 The Todos controller starts a transaction, locks and reads the current active task, applies the

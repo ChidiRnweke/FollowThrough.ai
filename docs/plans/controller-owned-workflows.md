@@ -1,5 +1,9 @@
 # Controller-owned workflows
 
+Current merged, open-PR and unresolved work is tracked in the
+[assessment continuation register](domain-assessment/continuation.md). Implementation notes below
+record work on the stack; they do not establish merge status or assessment completion.
+
 ## Required architecture
 
 This work applies the user's correction to the domain assessment and note pilot:
@@ -14,9 +18,9 @@ This work applies the user's correction to the domain assessment and note pilot:
 - A green import audit is not evidence that runtime ownership is correct. Fix the dependency,
   then test the behavior and audit the actual composition.
 
-These instructions supersede the placement of pure business decisions in models in ADR 0041
-and the previous repository guidance. Preserve the single-rule and offline consistency
-guarantees of that ADR while correcting placement. Keep the rest of the accepted product
+ADR 0041 was revised on 2026-09-19 to use shared services, as recorded in PR #157. These
+instructions follow that revision and preserve its single-rule and offline consistency
+guarantees. Keep the rest of the accepted product
 behavior, including actor scope, revision checks, cancellation, and failure reporting.
 
 ## Executor instructions
@@ -607,6 +611,13 @@ the resolved value. Offline commands use the same edit service. Models no longer
 creation policy remains open. Edit tests moved from the catalog to the real controller and catalog.
 A real PostgreSQL regression holds the task row until two competing edits reach it. Before the fix,
 one edit overwrites the other; after locking before the read, title and description changes survive.
+
+Task creation ownership: Todos and Suggestions apply the same shared creation rule used by offline
+commands. Task batches and automatic promise acceptance use the Todos controller’s creation method.
+TodoCatalog persists the resolved task after ownership, project, anchor and provenance checks. Task
+models now contain values, types and Zod schemas only. The task and suggestion-artifact fakes no
+longer duplicate construction or invent a project. Creation tests moved to the real task controller
+with the real catalog and repository fakes.
 
 ## Validation principles
 

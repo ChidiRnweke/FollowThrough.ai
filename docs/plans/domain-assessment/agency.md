@@ -53,6 +53,11 @@ return types. Test returned status and applied identity against persisted accept
 
 ### A03 — Shared task rules still allow inconsistent creation and staged persistence
 
+**Continuation, 2026-09-23:** This is a historical finding. The task-edit and task-creation
+slices now implement controller-owned decisions with shared services; see the
+[continuation register](continuation.md) for PR state and validation. These changes remain
+unmerged. The snapshot description below must not be used as a description of this branch.
+
 **Static, partly resolved by PR #47.** Completion and responsibility normalization are now shared.
 However, `Todos.update` still writes ordinary fields and status separately; direct tool updates lack
 an enclosing transaction in this method. `decideTodoCreation` retains `waitingOn` for responsibility
@@ -64,6 +69,11 @@ Test create/edit equivalence and failure of combined field/status updates withou
 Retain completion timestamps, reopening, explicit-null clears, ownership and linked-note validation.
 
 ### A04 — Batch creation exists only in the tool factory
+
+**Continuation, 2026-09-23:** [PR #83](https://github.com/ChidiRnweke/FollowThrough.ai/pull/83)
+implements durable controller-owned batches in the open stack. This branch uses that path and
+retains its rollback and retry tests. The historical absence below no longer describes this branch;
+PR #83 is still open.
 
 **Static.** `agent-tool-factory.ts:create_todos` loops over `Todos.create` without batch transaction
 or durable retry identity. A later failure can retain earlier tasks and a retry can duplicate them.
