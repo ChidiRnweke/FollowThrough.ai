@@ -23,8 +23,7 @@ import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
-	DrawioDiagramTextExtractor,
-	DrawioLabelExtractor
+	DrawioLabelReader
 } from '$lib/server/services/diagrams/drawio';
 import {
 	InMemorySearchRepository,
@@ -62,11 +61,10 @@ describe('Proposal effect coordination', () => {
 				suggestionAccepter: suggestions,
 				suggestionEffects: effects,
 				sourceNotes: notes,
-				drawioLabels: new DrawioLabelExtractor(),
 				diagramWriter: diagrams,
 				drawioXmlValidator: new DrawioXmlValidator(),
 				drawioSvgSanitizer: new DrawioSvgSanitizer(),
-				drawioTextExtractor: new DrawioDiagramTextExtractor(),
+				drawioLabels: new DrawioLabelReader(),
 				now: () => testNow,
 				diagramIndexer: diagrams,
 				transactionRunner: new InMemoryTransactionRunner([suggestions, effects, diagrams])

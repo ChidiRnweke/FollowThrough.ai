@@ -77,3 +77,11 @@ export const edge = ({
  */
 export const wrappedVertex = ({ id, value = '', ...geometry }: VertexFixture): string =>
 	`<object label="${value}">${vertex({ id, ...geometry })}</object>`;
+
+/** Accepted XML used by browser and server label-parity tests. */
+export const RICH_DRAWIO_LABELS_XML = mxfile(
+	wrappedVertex({ id: '2', value: '&lt;b&gt; Browser &lt;/b&gt;' }) +
+		vertex({ id: '3', value: 'Browser' }) +
+		vertex({ id: '4', value: '&amp;nbsp;' }) +
+		vertex({ id: '5', value: 'Queue' })
+);

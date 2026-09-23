@@ -1,3 +1,4 @@
+import { searchableDrawioText } from '$lib/services/diagrams/labels';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -8,8 +9,7 @@ import {
 import type {
 	DiagramWriter,
 	DrawioXmlContentValidator,
-	DrawioSvgPreviewSanitizer,
-	DiagramTextExtractor
+	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/contracts';
 import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
 import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
@@ -26,7 +26,7 @@ import type { RelationshipCreator } from '$lib/server/services/relationships/con
 import type { ReferenceCreator } from '$lib/server/services/references/contracts';
 import type { MemoryChanges } from '$lib/server/services/memory/contracts';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
-import type { DrawioLabelExtractor } from '$lib/server/services/diagrams/drawio';
+import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
@@ -135,7 +135,6 @@ export interface SuggestionsDependencies {
 	referenceCreator: ReferenceCreator;
 	memoryChanges: MemoryChanges;
 	sourceNotes: NoteReader;
-	drawioLabels: Pick<DrawioLabelExtractor, 'extract'>;
 	suggestionEffects: SuggestionEffectService;
 	indexEmbeddings: IEmbeddings;
 	indexWriter: Pick<ContentIndex, 'complete'>;
@@ -150,7 +149,7 @@ export interface SuggestionsDependencies {
 	diagramWriter: DiagramWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
-	drawioTextExtractor: DiagramTextExtractor;
+	drawioLabels: Pick<DrawioLabelReader, 'read'>;
 	now: () => DateTime;
 	transactionRunner: TransactionRunner;
 }
@@ -248,10 +247,7 @@ export class Suggestions implements SuggestionsController {
 				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(
 					input.drawioReview.renderedSvg
 				);
-				const searchableText = await this.dependencies.drawioTextExtractor.extract({
-					...created.after.value,
-					source
-				});
+				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
 				const diagram = await this.dependencies.diagramWriter.persistContent(actor, {
 					kind: 'drawio',
 					diagramId: created.after.value.id,
@@ -375,7 +371,7 @@ export class Suggestions implements SuggestionsController {
 			source,
 			searchableText:
 				suggestion.payload.kind === 'drawio'
-					? this.dependencies.drawioLabels.extract(source)
+					? searchableDrawioText(this.dependencies.drawioLabels.read(source))
 					: source,
 			sourceAnchorId: suggestion.sourceAnchorId,
 			provenanceId: suggestion.provenanceId,
