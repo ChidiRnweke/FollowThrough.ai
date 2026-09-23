@@ -9,6 +9,9 @@ import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres
 import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
 import { SuggestionEffects, mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
+import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { RelationshipGraph } from '$lib/server/services/relationships/graph';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
 
@@ -124,7 +127,17 @@ describe('Durable proposal application effects', () => {
 	it('preserves an existing relationship when undo restores its justification', async () => {
 		const state = await setup('9503');
 		const target = await seedNote('9504', state.owner);
+		await new NoteRecords(state.database).update(state.owner, {
+			...target.note,
+			projectId: state.project.id
+		});
 		const relationships = new RelationshipRecords(state.database);
+		const graph = new RelationshipGraph(
+			relationships,
+			new NoteRecords(state.database),
+			new SourceAnchorRecords(state.database),
+			new ProvenanceRecords(state.database)
+		);
 		const original = await relationships.insert(state.owner, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: state.owner.userId,
@@ -136,9 +149,10 @@ describe('Durable proposal application effects', () => {
 			updatedAt: now
 		});
 		await state.transactionRunner.run(async () => {
-			const change = await relationships.insertWithChange(state.owner, {
-				...original,
-				id: crypto.randomUUID() as RelationshipId,
+			const change = await graph.createWithChange(state.owner, {
+				sourceNoteId: original.sourceNoteId,
+				targetNoteId: original.targetNoteId,
+				kind: original.kind,
 				justification: 'Suggested'
 			});
 			await state.effects.record(state.owner, state.suggestion.id, [
