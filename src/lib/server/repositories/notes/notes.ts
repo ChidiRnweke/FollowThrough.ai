@@ -4,7 +4,8 @@ import type {
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
-	NotePublicationWrite
+	NotePublicationWrite,
+	NoteBuiltInRepairWrite
 } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 /** `updateIfRevision` is the compare-and-swap write the sync protocol depends on: a stale expected revision fails instead of overwriting. */
@@ -14,6 +15,8 @@ export interface NoteRepository {
 	findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
 	updateTrash(actor: ActorContext, note: Note): Promise<Note>;
 	findById(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
+	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined>;
+	repairBuiltIn(actor: ActorContext, write: NoteBuiltInRepairWrite): Promise<Note | undefined>;
 	findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined>;
 	listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
 	/**

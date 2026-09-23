@@ -1353,3 +1353,15 @@ export function documentTextMarks(node: ProseMirrorTextNode): {
 	}
 	return { bold, italic, code, ...(href !== undefined ? { href } : {}) };
 }
+
+/** Resolved built-in lifecycle and placement repair; authored content is not part of this write. */
+export interface NoteBuiltInRepairWrite {
+	readonly noteId: NoteId;
+	readonly builtInKey: string;
+	readonly projectId: ProjectId;
+	readonly parentId: NoteId | undefined;
+	readonly position: number;
+	readonly kind: 'skill';
+	readonly archivedAt: null;
+	readonly updatedAt: DateTime;
+}

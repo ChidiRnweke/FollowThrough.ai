@@ -50,6 +50,11 @@ const setupLegacyFollowThrough = async () => {
 	state.notes.notes = state.notes.notes.map((candidate) =>
 		candidate.id === storedNote.id ? storedNote : candidate
 	);
+	state.notes.revisions = state.notes.revisions.map((revision) =>
+		revision.noteId === storedNote.id
+			? { ...revision, document: storedNote.document, plainText: storedNote.plainText }
+			: revision
+	);
 	state.skills.skills = state.skills.skills.map((skill) =>
 		skill.note.id === note.id
 			? {
@@ -166,7 +171,12 @@ describe('Built-in skill provisioning invariants', () => {
 		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
 		const edited = {
 			...current,
+			document: parseProseMirrorDocument({
+				type: 'doc',
+				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'My preferred workflow' }] }]
+			}),
 			plainText: 'My preferred workflow',
+			currentRevision: 2,
 			publishedRevision: 1,
 			publishedAt: current.updatedAt
 		};
@@ -183,7 +193,15 @@ describe('Built-in skill provisioning invariants', () => {
 	it('does not overwrite edited stock FollowThrough instructions', async () => {
 		const { provisioner, notes, skills } = await setupLegacyFollowThrough();
 		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
-		const edited = { ...current, plainText: 'My preferred workflow', currentRevision: 2 };
+		const edited = {
+			...current,
+			document: parseProseMirrorDocument({
+				type: 'doc',
+				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'My preferred workflow' }] }]
+			}),
+			plainText: 'My preferred workflow',
+			currentRevision: 2
+		};
 		notes.notes = notes.notes.map((note) => (note.id === edited.id ? edited : note));
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === edited.id ? { ...skill, note: edited } : skill
@@ -191,6 +209,27 @@ describe('Built-in skill provisioning invariants', () => {
 		await provisioner.ensure(testActor());
 		expect(notes.notes.find((note) => note.id === edited.id)?.plainText).toBe(
 			'My preferred workflow'
+		);
+	});
+
+	it('preserves a formatting edit even when the stock guide plain text is unchanged', async () => {
+		const { provisioner, notes } = await setupLegacyFollowThrough();
+		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
+		const document = parseProseMirrorDocument({
+			type: 'doc',
+			content: [
+				{
+					type: 'paragraph',
+					content: [{ type: 'text', text: legacyInstructions, marks: [{ type: 'bold' }] }]
+				}
+			]
+		});
+		notes.notes = notes.notes.map((note) =>
+			note.id === current.id ? { ...note, document, currentRevision: 2 } : note
+		);
+		await provisioner.ensure(testActor());
+		expect((await notes.findByBuiltInKey(testActor(), 'followthrough'))?.document).toEqual(
+			document
 		);
 	});
 
@@ -238,10 +277,23 @@ describe('Built-in skill provisioning invariants', () => {
 		const stale = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
 		const staleNote = {
 			...stale.note,
-			document: parseProseMirrorDocument(stale.note.document),
+			document: parseProseMirrorDocument({
+				type: 'doc',
+				content: [
+					{
+						type: 'paragraph',
+						content: [{ type: 'text', text: RETIRED_BUILT_INS[1]!.instructions }]
+					}
+				]
+			}),
 			plainText: RETIRED_BUILT_INS[1]!.instructions
 		};
 		notes.notes = notes.notes.map((note) => (note.id === staleNote.id ? staleNote : note));
+		notes.revisions = notes.revisions.map((revision) =>
+			revision.noteId === staleNote.id
+				? { ...revision, document: staleNote.document, plainText: staleNote.plainText }
+				: revision
+		);
 		skills.skills = skills.skills.map((skill) =>
 			skill.note.id === staleNote.id
 				? {
