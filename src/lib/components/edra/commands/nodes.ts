@@ -44,7 +44,6 @@ declare module '@tiptap/core' {
 		mermaid: { setMermaid: (source: string) => ReturnType };
 		drawio: { setDrawio: (diagramReference: string) => ReturnType };
 		callout: { setCallout: () => ReturnType };
-		todoNode: { insertTodoNode: (attributes: { todoId: string }) => ReturnType };
 	}
 }
 
@@ -354,15 +353,7 @@ export const TodoNodeBase = Node.create({
 	renderHTML({ HTMLAttributes }) {
 		return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'todo-node' })];
 	},
-	...createAtomBlockMarkdownSpec({ nodeName: 'todoNode', allowedAttributes: ['todoId'] }),
-	addCommands() {
-		return {
-			insertTodoNode:
-				(attributes) =>
-				({ commands }) =>
-					commands.insertContent({ type: this.name, attrs: attributes })
-		};
-	}
+	...createAtomBlockMarkdownSpec({ nodeName: 'todoNode', allowedAttributes: ['todoId'] })
 });
 
 export const CalloutNode = Node.create({

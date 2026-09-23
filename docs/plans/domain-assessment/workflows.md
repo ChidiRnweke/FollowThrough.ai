@@ -144,10 +144,10 @@ from [the execution plan](../domain-assessment-plan.md).
 - [x] W09.07 Discover and reuse categories. [Current callers, values and retained evidence](task-reads.md); implementation remains on the open stack.
 - [x] W09.08 Delete tasks. [Current command disposition](task-commands.md); implementation remains on the open stack.
 - [x] W09.09 List, filter, sort, and count tasks. [Ownership and boundary disposition](task-reads.md); implementation remains on the open stack.
-- [ ] W09.10 View tasks as a board or table.
-- [ ] W09.11 Move tasks between board statuses.
-- [ ] W09.12 Open details and return to the originating view.
-- [ ] W09.13 Display and update tasks embedded in notes.
+- [x] W09.10 View tasks as a board or table. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
+- [x] W09.11 Move tasks between board statuses. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
+- [x] W09.12 Open details and return to the originating view. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
+- [x] W09.13 Display and update tasks embedded in notes. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
 - [ ] W09.14 Extract commitments from selected passages.
 - [ ] W09.15 Preserve task provenance through source changes.
 - [ ] W09.16 Attach screenshots to descriptions.
