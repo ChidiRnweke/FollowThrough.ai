@@ -39,6 +39,12 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #201](https://github.com/ChidiRnweke/FollowThrough.ai/pull/201) gives prepared edits one
+candidate note and records [skill value dispositions](skill-values.md). Focused regressions passed
+14 files and 84 tests; the full local unit suite passed 438 files and 4,066 tests. All required checks
+passed, including [PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35907346172).
+The next slice reviews [catalog name transactions](skill-name-transactions.md).
+
 [PR #200](https://github.com/ChidiRnweke/FollowThrough.ai/pull/200) resolves
 [skill pin scope and transaction ownership](skill-pins.md). Focused regressions passed 22 files
 and 152 tests; the full local unit suite passed 438 files and 4,066 tests. All required checks passed,
