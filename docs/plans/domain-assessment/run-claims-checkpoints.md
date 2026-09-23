@@ -28,5 +28,6 @@ cover approval reviews, event visibility, tool history, competing execution and 
 PostgreSQL contracts add checkpoint rollback when approval publication fails and cancellation by
 another execution before checkpoint publication. The PR records observed validation results.
 
-RunSettlements still uses the generic transition interface. Its terminal writes, model lifecycle
-helpers and remaining P17 workflows require separate review. This is not an assessment completion.
+The subsequent [terminal-settlement disposition](run-terminal-settlement.md) removes the remaining
+generic transitions and model lifecycle helpers. Other P17 workflows still require review. This is
+not an assessment completion.

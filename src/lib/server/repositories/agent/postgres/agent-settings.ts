@@ -5,7 +5,7 @@ import type {
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
-	AgentRunStatus,
+	RunSettlementWrite,
 	RunCancellationWrite,
 	RunApprovalWrite,
 	WorkflowContextWrite,
@@ -21,12 +21,7 @@ import type {
 	ResolvedAgentRun,
 	WorkflowAgentRun
 } from '$lib/models/agent';
-import {
-	assertAgentRunTransition,
-	parseSessionItem,
-	workflowRunContextSchema,
-	toStoredSessionItem
-} from '$lib/models/agent';
+import { parseSessionItem, workflowRunContextSchema, toStoredSessionItem } from '$lib/models/agent';
 import {
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
@@ -460,13 +455,17 @@ export class AgentRunRecords implements AgentRunRepository {
 		};
 	}
 
-	async transition(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<AgentRun> = {}
-	): Promise<AgentRun | undefined> {
-		const row = await this.transitionRow(runId, from, to, patch);
+	async settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined> {
+		const { expected, ...values } = change;
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				...values,
+				finishedAt: new Date(change.finishedAt),
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.status, expected)))
+			.returning();
 		return row ? toRun(row) : undefined;
 	}
 
@@ -527,51 +526,6 @@ export class AgentRunRecords implements AgentRunRepository {
 			)
 			.returning();
 		return row ? toResolvedRun(row) : undefined;
-	}
-
-	private async transitionRow(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<AgentRun> = {},
-		kind?: AgentRun['kind']
-	): Promise<typeof schema.agentRuns.$inferSelect | undefined> {
-		const fromStatuses = Array.isArray(from) ? from : [from];
-		for (const status of fromStatuses) assertAgentRunTransition(status, to);
-		const now = new Date();
-		const [row] = await this.database
-			.update(schema.agentRuns)
-			.set({
-				status: to,
-				...(patch.cancelRequestedAt
-					? { cancelRequestedAt: new Date(patch.cancelRequestedAt) }
-					: {}),
-				...(patch.startedAt ? { startedAt: new Date(patch.startedAt) } : {}),
-				...(patch.finishedAt ? { finishedAt: new Date(patch.finishedAt) } : {}),
-				...(patch.provenanceId !== undefined ? { provenanceId: patch.provenanceId ?? null } : {}),
-				...(patch.serializedState !== undefined
-					? { serializedState: patch.serializedState ?? null }
-					: {}),
-				...(patch.traceparent !== undefined ? { traceparent: patch.traceparent ?? null } : {}),
-				...(patch.pendingDecisions !== undefined
-					? { pendingDecisions: patch.pendingDecisions }
-					: {}),
-				...(patch.failure !== undefined ? { failure: patch.failure ?? null } : {}),
-				...(patch.providerErrorCode !== undefined
-					? { providerErrorCode: patch.providerErrorCode ?? null }
-					: {}),
-				...(patch.contextSnapshot ? { contextSnapshot: { ...patch.contextSnapshot } } : {}),
-				updatedAt: now
-			})
-			.where(
-				and(
-					eq(schema.agentRuns.id, runId),
-					inArray(schema.agentRuns.status, fromStatuses as [AgentRunStatus, ...AgentRunStatus[]]),
-					...(kind ? [eq(schema.agentRuns.kind, kind)] : [])
-				)
-			)
-			.returning();
-		return row;
 	}
 
 	async listQueuedAgents(): Promise<readonly ResolvedAgentRun[]> {

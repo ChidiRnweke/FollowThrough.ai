@@ -1,4 +1,5 @@
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { describe, expect, it } from 'vitest';
@@ -36,6 +37,7 @@ const setup = async (suffix: string) => {
 	const runs = new AgentRunRecords(transaction.database);
 	const events = new AgentRunEventRecords(transaction.database);
 	const sessions = new AgentSessionRecords(transaction.database);
+	const decisions = new AgentRunDecisionRecords(transaction.database);
 	const provenance = await seedProvenance(owner, suffix);
 	const run = await runs.insert(owner, {
 		kind: 'agent',
@@ -64,7 +66,7 @@ const setup = async (suffix: string) => {
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,
-			decisions: new AgentRunDecisionRecords(transaction.database),
+			decisions,
 			settlements: new RunSettlements(runs, events),
 			conversationJournal: new ConversationArchive(conversations),
 			runner,
@@ -80,11 +82,70 @@ const setup = async (suffix: string) => {
 		runner,
 		controller,
 		conversations,
+		decisions,
 		transactionRunner: transaction.transactionRunner
 	};
 };
 
 describe('atomic execution settlement', () => {
+	it('does not complete a queued run before execution claims it', async () => {
+		const { owner, runs, events, run } = await setup('17802');
+		const claim = await new RunSettlements(runs, events).claim(run.id, {
+			kind: 'completed',
+			conversationId: run.conversationId,
+			model: run.model
+		});
+		expect({ claim, status: (await runs.findById(owner, run.id))?.status }).toEqual({
+			claim: { kind: 'lost' },
+			status: 'queued'
+		});
+	});
+
+	it('clears the provider checkpoint after an approved run resumes and completes', async () => {
+		const { owner, runs, run, runner, controller, transactionRunner, decisions } =
+			await setup('17801');
+		runner.events = [];
+		runner.outcome = {
+			type: 'approval_checkpoint',
+			serializedState: 'provider-checkpoint',
+			pendingDecisions: [
+				{ callId: 'create-1', toolName: 'create_note', arguments: { title: 'Draft' } }
+			],
+			sessionItems: []
+		};
+		await controller.execute(run.id, new AbortController().signal);
+		await transactionRunner.run(async () => {
+			const approvals = new RunApprovals(runs);
+			const current = await approvals.getForWrite(owner, run.id);
+			const change = approvals.plan(current, ['create-1'], now);
+			if (!change) throw new Error('Expected a reviewed checkpoint');
+			await decisions.record(owner, {
+				runId: run.id,
+				callId: 'create-1',
+				decision: 'approve'
+			});
+			await approvals.persist(owner, run.id, change);
+		});
+		runner.outcome = { type: 'completed', sessionItems: [] };
+		await controller.execute(run.id, new AbortController().signal);
+		const saved = await runs.findById(owner, run.id);
+		const [row] =
+			await context.client`select serialized_state from agent_runs where id = ${run.id}`;
+		expect({
+			status: saved?.status,
+			checkpoint: saved?.serializedState,
+			stored: row.serialized_state,
+			pending: saved?.pendingDecisions,
+			timestampsMatch: saved?.finishedAt === saved?.updatedAt
+		}).toEqual({
+			status: 'completed',
+			checkpoint: undefined,
+			stored: null,
+			pending: [],
+			timestampsMatch: true
+		});
+	});
+
 	it('does not publish a checkpoint after another execution cancels the run', async () => {
 		const { owner, runs, events, sessions, run, runner, controller } = await setup('17701');
 		runner.events = [];

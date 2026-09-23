@@ -8,7 +8,7 @@ import type {
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
-	AgentRunStatus,
+	RunSettlementWrite,
 	RunCancellationWrite,
 	RunApprovalWrite,
 	WorkflowContextWrite,
@@ -22,10 +22,8 @@ import type {
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import type { DateTime } from '$lib/models/workspace';
 import type { OutputSegment } from '$lib/server/repositories/agent';
 import { segmentOutput } from '$lib/server/repositories/agent';
-import { agentRunContextSchema, assertAgentRunTransition } from '$lib/models/agent';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -124,43 +122,24 @@ export class InMemoryAgentRunPersistence
 		return owned;
 	}
 
-	async transition(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<AgentRun> = {}
-	): Promise<AgentRun | undefined> {
-		const fromStatuses = Array.isArray(from) ? from : [from];
-		// Every offered predecessor is checked, not just the one the run happens to
-		// be in, matching the database repository: a caller that names an illegal
-		// `from` must fail here too, whatever the row currently says.
-		for (const status of fromStatuses) assertAgentRunTransition(status, to);
+	async settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined> {
 		const run = this.runs.find(
-			(r) => r.id === runId && (fromStatuses as string[]).includes(r.status)
+			(candidate) => candidate.id === runId && candidate.status === change.expected
 		);
 		if (!run) return undefined;
-		const { kind: _kind, inputSnapshot: _inputSnapshot, contextSnapshot, ...statePatch } = patch;
+		const { expected: _expected, ...values } = change;
+		void _expected;
 		const updated: AgentRun =
-			run.kind === 'agent'
+			change.status === 'completed'
 				? {
 						...run,
-						...statePatch,
-						...(contextSnapshot === undefined
-							? {}
-							: { contextSnapshot: agentRunContextSchema.parse(contextSnapshot) }),
-						kind: 'agent',
-						status: to,
-						updatedAt: new Date().toISOString() as DateTime
+						status: change.status,
+						finishedAt: change.finishedAt,
+						updatedAt: change.updatedAt,
+						serializedState: undefined,
+						pendingDecisions: change.pendingDecisions
 					}
-				: {
-						...run,
-						...statePatch,
-						kind: 'workflow',
-						status: to,
-						updatedAt: new Date().toISOString() as DateTime
-					};
-		void _kind;
-		void _inputSnapshot;
+				: { ...run, ...values, serializedState: run.serializedState };
 		this.replace(updated);
 		return updated;
 	}

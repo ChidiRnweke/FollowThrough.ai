@@ -1,3 +1,4 @@
+import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
 import type { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import {
 	RunPreparationCancelled,
@@ -33,7 +34,7 @@ import type {
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { allImages, isTerminalAgentRunStatus } from '$lib/models/agent';
+import { allImages } from '$lib/models/agent';
 import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
@@ -124,6 +125,12 @@ export interface AgentController {
 	 * @throws NotFoundError if no run exists for `runId`.
 	 */
 	getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	/** Close event delivery only after a terminal run's durable tail has been delivered. */
+	isRunStreamComplete(
+		actor: ActorContext,
+		runId: AgentRunId,
+		deliveredCursor: string
+	): Promise<boolean>;
 	/**
 	 * Replay events for a run after the given cursor, for a client that polls the event
 	 * stream while a run executes. The cursor is the opaque continuation returned by the
@@ -402,6 +409,16 @@ export class Agent implements AgentController {
 		const run = await this.dependencies.runs.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return this.snapshot(actor, run);
+	}
+
+	async isRunStreamComplete(
+		actor: ActorContext,
+		runId: AgentRunId,
+		deliveredCursor: string
+	): Promise<boolean> {
+		const run = await this.requireRun(actor, runId);
+		const latestCursor = await this.dependencies.events.latestCursor(actor, runId);
+		return isRunEventStreamComplete(run.status, deliveredCursor, latestCursor);
 	}
 
 	/**

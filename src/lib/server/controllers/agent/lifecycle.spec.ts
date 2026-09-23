@@ -296,7 +296,7 @@ describe('a cancellation that races the end of a run', () => {
 describe('finishing a cancellation out of band', () => {
 	it('settles a run parked in cancelling', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await runs.transition(testRunId, 'queued', 'running');
+		await new RunPreparation(runs).claim(testRunId, testTime);
 		await requestCancellation(runs);
 		await lifecycle.finishCancellation(testRunId);
 		expect(currentRun(runs).status).toBe('cancelled');
@@ -304,23 +304,31 @@ describe('finishing a cancellation out of band', () => {
 
 	it('leaves a run that already settled alone', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await runs.transition(testRunId, 'queued', 'running');
-		await runs.transition(testRunId, 'running', 'completed');
+		await new RunPreparation(runs).claim(testRunId, testTime);
+		await new RunSettlements(runs, runs).claim(testRunId, {
+			kind: 'completed',
+			conversationId: testConversationId,
+			model: currentRun(runs).model
+		});
 		await lifecycle.finishCancellation(testRunId);
 		expect(currentRun(runs).status).toBe('completed');
 	});
 
 	it('appends no orphan event for a run that already settled', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await runs.transition(testRunId, 'queued', 'running');
-		await runs.transition(testRunId, 'running', 'completed');
+		await new RunPreparation(runs).claim(testRunId, testTime);
+		await new RunSettlements(runs, runs).claim(testRunId, {
+			kind: 'completed',
+			conversationId: testConversationId,
+			model: currentRun(runs).model
+		});
 		await lifecycle.finishCancellation(testRunId);
 		expect(runs.events.some((record) => record.event.type === 'cancelled')).toBe(false);
 	});
 
 	it('appends exactly one cancelled event when two settlers race', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
-		await runs.transition(testRunId, 'queued', 'running');
+		await new RunPreparation(runs).claim(testRunId, testTime);
 		await requestCancellation(runs);
 		await Promise.all([
 			lifecycle.finishCancellation(testRunId),
@@ -420,7 +428,7 @@ describe('settling a run whose execution threw', () => {
 	it('cancels rather than fails a run the user asked to stop', async () => {
 		const error = new Error('Stream ended oddly');
 		const { lifecycle, runs } = setup(throwingRunner(error));
-		await runs.transition(testRunId, 'queued', 'running');
+		await new RunPreparation(runs).claim(testRunId, testTime);
 		await requestCancellation(runs);
 		await lifecycle.failRun(testRunId, error);
 		expect(currentRun(runs).status).toBe('cancelled');
@@ -429,8 +437,12 @@ describe('settling a run whose execution threw', () => {
 	it('leaves a run that already completed alone', async () => {
 		const error = new Error('Late failure');
 		const { lifecycle, runs } = setup(throwingRunner(error));
-		await runs.transition(testRunId, 'queued', 'running');
-		await runs.transition(testRunId, 'running', 'completed');
+		await new RunPreparation(runs).claim(testRunId, testTime);
+		await new RunSettlements(runs, runs).claim(testRunId, {
+			kind: 'completed',
+			conversationId: testConversationId,
+			model: currentRun(runs).model
+		});
 		await lifecycle.failRun(testRunId, error);
 		expect(currentRun(runs).status).toBe('completed');
 	});
@@ -448,7 +460,7 @@ describe('settling a run whose execution threw', () => {
 				{ callId: 'call-parked', toolName: 'update_agent_preferences', arguments: {} }
 			]
 		});
-		await context.runs.transition(testRunId, 'queued', 'running');
+		await new RunPreparation(context.runs).claim(testRunId, testTime);
 		await context.lifecycle.failRun(
 			testRunId,
 			error instanceof Error ? error : new Error(String(error))

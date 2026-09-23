@@ -148,6 +148,7 @@ export const controllerSurfaces = {
 		submit: true,
 		getRun: true,
 		listRunEvents: true,
+		isRunStreamComplete: true,
 		decide: true,
 		decideMany: true,
 		cancel: true,

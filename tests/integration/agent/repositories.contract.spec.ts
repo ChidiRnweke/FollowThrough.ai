@@ -1,3 +1,6 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
@@ -331,9 +334,13 @@ describe('Postgres durable agent run repository invariants', () => {
 			sql`update agent_run_events set event = '{"type":"future_completion"}'::jsonb where cursor = ${terminal.cursor}`
 		);
 		const runs = new AgentRunRecords(context.db);
-		await runs.transition(run.id, 'queued', 'running');
-		await runs.transition(run.id, 'running', 'completed');
-		const controller = new Agent(capabilityDependencies<AgentDependencies>({ events }));
+		await new RunPreparation(runs).claim(run.id, now);
+		await new RunSettlements(runs, events).claim(run.id, {
+			kind: 'completed',
+			conversationId: run.conversationId,
+			model: run.model
+		});
+		const controller = new Agent(capabilityDependencies<AgentDependencies>({ events, runs }));
 		const replay = await controller.listRunEvents(owner, run.id, '0');
 		const tail = replay.at(-1);
 		if (!tail) throw new Error('Replay dropped its terminal cursor');
@@ -341,8 +348,28 @@ describe('Postgres durable agent run repository invariants', () => {
 			kind: tail.kind,
 			cursor: tail.cursor,
 			latest: await events.latestCursor(owner, run.id),
-			next: await controller.listRunEvents(owner, run.id, tail.cursor)
-		}).toEqual({ kind: 'unreadable', cursor: terminal.cursor, latest: terminal.cursor, next: [] });
+			next: await controller.listRunEvents(owner, run.id, tail.cursor),
+			complete: await controller.isRunStreamComplete(owner, run.id, tail.cursor)
+		}).toEqual({
+			kind: 'unreadable',
+			cursor: terminal.cursor,
+			latest: terminal.cursor,
+			next: [],
+			complete: true
+		});
+	});
+
+	it('does not expose another actor’s run through event-stream completion', async () => {
+		const run = await seedQueuedRun('17803');
+		const controller = new Agent(
+			capabilityDependencies<AgentDependencies>({
+				runs: new AgentRunRecords(context.db),
+				events: new AgentRunEventRecords(context.db)
+			})
+		);
+		await expect(controller.isRunStreamComplete(actor('17804'), run.id, '0')).rejects.toThrow(
+			'not found'
+		);
 	});
 
 	it('preserves a reviewed note change in PostgreSQL checkpoints and event replay', async () => {
@@ -356,11 +383,12 @@ describe('Postgres durable agent run repository invariants', () => {
 			review
 		};
 		const runs = new AgentRunRecords(context.db);
-		await runs.transition(run.id, 'queued', 'running');
-		await runs.transition(run.id, 'running', 'awaiting_approval', {
-			serializedState: 'checkpoint',
-			pendingDecisions: [pending]
-		});
+		await new RunPreparation(runs).claim(run.id, now);
+		const checkpoints = new RunCheckpoints(runs);
+		await checkpoints.persist(
+			run.id,
+			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [pending] }, now)
+		);
 		const events = new AgentRunEventRecords(context.db);
 		await events.append(run.id, 1, {
 			type: 'approval_required',
@@ -440,11 +468,12 @@ describe('Postgres durable agent run repository invariants', () => {
 			toolName: 'archive_note' as const,
 			arguments: { noteId: '40000000-0000-4000-8000-000000000103' }
 		};
-		await runs.transition(run.id, 'queued', 'running');
-		await runs.transition(run.id, 'running', 'awaiting_approval', {
-			serializedState: 'checkpoint',
-			pendingDecisions: [parked]
-		});
+		await new RunPreparation(runs).claim(run.id, now);
+		const checkpoints = new RunCheckpoints(runs);
+		await checkpoints.persist(
+			run.id,
+			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [parked] }, now)
+		);
 		const reread = await runs.findById(actor('103'), run.id);
 		expect(reread?.pendingDecisions).toEqual([parked]);
 	});

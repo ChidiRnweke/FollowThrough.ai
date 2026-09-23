@@ -78,15 +78,23 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #177](https://github.com/ChidiRnweke/FollowThrough.ai/pull/177) passed all required checks,
+including [quality, unit/browser, PostgreSQL checkpoint contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35873158609).
+It remains open on the dependent stack.
+
+The [terminal-settlement disposition](run-terminal-settlement.md) replaces the remaining generic
+transition API and fixes PostgreSQL checkpoint clearing. Event-output reconstruction and the wider
+P17 workflow/declaration review remain unresolved.
+
 The [claim/checkpoint disposition](run-claims-checkpoints.md) records explicit write ownership and
-atomic approval publication. Terminal settlement still uses the generic transition API.
+atomic approval publication. The terminal-settlement slice completes that API replacement.
 
 [PR #176](https://github.com/ChidiRnweke/FollowThrough.ai/pull/176) passed all required checks,
 including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35871771564).
 It remains open on the dependent stack.
 
 The [pending-call cleanup disposition](run-pending-cleanup.md) records corrected terminal snapshots,
-queued-checkpoint cleanup and removal of whole-run replacement. Generic transitions remain unresolved.
+queued-checkpoint cleanup and removal of whole-run replacement.
 
 [PR #175](https://github.com/ChidiRnweke/FollowThrough.ai/pull/175) passed all required checks in
 [CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35870333337), including PostgreSQL
@@ -95,7 +103,7 @@ browser file passed all 13 tests locally, and the failed job passed on retry. Th
 
 The [chat-preparation disposition](agent-preparation.md) records targeted locked writes, atomic
 context/start events and cancellation without a local abort signal. The subsequent cleanup slice
-covers pending-call abandonment; generic run transitions remain unresolved.
+covers pending-call abandonment.
 
 [PR #174](https://github.com/ChidiRnweke/FollowThrough.ai/pull/174) passed all required checks,
 including [quality, full browser/unit tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35868931988).

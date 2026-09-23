@@ -2,43 +2,11 @@ type AgentRunStatus =
 	'queued' | 'running' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
 type AgentRunId = string & { readonly __brand: 'AgentRunId' };
 
-class InvalidAgentRunTransition extends Error {
-	readonly code = 'INVALID_TRANSITION';
-}
-
-const transitions: Readonly<Record<AgentRunStatus, readonly AgentRunStatus[]>> = {
-	queued: ['running', 'cancelled'],
-	running: ['awaiting_approval', 'queued', 'cancelling', 'completed', 'failed'],
-	awaiting_approval: ['queued', 'cancelling'],
-	cancelling: ['cancelled'],
-	completed: [],
-	failed: [],
-	cancelled: []
-};
-
 export const terminalAgentRunStatuses: readonly AgentRunStatus[] = [
 	'completed',
 	'failed',
 	'cancelled'
 ];
-
-export const nonTerminalAgentRunStatuses: readonly AgentRunStatus[] = [
-	'queued',
-	'running',
-	'awaiting_approval',
-	'cancelling'
-];
-
-export const isTerminalAgentRunStatus = (status: AgentRunStatus): boolean =>
-	terminalAgentRunStatuses.includes(status);
-
-export const canTransitionAgentRun = (from: AgentRunStatus, to: AgentRunStatus): boolean =>
-	transitions[from].includes(to);
-
-export function assertAgentRunTransition(from: AgentRunStatus, to: AgentRunStatus): void {
-	if (!canTransitionAgentRun(from, to))
-		throw new InvalidAgentRunTransition(`Agent run cannot transition from ${from} to ${to}`);
-}
 
 export interface AgentRunDecisionRecord {
 	readonly runId: AgentRunId;

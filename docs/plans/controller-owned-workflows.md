@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Terminal run settlement: RunSettlements supplies resolved outcome writes with correlated expected
+states. Completion clears provider checkpoints explicitly. Generic run transitions are removed.
+See the [disposition](domain-assessment/run-terminal-settlement.md).
+
 Run claims and approval checkpoints: owning services supply resolved writes; repositories enforce
 the run kind and expected state. Agent commits checkpoints with sessions and approval publication.
 See the [disposition](domain-assessment/run-claims-checkpoints.md).
