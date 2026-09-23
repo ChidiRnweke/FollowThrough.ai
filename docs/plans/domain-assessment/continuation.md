@@ -53,7 +53,8 @@ The [task suggestion date boundary](suggestion-dates.md) rejects malformed store
 without making neighboring valid proposals unreadable. Five mapper regressions failed before the
 fix. Focused regressions passed ten files and 62 tests; the full local unit suite passed 445 files
 and 4,113 tests. Lint, final type checks, architecture audits and documentation checks passed. Required
-CI is pending. Suggestion workflow reconciliation and the wider assessment remain open.
+CI results are tracked on [PR #218](https://github.com/ChidiRnweke/FollowThrough.ai/pull/218).
+Suggestion workflow reconciliation and the wider assessment remain open.
 
 [PR #216](https://github.com/ChidiRnweke/FollowThrough.ai/pull/216) checks task availability before
 screenshot completion and listing. All required checks passed, including
