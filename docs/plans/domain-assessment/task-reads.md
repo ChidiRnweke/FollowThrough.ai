@@ -39,7 +39,8 @@ The unused due/source service contracts are retired as recorded in [the model re
 
 ## Remaining task coverage
 
-Creation, edits, extraction and export have implementation evidence in the continuation register,
-but their workflow checkboxes still require their own complete reconciliation. Detail-route and
-embedded-task visibility after project archival need further current-source verification. The
-workflow ledger is not bulk-checked based on this read review or the namespace declaration review.
+Creation and edits are reconciled in [the command review](task-commands.md), task surfaces in
+[the surface review](task-surfaces.md), extraction/source changes in [the origin review](task-origins.md)
+and exports in [the export review](task-exports.md). The archived-project detail defect is fixed in
+the open stack. Screenshot completion (W09.16) still needs its own disposition. These workflow
+decisions do not follow merely from this read review or the namespace declaration review.
