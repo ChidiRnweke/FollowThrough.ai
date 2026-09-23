@@ -1,3 +1,4 @@
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
@@ -46,6 +47,7 @@ export const diagramGenerationFixture = () => {
 		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
 		models,
 		runs: new AgentRunLedger(persistence),
+		runContext: new DiagramRunContext(persistence),
 		provenance,
 		builtInSkills: skills.builtInSkills,
 		defaultModel: 'test/model',

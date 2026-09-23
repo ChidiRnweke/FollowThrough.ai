@@ -1,3 +1,4 @@
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -32,6 +33,7 @@ const setup = async (suffix: string) => {
 				contextNotes: notes.catalog,
 				conversations: new ConversationArchive(new ConversationRecords(database)),
 				runs: new AgentRunLedger(new AgentRunRecords(database)),
+				runContext: new DiagramRunContext(new AgentRunRecords(database)),
 				provenance: notes.provenance
 			},
 			transactionRunner,

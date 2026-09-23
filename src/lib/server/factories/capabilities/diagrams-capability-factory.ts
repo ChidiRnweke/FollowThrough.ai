@@ -1,3 +1,5 @@
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import type { Database } from '$lib/server/db';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteRepository } from '$lib/server/repositories/notes';
@@ -106,6 +108,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			preferences: input.preferences,
 			models: input.models,
 			runs: input.runs,
+			runContext: new DiagramRunContext(new AgentRunRecords(input.db)),
 			provenance: input.provenance,
 			builtInSkills: input.builtInSkills,
 			defaultModel: input.defaultModel,
