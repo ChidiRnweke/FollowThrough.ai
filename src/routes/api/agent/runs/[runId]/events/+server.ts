@@ -1,5 +1,4 @@
 import type { AgentRunId } from '$lib/models/agent';
-import { isTerminalAgentRunStatus } from '$lib/models/agent';
 import { agentRunCursorSchema } from '$lib/models/agent';
 import { error } from '@sveltejs/kit';
 import { AppFactory } from '$lib/server/factories/app-factory';
@@ -75,11 +74,7 @@ export const GET: RequestHandler = async ({ params, request, url, locals }) => {
 							}
 							cursor = record.cursor;
 						}
-						const snapshot = await agent.getRun(actor, runId);
-						if (
-							isTerminalAgentRunStatus(snapshot.run.status) &&
-							BigInt(cursor) >= BigInt(snapshot.latestCursor)
-						) {
+						if (await agent.isRunStreamComplete(actor, runId, cursor)) {
 							close();
 							return;
 						}

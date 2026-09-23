@@ -20,7 +20,7 @@ export class RunSettlements implements RunSettlement {
 	) {}
 	async claim(runId: AgentRunId, outcome: RunSettlementOutcome): Promise<RunSettlementClaim> {
 		const plan = this.plan(runId, outcome, new Date().toISOString() as DateTime);
-		const run = await this.runs.transition(runId, plan.expected, plan.status, plan.patch);
+		const run = await this.runs.settle(runId, plan.change);
 		return run ? { kind: 'claimed', run, events: plan.events } : { kind: 'lost' };
 	}
 	async complete(
@@ -40,9 +40,14 @@ export class RunSettlements implements RunSettlement {
 			case 'completed':
 			case 'workflow_completed':
 				return {
-					expected: 'running',
-					status: 'completed',
-					patch: { finishedAt, serializedState: undefined, pendingDecisions: [] },
+					change: {
+						expected: 'running',
+						status: 'completed',
+						finishedAt,
+						updatedAt: finishedAt,
+						serializedState: null,
+						pendingDecisions: []
+					},
 					events: [
 						...(outcome.kind === 'workflow_completed'
 							? [
@@ -63,16 +68,25 @@ export class RunSettlements implements RunSettlement {
 				};
 			case 'cancelled':
 				return {
-					expected: 'cancelling',
-					status: 'cancelled',
-					patch: { finishedAt, failure: 'The request was cancelled' },
+					change: {
+						expected: 'cancelling',
+						status: 'cancelled',
+						finishedAt,
+						updatedAt: finishedAt,
+						failure: 'The request was cancelled'
+					},
 					events: [{ type: 'cancelled', runId, message: outcome.message }]
 				};
 			case 'failed':
 				return {
-					expected: 'running',
-					status: 'failed',
-					patch: { finishedAt, failure: outcome.message, providerErrorCode: outcome.code },
+					change: {
+						expected: 'running',
+						status: 'failed',
+						finishedAt,
+						updatedAt: finishedAt,
+						failure: outcome.message,
+						providerErrorCode: outcome.code
+					},
 					events: [
 						{
 							type: 'failed',

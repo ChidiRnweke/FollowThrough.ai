@@ -1913,10 +1913,26 @@ export type RunSettlementOutcome =
 	  };
 export type RunSettlementResult =
 	{ readonly kind: 'settled'; readonly run: AgentRun } | { readonly kind: 'lost' };
+export type RunSettlementWrite = {
+	readonly finishedAt: DateTime;
+	readonly updatedAt: DateTime;
+} & (
+	| {
+			readonly expected: 'running';
+			readonly status: 'completed';
+			readonly serializedState: null;
+			readonly pendingDecisions: readonly [];
+	  }
+	| { readonly expected: 'cancelling'; readonly status: 'cancelled'; readonly failure: string }
+	| {
+			readonly expected: 'running';
+			readonly status: 'failed';
+			readonly failure: string;
+			readonly providerErrorCode: string;
+	  }
+);
 export interface RunSettlementPlan {
-	readonly expected: 'running' | 'cancelling';
-	readonly status: 'completed' | 'cancelled' | 'failed';
-	readonly patch: Partial<AgentRun>;
+	readonly change: RunSettlementWrite;
 	readonly events: readonly AgentEvent[];
 }
 export type RunSettlementClaim =

@@ -1,5 +1,6 @@
+import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isTerminalAgentRunStatus, type PendingAgentDecision } from '$lib/models/agent';
+import { type PendingAgentDecision } from '$lib/models/agent';
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
 import type { AgentRunId, ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
