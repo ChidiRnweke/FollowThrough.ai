@@ -1,6 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
-import type { SourceAnchor } from '$lib/models/provenance';
 export interface TodoCreator {
 	create(actor: ActorContext, todo: Todo): Promise<Todo>;
 }
@@ -20,14 +19,8 @@ export interface TodoEditor {
 export interface TodoDeleter {
 	softDelete(actor: ActorContext, todoId: TodoId): Promise<void>;
 }
-export interface DueTodoFinder {
-	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]>;
-}
 export interface WaitingOnFinder {
 	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]>;
-}
-export interface TodoSourceFinder {
-	findSource(actor: ActorContext, todoId: TodoId): Promise<SourceAnchor>;
 }
 export interface TodoLister {
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
