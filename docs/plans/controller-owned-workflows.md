@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Diagram run context: Diagrams owns the short write transaction. DiagramRunContext resolves prepared
+context from the locked running workflow; persistence touches no lifecycle fields. See the
+[disposition](domain-assessment/diagram-run-context.md).
+
 Run approvals: Agent locks the authoritative run before validating a batch, recording decisions,
 persisting a resolved requeue and appending its event. RunApprovals owns the pending-call and state
 rules. See the [disposition](domain-assessment/run-approvals.md).
