@@ -2,20 +2,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import TodoCard from './todo-card.svelte';
 import type { Todo, TodoView } from '$lib/models/todos';
+import { todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const id = '00000000-0000-4000-8000-000000000001' as Todo['id'];
 
-const todo = (overrides: Partial<Todo> = {}): Todo => ({
-	id,
-	userId: '10000000-0000-4000-8000-000000000001' as Todo['userId'],
-	projectId: '20000000-0000-4000-8000-000000000001' as Todo['projectId'],
-	title: 'Ship the manifest',
-	status: 'open',
-	responsibility: 'mine',
-	createdAt: '2026-07-12T08:00:00.000Z' as Todo['createdAt'],
-	updatedAt: '2026-07-12T08:00:00.000Z' as Todo['updatedAt'],
-	...overrides
-});
+const todo = (overrides: Partial<Todo> = {}): Todo =>
+	todoBuilder({
+		id,
+		userId: '10000000-0000-4000-8000-000000000001' as Todo['userId'],
+		projectId: '20000000-0000-4000-8000-000000000001' as Todo['projectId'],
+		title: 'Ship the manifest',
+		responsibility: 'mine',
+		createdAt: '2026-07-12T08:00:00.000Z' as Todo['createdAt'],
+		updatedAt: '2026-07-12T08:00:00.000Z' as Todo['updatedAt'],
+		...overrides
+	});
 
 const view = (overrides: Partial<TodoView> = {}): TodoView => ({
 	todo: todo(),
