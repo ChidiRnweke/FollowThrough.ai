@@ -54,7 +54,7 @@ const setup = () => {
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: { index: async () => ({ kind: 'stored' }) },
 				drawioXmlValidator: { validate: (source: string) => source },
-				drawioTextExtractor: { extract: async () => 'Ingest Index Answer' }
+				drawioLabels: { read: () => ['Ingest Index Answer'] }
 			})
 		)
 	};

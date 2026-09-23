@@ -4,7 +4,7 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { FieldChange } from '$lib/components/agent';
 import { argumentLabel } from './tool-approval-fields';
 import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
-import { drawioLabelDiff } from '$lib/models/diagrams/drawio-labels';
+import { drawioLabelDiff } from '$lib/services/diagrams/labels';
 
 /**
  * What an approval card should show for a pending tool call.

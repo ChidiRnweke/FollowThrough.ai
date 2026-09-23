@@ -6,7 +6,7 @@ import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
-	DrawioDiagramTextExtractor
+	DrawioLabelReader
 } from '$lib/server/services/diagrams/drawio';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -27,7 +27,7 @@ import {
 	drawioBuilder,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { VALID_DRAWIO_XML, RICH_DRAWIO_LABELS_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 const setup = () => {
 	const notes = new InMemoryNoteContent();
@@ -59,7 +59,7 @@ const setup = () => {
 			indexWriter: index,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
-			drawioTextExtractor: new DrawioDiagramTextExtractor(),
+			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, search])
 		})
@@ -122,6 +122,14 @@ it('extracts searchable labels from the published XML', async () => {
 	const { controller, input } = setup();
 	const saved = await controller.publishProjectDiagram(testActor(), input).then(savedDiagram);
 	expect(saved.searchableText).toBe('API & worker');
+});
+
+it('publishes rich, repeated and blank labels with the same policy as browser review', async () => {
+	const { controller, input } = setup();
+	const saved = await controller
+		.publishProjectDiagram(testActor(), { ...input, source: RICH_DRAWIO_LABELS_XML })
+		.then(savedDiagram);
+	expect(saved.searchableText).toBe('Browser\nQueue');
 });
 
 it('publishes the submitted source as a new document revision', async () => {

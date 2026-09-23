@@ -17,10 +17,9 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import {
-	DrawioLabelExtractor,
+	DrawioLabelReader,
 	DrawioXmlValidator,
-	DrawioSvgSanitizer,
-	DrawioDiagramTextExtractor
+	DrawioSvgSanitizer
 } from '$lib/server/services/diagrams/drawio';
 
 const setup = (source = VALID_DRAWIO_XML) => {
@@ -51,9 +50,8 @@ const setup = (source = VALID_DRAWIO_XML) => {
 			diagramIndexer: diagrams,
 			sourceNotes: notes,
 			drawioXmlValidator: new DrawioXmlValidator(),
-			drawioLabels: new DrawioLabelExtractor(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
-			drawioTextExtractor: new DrawioDiagramTextExtractor(),
+			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, suggestions, effects])
 		})
