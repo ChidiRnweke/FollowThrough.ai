@@ -567,6 +567,22 @@ export interface WorkflowAgentRun extends AgentRunBase {
 }
 
 export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
+export interface RunClaimWrite {
+	readonly expected: 'queued';
+	readonly status: 'running';
+	readonly startedAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface AgentCheckpointWrite {
+	readonly expected: 'running';
+	readonly status: 'awaiting_approval';
+	readonly serializedState: string;
+	readonly pendingDecisions: readonly PendingAgentDecision[];
+	readonly traceparent: string | null;
+	readonly updatedAt: DateTime;
+}
+
 export interface AgentProvenanceWrite {
 	readonly provenanceId: ProvenanceId;
 	readonly updatedAt: DateTime;

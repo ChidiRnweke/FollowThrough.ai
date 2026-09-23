@@ -23,7 +23,12 @@ export class RunPreparation {
 	constructor(private readonly runs: AgentRunRepository) {}
 
 	claim(runId: AgentRunId, timestamp: DateTime): Promise<ResolvedAgentRun | undefined> {
-		return this.runs.transitionAgent(runId, 'queued', 'running', { startedAt: timestamp });
+		return this.runs.claimAgent(runId, {
+			expected: 'queued',
+			status: 'running',
+			startedAt: timestamp,
+			updatedAt: timestamp
+		});
 	}
 
 	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<ResolvedAgentRun> {

@@ -12,6 +12,8 @@ import type {
 	WorkflowSettlementWrite,
 	AgentProvenanceWrite,
 	AgentContextWrite,
+	RunClaimWrite,
+	AgentCheckpointWrite,
 	PreparedAgentRun,
 	ConversationId,
 	StoredAgentEvent,
@@ -61,11 +63,11 @@ export interface AgentRunRepository {
 		to: AgentRunStatus,
 		patch?: Partial<AgentRun>
 	): Promise<AgentRun | undefined>;
-	transitionAgent(
+	claimAgent(runId: AgentRunId, change: RunClaimWrite): Promise<ResolvedAgentRun | undefined>;
+	claimWorkflow(runId: AgentRunId, change: RunClaimWrite): Promise<WorkflowAgentRun | undefined>;
+	checkpointAgent(
 		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch?: Partial<ResolvedAgentRun>
+		change: AgentCheckpointWrite
 	): Promise<ResolvedAgentRun | undefined>;
 	updateCancellation(
 		actor: ActorContext,
