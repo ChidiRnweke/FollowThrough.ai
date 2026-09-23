@@ -78,6 +78,11 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [note-change preparation disposition](note-change-preparation.md) records the following slice:
+targeted replacement and revision-text comparison now belong to focused server services. The
+controller still owns preparation, approval and persistence. Focused regression results are recorded
+in that disposition; the public behavior is unchanged.
+
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.
 - The inherited 79 PRs remain open. This continuation neither merges nor restacks them.
