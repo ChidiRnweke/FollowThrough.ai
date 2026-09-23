@@ -1,3 +1,4 @@
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -62,6 +63,7 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 			transactionRunner,
 			contextMemory: memory,
 			preparation: new RunPreparation(runs),
+			checkpoints: new RunCheckpoints(runs),
 			cancellations: new RunCancellation(runs),
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
