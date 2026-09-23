@@ -3,11 +3,7 @@ import createDOMPurify from 'dompurify';
 import type { WindowLike } from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { ValidationError } from '$lib/errors';
-import { drawioLabels } from '$lib/models/diagrams/drawio-labels';
-
-export interface IDiagramContent {
-	extract(diagram: { readonly source: string }): Promise<string>;
-}
+import { drawioLabelValues } from '$lib/models/diagrams/drawio-labels';
 
 const MAX_DRAWIO_SOURCE_LENGTH = 2_000_000;
 const MAX_SVG_LENGTH = 2_000_000;
@@ -345,8 +341,8 @@ export class DrawioSvgSanitizer {
 	}
 }
 
-export class DrawioLabelExtractor {
-	/** The labels themselves, which the approval card shows and `extract` joins. */
+export class DrawioLabelReader {
+	/** Decode XML attributes and rich HTML labels; callers apply label policy. */
 	read(source: string): readonly string[] {
 		const xmlDom = parseXml(source, 'draw.io XML');
 		const htmlDom = new JSDOM('');
@@ -354,7 +350,7 @@ export class DrawioLabelExtractor {
 			const body = htmlDom.window.document.body;
 			// draw.io labels come from a rich-text editor, so the value is HTML. The
 			// walk is shared with the browser; only this decoding differs.
-			return drawioLabels(xmlDom.window.document, (html) => {
+			return drawioLabelValues(xmlDom.window.document).map((html) => {
 				body.textContent = '';
 				body.innerHTML = html;
 				return body.textContent ?? '';
@@ -363,17 +359,5 @@ export class DrawioLabelExtractor {
 			xmlDom.window.close();
 			htmlDom.window.close();
 		}
-	}
-
-	extract(source: string): string {
-		return this.read(source).join('\n');
-	}
-}
-
-export class DrawioDiagramTextExtractor implements IDiagramContent {
-	private readonly labels = new DrawioLabelExtractor();
-
-	async extract(diagram: { readonly source: string }): Promise<string> {
-		return this.labels.extract(diagram.source);
 	}
 }

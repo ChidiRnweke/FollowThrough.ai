@@ -17,7 +17,7 @@ import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
-	DrawioDiagramTextExtractor
+	DrawioLabelReader
 } from '$lib/server/services/diagrams/drawio';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
@@ -76,7 +76,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			},
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
-			drawioTextExtractor: new DrawioDiagramTextExtractor()
+			drawioLabels: new DrawioLabelReader()
 		})
 	);
 	const base = await sync.objects.read(seeded.owner, { type: 'diagrams', id: [diagram.id] }, null);

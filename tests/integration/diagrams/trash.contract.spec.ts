@@ -54,7 +54,7 @@ it.each([
 				diagramTrash: library,
 				diagramDraftWriter: library,
 				drawioXmlValidator: { validate: (source) => source },
-				drawioTextExtractor: { extract: async () => diagram.searchableText },
+				drawioLabels: { read: () => [diagram.searchableText] },
 				diagramIndexer: new InMemoryDiagrams(),
 				transactionRunner,
 				now: () => now

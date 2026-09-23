@@ -49,7 +49,7 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
 			diagramIndexer: index,
 			drawioXmlValidator: { validate: (source) => source },
-			drawioTextExtractor: { extract: async () => 'labels' },
+			drawioLabels: { read: () => ['labels'] },
 			drawioSvgSanitizer: { sanitize: (svg) => svg }
 		})
 	);

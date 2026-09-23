@@ -25,8 +25,7 @@ import { DiagramGeneration } from '$lib/server/services/diagrams/generation';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { DiagramContent } from '$lib/server/services/diagrams/content';
 import {
-	DrawioDiagramTextExtractor,
-	DrawioLabelExtractor,
+	DrawioLabelReader,
 	DrawioSvgSanitizer,
 	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
@@ -68,12 +67,11 @@ export interface DiagramsCapability {
 	readonly transforms: DiagramContent;
 	readonly generation: DiagramAgentDependencies;
 	readonly suggestionValidator: DrawioXmlValidator;
-	readonly suggestionLabels: DrawioLabelExtractor;
 	readonly xmlValidator: DrawioXmlValidator;
 	readonly iconSearch: IconifyIconSearch;
 	readonly canvasSource: PresentedCanvasSource;
 	readonly svgSanitizer: DrawioSvgSanitizer;
-	readonly textExtractor: DrawioDiagramTextExtractor;
+	readonly labels: DrawioLabelReader;
 	readonly mermaidValidator: MermaidSubmissionValidator;
 	/** One clock for every diagram write, services and controller alike. */
 	readonly now: () => DateTime;
@@ -91,12 +89,11 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		library,
 		transforms: new DiagramContent(),
 		suggestionValidator: new DrawioXmlValidator(),
-		suggestionLabels: new DrawioLabelExtractor(),
 		xmlValidator: new DrawioXmlValidator(),
 		iconSearch: new IconifyIconSearch(),
 		canvasSource: new PresentedCanvasSource(input.sessions),
 		svgSanitizer: new DrawioSvgSanitizer(),
-		textExtractor: new DrawioDiagramTextExtractor(),
+		labels: new DrawioLabelReader(),
 		mermaidValidator: new MermaidSubmissionValidator(),
 		now: () => new Date().toISOString() as DateTime,
 		generation: {

@@ -78,6 +78,13 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #188](https://github.com/ChidiRnweke/FollowThrough.ai/pull/188) passed all required checks,
+including [quality, unit/browser, PostgreSQL provenance/content contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35888362067).
+It remains open on the dependent stack.
+
+The [diagram-label disposition](diagram-labels.md) separates boundary decoding from shared label
+normalization, search text and edit comparison, with browser/server parity coverage.
+
 [PR #187](https://github.com/ChidiRnweke/FollowThrough.ai/pull/187) passed all required checks,
 including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35887084121).
 It remains open on the dependent stack.

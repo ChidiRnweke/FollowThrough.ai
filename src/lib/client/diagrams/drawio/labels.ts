@@ -1,4 +1,5 @@
-import { drawioLabels } from '$lib/models/diagrams/drawio-labels';
+import { drawioLabelValues } from '$lib/models/diagrams/drawio-labels';
+import { normalizedDrawioLabels } from '$lib/services/diagrams/labels';
 
 /**
  * The labels in a draw.io document, read in the browser.
@@ -26,5 +27,8 @@ export const readDrawioLabels = (source: string): DrawioLabelRead => {
 	// `DOMParser` reports a failure as a document rather than by throwing, so the
 	// error element is the only signal that the source was not XML at all.
 	if (parsed.querySelector('parsererror')) return { kind: 'unreadable' };
-	return { kind: 'labels', labels: drawioLabels(parsed, decodeHtml) };
+	return {
+		kind: 'labels',
+		labels: normalizedDrawioLabels(drawioLabelValues(parsed).map(decodeHtml))
+	};
 };
