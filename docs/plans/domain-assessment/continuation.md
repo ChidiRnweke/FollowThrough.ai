@@ -39,6 +39,12 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #196](https://github.com/ChidiRnweke/FollowThrough.ai/pull/196) retires
+[whole-note persistence](note-write-retirement.md). Focused regressions passed 38 files and 323 tests;
+the full local unit suite passed 435 files and 4,053 tests. Lint, type checks, architecture audits and
+documentation checks passed. Required CI is being tracked. The next slice addresses
+[skill edits and restoration](skill-edits.md).
+
 [PR #195](https://github.com/ChidiRnweke/FollowThrough.ai/pull/195) contains
 [built-in note repair and guarded upgrades](built-in-note-writes.md). Three regression cases fail
 against the previous implementation and pass with the fix. The full local unit suite passed

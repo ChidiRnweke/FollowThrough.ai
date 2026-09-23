@@ -77,6 +77,13 @@ const input: SkillEditInput = {
 };
 
 describe('Skill document imports', () => {
+	it('rejects metadata changes to an archived skill', async () => {
+		const { controller, notes, note } = importSkill();
+		notes.notes = [{ ...note, archivedAt: note.updatedAt }];
+		await expect(
+			controller.update(testActor(), { noteId: note.id, isEnabled: false })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
 	it('normalizes description and trigger hints through the shared metadata rules', async () => {
 		const { controller, note } = importSkill();
 		const { skill } = await controller.update(testActor(), {

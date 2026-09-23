@@ -260,7 +260,7 @@ export class Skills implements SkillsController {
 		input: RestoreSkillVersionInput
 	): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.skillFinder.load(actor, input.noteId);
+			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
 			const snapshot = (await this.dependencies.revisionReader.revisions(actor, input.noteId)).find(
 				(item) => item.revision === input.revision
 			);
@@ -289,7 +289,7 @@ export class Skills implements SkillsController {
 	}
 	async update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.skillFinder.load(actor, input.noteId);
+			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
 			const metadata = applySkillMetadataEdit(current, input);
 			const prepared = await this.dependencies.skillEditor.prepareEdit(
 				actor,

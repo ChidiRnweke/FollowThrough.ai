@@ -39,6 +39,7 @@ NoteRepository.update method has no production caller and is removed in
 [whole-note write retirement](note-write-retirement.md). Archiving the Inbox itself exposes another
 unresolved issue: the unique index
 includes archived Inboxes, while provisioning selects only an active Inbox. That project lifecycle
-decision is separate from legacy built-in repair. Broader skill metadata writes and the remaining
+decision is separate from legacy built-in repair. [Skill edits and restoration](skill-edits.md) now
+read authoritative notes and metadata in the same lock order. Broader skill metadata writes and the remaining
 declaration/workflow assessment still need review. No migration or public command change is required
 for this slice.
