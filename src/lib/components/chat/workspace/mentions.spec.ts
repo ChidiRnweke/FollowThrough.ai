@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mentionCandidatesFor, mentionQueryOf } from './mentions';
 import type { NoteId, NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
+import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const id = (n: number): NoteId =>
 	`00000000-0000-4000-8000-${String(n).padStart(12, '0')}` as unknown as NoteId;
@@ -22,6 +23,8 @@ const entry = (overrides: Partial<NoteSummary> & Pick<NoteSummary, 'id' | 'title
 const skill = (name: string, noteId: NoteId): SkillSummary => ({
 	name,
 	noteId,
+	projectId: testProjectId(),
+	isPinned: false,
 	slug: `skill-${noteId}`,
 	description: 'Mentionable skill',
 	triggerHints: [],

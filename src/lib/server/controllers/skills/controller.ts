@@ -6,7 +6,7 @@ import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import { serializeSkillManifest, validatePortableSkill } from '$lib/services/skills/manifest';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
-import type { SkillEditInput } from '$lib/models/skills';
+import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
@@ -48,7 +48,8 @@ import type {
 	SkillFinder,
 	SkillUsageLister,
 	SkillUsageRecorder,
-	SkillEditor
+	SkillEditor,
+	SkillPinWriter
 } from '$lib/server/services/skills/contracts';
 
 /**
@@ -93,10 +94,7 @@ export interface SkillsController {
 	/** Serialize a skill into the compact form the agent consumes. */
 	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string>;
 	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
-	setPinned(
-		actor: ActorContext,
-		input: { noteId: GetSkillViewInput['noteId']; projectId: ProjectId; pinned: boolean }
-	): Promise<void>;
+	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void>;
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
@@ -116,6 +114,7 @@ export interface SkillsDependencies {
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;
+	skillPinWriter: SkillPinWriter;
 	selectionOrigins: SelectionOriginService;
 	skillCreator: SkillCreator;
 	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
@@ -334,16 +333,11 @@ export class Skills implements SkillsController {
 		const manifest = await this.dependencies.skillEditor.manifest(actor, input.noteId);
 		return serializeSkillManifest(manifest);
 	}
-	setPinned(
-		actor: ActorContext,
-		input: { noteId: GetSkillViewInput['noteId']; projectId: ProjectId; pinned: boolean }
-	): Promise<void> {
-		return this.dependencies.skillEditor.setPinned(
-			actor,
-			input.noteId,
-			input.projectId,
-			input.pinned
-		);
+	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const change = await this.dependencies.skillPinWriter.prepare(actor, input);
+			await this.dependencies.skillPinWriter.persist(actor, change);
+		});
 	}
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
 		if (result.kind === 'stored') return;

@@ -11,6 +11,7 @@ import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { SkillLibrary } from '$lib/server/services/skills/library';
+import { SkillPins } from '$lib/server/services/skills/pins';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -33,6 +34,7 @@ export const skillController = (database: Database, transactionRunner: Transacti
 			}),
 			skillFinder: library,
 			skillEditor: library,
+			skillPinWriter: new SkillPins(projects, notes, skills),
 			skillUsageLister: library,
 			noteEditor: catalog,
 			revisionReader: catalog,

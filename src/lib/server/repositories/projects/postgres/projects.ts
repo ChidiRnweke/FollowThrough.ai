@@ -78,7 +78,8 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 					isNull(schema.projects.archivedAt)
 				)
 			)
-			.for('update');
+			// Serialize project writers without blocking foreign-key checks from note indexing.
+			.for('no key update');
 		return row ? toProject(row) : undefined;
 	}
 
