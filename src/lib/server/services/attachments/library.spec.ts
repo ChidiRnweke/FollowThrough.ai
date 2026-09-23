@@ -61,8 +61,10 @@ describe('removing an attachment without breaking its containing note', () => {
 				type: 'doc',
 				content: [
 					{
-						type: 'image',
-						attrs: { src: `/api/attachments/${ATTACHMENT_ID}/content` }
+						type: 'blockquote',
+						content: [
+							{ type: 'image', attrs: { src: `/api/attachments/${ATTACHMENT_ID}/content` } }
+						]
 					}
 				]
 			}
@@ -76,6 +78,24 @@ describe('removing an attachment without breaking its containing note', () => {
 			kind: 'referenced-by-note',
 			note: { id: note.id, title: 'Solution design' }
 		});
+	});
+
+	it('allows removal when the attachment endpoint appears only in prose', async () => {
+		const { service, repository, notes } = setup();
+		const note = noteBuilder({
+			document: {
+				type: 'doc',
+				content: [
+					{
+						type: 'paragraph',
+						content: [{ type: 'text', text: `/api/attachments/${ATTACHMENT_ID}/content` }]
+					}
+				]
+			}
+		});
+		notes.notes.push(note);
+		repository.found = noteAttachment(note.id);
+		expect(await service.removeById(testActor(), ATTACHMENT_ID)).toEqual({ kind: 'removed' });
 	});
 
 	it('keeps a referenced attachment downloadable', async () => {

@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { ProseMirrorDocument } from '$lib/models/notes';
-import { collectNoteLinkTargets, documentReferencesAttachment } from './index';
+import type { ProseMirrorDocument, ProseMirrorNode, ProseMirrorTextNode } from '$lib/models/notes';
+import { collectNoteLinkTargets, drawioReferencesIn } from './references';
 
-const linked = (noteId: string, text = 'the decision') => ({
+const linked = (noteId: string, text = 'the decision'): ProseMirrorTextNode => ({
 	type: 'text',
 	marks: [{ type: 'noteLink', attrs: { noteId } }],
 	text
 });
 
-const doc = (...content: unknown[]): ProseMirrorDocument =>
-	({ type: 'doc', content }) as ProseMirrorDocument;
+const doc = (...content: ProseMirrorNode[]): ProseMirrorDocument => ({ type: 'doc', content });
 
 describe('Finding the notes a document links to', () => {
 	it('finds a link in a paragraph', () => {
@@ -65,25 +64,40 @@ describe('Finding the notes a document links to', () => {
 	});
 });
 
-describe('Finding an embedded attachment in a note document', () => {
-	it('finds the exact attachment in a nested image node', () => {
-		const document = doc({
-			type: 'blockquote',
-			content: [
+describe('note diagram references', () => {
+	it('finds nested diagram references in document order', () => {
+		expect(
+			drawioReferencesIn([
 				{
-					type: 'image',
-					attrs: { src: '/api/attachments/attachment-7/content' }
+					document: {
+						type: 'doc',
+						content: [
+							{ type: 'blockquote', content: [{ type: 'drawio', attrs: { diagramId: 'first' } }] },
+							{ type: 'drawio', attrs: { diagramId: 'second' } }
+						]
+					}
 				}
-			]
-		});
-		expect(documentReferencesAttachment(document, 'attachment-7')).toBe(true);
+			])
+		).toEqual(['first', 'second']);
 	});
-
-	it('does not treat the same url in prose as an embedded image', () => {
-		const document = doc({
-			type: 'paragraph',
-			content: [{ type: 'text', text: '/api/attachments/attachment-7/content' }]
-		});
-		expect(documentReferencesAttachment(document, 'attachment-7')).toBe(false);
+	it('counts a repeated diagram once across the selected documents', () => {
+		expect(
+			drawioReferencesIn([
+				{ document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: 'same' } }] } },
+				{ document: { type: 'doc', content: [{ type: 'drawio', attrs: { diagramId: 'same' } }] } }
+			])
+		).toEqual(['same']);
+	});
+	it('ignores empty references retained in a document', () => {
+		expect(
+			drawioReferencesIn([
+				{
+					document: {
+						type: 'doc',
+						content: [{ type: 'drawio' }, { type: 'drawio', attrs: { diagramId: null } }]
+					}
+				}
+			])
+		).toEqual([]);
 	});
 });
