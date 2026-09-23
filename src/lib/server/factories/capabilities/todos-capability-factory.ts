@@ -9,10 +9,8 @@ import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
 import { TodoCatalog } from '$lib/server/services/todos/catalog';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import { TodoBatchReceiptRecords } from '$lib/server/repositories/todos/postgres/batch-receipts';
-import {
-	PromiseClassification,
-	PromiseDiscovery
-} from '$lib/server/services/todos/promise-discovery';
+import { PromiseDiscovery } from '$lib/server/services/todos/promise-discovery';
+import { PromiseClassification } from '$lib/server/repositories/todos/classification';
 import { DEFAULT_PROMISE_MODEL } from '$lib/models/todos';
 import type { SelectionGeneration } from '$lib/models/agent';
 import { DeterministicPromiseExtractor } from '$lib/server/services/todos/promise-rules';

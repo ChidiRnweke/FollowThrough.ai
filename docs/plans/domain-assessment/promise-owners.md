@@ -25,12 +25,15 @@ acceptance creates a task waiting on Maya. A separate case retains no waiting-on
 
 Two PostgreSQL contracts run the durable controller path with the same source sentence. They inspect
 the stored proposal payload, acceptance status and created task row. They require CI because the
-local Docker service is unavailable. Existing extraction, task edit/creation, proposal lifecycle,
+local Docker service is unavailable. Both cases passed in
+[PR #204 CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35910479107).
+Existing extraction, task edit/creation, proposal lifecycle,
 transaction rollback, cancellation and duplicate-run tests are retained.
 
 ## Continuing task assessment
 
 This is a targeted correction discovered during current-source reconciliation, not a completed
 review of W09 or the task model. The Todo completion/status representation, the source-anchor range
-shape, provider date narrowing, and remaining UI/export entry paths still need explicit dispositions.
+shape and remaining UI/export entry paths still need explicit dispositions. Provider date narrowing
+is reviewed in the [date boundary disposition](promise-date-boundary.md).
 The older assessment's A03 and A04 implementations remain on open PRs; their delivery has not merged.
