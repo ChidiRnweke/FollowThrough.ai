@@ -621,6 +621,12 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Note change preparation: the Notes controller now calls focused server services for targeted
+replacement and compact revision-text comparison. Models retain the request, result and failure
+values only. The exact reviewed base/result, literal replacement behavior and unchanged source
+line endings are preserved. Tests move with their service owner; reviewed-change and revision
+controller regressions remain in place. See the [disposition](domain-assessment/note-change-preparation.md).
+
 Relationship write ownership: RelationshipGraph now owns semantic-edge creation, modification and
 unchanged results. Repository reads retain the actor-scoped advisory lock and row lock until the
 calling Suggestions or Notes controller transaction ends. Persistence accepts the resolved edge;
