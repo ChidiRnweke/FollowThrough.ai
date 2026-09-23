@@ -278,11 +278,11 @@ export const projects = pgTable(
 		uniqueIndex('projects_user_name_unique')
 			.on(table.userId, sql`lower(${table.name})`)
 			.where(sql`${table.archivedAt} is null`),
-		// One inbox per user, so "where does an uncategorised capture go" has exactly
+		// One active inbox per user, so "where does an uncategorised capture go" has exactly
 		// one answer and the database is what guarantees it.
 		uniqueIndex('projects_user_inbox_unique')
 			.on(table.userId)
-			.where(sql`${table.role} = 'inbox'`),
+			.where(sql`${table.role} = 'inbox' and ${table.archivedAt} is null`),
 		index('projects_user_updated_idx').on(table.userId, table.updatedAt)
 	]
 );

@@ -46,6 +46,14 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 			)
 		)
 			throw new ConflictError('An active project with this name already exists');
+		if (
+			input.role === 'inbox' &&
+			this.projects.some(
+				(project) =>
+					project.userId === actor.userId && project.role === 'inbox' && !project.archivedAt
+			)
+		)
+			throw new ConflictError('This workspace already has an active inbox');
 		const project = projectBuilder({
 			id: input.id ?? testProjectId(this.nextProject++),
 			userId: actor.userId,

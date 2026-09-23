@@ -24,5 +24,5 @@ verify its actual replacements. The fixture helper restores known setup states, 
 clearing of nullable fields.
 
 This closes the whole-note write retirement identified by
-[built-in note writes](built-in-note-writes.md). It does not close the pending Inbox lifecycle issue,
-all skill metadata workflows or the repository-wide declaration inventory.
+[built-in note writes](built-in-note-writes.md). [Inbox lifecycle](inbox-lifecycle.md) is addressed in
+a later slice. Skill metadata workflows and the repository-wide declaration inventory remain separate.
