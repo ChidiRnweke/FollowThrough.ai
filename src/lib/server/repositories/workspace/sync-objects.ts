@@ -1,4 +1,5 @@
 import { suggestionRecordKeys } from '$lib/models/suggestions';
+import { sourceAnchorFields } from '$lib/models/provenance';
 import { sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '$lib/server/db';
@@ -33,7 +34,7 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	notes: Object.keys(resourceDataSchemas.notes.shape),
 	todos: Object.keys(todoRecordFields),
 	diagrams: Object.keys(resourceDataSchemas.diagrams.options[1].shape),
-	source_anchors: Object.keys(resourceDataSchemas.source_anchors.shape),
+	source_anchors: Object.keys(sourceAnchorFields),
 	provenance: [
 		'id',
 		'userId',
