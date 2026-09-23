@@ -27,5 +27,6 @@ retains the old declarations as a snapshot, not a list of live capabilities.
   the migrated content tests.
 
 These dispositions cover the retired declarations and their tests, not all of W13.09–W13.15.
-Editor communication, complete workflow coverage and the remaining general diagram persistence
-callers remain open. The latter still serve Mermaid revisions and reviewed new conversion artifacts.
+Editor communication and complete workflow coverage remain open. The subsequent
+[content-persistence slice](diagram-content.md) replaces the general write used by Mermaid revisions
+and reviewed new conversion artifacts.

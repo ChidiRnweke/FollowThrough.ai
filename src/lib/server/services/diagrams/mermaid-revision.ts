@@ -1,14 +1,15 @@
 import type { Diagram, MermaidDiagram } from '$lib/models/diagrams';
 import type { DateTime } from '$lib/models/workspace';
+import type { ProvenanceId } from '$lib/models/provenance';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 
 /** Generation may only replace the active content from which it started. */
 export function prepareMermaidRevision(
 	current: Diagram,
 	base: MermaidDiagram,
-	draft: Pick<MermaidDiagram, 'source' | 'title' | 'provenanceId'>,
+	draft: Pick<MermaidDiagram, 'source' | 'title'> & { readonly provenanceId: ProvenanceId },
 	timestamp: DateTime
-): MermaidDiagram {
+): MermaidDiagram & { readonly provenanceId: ProvenanceId } {
 	if (current.archivedAt) throw new ValidationError('Archived diagrams cannot be revised');
 	if (
 		current.kind !== 'mermaid' ||

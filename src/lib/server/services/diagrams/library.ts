@@ -1,6 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramRevisionWrite,
 	DiagramId,
 	DiagramRevision,
@@ -69,19 +70,13 @@ export class DiagramLibrary {
 			throw new NotFoundError('Diagram provenance was not found');
 		return this.diagrams.insert(actor, diagram);
 	}
-	async update(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
-		if (diagram.userId !== actor.userId)
-			throw new OwnershipError('Cannot update another user’s diagram');
-		await this.get(actor, diagram.id);
-		await this.requireOwnedScope(actor, diagram);
-		if (diagram.sourceAnchorId) {
-			const anchor = await this.anchors.findById(actor, diagram.sourceAnchorId);
-			if (!anchor || anchor.noteId !== diagram.sourceNoteId)
-				throw new NotFoundError('Diagram source anchor was not found');
-		}
-		if (diagram.provenanceId && !(await this.provenance.findById(actor, diagram.provenanceId)))
+	async persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram> {
+		if (write.kind === 'mermaid' && !(await this.provenance.findById(actor, write.provenanceId)))
 			throw new NotFoundError('Diagram provenance was not found');
-		return this.diagrams.update(actor, diagram);
+		const saved = await this.diagrams.updateContent(actor, write);
+		if (!saved)
+			throw new StaleRevisionError('The diagram changed before its content could be saved');
+		return saved;
 	}
 	async getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
 		const diagram = await this.diagrams.findForWrite(actor, diagramId);

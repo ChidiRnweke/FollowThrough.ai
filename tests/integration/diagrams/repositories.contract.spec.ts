@@ -8,7 +8,9 @@ import type {
 } from '$lib/models/diagrams';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { actor, context, now, seedNote } from '../database-harness';
+import { actor, context, now, seedNote, seedProvenance } from '../database-harness';
+import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 const diagram = (
 	suffix: string,
@@ -30,6 +32,39 @@ const diagram = (
 };
 
 describe('Project-owned diagram persistence invariants', () => {
+	it('preserves conversion identity and publication state when replacing reviewed content', async () => {
+		const { owner, project, note } = await seedNote('18802');
+		const provenance = await seedProvenance(owner, '18802');
+		const repository = new DiagramRecords(context.db);
+		const current = await repository.insert(
+			owner,
+			drawioBuilder({
+				id: crypto.randomUUID() as DiagramId,
+				userId: owner.userId,
+				projectId: project.id,
+				sourceNoteId: note.id,
+				provenanceId: provenance.id,
+				source: VALID_DRAWIO_XML,
+				publishedRevision: 0,
+				publishedAt: undefined
+			})
+		);
+		const source = VALID_DRAWIO_XML.replace('API &amp; worker', 'Reviewed queue');
+		const renderedSvg = '<svg xmlns="http://www.w3.org/2000/svg"><text>Reviewed queue</text></svg>';
+		const saved = await repository.updateContent(owner, {
+			kind: 'drawio',
+			diagramId: current.id,
+			source,
+			renderedSvg,
+			searchableText: 'Reviewed queue',
+			expectedUpdatedAt: current.updatedAt,
+			updatedAt: current.updatedAt,
+			expectedRevision: 1,
+			expectedPublishedRevision: 0
+		});
+		expect(saved).toEqual({ ...current, source, renderedSvg, searchableText: 'Reviewed queue' });
+	});
+
 	it('preserves a diagram restored after a caller observed it in the trash', async () => {
 		const { owner, project } = await seedNote('489');
 		const repository = new DiagramRecords(context.db);

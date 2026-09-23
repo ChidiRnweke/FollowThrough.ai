@@ -1,10 +1,16 @@
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
-import type { Diagram, DiagramId, DrawioDiagram, MermaidDiagram } from '$lib/models/diagrams';
+import type {
+	Diagram,
+	DiagramContentWrite,
+	DiagramId,
+	DrawioDiagram,
+	MermaidDiagram
+} from '$lib/models/diagrams';
 import type { Note, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
-import { ExternalServiceError, NotFoundError } from '$lib/errors';
+import { ExternalServiceError, NotFoundError, StaleRevisionError } from '$lib/errors';
 import type {
 	DiagramFinder,
 	DiagramIndexer,
@@ -124,14 +130,32 @@ export class InMemoryDiagrams
 		return diagram;
 	}
 
-	async update(_actor: ActorContext, diagram: Diagram): Promise<Diagram> {
-		void _actor;
-		this.diagrams = this.diagrams.map((candidate) =>
-			candidate.id === diagram.id ? diagram : candidate
+	async persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram> {
+		const current = this.diagrams.find(
+			(item) => item.id === write.diagramId && item.userId === actor.userId
 		);
-		return diagram;
+		if (
+			!current ||
+			current.kind !== write.kind ||
+			current.archivedAt ||
+			current.updatedAt !== write.expectedUpdatedAt ||
+			(write.kind === 'drawio' &&
+				(current.kind !== 'drawio' ||
+					current.currentRevision !== write.expectedRevision ||
+					current.publishedRevision !== write.expectedPublishedRevision))
+		)
+			throw new StaleRevisionError('The diagram changed before its content could be saved');
+		const saved: Diagram = {
+			...current,
+			source: write.source,
+			renderedSvg: write.renderedSvg,
+			searchableText: write.searchableText,
+			updatedAt: write.updatedAt,
+			...(write.kind === 'mermaid' ? { title: write.title, provenanceId: write.provenanceId } : {})
+		};
+		this.diagrams = this.diagrams.map((item) => (item.id === saved.id ? saved : item));
+		return saved;
 	}
-
 	async index(_actor: ActorContext, diagram: Diagram): Promise<IndexingResult> {
 		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
 		void _actor;
