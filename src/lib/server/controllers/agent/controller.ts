@@ -1,3 +1,4 @@
+import { segmentOutput } from '$lib/server/services/agent/runs/output';
 import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
 import type { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import {
@@ -1139,7 +1140,8 @@ export class Agent implements AgentController {
 			// One message per contiguous run of output, each carrying the cursor it began at.
 			// Written as a single blob it could only be replayed after every tool call, which
 			// is why a reopened conversation read as "all the work, then all the words".
-			const segments = await this.dependencies.events.reconstructOutput(run.id, 1);
+			const records = await this.dependencies.events.listAttempt(run.id, 1);
+			const segments = segmentOutput(records);
 			for (const segment of segments) {
 				const provenance = { runId: run.id, eventCursor: segment.cursor };
 				if (segment.kind === 'reasoning')

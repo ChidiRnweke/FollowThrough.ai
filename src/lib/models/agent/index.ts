@@ -976,6 +976,21 @@ export type AgentEvent =
  * every replay, diverging from the type the repository wrote and the client
  * parsed.
  */
+/**
+ * A contiguous run of one kind of output, with the cursor it began at.
+ *
+ * A turn is not "some tools, then a paragraph": the agent thinks, acts, speaks, acts again.
+ * Reconstructing it as one string threw that order away, so a reopened conversation showed
+ * every tool call before everything the agent said, and its reasoning not at all. Segments
+ * keep the shape of what happened, and the cursor is what lets the persisted messages be put
+ * back in the order the events arrived.
+ */
+export interface OutputSegment {
+	readonly kind: 'text' | 'reasoning';
+	readonly text: string;
+	readonly cursor: string;
+}
+
 interface AgentRunEventIdentity {
 	readonly cursor: string;
 	readonly runId: AgentRunId;
