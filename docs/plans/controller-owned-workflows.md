@@ -621,6 +621,11 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Workspace synchronization state: exact receipt ancestry, pending-write transitions, monotonic cache
+merges and local projections have one shared protocol owner. Status wording has a separate shared
+presentation owner. Schemas and the version constructor remain in models; the unused ancestry-repair
+export is removed under ADR 0040. See the [disposition](domain-assessment/sync-state.md).
+
 Note comparisons: version-review alignment and live revision highlights have separate shared service
 owners and consume the actual document types. Model files retain comparison results only. Title
 comparison takes one optional pair with both values required. See the [disposition](domain-assessment/note-comparison.md).

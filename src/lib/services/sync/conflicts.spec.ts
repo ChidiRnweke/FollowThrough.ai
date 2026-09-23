@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import { discardWrites, dependentWrites, retryConflictedWrite, type OutboxEntry } from './index';
+import { type OutboxEntry } from '$lib/models/outbox';
+import { discardWrites, dependentWrites, retryConflictedWrite } from '$lib/services/sync/state';
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
 const replacementId = 'a0000000-0000-4000-8000-000000000002';

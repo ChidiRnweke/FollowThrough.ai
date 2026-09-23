@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Transaction } from 'dexie';
-import { syncCursorSchema, mergeResourceStates, resourceVersion } from '$lib/models/sync';
+import { syncCursorSchema } from '$lib/models/sync';
+import { mergeResourceStates, resourceVersion } from '$lib/services/sync/state';
 import type { CacheCommit, StoredCache, SyncCacheRepository } from './contracts';
 import { WorkspaceDatabase, storedResourceSchema, storedTable } from './database';
 

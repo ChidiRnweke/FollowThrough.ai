@@ -1,20 +1,22 @@
 import {
+	type WriteReceipt,
+	type WriteBaseResolution,
+	type OutboxEntry,
+	type WriteDraft,
+	type WriteOutcome
+} from '$lib/models/outbox';
+import {
 	authoritativeWriteResource,
 	retryConflictedWrite,
 	retainWriteReceipt,
-	type WriteReceipt,
 	discardWrites,
 	appendWrite,
 	beginWrite,
 	failWrite,
 	nextWrite,
 	settleWrite,
-	resolveWriteBase,
-	type WriteBaseResolution,
-	type OutboxEntry,
-	type WriteDraft,
-	type WriteOutcome
-} from '$lib/models/outbox';
+	resolveWriteBase
+} from '$lib/services/sync/state';
 import type {
 	WorkspaceLocalProjection,
 	WorkspaceLocalRepository

@@ -10,13 +10,19 @@ import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteRevision } from '$lib/models/notes';
 import {
-	visibleResources,
-	localResource,
 	type WriteDraft,
 	type DraftStatus,
 	type WriteConflictView,
 	type WriteBase
 } from '$lib/models/outbox';
+import {
+	visibleResources,
+	localResource,
+	accessCache,
+	accessMessage,
+	cachedSnapshot,
+	compareSyncEtags
+} from '$lib/services/sync/state';
 import {
 	workspaceRecordSchema,
 	workspaceRecordIdentity,
@@ -40,15 +46,7 @@ import {
 	type WorkspaceResourceIdentity
 } from '$lib/models/workspace-sync';
 import { WorkspaceViews } from '$lib/controllers/workspace/views';
-import {
-	accessCache,
-	accessMessage,
-	cachedSnapshot,
-	compareSyncEtags,
-	type CacheAccess,
-	type SyncEtag,
-	type SyncSnapshot
-} from '$lib/models/sync';
+import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';

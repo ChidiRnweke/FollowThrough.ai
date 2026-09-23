@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { loadExportSettings } from './load-settings';
-	import { accessMessage } from '$lib/models/sync';
+	import { accessMessage } from '$lib/services/sync/state';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';

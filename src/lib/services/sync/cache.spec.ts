@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { accessCache, receiveResource, syncEtag } from './index';
+import { syncEtag } from '$lib/models/sync';
+import { accessCache, receiveResource } from '$lib/services/sync/state';
 const original = receiveResource(undefined, { etag: syncEtag(1n), value: 'Saved note' });
 describe('opening retained content', () => {
 	it('opens cached content online without an inventory barrier', () => {

@@ -9,58 +9,6 @@ export interface SyncIndicatorInput {
 	readonly downloading: boolean;
 	readonly failure: string | null;
 }
-export const syncIndicator = (
-	input: SyncIndicatorInput
-): {
-	kind: 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';
-	headline: string;
-	description: string;
-	badge: number;
-} => {
-	if (input.review || input.failedDownloads || input.failure)
-		return {
-			kind: 'attention',
-			headline: input.review
-				? `${input.review} ${input.review === 1 ? 'change needs' : 'changes need'} a decision`
-				: 'Sync needs attention',
-			description:
-				input.failure ??
-				(input.failedDownloads
-					? `${input.failedDownloads} saved copies could not be downloaded. Retry to complete your workspace.`
-					: 'Review the versions and choose which changes to keep.'),
-			badge: input.review
-		};
-	if (!input.online)
-		return {
-			kind: 'offline',
-			headline: "You're offline",
-			description: input.pending
-				? `${input.pending} ${input.pending === 1 ? 'change' : 'changes'} will sync when you're back online.`
-				: 'Downloaded content remains available on this device.',
-			badge: input.pending
-		};
-	if (input.pending || input.sending)
-		return {
-			kind: 'saving',
-			headline: 'Saving your changes',
-			description: 'Your changes are saved on this device while they sync.',
-			badge: 0
-		};
-	if (input.downloading)
-		return {
-			kind: 'downloading',
-			headline: 'Downloading your workspace',
-			description: 'Saved copies are becoming available for offline use.',
-			badge: 0
-		};
-	return {
-		kind: 'synced',
-		headline: 'Everything is saved',
-		description: 'Your workspace is up to date on this device.',
-		badge: 0
-	};
-};
-
 export type SyncEtag = string & { readonly __brand: 'SyncEtag' };
 export const syncCursorSchema = z
 	.string()
@@ -77,12 +25,6 @@ export const syncEtagSchema = z
 export const syncEtag = (version: bigint): SyncEtag => {
 	if (version <= 0n) throw new Error('A synchronization version must be positive');
 	return `sync-v1-${version}` as SyncEtag;
-};
-
-export const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
-	const a = BigInt(left.slice(8));
-	const b = BigInt(right.slice(8));
-	return a < b ? -1 : a > b ? 1 : 0;
 };
 
 export const resourceChangeSchema = z.discriminatedUnion('kind', [
@@ -167,58 +109,9 @@ export const resourceStateSchema = <T>(value: z.ZodType<T>): z.ZodType<ResourceS
 		z.object({ kind: z.literal('present'), snapshot: z.object({ etag: syncEtagSchema, value }) }),
 		deletionSchema
 	]);
-export const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
-	state?.kind === 'present' ? state.snapshot.etag : (state?.etag ?? null);
-export const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
-	state?.kind === 'present' ? state.snapshot : null;
-export const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
-	state?.kind === 'present';
-/** Page replication, targeted reads and write receipts all use the same monotonic merge. */
-export const mergeResourceStates = <T>(
-	current: ResourceState<T> | undefined,
-	incoming: ResourceState<T>
-): ResourceState<T> => {
-	if (!current) return incoming;
-	const before = current.kind === 'present' ? current.snapshot.etag : current.etag;
-	const after = incoming.kind === 'present' ? incoming.snapshot.etag : incoming.etag;
-	const order = compareSyncEtags(after, before);
-	return order > 0 || (order === 0 && incoming.kind === 'deleted') ? incoming : current;
-};
-export const receiveResource = <T>(
-	state: ResourceState<T> | undefined,
-	received: SyncSnapshot<T> | ResourceDeletion
-): ResourceState<T> =>
-	mergeResourceStates(
-		state,
-		'kind' in received ? received : { kind: 'present', snapshot: received }
-	);
-
 export type CacheAccess<T> =
 	| { readonly kind: 'ready'; readonly value: T }
 	| { readonly kind: 'wait' }
 	| { readonly kind: 'unavailable' }
 	| { readonly kind: 'deleted' }
 	| { readonly kind: 'failure'; readonly message: string };
-
-export const accessCache = <T>(
-	state: ResourceState<T> | undefined,
-	online: boolean,
-	transfer?: TransferState
-): CacheAccess<T> => {
-	if (state?.kind === 'deleted') return { kind: 'deleted' };
-	const snapshot = cachedSnapshot(state);
-	if (snapshot) return { kind: 'ready', value: snapshot.value };
-	if (!online || transfer?.kind === 'missing') return { kind: 'unavailable' };
-	if (transfer?.kind === 'failed') return { kind: 'failure', message: transfer.message };
-	return { kind: 'wait' };
-};
-
-/** One wording for each state a surface cannot render, named for the resource it concerns. */
-export const accessMessage = <T>(
-	access: Exclude<CacheAccess<T>, { kind: 'ready' }>,
-	name: string
-): string => {
-	if (access.kind === 'failure') return access.message;
-	if (access.kind === 'deleted') return `This ${name} was deleted.`;
-	return `This ${name} is not available on this device. Reconnect to download it.`;
-};
