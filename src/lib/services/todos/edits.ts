@@ -7,7 +7,7 @@ export function applyTodoEdit(
 	input: Omit<UpdateTodoInput, 'todoId'>,
 	timestamp: DateTime
 ): Todo {
-	const edited: Todo = {
+	const edited = {
 		...todo,
 		...(input.title !== undefined ? { title: input.title.trim() } : {}),
 		...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
@@ -17,10 +17,14 @@ export function applyTodoEdit(
 		...(input.category !== undefined ? { category: input.category?.trim() || undefined } : {}),
 		...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn?.trim() || undefined } : {}),
 		...(input.linkedNoteId !== undefined ? { linkedNoteId: input.linkedNoteId ?? undefined } : {}),
-		...(input.status !== undefined && input.status !== todo.status
-			? { status: input.status, completedAt: input.status === 'done' ? timestamp : undefined }
-			: {}),
 		updatedAt: timestamp
 	};
-	return { ...edited, waitingOn: edited.responsibility === 'mine' ? undefined : edited.waitingOn };
+	const fields = {
+		...edited,
+		waitingOn: edited.responsibility === 'mine' ? undefined : edited.waitingOn
+	};
+	const status = input.status ?? todo.status;
+	return status === 'done'
+		? { ...fields, status, completedAt: todo.status === 'done' ? todo.completedAt : timestamp }
+		: { ...fields, status, completedAt: undefined };
 }

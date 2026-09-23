@@ -78,17 +78,22 @@ export const noteRevisionBuilder = (overrides: Partial<NoteRevision> = {}): Note
 	...overrides
 });
 
-export const todoBuilder = (overrides: Partial<Todo> = {}): Todo => ({
-	id: testTodoId(),
-	userId: testActor().userId,
-	projectId: testProjectId(),
-	title: 'Send the design',
-	status: 'open',
-	responsibility: 'mine',
-	createdAt: testNow,
-	updatedAt: testNow,
-	...overrides
-});
+export const todoBuilder = (overrides: Partial<Todo> = {}): Todo => {
+	const fields = {
+		id: testTodoId(),
+		userId: testActor().userId,
+		projectId: testProjectId(),
+		title: 'Send the design',
+		responsibility: 'mine' as const,
+		createdAt: testNow,
+		updatedAt: testNow,
+		...overrides
+	};
+	const status = overrides.status ?? 'open';
+	return status === 'done'
+		? { ...fields, status, completedAt: overrides.completedAt ?? testNow }
+		: { ...fields, status, completedAt: undefined };
+};
 
 const suggestionLifecycle = (
 	overrides: Partial<SuggestionLifecycle>,

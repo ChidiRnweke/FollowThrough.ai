@@ -39,6 +39,14 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #205](https://github.com/ChidiRnweke/FollowThrough.ai/pull/205) validates resolved promise dates
+at the provider boundary. Focused regressions passed 14 files and 105 tests; the full local unit
+suite passed 440 files and 4,079 tests. All required checks passed, including
+[quality, PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35911654254).
+
+The [task completion disposition](task-completion-values.md) records the next reproduced mismatch
+between documented completion state and accepted stored values. Overall task review remains open.
+
 [PR #204](https://github.com/ChidiRnweke/FollowThrough.ai/pull/204) preserves
 [extracted commitment owners](promise-owners.md) through review and automatic acceptance.
 Focused regressions passed 17 files and 134 tests; the full local unit suite passed 439 files and

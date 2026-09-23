@@ -68,14 +68,12 @@ interface SourceAnchor {
 	readonly createdAt: DateTime;
 }
 
-/** A tracked commitment. `completedAt` is set if and only if `status` is `done`; deletion is soft, so history survives. */
-export interface Todo {
+interface TodoFields {
 	readonly id: TodoId;
 	readonly userId: UserId;
 	readonly projectId: ProjectId;
 	readonly title: string;
 	readonly description?: string;
-	readonly status: TodoStatus;
 	readonly responsibility: TodoResponsibility;
 	readonly priority?: TodoPriority;
 	readonly category?: string;
@@ -86,11 +84,17 @@ export interface Todo {
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly linkedNoteId?: NoteId;
 	readonly provenanceId?: ProvenanceId;
-	readonly completedAt?: DateTime;
 	readonly deletedAt?: DateTime;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
 }
+
+/** A tracked commitment. Completion time exists exactly for done tasks; soft deletion retains history. */
+export type Todo = TodoFields &
+	(
+		| { readonly status: 'done'; readonly completedAt: DateTime }
+		| { readonly status: Exclude<TodoStatus, 'done'>; readonly completedAt?: never }
+	);
 
 export interface CreateTodoInput {
 	readonly id?: TodoId;

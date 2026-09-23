@@ -9,7 +9,7 @@ import {
 	resourceDataSchemas,
 	noteRecordSchema,
 	projectRecordSchema,
-	todoRecordSchema,
+	todoRecordFields,
 	workspaceObjectReadSchema,
 	workspaceWriteReceiptSchema,
 	type WorkspaceRecord
@@ -18,7 +18,7 @@ const noteId = noteRecordSchema.shape.id;
 
 const projectId = projectRecordSchema.shape.id;
 
-const todoId = todoRecordSchema.shape.id;
+const todoId = todoRecordFields.id;
 
 const diagramId = z
 	.string()
@@ -162,18 +162,18 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		id: todoId,
 		projectId,
 		title: z.string().trim().min(1),
-		responsibility: todoRecordSchema.shape.responsibility,
-		status: todoRecordSchema.shape.status.optional()
+		responsibility: todoRecordFields.responsibility,
+		status: todoRecordFields.status.optional()
 	}),
 	z.object({
 		kind: z.literal('updateTodo'),
 		todoId,
-		status: todoRecordSchema.shape.status.optional(),
+		status: todoRecordFields.status.optional(),
 		title: z.string().trim().min(1).optional(),
 		description: z.string().nullable().optional(),
-		dueDate: todoRecordSchema.shape.dueDate.nullable(),
-		responsibility: todoRecordSchema.shape.responsibility.optional(),
-		priority: todoRecordSchema.shape.priority.nullable(),
+		dueDate: todoRecordFields.dueDate.nullable(),
+		responsibility: todoRecordFields.responsibility.optional(),
+		priority: todoRecordFields.priority.nullable(),
 		category: z.string().nullable().optional(),
 		waitingOn: z.string().nullable().optional(),
 		linkedNoteId: noteId.nullable().optional()

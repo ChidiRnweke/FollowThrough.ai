@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import type { TodoListFilter } from '$lib/models/todos';
-import { todoRecordSchema } from '$lib/models/workspace-records';
+import { todoRecordFields } from '$lib/models/workspace-records';
 const filterSchema = z.object({
-	status: todoRecordSchema.shape.status.optional(),
-	responsibility: todoRecordSchema.shape.responsibility.optional(),
-	projectId: todoRecordSchema.shape.projectId.optional(),
+	status: todoRecordFields.status.optional(),
+	responsibility: todoRecordFields.responsibility.optional(),
+	projectId: todoRecordFields.projectId.optional(),
 	category: z.string().min(1).optional()
 });
 /** Shared URL boundary for workspace and project task lists. */
