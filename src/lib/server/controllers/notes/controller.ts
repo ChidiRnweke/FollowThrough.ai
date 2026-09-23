@@ -12,9 +12,9 @@ import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { applyNotePatch, describeNotePatchFailure } from '$lib/server/services/notes/patches';
+import { diffNoteRevisionTexts } from '$lib/server/services/notes/revision-diff';
 import {
-	applyNotePatch,
-	describeNotePatchFailure,
 	type NoteChangeRequest,
 	type NoteChangeTarget,
 	type NoteChangeReview,
@@ -94,7 +94,6 @@ import type {
 import {
 	MAX_NOTE_DOCUMENTS,
 	collectNoteLinkTargets,
-	diffNoteRevisionTexts,
 	sectionNumberingView
 } from '$lib/models/notes';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
