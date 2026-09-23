@@ -1,3 +1,5 @@
+import { prepareWorkspaceCommand } from '$lib/controllers/workspace/commands';
+import type { CreateTodoInput } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +16,7 @@ import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
+	testNow,
 	testProjectId,
 	testTodoId
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -26,7 +29,10 @@ const setup = () => {
 	const provenance = new InMemoryProvenanceRepository();
 	projects.projects = [projectBuilder()];
 	const service = new TodoCatalog(todos, projects, anchors, notes, provenance);
-	const controller = new Todos(capabilityDependencies<TodosDependencies>({ todoCreator: service }));
+	const controller = new Todos(
+		capabilityDependencies<TodosDependencies>({ todoCreator: service }),
+		() => testNow
+	);
 	return {
 		todos,
 		projects,
@@ -38,6 +44,62 @@ const setup = () => {
 };
 
 describe('Task creation rules', () => {
+	const variants: readonly Pick<CreateTodoInput, 'responsibility' | 'waitingOn' | 'status'>[] = [
+		{ responsibility: 'mine', waitingOn: 'Sam' },
+		{ responsibility: 'waiting_on', waitingOn: '  Sam  ' },
+		{ responsibility: 'mine', status: 'done' }
+	];
+	it.each(variants)(
+		'stores the same initial task as the offline preview for %j',
+		async (variant) => {
+			const { controller, todos } = setup();
+			const input = {
+				id: testTodoId(),
+				projectId: testProjectId(),
+				title: '  Send design  ',
+				...variant
+			};
+			const preview = prepareWorkspaceCommand({ kind: 'createTodo', ...input }, null, {
+				userId: testActor().userId,
+				now: testNow,
+				records: new Map(),
+				inventory: 'complete'
+			});
+			const { todo } = await controller.create(testActor(), input);
+			expect({ returned: todo, stored: todos.todos }).toEqual({
+				returned: preview.local?.value,
+				stored: [preview.local?.value]
+			});
+		}
+	);
+	it('rejects a blank title before creating a task', async () => {
+		const { controller, todos } = setup();
+		const result = await controller
+			.create(testActor(), { projectId: testProjectId(), title: '  ', responsibility: 'mine' })
+			.then(
+				() => 'saved',
+				(error: Error) => error.message
+			);
+		expect({ result, stored: todos.todos }).toEqual({
+			result: 'Todo title is required',
+			stored: []
+		});
+	});
+	it.each([
+		['another account', projectBuilder({ userId: testActor(2).userId })],
+		['archived', projectBuilder({ archivedAt: testNow })]
+	])('rejects creating a task in an unavailable project: %s', async (_label, project) => {
+		const { controller, projects } = setup();
+		projects.projects = [project];
+		await expect(
+			controller.create(testActor(), {
+				projectId: project.id,
+				title: 'Send design',
+				responsibility: 'mine'
+			})
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	});
+
 	it('preserves the final identity assigned to a task before it was synchronized', async () => {
 		const { controller } = setup();
 		const id = testTodoId(501);
