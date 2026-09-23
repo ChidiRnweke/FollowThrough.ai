@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import type { SuggestionId } from '$lib/models/suggestions';
+import type { NoteId } from '$lib/models/notes';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { RelationshipId } from '$lib/models/relationships';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -126,10 +127,10 @@ describe('Durable proposal application effects', () => {
 	});
 	it('preserves an existing relationship when undo restores its justification', async () => {
 		const state = await setup('9503');
-		const target = await seedNote('9504', state.owner);
-		await new NoteRecords(state.database).update(state.owner, {
-			...target.note,
-			projectId: state.project.id
+		const target = await new NoteRecords(state.database).insert(state.owner, {
+			...state.note,
+			id: crypto.randomUUID() as NoteId,
+			position: 1
 		});
 		const relationships = new RelationshipRecords(state.database);
 		const graph = new RelationshipGraph(
@@ -142,7 +143,7 @@ describe('Durable proposal application effects', () => {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: state.owner.userId,
 			sourceNoteId: state.note.id,
-			targetNoteId: target.note.id,
+			targetNoteId: target.id,
 			kind: 'elaborates',
 			justification: 'Original',
 			createdAt: now,
