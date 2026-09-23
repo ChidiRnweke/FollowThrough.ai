@@ -92,7 +92,8 @@ import type {
 	ReplaceNoteTextInput,
 	ReplaceNoteTextOutput
 } from '$lib/models/notes';
-import { MAX_NOTE_DOCUMENTS, collectNoteLinkTargets } from '$lib/models/notes';
+import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
+import { collectNoteLinkTargets } from '$lib/services/notes/references';
 import { sectionNumberingView } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import {

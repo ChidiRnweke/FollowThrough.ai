@@ -22,7 +22,7 @@
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
-	import { drawioReferencesIn } from '$lib/models/notes';
+	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
