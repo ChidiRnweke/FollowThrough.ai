@@ -82,7 +82,8 @@ workspace checkbox in an authenticated app. No production rendering behavior cha
 
 Focused regressions passed five files and 59 tests, including actual browser rendering and the
 server Markdown round trip. Full gates and required CI are recorded in the continuation register.
-These dispositions leave extraction, provenance, screenshots and exports for their own review.
+Extraction/source changes are reconciled in [the origin review](task-origins.md) and exports in
+[the export review](task-exports.md). Screenshot completion (W09.16) remains open.
 
 The full local unit suite passed 444 files and 4,099 tests. The new preview case also passed in the
 focused browser run above. Lint, type checks, architecture audits and documentation checks passed.

@@ -114,7 +114,6 @@
 				<TodoSourceField
 					todoId={view.todo.id}
 					projectId={view.todo.projectId}
-					value={view.todo.linkedNoteId}
 					sourceTitle={view.sourceNote?.title}
 					hasOrigin={view.originNote !== undefined}
 					{notes}
@@ -201,7 +200,6 @@
 						><TodoSourceField
 							todoId={view.todo.id}
 							projectId={view.todo.projectId}
-							value={view.todo.linkedNoteId}
 							sourceTitle={view.sourceNote?.title}
 							hasOrigin={view.originNote !== undefined}
 							quiet
