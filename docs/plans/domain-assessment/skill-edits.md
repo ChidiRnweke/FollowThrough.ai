@@ -49,6 +49,7 @@ They do not count repository calls. Storage contracts are verified in CI; Docker
 the current local environment.
 
 This continues the skill edit and version workflows. [Resolved metadata persistence](skill-metadata-persistence.md)
-removes repository defaults and upsert semantics. Portable-name conflict handling, pin/usage writes
-and complete declaration dispositions still need separate review. This slice does not establish
+removes repository defaults and upsert semantics. [Skill pins](skill-pins.md) reviews project pin writes,
+and [skill values](skill-values.md) records declaration dispositions. Portable-name conflict handling
+and usage writes still need separate review. This slice does not establish
 repository-wide completion.

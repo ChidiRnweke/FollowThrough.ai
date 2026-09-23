@@ -198,7 +198,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W12.09 Save skill content.
 - [ ] W12.10 Propose, preview, approve, and apply targeted edits.
 - [ ] W12.11 Propose, preview, approve, and replace complete content.
-- [ ] W12.12 Pin and unpin skills.
+- [x] W12.12 Pin and unpin skills. [Disposition and observed contracts](skill-pins.md); implementation remains in open PR #200.
 - [ ] W12.13 Browse skill versions.
 - [ ] W12.14 Restore earlier versions.
 - [ ] W12.15 Discover and load skills for execution.
