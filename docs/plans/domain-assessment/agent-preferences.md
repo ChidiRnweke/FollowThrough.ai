@@ -21,10 +21,10 @@ Omitted fields retain current values, null clears an override, and explicit fals
 completion. Offline and server edits use the same rule and update timestamp. CreatedAt remains stable
 after persistence. Resolved persistence checks actor identity and retains nullable column clearing.
 
-Vision and generation capability checks are required by the model catalog interface. Settings writes
-cannot silently skip them when a supplied catalog lacks a method. The production catalog retains its
-existing checks. The shared fake implements them; the pinned evaluation catalog rejects preference
-changes it does not support. It retains its existing pinned-run behavior.
+Vision and generation capability checks run in the controller through the shared model-choice rule.
+The catalog supplies metadata and cannot bypass validation. The configured deployment choices and
+provider capability facts determine which model can fill each role. See the
+[model-choice disposition](agent-model-choice.md) for the current owner and evaluation behavior.
 
 ## Ownership and test decisions
 
@@ -51,4 +51,5 @@ per-run model resolution and other account settings still require their own disp
 
 Local validation passed 16 focused files and 100 tests, then all 413 unit files and 3,917 tests.
 Lint, type checks, architecture audits and documentation checks passed; docs report one existing hint.
-The new PostgreSQL races await the dependent PR's CI run.
+[PR #169 CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35861816871) passed
+the PostgreSQL races, quality, full browser/unit tests and sync PWA. Commit and PR title checks also passed.

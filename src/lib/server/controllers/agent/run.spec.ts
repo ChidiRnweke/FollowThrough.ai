@@ -54,7 +54,8 @@ describe('durable agent submission', () => {
 		const { controller } = setup();
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-000000000001',
-			input: 'Help me decide'
+			input: 'Help me decide',
+			model: 'openai/test-model'
 		});
 		expect(receipt.status).toBe('queued');
 	});

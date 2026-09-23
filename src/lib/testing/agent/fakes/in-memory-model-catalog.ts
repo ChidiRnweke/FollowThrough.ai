@@ -1,6 +1,5 @@
 import type { AgentModel } from '$lib/models/agent';
 import type { AgentModelCatalog } from '$lib/server/services/agent/runs/preferences';
-import { ValidationError } from '$lib/errors';
 
 export class InMemoryModelCatalog implements AgentModelCatalog {
 	models: AgentModel[] = [];
@@ -8,17 +7,5 @@ export class InMemoryModelCatalog implements AgentModelCatalog {
 	async list(): Promise<readonly AgentModel[]> {
 		if (this.failure) throw this.failure;
 		return this.models;
-	}
-	async assertSelectable(modelId: string): Promise<void> {
-		if (!this.models.some((model) => model.id === modelId && model.supportsTools))
-			throw new ValidationError('The selected model is unavailable or does not support tools');
-	}
-	async assertVisionSelectable(modelId: string): Promise<void> {
-		if (!this.models.some((model) => model.id === modelId && model.supportsVision))
-			throw new ValidationError('The selected vision model is unavailable or cannot read images');
-	}
-	async assertGenerationSelectable(modelId: string): Promise<void> {
-		if (!this.models.some((model) => model.id === modelId))
-			throw new ValidationError('The selected model is unavailable');
 	}
 }

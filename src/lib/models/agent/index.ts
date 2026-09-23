@@ -265,16 +265,12 @@ export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
 
 export const DEFAULT_AGENT_MAX_TURNS = 20;
 
+/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
 export const normalizeLanguageModelId = (modelId: string): string => {
 	const separator = modelId.indexOf(':');
 	if (separator <= 0 || modelId.includes('/')) return modelId;
 	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
 };
-
-export const resolveAttachmentVisionModel = (
-	preferences: Pick<AgentPreferences, 'attachmentVisionModel'>,
-	environmentDefault: string
-): string => normalizeLanguageModelId(preferences.attachmentVisionModel ?? environmentDefault);
 
 export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
 	engine: 'exa',
@@ -1846,27 +1842,6 @@ export type AgentExecutionUpdate =
 
 export * from './agent-runs';
 export * from './session-item';
-
-/** Preserve explicitly configured models when the deployment catalog omits them. */
-export const configuredAgentModels = (
-	models: readonly AgentModel[],
-	defaults: { chatModelId: string; visionModelId: string }
-): readonly AgentModel[] => {
-	const result = [...models];
-	for (const id of new Set([defaults.chatModelId, defaults.visionModelId])) {
-		if (result.some((model) => model.id === id)) continue;
-		result.push({
-			id,
-			name: id,
-			provider: id.split('/')[0],
-			supportsTools: id === defaults.chatModelId,
-			supportsVision: id === defaults.visionModelId,
-			recommended: false,
-			capabilities: ['configured']
-		});
-	}
-	return result;
-};
 
 export type RunSettlementOutcome =
 	| { readonly kind: 'completed'; readonly conversationId: ConversationId; readonly model: string }

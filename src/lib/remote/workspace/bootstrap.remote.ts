@@ -11,24 +11,10 @@ import { requestActor } from '$lib/server/factories/request-actor-factory';
 export const readWorkspaceBootstrap = command(z.object({}), async () => {
 	const actor = requestActor();
 	const settings = AppFactory.controllers().agentSettings();
-	const [agentDefaults, models] = await Promise.all([
+	const [agentDefaults, agentModels] = await Promise.all([
 		settings.deploymentDefaults(actor),
 		settings.listModels(actor)
 	]);
-	const agentModels = models.some((model) => model.id === agentDefaults.chatModelId)
-		? models
-		: [
-				...models,
-				{
-					id: agentDefaults.chatModelId,
-					name: agentDefaults.chatModelId,
-					provider: agentDefaults.chatModelId.split('/')[0],
-					supportsTools: true,
-					supportsVision: false,
-					recommended: false,
-					capabilities: ['configured']
-				}
-			];
 	const environment = webSearchOptionsFromEnvironment(process.env);
 	return {
 		accountId: actor.userId,

@@ -1,21 +1,16 @@
 import { OpenRouter } from '@openrouter/sdk';
 import type { ActorContext } from '$lib/models/identity';
-import {
-	normalizeLanguageModelId,
-	resolveAttachmentVisionModel,
-	type AgentExecutionMode,
-	type AgentModel,
-	type AgentPreferences,
-	type Conversation
+import type {
+	AgentExecutionMode,
+	AgentModel,
+	AgentPreferences,
+	Conversation
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
-import type { WebResearchOptions } from '$lib/models/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
-
-export { normalizeLanguageModelId, resolveAttachmentVisionModel };
 
 export interface AgentPreferencesStore {
 	get(actor: ActorContext): Promise<AgentPreferences>;
@@ -23,15 +18,6 @@ export interface AgentPreferencesStore {
 
 export interface AgentModelCatalog {
 	list(): Promise<readonly AgentModel[]>;
-	/** Selectable as the chat model: must exist and support tool calling. */
-	assertSelectable(modelId: string): Promise<void>;
-	assertVisionSelectable(modelId: string): Promise<void>;
-	/**
-	 * Selectable for a toolless call such as inline completion. Existence is the
-	 * only requirement — demanding tool support here would rule out exactly the
-	 * small, fast models this path wants.
-	 */
-	assertGenerationSelectable(modelId: string): Promise<void>;
 }
 
 export class AgentPreferenceCatalog implements AgentPreferencesStore {
@@ -105,91 +91,6 @@ export class AgentModels implements AgentModelCatalog {
 			throw error;
 		}
 	}
-
-	async assertSelectable(modelId: string): Promise<void> {
-		const model = (await this.list()).find((candidate) => candidate.id === modelId);
-		if (!model || !model.supportsTools)
-			throw new ValidationError('The selected model is unavailable or does not support tools');
-	}
-
-	async assertVisionSelectable(modelId: string): Promise<void> {
-		const model = (await this.list()).find((candidate) => candidate.id === modelId);
-		if (!model?.supportsVision)
-			throw new ValidationError('The selected vision model is unavailable or cannot read images');
-	}
-
-	async assertGenerationSelectable(modelId: string): Promise<void> {
-		const model = (await this.list()).find((candidate) => candidate.id === modelId);
-		if (!model) throw new ValidationError('The selected model is unavailable');
-	}
-}
-
-/**
- * The tail of the resolution chain: what a conversation with no override of its
- * own runs on. Split out because the composer names this model on screen, and a
- * client that guessed it would confidently label a model the run does not use —
- * the deployment fallback is server-only configuration.
- */
-export function resolveDefaultAgentModel(
-	preferences: Pick<AgentPreferences, 'defaultModel'>,
-	environmentDefault: string
-): string {
-	return normalizeLanguageModelId(preferences.defaultModel ?? environmentDefault);
-}
-
-export function resolveDefaultVisionModel(
-	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
-	environmentDefault: string
-): string {
-	return normalizeLanguageModelId(preferences.defaultVisionModel ?? environmentDefault);
-}
-
-export function resolveAgentModel(
-	conversation: Pick<Conversation, 'modelOverride'>,
-	preferences: Pick<AgentPreferences, 'defaultModel'>,
-	environmentDefault: string
-): string {
-	return conversation.modelOverride
-		? normalizeLanguageModelId(conversation.modelOverride)
-		: resolveDefaultAgentModel(preferences, environmentDefault);
-}
-
-export function resolveVisionModel(
-	conversation: Pick<Conversation, 'visionModelOverride'>,
-	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
-	environmentDefault: string
-): string {
-	return conversation.visionModelOverride
-		? normalizeLanguageModelId(conversation.visionModelOverride)
-		: resolveDefaultVisionModel(preferences, environmentDefault);
-}
-
-export function resolveMaxTurns(
-	preferences: Pick<AgentPreferences, 'agentMaxTurns'>,
-	environmentDefault: number
-): number {
-	return preferences.agentMaxTurns ?? environmentDefault;
-}
-
-/**
- * Layered over the environment options rather than replacing them, so a user who
- * has set only a result cap still gets the deployment's engine.
- */
-export function resolveWebSearchOptions(
-	preferences: Pick<
-		AgentPreferences,
-		'webSearchEngine' | 'webSearchMaxResults' | 'webSearchMaxTotalResults'
-	>,
-	environmentDefaults: WebResearchOptions
-): WebResearchOptions {
-	return {
-		...environmentDefaults,
-		...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
-		...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
-		...(preferences.webSearchMaxTotalResults
-			? { maxTotalResults: preferences.webSearchMaxTotalResults }
-			: {})
-	};
 }
 
 export function resolveAgentExecutionMode(

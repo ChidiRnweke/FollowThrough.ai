@@ -1,3 +1,10 @@
+import {
+	configuredAgentModels,
+	configuredChatModels,
+	modelChoiceIssue,
+	resolveDefaultAgentModel,
+	resolveDefaultVisionModel
+} from '$lib/services/agent/model-selection';
 import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
@@ -11,11 +18,9 @@ import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '
 import { webSearchEngines } from '$lib/models/agent';
 import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 import { ValidationError } from '$lib/errors';
-import {
-	resolveDefaultAgentModel,
-	resolveDefaultVisionModel,
-	type AgentModelCatalog,
-	type AgentPreferenceCatalog
+import type {
+	AgentModelCatalog,
+	AgentPreferenceCatalog
 } from '$lib/server/services/agent/runs/preferences';
 
 /**
@@ -126,14 +131,23 @@ export class AgentSettings implements AgentSettingsController {
 		actor: ActorContext,
 		input: UpdateAgentPreferencesInput
 	): Promise<AgentPreferences> {
-		if (input.defaultModel) await this.dependencies.models.assertSelectable(input.defaultModel);
+		const choices: { modelId: string; role: 'chat' | 'vision' | 'generation' }[] = [];
+		if (input.defaultModel) choices.push({ modelId: input.defaultModel, role: 'chat' });
 		if (input.defaultVisionModel)
-			await this.dependencies.models.assertVisionSelectable(input.defaultVisionModel);
+			choices.push({ modelId: input.defaultVisionModel, role: 'vision' });
 		if (input.attachmentVisionModel)
-			await this.dependencies.models.assertVisionSelectable(input.attachmentVisionModel);
-		// Inline completion never calls tools, so it is checked for existence only.
-		if (input.inlineModel)
-			await this.dependencies.models.assertGenerationSelectable(input.inlineModel);
+			choices.push({ modelId: input.attachmentVisionModel, role: 'vision' });
+		if (input.inlineModel) choices.push({ modelId: input.inlineModel, role: 'generation' });
+		if (choices.length > 0) {
+			const models = configuredAgentModels(
+				await this.dependencies.models.list(),
+				this.modelDefaults()
+			);
+			for (const choice of choices) {
+				const issue = modelChoiceIssue(models, choice.modelId, choice.role);
+				if (issue) throw new ValidationError(issue);
+			}
+		}
 		// Both the settings form and the agent's own `update_agent_preferences`
 		// land here, so this is the one place the limits have to hold.
 		if (input.webSearchEngine && !webSearchEngines.includes(input.webSearchEngine))
@@ -150,13 +164,17 @@ export class AgentSettings implements AgentSettingsController {
 		});
 	}
 
-	listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
+	async listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
 		void _actor;
-		return this.dependencies.models.list();
+		return configuredChatModels(await this.dependencies.models.list(), this.modelDefaults());
 	}
 
 	async deploymentDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
 		void actor;
+		return this.modelDefaults();
+	}
+
+	private modelDefaults(): AgentModelDefaults {
 		return {
 			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
 			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)

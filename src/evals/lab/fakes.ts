@@ -13,14 +13,6 @@ export class StubModelCatalog implements AgentModelCatalog {
 	async list(): Promise<readonly AgentModel[]> {
 		return [];
 	}
-
-	async assertSelectable(): Promise<void> {}
-	async assertVisionSelectable(): Promise<void> {
-		throw new Error('The evaluation catalog does not support changing model preferences');
-	}
-	async assertGenerationSelectable(): Promise<void> {
-		throw new Error('The evaluation catalog does not support changing model preferences');
-	}
 }
 
 /** Keeps attachment bytes in the process so the lab needs no S3/MinIO. */

@@ -54,6 +54,44 @@ const setup = () => {
 };
 
 describe('agent settings controller behavior', () => {
+	it.each([
+		['defaultModel', DEPLOYMENT_CHAT_MODEL],
+		['defaultVisionModel', DEPLOYMENT_VISION_MODEL],
+		['attachmentVisionModel', DEPLOYMENT_VISION_MODEL],
+		['inlineModel', DEPLOYMENT_CHAT_MODEL]
+	] as const)(
+		'accepts the configured deployment model for %s when the provider omits it',
+		async (field, modelId) => {
+			const { controller } = setup();
+			expect((await controller.updatePreferences(testActor(), { [field]: modelId }))[field]).toBe(
+				modelId
+			);
+		}
+	);
+	it('rejects a newly selected chat model without tool support', async () => {
+		const { controller, models } = setup();
+		models.models = [
+			{
+				id: 'vendor/text',
+				name: 'Text',
+				provider: 'vendor',
+				supportsTools: false,
+				supportsVision: false,
+				recommended: false,
+				capabilities: []
+			}
+		];
+		await expect(
+			controller.updatePreferences(testActor(), { defaultModel: 'vendor/text' })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+	it('reports a catalog failure instead of treating it as an empty catalog', async () => {
+		const { controller, models } = setup();
+		models.failure = new Error('Catalog unavailable');
+		await expect(
+			controller.updatePreferences(testActor(), { defaultModel: DEPLOYMENT_CHAT_MODEL })
+		).rejects.toThrow('Catalog unavailable');
+	});
 	it('creates the first preferences with one timestamp and the requested settings', async () => {
 		const { controller, repository } = setup();
 		repository.entries.clear();
@@ -125,9 +163,20 @@ describe('agent settings controller behavior', () => {
 		);
 	});
 
-	it('returns the selectable model catalog', async () => {
+	it('includes the deployment chat model alongside provider models', async () => {
 		const { controller, models } = setup();
-		expect(await controller.listModels(testActor())).toEqual(models.models);
+		expect(await controller.listModels(testActor())).toEqual([
+			...models.models,
+			{
+				id: DEPLOYMENT_CHAT_MODEL,
+				name: DEPLOYMENT_CHAT_MODEL,
+				provider: 'deepseek',
+				supportsTools: true,
+				supportsVision: false,
+				recommended: false,
+				capabilities: ['configured']
+			}
+		]);
 	});
 
 	it('persists a selectable default model', async () => {

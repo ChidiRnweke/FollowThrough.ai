@@ -34,11 +34,15 @@ import type {
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
+import { resolveAgentExecutionMode } from '$lib/server/services/agent/runs/preferences';
 import {
-	resolveAgentExecutionMode,
+	configuredAgentModels,
+	modelChoiceIssue,
 	resolveAgentModel,
-	resolveVisionModel
-} from '$lib/server/services/agent/runs/preferences';
+	resolveVisionModel,
+	resolveDefaultAgentModel,
+	resolveDefaultVisionModel
+} from '$lib/services/agent/model-selection';
 import {
 	abortActiveRun,
 	registerActiveRun,
@@ -294,7 +298,14 @@ export class Agent implements AgentController {
 	async submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt> {
 		const existing = await this.dependencies.runs.findByRequestId(actor, input.requestId);
 		if (existing) return this.receipt(actor, existing);
-		if (input.model) await this.dependencies.models.assertSelectable(input.model);
+		if (input.model) {
+			const models = configuredAgentModels(await this.dependencies.models.list(), {
+				chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
+				visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
+			});
+			const issue = modelChoiceIssue(models, input.model, 'chat');
+			if (issue) throw new ValidationError(issue);
+		}
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
 				const submittedAt = now();

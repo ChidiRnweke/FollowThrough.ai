@@ -78,6 +78,14 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The model-choice slice shares precedence rules and fixes rejection of explicitly selected deployment
+defaults omitted by the provider catalog. It retains role checks, provider metadata and loud lookup
+failure. See the [model-choice disposition](agent-model-choice.md).
+
+[PR #169](https://github.com/ChidiRnweke/FollowThrough.ai/pull/169) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35861816871).
+Its preference-write implementation remains open on the dependent stack.
+
 The agent preference slice removes the service-owned read-apply-write workflow. It serializes first
 creation and later edits, shares timestamp/nullable edit rules with offline commands and requires model
 capability validation. See the [agent-preference disposition](agent-preferences.md).

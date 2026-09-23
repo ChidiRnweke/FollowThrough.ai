@@ -1,7 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentVersion, AttachmentView } from '$lib/models/attachments';
 import type { AgentPreferences } from '$lib/models/agent';
-import { resolveAttachmentVisionModel } from '$lib/models/agent';
+import { resolveAttachmentVisionModel } from '$lib/services/agent/model-selection';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	DocumentImageDescription,
