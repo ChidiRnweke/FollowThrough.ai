@@ -195,12 +195,12 @@ export class AgentRunDecisionRecords implements AgentRunDecisionRepository {
 		return Boolean(row);
 	}
 
-	async clearPending(runId: AgentRunId): Promise<boolean> {
+	async clearPending(runId: AgentRunId): Promise<void> {
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({ pendingDecisions: [] })
 			.where(eq(schema.agentRuns.id, runId))
 			.returning({ id: schema.agentRuns.id });
-		return Boolean(row);
+		if (!row) throw new NotFoundError('Agent run was not found');
 	}
 }

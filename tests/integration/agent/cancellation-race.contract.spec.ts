@@ -4,6 +4,8 @@ import type { AgentRunId, ConversationId } from '$lib/models/agent';
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { actor, context, now } from '../database-harness';
 
 it('preserves cancellation committed while prepared context waits for the run row', async () => {
@@ -16,7 +18,9 @@ it('preserves cancellation committed while prepared context waits for the run ro
 		createdAt: now,
 		updatedAt: now
 	});
-	const runs = new AgentRunRecords(context.db);
+	const { database, transactionRunner } = createTransactionContext(context.db);
+	const runs = new AgentRunRecords(database);
+	const preparation = new RunPreparation(runs);
 	const run = await runs.insert(owner, {
 		kind: 'agent',
 		id: crypto.randomUUID() as AgentRunId,
@@ -45,10 +49,15 @@ it('preserves cancellation committed while prepared context waits for the run ro
 	});
 	try {
 		await locked.promise;
-		const saved = runs
-			.update(owner, {
-				...run,
-				contextSnapshot: { contextNotes: [], skills: { items: [] } }
+		const saved = transactionRunner
+			.run(async () => {
+				const current = await preparation.getForWrite(owner, run.id);
+				const change = preparation.context(
+					current,
+					{ contextNotes: [], skills: { items: [] } },
+					now
+				);
+				return preparation.persistContext(owner, run.id, change);
 			})
 			.then(
 				(value) => ({ kind: 'saved' as const, value }),

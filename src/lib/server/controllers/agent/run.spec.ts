@@ -391,6 +391,33 @@ describe('durable agent lifecycle commands', () => {
 		expect(snapshot.run.status).toBe('cancelled');
 	});
 
+	it('returns no pending approval cards after cancelling a parked run', async () => {
+		const { controller, receipt } = await awaitingApproval([
+			{ callId: 'call-cleared', toolName: 'archive_note', arguments: { noteId: testNoteId() } }
+		]);
+		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		expect({ run: snapshot.run.pendingDecisions, cards: snapshot.pendingDecisions }).toEqual({
+			run: [],
+			cards: []
+		});
+	});
+
+	it('clears pending calls when a reviewed run is cancelled before it resumes', async () => {
+		const { controller, receipt } = await awaitingApproval([
+			{ callId: 'call-reviewed', toolName: 'archive_note', arguments: { noteId: testNoteId() } }
+		]);
+		await controller.decide(testActor(), {
+			runId: receipt.runId,
+			callId: 'call-reviewed',
+			decision: 'approve'
+		});
+		const snapshot = await controller.cancel(testActor(), receipt.runId);
+		expect({ run: snapshot.run.pendingDecisions, cards: snapshot.pendingDecisions }).toEqual({
+			run: [],
+			cards: []
+		});
+	});
+
 	describe('the cancellation backstop', () => {
 		it('settles the run when the executor never unwinds', async () => {
 			vi.useFakeTimers();

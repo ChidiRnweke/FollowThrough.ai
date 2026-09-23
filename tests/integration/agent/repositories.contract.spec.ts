@@ -357,9 +357,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		};
 		const runs = new AgentRunRecords(context.db);
 		await runs.transition(run.id, 'queued', 'running');
-		await runs.update(owner, {
-			...run,
-			status: 'awaiting_approval',
+		await runs.transition(run.id, 'running', 'awaiting_approval', {
 			serializedState: 'checkpoint',
 			pendingDecisions: [pending]
 		});
@@ -440,9 +438,13 @@ describe('Postgres durable agent run repository invariants', () => {
 		const parked = {
 			callId: 'call-103',
 			toolName: 'archive_note' as const,
-			arguments: { noteId: 'note-103' }
+			arguments: { noteId: '40000000-0000-4000-8000-000000000103' }
 		};
-		await runs.update(actor('103'), { ...run, pendingDecisions: [parked] });
+		await runs.transition(run.id, 'queued', 'running');
+		await runs.transition(run.id, 'running', 'awaiting_approval', {
+			serializedState: 'checkpoint',
+			pendingDecisions: [parked]
+		});
 		const reread = await runs.findById(actor('103'), run.id);
 		expect(reread?.pendingDecisions).toEqual([parked]);
 	});

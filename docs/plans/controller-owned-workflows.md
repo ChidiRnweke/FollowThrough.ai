@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Pending run calls: Agent journals and clears abandoned calls in the settlement transaction. Terminal
+responses read the saved run, including queued-after-review cancellation. Whole-run replacement is
+removed. See the [disposition](domain-assessment/run-pending-cleanup.md).
+
 Chat preparation: Agent owns locked provenance writes and atomic context/start-event persistence.
 RunPreparation keeps authoritative frozen facts and identifies cancellation before provider execution.
 See the [disposition](domain-assessment/agent-preparation.md).
