@@ -6,6 +6,7 @@ import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
@@ -52,7 +53,8 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 		capabilityDependencies<SkillsDependencies>({
 			skillFinder: library,
 			skillUsageRecorder: library,
-			skillUsageLister: library
+			skillUsageLister: library,
+			transactionRunner: new InMemoryTransactionRunner([notes, skills])
 		})
 	);
 	return { controller, note, notes, skills };

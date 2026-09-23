@@ -171,16 +171,18 @@ export class Skills implements SkillsController {
 		return { skill, usages };
 	}
 	async loadForAgent(actor: ActorContext, input: LoadSkillInput): Promise<SkillView<Note>> {
-		const skill = await this.dependencies.skillFinder.load(actor, input.noteId);
-		await this.dependencies.skillUsageRecorder.record(actor, {
-			skillNoteId: input.noteId,
-			contextNoteId: input.contextNoteId,
-			provenanceId: input.provenanceId
+		return this.dependencies.transactionRunner.run(async () => {
+			const skill = await this.dependencies.skillFinder.load(actor, input.noteId);
+			await this.dependencies.skillUsageRecorder.record(actor, {
+				skillNoteId: input.noteId,
+				contextNoteId: input.contextNoteId,
+				provenanceId: input.provenanceId
+			});
+			return {
+				skill,
+				usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
+			};
 		});
-		return {
-			skill,
-			usages: await this.dependencies.skillUsageLister.list(actor, input.noteId)
-		};
 	}
 	private async createSkillNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
 		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);

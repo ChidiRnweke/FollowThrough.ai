@@ -32,7 +32,9 @@ description unchanged. The harness disables transaction retries, so they cannot 
 
 The name race's before state follows from the two unlocked catalog reads and the absence of an
 actor-wide SQL constraint. PostgreSQL is unavailable locally; the old SQL scenario was not executed
-locally, and the new contracts must pass in CI before they count as observed evidence.
+locally. All six new contracts passed in
+[PR #202 CI](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35908382055), together with
+the existing project, skill and synchronization contracts.
 
 This change serializes the existing decisions. It does not rename preexisting duplicate catalog
 entries or settle an authored name that predates installation of a built-in with that name. Built-in
