@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { sectionNumbersFor, type OutlineHeading } from '$lib/models/notes';
+	import { type OutlineHeading } from '$lib/models/notes';
+	import { sectionNumbersFor } from '$lib/services/notes/section-numbering';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn } from '$lib/utils.js';
 

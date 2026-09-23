@@ -23,7 +23,7 @@
 		type ProseMirrorDocument,
 		type TextSelection
 	} from '$lib/models/notes';
-	import { activeHeadingAt, outlineFrom } from '$lib/models/notes';
+	import { activeHeadingAt, outlineFrom } from '$lib/services/notes/outline';
 	import type { ProjectId } from '$lib/models/projects';
 	import { ProjectDiagramPicker, MermaidNodeView } from '$lib/components/diagrams';
 	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
