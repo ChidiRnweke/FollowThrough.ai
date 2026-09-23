@@ -38,5 +38,6 @@ status list is removed. Public commands and response shapes remain unchanged. No
 - Add resumed-checkpoint clearing and consistent finish/update timestamps, plus PostgreSQL coverage
   of actual approval, resume and completion. Add a database refusal to complete a queued run.
 
-The PR records observed validation. Event-output reconstruction and other P17 declarations remain
-unresolved; this disposition does not complete the full workflow inventory.
+The PR records observed validation. The subsequent [run-output disposition](run-output.md) covers
+reconstruction. Other P17 declarations remain unresolved; this disposition does not complete the full
+workflow inventory.

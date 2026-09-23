@@ -22,8 +22,6 @@ import type {
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import type { OutputSegment } from '$lib/server/repositories/agent';
-import { segmentOutput } from '$lib/server/repositories/agent';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -329,15 +327,13 @@ export class InMemoryAgentRunPersistence
 		return this.events.filter((event) => event.runId === runId).at(-1)?.cursor ?? '0';
 	}
 
-	async reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]> {
-		return segmentOutput(
-			this.events
-				.filter((record) => record.runId === runId && record.attempt === attempt)
-				.map((record) => ({
-					cursor: record.cursor,
-					event: { kind: 'readable', event: record.event }
-				}))
-		);
+	async listAttempt(
+		runId: AgentRunId,
+		attempt: number
+	): Promise<readonly StoredAgentRunEventRecord[]> {
+		return this.events
+			.filter((record) => record.runId === runId && record.attempt === attempt)
+			.map((record) => ({ ...record, kind: 'readable' as const }));
 	}
 
 	async record(

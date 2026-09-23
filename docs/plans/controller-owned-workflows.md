@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Run output: repositories read ordered attempt events; the run-output service reconstructs text and
+reasoning boundaries. Agent journals the resolved segments in its settlement transaction. See the
+[disposition](domain-assessment/run-output.md).
+
 Terminal run settlement: RunSettlements supplies resolved outcome writes with correlated expected
 states. Completion clears provider checkpoints explicitly. Generic run transitions are removed.
 See the [disposition](domain-assessment/run-terminal-settlement.md).

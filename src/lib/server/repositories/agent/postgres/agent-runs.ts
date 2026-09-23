@@ -12,10 +12,8 @@ import type { NoteActionResult } from '../agent-runs';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
-	AgentRunEventRepository,
-	OutputSegment
+	AgentRunEventRepository
 } from '$lib/server/repositories/agent';
-import { segmentOutput } from '$lib/server/repositories/agent';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/agent';
 
@@ -114,20 +112,18 @@ export class AgentRunEventRecords implements AgentRunEventRepository {
 		return BigInt(row?.cursor ?? 0).toString();
 	}
 
-	async reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]> {
+	async listAttempt(
+		runId: AgentRunId,
+		attempt: number
+	): Promise<readonly StoredAgentRunEventRecord[]> {
 		const rows = await this.database
-			.select({ cursor: schema.agentRunEvents.cursor, event: schema.agentRunEvents.event })
+			.select()
 			.from(schema.agentRunEvents)
 			.where(
 				and(eq(schema.agentRunEvents.runId, runId), eq(schema.agentRunEvents.attempt, attempt))
 			)
 			.orderBy(asc(schema.agentRunEvents.cursor));
-		return segmentOutput(
-			rows.map(({ cursor, event }) => ({
-				cursor: String(cursor),
-				event: readAgentEvent(event)
-			}))
-		);
+		return rows.map(toStoredEvent);
 	}
 }
 

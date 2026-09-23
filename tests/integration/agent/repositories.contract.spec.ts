@@ -1,4 +1,5 @@
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { segmentOutput } from '$lib/server/services/agent/runs/output';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
@@ -356,6 +357,41 @@ describe('Postgres durable agent run repository invariants', () => {
 			latest: terminal.cursor,
 			next: [],
 			complete: true
+		});
+	});
+
+	it('reconstructs one attempt without merging across an unreadable stored event', async () => {
+		const run = await seedQueuedRun('17901');
+		const other = await seedQueuedRun('17902');
+		const runs = new AgentRunRecords(context.db);
+		await new RunPreparation(runs).claim(run.id, now);
+		const events = new AgentRunEventRecords(context.db);
+		const first = await events.append(run.id, 1, { type: 'text_delta', text: 'Before.' });
+		await events.append(run.id, 2, { type: 'text_delta', text: 'Another attempt.' });
+		const unreadable = await events.append(run.id, 1, {
+			type: 'text_delta',
+			text: 'Future output.'
+		});
+		await context.db.execute(
+			sql`update agent_run_events set event = '{"type":"future_output"}'::jsonb where cursor = ${unreadable.cursor}`
+		);
+		await events.append(other.id, 0, {
+			type: 'run_queued',
+			runId: other.id,
+			attempt: 1,
+			reason: 'submitted'
+		});
+		const last = await events.append(run.id, 1, { type: 'text_delta', text: 'After.' });
+		const records = await events.listAttempt(run.id, 1);
+		expect({
+			kinds: records.map((record) => record.kind),
+			segments: segmentOutput(records)
+		}).toEqual({
+			kinds: ['readable', 'unreadable', 'readable'],
+			segments: [
+				{ kind: 'text', text: 'Before.', cursor: first.cursor },
+				{ kind: 'text', text: 'After.', cursor: last.cursor }
+			]
 		});
 	});
 

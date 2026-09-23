@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentEvent, AgentRunId, StoredAgentEvent } from '$lib/models/agent';
-import { segmentOutput } from './agent-runs';
+import type {
+	AgentEvent,
+	AgentRunId,
+	StoredAgentEvent,
+	StoredAgentRunEventRecord
+} from '$lib/models/agent';
+import { segmentOutput } from './output';
 
 const runId = '00000000-0000-4000-8000-000000000001' as AgentRunId;
 
 let cursor = 0;
 const stored = (event: AgentEvent): StoredAgentEvent => ({ kind: 'readable', event });
-const at = (event: AgentEvent) => ({ cursor: String(++cursor), event: stored(event) });
+const row = (cursor: string, event: StoredAgentEvent): StoredAgentRunEventRecord => ({
+	cursor,
+	runId,
+	attempt: 1,
+	createdAt: new Date('2026-01-01T00:00:00Z'),
+	...event
+});
+const at = (event: AgentEvent) => row(String(++cursor), stored(event));
 
 const text = (value: string): AgentEvent => ({ type: 'text_delta', text: value });
 const thinking = (value: string): AgentEvent => ({ type: 'reasoning_delta', text: value });
@@ -19,7 +31,9 @@ const toolStarted = (): AgentEvent => ({
 
 describe('A turn is folded into the runs of output it was', () => {
 	it('joins the deltas of one run into a single segment', () => {
-		expect(segmentOutput([at(text('Hello ')), at(text('there.'))])).toHaveLength(1);
+		expect(
+			segmentOutput([at(text('Hello ')), at(text('there.'))]).map((segment) => segment.text)
+		).toEqual(['Hello there.']);
 	});
 
 	it('keeps thinking apart from speech', () => {
@@ -37,9 +51,9 @@ describe('A turn is folded into the runs of output it was', () => {
 
 	it('remembers where a segment began, which is what puts the turn back in order', () => {
 		const segments = segmentOutput([
-			{ cursor: '1', event: stored(text('a')) },
-			{ cursor: '2', event: stored(toolStarted()) },
-			{ cursor: '3', event: stored(text('b')) }
+			row('1', stored(text('a'))),
+			row('2', stored(toolStarted())),
+			row('3', stored(text('b')))
 		]);
 		expect(segments.at(-1)?.cursor).toBe('3');
 	});
@@ -51,9 +65,9 @@ describe('A turn is folded into the runs of output it was', () => {
 	it('closes the open segment on a row it could not read, rather than merging across it', () => {
 		expect(
 			segmentOutput([
-				{ cursor: '1', event: stored(text('a')) },
-				{ cursor: '2', event: { kind: 'unreadable', reason: 'unrecognised type' } },
-				{ cursor: '3', event: stored(text('b')) }
+				row('1', stored(text('a'))),
+				row('2', { kind: 'unreadable', reason: 'unrecognised type' }),
+				row('3', stored(text('b')))
 			]).map((segment) => segment.text)
 		).toEqual(['a', 'b']);
 	});
