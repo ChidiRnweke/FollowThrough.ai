@@ -39,6 +39,17 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #214](https://github.com/ChidiRnweke/FollowThrough.ai/pull/214) rejects unavailable project
+exports and records the two export workflows. The full local unit suite passed 444 files and 4,103
+tests. All required checks passed, including
+[PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35921491816).
+The first PWA job stopped after Chromium crashed during service-worker registration; its rerun passed.
+
+The [task origin review](task-origins.md) reconciles W09.14 and W09.15. The source selector drops
+an unused input and requires its resolved origin flag. Focused regressions passed 11 files and 83
+tests; the full local unit suite passed 444 files and 4,103 tests. Seventeen of the 18 task workflows
+now have current dispositions. Screenshot completion (W09.16) and the wider assessment remain open.
+
 [PR #213](https://github.com/ChidiRnweke/FollowThrough.ai/pull/213) retires the unused embedded
 task insertion command, verifies passive preview references and records four task surface workflows.
 Focused regressions passed five files and 59 tests; the full local unit suite passed 444 files and

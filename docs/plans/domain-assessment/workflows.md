@@ -148,8 +148,8 @@ from [the execution plan](../domain-assessment-plan.md).
 - [x] W09.11 Move tasks between board statuses. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
 - [x] W09.12 Open details and return to the originating view. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
 - [x] W09.13 Display and update tasks embedded in notes. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
-- [ ] W09.14 Extract commitments from selected passages.
-- [ ] W09.15 Preserve task provenance through source changes.
+- [x] W09.14 Extract commitments from selected passages. [Current origin disposition](task-origins.md); implementation remains on the open stack.
+- [x] W09.15 Preserve task provenance through source changes. [Current origin disposition](task-origins.md); implementation remains on the open stack.
 - [ ] W09.16 Attach screenshots to descriptions.
 - [x] W09.17 Export boards as Markdown. [Current export disposition](task-exports.md); implementation remains on the open stack.
 - [x] W09.18 Export boards as PDF. [Current export disposition](task-exports.md); implementation remains on the open stack.
