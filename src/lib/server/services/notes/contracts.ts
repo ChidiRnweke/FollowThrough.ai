@@ -58,20 +58,6 @@ export interface NoteAttachmentRestorer {
 		revisionId: NoteRevisionId
 	): Promise<void>;
 }
-/**
- * Destroying trashed notes for good. Both methods return the ids they removed, which a
- * folder makes wider than what was asked for: its trashed contents go with it.
- */
-export interface NotePurger {
-	deleteForever(
-		actor: ActorContext,
-		noteId: NoteId
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]>;
-	emptyTrash(
-		actor: ActorContext,
-		projectId?: ProjectId
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]>;
-}
 export interface NoteTrashReader {
 	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly TrashedNote[]>;
 }

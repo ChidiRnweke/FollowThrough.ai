@@ -37,7 +37,7 @@ export interface NoteRepository {
 		note: Note,
 		expectedRevision: number
 	): Promise<Note | undefined>;
-	delete(actor: ActorContext, id: NoteId): Promise<void>;
+	deleteTrashed(actor: ActorContext, id: NoteId): Promise<Pick<Note, 'id' | 'title'> | undefined>;
 	insertRevision(actor: ActorContext, revision: NoteRevision): Promise<NoteRevision>;
 	listRevisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
 	/** Drop all but the newest `keepNewest` revisions of a note, so history stays bounded. */

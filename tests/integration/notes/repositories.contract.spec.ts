@@ -172,14 +172,22 @@ describe('Postgres note repository invariants', () => {
 		const { owner, note } = await seedNote('190');
 		const repository = new NoteRecords(context.db);
 		await repository.update(owner, { ...note, archivedAt: now });
-		await repository.delete(owner, note.id);
+		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, note.id)).toBeUndefined();
 	});
 	it('does not let one actor hard-delete another actor’s note', async () => {
 		const { owner, note } = await seedNote('191');
 		const repository = new NoteRecords(context.db);
-		await repository.delete(actor('192'), note.id);
-		expect(await repository.findById(owner, note.id)).toEqual(note);
+		const trashed = await repository.update(owner, { ...note, archivedAt: now });
+		await repository.deleteTrashed(actor('192'), note.id);
+		expect(await repository.findById(owner, note.id)).toEqual(trashed);
+	});
+	it('refuses storage deletion of a hidden skill in the trash', async () => {
+		const { owner, note } = await seedNote('19407');
+		const repository = new NoteRecords(context.db);
+		const skill = await repository.update(owner, { ...note, kind: 'skill', archivedAt: now });
+		await repository.deleteTrashed(owner, note.id);
+		expect(await repository.findById(owner, note.id)).toEqual(skill);
 	});
 	it('takes the note’s revisions with it', async () => {
 		const { owner, note } = await seedNote('193');
@@ -193,7 +201,8 @@ describe('Postgres note repository invariants', () => {
 			plainText: '',
 			createdAt: now
 		});
-		await repository.delete(owner, note.id);
+		await repository.update(owner, { ...note, archivedAt: now });
+		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.listRevisions(owner, note.id)).toEqual([]);
 	});
 	// `note_revision_attachments.attachment_version_id` is `restrict`, so a note whose
@@ -228,7 +237,8 @@ describe('Postgres note repository invariants', () => {
 			plainText: '',
 			createdAt: now
 		});
-		await repository.delete(owner, note.id);
+		await repository.update(owner, { ...note, archivedAt: now });
+		await repository.deleteTrashed(owner, note.id);
 		expect(await repository.findById(owner, note.id)).toBeUndefined();
 	});
 	it('allows exactly one concurrent note update from the same revision', async () => {
