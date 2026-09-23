@@ -8,7 +8,7 @@ import type {
 	RemoveAttachmentResult
 } from '$lib/models/attachments';
 import type { DateTime } from '$lib/models/workspace';
-import { documentReferencesAttachment, type NoteId } from '$lib/models/notes';
+import type { NoteId, ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -16,6 +16,18 @@ import type { AttachmentRepository } from '$lib/server/repositories/attachments/
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 
 import type { IAttachmentStorage } from '$lib/server/repositories/attachments/storage';
+
+/** Only an embedded image claims this endpoint; prose mentioning it does not. */
+const documentReferencesAttachment = (
+	document: ProseMirrorDocument,
+	attachmentId: AttachmentId
+): boolean => {
+	const expectedSource = `/api/attachments/${attachmentId}/content`;
+	const references = (node: ProseMirrorNode): boolean =>
+		(node.type === 'image' && node.attrs?.src === expectedSource) ||
+		('content' in node && (node.content ?? []).some(references));
+	return (document.content ?? []).some(references);
+};
 
 const validateAttachmentPath = (value: string): string => {
 	const path = value.trim().replaceAll('\\', '/');

@@ -4,7 +4,7 @@ import type {
 	ArchiveLinkIssue,
 	ArchiveReferenceIndex
 } from '$lib/models/projects';
-import { WIKI_LINK_PATTERN } from '$lib/models/notes';
+const WIKI_LINK_PATTERN = /\[\[([^\]|\n]+?)(?:\|([^\]\n]+?))?\]\]/g;
 
 const archivePathKey = (value: string): string | undefined => {
 	const segments: string[] = [];

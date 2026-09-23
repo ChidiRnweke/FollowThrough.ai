@@ -9,7 +9,7 @@ import type { SkillEditInput } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
-import { collectNoteLinkTargets } from '$lib/models/notes';
+import { collectNoteLinkTargets } from '$lib/services/notes/references';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
 import type {

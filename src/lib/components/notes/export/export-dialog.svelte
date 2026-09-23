@@ -2,7 +2,8 @@
 	import { loadExportSettings } from './load-settings';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
-	import { drawioReferencesIn, type ProseMirrorDocument } from '$lib/models/notes';
+	import type { ProseMirrorDocument } from '$lib/models/notes';
+	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';

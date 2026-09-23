@@ -1240,8 +1240,6 @@ export const findProseMirrorDocumentIssue = (
 
 export * from './note-patch';
 
-export * from './note-links';
-
 export interface NoteSearchOptions {
 	readonly regex: boolean;
 	readonly caseSensitive: boolean;
@@ -1323,30 +1321,17 @@ export * from './outline';
 
 export * from './revision-diff';
 
-function collectDrawioIds(node: ProseMirrorNode, ids: string[]): void {
-	if (node.type === 'drawio') {
-		const id = node.attrs?.diagramId;
-		if (id && !ids.includes(id)) ids.push(id);
-		return;
-	}
-	for (const child of 'content' in node ? (node.content ?? []) : []) collectDrawioIds(child, ids);
-}
-
-/** Every draw.io diagram referenced by a set of documents, in document order. */
-export function drawioReferencesIn(
-	documents: readonly { document: ProseMirrorDocument }[]
-): string[] {
-	const ids: string[] = [];
-	for (const entry of documents)
-		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
-	return ids;
-}
-
 export interface NoteCreationIntent {
 	readonly id: NoteId;
 	readonly title: string;
 	readonly kind: 'note' | 'folder' | 'skill';
 	readonly parentId?: NoteId;
+}
+
+/** Enough of a note to offer it as a link target. */
+export interface NoteLinkTarget {
+	readonly id: NoteId;
+	readonly title: string;
 }
 
 export interface NoteCreationFacts {

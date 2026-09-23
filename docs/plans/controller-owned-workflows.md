@@ -621,6 +621,11 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Authored resource references: note and diagram identity discovery uses one typed shared service;
+attachment removal owns its private embedded-image guard. Remove loose model document views and
+retain the editor's link-target value type. Preserve nested-reference, ordering and removal behavior with
+tests at their owners. See the [disposition](domain-assessment/note-resource-references.md).
+
 Note trash ownership: Notes coordinates locked reads, the shared archive/restore rule, targeted
 persistence and indexing in its transaction. Offline commands use the same resolved transition.
 Catalog lifecycle tests move to controller state and rollback checks; PostgreSQL contracts cover

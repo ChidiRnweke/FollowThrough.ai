@@ -98,9 +98,14 @@ All checks passed on [#162](https://github.com/ChidiRnweke/FollowThrough.ai/acti
 and [#163](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35855886034), including
 PostgreSQL contracts, full browser tests and PWA checks. Their PRs remain open.
 
-The [note-trash disposition](note-trash.md) records controller-owned archive/restore transitions,
+[PR #164](https://github.com/ChidiRnweke/FollowThrough.ai/pull/164) contains the
+[note-trash disposition](note-trash.md) and controller-owned archive/restore transitions,
 shared offline rules and targeted persistence under row locks. Its remaining cross-writer race
 review is explicit; this does not close the whole trash family.
+
+The [authored resource-reference disposition](note-resource-references.md) records shared typed
+note/diagram discovery and the attachment-removal guard. Tests move to the responsible services,
+and the old loose document views are removed. The editor's link-target value type is retained.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.

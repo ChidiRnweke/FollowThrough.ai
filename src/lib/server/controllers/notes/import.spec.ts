@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { importedNotesFixture } from '$lib/testing/notes/fixtures/import';
-import { collectNoteLinkTargets } from '$lib/models/notes';
+import { collectNoteLinkTargets } from '$lib/services/notes/references';
 
 describe('imported note identities and write consequences', () => {
 	it('stores each note body and indexes the saved note', async () => {
