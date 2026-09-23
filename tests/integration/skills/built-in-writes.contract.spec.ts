@@ -53,13 +53,16 @@ it('upgrades an untouched stored guide and records the new revision', async () =
 	});
 });
 
-it('repairs built-ins into the replacement Inbox while preserving authored content and identity', async () => {
+it('repairs legacy built-ins from an archived project while preserving authored content and identity', async () => {
 	const owner = actor('19501');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const skills = controller(database, transactionRunner, currentDefinitions);
 	const initial = await skills.list(owner);
 	const notes = new NoteRecords(context.db);
 	const projects = new ProjectRecords(context.db);
+	// Before project roles, provisioning installed built-ins in the ordinary General project.
+	const legacy = await projects.insert(owner, { name: 'General', role: 'workspace' });
+	await context.client`update notes set project_id = ${legacy.id} where user_id = ${owner.userId} and built_in_key is not null`;
 	const original = (await notes.findByBuiltInKey(owner, 'followthrough'))!;
 	const folder = await notes.insert(owner, {
 		...original,

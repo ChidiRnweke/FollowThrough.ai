@@ -9,6 +9,7 @@ import {
 	projectBuilder,
 	testActor,
 	testNoteId,
+	testProjectId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -22,7 +23,11 @@ const setup = async () => {
 		retired: RETIRED_BUILT_INS
 	});
 	await provisioner.ensure(testActor());
-	const folder = noteBuilder({ id: testNoteId(90), kind: 'folder' });
+	// Older releases installed these notes in General before Inbox became a project role.
+	const legacy = projectBuilder({ id: testProjectId(2), name: 'General', role: 'workspace' });
+	projects.projects.push(legacy);
+	notes.notes = notes.notes.map((note) => ({ ...note, projectId: legacy.id }));
+	const folder = noteBuilder({ id: testNoteId(90), projectId: legacy.id, kind: 'folder' });
 	notes.notes.push(folder);
 	const builtIn = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
 	notes.notes = notes.notes.map((note) =>
