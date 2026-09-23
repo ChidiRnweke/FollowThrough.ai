@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import {
-	countNoteDiff,
-	diffNoteDocuments,
-	type DiffDocument,
-	type DiffNode,
-	type NoteDiff
-} from './note-diff';
+import { countNoteDiff, diffNoteDocuments, withTitleBlock } from './note-diff';
+import type { NoteDiff } from '$lib/models/notes/note-diff';
+import type {
+	ProseMirrorDocument,
+	ProseMirrorNode,
+	ProseMirrorParagraphNode,
+	ProseMirrorHeadingNode
+} from '$lib/models/notes';
 
-const para = (text: string) => ({
+const para = (text: string): ProseMirrorParagraphNode => ({
 	type: 'paragraph',
 	content: [{ type: 'text', text }]
 });
 
-const heading = (text: string) => ({
+const heading = (text: string): ProseMirrorHeadingNode => ({
 	type: 'heading',
 	attrs: { level: 1 },
 	content: [{ type: 'text', text }]
 });
 
-const doc = (...content: DiffNode[]): DiffDocument => ({ type: 'doc', content });
+const doc = (...content: ProseMirrorNode[]): ProseMirrorDocument => ({ type: 'doc', content });
 
 /** The classification of each side, as kinds only, so an assertion reads the property under test. */
 const kindsOf = (diff: NoteDiff) => ({
@@ -91,7 +92,7 @@ describe('diffNoteDocuments', () => {
 	it('ignores formatting-only differences when the text is unchanged', () => {
 		const base = doc({
 			type: 'paragraph',
-			attrs: { unrelated: true },
+			attrs: { textAlign: 'center' },
 			content: [{ type: 'text', text: 'same' }]
 		});
 		const candidate = doc(para('same'));
@@ -116,5 +117,26 @@ describe('countNoteDiff', () => {
 			added: 0,
 			removed: 0
 		});
+	});
+});
+
+it('compares a rename while preserving identical body blocks as context', () => {
+	const body = doc(para('Unchanged'));
+	expect(
+		kindsOf(diffNoteDocuments(withTitleBlock(body, 'Before'), withTitleBlock(body, 'After')))
+	).toEqual({ base: ['removed', 'context'], candidate: ['added', 'context'] });
+});
+it('detects a changed diagram identity inside a textless nested block', () => {
+	const before = doc({
+		type: 'blockquote',
+		content: [{ type: 'drawio', attrs: { diagramId: 'first' } }]
+	});
+	const after = doc({
+		type: 'blockquote',
+		content: [{ type: 'drawio', attrs: { diagramId: 'second' } }]
+	});
+	expect(kindsOf(diffNoteDocuments(before, after))).toEqual({
+		base: ['removed'],
+		candidate: ['added']
 	});
 });

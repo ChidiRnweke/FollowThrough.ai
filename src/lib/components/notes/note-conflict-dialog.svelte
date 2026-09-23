@@ -59,8 +59,7 @@
 						candidate={record.local.document}
 						baseLabel="Shared base"
 						candidateLabel="Your changes"
-						baseTitle={record.base?.title ?? 'New local note'}
-						candidateTitle={record.local.title}
+						titles={{ base: record.base?.title ?? 'New local note', candidate: record.local.title }}
 					/>
 				{:else}<p>Your local edit deletes this note.</p>{/if}
 			</Tabs.Content>
@@ -71,8 +70,10 @@
 						candidate={record.remote.value.document}
 						baseLabel="Shared base"
 						candidateLabel="Latest saved version"
-						baseTitle={record.base?.title ?? 'New local note'}
-						candidateTitle={record.remote.value.title}
+						titles={{
+							base: record.base?.title ?? 'New local note',
+							candidate: record.remote.value.title
+						}}
 					/>
 				{:else}
 					<p>
