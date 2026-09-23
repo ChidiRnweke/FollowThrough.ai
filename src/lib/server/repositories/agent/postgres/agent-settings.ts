@@ -9,6 +9,7 @@ import type {
 	RunCancellationWrite,
 	RunApprovalWrite,
 	WorkflowContextWrite,
+	WorkflowSettlementWrite,
 	AgentSessionItem,
 	ConversationId,
 	PersistedSessionItem,
@@ -350,6 +351,34 @@ export class AgentRunRecords implements AgentRunRepository {
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
+	}
+
+	async updateWorkflowSettlement(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowSettlementWrite
+	): Promise<WorkflowAgentRun> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: change.status,
+				finishedAt: new Date(change.finishedAt),
+				updatedAt: new Date(change.updatedAt),
+				pendingDecisions: [],
+				...(change.status === 'completed'
+					? { serializedState: change.serializedState }
+					: { failure: change.failure })
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.kind, 'workflow')
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Workflow run was not found');
+		return toWorkflowRun(row);
 	}
 
 	async updateWorkflowContext(
