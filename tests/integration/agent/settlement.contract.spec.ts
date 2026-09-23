@@ -1,3 +1,4 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId, PersistedSessionItem } from '$lib/models/agent';
@@ -57,6 +58,7 @@ const setup = async (suffix: string) => {
 		capabilityDependencies<AgentDependencies>({
 			runs,
 			cancellations: new RunCancellation(runs),
+			preparation: new RunPreparation(runs),
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,
