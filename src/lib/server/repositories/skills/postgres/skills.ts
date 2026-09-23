@@ -13,7 +13,8 @@ import { toSkill } from '$lib/server/db/mappers';
 
 export class SkillRecords implements SkillRepository {
 	constructor(private readonly database: Database) {}
-	async lockBuiltInProvisioning(actor: ActorContext): Promise<void> {
+	async lockCatalog(actor: ActorContext): Promise<void> {
+		// Keep the existing provisioning lock namespace so both paths serialize together.
 		await this.database.execute(
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext('built-in-skills'))`
 		);

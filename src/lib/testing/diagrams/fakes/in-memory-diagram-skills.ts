@@ -167,6 +167,7 @@ export class InMemoryDiagrams
 export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 	skills: Skill<Note>[] = [];
 	failCreation = false;
+	async lockCatalog(_actor: ActorContext): Promise<void> {}
 
 	async create(
 		_actor: ActorContext,

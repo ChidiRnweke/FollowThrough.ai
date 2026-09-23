@@ -53,6 +53,7 @@ validation-before-save, stale bases, identical retries, current metadata and rol
 skill-edit, offline metadata, manifest and PostgreSQL concurrent edit contracts. They observe the
 saved result rather than the removed duplicate field; no test is added merely to mirror this shape.
 
-Portable-name concurrency, usage ownership/atomicity and archived skill discovery still require
-workflow review. Preserve the tested restoration snapshot distinction while D03 remains unresolved.
+[Portable-name concurrency](skill-name-transactions.md) has a separate transaction review; legacy
+collisions remain open. Usage ownership/atomicity and archived skill discovery still require workflow
+review. Preserve the tested restoration snapshot distinction while D03 remains unresolved.
 The old workflow ledger is not closed by this declaration review.

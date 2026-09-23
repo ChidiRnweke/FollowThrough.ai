@@ -33,6 +33,10 @@ export class SkillLibrary {
 		private readonly notes: NoteRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
+	/** Acquire before project or note locks; the controller owns the transaction. */
+	lockCatalog(actor: ActorContext): Promise<void> {
+		return this.skills.lockCatalog(actor);
+	}
 	async create(
 		actor: ActorContext,
 		note: Note,

@@ -128,6 +128,7 @@ export class Skills implements SkillsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
+					await this.dependencies.skillEditor.lockCatalog(actor);
 					const target = mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
@@ -202,6 +203,7 @@ export class Skills implements SkillsController {
 
 	create(actor: ActorContext, input: CreateSkillInput): Promise<CreateSkillOutput<Note>> {
 		return this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.skillCreator.lockCatalog(actor);
 			const note = await this.createSkillNote(actor, {
 				id: input.id,
 				title: input.name,
@@ -221,6 +223,7 @@ export class Skills implements SkillsController {
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.skillCreator.lockCatalog(actor);
 			const sourceNote = await this.dependencies.selectionOrigins.validate(actor, input.selection);
 			// Acquire the project lock before inserting an anchor that locks its source note's FK.
 			const created = await this.createSkillNote(actor, {
@@ -288,6 +291,7 @@ export class Skills implements SkillsController {
 	}
 	async update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>> {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.skillEditor.lockCatalog(actor);
 			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
 			const metadata = applySkillMetadataEdit(current, input);
 			const prepared = await this.dependencies.skillEditor.prepareEdit(

@@ -13,6 +13,7 @@ import type {
 } from '$lib/models/skills';
 
 export interface SkillCreator {
+	lockCatalog(actor: ActorContext): Promise<void>;
 	create(
 		actor: ActorContext,
 		note: Note,
@@ -26,6 +27,7 @@ export interface SkillFinder {
 }
 
 export interface SkillEditor {
+	lockCatalog(actor: ActorContext): Promise<void>;
 	getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
 	prepareEdit(
 		actor: ActorContext,

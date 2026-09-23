@@ -17,6 +17,7 @@ import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { context } from '../database-harness';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 
 export const skillController = (database: Database, transactionRunner: TransactionRunner) => {
 	const projects = new ProjectRecords(database);
@@ -25,14 +26,19 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const library = new SkillLibrary(skills, notes, new ProvenanceRecords(database));
 	const catalog = new NoteCatalog(notes, new SourceAnchorRecords(database), projects);
 	const content = new InMemoryNoteContent();
+	const sync = createSyncCapability({ db: database });
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			transactionRunner,
+			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
 			builtInSkills: new BuiltInSkills(projects, notes, skills, {
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			}),
 			skillFinder: library,
+			skillCreator: library,
+			noteCreation: catalog,
 			skillEditor: library,
 			skillPinWriter: new SkillPins(projects, notes, skills),
 			skillUsageLister: library,

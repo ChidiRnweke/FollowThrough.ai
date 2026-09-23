@@ -26,7 +26,7 @@ export class BuiltInSkills {
 
 	/** The calling controller owns the transaction for installation and its lock. */
 	async ensure(actor: ActorContext): Promise<void> {
-		await this.skills.lockBuiltInProvisioning(actor);
+		await this.skills.lockCatalog(actor);
 		const projects: Project[] = [];
 		const ids = (await this.projects.listActive(actor)).map((project) => project.id).sort();
 		for (const id of ids) {
