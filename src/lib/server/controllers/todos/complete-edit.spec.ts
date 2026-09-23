@@ -64,7 +64,7 @@ describe('complete task edits', () => {
 	it.each(edits)('matches the offline task preview for %j', async (edit) => {
 		const { controller, original } = setup();
 		const { todo } = await controller.update(testActor(), { todoId: original.id, ...edit });
-		expect(todo).toEqual(todoWrite(original, edit, testNow).local.value);
+		expect(todo).toEqual(todoWrite(original, edit, testNow).local?.value);
 	});
 
 	it('leaves all fields unchanged when saving the completed task fails', async () => {
