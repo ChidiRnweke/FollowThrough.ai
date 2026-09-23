@@ -115,8 +115,12 @@ export class InMemoryWebReferenceClient implements WebReferenceClient {
 
 export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotParticipant {
 	records: Provenance[] = [];
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
 
 	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
+		this.started.resolve();
+		await this.completion;
 		const provenance = provenanceSchema.parse({
 			...input,
 			id: testProvenanceId(this.records.length + 1),

@@ -567,12 +567,17 @@ export interface WorkflowAgentRun extends AgentRunBase {
 }
 
 export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
-/** Resolved cancellation fields. An immediate cancellation also fixes its completion time. */
+export interface WorkflowContextWrite {
+	readonly contextSnapshot: WorkflowRunContext;
+	readonly updatedAt: DateTime;
+}
+
 export interface RunApprovalWrite {
 	readonly status: 'queued';
 	readonly updatedAt: DateTime;
 }
 
+/** Resolved cancellation fields. An immediate cancellation also fixes its completion time. */
 export type RunCancellationWrite = {
 	readonly cancelRequestedAt: DateTime;
 	readonly updatedAt: DateTime;

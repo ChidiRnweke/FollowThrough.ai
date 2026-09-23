@@ -1,3 +1,4 @@
+import type { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { Skill } from '$lib/models/skills';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
@@ -209,7 +210,8 @@ export interface DiagramAgentDependencies {
 	>;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
-	readonly runs: Pick<AgentRunStore, 'create' | 'updateContext' | 'complete' | 'fail'>;
+	readonly runs: Pick<AgentRunStore, 'create' | 'complete' | 'fail'>;
+	readonly runContext: Pick<DiagramRunContext, 'getForWrite' | 'prepare' | 'persist'>;
 	readonly provenance: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 	};
@@ -785,16 +787,15 @@ export class Diagrams implements DiagramsController {
 			provenanceId: provenance.id,
 			diagramOperation: task.operation
 		};
-		await this.dependencies.generation.runs.updateContext(
-			actor,
-			run.id,
-			run.kind === 'workflow' && run.contextSnapshot.kind === 'diagram_action'
-				? {
-						...run.contextSnapshot,
-						prepared: { context: context.context, provenanceId: provenance.id }
-					}
-				: context
-		);
+		await this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.generation.runContext.getForWrite(actor, run.id);
+			const change = this.dependencies.generation.runContext.prepare(
+				current,
+				context,
+				this.dependencies.now()
+			);
+			await this.dependencies.generation.runContext.persist(actor, run.id, change);
+		});
 
 		return await this.dependencies.generation.observeWorkflow(
 			'diagram.agent-turn',

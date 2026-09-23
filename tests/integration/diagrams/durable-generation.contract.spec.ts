@@ -1,3 +1,4 @@
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { afterAll, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -72,6 +73,7 @@ const setup = async (suffix: string) => {
 			contextNotes: notes.catalog,
 			conversations: new ConversationArchive(conversations),
 			runs: new AgentRunLedger(runs),
+			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance
 		},
 		transactionRunner,

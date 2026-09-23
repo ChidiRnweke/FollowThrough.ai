@@ -8,6 +8,7 @@ import type {
 	AgentRunStatus,
 	RunCancellationWrite,
 	RunApprovalWrite,
+	WorkflowContextWrite,
 	ConversationId,
 	StoredAgentEvent,
 	StoredAgentRunEventRecord
@@ -68,6 +69,11 @@ export interface AgentRunRepository {
 		runId: AgentRunId,
 		change: RunCancellationWrite
 	): Promise<AgentRun>;
+	updateWorkflowContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowContextWrite
+	): Promise<WorkflowAgentRun>;
 	updateApproval(
 		actor: ActorContext,
 		runId: AgentRunId,

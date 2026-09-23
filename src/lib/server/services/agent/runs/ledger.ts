@@ -8,7 +8,7 @@ import type {
 	WorkflowRunContext
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError } from '$lib/errors';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
@@ -26,11 +26,7 @@ export interface AgentRunStore {
 	): Promise<AgentRun>;
 	get(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
 	getLatestForConversation(actor: ActorContext, conversationId: ConversationId): Promise<AgentRun>;
-	updateContext(
-		actor: ActorContext,
-		runId: AgentRunId,
-		contextSnapshot: WorkflowRunContext
-	): Promise<AgentRun>;
+
 	pause(
 		actor: ActorContext,
 		runId: AgentRunId,
@@ -88,17 +84,6 @@ export class AgentRunLedger implements AgentRunStore {
 		const run = await this.repository.findLatestByConversation(actor, conversationId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return run;
-	}
-
-	async updateContext(
-		actor: ActorContext,
-		runId: AgentRunId,
-		contextSnapshot: WorkflowRunContext
-	): Promise<AgentRun> {
-		const run = await this.get(actor, runId);
-		if (run.kind !== 'workflow')
-			throw new ValidationError('Only workflow runs accept workflow context updates');
-		return this.repository.update(actor, { ...run, contextSnapshot, updatedAt: now() });
 	}
 
 	async pause(

@@ -78,6 +78,14 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [diagram-run context disposition](diagram-run-context.md) replaces the ledger's whole-run context
+update with controller-owned locking and targeted persistence. General run transitions, chat
+preparation and direct diagram run settlement remain unresolved.
+
+[PR #172](https://github.com/ChidiRnweke/FollowThrough.ai/pull/172) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35866176971).
+Its approval implementation remains open on the dependent stack.
+
 The [run-approval disposition](run-approvals.md) records controller-owned locking and requeue,
 whole-batch validation and atomic decision/event writes. General run transitions remain unresolved.
 

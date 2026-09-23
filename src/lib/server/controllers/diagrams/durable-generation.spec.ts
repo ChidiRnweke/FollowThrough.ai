@@ -85,6 +85,29 @@ it('saves no diagram proposal or anchor when cancellation wins during generation
 	}).toEqual({ status: 'cancelled', suggestions: [], anchors: [] });
 });
 
+it('does not save prepared context when cancellation wins during preparation', async () => {
+	const state = await prepare();
+	const gate = Promise.withResolvers<void>();
+	state.provenance.completion = gate.promise;
+	const execution = state.controller.executeDiagramRun(testActor(), state.receipt.runId);
+	try {
+		await state.provenance.started.promise;
+		await state.agent.cancel(testActor(), state.receipt.runId);
+	} finally {
+		gate.resolve();
+	}
+	await execution;
+	const run = state.persistence.runs[0];
+	expect({ status: run.status, context: run.contextSnapshot }).toEqual({
+		status: 'cancelled',
+		context: {
+			kind: 'diagram_action',
+			model: 'test/frozen',
+			input: { operation: 'generate', selection: diagramSelection }
+		}
+	});
+});
+
 it('rejects a changed source selection before publishing the generated diagram', async () => {
 	const state = await prepare();
 	const gate = Promise.withResolvers<void>();
