@@ -1,3 +1,4 @@
+import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -131,6 +132,21 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 			.select()
 			.from(schema.agentPreferences)
 			.where(eq(schema.agentPreferences.userId, actor.userId));
+		return row ? toPreferences(row) : undefined;
+	}
+
+	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
+		// The same resource lock as synchronized writes also covers an absent preference row.
+		const key =
+			'resource:' + workspaceResourceKey({ type: 'agent_preferences', id: [actor.userId] });
+		await this.database.execute(
+			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${key}))`
+		);
+		const [row] = await this.database
+			.select()
+			.from(schema.agentPreferences)
+			.where(eq(schema.agentPreferences.userId, actor.userId))
+			.for('update');
 		return row ? toPreferences(row) : undefined;
 	}
 

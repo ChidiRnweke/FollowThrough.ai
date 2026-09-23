@@ -1,3 +1,4 @@
+import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
@@ -51,6 +52,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly now: () => DateTime;
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceCatalog;
 	readonly models: AgentModelCatalog;
@@ -109,6 +111,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	);
 
 	return {
+		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		preferences,
 		models,

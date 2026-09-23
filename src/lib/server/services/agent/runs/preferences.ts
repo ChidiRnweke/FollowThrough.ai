@@ -2,13 +2,11 @@ import { OpenRouter } from '@openrouter/sdk';
 import type { ActorContext } from '$lib/models/identity';
 import {
 	normalizeLanguageModelId,
-	applyAgentPreferenceUpdate,
 	resolveAttachmentVisionModel,
 	type AgentExecutionMode,
 	type AgentModel,
 	type AgentPreferences,
-	type Conversation,
-	type UpdateAgentPreferencesInput
+	type Conversation
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
@@ -17,47 +15,47 @@ import type { WebResearchOptions } from '$lib/models/agent';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export { normalizeLanguageModelId, applyAgentPreferenceUpdate, resolveAttachmentVisionModel };
+export { normalizeLanguageModelId, resolveAttachmentVisionModel };
 
 export interface AgentPreferencesStore {
 	get(actor: ActorContext): Promise<AgentPreferences>;
-	update(actor: ActorContext, input: UpdateAgentPreferencesInput): Promise<AgentPreferences>;
 }
 
 export interface AgentModelCatalog {
 	list(): Promise<readonly AgentModel[]>;
 	/** Selectable as the chat model: must exist and support tool calling. */
 	assertSelectable(modelId: string): Promise<void>;
-	assertVisionSelectable?(modelId: string): Promise<void>;
+	assertVisionSelectable(modelId: string): Promise<void>;
 	/**
 	 * Selectable for a toolless call such as inline completion. Existence is the
 	 * only requirement — demanding tool support here would rule out exactly the
 	 * small, fast models this path wants.
 	 */
-	assertGenerationSelectable?(modelId: string): Promise<void>;
+	assertGenerationSelectable(modelId: string): Promise<void>;
 }
 
 export class AgentPreferenceCatalog implements AgentPreferencesStore {
 	constructor(private readonly repository: AgentPreferencesRepository) {}
 
-	async get(actor: ActorContext): Promise<AgentPreferences> {
-		return (
-			(await this.repository.get(actor)) ?? {
-				userId: actor.userId,
-				executionMode: 'approval_required',
-				inlineSuggestionsEnabled: true,
-				createdAt: now(),
-				updatedAt: now()
-			}
-		);
+	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences {
+		return {
+			userId: actor.userId,
+			executionMode: 'approval_required',
+			inlineSuggestionsEnabled: true,
+			createdAt: timestamp,
+			updatedAt: timestamp
+		};
 	}
-
-	async update(actor: ActorContext, input: UpdateAgentPreferencesInput): Promise<AgentPreferences> {
-		const current = await this.get(actor);
-		return this.repository.upsert(actor, {
-			...applyAgentPreferenceUpdate(current, input),
-			updatedAt: now()
-		});
+	async get(actor: ActorContext): Promise<AgentPreferences> {
+		return (await this.repository.get(actor)) ?? this.defaults(actor, now());
+	}
+	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
+		return this.repository.getForWrite(actor);
+	}
+	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
+		if (preferences.userId !== actor.userId)
+			throw new ValidationError('The preferences belong to another account');
+		return this.repository.upsert(actor, preferences);
 	}
 }
 

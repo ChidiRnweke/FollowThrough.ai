@@ -80,7 +80,10 @@ describe('direct inline completion', () => {
 	});
 	it('returns nothing when inline completion is disabled', async () => {
 		const fixture = setup();
-		await fixture.preferences.update(actor, { inlineSuggestionsEnabled: false });
+		await fixture.preferences.persist(actor, {
+			...(await fixture.preferences.get(actor)),
+			inlineSuggestionsEnabled: false
+		});
 		expect(await fixture.controller.suggest(actor, request(), signal())).toEqual({
 			outcome: 'no_suggestion',
 			reason: 'ineligible'

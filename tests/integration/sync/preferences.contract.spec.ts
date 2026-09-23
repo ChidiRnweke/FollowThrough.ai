@@ -14,7 +14,7 @@ import { UserPreferenceStore } from '$lib/server/services/identity/user-preferen
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote } from '../database-harness';
+import { context, seedNote, now } from '../database-harness';
 
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
@@ -24,6 +24,7 @@ const setup = async (suffix: string) => {
 	const agent = new AgentSettings(
 		capabilityDependencies<AgentSettingsDependencies>({
 			preferences,
+			now: () => now,
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner
@@ -58,7 +59,11 @@ describe('guarded account preferences', () => {
 	});
 	it('clears a model override while retaining settings from another tab', async () => {
 		const { owner, preferences, sync, agent } = await setup('9402');
-		await preferences.update(owner, { defaultModel: 'retired/model', webSearchMaxResults: 12 });
+		await preferences.persist(owner, {
+			...(await preferences.get(owner)),
+			defaultModel: 'retired/model',
+			webSearchMaxResults: 12
+		});
 		const base = await sync.objects.read(
 			owner,
 			{ type: 'agent_preferences', id: [owner.userId] },
@@ -83,14 +88,14 @@ describe('guarded account preferences', () => {
 	});
 	it('rejects stale preference writes instead of silently rebasing a second form', async () => {
 		const { owner, preferences, sync, agent } = await setup('9403');
-		await preferences.update(owner, { webSearchMaxResults: 12 });
+		await agent.updatePreferences(owner, { webSearchMaxResults: 12 });
 		const base = await sync.objects.read(
 			owner,
 			{ type: 'agent_preferences', id: [owner.userId] },
 			null
 		);
 		if (base.kind !== 'found') throw new Error('Preferences must exist');
-		await preferences.update(owner, { webSearchMaxResults: 15 });
+		await agent.updatePreferences(owner, { webSearchMaxResults: 15 });
 		const result = await agent.synchronize(owner, {
 			operationId: crypto.randomUUID(),
 			baseEtag: base.snapshot.etag,
