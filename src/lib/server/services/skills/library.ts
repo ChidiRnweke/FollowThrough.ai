@@ -102,6 +102,17 @@ export class SkillLibrary {
 		);
 	}
 
+	/** Lock the note before metadata to match provisioning and the title projection trigger. */
+	async getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
+		const note = await this.notes.findForWrite(actor, noteId);
+		if (!note) throw new NotFoundError('Skill note was not found');
+		if (note.archivedAt) throw new ValidationError('Archived notes cannot be edited');
+		if (note.kind !== 'skill') throw new ValidationError('Skill metadata requires a skill note');
+		const skill = await this.skills.findForWrite(actor, noteId);
+		if (!skill) throw new NotFoundError('Skill was not found');
+		return skill;
+	}
+
 	async prepareEdit(
 		actor: ActorContext,
 		current: Skill<Note>,

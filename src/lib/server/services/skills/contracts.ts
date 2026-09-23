@@ -25,6 +25,7 @@ export interface SkillFinder {
 }
 
 export interface SkillEditor {
+	getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
 	prepareEdit(
 		actor: ActorContext,
 		current: Skill<Note>,
