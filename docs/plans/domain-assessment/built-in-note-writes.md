@@ -4,12 +4,12 @@ BuiltInSkills coordinates provisioning within the transaction already owned by W
 Agent or Diagrams. It keeps the existing actor provisioning lock, locks active projects in stable ID
 order, then locks each built-in note and its skill metadata before inspecting their current state.
 This shares the project
-ordering used by placement and empty trash. An Inbox archived while provisioning waits is excluded
-before selecting or creating the replacement Inbox.
+ordering used by placement and empty trash. Projects archived while provisioning waits are excluded
+before repairing built-in placement.
 
 Repair supplies a resolved NoteBuiltInRepairWrite. Persistence changes only placement, kind, archive
 state and its supplied update timestamp. The old general note update did not write projectId, so a
-built-in in an archived Inbox could not move to the replacement Inbox in PostgreSQL. The new write
+built-in in an archived legacy General project could not move to the Inbox in PostgreSQL. The new write
 persists that move. It clears unavailable or cross-project parents and resolves the new root position
 under the project lock. Authored content, identity, publication, pins and skill settings survive.
 
@@ -29,12 +29,15 @@ A third regression reproduced an overwritten formatting-only edit and now preser
 Repair legacy stock fixtures so their document, plain text and initial revision describe the same
 released content; the previous-version fixture mixed a current document with retired plain text.
 
-Add PostgreSQL coverage through Skills.list for replacing an archived Inbox while preserving the
+Add PostgreSQL coverage through Skills.list for repairing an archived legacy project while preserving the
 built-in identities and edited/published content, a document edit or disable committing while a stock
 upgrade waits, and a successful untouched-stock upgrade after JSONB storage. Keep concurrent first provisioning
 and first browser synchronization contracts.
 
 This continues W02.02 and built-in placement left open by the tree and deletion slices. The general
 NoteRepository.update method now has no production caller; retiring its storage-test setup uses is a
-separate cleanup. Broader skill metadata writes and the remaining declaration/workflow assessment
-still need review. No migration or public command change is required.
+separate cleanup. Archiving the Inbox itself exposes another unresolved issue: the unique index
+includes archived Inboxes, while provisioning selects only an active Inbox. That project lifecycle
+decision is separate from legacy built-in repair. Broader skill metadata writes and the remaining
+declaration/workflow assessment still need review. No migration or public command change is required
+for this slice.
