@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
@@ -67,6 +68,7 @@ export const promiseExtractionFixture = () => {
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
+			cancellations: new RunCancellation(runs),
 			events: runs,
 			decisions: runs,
 			settlements,

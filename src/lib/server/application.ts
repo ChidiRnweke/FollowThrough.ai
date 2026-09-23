@@ -420,6 +420,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			preferences,
 			models: modelCatalog,
 			runs: runRepository,
+			cancellations: agentCapability.cancellations,
 			events: runEvents,
 			decisions: runDecisions,
 			sessions: agentSessions,

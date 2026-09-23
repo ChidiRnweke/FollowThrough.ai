@@ -9,6 +9,7 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	AgentRunStatus,
+	RunCancellationWrite,
 	ConversationId,
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
@@ -44,6 +45,10 @@ export class InMemoryAgentRunPersistence
 
 	async findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
 		return this.runs.find((run) => run.id === id && run.userId === actor.userId);
+	}
+
+	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
+		return this.findById(actor, id);
 	}
 
 	async findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined> {
@@ -186,21 +191,14 @@ export class InMemoryAgentRunPersistence
 		return updated;
 	}
 
-	async requestCancellation(
+	async updateCancellation(
 		actor: ActorContext,
 		runId: AgentRunId,
-		at: DateTime
+		change: RunCancellationWrite
 	): Promise<AgentRun> {
 		const run = await this.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
-		if (['completed', 'failed', 'cancelled', 'cancelling'].includes(run.status)) return run;
-		const updated: AgentRun = {
-			...run,
-			status: run.status === 'queued' ? 'cancelled' : 'cancelling',
-			cancelRequestedAt: at,
-			...(run.status === 'queued' ? { finishedAt: at } : {}),
-			updatedAt: at
-		};
+		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;
 	}

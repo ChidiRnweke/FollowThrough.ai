@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
@@ -59,6 +60,7 @@ export interface AgentCapability {
 	readonly toolPreferences: ToolAccess;
 	readonly trust: ToolTrust;
 	readonly runs: AgentRunRecords;
+	readonly cancellations: RunCancellation;
 	readonly runLedger: AgentRunLedger;
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
@@ -118,6 +120,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db), agentToolCatalog),
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
 		runs,
+		cancellations: new RunCancellation(runs),
 		runLedger,
 		runEvents,
 		runDecisions,

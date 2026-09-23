@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import {
 	References,
 	type ReferencesDependencies
@@ -58,6 +59,7 @@ export const referenceSearchFixture = () => {
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
+			cancellations: new RunCancellation(runs),
 			events: runs,
 			decisions: runs,
 			settlements,

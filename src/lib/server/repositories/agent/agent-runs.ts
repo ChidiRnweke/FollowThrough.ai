@@ -6,6 +6,7 @@ import type {
 	AgentRunEventRecord,
 	AgentRunId,
 	AgentRunStatus,
+	RunCancellationWrite,
 	ConversationId,
 	StoredAgentEvent,
 	StoredAgentRunEventRecord
@@ -31,6 +32,8 @@ import type { DateTime } from '$lib/models/workspace';
 /** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
 export interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
+	/** Lock an actor-owned run within the caller transaction. */
+	findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
 	findAwaitingByConversation(
@@ -60,7 +63,11 @@ export interface AgentRunRepository {
 		to: AgentRunStatus,
 		patch?: Partial<ResolvedAgentRun>
 	): Promise<ResolvedAgentRun | undefined>;
-	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
+	updateCancellation(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunCancellationWrite
+	): Promise<AgentRun>;
 	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
 	listInterrupted(): Promise<readonly AgentRun[]>;
 	listQueuedAgents(): Promise<readonly ResolvedAgentRun[]>;
