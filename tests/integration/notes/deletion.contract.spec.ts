@@ -3,12 +3,12 @@ import type { NoteId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { competingTreeWrites, treeControllers } from '../project-tree-harness';
-import { context, now, seedNote } from '../database-harness';
+import { replaceNoteFixture, context, now, seedNote } from '../database-harness';
 
 it('refuses individual deletion after a concurrent restore commits', async () => {
 	const { owner, note } = await seedNote('19401');
 	const records = new NoteRecords(context.db);
-	await records.update(owner, { ...note, archivedAt: now });
+	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
 			await api.notes.restore(owner, { noteId: note.id });
@@ -24,7 +24,7 @@ it('refuses individual deletion after a concurrent restore commits', async () =>
 it('keeps a concurrently restored note when emptying project trash', async () => {
 	const { owner, note, project } = await seedNote('19402');
 	const records = new NoteRecords(context.db);
-	await records.update(owner, { ...note, archivedAt: now });
+	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
 			await api.notes.restore(owner, { noteId: note.id });
@@ -40,7 +40,7 @@ it('keeps a concurrently restored note when emptying project trash', async () =>
 it('refuses restoring a note after its permanent deletion commits', async () => {
 	const { owner, note } = await seedNote('19403');
 	const records = new NoteRecords(context.db);
-	await records.update(owner, { ...note, archivedAt: now });
+	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
 			await api.notes.deleteForever(owner, { noteId: note.id });
@@ -56,7 +56,7 @@ it('refuses restoring a note after its permanent deletion commits', async () => 
 it('preserves a restored child while permanently deleting its previous folder', async () => {
 	const { owner, note } = await seedNote('19404');
 	const records = new NoteRecords(context.db);
-	await records.update(owner, { ...note, kind: 'folder', archivedAt: now });
+	await replaceNoteFixture({ ...note, kind: 'folder', archivedAt: now });
 	const child = await records.insert(owner, {
 		...note,
 		id: crypto.randomUUID() as NoteId,
@@ -82,7 +82,7 @@ it('preserves a restored child while permanently deleting its previous folder', 
 it('guards storage deletion against a restoration even without the controller project lock', async () => {
 	const { owner, note } = await seedNote('19405');
 	const records = new NoteRecords(context.db);
-	await records.update(owner, { ...note, archivedAt: now });
+	await replaceNoteFixture({ ...note, archivedAt: now });
 	const result = await competingTreeWrites(
 		async (api) => {
 			await api.notes.restore(owner, { noteId: note.id });
@@ -98,7 +98,7 @@ it('guards storage deletion against a restoration even without the controller pr
 it('rolls back child deletion when PostgreSQL refuses the folder deletion', async () => {
 	const { owner, note } = await seedNote('19406');
 	const records = new NoteRecords(context.db);
-	const parent = await records.update(owner, {
+	const parent = await replaceNoteFixture({
 		...note,
 		kind: 'folder',
 		archivedAt: now,

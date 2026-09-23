@@ -35,8 +35,9 @@ upgrade waits, and a successful untouched-stock upgrade after JSONB storage. Kee
 and first browser synchronization contracts.
 
 This continues W02.02 and built-in placement left open by the tree and deletion slices. The general
-NoteRepository.update method now has no production caller; retiring its storage-test setup uses is a
-separate cleanup. Archiving the Inbox itself exposes another unresolved issue: the unique index
+NoteRepository.update method has no production caller and is removed in
+[whole-note write retirement](note-write-retirement.md). Archiving the Inbox itself exposes another
+unresolved issue: the unique index
 includes archived Inboxes, while provisioning selects only an active Inbox. That project lifecycle
 decision is separate from legacy built-in repair. Broader skill metadata writes and the remaining
 declaration/workflow assessment still need review. No migration or public command change is required
