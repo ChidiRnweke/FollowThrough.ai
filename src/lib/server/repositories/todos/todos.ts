@@ -2,6 +2,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
 
 export interface TodoRepository {
+	findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined>;
 	findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined>;
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
 	/**

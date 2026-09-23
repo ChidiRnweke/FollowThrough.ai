@@ -18,6 +18,10 @@ export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipa
 		};
 	}
 
+	findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
+		return this.findById(actor, id);
+	}
+
 	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
 		return this.todos.find(
 			(todo) => todo.id === id && todo.userId === actor.userId && !todo.deletedAt
