@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
@@ -100,6 +101,7 @@ const setup = <T extends AgentRunner>(
 	const lifecycle = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
+			cancellations: new RunCancellation(runs),
 			events: runs,
 			decisions: runs,
 			sessions,
@@ -158,8 +160,12 @@ const stopMidStream = async () => {
 };
 
 /** Drives a run to `cancelling` the way the controller does before aborting. */
-const requestCancellation = async (runs: InMemoryAgentRunPersistence) =>
-	runs.requestCancellation(testActor(), testRunId, testTime);
+const requestCancellation = async (runs: InMemoryAgentRunPersistence) => {
+	const cancellations = new RunCancellation(runs);
+	const current = await cancellations.getForWrite(testActor(), testRunId);
+	const change = cancellations.plan(current.status, testTime);
+	if (change) await cancellations.persist(testActor(), testRunId, change);
+};
 
 const currentRun = (runs: InMemoryAgentRunPersistence) =>
 	runs.runs.find((run) => run.id === testRunId)!;

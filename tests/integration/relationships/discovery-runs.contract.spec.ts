@@ -1,3 +1,4 @@
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { afterAll, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -121,6 +122,7 @@ const setup = async (suffix: string) => {
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			runs,
+			cancellations: new RunCancellation(runs),
 			events,
 			decisions: new AgentRunDecisionRecords(database),
 			settlements,

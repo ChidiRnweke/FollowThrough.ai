@@ -6,6 +6,7 @@ import type {
 	AgentRun,
 	AgentRunId,
 	AgentRunStatus,
+	RunCancellationWrite,
 	AgentSessionItem,
 	ConversationId,
 	PersistedSessionItem,
@@ -14,7 +15,6 @@ import type {
 } from '$lib/models/agent';
 import {
 	assertAgentRunTransition,
-	isTerminalAgentRunStatus,
 	parseSessionItem,
 	workflowRunContextSchema,
 	toStoredSessionItem
@@ -187,6 +187,15 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
+	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)))
+			.for('update');
+		return row ? toRun(row) : undefined;
+	}
+
 	async findAgentById(
 		actor: ActorContext,
 		id: AgentRun['id']
@@ -322,40 +331,23 @@ export class AgentRunRecords implements AgentRunRepository {
 		return toRun(row);
 	}
 
-	async requestCancellation(
+	async updateCancellation(
 		actor: ActorContext,
-		runId: AgentRun['id'],
-		at: AgentRun['updatedAt']
+		runId: AgentRunId,
+		change: RunCancellationWrite
 	): Promise<AgentRun> {
-		const run = await this.findById(actor, runId);
-		if (!run) throw new NotFoundError('Agent run was not found');
-		if (isTerminalAgentRunStatus(run.status) || run.status === 'cancelling') return run;
-		const status = run.status === 'queued' ? 'cancelled' : 'cancelling';
-		assertAgentRunTransition(run.status, status);
-		const [updated] = await this.database
+		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
-				status,
-				cancelRequestedAt: new Date(at),
-				...(status === 'cancelled' ? { finishedAt: new Date(at) } : {}),
-				updatedAt: new Date(at)
+				status: change.status,
+				cancelRequestedAt: new Date(change.cancelRequestedAt),
+				updatedAt: new Date(change.updatedAt),
+				...(change.status === 'cancelled' ? { finishedAt: new Date(change.finishedAt) } : {})
 			})
-			.where(
-				and(
-					eq(schema.agentRuns.id, runId),
-					eq(schema.agentRuns.userId, actor.userId),
-					eq(schema.agentRuns.status, run.status)
-				)
-			)
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)))
 			.returning();
-		if (updated) return toRun(updated);
-		const concurrent = await this.findById(actor, runId);
-		if (
-			concurrent &&
-			(isTerminalAgentRunStatus(concurrent.status) || concurrent.status === 'cancelling')
-		)
-			return concurrent;
-		throw new NotFoundError('Agent run was not found');
+		if (!row) throw new NotFoundError('Agent run was not found');
+		return toRun(row);
 	}
 
 	async requeueAfterDecision(
