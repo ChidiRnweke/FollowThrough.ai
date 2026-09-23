@@ -2,6 +2,9 @@
 
 Snapshot source revision: `48f7f457d10f0d7662ff91bd42868b03b19acade`. Source digest: `4d67c5a4c6a215a9c43e0211df76290841a011bb7b8b4c8135198a346c215114`.
 
+See [the continuation register](continuation.md) for merged work, open implementation PRs and
+unresolved review. Counts below belong to this historical inventory, not the current branch.
+
 ## What is complete
 
 - The agreed checklist is persisted with 411 stable workflow IDs across 28 families.

@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
+import type { Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import type { SourceAnchor } from '$lib/models/provenance';
 export interface TodoCreator {
 	create(actor: ActorContext, todo: Todo): Promise<Todo>;

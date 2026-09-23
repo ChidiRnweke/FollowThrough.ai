@@ -3,6 +3,9 @@
 Assessment source: `74215c9acf3e0461dfa41b598338fa168a0754b4`, 2026-09-15.
 Application code was not changed. Current source was reconciled after the initial `ad17b2bd` review.
 
+Current continuation evidence is recorded in [the continuation register](continuation.md).
+The results below belong to the original documentation delivery.
+
 ## Checks observed
 
 | Check                          | Result                                                                                                                                     |
