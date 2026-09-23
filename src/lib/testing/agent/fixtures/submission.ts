@@ -9,7 +9,8 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 export const agentSubmissionFixture = (
-	phase: 'queued' | 'running' | 'approval' | 'abortable' = 'queued'
+	phase: 'queued' | 'running' | 'approval' | 'abortable' = 'queued',
+	configuration: { readonly defaultModel?: string; readonly defaultVisionModel?: string } = {}
 ) => {
 	const { dependencies, runs } = agentContextFixture();
 	const { sessions, runner } = dependencies;
@@ -32,6 +33,7 @@ export const agentSubmissionFixture = (
 		runs.runs.some((run) => run.id === runId)
 	);
 	const journal = new ConversationArchive(conversations);
+	const models = new InMemoryModelCatalog();
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			...dependencies,
@@ -39,13 +41,14 @@ export const agentSubmissionFixture = (
 			contextConversations: journal,
 			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 			preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
-			models: new InMemoryModelCatalog(),
-			defaultModel: 'openai/test-model',
-			defaultVisionModel: 'openai/test-vision-model'
+			models,
+			defaultModel: configuration.defaultModel ?? 'openai/test-model',
+			defaultVisionModel: configuration.defaultVisionModel ?? 'openai/test-vision-model'
 		})
 	);
 	return {
 		controller,
+		models,
 		conversations,
 		runs,
 		sessions,
