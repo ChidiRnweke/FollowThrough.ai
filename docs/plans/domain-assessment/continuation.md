@@ -39,6 +39,17 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #215](https://github.com/ChidiRnweke/FollowThrough.ai/pull/215) removes an unused source selector
+input and records extraction/source-change dispositions. All required checks passed, including
+[PostgreSQL contracts, full browser tests and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35922556861).
+
+The [task screenshot review](task-screenshots.md) adds an active-task check before upload completion
+and screenshot listing. All 18 task workflows now have current ownership dispositions on the open
+stack. Object-storage retry/cleanup and concurrent lifecycle work remain explicit attachment-family
+assessment items. Focused regressions passed six files and 37 tests; the full local unit suite
+passed 444 files and 4,106 tests. Lint, type checks, architecture and documentation checks passed.
+Required CI is pending. This is not repository-wide completion.
+
 [PR #214](https://github.com/ChidiRnweke/FollowThrough.ai/pull/214) rejects unavailable project
 exports and records the two export workflows. The full local unit suite passed 444 files and 4,103
 tests. All required checks passed, including

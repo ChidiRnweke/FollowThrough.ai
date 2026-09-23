@@ -42,5 +42,5 @@ The unused due/source service contracts are retired as recorded in [the model re
 Creation and edits are reconciled in [the command review](task-commands.md), task surfaces in
 [the surface review](task-surfaces.md), extraction/source changes in [the origin review](task-origins.md)
 and exports in [the export review](task-exports.md). The archived-project detail defect is fixed in
-the open stack. Screenshot completion (W09.16) still needs its own disposition. These workflow
+the open stack. Screenshot completion (W09.16) is covered by [its disposition](task-screenshots.md). These workflow
 decisions do not follow merely from this read review or the namespace declaration review.
