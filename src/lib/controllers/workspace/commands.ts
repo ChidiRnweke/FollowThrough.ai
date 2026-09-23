@@ -1,3 +1,4 @@
+import { decideNoteRestore, noteTrashChange } from '$lib/services/notes/trash';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { decideNoteCreation } from '$lib/services/notes/creation';
@@ -17,13 +18,7 @@ import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import {
-	applyNoteDraftEdit,
-	decideNoteArchive,
-	decideNoteRestore,
-	type Note,
-	type NoteId
-} from '$lib/models/notes';
+import { applyNoteDraftEdit, type Note, type NoteId } from '$lib/models/notes';
 import type { WriteContent } from '$lib/models/outbox';
 import {
 	isWorkspaceRecord,
@@ -99,42 +94,32 @@ export const noteTrashWrite = (
 	notes: readonly Note[],
 	timestamp: DateTime
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
-	if (action === 'archive') {
-		const decision = decideNoteArchive(
-			note,
-			notes.some((entry) => entry.parentId === note.id && !entry.archivedAt)
-		);
-		if (decision.kind === 'invalid') throw new Error(decision.message);
-		return {
-			command: { kind: 'archiveNote', noteId: note.id },
-			local: { type: 'notes', value: { ...note, archivedAt: timestamp, updatedAt: timestamp } },
-			coalesce: null,
-			references: []
-		};
-	}
-	const parent = notes.find((entry) => entry.id === note.parentId);
-	const decision = decideNoteRestore(note, parent ?? null);
-	if (decision.kind === 'invalid') throw new Error(decision.message);
-	const { archivedAt, ...rest } = note;
-	void archivedAt;
-	const { parentId, ...detached } = rest;
-	void parentId;
-	const local: Note =
-		decision.placement === 'root'
+	const decision = noteTrashChange(
+		note,
+		action === 'archive'
 			? {
-					...detached,
-					position: notes.filter((entry) => entry.projectId === note.projectId && !entry.parentId)
-						.length,
-					updatedAt: timestamp
+					kind: 'archive',
+					hasActiveChildren: notes.some((entry) => entry.parentId === note.id && !entry.archivedAt)
 				}
-			: { ...rest, updatedAt: timestamp };
+			: {
+					kind: 'restore',
+					parent: notes.find((entry) => entry.id === note.parentId) ?? null,
+					rootSiblingCount: notes.filter(
+						(entry) => entry.projectId === note.projectId && !entry.parentId
+					).length
+				},
+		timestamp
+	);
+	if (decision.kind === 'invalid') throw new Error(decision.message);
+	const local = decision.note;
 	return {
-		command: { kind: 'restoreNote', noteId: note.id },
+		command: { kind: action === 'archive' ? 'archiveNote' : 'restoreNote', noteId: note.id },
 		local: { type: 'notes', value: local },
 		coalesce: null,
-		references: local.parentId
-			? [workspaceResourceKey({ type: 'notes', id: [local.parentId] })]
-			: []
+		references:
+			action === 'restore' && local.parentId
+				? [workspaceResourceKey({ type: 'notes', id: [local.parentId] })]
+				: []
 	};
 };
 

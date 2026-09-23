@@ -28,6 +28,25 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
 	}
 
+	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+		return this.findById(actor, id);
+	}
+
+	async updateTrash(actor: ActorContext, note: Note): Promise<Note> {
+		const current = await this.findById(actor, note.id);
+		if (!current) throw new NotFoundError('Note was not found');
+		const { archivedAt, parentId, ...rest } = current;
+		void archivedAt;
+		void parentId;
+		return this.update(actor, {
+			...rest,
+			...(note.archivedAt ? { archivedAt: note.archivedAt } : {}),
+			...(note.parentId ? { parentId: note.parentId } : {}),
+			position: note.position,
+			updatedAt: note.updatedAt
+		});
+	}
+
 	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
 		return this.notes.find((note) => note.userId === actor.userId && note.builtInKey === key);
 	}

@@ -621,6 +621,11 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Note trash ownership: Notes coordinates locked reads, the shared archive/restore rule, targeted
+persistence and indexing in its transaction. Offline commands use the same resolved transition.
+Catalog lifecycle tests move to controller state and rollback checks; PostgreSQL contracts cover
+concurrent edits and locking-read isolation. See the [disposition](domain-assessment/note-trash.md).
+
 Agent tool recovery: the run recovery formatter owns private name-distance ranking and its
 direct-versus-search guidance. Remove the unused matching API from models and cover ranking through
 the real formatter output. See the [disposition](domain-assessment/agent-tool-recovery.md).

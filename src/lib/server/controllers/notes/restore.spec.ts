@@ -1,3 +1,5 @@
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { noteTrashWrite } from '$lib/controllers/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -24,16 +26,51 @@ const setup = () => {
 	const indexer = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteArchiver: service,
+			noteTrash: service,
 			noteTrashReader: service,
 			noteIndexer: indexer,
-			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
+			transactionRunner: new InMemoryTransactionRunner([notes, indexer])
 		})
 	);
 	return { notes, controller, indexer };
 };
 
 describe('Note restore invariants', () => {
+	it('matches offline restoration when an archived parent requires root placement', async () => {
+		const { notes, controller } = setup();
+		const parent = noteBuilder({ kind: 'folder', archivedAt: testNow });
+		const original = noteBuilder({ id: testNoteId(2), parentId: parent.id, archivedAt: testNow });
+		const inventory = [parent, original, noteBuilder({ id: testNoteId(3) })];
+		notes.notes = inventory;
+		const { note } = await controller.restore(testActor(), { noteId: original.id });
+		expect(noteTrashWrite(original, 'restore', inventory, note.updatedAt).local).toEqual({
+			type: 'notes',
+			value: note
+		});
+	});
+	it('rolls back the restore when indexing fails', async () => {
+		const { notes, controller, indexer } = setup();
+		const original = noteBuilder({ archivedAt: testNow });
+		notes.notes = [original];
+		indexer.failIndex = true;
+		const outcome = await controller.restore(testActor(), { noteId: original.id }).then(
+			() => ({ kind: 'success' }),
+			() => ({ kind: 'failure', notes: notes.notes })
+		);
+		expect(outcome).toEqual({ kind: 'failure', notes: [original] });
+	});
+
+	it('uses the same resolved note as the offline restore command', async () => {
+		const { notes, controller } = setup();
+		const original = noteBuilder({ archivedAt: testNow });
+		notes.notes = [original];
+		const { note } = await controller.restore(testActor(), { noteId: original.id });
+		expect(noteTrashWrite(original, 'restore', [original], note.updatedAt).local).toEqual({
+			type: 'notes',
+			value: note
+		});
+	});
+
 	it('clears the archived marker', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];

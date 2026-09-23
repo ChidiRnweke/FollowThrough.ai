@@ -28,6 +28,37 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row.note) : undefined;
 	}
 
+	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+		const [row] = await this.database
+			.select({ note: schema.notes })
+			.from(schema.notes)
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+			.where(
+				and(
+					eq(schema.notes.id, id),
+					eq(schema.notes.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			)
+			.for('update', { of: schema.notes });
+		return row ? toNote(row.note) : undefined;
+	}
+
+	async updateTrash(actor: ActorContext, note: Note): Promise<Note> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				parentId: note.parentId ?? null,
+				position: note.position,
+				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
+				updatedAt: new Date(note.updatedAt)
+			})
+			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, actor.userId)))
+			.returning();
+		if (!row) throw new NotFoundError('Note was not found');
+		return toNote(row);
+	}
+
 	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
 		const [row] = await this.database
 			.select()

@@ -1,3 +1,4 @@
+import { noteTrashChange } from '$lib/services/notes/trash';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
@@ -124,7 +125,6 @@ import type {
 } from '$lib/server/services/suggestions/contracts';
 import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/contracts';
 import type {
-	NoteArchiver,
 	NoteAttachmentRestorer,
 	NoteEditor,
 	NoteIndexer,
@@ -344,7 +344,7 @@ export interface NotesDependencies {
 	suggestionContextReader: SuggestionContextReader;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
-	noteArchiver: NoteArchiver;
+	noteTrash: Pick<NoteCatalog, 'archiveFacts' | 'restoreFacts' | 'persistTrash'>;
 	noteTrashReader: NoteTrashReader;
 	notePurger: NotePurger;
 	notePublisher: NotePublisher;
@@ -871,14 +871,28 @@ export class Notes implements NotesController {
 	}
 	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteArchiver.archive(actor, input.noteId);
+			const facts = await this.dependencies.noteTrash.archiveFacts(actor, input.noteId);
+			const decision = noteTrashChange(
+				facts.note,
+				{ kind: 'archive', ...facts },
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
 	async restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteArchiver.restore(actor, input.noteId);
+			const facts = await this.dependencies.noteTrash.restoreFacts(actor, input.noteId);
+			const decision = noteTrashChange(
+				facts.note,
+				{ kind: 'restore', ...facts },
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});

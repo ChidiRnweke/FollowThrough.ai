@@ -1,5 +1,5 @@
 import { decideRevisionWrite } from '$lib/models/revisions';
-import { sameNoteDraft, decideNoteArchive, decideNoteRestore } from '$lib/models/notes';
+import { sameNoteDraft } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
@@ -106,33 +106,36 @@ export class NoteCatalog {
 		return this.notes.setSectionNumbering(actor, input.noteId, input.enabled ?? null);
 	}
 
-	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
-		const decision = decideNoteArchive(
-			note,
-			active.some((entry) => entry.parentId === noteId)
-		);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return this.notes.update(actor, { ...note, archivedAt: now(), updatedAt: now() });
+	private async lockedNote(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const note = await this.notes.findForWrite(actor, noteId);
+		if (!note) throw new NotFoundError('Note was not found', { noteId });
+		return note;
 	}
 
-	async restore(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
-		const decision = decideNoteRestore(note, parent ?? null);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		const { archivedAt, ...rest } = note;
-		void archivedAt;
-		if (decision.placement === 'keep')
-			return this.notes.update(actor, { ...rest, updatedAt: now() });
-		const { parentId, ...detached } = rest;
-		void parentId;
-		return this.notes.update(actor, {
-			...detached,
-			position: await this.notes.countSiblings(actor, note.projectId, undefined),
-			updatedAt: now()
-		});
+	async archiveFacts(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<{ note: Note; hasActiveChildren: boolean }> {
+		const note = await this.lockedNote(actor, noteId);
+		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
+		return { note, hasActiveChildren: active.some((entry) => entry.parentId === noteId) };
+	}
+
+	async restoreFacts(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<{ note: Note; parent: Note | null; rootSiblingCount: number }> {
+		const note = await this.lockedNote(actor, noteId);
+		const parent = note.parentId ? await this.notes.findForWrite(actor, note.parentId) : undefined;
+		return {
+			note,
+			parent: parent ?? null,
+			rootSiblingCount: await this.notes.countSiblings(actor, note.projectId)
+		};
+	}
+
+	persistTrash(actor: ActorContext, note: Note): Promise<Note> {
+		return this.notes.updateTrash(actor, note);
 	}
 
 	async listTrashed(
