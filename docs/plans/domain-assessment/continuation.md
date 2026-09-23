@@ -62,15 +62,14 @@ reports one existing hint. The corrected suggestion suite passed all 16 tests af
 unsupported completed-task proposal fixture with the supported open-task state. Current CI results
 are linked from [PR #159](https://github.com/ChidiRnweke/FollowThrough.ai/pull/159/checks).
 
-## Unresolved
-
 ## Further continuation on 2026-09-23
 
 The current check summaries for all 81 PR heads (#71–#148, #157–#159) reported success when
 queried during this continuation. This is a check-status observation, not a new execution of every
 head or a semantic review of every workflow. The PRs remain open.
 
-The [relationship-write disposition](relationship-writes.md) records the next ownership slice.
+[PR #160](https://github.com/ChidiRnweke/FollowThrough.ai/pull/160) contains the
+[relationship-write disposition](relationship-writes.md) and implementation.
 RelationshipGraph now decides created, modified and unchanged results under the caller's transaction;
 the repository only locks and persists. Local lint, type checks, architecture audits and docs checks
 pass, with one existing documentation hint. All 413 unit files and 3,910 tests pass. The focused
@@ -78,6 +77,11 @@ relationship, suggestion and note suites pass 29 files and 200 tests. PostgreSQL
 the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
+
+The [note-change preparation disposition](note-change-preparation.md) records the following slice:
+targeted replacement and revision-text comparison now belong to focused server services. The
+controller still owns preparation, approval and persistence. Focused regression results are recorded
+in that disposition; the public behavior is unchanged.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.

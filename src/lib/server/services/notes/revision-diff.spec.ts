@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	REVISION_DIFF_LINE_LIMIT,
-	diffNoteRevisionTexts,
-	type RevisionText
-} from './revision-diff';
+import { diffNoteRevisionTexts } from './revision-diff';
+import { REVISION_DIFF_LINE_LIMIT, type RevisionText } from '$lib/models/notes/revision-diff';
 
 const revisionText = (overrides: Partial<RevisionText> = {}): RevisionText => ({
 	revision: 1,
