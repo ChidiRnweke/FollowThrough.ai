@@ -10,7 +10,7 @@ import type {
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams
 } from '$lib/models/diagrams';
-import { diagramEtag, decideDiagramTrash } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/models/diagrams';
 import type { ConversationId } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -91,10 +91,15 @@ export class DiagramLibrary {
 			throw new NotFoundError('Diagram provenance was not found');
 		return this.diagrams.update(actor, diagram);
 	}
-	async delete(actor: ActorContext, diagramId: DiagramId): Promise<void> {
-		const current = await this.get(actor, diagramId);
-		const decision = decideDiagramTrash('delete', current);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+	async getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
+		const diagram = await this.diagrams.findForWrite(actor, diagramId);
+		if (!diagram) throw new NotFoundError('Diagram was not found');
+		return diagram;
+	}
+	persistTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
+		return this.diagrams.updateTrash(actor, diagram);
+	}
+	async deleteArchived(actor: ActorContext, diagramId: DiagramId): Promise<void> {
 		if (!(await this.diagrams.deleteArchived(actor, diagramId)))
 			throw new StaleRevisionError('The diagram changed before it could be deleted');
 	}
@@ -107,22 +112,6 @@ export class DiagramLibrary {
 		if (!note) throw new NotFoundError('Diagram note was not found');
 		if (note.projectId !== diagram.projectId)
 			throw new ValidationError('The diagram and its source note must belong to the same project');
-	}
-
-	/** Reversible removal. `delete` above stays what it says: permanent. */
-	async archive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
-		const current = await this.get(actor, diagramId);
-		const decision = decideDiagramTrash('archive', current);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return this.diagrams.setArchived(actor, diagramId, true);
-	}
-
-	/** Named `unarchive` because `restore` already means restoring a revision here. */
-	async unarchive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
-		const current = await this.get(actor, diagramId);
-		const decision = decideDiagramTrash('restore', current);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return this.diagrams.setArchived(actor, diagramId, false);
 	}
 
 	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]> {

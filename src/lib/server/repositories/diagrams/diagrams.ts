@@ -13,6 +13,8 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 /** One repository for both diagram kinds; `Diagram` is the `MermaidDiagram | DrawioDiagram` union, distinguished by `kind`. */
 export interface DiagramRepository {
+	/** Lock the owned row within the caller transaction. */
+	findForWrite(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined>;
 	findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined>;
 	/** The diagram a studio conversation produced, if it has been promoted yet. */
 	findByConversation(
@@ -62,7 +64,7 @@ export interface DiagramRepository {
 	): Promise<DiagramRevision | undefined>;
 	/** Atomically refuse deletion if a concurrent restore made the diagram active. */
 	deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean>;
-	/** Soft delete: sets or clears `archivedAt` and answers the stored row. */
-	setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram>;
+	/** Persist resolved trash fields without replacing diagram content. */
+	updateTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
 	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]>;
 }

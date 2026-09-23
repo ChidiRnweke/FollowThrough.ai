@@ -64,8 +64,8 @@ const setup = async (suffix: string) => {
 			diagramSourceNotes: notes.catalog,
 			diagramDraftWriter: library,
 			diagramRenamer: library,
-			diagramDeleter: library,
-			diagramArchiver: library,
+			diagramTrash: library,
+			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
 				index: async (actor, value, sourceContext) => {
 					const result = await index.index(actor, value, sourceContext);

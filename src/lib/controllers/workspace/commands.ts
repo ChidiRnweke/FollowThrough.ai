@@ -13,7 +13,7 @@ import type {
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
 import { applyAgentPreferenceUpdate, type UpdateAgentPreferencesInput } from '$lib/models/agent';
-import { decideDiagramTrash } from '$lib/models/diagrams';
+import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/trash';
 import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
@@ -409,18 +409,14 @@ export const prepareWorkspaceCommand = (
 					: command.kind === 'restoreDiagram'
 						? 'restore'
 						: 'delete';
-			const decision = decideDiagramTrash(action, diagram);
+			if (action === 'delete') {
+				const decision = decideDiagramTrash(action, diagram);
+				if (decision.kind === 'invalid') throw new Error(decision.message);
+				return content(null);
+			}
+			const decision = diagramTrashChange(action, diagram, now);
 			if (decision.kind === 'invalid') throw new Error(decision.message);
-			if (command.kind === 'deleteDiagram') return content(null);
-			const { archivedAt, ...restored } = diagram;
-			void archivedAt;
-			return content({
-				type: 'diagrams',
-				value:
-					command.kind === 'archiveDiagram'
-						? { ...diagram, archivedAt: now, updatedAt: now }
-						: { ...restored, updatedAt: now }
-			});
+			return content({ type: 'diagrams', value: decision.diagram });
 		}
 		case 'saveDiagram':
 		case 'publishDiagram': {
