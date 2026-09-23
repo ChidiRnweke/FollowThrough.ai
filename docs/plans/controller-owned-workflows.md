@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Agent preference writes: AgentSettings owns the transaction, authoritative resource lock, shared
+partial edit and resolved persistence. First writes and later edits use the same lock as sync.
+See the [disposition](domain-assessment/agent-preferences.md).
+
 Diagram trash: DiagramStudio owns locked reads, the shared transition rule, resolved persistence
 and indexing in its transaction. Archive and restore share timestamps with offline commands.
 Permanent deletion retains the trash guard and saved note references. See the
