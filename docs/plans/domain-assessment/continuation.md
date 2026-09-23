@@ -78,12 +78,21 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [run-images disposition](run-images.md) records native/fallback selection, shared channel budgets
+and explicit runner inputs. Web research configuration and remaining agent declarations still need
+review.
+
+[PR #179](https://github.com/ChidiRnweke/FollowThrough.ai/pull/179) passed all required checks,
+including [quality, unit/browser, PostgreSQL output reconstruction and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35875779030).
+It remains open on the dependent stack.
+
 [PR #178](https://github.com/ChidiRnweke/FollowThrough.ai/pull/178) passed all required checks,
 including [quality, unit/browser, PostgreSQL settlement/stream contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35875005430).
 It remains open on the dependent stack.
 
 The [run-output disposition](run-output.md) moves reconstruction out of event persistence. Provider
-session encoding, image preparation and remaining agent declarations still require review.
+session encoding and remaining agent declarations still require review; image preparation is covered
+above.
 
 [PR #177](https://github.com/ChidiRnweke/FollowThrough.ai/pull/177) passed all required checks,
 including [quality, unit/browser, PostgreSQL checkpoint contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35873158609).

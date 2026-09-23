@@ -1,3 +1,4 @@
+import { prepareRunImages } from './images';
 import { describe, expect, it } from 'vitest';
 import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -23,7 +24,7 @@ const request: RunAgentInput = {
 	visionModelOverride: 'test/vision',
 	images: [
 		{
-			id: 'image-1',
+			id: '40000000-0000-4000-8000-000000018001',
 			mediaType: 'image/png',
 			dataUrl: imageUrl,
 			name: 'sample.png'
@@ -38,6 +39,7 @@ const run: PreparedAgentRun = {
 	model: 'test/text',
 	executionMode: 'approval_required',
 	status: 'running',
+	startedAt: now,
 	requestId: 'image-preparation-test',
 	pendingDecisions: [],
 	inputSnapshot: request,
@@ -88,6 +90,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 			actor: testActor(),
 			run: { ...run, inputSnapshot: input },
 			request: input,
+			imageInput: prepareRunImages(input),
 			context,
 			signal,
 			toolExecutor: { execute: async (_input, action) => action() }
@@ -128,8 +131,18 @@ describe('agent image preparation', () => {
 		};
 		const { execute } = setup(transport);
 		const images = [
-			{ id: 'first-image', name: 'first.png', mediaType: 'image/png' as const, dataUrl: imageUrl },
-			{ id: 'second-image', name: 'second.png', mediaType: 'image/png' as const, dataUrl: imageUrl }
+			{
+				id: '40000000-0000-4000-8000-000000018001',
+				name: 'first.png',
+				mediaType: 'image/png' as const,
+				dataUrl: imageUrl
+			},
+			{
+				id: '40000000-0000-4000-8000-000000018002',
+				name: 'second.png',
+				mediaType: 'image/png' as const,
+				dataUrl: imageUrl
+			}
 		];
 		const result = await execute(new AbortController().signal, { ...request, images }).then(
 			() => ({ kind: 'success' }),
@@ -222,5 +235,19 @@ describe('agent image preparation', () => {
 		const { visionModelOverride: _override, ...native } = request;
 		await execute(new AbortController().signal, native);
 		expect(JSON.stringify(model.requests[0]?.input)).toContain(imageUrl);
+	});
+	it('provides app-supplied images to native vision', async () => {
+		const { execute, model } = setup(async () => {
+			throw new Error('Native vision must not request a caption');
+		});
+		const { visionModelOverride: _override, images, ...native } = request;
+		await execute(new AbortController().signal, { ...native, contextImages: images });
+		expect(JSON.stringify(model.requests[0]?.input)).toContain(imageUrl);
+	});
+	it('describes app-supplied images for a text-only model', async () => {
+		const { execute, model } = setup(async () => Response.json(completion('A diagram render.')));
+		const { images, ...contextual } = request;
+		await execute(new AbortController().signal, { ...contextual, contextImages: images });
+		expect(JSON.stringify(model.requests[0]?.input)).toContain('Image 1: A diagram render.');
 	});
 });

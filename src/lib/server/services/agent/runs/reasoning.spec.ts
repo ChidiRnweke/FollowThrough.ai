@@ -486,6 +486,7 @@ describe('Agent runtime boundary', () => {
 		const updates = runner.execute({
 			actor: testActor(),
 			run,
+			imageInput: { kind: 'none' },
 			request: { conversationId: run.conversationId, prompt: 'Help' },
 			context: run.contextSnapshot!,
 			signal: new AbortController().signal,
@@ -904,6 +905,7 @@ describe('Agent turn span lifecycle', () => {
 			const updates = reasoning.execute({
 				actor: testActor(),
 				run,
+				imageInput: { kind: 'none' },
 				request: { conversationId: run.conversationId, prompt: 'Save this note' },
 				context: run.contextSnapshot!,
 				signal: new AbortController().signal,
@@ -948,6 +950,7 @@ describe('Agent turn span lifecycle', () => {
 		const updates = recording.execute({
 			actor: testActor(),
 			run: parked,
+			imageInput: { kind: 'none' },
 			request: { conversationId: run.conversationId, prompt: 'Save this note' },
 			context: parked.contextSnapshot!,
 			signal: new AbortController().signal,

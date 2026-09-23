@@ -17,6 +17,7 @@ import {
 	type AgentExecutionUpdate,
 	type AgentEvent,
 	type AgentRun,
+	type AgentRunImages,
 	type AgentRunContext,
 	type AgentRunDecisionRecord,
 	type PendingAgentDecision,
@@ -33,7 +34,6 @@ import {
 	type AgentToolName,
 	type ToolName
 } from '$lib/models/agent/tool-catalog';
-import { allImages } from '$lib/models/agent';
 import {
 	parseProviderStreamEvent,
 	parseProviderToolCall
@@ -473,12 +473,22 @@ export class AgentReasoning {
 		readonly actor: ActorContext;
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
+		readonly imageInput: AgentRunImages;
 		readonly context: AgentRunContext;
 		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate> {
-		const { actor, run, request, context, decisions = [], signal, toolExecutor } = input;
+		const {
+			actor,
+			run,
+			request,
+			imageInput,
+			context,
+			decisions = [],
+			signal,
+			toolExecutor
+		} = input;
 		signal.throwIfAborted();
 		if (!this.apiKey)
 			throw new AgentProviderFailure(
@@ -502,8 +512,8 @@ export class AgentReasoning {
 			let visionDescriptions: string[] | undefined;
 			// The app's own images are described too when the chat model cannot see: a
 			// render left out here would simply vanish on a text-only model.
-			const describable = allImages(request);
-			if (describable.length && request.visionModelOverride) {
+			if (imageInput.kind === 'describe') {
+				const { images: describable, model } = imageInput;
 				const client = new OpenAI({
 					apiKey: this.apiKey,
 					baseURL: this.baseURL,
@@ -514,7 +524,7 @@ export class AgentReasoning {
 					describable.map(async (image) => {
 						const response = await client.chat.completions.create(
 							{
-								model: request.visionModelOverride!,
+								model,
 								messages: [
 									{
 										role: 'user',
@@ -602,25 +612,24 @@ export class AgentReasoning {
 				// they came from: `images` is what the user attached, `contextImages`
 				// is what the app supplies — a render of the diagram the agent drew,
 				// which it otherwise has no way to look at.
-				const visibleImages = allImages(request);
-				const initialInput: string | AgentInputItem[] =
-					visibleImages.length && !visionDescriptions
-						? [
-								{
-									role: 'user' as const,
-									content: [
-										{
-											type: 'input_text' as const,
-											text: `${request.prompt || 'Describe the attached image(s).'}${attachedBlocks}`
-										},
-										...visibleImages.map((image) => ({
-											type: 'input_image' as const,
-											image: image.dataUrl
-										}))
-									]
-								}
-							]
-						: fallbackPrompt;
+				const visibleImages = imageInput.kind === 'native' ? imageInput.images : [];
+				const initialInput: string | AgentInputItem[] = visibleImages.length
+					? [
+							{
+								role: 'user' as const,
+								content: [
+									{
+										type: 'input_text' as const,
+										text: `${request.prompt || 'Describe the attached image(s).'}${attachedBlocks}`
+									},
+									...visibleImages.map((image) => ({
+										type: 'input_image' as const,
+										image: image.dataUrl
+									}))
+								]
+							}
+						]
+					: fallbackPrompt;
 				const runInput: string | AgentInputItem[] | RunState<unknown, typeof agent> =
 					state ?? initialInput;
 				const stream = await runner.run(agent, runInput, {

@@ -6,6 +6,7 @@ import type {
 	AgentRun,
 	AgentRunDecisionRecord,
 	AgentRunId,
+	AgentRunImages,
 	Conversation,
 	ConversationId,
 	ConversationImageInput,
@@ -47,6 +48,7 @@ export interface AgentRunner {
 		readonly actor: ActorContext;
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
+		readonly imageInput: AgentRunImages;
 		readonly context: AgentRunContext;
 		/** Decisions to apply before resuming, one per parked tool call. */
 		readonly decisions?: readonly AgentRunDecisionRecord[];

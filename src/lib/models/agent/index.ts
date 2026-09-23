@@ -675,22 +675,15 @@ export interface ContextSelection extends TextSelection {
 	readonly title?: string;
 }
 
-/**
- * Every image the model will see on this turn, in one list.
- *
- * `images` and `contextImages` are separate on the way in — one is what the user
- * attached, the other is what the app supplied — and identical from here on: they
- * share the four-image budget, the same size cap, the same vision-model
- * fallback, and they arrive in the same request. Joining them was written out at
- * four separate call sites, one of which is where the budget is enforced.
- */
-export const allImages = (request: {
-	readonly images?: readonly ConversationImageInput[];
-	readonly contextImages?: readonly ConversationImageInput[];
-}): readonly ConversationImageInput[] => [
-	...(request.images ?? []),
-	...(request.contextImages ?? [])
-];
+/** Image input resolved by the controller before provider execution. */
+export type AgentRunImages =
+	| { readonly kind: 'none' }
+	| { readonly kind: 'native'; readonly images: readonly ConversationImageInput[] }
+	| {
+			readonly kind: 'describe';
+			readonly images: readonly ConversationImageInput[];
+			readonly model: string;
+	  };
 
 export interface StagedAgentRunInput {
 	readonly requestId?: string;
