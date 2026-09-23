@@ -1,3 +1,5 @@
+import { todoWrite } from '$lib/controllers/workspace/commands';
+import type { UpdateTodoInput } from '$lib/models/todos';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
@@ -47,6 +49,24 @@ const setup = () => {
 };
 
 describe('complete task edits', () => {
+	const edits: readonly Omit<UpdateTodoInput, 'todoId'>[] = [
+		{ title: '  Retitled  ', status: 'done' },
+		{ responsibility: 'mine', waitingOn: 'Sam' },
+		{
+			description: null,
+			dueDate: null,
+			priority: null,
+			category: null,
+			waitingOn: null,
+			linkedNoteId: null
+		}
+	];
+	it.each(edits)('matches the offline task preview for %j', async (edit) => {
+		const { controller, original } = setup();
+		const { todo } = await controller.update(testActor(), { todoId: original.id, ...edit });
+		expect(todo).toEqual(todoWrite(original, edit, testNow).local.value);
+	});
+
 	it('leaves all fields unchanged when saving the completed task fails', async () => {
 		const { controller, records, original } = setup();
 		records.updateFailures.set('done', new Error('Completion write failed'));
