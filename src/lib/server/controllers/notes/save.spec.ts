@@ -139,6 +139,27 @@ describe('Note save transaction invariants', () => {
 });
 
 describe('Note publish invariants', () => {
+	it('rolls back the snapshot when publication persistence fails', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder();
+		content.notes = [note];
+		content.publicationFailure = new Error('Publication storage unavailable');
+		await controller
+			.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) })
+			.catch(() => ({ kind: 'failure' }));
+		expect({ notes: content.notes, snapshots: content.recordedRevisions }).toEqual({
+			notes: [note],
+			snapshots: []
+		});
+	});
+	it('refuses to publish an archived note', async () => {
+		const { content, controller } = setup();
+		const note = noteBuilder({ archivedAt: noteBuilder().updatedAt });
+		content.notes = [note];
+		await expect(
+			controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
 	it('creates a revision snapshot on publish (1/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();

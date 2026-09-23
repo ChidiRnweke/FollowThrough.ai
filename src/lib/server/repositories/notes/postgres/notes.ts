@@ -1,6 +1,12 @@
 import { and, asc, desc, eq, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	NotePublicationWrite
+} from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -12,6 +18,29 @@ import { toAnchor, toNote, toRevision } from '$lib/server/db/mappers';
 
 export class NoteRecords implements NoteRepository {
 	constructor(private readonly database: Database) {}
+
+	async updatePublication(
+		actor: ActorContext,
+		write: NotePublicationWrite
+	): Promise<Note | undefined> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				publishedRevision: write.publishedRevision,
+				publishedAt: new Date(write.publishedAt),
+				updatedAt: new Date(write.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.notes.id, write.noteId),
+					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.currentRevision, write.expectedRevision),
+					isNull(schema.notes.archivedAt)
+				)
+			)
+			.returning();
+		return row ? toNote(row) : undefined;
+	}
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		const [row] = await this.database

@@ -1,8 +1,15 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	NotePublicationWrite
+} from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 /** `updateIfRevision` is the compare-and-swap write the sync protocol depends on: a stale expected revision fails instead of overwriting. */
 export interface NoteRepository {
+	updatePublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note | undefined>;
 	/** Retain the note row lock until the caller transaction ends. */
 	findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
 	updateTrash(actor: ActorContext, note: Note): Promise<Note>;

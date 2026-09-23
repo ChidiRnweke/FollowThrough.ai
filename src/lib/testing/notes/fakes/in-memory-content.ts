@@ -3,6 +3,7 @@ import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
 	NoteSaveWrite,
+	NotePublicationWrite,
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
@@ -206,16 +207,23 @@ export class InMemoryNoteContent
 		this.restoredAttachmentRevisionIds.push(revisionId);
 	}
 
-	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const ts = new Date().toISOString() as Note['updatedAt'];
+	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		return this.get(actor, noteId);
+	}
+
+	publicationFailure: Error | undefined;
+	async persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note> {
+		if (this.publicationFailure) throw this.publicationFailure;
+		const current = await this.get(actor, write.noteId);
+		if (current.currentRevision !== write.expectedRevision || current.archivedAt)
+			throw new StaleRevisionError('The note changed while it was being published');
 		const published = {
-			...note,
-			publishedRevision: note.currentRevision,
-			publishedAt: ts,
-			updatedAt: ts
+			...current,
+			publishedRevision: write.publishedRevision,
+			publishedAt: write.publishedAt,
+			updatedAt: write.updatedAt
 		};
-		this.notes = this.notes.map((n) => (n.id === noteId ? published : n));
+		this.notes = this.notes.map((note) => (note.id === write.noteId ? published : note));
 		return published;
 	}
 

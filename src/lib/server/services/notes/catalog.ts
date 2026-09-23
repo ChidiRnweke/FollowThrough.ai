@@ -3,6 +3,7 @@ import type {
 	CreateNoteInput,
 	NoteCreationFacts,
 	NoteSaveWrite,
+	NotePublicationWrite,
 	Note,
 	NoteId,
 	NoteRevision,
@@ -258,15 +259,14 @@ export class NoteCatalog {
 		await this.notes.restoreAttachmentSnapshot(actor, revisionId, noteId);
 	}
 
-	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const ts = now();
-		return this.notes.update(actor, {
-			...note,
-			publishedRevision: note.currentRevision,
-			publishedAt: ts,
-			updatedAt: ts
-		});
+	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		return this.lockedNote(actor, noteId);
+	}
+
+	async persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note> {
+		const note = await this.notes.updatePublication(actor, write);
+		if (!note) throw new StaleRevisionError('The note changed while it was being published');
+		return note;
 	}
 
 	async repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]> {
