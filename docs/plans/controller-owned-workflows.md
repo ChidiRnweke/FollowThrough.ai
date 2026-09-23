@@ -6,6 +6,9 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Note publication: Notes locks before checking the base, records that snapshot and persists only its
+resolved publication fields in one transaction. See the [disposition](domain-assessment/note-publication.md).
+
 Diagram revisions: DiagramStudio owns locked reads, shared edit decisions, guarded writes,
 publication snapshots and indexing, including rename. See the
 [disposition](domain-assessment/diagram-revisions.md).

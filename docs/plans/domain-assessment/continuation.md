@@ -78,13 +78,20 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+[PR #184](https://github.com/ChidiRnweke/FollowThrough.ai/pull/184) passed all required checks,
+including [quality, unit/browser, PostgreSQL revision/rename contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35883902639).
+It remains open on the dependent stack.
+
+The [note-publication disposition](note-publication.md) covers locked ETag validation, snapshot
+atomicity and targeted publication writes. Project/folder lifecycle coordination remains separate.
+
 [PR #183](https://github.com/ChidiRnweke/FollowThrough.ai/pull/183) passed all required checks,
 including [quality, unit/browser, PostgreSQL concurrent-save contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35882401268).
 It remains open on the dependent stack.
 
 The [diagram-revision disposition](diagram-revisions.md) covers controller-owned revision writes,
-rename indexing and nullable restoration. Note publication and legacy whole-diagram updates remain
-separate review items.
+rename indexing and nullable restoration. Note publication is covered above; legacy whole-diagram
+updates remain a separate review item.
 
 [PR #182](https://github.com/ChidiRnweke/FollowThrough.ai/pull/182) passed all required checks on its
 corrected head, including [quality, unit/browser, PostgreSQL canvas contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35881623469).
@@ -92,8 +99,7 @@ The first contract run found conversation-ID collisions in the new fixtures; fre
 test setup. The PR remains open on the dependent stack.
 
 The [note-save disposition](note-save.md) covers locked draft writes through Notes and Skills, shared
-authored-field rules and resolved persistence. Diagram revision ownership is covered above; note
-publication remains a separate review item.
+authored-field rules and resolved persistence. Diagram revisions and note publication are covered above.
 
 [PR #181](https://github.com/ChidiRnweke/FollowThrough.ai/pull/181) passed all required checks,
 including [quality, unit/browser, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35879911330).

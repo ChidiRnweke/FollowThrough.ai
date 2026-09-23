@@ -1,5 +1,7 @@
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { noteEtag } from '$lib/services/notes/presentation';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
@@ -222,10 +224,19 @@ describe('Skill document imports', () => {
 		expect({ note: notes.notes[0], revisions: notes.revisions }).toEqual({ note, revisions: [] });
 	});
 	it('creates a snapshot only when the imported document is recorded for publication', async () => {
-		const { controller, catalog, notes } = importSkill();
+		const { controller, catalog, notes, transactionRunner } = importSkill();
 		const result = await controller.update(testActor(), input);
-		await catalog.record(testActor(), result.skill.note);
-		await catalog.markPublished(testActor(), result.skill.note.id);
+		const publisher = new Notes(
+			capabilityDependencies<NotesDependencies>({
+				transactionRunner,
+				notePublisher: catalog,
+				revisionRecorder: catalog
+			})
+		);
+		await publisher.publish(testActor(), {
+			noteId: result.skill.note.id,
+			baseEtag: noteEtag(result.skill.note)
+		});
 		expect(notes.revisions.map((snapshot) => snapshot.plainText)).toEqual([
 			'Write a decision and explain its consequences.'
 		]);

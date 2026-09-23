@@ -24,8 +24,8 @@ own local revision handling.
 applyNoteDraftEdit and sameNoteDraft leave models for the shared edit service. Skills checks its
 import base against the prepared document in the controller, so SkillLibrary no longer imports the
 comparison rule. The subsequent [diagram-revision slice](diagram-revisions.md) removes the generic
-revision decision and keeps the distinct note and diagram retry rules with their owners. Publication
-races remain a separate review item.
+revision decision and keeps the distinct note and diagram retry rules with their owners. The subsequent
+[note-publication slice](note-publication.md) covers publication races and targeted writes.
 
 ## Test dispositions and remaining review
 
@@ -37,4 +37,5 @@ unchanged saves, archived no-ops and authoritative metadata preservation. Add Po
 that block an unchanged save behind a concurrent archive or edit and verify refusal after commit.
 
 No command or response change or database migration is needed. The dependent PR records validation.
-Diagram revision writes, note publication, folder lifecycle races and the wider assessment remain open.
+Diagram revision writes and note publication have subsequent dispositions linked above. Folder
+lifecycle races and the wider assessment remain open.

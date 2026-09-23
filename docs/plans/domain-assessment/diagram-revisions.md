@@ -33,5 +33,6 @@ the same revision results. PostgreSQL contracts cover untitled restoration, rena
 an unchanged save waiting behind a concurrent archive. The previous archive-lock contract remains.
 
 ADR 0010 still defines safe retries and authoritative conflict views. No public command or response
-shape changes or database migration are needed. The PR records observed validation. Legacy whole
-diagram updates, note publication, folder lifecycle races and the wider assessment remain open.
+shape changes or database migration are needed. The PR records observed validation. The subsequent
+[note-publication slice](note-publication.md) covers that workflow. Legacy whole-diagram updates,
+folder lifecycle races and the wider assessment remain open.

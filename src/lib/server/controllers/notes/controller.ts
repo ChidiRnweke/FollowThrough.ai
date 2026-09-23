@@ -1,4 +1,5 @@
 import { noteTrashChange } from '$lib/services/notes/trash';
+import { prepareNotePublication } from '$lib/services/notes/publication';
 import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
@@ -778,11 +779,12 @@ export class Notes implements NotesController {
 	}
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteReader.get(actor, input.noteId);
+			const note = await this.dependencies.notePublisher.getForPublication(actor, input.noteId);
 			if (!noteMatchesEtag(note, input.baseEtag))
 				throw new StaleRevisionError('The note has changed since it was loaded');
+			const write = prepareNotePublication(note, new Date().toISOString() as DateTime);
 			await this.dependencies.revisionRecorder.record(actor, note);
-			const published = await this.dependencies.notePublisher.markPublished(actor, note.id);
+			const published = await this.dependencies.notePublisher.persistPublication(actor, write);
 			return { note: published, etag: noteEtag(published) };
 		});
 	}

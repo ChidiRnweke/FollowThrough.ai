@@ -1349,6 +1349,14 @@ export interface NoteSaveWrite {
 	readonly expectedRevision: number;
 }
 
+export interface NotePublicationWrite {
+	readonly noteId: NoteId;
+	readonly expectedRevision: number;
+	readonly publishedRevision: number;
+	readonly publishedAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
 /** Direct children and inline text use the editor's existing document representation. */
 export const documentNodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
 	'content' in node ? (node.content ?? []) : [];

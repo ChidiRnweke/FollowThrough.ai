@@ -1,5 +1,11 @@
 import type { ActorContext, UserId } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	NotePublicationWrite
+} from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -112,6 +118,28 @@ export class InMemoryNoteRepository implements NoteRepository {
 		void _actor;
 		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? note : candidate));
 		return note;
+	}
+
+	async updatePublication(
+		actor: ActorContext,
+		write: NotePublicationWrite
+	): Promise<Note | undefined> {
+		const current = this.notes.find(
+			(note) =>
+				note.id === write.noteId &&
+				note.userId === actor.userId &&
+				note.currentRevision === write.expectedRevision &&
+				!note.archivedAt
+		);
+		if (!current) return undefined;
+		const published = {
+			...current,
+			publishedRevision: write.publishedRevision,
+			publishedAt: write.publishedAt,
+			updatedAt: write.updatedAt
+		};
+		this.notes = this.notes.map((note) => (note.id === write.noteId ? published : note));
+		return published;
 	}
 
 	async updateIfRevision(
