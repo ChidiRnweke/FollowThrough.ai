@@ -1,3 +1,4 @@
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
@@ -28,6 +29,7 @@ const setup = () => {
 	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
+	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			skillFinder: service,
@@ -40,10 +42,10 @@ const setup = () => {
 			anchorRepairer: catalog,
 			noteIndexer: content,
 			noteLinkReconciler: content,
-			transactionRunner: new InMemoryTransactionRunner([notes, skills])
+			transactionRunner
 		})
 	);
-	return { controller, service, notes, skills, catalog, content };
+	return { controller, service, notes, skills, catalog, content, transactionRunner };
 };
 const importSkill = () => {
 	const state = setup();
@@ -98,8 +100,11 @@ describe('Skill document imports', () => {
 		});
 	});
 	it('reads the current note title in the skill list after a document rename', async () => {
-		const { catalog, service, note } = importSkill();
-		await catalog.save(testActor(), { ...note, title: 'Release decisions' });
+		const { catalog, service, note, transactionRunner } = importSkill();
+		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+			...note,
+			title: 'Release decisions'
+		});
 		expect((await service.listAll(testActor())).map((skill) => skill.name)).toEqual([
 			'Release decisions'
 		]);
@@ -226,8 +231,11 @@ describe('Skill document imports', () => {
 		]);
 	});
 	it('refuses imported content based on an older editor revision', async () => {
-		const { controller, catalog, note } = importSkill();
-		await catalog.save(testActor(), { ...note, plainText: 'A newer edit' });
+		const { controller, catalog, note, transactionRunner } = importSkill();
+		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+			...note,
+			plainText: 'A newer edit'
+		});
 		await expect(controller.update(testActor(), input)).rejects.toMatchObject({
 			code: 'STALE_REVISION'
 		});

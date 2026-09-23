@@ -1,3 +1,4 @@
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -27,7 +28,10 @@ const setup = async (suffix: string) => {
 	).notes;
 	const original = await Promise.all(
 		[first.note, second.note].map((note) =>
-			catalog.save(first.owner, { ...note, ...markdown.read('ship release') })
+			saveNoteDraft(catalog, transactionRunner, first.owner, {
+				...note,
+				...markdown.read('ship release')
+			})
 		)
 	);
 	for (const note of original) await index.index(first.owner, note);

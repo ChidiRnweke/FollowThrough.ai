@@ -1344,29 +1344,9 @@ export interface NoteCreationFacts {
 	readonly siblingCount: number;
 }
 
-/** Apply authored fields while retaining the revision the editor actually observed. */
-export function applyNoteDraftEdit(
-	note: Note,
-	input: Pick<Note, 'document' | 'plainText'> & Partial<Pick<Note, 'title' | 'isPinned'>>,
-	timestamp: DateTime
-): Note {
-	return {
-		...note,
-		document: input.document,
-		plainText: input.plainText,
-		...(input.title !== undefined ? { title: input.title.trim() } : {}),
-		...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
-		updatedAt: timestamp
-	};
-}
-
-export function sameNoteDraft(current: Note, candidate: Note): boolean {
-	return (
-		current.title === candidate.title &&
-		current.plainText === candidate.plainText &&
-		JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-		current.isPinned === candidate.isPinned
-	);
+export interface NoteSaveWrite {
+	readonly note: Note;
+	readonly expectedRevision: number;
 }
 
 /** Direct children and inline text use the editor's existing document representation. */

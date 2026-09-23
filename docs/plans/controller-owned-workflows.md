@@ -6,6 +6,10 @@ record work on the stack; they do not establish merge status or assessment compl
 
 ## Required architecture
 
+Note saves: Notes and Skills own locked reads, shared draft preparation and resolved persistence
+inside their transactions. The catalog and fake no longer decide revision changes. See the
+[disposition](domain-assessment/note-save.md).
+
 Conversation canvas: the storage boundary decodes diagram-tool results into typed values.
 PresentedCanvasSource selects the latest successful write; DiagramStudio reads the current saved
 diagram. See the [disposition](domain-assessment/canvas-results.md).

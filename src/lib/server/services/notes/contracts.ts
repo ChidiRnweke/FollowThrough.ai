@@ -2,6 +2,7 @@ import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
+	NoteSaveWrite,
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
@@ -30,7 +31,8 @@ export interface NoteTextSearcher {
 	listSearchable(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
 }
 export interface NoteEditor {
-	save(actor: ActorContext, note: Note): Promise<Note>;
+	getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note>;
+	persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note>;
 }
 export interface NoteSectionNumberingEditor {
 	setSectionNumbering(actor: ActorContext, input: SetNoteSectionNumberingInput): Promise<Note>;

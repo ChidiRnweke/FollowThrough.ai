@@ -19,7 +19,8 @@ import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import { applyNoteDraftEdit, type Note, type NoteId } from '$lib/models/notes';
+import { type Note, type NoteId } from '$lib/models/notes';
+import { applyNoteDraftEdit } from '$lib/services/notes/editing';
 import type { WriteContent } from '$lib/models/outbox';
 import {
 	isWorkspaceRecord,
