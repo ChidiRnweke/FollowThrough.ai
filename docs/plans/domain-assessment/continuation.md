@@ -26,7 +26,8 @@ the entire stack is ready to merge.
 - [#158](https://github.com/ChidiRnweke/FollowThrough.ai/pull/158) adds controller-owned task edits.
   The controller locks the authoritative active task, applies the shared edit rule, persists the
   resolved task and returns its view in one transaction. Browser commands use the same rule.
-- The task-creation slice in this branch depends on #158. Direct creation, atomic batches,
+- [#159](https://github.com/ChidiRnweke/FollowThrough.ai/pull/159) adds task-creation ownership and
+  depends on #158. Direct creation, atomic batches,
   automatic task acceptance, reviewed suggestion acceptance and offline creation use the shared
   creation rule. Persistence receives resolved tasks and retains actor, project and origin checks.
 - [#83](https://github.com/ChidiRnweke/FollowThrough.ai/pull/83) already added durable task batches.
@@ -56,7 +57,10 @@ PostgreSQL evidence.
 The creation slice's focused controller and service regressions passed 21 files and 143 tests.
 They cover offline parity, blank-title rejection, actor and project ownership, completion timestamps,
 suggestion acceptance, and batch rollback and retry behavior. The full unit suite passed 412 files and 3,907 tests. The full browser suite passed 73 files and
-588 tests. Final quality checks and current CI results will be recorded before delivery.
+588 tests. Local lint, type checks, architecture audits and documentation checks also passed. Documentation
+reports one existing hint. The corrected suggestion suite passed all 16 tests after replacing an
+unsupported completed-task proposal fixture with the supported open-task state. Current CI results
+are linked from [PR #159](https://github.com/ChidiRnweke/FollowThrough.ai/pull/159/checks).
 
 ## Unresolved
 
