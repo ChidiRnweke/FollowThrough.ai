@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/models/notes/note-diff';
+	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/services/notes/note-diff';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { cn } from '$lib/utils';
 	import NoteDiffEditor from './note-diff-editor.svelte';
@@ -13,8 +13,7 @@
 		candidateLabel,
 		baseSublabel,
 		candidateSublabel,
-		baseTitle,
-		candidateTitle,
+		titles,
 		caption,
 		compact = false,
 		layout = 'split',
@@ -35,8 +34,7 @@
 		 * rename reads as a changed first line; callers that show the title change
 		 * themselves leave them unset rather than saying it twice.
 		 */
-		baseTitle?: string;
-		candidateTitle?: string;
+		titles?: { readonly base: string; readonly candidate: string };
 		/** What the two sides are, in the reader's terms. Every caller compares a different pair. */
 		caption?: string;
 		compact?: boolean;
@@ -61,14 +59,9 @@
 		noteId?: NoteId;
 	} = $props();
 
-	const withTitles = $derived(baseTitle !== undefined && candidateTitle !== undefined);
-	const baseDocument = $derived(
-		withTitles ? (withTitleBlock(base, baseTitle ?? '') as ProseMirrorDocument) : base
-	);
+	const baseDocument = $derived(titles ? withTitleBlock(base, titles.base) : base);
 	const candidateDocument = $derived(
-		withTitles
-			? (withTitleBlock(candidate, candidateTitle ?? '') as ProseMirrorDocument)
-			: candidate
+		titles ? withTitleBlock(candidate, titles.candidate) : candidate
 	);
 	const diff = $derived(diffNoteDocuments(baseDocument, candidateDocument));
 	const counts = $derived(countNoteDiff(diff));

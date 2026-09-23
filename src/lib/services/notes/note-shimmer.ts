@@ -22,52 +22,33 @@
  * the client only, with no ProseMirror runtime dependency.
  */
 
-/**
- * The part of a document block this comparison reads, and nothing else.
- *
- * Structurally a `ProseMirrorNode` satisfies it, which is what the caller
- * passes; it cannot say so by name, because a model file may not import its
- * domain's barrel. Every field this once declared as `unknown` was read through
- * a `typeof` immediately below, and `attrs` was never read at all — the shape
- * was already known, it just was not written down.
- */
-export interface ShimmerNode {
-	readonly type?: string;
-	readonly text?: string;
-	readonly content?: readonly ShimmerNode[];
-}
-
-export interface ShimmerDocument {
-	readonly type: 'doc';
-	readonly content?: readonly ShimmerNode[];
-}
+import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 
 /** The block's full text, descending into content so nested nodes count. */
-const blockText = (block: ShimmerNode | undefined): string => {
-	if (!block) return '';
-	if (block.text !== undefined) return block.text;
+const blockText = (block: ProseMirrorNode): string => {
+	if (block.type === 'text') return block.text;
 	let text = '';
-	for (const child of block.content ?? []) text += blockText(child);
+	for (const child of 'content' in block ? (block.content ?? []) : []) text += blockText(child);
 	return text;
 };
 
 /** Everything a changed-block decision is allowed to look at. */
-const signature = (block: ShimmerNode | undefined): string =>
-	`${block?.type ?? ''}:${blockText(block)}`;
+const signature = (block: ProseMirrorNode): string => `${block.type}:${blockText(block)}`;
 
 /**
  * Indices into `next` of the top-level blocks that differ from the block at
  * the same position in `previous`. Blocks beyond the old length count as new.
  */
 export const changedTopLevelBlockIndices = (
-	previous: ShimmerDocument,
-	next: ShimmerDocument
+	previous: ProseMirrorDocument,
+	next: ProseMirrorDocument
 ): number[] => {
 	const before = previous.content ?? [];
 	const after = next.content ?? [];
 	const changed: number[] = [];
-	for (let index = 0; index < after.length; index += 1) {
-		if (signature(before[index]) !== signature(after[index])) changed.push(index);
+	for (const [index, block] of after.entries()) {
+		const previousBlock = before[index];
+		if (!previousBlock || signature(previousBlock) !== signature(block)) changed.push(index);
 	}
 	return changed;
 };

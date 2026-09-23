@@ -27,7 +27,7 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import { ProjectDiagramPicker, MermaidNodeView } from '$lib/components/diagrams';
 	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
-	import { changedTopLevelBlockIndices } from '$lib/models/notes/note-shimmer';
+	import { changedTopLevelBlockIndices } from '$lib/services/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';

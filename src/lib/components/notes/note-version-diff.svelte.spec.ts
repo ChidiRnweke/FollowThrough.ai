@@ -41,6 +41,18 @@ const base = {
 };
 
 describe('NoteVersionDiff', () => {
+	it('shows a paired title change without marking the unchanged body', async () => {
+		const unchanged = doc(para('Unchanged body'));
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: unchanged,
+			candidate: unchanged,
+			titles: { base: 'Old title', candidate: 'New title' }
+		});
+		expect(
+			Array.from(screen.container.querySelectorAll('.diff-block'), (block) => block.textContent)
+		).toEqual(['Old title', 'New title']);
+	});
 	it('renders the base pane label', async () => {
 		const screen = await render(NoteVersionDiff, base);
 		expect(await screen.getByText('Version 2').all()).not.toHaveLength(0);
