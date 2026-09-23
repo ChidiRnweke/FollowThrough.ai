@@ -39,6 +39,16 @@ complete the assessment and are not merged by this continuation.
 
 ## Observed verification
 
+[PR #208](https://github.com/ChidiRnweke/FollowThrough.ai/pull/208) preserves
+[device calendar dates and due-date labels](task-calendar.md), with matched actual-component
+captures. Focused regressions passed five files and 25 tests; the full local unit suite passed 443
+files and 4,093 tests. All required checks passed, including
+[full browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35915857929).
+
+The [task-link lifecycle disposition](task-link-lifecycle.md) records an observed task-edit failure
+after a linked note is archived. Explicit new assignments retain their active-note guard; unrelated
+edits preserve the existing link. This does not close the full task workflow review.
+
 [PR #207](https://github.com/ChidiRnweke/FollowThrough.ai/pull/207) validates
 [source-anchor ranges](source-anchor-values.md). Focused regressions passed 37 files and 298 tests;
 the full local unit suite passed 442 files and 4,089 tests. All required checks passed, including

@@ -246,6 +246,13 @@ export class Todos implements TodosController {
 		}
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.todoEditor.getForEdit(actor, input.todoId);
+			if (input.linkedNoteId) {
+				await this.dependencies.todoEditor.validateLinkedNote(
+					actor,
+					input.linkedNoteId,
+					current.projectId
+				);
+			}
 			const edited = applyTodoEdit(current, input, this.clock());
 			const todo = await this.dependencies.todoEditor.update(actor, edited);
 			const context = await this.dependencies.todoContextReader.readContext(actor, todo);

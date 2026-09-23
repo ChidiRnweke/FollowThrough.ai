@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { Note } from '$lib/models/notes';
 import type { Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type {
@@ -28,6 +29,26 @@ export class InMemoryTodos
 		SnapshotParticipant
 {
 	todos: Todo[] = [];
+	notes: Note[] = [];
+
+	async validateLinkedNote(
+		actor: ActorContext,
+		noteId: NonNullable<Todo['linkedNoteId']>,
+		projectId: Todo['projectId']
+	): Promise<void> {
+		if (
+			!this.notes.some(
+				(note) =>
+					note.id === noteId &&
+					note.userId === actor.userId &&
+					note.projectId === projectId &&
+					note.kind === 'note' &&
+					!note.archivedAt
+			)
+		) {
+			throw new NotFoundError('Todo linked note was not found');
+		}
+	}
 
 	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
 		return this.list(actor, { responsibility: 'waiting_on' });
