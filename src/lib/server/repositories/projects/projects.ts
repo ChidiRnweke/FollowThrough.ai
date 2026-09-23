@@ -10,6 +10,8 @@ import type { Note, NoteId } from '$lib/models/notes';
 /** Owns the project record itself; the document tree is `ProjectTreeRepository`'s. */
 export interface ProjectRepository {
 	insert(actor: ActorContext, input: CreateProjectInput): Promise<Project>;
+	/** Lock the active project before reading or changing its tree. */
+	findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined>;
 	findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined>;
 	listActive(actor: ActorContext): Promise<readonly Project[]>;
 	findFirstActive(actor: ActorContext): Promise<Project | undefined>;

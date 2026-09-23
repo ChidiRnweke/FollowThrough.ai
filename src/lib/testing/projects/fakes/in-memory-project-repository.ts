@@ -57,6 +57,10 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		return project;
 	}
 
+	findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
+		return this.findById(actor, projectId);
+	}
+
 	async findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
 		return this.projects.find(
 			(project) =>

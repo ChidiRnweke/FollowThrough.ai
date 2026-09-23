@@ -1,20 +1,18 @@
-import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateProjectInput,
-	MoveProjectEntryInput,
 	Project,
 	ProjectId,
 	ProjectDetails,
 	RenameProjectInput,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
-import type { Note } from '$lib/models/notes';
-import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
+import type { Note, NoteId } from '$lib/models/notes';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
 	ProjectCreator,
 	ProjectEditor,
-	ProjectEntryMover,
+	ProjectTreeWriter,
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
@@ -32,7 +30,7 @@ export class InMemoryProjects
 		ProjectLister,
 		ProjectEditor,
 		ProjectTreeReader,
-		ProjectEntryMover
+		ProjectTreeWriter
 {
 	projects: Project[] = [];
 	entries: Note[] = [];
@@ -118,18 +116,19 @@ export class InMemoryProjects
 		return entries;
 	}
 
-	async move(actor: ActorContext, input: MoveProjectEntryInput): Promise<Note> {
-		const decision = decideProjectEntryMove(input, await this.readEntries(actor, input.projectId));
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		const changes = new Map(decision.changes.map((change) => [change.id, change]));
+	readForMove(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]> {
+		return this.readEntries(actor, projectId);
+	}
+
+	async persistOrder(
+		actor: ActorContext,
+		entries: readonly { id: NoteId; parentId: NoteId | undefined; position: number }[]
+	): Promise<void> {
+		const changes = new Map(entries.map((entry) => [entry.id, entry]));
 		this.entries = this.entries.map((entry) => {
-			const change = changes.get(entry.id);
-			return change ? { ...entry, parentId: change.parentId, position: change.position } : entry;
+			const change = entry.userId === actor.userId ? changes.get(entry.id) : undefined;
+			return change ? { ...entry, ...change } : entry;
 		});
-		return { ...decision.entry, parentId: decision.parentId, position: decision.position };
 	}
 
 	private replaceProject(project: Project): void {

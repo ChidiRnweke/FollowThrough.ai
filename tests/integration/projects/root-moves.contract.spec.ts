@@ -18,7 +18,8 @@ it('keeps a folder at the project root after reloading a completed move', async 
 	const catalog = new ProjectCatalog(repository, repository);
 	const project = await repository.insert(owner, { name: 'Root folder move' });
 	const creation = noteCreationControllers(
-		new NoteCatalog(new NoteRecords(database), new SourceAnchorRecords(database), repository)
+		new NoteCatalog(new NoteRecords(database), new SourceAnchorRecords(database), repository),
+		transactionRunner
 	);
 	const { folder: parent } = await creation.projects.createFolder(owner, {
 		projectId: project.id,
@@ -33,7 +34,7 @@ it('keeps a folder at the project root after reloading a completed move', async 
 		capabilityDependencies<ProjectsDependencies>({
 			projectReader: catalog,
 			projectTreeReader: catalog,
-			entryMover: catalog,
+			entryWriter: catalog,
 			transactionRunner
 		})
 	);
@@ -49,7 +50,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 	const project = await projects.insert(owner, { name: 'Restore at root' });
 	const repository = new NoteRecords(database);
 	const catalog = new NoteCatalog(repository, new SourceAnchorRecords(database), projects);
-	const creation = noteCreationControllers(catalog);
+	const creation = noteCreationControllers(catalog, transactionRunner);
 	const { folder: parent } = await creation.projects.createFolder(owner, {
 		projectId: project.id,
 		name: 'Archived parent'
