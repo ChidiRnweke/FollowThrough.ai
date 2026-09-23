@@ -1,3 +1,4 @@
+import type { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import type { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type {
@@ -205,9 +206,10 @@ export interface AgentDependencies {
 	preferences: AgentPreferencesStore;
 	/** The catalogue of selectable models, used to validate and resolve run models. */
 	models: AgentModelCatalog;
-	/** Run records: idempotent inserts, lookups by id/request id, cancellation and requeue. */
+	/** Run records: idempotent inserts, lookups and persistence of resolved values. */
 	runs: AgentRunRepository;
 	cancellations: Pick<RunCancellation, 'getForWrite' | 'plan' | 'persist'>;
+	approvals: Pick<RunApprovals, 'getForWrite' | 'plan' | 'persist'>;
 	/** The append-only event log per run that clients poll via cursors. */
 	events: AgentRunEventRepository;
 	/** Recorded approvals and rejections for pending tool calls. */
@@ -422,14 +424,8 @@ export class Agent implements AgentController {
 		input: DecideAgentRunBatchInput
 	): Promise<AgentRunSnapshot> {
 		const snapshot = await this.dependencies.transactionRunner.run(async () => {
-			const run = await this.requireRun(actor, input.runId);
-			if (run.status !== 'awaiting_approval' && run.status !== 'queued')
-				throw new ValidationError('The agent run is not awaiting approval');
-			// All or nothing: half a batch recorded against a run that then requeues would
-			// leave the user staring at cards whose decision silently went nowhere.
-			for (const callId of input.callIds)
-				if (!run.pendingDecisions.some((pending) => pending.callId === callId))
-					throw new ValidationError('The pending tool call was not found');
+			const run = await this.dependencies.approvals.getForWrite(actor, input.runId);
+			const change = this.dependencies.approvals.plan(run, input.callIds, now());
 			for (const callId of input.callIds)
 				await this.dependencies.decisions.record(actor, {
 					runId: input.runId,
@@ -437,8 +433,10 @@ export class Agent implements AgentController {
 					decision: input.decision,
 					...(input.message === undefined ? {} : { message: input.message })
 				});
-			const queued = await this.dependencies.runs.requeueAfterDecision(actor, run.id, now());
-			if (run.status === 'awaiting_approval')
+			const queued = change
+				? await this.dependencies.approvals.persist(actor, run.id, change)
+				: run;
+			if (change)
 				await this.dependencies.events.append(run.id, 0, {
 					type: 'run_queued',
 					runId: run.id,

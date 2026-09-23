@@ -7,6 +7,7 @@ import type {
 	AgentRunId,
 	AgentRunStatus,
 	RunCancellationWrite,
+	RunApprovalWrite,
 	ConversationId,
 	StoredAgentEvent,
 	StoredAgentRunEventRecord
@@ -27,7 +28,6 @@ import type {
 } from '$lib/models/suggestions';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 import type { FindReferencesOutput } from '$lib/models/references';
-import type { DateTime } from '$lib/models/workspace';
 
 /** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
 export interface AgentRunRepository {
@@ -68,7 +68,11 @@ export interface AgentRunRepository {
 		runId: AgentRunId,
 		change: RunCancellationWrite
 	): Promise<AgentRun>;
-	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
+	updateApproval(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunApprovalWrite
+	): Promise<AgentRun>;
 	listInterrupted(): Promise<readonly AgentRun[]>;
 	listQueuedAgents(): Promise<readonly ResolvedAgentRun[]>;
 	listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]>;
