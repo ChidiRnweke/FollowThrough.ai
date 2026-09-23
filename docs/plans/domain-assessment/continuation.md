@@ -84,9 +84,14 @@ targeted replacement and revision-text comparison now belong to focused server s
 controller still owns preparation, approval and persistence. Focused regression results are recorded
 in that disposition; the public behavior is unchanged.
 
-The [note-reading disposition](note-reading.md) records the next shared-service slice for reading
+[PR #162](https://github.com/ChidiRnweke/FollowThrough.ai/pull/162) contains the
+[note-reading disposition](note-reading.md) and shared-service slice for reading
 estimates, outlines and section numbering. Browser/server rules stay shared, and model types retain
 their existing meaning. Its focused regression run passes 38 files and 289 tests.
+
+The [agent tool-recovery disposition](agent-tool-recovery.md) records the next server-rule slice.
+Name ranking belongs to the recovery formatter; the unused matching API and algorithm-only tests
+are removed. Formatter tests retain the ranking and discovery guarantees.
 
 - The other assessment families, unchecked workflow IDs and unresolved decisions still need their own
   source review and behavior evidence. No global checklist is marked complete here.

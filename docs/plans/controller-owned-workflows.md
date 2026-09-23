@@ -621,6 +621,10 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Agent tool recovery: the run recovery formatter owns private name-distance ranking and its
+direct-versus-search guidance. Remove the unused matching API from models and cover ranking through
+the real formatter output. See the [disposition](domain-assessment/agent-tool-recovery.md).
+
 Note reading presentation: reading estimates, outline interpretation and section numbering now
 belong to focused shared services. Server Notes, offline WorkspaceViews and browser components use
 those owners directly. Model files retain values only; component edits change imports, with no

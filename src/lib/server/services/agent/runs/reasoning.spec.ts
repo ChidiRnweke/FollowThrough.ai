@@ -496,6 +496,27 @@ describe('Agent runtime boundary', () => {
 });
 
 describe('Unknown agent tool recovery', () => {
+	it('orders equally close suggestions by name across both tool surfaces', async () => {
+		expect(await formattedMissingTool('bat', ['hat'], ['cat'])).toMatchObject({
+			suggestions: [
+				{ name: 'cat', invokeVia: 'search_first' },
+				{ name: 'hat', invokeVia: 'direct' }
+			]
+		});
+	});
+
+	it('includes names three edits away and excludes names four edits away', async () => {
+		expect(await formattedMissingTool('abc', ['abcdef', 'abcdefg'], [])).toMatchObject({
+			suggestions: [{ name: 'abcdef', invokeVia: 'direct' }]
+		});
+	});
+
+	it('returns each suggested name once when both surfaces contain duplicates', async () => {
+		expect(
+			await formattedMissingTool('serch', ['search', 'search'], ['search', 'search'])
+		).toMatchObject({ suggestions: [{ name: 'search', invokeVia: 'direct' }] });
+	});
+
 	it('sends an undiscovered catalog tool through search and back to itself', async () => {
 		expect(await formattedMissingTool('save_note', ['search'], ['save_note'])).toEqual({
 			failure: 'Tool "save_note" exists but has not been surfaced in this conversation yet.',

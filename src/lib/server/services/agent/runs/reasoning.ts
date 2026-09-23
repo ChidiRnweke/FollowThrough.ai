@@ -41,7 +41,6 @@ import {
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import { AgentProviderFailure, ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
 import { withReasoning } from '$lib/server/repositories/agent/reasoning-transport';
 import type {
@@ -121,6 +120,33 @@ interface RecoverableToolFailure {
 
 const formatToolNames = (names: readonly string[]): string =>
 	names.map((name) => `"${name}"`).join(', ');
+
+const toolNameDistance = (a: string, b: string): number => {
+	let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+	for (let row = 1; row <= a.length; row++) {
+		const current = [row];
+		for (let column = 1; column <= b.length; column++) {
+			const cost = a[row - 1] === b[column - 1] ? 0 : 1;
+			current[column] = Math.min(
+				current[column - 1]! + 1,
+				previous[column]! + 1,
+				previous[column - 1]! + cost
+			);
+		}
+		previous = current;
+	}
+	return previous[b.length]!;
+};
+
+const suggestToolNames = (query: string, names: readonly string[]) =>
+	names
+		.map((name) => ({ name, distance: toolNameDistance(query, name) }))
+		.filter((suggestion) => suggestion.distance <= 3)
+		.sort(
+			(left, right) =>
+				left.distance - right.distance ||
+				(left.name < right.name ? -1 : left.name > right.name ? 1 : 0)
+		);
 
 /**
  * There is one dispatch path: a tool is either callable right now, or it must be
