@@ -7,6 +7,7 @@ import type {
 	AgentRunId,
 	AgentRunStatus,
 	RunCancellationWrite,
+	RunApprovalWrite,
 	AgentSessionItem,
 	ConversationId,
 	PersistedSessionItem,
@@ -350,33 +351,18 @@ export class AgentRunRecords implements AgentRunRepository {
 		return toRun(row);
 	}
 
-	async requeueAfterDecision(
+	async updateApproval(
 		actor: ActorContext,
-		runId: AgentRun['id'],
-		at: AgentRun['updatedAt']
+		runId: AgentRunId,
+		change: RunApprovalWrite
 	): Promise<AgentRun> {
-		const run = await this.findById(actor, runId);
-		if (!run) throw new NotFoundError('Agent run was not found');
-		if (run.status === 'queued') return run;
-		assertAgentRunTransition(run.status, 'queued');
-		const [updated] = await this.database
+		const [row] = await this.database
 			.update(schema.agentRuns)
-			.set({
-				status: 'queued',
-				updatedAt: new Date(at)
-			})
-			.where(
-				and(
-					eq(schema.agentRuns.id, runId),
-					eq(schema.agentRuns.userId, actor.userId),
-					eq(schema.agentRuns.status, run.status)
-				)
-			)
+			.set({ status: change.status, updatedAt: new Date(change.updatedAt) })
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)))
 			.returning();
-		if (updated) return toRun(updated);
-		const concurrent = await this.findById(actor, runId);
-		if (concurrent?.status === 'queued') return concurrent;
-		throw new NotFoundError('Agent run was not found');
+		if (!row) throw new NotFoundError('Agent run was not found');
+		return toRun(row);
 	}
 
 	private toInsert(actor: ActorContext, run: AgentRun): typeof schema.agentRuns.$inferInsert {

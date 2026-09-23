@@ -456,6 +456,50 @@ describe('durable agent lifecycle commands', () => {
 		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(2);
 	});
 
+	it('records one queue event for separate decisions before execution resumes', async () => {
+		const { controller, runs, receipt } = await awaitingApproval([
+			{ callId: 'call-a', toolName: 'create_todo', arguments: {} },
+			{ callId: 'call-b', toolName: 'archive_note', arguments: {} }
+		]);
+		await controller.decide(testActor(), {
+			runId: receipt.runId,
+			callId: 'call-a',
+			decision: 'approve'
+		});
+		await controller.decide(testActor(), {
+			runId: receipt.runId,
+			callId: 'call-b',
+			decision: 'reject'
+		});
+		expect(
+			runs.events.filter(
+				(record) => record.event.type === 'run_queued' && record.event.reason === 'resumed'
+			)
+		).toHaveLength(1);
+	});
+
+	it('rolls back the decision and requeue if the queue event cannot be stored', async () => {
+		const { controller, runs, receipt } = await awaitingApproval([
+			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
+		]);
+		runs.failedEvent = 'run_queued';
+		try {
+			await controller
+				.decide(testActor(), { runId: receipt.runId, callId: 'call-a', decision: 'approve' })
+				.catch((error) => {
+					if (!(error instanceof Error) || error.message !== 'Event storage unavailable')
+						throw error;
+					return { kind: 'failure' as const };
+				});
+			expect({
+				status: runs.runs.find((run) => run.id === receipt.runId)?.status,
+				decisions: await runs.loadUnconsumed(receipt.runId)
+			}).toEqual({ status: 'awaiting_approval', decisions: [] });
+		} finally {
+			runs.failedEvent = undefined;
+		}
+	});
+
 	it('records nothing when one call in a batch is not pending (1/2)', async () => {
 		const { controller, receipt } = await awaitingApproval([
 			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }

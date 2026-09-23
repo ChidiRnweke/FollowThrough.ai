@@ -78,9 +78,16 @@ the dependent PR's CI because the local Docker socket remains unavailable.
 
 ## Remaining work
 
+The [run-approval disposition](run-approvals.md) records controller-owned locking and requeue,
+whole-batch validation and atomic decision/event writes. General run transitions remain unresolved.
+
+[PR #171](https://github.com/ChidiRnweke/FollowThrough.ai/pull/171) passed all required checks,
+including [quality, full browser/unit tests, PostgreSQL races and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35865285609).
+Its cancellation implementation remains open on the dependent stack.
+
 The [run-cancellation disposition](run-cancellation.md) records a reproduced duplicate terminal event,
-controller-owned locked cancellation and concurrency/rollback coverage. Approval requeue and general
-run transitions remain unresolved.
+controller-owned locked cancellation and concurrency/rollback coverage. The subsequent approval slice
+covers requeue; general run transitions remain unresolved.
 
 [PR #170](https://github.com/ChidiRnweke/FollowThrough.ai/pull/170) passed all required checks,
 including [quality, full browser/unit tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35863719473).

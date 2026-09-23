@@ -1,3 +1,4 @@
+import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
@@ -61,6 +62,7 @@ export interface AgentCapability {
 	readonly trust: ToolTrust;
 	readonly runs: AgentRunRecords;
 	readonly cancellations: RunCancellation;
+	readonly approvals: RunApprovals;
 	readonly runLedger: AgentRunLedger;
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
@@ -121,6 +123,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
 		runs,
 		cancellations: new RunCancellation(runs),
+		approvals: new RunApprovals(runs),
 		runLedger,
 		runEvents,
 		runDecisions,
