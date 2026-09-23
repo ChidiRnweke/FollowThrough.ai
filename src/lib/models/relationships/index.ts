@@ -112,20 +112,6 @@ export interface BacklinkView {
 	readonly targetNote: NoteRef;
 }
 
-/** Existing links keep their identity and origin when another proposal changes the explanation. */
-export function decideRelationshipWrite<
-	Record extends { readonly justification?: string; readonly updatedAt: string }
->(incoming: Record, current: Record | null) {
-	if (!current) return { kind: 'created' as const, after: incoming };
-	if (current.justification === incoming.justification)
-		return { kind: 'unchanged' as const, after: current };
-	return {
-		kind: 'modified' as const,
-		before: current,
-		after: { ...current, justification: incoming.justification, updatedAt: incoming.updatedAt }
-	};
-}
-
 export interface BacklinkContext {
 	readonly relationship: NoteRelationship;
 	readonly source: NoteRef;

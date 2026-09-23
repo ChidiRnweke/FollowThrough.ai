@@ -47,13 +47,31 @@ export class RelationshipGraph {
 		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
 		const timestamp = now();
-		return this.relationships.insertWithChange(actor, {
+		return this.write(actor, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: actor.userId,
 			...input,
 			createdAt: timestamp,
 			updatedAt: timestamp
 		});
+	}
+
+	/** The caller owns the transaction that retains the semantic-edge lock through persistence. */
+	private async write(
+		actor: ActorContext,
+		incoming: NoteRelationship
+	): Promise<AppliedChange<NoteRelationship>> {
+		const current = await this.relationships.findForWrite(actor, incoming);
+		if (!current)
+			return { kind: 'created', after: await this.relationships.insert(actor, incoming) };
+		if (current.justification === incoming.justification)
+			return { kind: 'unchanged', after: current };
+		const after = await this.relationships.update(actor, {
+			...current,
+			justification: incoming.justification,
+			updatedAt: incoming.updatedAt
+		});
+		return { kind: 'modified', before: current, after };
 	}
 	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void> {
 		return this.relationships.delete(actor, relationshipId);
@@ -87,7 +105,7 @@ export class RelationshipGraph {
 			const targetNote = await this.notes.findById(actor, target);
 			if (!targetNote || targetNote.projectId !== note.projectId) continue;
 			const timestamp = now();
-			await this.relationships.insert(actor, {
+			await this.write(actor, {
 				id: crypto.randomUUID() as RelationshipId,
 				userId: actor.userId,
 				sourceNoteId: note.id,

@@ -621,6 +621,13 @@ with the real catalog and repository fakes.
 
 ## Validation principles
 
+Relationship write ownership: RelationshipGraph now owns semantic-edge creation, modification and
+unchanged results. Repository reads retain the actor-scoped advisory lock and row lock until the
+calling Suggestions or Notes controller transaction ends. Persistence accepts the resolved edge;
+models and repository fakes no longer apply the domain rule. The proposal undo contract now uses
+the graph and a same-project fixture. See the [relationship-write disposition](domain-assessment/relationship-writes.md)
+for entry paths, preserved guarantees and test decisions.
+
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
 only assert a moved class exists. Use shared in-memory fakes and real PostgreSQL contracts.
 Exactly one assertion per test. Required model schemas must still be exercised with real
