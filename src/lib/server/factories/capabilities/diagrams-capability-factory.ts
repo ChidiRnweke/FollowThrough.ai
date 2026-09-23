@@ -16,7 +16,7 @@ import type {
 	AgentModelCatalog,
 	AgentPreferenceCatalog
 } from '$lib/server/services/agent/runs/preferences';
-import { resolveAgentModel } from '$lib/server/services/agent/runs/preferences';
+import { resolveAgentModel } from '$lib/services/agent/model-selection';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
 import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { DiagramGeneration } from '$lib/server/services/diagrams/generation';
