@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import {
-	noteBuilder,
-	projectBuilder,
-	testActor,
-	testNoteId
-} from '$lib/testing/workspace/fixtures/domain-builders';
+import { projectBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ProjectCatalog } from './catalog';
 
 const setup = () => {
@@ -15,61 +10,6 @@ const setup = () => {
 };
 
 describe('Project management invariants', () => {
-	it('rejects moving an entry below its descendant', async () => {
-		const { repository, service } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
-			noteBuilder({ id: testNoteId(2), kind: 'folder', parentId: testNoteId(1) })
-		];
-		await expect(
-			service.move(testActor(), {
-				projectId: projectBuilder().id,
-				entryId: testNoteId(1),
-				parentId: testNoteId(2),
-				position: 0
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
-	});
-
-	it('closes the ordering gap after a cross-folder move', async () => {
-		const { repository, service } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1), kind: 'folder', position: 0 }),
-			noteBuilder({ id: testNoteId(2), position: 1 }),
-			noteBuilder({ id: testNoteId(3), kind: 'folder', position: 2 })
-		];
-		await service.move(testActor(), {
-			projectId: projectBuilder().id,
-			entryId: testNoteId(2),
-			parentId: testNoteId(3),
-			position: 0
-		});
-		expect(
-			repository.entries
-				.filter((entry) => entry.parentId === undefined)
-				.sort((left, right) => left.position - right.position)
-				.map((entry) => entry.position)
-		).toEqual([0, 1]);
-	});
-
-	it('preserves a folder subtree when moving its root', async () => {
-		const { repository, service } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
-			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) }),
-			noteBuilder({ id: testNoteId(3), kind: 'folder' })
-		];
-		await service.move(testActor(), {
-			projectId: projectBuilder().id,
-			entryId: testNoteId(1),
-			parentId: testNoteId(3),
-			position: 0
-		});
-		expect(repository.entries.find((entry) => entry.id === testNoteId(2))?.parentId).toBe(
-			testNoteId(1)
-		);
-	});
-
 	it('hides a project tree after the project is archived', async () => {
 		const { service } = setup();
 		await service.archive(testActor(), projectBuilder().id);

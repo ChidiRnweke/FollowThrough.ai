@@ -222,16 +222,18 @@ export class Skills implements SkillsController {
 		input: CreateSkillFromSelectionInput
 	): Promise<CreateSkillFromSelectionOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
+			const sourceNote = await this.dependencies.selectionOrigins.validate(actor, input.selection);
+			// Acquire the project lock before inserting an anchor that locks its source note's FK.
+			const created = await this.createSkillNote(actor, {
+				title: input.name,
+				projectId: sourceNote.projectId,
+				parentId: sourceNote.parentId
+			});
 			const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
 			await this.dependencies.selectionOrigins.record(actor, source, {
 				producerKind: 'user',
 				producerName: 'Create Skill From Selection',
 				metadata: {}
-			});
-			const created = await this.createSkillNote(actor, {
-				title: input.name,
-				projectId: source.note.projectId,
-				parentId: source.note.parentId
 			});
 			const note = await this.saveDocument(actor, {
 				...created,

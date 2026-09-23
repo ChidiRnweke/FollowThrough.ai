@@ -20,7 +20,7 @@ const setup = () => {
 			projectLister: projects,
 			projectEditor: projects,
 			projectTreeReader: projects,
-			entryMover: projects,
+			entryWriter: projects,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);
