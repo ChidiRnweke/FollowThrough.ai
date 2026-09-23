@@ -1,7 +1,5 @@
-import { decideRelationshipWrite } from '$lib/models/relationships';
-import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { Note } from '$lib/models/notes';
-import { NotFoundError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
@@ -37,25 +35,44 @@ export class InMemoryRelationshipRepository implements NoteRelationshipRepositor
 	}
 
 	async insert(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
-		return (await this.insertWithChange(actor, relationship)).after;
-	}
-	async insertWithChange(
-		_actor: ActorContext,
-		relationship: NoteRelationship
-	): Promise<AppliedChange<NoteRelationship>> {
-		const current =
-			this.relationships.find(
+		if (
+			this.relationships.some(
 				(item) =>
-					item.sourceNoteId === relationship.sourceNoteId &&
-					item.targetNoteId === relationship.targetNoteId &&
-					item.kind === relationship.kind
-			) ?? null;
-		const change = decideRelationshipWrite(relationship, current);
-		this.relationships = [
-			...this.relationships.filter((item) => item.id !== change.after.id),
-			change.after
-		];
-		return change;
+					item.id === relationship.id ||
+					(item.sourceNoteId === relationship.sourceNoteId &&
+						item.targetNoteId === relationship.targetNoteId &&
+						item.kind === relationship.kind)
+			)
+		)
+			throw new ConflictError('Relationship already exists');
+		const stored = { ...relationship, userId: actor.userId };
+		this.relationships.push(stored);
+		return stored;
+	}
+	async findForWrite(
+		actor: ActorContext,
+		relationship: Pick<NoteRelationship, 'sourceNoteId' | 'targetNoteId' | 'kind'>
+	): Promise<NoteRelationship | undefined> {
+		return this.relationships.find(
+			(item) =>
+				item.userId === actor.userId &&
+				item.sourceNoteId === relationship.sourceNoteId &&
+				item.targetNoteId === relationship.targetNoteId &&
+				item.kind === relationship.kind
+		);
+	}
+	async update(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
+		const current = await this.findById(actor, relationship.id);
+		if (!current) throw new NotFoundError('Relationship was not found');
+		const updated = {
+			...current,
+			justification: relationship.justification,
+			updatedAt: relationship.updatedAt
+		};
+		this.relationships = this.relationships.map((item) =>
+			item.id === current.id ? updated : item
+		);
+		return updated;
 	}
 
 	async delete(actor: ActorContext, id: RelationshipId) {
