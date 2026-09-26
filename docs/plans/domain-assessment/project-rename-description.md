@@ -15,7 +15,14 @@ The server prepares this change after shared detail normalization. ProjectCatalo
 ownership, then the repository updates only requested columns. It does not copy a previously read
 description back into storage. The browser's name-only projection preserves the rest of the project,
 including its description and inbox role. The two existing project fakes follow those same effects.
-No component layout or visible control changes; the lost field is retained data used in project context.
+The project page also displays this description in PageShell. A rename previously removed that
+visible context. Matched light-theme, 1000-pixel-wide component captures show the old and corrected
+command results in the real PageShell with production CSS. The seed has a Research project with
+description "Research notes and decisions for the autumn release." and renames it to Autumn research.
+Both captures use prepareWorkspaceCommand and the same server; only the command implementation
+changes. This verifies the seeded component result, not a full authenticated browser round trip.
+Local PostgreSQL is unavailable, so persistence is verified by the SQL contracts in CI. The temporary
+fixture was removed after capture.
 
 ## Evidence and test disposition
 
