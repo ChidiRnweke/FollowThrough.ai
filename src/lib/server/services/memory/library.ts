@@ -27,6 +27,7 @@ export class MemoryLibrary {
 	async get(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
 		const entry = await this.entries.findById(actor, memoryEntryId);
 		if (!entry) throw new NotFoundError('Memory entry was not found', { memoryEntryId });
+		if (entry.projectId) await this.requireProject(actor, entry.projectId);
 		return entry;
 	}
 
@@ -45,6 +46,7 @@ export class MemoryLibrary {
 	async update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
 		if (entry.userId !== actor.userId)
 			throw new OwnershipError('Cannot edit another user’s memory');
+		if (entry.projectId) await this.requireProject(actor, entry.projectId);
 		return this.entries.update(actor, entry);
 	}
 
@@ -155,6 +157,7 @@ export class MemoryLibrary {
 		const entry = await this.entries.findByIdForUpdate(actor, memoryEntryId);
 		if (!entry || entry.deletedAt)
 			throw new NotFoundError('Memory entry was not found', { memoryEntryId });
+		if (entry.projectId) await this.requireProject(actor, entry.projectId);
 		return entry;
 	}
 
