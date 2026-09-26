@@ -260,6 +260,13 @@ export interface RenameProjectInput {
 	readonly description?: string;
 }
 
+/** A prepared rename: omitted description leaves storage untouched; null explicitly clears it. */
+export interface ProjectRename {
+	readonly projectId: ProjectId;
+	readonly name: string;
+	readonly description?: string | null;
+}
+
 export interface RenameProjectOutput {
 	readonly project: Project;
 }

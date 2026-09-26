@@ -159,9 +159,9 @@ export class Projects implements ProjectsController {
 		if (details.kind === 'invalid') throw new ValidationError(details.message);
 		return {
 			project: await this.dependencies.projectEditor.rename(actor, {
-				...input,
+				projectId: input.projectId,
 				name: details.name,
-				description: details.description
+				...(input.description !== undefined ? { description: details.description ?? null } : {})
 			})
 		};
 	}

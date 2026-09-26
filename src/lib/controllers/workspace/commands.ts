@@ -267,7 +267,6 @@ export const prepareWorkspaceCommand = (
 				value: {
 					...value('projects'),
 					name: decision.name,
-					description: decision.description,
 					updatedAt: now
 				}
 			});
