@@ -3,6 +3,7 @@ import { building } from '$app/env';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import {
 	getSessionCookie,
+	setSessionCookie,
 	hydrateEnvironment,
 	setWorkspaceAccountCookie,
 	clearWorkspaceAccountCookie
@@ -62,6 +63,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const authService = AppFactory.sessions();
 			const result = await authService.validateSession(sessionId);
 			if (result) {
+				// Session validation may extend the stored deadline. Keep the browser in sync.
+				setSessionCookie(
+					event.cookies,
+					result.session.id,
+					event.url.protocol === 'https:',
+					result.session.expiresAt
+				);
 				event.locals.user = result.user;
 			}
 		}

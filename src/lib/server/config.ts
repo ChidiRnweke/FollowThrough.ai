@@ -475,8 +475,15 @@ export const getSessionCookie = (cookies: Pick<CookieJar, 'get'>): string | null
 export const setSessionCookie = (
 	cookies: Pick<CookieJar, 'set'>,
 	sessionId: string,
-	secure: boolean
-): void => cookies.set('session', sessionId, cookieOptions(secure, 60 * 60 * 24 * 30));
+	secure: boolean,
+	expiresAt: Date,
+	now = Date.now()
+): void =>
+	cookies.set(
+		'session',
+		sessionId,
+		cookieOptions(secure, Math.max(0, Math.floor((expiresAt.getTime() - now) / 1000)))
+	);
 
 // Public cookie protocol, also named by the browser's bootstrap model.
 // Configuration must remain independent of application imports.
