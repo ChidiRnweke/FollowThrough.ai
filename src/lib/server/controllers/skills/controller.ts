@@ -217,7 +217,17 @@ export class Skills implements SkillsController {
 				description: input.description ?? '',
 				triggerHints: input.triggerHints ?? []
 			});
-			return { skill };
+			if (input.instructions === undefined) return { skill };
+			const text = input.instructions.trimEnd();
+			const saved = await this.saveDocument(actor, {
+				...note,
+				document: {
+					type: 'doc',
+					content: text ? [{ type: 'paragraph', content: [{ type: 'text', text }] }] : []
+				},
+				plainText: text
+			});
+			return { skill: { ...skill, note: saved } };
 		});
 	}
 	createFromSelection(

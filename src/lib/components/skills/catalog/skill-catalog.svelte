@@ -19,7 +19,6 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import { createSkill } from '$lib/remote/projects/projects.remote';
 
-	import { saveSkillDraft } from '$lib/remote/skills/skills.remote';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ListSkillsOutput } from '$lib/models/skills';
@@ -48,17 +47,12 @@
 		if (!name || creating) return;
 		creating = true;
 		try {
-			const { skill } = await createSkill({ name, projectId: data.inboxProjectId });
-			const description = draftDescription.trim();
-			const instructions = draftInstructions.trim();
-			if (description || instructions) {
-				await saveSkillDraft({
-					noteId: skill.note.id,
-					description,
-					instructions,
-					baseRevision: skill.note.currentRevision
-				});
-			}
+			const { skill } = await createSkill({
+				name,
+				projectId: data.inboxProjectId,
+				description: draftDescription.trim(),
+				instructions: draftInstructions.trim()
+			});
 			createOpen = false;
 			resetWizard();
 			await goto(`/skills/${skill.note.id}`);

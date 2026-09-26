@@ -142,6 +142,8 @@ export interface CreateSkillInput {
 	/** Required for the reason `CreateNoteInput.projectId` is: a skill is a note, and no default can honestly say where it belongs. */
 	readonly projectId: ProjectId;
 	readonly parentId?: NoteId;
+	/** Initial instruction text, committed with the new skill. */
+	readonly instructions?: string;
 }
 
 export interface CreateSkillOutput<Document> {

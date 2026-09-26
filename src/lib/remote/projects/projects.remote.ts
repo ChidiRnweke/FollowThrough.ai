@@ -53,6 +53,7 @@ export const createSkill = command(
 	z.object({
 		name: z.string().min(1),
 		description: z.string().optional(),
+		instructions: z.string().optional(),
 		// Branded where they are parsed, so what comes out of the schema is already
 		// the id type the controller wants. The alternative is a cast at the call
 		// site, which asserts the very thing the schema is here to establish.
@@ -73,6 +74,7 @@ export const createSkill = command(
 				name: input.name,
 				projectId: input.projectId,
 				...(input.description === undefined ? {} : { description: input.description }),
+				...(input.instructions === undefined ? {} : { instructions: input.instructions }),
 				...(input.parentId === undefined ? {} : { parentId: input.parentId })
 			})
 );
