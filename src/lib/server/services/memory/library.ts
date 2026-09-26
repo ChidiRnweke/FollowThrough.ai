@@ -127,6 +127,7 @@ export class MemoryLibrary {
 			userId: actor.userId,
 			...(target.projectId !== undefined ? { projectId: target.projectId } : {}),
 			content,
+			type: target.type,
 			shareWithAgents: payload.shareWithAgents ?? target.shareWithAgents,
 			provenanceId,
 			replacesEntryId: target.id,
