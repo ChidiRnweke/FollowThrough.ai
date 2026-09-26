@@ -41,27 +41,6 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		}
 	}
 
-	/**
-	 * The user's inbox, found by role.
-	 *
-	 * Not by name: the name is the user's to change, and matching on it is what
-	 * let a renamed project stop being the inbox while a new one silently became
-	 * it. Absent before provisioning or after the previous Inbox is archived.
-	 */
-	async findInbox(actor: ActorContext): Promise<Project | undefined> {
-		const [row] = await this.database
-			.select()
-			.from(schema.projects)
-			.where(
-				and(
-					eq(schema.projects.userId, actor.userId),
-					eq(schema.projects.role, 'inbox'),
-					isNull(schema.projects.archivedAt)
-				)
-			);
-		return row ? toProject(row) : undefined;
-	}
-
 	async findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
 		const [row] = await this.database
 			.select()
@@ -89,16 +68,6 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 					isNull(schema.projects.archivedAt)
 				)
 			);
-		return row ? toProject(row) : undefined;
-	}
-
-	async findFirstActive(actor: ActorContext): Promise<Project | undefined> {
-		const [row] = await this.database
-			.select()
-			.from(schema.projects)
-			.where(and(eq(schema.projects.userId, actor.userId), isNull(schema.projects.archivedAt)))
-			.orderBy(asc(schema.projects.createdAt))
-			.limit(1);
 		return row ? toProject(row) : undefined;
 	}
 

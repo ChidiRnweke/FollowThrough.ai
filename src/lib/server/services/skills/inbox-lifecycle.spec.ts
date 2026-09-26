@@ -21,11 +21,11 @@ it('replaces an archived Inbox while preserving built-in identities', async () =
 	const { projects, notes, provisioner } = setup();
 	const owner = testActor();
 	await provisioner.ensure(owner);
-	const previous = (await projects.findInbox(owner))!;
+	const previous = (await projects.listActive(owner)).find((project) => project.role === 'inbox')!;
 	const ids = notes.notes.map((note) => note.id).sort();
 	await projects.archive(owner, previous.id);
 	await provisioner.ensure(owner);
-	const active = (await projects.findInbox(owner))!;
+	const active = (await projects.listActive(owner)).find((project) => project.role === 'inbox')!;
 	expect({
 		replaced: active.id !== previous.id,
 		previousArchived: Boolean(

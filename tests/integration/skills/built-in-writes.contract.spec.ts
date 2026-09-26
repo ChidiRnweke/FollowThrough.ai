@@ -98,7 +98,7 @@ it('repairs legacy built-ins from an archived project while preserving authored 
 	});
 	await projects.archive(owner, original.projectId);
 	const result = await skills.list(owner);
-	const inbox = (await projects.findInbox(owner))!;
+	const inbox = (await projects.listActive(owner)).find((project) => project.role === 'inbox')!;
 	const stored = await notes.findByBuiltInKey(owner, 'followthrough');
 	expect({ ids: result.skills.map((skill) => skill.noteId).sort(), stored }).toMatchObject({
 		ids: initial.skills.map((skill) => skill.noteId).sort(),

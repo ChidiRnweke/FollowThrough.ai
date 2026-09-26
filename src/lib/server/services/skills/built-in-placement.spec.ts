@@ -41,7 +41,9 @@ it('moves a built-in out of an archived project without retaining its old folder
 	await projects.archive(testActor(), builtIn.projectId);
 	await provisioner.ensure(testActor());
 	const repaired = await notes.findByBuiltInKey(testActor(), 'followthrough');
-	const inbox = await projects.findInbox(testActor());
+	const inbox = (await projects.listActive(testActor())).find(
+		(project) => project.role === 'inbox'
+	);
 	expect({ projectId: repaired?.projectId, parentId: repaired?.parentId }).toEqual({
 		projectId: inbox?.id,
 		parentId: undefined
