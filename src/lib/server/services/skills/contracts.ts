@@ -7,10 +7,13 @@ import type {
 	SkillSummary,
 	SkillUsageView,
 	SkillManifest,
-	PreparedSkillEdit
+	SkillEditInput,
+	PreparedSkillEdit,
+	SkillPinChange
 } from '$lib/models/skills';
 
 export interface SkillCreator {
+	lockCatalog(actor: ActorContext): Promise<void>;
 	create(
 		actor: ActorContext,
 		note: Note,
@@ -24,28 +27,19 @@ export interface SkillFinder {
 }
 
 export interface SkillEditor {
+	lockCatalog(actor: ActorContext): Promise<void>;
+	getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
 	prepareEdit(
 		actor: ActorContext,
-		input: {
-			noteId: NoteId;
-			displayName?: string;
-			description?: string;
-			raw?: string;
-			instructions?: string;
-			baseRevision?: number;
-			manifest?: SkillManifest;
-			triggerHints?: readonly string[];
-			isEnabled?: boolean;
-		}
+		current: Skill<Note>,
+		input: Omit<SkillEditInput, 'noteId'>
 	): Promise<PreparedSkillEdit<Note>>;
 	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
-	serialize(actor: ActorContext, noteId: NoteId): Promise<string>;
-	setPinned(
-		actor: ActorContext,
-		noteId: NoteId,
-		projectId: ProjectId,
-		pinned: boolean
-	): Promise<void>;
+	manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest>;
+}
+export interface SkillPinWriter {
+	prepare(actor: ActorContext, input: SkillPinChange): Promise<SkillPinChange>;
+	persist(actor: ActorContext, change: SkillPinChange): Promise<void>;
 }
 export interface SkillUsageRecorder {
 	record(

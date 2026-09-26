@@ -1,11 +1,10 @@
-import { decideRelationshipWrite } from '$lib/models/relationships';
-import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { Note } from '$lib/models/notes';
-import { NotFoundError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
 	DiagramRevision,
 	DiagramRevisionId,
@@ -21,6 +20,7 @@ import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagra
 import type { NoteRelationshipRepository } from '$lib/server/repositories/relationships/relationships';
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
+import type { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 
 export class InMemoryRelationshipRepository implements NoteRelationshipRepository {
 	relationships: NoteRelationship[] = [];
@@ -36,25 +36,44 @@ export class InMemoryRelationshipRepository implements NoteRelationshipRepositor
 	}
 
 	async insert(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
-		return (await this.insertWithChange(actor, relationship)).after;
-	}
-	async insertWithChange(
-		_actor: ActorContext,
-		relationship: NoteRelationship
-	): Promise<AppliedChange<NoteRelationship>> {
-		const current =
-			this.relationships.find(
+		if (
+			this.relationships.some(
 				(item) =>
-					item.sourceNoteId === relationship.sourceNoteId &&
-					item.targetNoteId === relationship.targetNoteId &&
-					item.kind === relationship.kind
-			) ?? null;
-		const change = decideRelationshipWrite(relationship, current);
-		this.relationships = [
-			...this.relationships.filter((item) => item.id !== change.after.id),
-			change.after
-		];
-		return change;
+					item.id === relationship.id ||
+					(item.sourceNoteId === relationship.sourceNoteId &&
+						item.targetNoteId === relationship.targetNoteId &&
+						item.kind === relationship.kind)
+			)
+		)
+			throw new ConflictError('Relationship already exists');
+		const stored = { ...relationship, userId: actor.userId };
+		this.relationships.push(stored);
+		return stored;
+	}
+	async findForWrite(
+		actor: ActorContext,
+		relationship: Pick<NoteRelationship, 'sourceNoteId' | 'targetNoteId' | 'kind'>
+	): Promise<NoteRelationship | undefined> {
+		return this.relationships.find(
+			(item) =>
+				item.userId === actor.userId &&
+				item.sourceNoteId === relationship.sourceNoteId &&
+				item.targetNoteId === relationship.targetNoteId &&
+				item.kind === relationship.kind
+		);
+	}
+	async update(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
+		const current = await this.findById(actor, relationship.id);
+		if (!current) throw new NotFoundError('Relationship was not found');
+		const updated = {
+			...current,
+			justification: relationship.justification,
+			updatedAt: relationship.updatedAt
+		};
+		this.relationships = this.relationships.map((item) =>
+			item.id === current.id ? updated : item
+		);
+		return updated;
 	}
 
 	async delete(actor: ActorContext, id: RelationshipId) {
@@ -80,31 +99,22 @@ export class InMemoryReferenceRepository implements ReferenceRepository {
 	}
 }
 
-/**
- * Set or clear `archivedAt`, keeping each arm of the `Diagram` union intact.
- *
- * Written per-arm because spreading a union and asserting the result is exactly
- * the shape-cast the source audit rejects: it would let this fake produce a row
- * with a Mermaid discriminant and draw.io fields, which production cannot.
- */
-const withArchivedAt = (diagram: Diagram, archived: boolean): Diagram => {
-	const archivedAt = archived ? (new Date().toISOString() as Diagram['createdAt']) : undefined;
-	const stamp = archivedAt === undefined ? {} : { archivedAt };
-	if (diagram.kind === 'drawio') {
-		const { archivedAt: _cleared, ...rest } = diagram;
-		void _cleared;
-		return { ...rest, ...stamp };
-	}
-	const { archivedAt: _cleared, ...rest } = diagram;
-	void _cleared;
-	return { ...rest, ...stamp };
-};
-
 export class InMemoryDiagramRepository implements DiagramRepository {
 	diagrams: Diagram[] = [];
 	diagramRevisions: DiagramRevision[] = [];
+	snapshot(): () => void {
+		const diagrams = structuredClone(this.diagrams);
+		const revisions = structuredClone(this.diagramRevisions);
+		return () => {
+			this.diagrams = diagrams;
+			this.diagramRevisions = revisions;
+		};
+	}
 	/** Notes whose document renders a diagram, keyed by diagram id. */
 	referencingNotes = new Map<DiagramId, number>();
+	async findForWrite(actor: ActorContext, id: DiagramId) {
+		return this.findById(actor, id);
+	}
 	async findById(actor: ActorContext, id: DiagramId) {
 		return this.diagrams.find((item) => item.id === id && item.userId === actor.userId);
 	}
@@ -161,9 +171,34 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 		this.diagrams.push(diagram);
 		return diagram;
 	}
-	async update(_actor: ActorContext, diagram: Diagram) {
-		this.diagrams = this.diagrams.map((item) => (item.id === diagram.id ? diagram : item));
-		return diagram;
+	async updateContent(
+		actor: ActorContext,
+		write: DiagramContentWrite
+	): Promise<Diagram | undefined> {
+		const current = this.diagrams.find(
+			(item) => item.id === write.diagramId && item.userId === actor.userId
+		);
+		if (
+			!current ||
+			current.kind !== write.kind ||
+			current.archivedAt ||
+			current.updatedAt !== write.expectedUpdatedAt ||
+			(write.kind === 'drawio' &&
+				(current.kind !== 'drawio' ||
+					current.currentRevision !== write.expectedRevision ||
+					current.publishedRevision !== write.expectedPublishedRevision))
+		)
+			return undefined;
+		const saved: Diagram = {
+			...current,
+			source: write.source,
+			renderedSvg: write.renderedSvg,
+			searchableText: write.searchableText,
+			updatedAt: write.updatedAt,
+			...(write.kind === 'mermaid' ? { title: write.title, provenanceId: write.provenanceId } : {})
+		};
+		this.diagrams = this.diagrams.map((item) => (item.id === saved.id ? saved : item));
+		return saved;
 	}
 	async updateIfRevision(
 		_actor: ActorContext,
@@ -181,7 +216,7 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 			current.publishedRevision !== expectedPublishedRevision
 		)
 			return undefined;
-		await this.update(_actor, diagram);
+		this.diagrams = this.diagrams.map((item) => (item.id === diagram.id ? diagram : item));
 		return diagram;
 	}
 	async insertRevision(_actor: ActorContext, revision: DiagramRevision) {
@@ -200,16 +235,18 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 			(revision) => revision.diagramId === id && revision.id === revisionId
 		);
 	}
-	async setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram> {
+	async updateTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
 		const index = this.diagrams.findIndex(
-			(diagram) => diagram.id === id && diagram.userId === actor.userId
+			(item) => item.id === diagram.id && item.userId === actor.userId
 		);
-		if (index === -1) throw new NotFoundError('Diagram was not found', { diagramId: id });
-		// Narrowed on `kind` rather than spread-and-asserted. `Diagram` is a union, so
-		// `{ ...current, … } as Diagram` would turn off the field checking that keeps
-		// this fake honest — and a fake that can hold a shape production cannot
-		// teaches the bug to everyone who copies it.
-		const updated = withArchivedAt(this.diagrams[index]!, archived);
+		if (index === -1) throw new NotFoundError('Diagram was not found', { diagramId: diagram.id });
+		const { archivedAt, ...current } = this.diagrams[index]!;
+		void archivedAt;
+		const updated = {
+			...current,
+			updatedAt: diagram.updatedAt,
+			...(diagram.archivedAt === undefined ? {} : { archivedAt: diagram.archivedAt })
+		};
 		this.diagrams[index] = updated;
 		return updated;
 	}
@@ -223,45 +260,110 @@ export class InMemoryDiagramRepository implements DiagramRepository {
 		);
 	}
 
-	async delete(actor: ActorContext, id: DiagramId) {
+	async deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean> {
+		const eligible = this.diagrams.find(
+			(item) => item.id === id && item.userId === actor.userId && item.archivedAt !== undefined
+		);
+		if (!eligible) return false;
 		this.diagrams = this.diagrams.filter((item) => item.id !== id || item.userId !== actor.userId);
+		this.diagramRevisions = this.diagramRevisions.filter((revision) => revision.diagramId !== id);
+		return true;
 	}
 }
 
 export class InMemorySkillRepository implements SkillRepository {
+	constructor(private readonly notes: InMemoryNoteRepository) {}
+	writeFailure: Error | undefined;
+	usageReadFailure: Error | undefined;
+	// Unit transactions run sequentially; PostgreSQL contracts verify concurrent locking.
+	async lockCatalog(_actor: ActorContext): Promise<void> {}
+	snapshot(): () => void {
+		const skills = structuredClone(this.skills);
+		const usages = structuredClone(this.usages);
+		const pins = structuredClone(this.pins);
+		return () => {
+			this.skills = skills;
+			this.usages = usages;
+			this.pins = pins;
+		};
+	}
 	skills: Skill<Note>[] = [];
 	usages: SkillUsage[] = [];
+	pins: { projectId: ProjectId; skillNoteId: NoteId }[] = [];
+	findForWrite(actor: ActorContext, noteId: NoteId): Promise<Skill<Note> | undefined> {
+		return this.findByNoteId(actor, noteId);
+	}
 	async findByNoteId(actor: ActorContext, noteId: NoteId) {
-		return this.skills.find((item) => item.note.id === noteId && item.note.userId === actor.userId);
+		const skill = this.skills.find((item) => item.note.id === noteId);
+		const note = await this.notes.findById(actor, noteId);
+		return skill && note ? { ...skill, note } : undefined;
 	}
-	async listEnabled(actor: ActorContext): Promise<readonly SkillSummary[]> {
-		return (await this.listAll(actor)).filter((skill) => skill.isEnabled);
+	async listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		return (await this.listAll(actor, projectId)).filter((skill) => skill.isEnabled);
 	}
-	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
-		return this.skills
-			.filter((item) => item.note.userId === actor.userId)
+	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		const joined = await Promise.all(
+			this.skills.map((item) => this.findByNoteId(actor, item.note.id))
+		);
+		return joined
+			.filter((item) => item !== undefined)
+			.filter((item) => item.note.archivedAt === undefined)
 			.map((item) => ({
 				noteId: item.note.id,
-				name: item.name,
+				projectId: item.note.projectId,
+				name: item.note.title,
+				slug: item.slug,
 				description: item.description,
 				triggerHints: item.triggerHints,
+				allowImplicitInvocation: item.allowImplicitInvocation,
+				isPinned: this.pins.some(
+					(pin) => pin.projectId === projectId && pin.skillNoteId === item.note.id
+				),
 				isEnabled: item.isEnabled
 			}));
 	}
-	async insert(_actor: ActorContext, skill: Skill<Note>) {
-		this.skills.push(skill);
-		return skill;
+	async insert(actor: ActorContext, skill: Skill<Note>) {
+		if (this.writeFailure) throw this.writeFailure;
+		const note = await this.notes.findById(actor, skill.note.id);
+		if (!note) throw new NotFoundError('Skill note was not found');
+		if (this.skills.some((current) => current.note.id === note.id))
+			throw new ConflictError('Skill metadata already exists');
+		const stored = { ...skill, note };
+		this.skills.push(stored);
+		return stored;
 	}
-	async update(_actor: ActorContext, skill: Skill<Note>) {
-		this.skills = this.skills.map((item) => (item.note.id === skill.note.id ? skill : item));
-		return skill;
+	async update(actor: ActorContext, skill: Skill<Note>) {
+		if (this.writeFailure) throw this.writeFailure;
+		const note = await this.notes.findById(actor, skill.note.id);
+		if (!note) throw new NotFoundError('Skill note was not found');
+		if (!this.skills.some((current) => current.note.id === note.id))
+			throw new NotFoundError('Skill was not found');
+		const stored = { ...skill, note };
+		this.skills = this.skills.map((item) => (item.note.id === note.id ? stored : item));
+		return stored;
 	}
-	async setPinned(): Promise<void> {}
-	async recordUsage(_actor: ActorContext, usage: SkillUsage) {
+	async setPinned(
+		actor: ActorContext,
+		noteId: NoteId,
+		projectId: ProjectId,
+		pinned: boolean
+	): Promise<void> {
+		if (!(await this.findByNoteId(actor, noteId))) throw new NotFoundError('Skill was not found');
+		this.pins = this.pins.filter(
+			(pin) => pin.projectId !== projectId || pin.skillNoteId !== noteId
+		);
+		if (pinned) this.pins.push({ projectId, skillNoteId: noteId });
+	}
+	async recordUsage(actor: ActorContext, usage: SkillUsage) {
+		if (this.writeFailure) throw this.writeFailure;
+		if (!(await this.findByNoteId(actor, usage.skillNoteId)))
+			throw new NotFoundError('Skill was not found');
 		this.usages.push(usage);
 		return usage;
 	}
-	async listUsages(_actor: ActorContext, noteId: NoteId) {
+	async listUsages(actor: ActorContext, noteId: NoteId) {
+		if (this.usageReadFailure) throw this.usageReadFailure;
+		if (!(await this.findByNoteId(actor, noteId))) throw new NotFoundError('Skill was not found');
 		return this.usages.filter((item) => item.skillNoteId === noteId);
 	}
 }

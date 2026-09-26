@@ -1,9 +1,27 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
+import type { DateTime } from '$lib/models/workspace';
+import { NotFoundError } from '$lib/errors';
+import type { Todo, TodoId, TodoListFilter, TodoStatus } from '$lib/models/todos';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
+import type {
+	RestoreSnapshot,
+	SnapshotParticipant
+} from '$lib/testing/workspace/fakes/in-memory-transaction';
 
-export class InMemoryTodoRepository implements TodoRepository {
+export class InMemoryTodoRepository implements TodoRepository, SnapshotParticipant {
 	todos: Todo[] = [];
+	updateFailures = new Map<TodoStatus, Error>();
+	insertFailures = new Map<string, Error>();
+	snapshot(): RestoreSnapshot {
+		const todos = structuredClone(this.todos);
+		return () => {
+			this.todos = todos;
+		};
+	}
+
+	findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
+		return this.findById(actor, id);
+	}
 
 	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
 		return this.todos.find(
@@ -40,14 +58,19 @@ export class InMemoryTodoRepository implements TodoRepository {
 	}
 
 	async insert(_actor: ActorContext, todo: Todo): Promise<Todo> {
+		const failure = this.insertFailures.get(todo.title);
+		if (failure) throw failure;
 		this.todos.push(todo);
 		return todo;
 	}
-	async update(_actor: ActorContext, todo: Todo): Promise<Todo> {
+	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (!(await this.findById(actor, todo.id))) throw new NotFoundError('Todo was not found');
+		const failure = this.updateFailures.get(todo.status);
+		if (failure) throw failure;
 		this.todos = this.todos.map((item) => (item.id === todo.id ? todo : item));
 		return todo;
 	}
-	async softDelete(_actor: ActorContext, id: TodoId, deletedAt: Todo['deletedAt']): Promise<void> {
+	async softDelete(_actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void> {
 		this.todos = this.todos.map((todo) => (todo.id === id ? { ...todo, deletedAt } : todo));
 	}
 }

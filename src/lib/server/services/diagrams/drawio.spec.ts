@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DrawioLabelExtractor, DrawioSvgSanitizer, DrawioXmlValidator } from './drawio';
+import { DrawioLabelReader, DrawioSvgSanitizer, DrawioXmlValidator } from './drawio';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 describe('Untrusted draw.io XML invariants', () => {
@@ -193,6 +193,6 @@ describe('Draw.io preview and retrieval invariants', () => {
 	});
 
 	it('extracts searchable labels from draw.io cells', () => {
-		expect(new DrawioLabelExtractor().extract(VALID_DRAWIO_XML)).toBe('API & worker');
+		expect(new DrawioLabelReader().read(VALID_DRAWIO_XML)).toEqual(['API & worker']);
 	});
 });

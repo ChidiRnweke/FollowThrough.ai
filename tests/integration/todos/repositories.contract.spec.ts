@@ -33,7 +33,7 @@ describe('Postgres todo repository invariants', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await repository.update(owner, { ...todo, status: 'done' });
+		await repository.update(owner, { ...todo, status: 'done', completedAt: now });
 		expect((await repository.list(owner, { status: 'done' })).map((item) => item.id)).toEqual([
 			todo.id
 		]);

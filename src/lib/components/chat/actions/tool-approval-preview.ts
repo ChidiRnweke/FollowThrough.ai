@@ -4,7 +4,7 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { FieldChange } from '$lib/components/agent';
 import { argumentLabel } from './tool-approval-fields';
 import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
-import { drawioLabelDiff } from '$lib/models/diagrams/drawio-labels';
+import { drawioLabelDiff } from '$lib/services/diagrams/labels';
 
 /**
  * What an approval card should show for a pending tool call.
@@ -14,7 +14,7 @@ import { drawioLabelDiff } from '$lib/models/diagrams/drawio-labels';
  */
 
 /** Tools whose payload rewrites a note body, and so deserve a real before/after. */
-const NOTE_BODY_TOOLS = new Set(['save_note', 'edit_note']);
+const NOTE_BODY_TOOLS = new Set(['save_note', 'edit_note', 'save_skill', 'edit_skill']);
 
 /** The tool that rewrites the agent's own defaults, whose before-image the card already holds. */
 const PREFERENCES_TOOL = 'update_agent_preferences';

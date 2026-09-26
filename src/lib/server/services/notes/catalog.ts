@@ -1,30 +1,24 @@
-import { decideRevisionWrite } from '$lib/models/revisions';
-import {
-	sameNoteDraft,
-	decideSelection,
-	decideNoteCreation,
-	decideNoteArchive,
-	decideNoteRestore
-} from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateNoteInput,
+	NoteCreationFacts,
+	NoteSaveWrite,
+	NotePublicationWrite,
 	Note,
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
 	NoteSearchTarget,
 	NoteSummary,
-	SetNoteSectionNumberingInput,
-	TextSelection
+	SetNoteSectionNumberingInput
 } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
-import type { Provenance, SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
+import type { Provenance, SourceAnchor } from '$lib/models/provenance';
 import type { TrashedNote } from '$lib/models/notes';
 
-import { NOTE_REVISION_HISTORY_LIMIT, findProseMirrorDocumentIssue } from '$lib/models/notes';
-import { NotFoundError, OwnershipError, StaleRevisionError, ValidationError } from '$lib/errors';
+import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
+import { NotFoundError, OwnershipError, StaleRevisionError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
@@ -60,58 +54,14 @@ export class NoteCatalog {
 		return this.notes.listSearchable(actor, projectId);
 	}
 
-	async create(
-		actor: ActorContext,
-		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
-	): Promise<Note>;
-	async create(actor: ActorContext, input: TextSelection): Promise<SourceAnchor>;
-	async create(
-		actor: ActorContext,
-		input: (CreateNoteInput & { documentKind?: 'note' | 'skill' }) | TextSelection
-	): Promise<Note | SourceAnchor> {
-		return 'text' in input ? this.createAnchor(actor, input) : this.createNote(actor, input);
-	}
-
-	async save(actor: ActorContext, candidate: Note): Promise<Note> {
+	async getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note> {
 		if (candidate.userId !== actor.userId)
 			throw new OwnershipError('Cannot save another user’s note');
-		const current = await this.get(actor, candidate.id);
-		if (!candidate.title.trim()) throw new ValidationError('Note title is required');
-		const documentIssue = findProseMirrorDocumentIssue(candidate.document);
-		if (documentIssue)
-			throw new ValidationError(
-				`Invalid note document at ${documentIssue.path}: ${documentIssue.message}`
-			);
-		if (current.archivedAt) throw new ValidationError('Archived notes cannot be edited');
-		if (candidate.projectId !== current.projectId || candidate.kind !== current.kind)
-			throw new ValidationError('A save cannot move a note between projects or change its kind');
-		if (
-			candidate.kind === 'folder' &&
-			(candidate.plainText.trim() || candidate.document.content?.length)
-		)
-			throw new ValidationError('Folders cannot contain authored document content');
-		const decision = decideRevisionWrite(
-			{
-				kind: 'save',
-				baseMatches: candidate.currentRevision === current.currentRevision,
-				contentChanged: !sameNoteDraft(current, candidate)
-			},
-			current,
-			{ acceptUnchangedRetry: false }
-		);
-		if (decision.kind === 'conflict')
-			throw new StaleRevisionError('The note has changed since it was loaded');
-		if (decision.kind === 'unchanged') return current;
-		const updated = await this.notes.updateIfRevision(
-			actor,
-			{
-				...candidate,
-				title: candidate.title.trim(),
-				currentRevision: decision.currentRevision,
-				updatedAt: now()
-			},
-			current.currentRevision
-		);
+		return this.lockedNote(actor, candidate.id);
+	}
+
+	async persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note> {
+		const updated = await this.notes.updateIfRevision(actor, write.note, write.expectedRevision);
 		if (!updated) throw new StaleRevisionError('The note changed while it was being saved');
 		return updated;
 	}
@@ -124,33 +74,42 @@ export class NoteCatalog {
 		return this.notes.setSectionNumbering(actor, input.noteId, input.enabled ?? null);
 	}
 
-	async archive(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
-		const decision = decideNoteArchive(
-			note,
-			active.some((entry) => entry.parentId === noteId)
-		);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		return this.notes.update(actor, { ...note, archivedAt: now(), updatedAt: now() });
+	private async lockedNote(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const note = await this.notes.findForWrite(actor, noteId);
+		if (!note) throw new NotFoundError('Note was not found', { noteId });
+		return note;
 	}
 
-	async restore(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const parent = note.parentId ? await this.notes.findById(actor, note.parentId) : undefined;
-		const decision = decideNoteRestore(note, parent ?? null);
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		const { archivedAt, ...rest } = note;
-		void archivedAt;
-		if (decision.placement === 'keep')
-			return this.notes.update(actor, { ...rest, updatedAt: now() });
-		const { parentId, ...detached } = rest;
-		void parentId;
-		return this.notes.update(actor, {
-			...detached,
-			position: await this.notes.countSiblings(actor, note.projectId, undefined),
-			updatedAt: now()
-		});
+	private async lockTreeForNote(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		const candidate = await this.get(actor, noteId);
+		await this.resolveProject(actor, candidate.projectId);
+		return this.lockedNote(actor, noteId);
+	}
+
+	async archiveFacts(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<{ note: Note; hasActiveChildren: boolean }> {
+		const note = await this.lockTreeForNote(actor, noteId);
+		const active = note.kind === 'folder' ? await this.notes.listActive(actor, note.projectId) : [];
+		return { note, hasActiveChildren: active.some((entry) => entry.parentId === noteId) };
+	}
+
+	async restoreFacts(
+		actor: ActorContext,
+		noteId: NoteId
+	): Promise<{ note: Note; parent: Note | null; rootSiblingCount: number }> {
+		const note = await this.lockTreeForNote(actor, noteId);
+		const parent = note.parentId ? await this.notes.findForWrite(actor, note.parentId) : undefined;
+		return {
+			note,
+			parent: parent ?? null,
+			rootSiblingCount: await this.notes.countSiblings(actor, note.projectId)
+		};
+	}
+
+	persistTrash(actor: ActorContext, note: Note): Promise<Note> {
+		return this.notes.updateTrash(actor, note);
 	}
 
 	async listTrashed(
@@ -182,77 +141,45 @@ export class NoteCatalog {
 			}));
 	}
 
-	async deleteForever(
+	async deletionFacts(
 		actor: ActorContext,
 		noteId: NoteId
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
-		const note = await this.get(actor, noteId);
-		if (!note.archivedAt)
-			throw new ValidationError('Only notes in the trash can be deleted permanently');
-		if (note.kind === 'skill')
-			throw new ValidationError('Skill notes are not deleted from the trash');
-		const trashed = await this.notes.listTrashed(actor, note.projectId);
-		const deleted = await this.purge(actor, this.descendants(trashed, [noteId]));
-		return this.inDeletionOrder(trashed, deleted);
+	): Promise<{ note: Note; trashed: readonly Note[] }> {
+		const note = await this.lockTreeForNote(actor, noteId);
+		return { note, trashed: await this.notes.listTrashed(actor, note.projectId) };
 	}
 
-	async emptyTrash(
+	async trashForDeletion(
 		actor: ActorContext,
 		projectId?: Note['projectId']
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
-		const trashed = await this.notes.listTrashed(actor, projectId);
-		// Skills are filtered out of the trash listing, so they are not something the user
-		// can see they are about to destroy. Emptying the trash empties what is on screen.
-		const visible = trashed.filter((note) => note.kind !== 'skill');
-		const deleted = await this.purge(
-			actor,
-			this.descendants(
-				trashed,
-				visible.map((note) => note.id)
-			)
+	): Promise<readonly Note[]> {
+		const projectIds = projectId
+			? [projectId]
+			: (await this.projects.listActive(actor)).map((project) => project.id).sort();
+		const locked = new Set<Note['projectId']>();
+		for (const id of projectIds) {
+			const project = await this.projects.findForWrite(actor, id);
+			if (project) locked.add(project.id);
+		}
+		if (locked.size === 0) return [];
+		// Preserve trash ordering while excluding projects created after the locked inventory.
+		return (await this.notes.listTrashed(actor, projectId)).filter((note) =>
+			locked.has(note.projectId)
 		);
-		return this.inDeletionOrder(trashed, deleted);
 	}
 
-	/**
-	 * The trashed notes reachable from `roots` through `parentId`, deepest first. A trashed
-	 * folder is deleted with its contents: `notes.parent_id` is `set null` on delete, so
-	 * leaving them behind would silently move them to the project root instead.
-	 */
-	private descendants(trashed: readonly Note[], roots: readonly NoteId[]): readonly NoteId[] {
-		const visible = trashed.filter((note) => note.kind !== 'skill');
-		const ordered: NoteId[] = [];
-		const seen = new Set<NoteId>();
-		const walk = (id: NoteId): void => {
-			if (seen.has(id)) return;
-			seen.add(id);
-			for (const child of visible.filter((note) => note.parentId === id)) walk(child.id);
-			ordered.push(id);
-		};
-		for (const root of roots) walk(root);
-		return ordered;
-	}
-
-	private async purge(actor: ActorContext, ids: readonly NoteId[]): Promise<readonly NoteId[]> {
-		// Sequential rather than concurrent: the ids arrive children-first so that a folder
-		// is never removed while something still points at it.
-		for (const id of ids) await this.notes.delete(actor, id);
-		return ids;
-	}
-
-	/**
-	 * Report the deleted rows in the order they were purged — children before the folder
-	 * that holds them — not in trash-listing order.
-	 */
-	private inDeletionOrder(
-		trashed: readonly Note[],
-		deleted: readonly NoteId[]
-	): readonly Pick<Note, 'id' | 'title'>[] {
-		const byId = new Map(trashed.map((row) => [row.id, row]));
-		return deleted.flatMap((id) => {
-			const row = byId.get(id);
-			return row === undefined ? [] : [{ id, title: row.title }];
-		});
+	async persistDeletion(
+		actor: ActorContext,
+		notes: readonly Pick<Note, 'id' | 'title'>[]
+	): Promise<readonly Pick<Note, 'id' | 'title'>[]> {
+		const deleted: Pick<Note, 'id' | 'title'>[] = [];
+		// The resolved order is children first; an unexpected missing/restored row aborts the batch.
+		for (const note of notes) {
+			const result = await this.notes.deleteTrashed(actor, note.id);
+			if (!result) throw new StaleRevisionError('The note left the trash before deletion');
+			deleted.push(result);
+		}
+		return deleted;
 	}
 
 	async record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void> {
@@ -306,15 +233,14 @@ export class NoteCatalog {
 		await this.notes.restoreAttachmentSnapshot(actor, revisionId, noteId);
 	}
 
-	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const ts = now();
-		return this.notes.update(actor, {
-			...note,
-			publishedRevision: note.currentRevision,
-			publishedAt: ts,
-			updatedAt: ts
-		});
+	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		return this.lockedNote(actor, noteId);
+	}
+
+	async persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note> {
+		const note = await this.notes.updatePublication(actor, write);
+		if (!note) throw new StaleRevisionError('The note changed while it was being published');
+		return note;
 	}
 
 	async repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]> {
@@ -336,48 +262,21 @@ export class NoteCatalog {
 		return repaired;
 	}
 
-	private async createNote(
+	async creationFacts(
 		actor: ActorContext,
-		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
-	): Promise<Note> {
+		input: Pick<CreateNoteInput, 'projectId' | 'parentId'>
+	): Promise<NoteCreationFacts> {
 		const project = await this.resolveProject(actor, input.projectId);
-		const parent = input.parentId ? await this.notes.findById(actor, input.parentId) : undefined;
-		const decision = decideNoteCreation(
-			{
-				...input,
-				id: input.id ?? (crypto.randomUUID() as NoteId),
-				kind: input.documentKind ?? 'note'
-			},
-			{
-				project,
-				parent: parent ?? null,
-				siblingCount: await this.notes.countSiblings(actor, project.id, input.parentId)
-			},
-			now()
-		);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return this.notes.insert(actor, decision.note);
+		return {
+			project,
+			parent: input.parentId ? ((await this.notes.findById(actor, input.parentId)) ?? null) : null,
+			siblingCount: await this.notes.countSiblings(actor, project.id, input.parentId)
+		};
 	}
 
-	private async createAnchor(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {
-		const note = await this.get(actor, selection.noteId);
-		const decision = decideSelection(selection, note);
-		if (decision.kind === 'invalid') {
-			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
-			throw new ValidationError(decision.message);
-		}
-		return this.anchors.insert(actor, {
-			id: crypto.randomUUID() as SourceAnchorId,
-			noteId: note.id,
-			from: selection.from,
-			to: selection.to,
-			quote: selection.text,
-			revision: selection.revision,
-			createdAt: now()
-		});
+	async insert(actor: ActorContext, note: Note): Promise<Note> {
+		if (note.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s note');
+		return this.notes.insert(actor, note);
 	}
 
 	/**
@@ -400,7 +299,7 @@ export class NoteCatalog {
 		actor: ActorContext,
 		projectId: Note['projectId']
 	): Promise<Project> {
-		const project = await this.projects.findById(actor, projectId);
+		const project = await this.projects.findForWrite(actor, projectId);
 		if (!project) throw new NotFoundError('Project was not found', { projectId });
 		return project;
 	}

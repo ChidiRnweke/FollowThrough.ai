@@ -119,7 +119,9 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 
 | Directory                      | Holds                                                                   |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| `models/<domain>/`             | Pure types and logic shared by client and server. No I/O, no framework. |
+| `models/<domain>/`             | Values, types, Zod schemas and constructors. No business logic.         |
+| `services/<domain>/`           | Business rules shared by browser and server. No I/O (ADR 0041).         |
+| `controllers/<area>/`          | Browser-side coordination over shared services, such as offline edits.  |
 | `server/services/<domain>/`    | Server-only logic against repositories.                                 |
 | `server/controllers/<domain>/` | Orchestration across services; the only cross-service seam.             |
 | `remote/<domain>/`             | Zod-validated `query`/`command` — the sole UI→server entry point.       |
@@ -172,6 +174,9 @@ A new controller method needs all of these, or `svelte-check` / the audits fail:
 4. Classify the method in the `AgentToolCoverage` map in
    `src/lib/server/factories/agent/agent-tool-factory.ts`. The map is total over each controller's
    methods; a missing entry is a type error.
+5. Register the public method in `src/lib/server/factories/controller-surfaces.ts`. This map is
+   total over controller interfaces. Boundary instrumentation uses it to start tracing before
+   execution and to leave internal helpers untouched.
 
 Boundary logging and tracing are automatic (`instrumentedController` wraps every controller):
 one `domain.method` span, info before / debug after / warn on `DomainError` / error otherwise,
@@ -184,7 +189,8 @@ dev, info in prod.
 - Each `src/lib/models/<domain>/` domain is self-contained: no imports of sibling files in the
   same domain, and never imports from `components/`.
 - Services may not import other services; orchestrate across services in a controller.
-- Pure logic shared by client and server belongs in `models/`; server-only logic in `services/`.
+- Models hold no behavior. Business rules shared by client and server belong in `services/`;
+  server-only logic in `server/services/` (ADR 0041).
 
 ## Failing loudly (audit-enforced)
 

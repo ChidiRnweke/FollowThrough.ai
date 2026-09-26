@@ -1,76 +1,69 @@
+import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
+import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type { Database } from '$lib/server/db';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { KnowledgeIndexMaintenance } from '$lib/server/services/knowledge-search/index-maintenance';
+import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import {
 	ContentIndex,
 	retrievalChunkerFromEnv
 } from '$lib/server/services/knowledge-search/indexing';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
-import {
-	EmbeddedKnowledgeSearcher,
-	ProjectScopedLinkFinder,
-	RerankingKnowledgeSearcher,
-	type Reranker
-} from '$lib/server/services/knowledge-search/semantic';
-import type { Condenser, EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
-import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
+import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
+import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { operationObserver } from '$lib/server/services/telemetry';
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
-import { ConversationSummary } from '$lib/server/services/agent/conversations/summary';
 import {
-	PgToolRetriever,
+	SearchQueryGeneration,
+	type ISearchQueryGeneration
+} from '$lib/server/services/knowledge-search/query-generation';
+import {
+	ToolDiscovery,
 	type ToolRetriever
-} from '$lib/server/services/agent/tools/tool-retriever';
+} from '$lib/server/controllers/tool-discovery/controller';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
 import { InlineSuggestionCompletion } from '$lib/server/services/inline-suggestions/inline-completion';
-import { InlineSuggestionContext } from '$lib/server/services/inline-suggestions/inline-context';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
 
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
 	readonly transactionRunner: TransactionRunner;
-	readonly notes: NoteCatalog;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
 	readonly embeddingClient?: EmbeddingClient;
 	readonly reranker?: Reranker;
-	readonly condenser?: Condenser;
+	readonly queryGenerator?: ISearchQueryGeneration;
 	readonly deferEmbedding: boolean;
 }
 
 export interface KnowledgeSearchCapability {
 	readonly repository: KnowledgeIndexRecords;
+	readonly indexWriter: ContentIndex;
 	readonly embeddingClient: EmbeddingClient;
 	readonly reranker: Reranker;
-	readonly condenser: Condenser;
+	readonly queryGenerator: ISearchQueryGeneration;
 	readonly attachmentIndexer: ContentIndex['attachments'];
 	readonly noteIndexer: ContentIndex['notes'];
-	readonly diagramIndexer: ReturnType<ContentIndex['diagrams']>;
+	readonly diagramIndexer: ContentIndex['diagrams'];
 	readonly memoryIndexer: ContentIndex['memories'];
-	readonly embeddedSearcher: EmbeddedKnowledgeSearcher;
-	readonly searcher: RerankingKnowledgeSearcher;
-	readonly linkFinder: ProjectScopedLinkFinder;
-	readonly maintenance: KnowledgeIndexMaintenance;
+	readonly lookup: KnowledgeLookup;
+	readonly maintenance: EmbeddingMaintenance;
 	readonly toolRetriever: ToolRetriever;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
 
 export interface KnowledgeSearchFinalizeInput {
 	readonly preferences: AgentPreferenceCatalog;
-	readonly memory: MemoryLibrary;
 }
 
 export interface KnowledgeSearchFinalized {
 	readonly preferences: AgentPreferenceCatalog;
 	readonly inlineCompletion: InlineSuggestionCompletion;
-	readonly inlineContext: InlineSuggestionContext;
+	readonly observer: typeof operationObserver;
 	readonly inlineAdmission: InlineSuggestionAdmission;
 }
 
@@ -93,50 +86,43 @@ export const createKnowledgeSearchCapability = (
 			observer: operationObserver
 		});
 	const chunker = retrievalChunkerFromEnv();
-	const embeddedSearcher = new EmbeddedKnowledgeSearcher(repository, embeddingClient);
-	const condenser =
-		input.condenser ??
-		new ConversationSummary(input.openRouterApiKey, {
+	const queryGenerator =
+		input.queryGenerator ??
+		new SearchQueryGeneration(input.openRouterApiKey, {
 			baseURL: input.openRouterBaseURL,
 			appURL: input.appURL,
 			observer: operationObserver
 		});
-	const index = new ContentIndex(repository, embeddingClient, chunker, input.deferEmbedding);
+	const index = new ContentIndex(repository, embeddingClient.model, chunker, input.deferEmbedding);
 
 	return {
 		repository,
+		indexWriter: index,
 		embeddingClient,
-		toolRetriever: new PgToolRetriever(embeddingClient, new ToolEmbeddingRecords(input.db)),
-		finalize: ({ preferences, memory }) => ({
+		toolRetriever: new ToolDiscovery(
+			new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
+			embeddingClient,
+			input.transactionRunner
+		),
+		finalize: ({ preferences }) => ({
 			preferences,
 			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {
 				baseURL: input.openRouterBaseURL,
 				appURL: input.appURL,
 				observer: operationObserver
 			}),
-			inlineContext: new InlineSuggestionContext({
-				searcher: embeddedSearcher,
-				memory,
-				reranker,
-				observer: operationObserver
-			}),
+			observer: operationObserver,
 			inlineAdmission: new InlineSuggestionAdmission()
 		}),
 		reranker,
-		condenser,
+		queryGenerator,
 		attachmentIndexer: index.attachments,
 		noteIndexer: index.notes,
-		diagramIndexer: index.diagrams(new NoteRecords(input.db)),
+		diagramIndexer: index.diagrams,
 		memoryIndexer: index.memories,
-		embeddedSearcher,
-		searcher: new RerankingKnowledgeSearcher(embeddedSearcher, reranker),
-		linkFinder: new ProjectScopedLinkFinder(
-			input.notes,
-			new RerankingKnowledgeSearcher(embeddedSearcher, reranker),
-			new RelationshipDiscovery({ observer: operationObserver })
-		),
-		maintenance: new KnowledgeIndexMaintenance(
-			repository,
+		lookup: new KnowledgeLookup(repository),
+		maintenance: new EmbeddingMaintenance(
+			new IndexBacklog(repository),
 			embeddingClient,
 			input.transactionRunner,
 			{

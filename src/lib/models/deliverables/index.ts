@@ -1,4 +1,44 @@
 import { z } from 'zod';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+
+export interface ExportInput extends DiagramRenders {
+	readonly notes: readonly { title: string; document: ProseMirrorDocument }[];
+	readonly title: string;
+	readonly styles?: ExtractedTemplateStyles;
+	readonly settings?: ExportSettings;
+	readonly images?: ReadonlyMap<string, string>;
+}
+
+export type ExportDiagramSource =
+	| { readonly kind: 'mermaid'; readonly key: string; readonly source: string }
+	| { readonly kind: 'svg'; readonly key: string; readonly source: string };
+
+export type ExportDiagramReference =
+	| { readonly kind: 'mermaid'; readonly source: string }
+	| { readonly kind: 'drawio'; readonly diagramId: string };
+
+export interface ExportDiagramRaster {
+	readonly png: string;
+	readonly size: DiagramSize;
+}
+
+export type PreparedDiagram = { kind: 'raster' | 'vector'; data: string; size?: DiagramSize };
+
+export interface ExportHeadingSpacing {
+	readonly before: number;
+	readonly after: number;
+}
+
+export interface PreparedExport extends Omit<
+	ExportInput,
+	'settings' | 'images' | keyof DiagramRenders
+> {
+	readonly settings: ExportSettings;
+	readonly images: ReadonlyMap<string, string>;
+	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	/** Explicit common overrides; other heading levels keep each format's native spacing. */
+	readonly headingSpacing: ReadonlyMap<number, ExportHeadingSpacing>;
+}
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -137,24 +177,31 @@ export const defaultExportSettings: ExportSettings = {
 	diagramTheme: { base: 'light' }
 };
 
+/** Complete settings supplied by a browser request or agent tool. */
+export const exportSettingsSchema = z.object({
+	fontFamily: z.enum(['helvetica', 'times', 'courier']),
+	fontSize: z.number().min(8).max(18),
+	lineHeight: z.number().min(1).max(2.2),
+	margin: z.number().min(18).max(144),
+	includeTitle: z.boolean().optional(),
+	diagramTheme: z
+		.object({
+			base: z.enum(['light', 'dark']),
+			colors: z.record(z.string(), z.string()).optional()
+		})
+		.optional()
+});
+
 /**
  * Stored settings are a partial overlay on the defaults, so every field is
  * optional here and the reader merges the result. Written to JSONB by the
  * exporter's own repositories, where typed values are always a subset of this.
  */
-export const exportSettingsOverlaySchema = z
-	.object({
-		fontFamily: z.enum(['helvetica', 'times', 'courier']),
+export const exportSettingsOverlaySchema = exportSettingsSchema
+	.extend({
 		fontSize: z.number(),
 		lineHeight: z.number(),
-		margin: z.number(),
-		includeTitle: z.boolean(),
-		diagramTheme: z
-			.object({
-				base: z.enum(['light', 'dark']),
-				colors: z.record(z.string(), z.string()).optional()
-			})
-			.optional()
+		margin: z.number()
 	})
 	.partial();
 
@@ -172,32 +219,14 @@ export interface DiagramSize {
  * to it for any caller that still ships the full markup.
  */
 export function svgViewBoxSize(svg: string): DiagramSize | undefined {
-	const viewBox = /viewBox="([\d.\s-]+)"/.exec(svg)?.[1]?.trim().split(/\s+/).map(Number);
-	if (viewBox?.length === 4 && viewBox[2]! > 0 && viewBox[3]! > 0) {
-		return { width: viewBox[2]!, height: viewBox[3]! };
-	}
-	return undefined;
-}
-
-/**
- * Vertical spacing around a heading in an exported document, mirroring the
- * editor's double-spaced titles.
- *
- * The editor gives a title a full blank line's worth of space on either side —
- * an h1 more than an h2 — so a heading never reads as glued to the body text.
- * Exports carry the same rhythm. Values are in points; a DOCX generator converts
- * them to twips. Deeper headings keep the tight rhythm and return `undefined`,
- * so each generator falls back to its own previous behaviour for them.
- */
-export function headingSpacingPt(level: number): { before: number; after: number } | undefined {
-	switch (level) {
-		case 1:
-			return { before: 18, after: 18 };
-		case 2:
-			return { before: 15, after: 15 };
-		default:
-			return undefined;
-	}
+	const attribute = /(?:^|\s)viewBox\s*=\s*(["'])([^"']*)\1/.exec(svg)?.[2];
+	if (attribute === undefined) return undefined;
+	const values = attribute.trim().split(/\s*,\s*|\s+/);
+	const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+	if (values.length !== 4 || !values.every((value) => number.test(value))) return undefined;
+	const viewBox = values.map(Number);
+	if (!viewBox.every(Number.isFinite) || viewBox[2]! <= 0 || viewBox[3]! <= 0) return undefined;
+	return { width: viewBox[2]!, height: viewBox[3]! };
 }
 
 /**
@@ -227,7 +256,12 @@ export const columnShares = (
 		widths.push(width);
 	}
 	const total = widths.reduce((sum, width) => sum + width, 0);
-	return widths.map((width) => width / total);
+	if (Number.isFinite(total)) return widths.map((width) => width / total);
+	// Scaling first preserves finite ratios when adding valid widths overflows.
+	const maximum = widths.reduce((largest, width) => Math.max(largest, width), 0);
+	const scaled = widths.map((width) => width / maximum);
+	const scaledTotal = scaled.reduce((sum, width) => sum + width, 0);
+	return scaled.map((width) => width / scaledTotal);
 };
 
 /**

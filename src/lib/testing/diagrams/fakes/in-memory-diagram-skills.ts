@@ -1,20 +1,24 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
-import type { Diagram, DiagramId, DrawioDiagram, MermaidDiagram } from '$lib/models/diagrams';
+import type {
+	Diagram,
+	DiagramContentWrite,
+	DiagramId,
+	DrawioDiagram,
+	MermaidDiagram
+} from '$lib/models/diagrams';
 import type { Note, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
-import { ExternalServiceError, NotFoundError } from '$lib/errors';
+import { ExternalServiceError, NotFoundError, StaleRevisionError } from '$lib/errors';
 import type {
 	DiagramFinder,
 	DiagramIndexer,
 	DiagramPromoter,
 	DiagramTextExtractor,
 	DiagramWriter,
-	DrawioDiagramCreator,
 	DrawioDiagramExporter,
-	MermaidDiagramCreator,
-	MermaidDiagramRenderer,
-	MermaidDiagramReviser
+	MermaidDiagramRenderer
 } from '$lib/server/services/diagrams/contracts';
 import type { SkillCreator } from '$lib/server/services/skills/contracts';
 import {
@@ -63,17 +67,26 @@ export const drawioBuilder = (overrides: Partial<DrawioDiagram> = {}): DrawioDia
 export class InMemoryDiagrams
 	implements
 		DiagramFinder,
-		MermaidDiagramReviser,
 		MermaidDiagramRenderer,
-		DrawioDiagramCreator,
 		DrawioDiagramExporter,
 		DiagramPromoter,
 		DiagramTextExtractor,
 		DiagramWriter,
-		DiagramIndexer
+		DiagramIndexer,
+		SnapshotParticipant
 {
 	diagrams: Diagram[] = [];
 	indexedIds: DiagramId[] = [];
+	failIndex = false;
+
+	snapshot(): RestoreSnapshot {
+		const diagrams = structuredClone(this.diagrams);
+		const indexedIds = [...this.indexedIds];
+		return () => {
+			this.diagrams = diagrams;
+			this.indexedIds = indexedIds;
+		};
+	}
 
 	async get(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
 		const diagram = this.diagrams.find(
@@ -83,28 +96,12 @@ export class InMemoryDiagrams
 		return diagram;
 	}
 
-	async revise(
-		_actor: ActorContext,
-		diagram: MermaidDiagram,
-		instruction: string
-	): Promise<MermaidDiagram> {
-		void _actor;
-		return { ...diagram, source: `${diagram.source}\n%% ${instruction}` };
+	getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram> {
+		return this.get(actor, diagramId);
 	}
 
 	async render(source: string): Promise<string> {
 		return `<svg>${source}</svg>`;
-	}
-
-	async createFromMermaid(_actor: ActorContext, diagram: MermaidDiagram): Promise<DrawioDiagram> {
-		void _actor;
-		return drawioBuilder({
-			projectId: diagram.projectId,
-			sourceNoteId: diagram.sourceNoteId,
-			source:
-				'<mxfile><diagram name="Page-1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="A" vertex="1" parent="1"><mxGeometry x="0" y="0" width="80" height="30" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>',
-			promotedFromId: diagram.id
-		});
 	}
 
 	async exportSvg(diagram: DrawioDiagram): Promise<string> {
@@ -133,38 +130,44 @@ export class InMemoryDiagrams
 		return diagram;
 	}
 
-	async update(_actor: ActorContext, diagram: Diagram): Promise<Diagram> {
-		void _actor;
-		this.diagrams = this.diagrams.map((candidate) =>
-			candidate.id === diagram.id ? diagram : candidate
+	async persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram> {
+		const current = this.diagrams.find(
+			(item) => item.id === write.diagramId && item.userId === actor.userId
 		);
-		return diagram;
+		if (
+			!current ||
+			current.kind !== write.kind ||
+			current.archivedAt ||
+			current.updatedAt !== write.expectedUpdatedAt ||
+			(write.kind === 'drawio' &&
+				(current.kind !== 'drawio' ||
+					current.currentRevision !== write.expectedRevision ||
+					current.publishedRevision !== write.expectedPublishedRevision))
+		)
+			throw new StaleRevisionError('The diagram changed before its content could be saved');
+		const saved: Diagram = {
+			...current,
+			source: write.source,
+			renderedSvg: write.renderedSvg,
+			searchableText: write.searchableText,
+			updatedAt: write.updatedAt,
+			...(write.kind === 'mermaid' ? { title: write.title, provenanceId: write.provenanceId } : {})
+		};
+		this.diagrams = this.diagrams.map((item) => (item.id === saved.id ? saved : item));
+		return saved;
 	}
-
-	async index(_actor: ActorContext, diagram: Diagram): Promise<void> {
+	async index(_actor: ActorContext, diagram: Diagram): Promise<IndexingResult> {
+		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
 		void _actor;
 		this.indexedIds.push(diagram.id);
-	}
-}
-
-export class InMemoryMermaidCreator implements MermaidDiagramCreator {
-	async create(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		instruction?: string
-	): Promise<{ title?: string; source: string }> {
-		void _actor;
-		void _selection;
-		return {
-			title: instruction ? `Diagram: ${instruction}` : 'Generated diagram',
-			source: 'flowchart LR\nA --> B'
-		};
+		return { kind: 'stored' };
 	}
 }
 
 export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 	skills: Skill<Note>[] = [];
 	failCreation = false;
+	async lockCatalog(_actor: ActorContext): Promise<void> {}
 
 	async create(
 		_actor: ActorContext,
@@ -173,7 +176,15 @@ export class InMemorySkillCreator implements SkillCreator, SnapshotParticipant {
 	): Promise<Skill<Note>> {
 		void _actor;
 		if (this.failCreation) throw new ExternalServiceError('Skill creation failed');
-		const skill: Skill<Note> = { note, isEnabled: true, ...input };
+		const skill: Skill<Note> = {
+			note,
+			slug: `skill-${note.id}`,
+			metadata: {},
+			allowImplicitInvocation: true,
+			isEnabled: true,
+			description: input.description,
+			triggerHints: input.triggerHints
+		};
 		this.skills.push(skill);
 		return skill;
 	}

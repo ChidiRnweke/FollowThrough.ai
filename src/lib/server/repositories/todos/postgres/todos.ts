@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, type SQL } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
 import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
 import { NotFoundError } from '$lib/errors';
 import type { TodoRepository } from '$lib/server/repositories/todos/todos';
@@ -11,7 +12,17 @@ export class TodoRecords implements TodoRepository {
 	constructor(private readonly database: Database) {}
 
 	async findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
-		const [row] = await this.database
+		const [row] = await this.activeTask(actor, id);
+		return row ? toTodo(row.todo) : undefined;
+	}
+
+	async findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined> {
+		const [row] = await this.activeTask(actor, id).for('update', { of: schema.todos });
+		return row ? toTodo(row.todo) : undefined;
+	}
+
+	private activeTask(actor: ActorContext, id: TodoId) {
+		return this.database
 			.select({ todo: schema.todos })
 			.from(schema.todos)
 			.innerJoin(schema.projects, eq(schema.projects.id, schema.todos.projectId))
@@ -19,10 +30,10 @@ export class TodoRecords implements TodoRepository {
 				and(
 					eq(schema.todos.id, id),
 					eq(schema.todos.userId, actor.userId),
+					isNull(schema.todos.deletedAt),
 					isNull(schema.projects.archivedAt)
 				)
 			);
-		return row ? toTodo(row.todo) : undefined;
 	}
 
 	/**
@@ -139,32 +150,38 @@ export class TodoRecords implements TodoRepository {
 			.update(schema.todos)
 			.set({
 				title: todo.title,
-				description: todo.description,
+				description: todo.description ?? null,
 				status: todo.status,
 				responsibility: todo.responsibility,
 				priority: todo.priority ?? null,
 				category: todo.category ?? null,
-				waitingOn: todo.waitingOn,
-				dueDate: todo.dueDate,
-				dueDateVerbatim: todo.dueDateVerbatim,
-				promiseStrength: todo.promiseStrength,
-				sourceAnchorId: todo.sourceAnchorId,
-				linkedNoteId: todo.linkedNoteId,
-				provenanceId: todo.provenanceId,
+				waitingOn: todo.waitingOn ?? null,
+				dueDate: todo.dueDate ?? null,
+				dueDateVerbatim: todo.dueDateVerbatim ?? null,
+				promiseStrength: todo.promiseStrength ?? null,
+				sourceAnchorId: todo.sourceAnchorId ?? null,
+				linkedNoteId: todo.linkedNoteId ?? null,
+				provenanceId: todo.provenanceId ?? null,
 				completedAt: todo.completedAt ? new Date(todo.completedAt) : null,
 				deletedAt: todo.deletedAt ? new Date(todo.deletedAt) : null,
 				updatedAt: new Date(todo.updatedAt)
 			})
-			.where(and(eq(schema.todos.id, todo.id), eq(schema.todos.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.todos.id, todo.id),
+					eq(schema.todos.userId, actor.userId),
+					isNull(schema.todos.deletedAt)
+				)
+			)
 			.returning();
 		if (!row) throw new NotFoundError('Todo was not found');
 		return toTodo(row);
 	}
 
-	async softDelete(actor: ActorContext, id: TodoId, deletedAt: Todo['deletedAt']): Promise<void> {
+	async softDelete(actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void> {
 		const [row] = await this.database
 			.update(schema.todos)
-			.set({ deletedAt: deletedAt ? new Date(deletedAt) : new Date() })
+			.set({ deletedAt: new Date(deletedAt) })
 			.where(and(eq(schema.todos.id, id), eq(schema.todos.userId, actor.userId)))
 			.returning({ id: schema.todos.id });
 		if (!row) throw new NotFoundError('Todo was not found');

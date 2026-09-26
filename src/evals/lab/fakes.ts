@@ -13,8 +13,6 @@ export class StubModelCatalog implements AgentModelCatalog {
 	async list(): Promise<readonly AgentModel[]> {
 		return [];
 	}
-
-	async assertSelectable(): Promise<void> {}
 }
 
 /** Keeps attachment bytes in the process so the lab needs no S3/MinIO. */

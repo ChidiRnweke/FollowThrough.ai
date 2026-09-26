@@ -1,8 +1,10 @@
+import { mutationResource } from '$lib/services/workspace/commands';
+import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	TrustPolicyMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import { ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -13,8 +15,8 @@ import type {
 import type { TrustPolicyStore } from '$lib/server/services/agent/runs/tool-trust';
 
 /**
- * Application boundary for trust policies: the rules deciding which agent tool calls and
- * suggestion types are auto-approved versus gated on explicit user approval.
+ * Application boundary for auto-accepting extracted task and memory proposals.
+ * Chat tool approval is controlled separately by execution mode.
  */
 export interface TrustPoliciesController {
 	synchronize(
@@ -23,23 +25,44 @@ export interface TrustPoliciesController {
 	): Promise<WorkspaceMutationResult>;
 	/** List the current trust policies. */
 	list(actor: ActorContext): Promise<GetTrustPoliciesOutput>;
-	/** Upsert a trust policy, replacing the previous rule for the same scope and tool. */
+	/** Replace the user's auto-accept rule for one supported proposal workflow. */
 	update(actor: ActorContext, input: UpdateTrustPolicyInput): Promise<UpdateTrustPolicyOutput>;
 }
 export interface TrustPoliciesDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	transactionRunner: AtomicOperation;
+	syncRetry: 'database-only' | 'never';
 	trustPolicyStore: TrustPolicyStore;
 }
 export class TrustPolicies implements TrustPoliciesController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: TrustPolicyMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async () => {
-			if (input.command.userId !== actor.userId)
-				throw new ValidationError('The preferences belong to another account');
-			await this.update(actor, input.command);
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input, target);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: TrustPolicyMutationRequest
+	): Promise<void> {
+		if (input.command.userId !== actor.userId)
+			throw new ValidationError('The preferences belong to another account');
+		await this.update(actor, input.command);
 	}
 	constructor(private readonly dependencies: TrustPoliciesDependencies) {}
 	async list(actor: ActorContext): Promise<GetTrustPoliciesOutput> {

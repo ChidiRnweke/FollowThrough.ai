@@ -1,7 +1,7 @@
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -11,31 +11,22 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import type { InlineMermaidToDrawioConverter } from '$lib/server/services/diagrams/contracts';
-
-class FakeDrawioConverter implements InlineMermaidToDrawioConverter {
-	source = VALID_DRAWIO_XML;
-
-	async convertInline() {
-		return {
-			title: 'Converted architecture',
-			source: this.source,
-			provenanceId: testProvenanceId(2)
-		};
-	}
-}
 
 const setup = () => {
 	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
-	const converter = new FakeDrawioConverter();
+	const generation = diagramGenerationFixture();
+	const converter = generation.provider;
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
-			inlineMermaidToDrawioConverter: converter,
+			...generation,
 			drawioXmlValidator: new DrawioXmlValidator(),
-			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
+			transactionRunner: new InMemoryTransactionRunner([
+				suggestions,
+				generation.provenance,
+				generation.persistence,
+				generation.conversations
+			])
 		})
 	);
 	return { controller, converter, suggestions };
@@ -63,7 +54,7 @@ describe('Inline Mermaid conversion invariants', () => {
 	it('records the fresh agent provenance on the suggestion', async () => {
 		const { controller } = setup();
 		const result = await controller.convertInlineMermaid(testActor(), input);
-		expect(result.suggestion.provenanceId).toBe(testProvenanceId(2));
+		expect(result.suggestion.provenanceId).toBe(testProvenanceId(1));
 	});
 
 	it('does not persist a suggestion after terminal XML validation failure', async () => {

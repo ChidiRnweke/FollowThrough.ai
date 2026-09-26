@@ -1,7 +1,11 @@
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { noteEtag } from '$lib/services/notes/presentation';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { SkillManifestCodec } from '$lib/server/services/skills/manifest';
+import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
+import type { SkillEditInput } from '$lib/models/skills';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -23,15 +27,11 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const skills = new InMemorySkillRepository();
-	const service = new SkillLibrary(
-		skills,
-		notes,
-		new InMemoryProvenanceRepository(),
-		new SkillManifestCodec()
-	);
+	const skills = new InMemorySkillRepository(notes);
+	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
+	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			skillFinder: service,
@@ -44,10 +44,10 @@ const setup = () => {
 			anchorRepairer: catalog,
 			noteIndexer: content,
 			noteLinkReconciler: content,
-			transactionRunner: new InMemoryTransactionRunner([])
+			transactionRunner
 		})
 	);
-	return { controller, service, notes, skills, catalog, content };
+	return { controller, service, notes, skills, catalog, content, transactionRunner };
 };
 const importSkill = () => {
 	const state = setup();
@@ -56,22 +56,181 @@ const importSkill = () => {
 	state.skills.skills = [
 		{
 			note,
-			name: note.title,
+
 			slug: 'decision-writing',
 			description: 'Writes decisions',
 			triggerHints: [],
+			metadata: {},
+			allowImplicitInvocation: true,
 			isEnabled: true
 		}
 	];
 	return { ...state, note };
 };
-const input = {
-	baseRevision: 1,
+const input: SkillEditInput = {
 	noteId: testNoteId(),
-	raw: '---\nname: decision-writing\ndescription: Writes decisions\n---\nWrite a decision and explain its consequences.'
+	content: {
+		kind: 'manifest',
+		baseRevision: 1,
+		manifest: readSkillManifest(
+			'---\nname: decision-writing\ndescription: Writes decisions\n---\nWrite a decision and explain its consequences.'
+		)
+	}
 };
 
 describe('Skill document imports', () => {
+	it('clears omitted portable fields while preserving an explicit invocation policy', async () => {
+		const { controller, skills, note } = importSkill();
+		skills.skills[0] = {
+			...skills.skills[0],
+			license: 'MIT',
+			compatibility: 'Node 22',
+			metadata: { owner: 'author' }
+		};
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			content: {
+				kind: 'manifest',
+				baseRevision: 1,
+				manifest: {
+					slug: 'decision-writing',
+					description: 'Writes decisions',
+					metadata: {},
+					allowImplicitInvocation: false,
+					instructions: 'New instructions'
+				}
+			}
+		});
+		expect({
+			license: skill.license,
+			compatibility: skill.compatibility,
+			metadata: skill.metadata,
+			implicit: skill.allowImplicitInvocation
+		}).toEqual({ license: undefined, compatibility: undefined, metadata: {}, implicit: false });
+	});
+	it('rejects metadata changes to an archived skill', async () => {
+		const { controller, notes, note } = importSkill();
+		notes.notes = [{ ...note, archivedAt: note.updatedAt }];
+		await expect(
+			controller.update(testActor(), { noteId: note.id, isEnabled: false })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+	it('normalizes description and trigger hints through the shared metadata rules', async () => {
+		const { controller, note } = importSkill();
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			description: '  Release guidance  ',
+			triggerHints: [' release ', '', '  ']
+		});
+		expect({ description: skill.description, triggerHints: skill.triggerHints }).toEqual({
+			description: 'Release guidance',
+			triggerHints: ['release']
+		});
+	});
+	it('retains the current description when disabling a skill with an empty description', async () => {
+		const { controller, note } = importSkill();
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			description: '  ',
+			isEnabled: false
+		});
+		expect({ description: skill.description, enabled: skill.isEnabled }).toEqual({
+			description: 'Writes decisions',
+			enabled: false
+		});
+	});
+	it('reads the current note title in the skill list after a document rename', async () => {
+		const { catalog, service, note, transactionRunner } = importSkill();
+		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+			...note,
+			title: 'Release decisions'
+		});
+		expect((await service.listAll(testActor())).map((skill) => skill.name)).toEqual([
+			'Release decisions'
+		]);
+	});
+	it('keeps a title change unpublished and preserves the portable skill name', async () => {
+		const { controller, notes, note } = importSkill();
+		const { skill } = await controller.update(testActor(), {
+			noteId: note.id,
+			displayName: 'Release decisions'
+		});
+		expect({
+			slug: skill.slug,
+			revision: skill.note.currentRevision,
+			published: skill.note.publishedRevision,
+			history: notes.revisions
+		}).toEqual({ slug: 'decision-writing', revision: 2, published: 0, history: [] });
+	});
+	it('rolls back the renamed document when its metadata write fails', async () => {
+		const { controller, notes, skills, note } = importSkill();
+		skills.writeFailure = new Error('Metadata write failed');
+		await controller
+			.update(testActor(), { noteId: note.id, displayName: 'Release decisions' })
+			.then(
+				() => {
+					throw new Error('Expected metadata failure');
+				},
+				(error: Error) => {
+					if (error.message !== 'Metadata write failed') throw error;
+				}
+			);
+		expect(notes.notes).toEqual([note]);
+	});
+	it('rejects an empty display name', async () => {
+		const { controller, note } = importSkill();
+		await expect(
+			controller.update(testActor(), { noteId: note.id, displayName: '  ' })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+	it('renames the skill note when its display name changes', async () => {
+		const { controller, notes, note } = importSkill();
+		await controller.update(testActor(), { noteId: note.id, displayName: 'Release decisions' });
+		expect(notes.notes[0].title).toBe('Release decisions');
+	});
+	it('does not save instructions when their portable metadata is incomplete', async () => {
+		const { controller, notes } = importSkill();
+		const original = structuredClone(notes.notes);
+		await controller
+			.update(testActor(), {
+				noteId: input.noteId,
+				description: 'x'.repeat(1025),
+				content: { kind: 'instructions', text: 'Replacement body', baseRevision: 1 }
+			})
+			.then(
+				() => {
+					throw new Error('Expected invalid portable metadata');
+				},
+				(error: Error) => {
+					if (!error.message.includes('Invalid SKILL.md')) throw error;
+				}
+			);
+		expect(notes.notes).toEqual(original);
+	});
+	it('rejects an imported portable name already used by another skill', async () => {
+		const { controller, skills, notes } = importSkill();
+		const other = noteBuilder({ id: testNoteId(2), kind: 'skill', title: 'Another skill' });
+		notes.notes.push(other);
+		skills.skills.push({
+			note: other,
+			slug: 'already-used',
+			description: 'Existing instructions',
+			triggerHints: [],
+			metadata: {},
+			allowImplicitInvocation: true,
+			isEnabled: true
+		});
+		await expect(
+			controller.update(testActor(), {
+				noteId: input.noteId,
+				content: {
+					kind: 'manifest',
+					baseRevision: 1,
+					manifest: readSkillManifest('---\nname: already-used\ndescription: Imported\n---\nBody')
+				}
+			})
+		).rejects.toThrow('A skill with this portable name already exists');
+	});
 	it('saves imported instructions as an unpublished draft without a snapshot', async () => {
 		const { controller, notes } = importSkill();
 		const result = await controller.update(testActor(), input);
@@ -105,17 +264,29 @@ describe('Skill document imports', () => {
 		expect({ note: notes.notes[0], revisions: notes.revisions }).toEqual({ note, revisions: [] });
 	});
 	it('creates a snapshot only when the imported document is recorded for publication', async () => {
-		const { controller, catalog, notes } = importSkill();
+		const { controller, catalog, notes, transactionRunner } = importSkill();
 		const result = await controller.update(testActor(), input);
-		await catalog.record(testActor(), result.skill.note);
-		await catalog.markPublished(testActor(), result.skill.note.id);
+		const publisher = new Notes(
+			capabilityDependencies<NotesDependencies>({
+				transactionRunner,
+				notePublisher: catalog,
+				revisionRecorder: catalog
+			})
+		);
+		await publisher.publish(testActor(), {
+			noteId: result.skill.note.id,
+			baseEtag: noteEtag(result.skill.note)
+		});
 		expect(notes.revisions.map((snapshot) => snapshot.plainText)).toEqual([
 			'Write a decision and explain its consequences.'
 		]);
 	});
 	it('refuses imported content based on an older editor revision', async () => {
-		const { controller, catalog, note } = importSkill();
-		await catalog.save(testActor(), { ...note, plainText: 'A newer edit' });
+		const { controller, catalog, note, transactionRunner } = importSkill();
+		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+			...note,
+			plainText: 'A newer edit'
+		});
 		await expect(controller.update(testActor(), input)).rejects.toMatchObject({
 			code: 'STALE_REVISION'
 		});
@@ -130,8 +301,7 @@ describe('Skill document imports', () => {
 		const { controller } = importSkill();
 		const result = await controller.update(testActor(), {
 			noteId: input.noteId,
-			baseRevision: 1,
-			instructions: 'Wizard instructions',
+			content: { kind: 'instructions', text: 'Wizard instructions', baseRevision: 1 },
 			description: 'Wizard description'
 		});
 		expect({ description: result.skill.description, text: result.skill.note.plainText }).toEqual({

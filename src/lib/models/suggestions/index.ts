@@ -1,4 +1,10 @@
-import type { ProvenanceOrigin, SourceAnchor, SelectionOrigin } from '$lib/models/provenance';
+import type {
+	Provenance,
+	ProvenanceOrigin,
+	SourceAnchor,
+	SelectionOrigin
+} from '$lib/models/provenance';
+import { storedMemoryChangePayloadSchema, type MemoryChangePayload } from '$lib/models/memory';
 import { z } from 'zod';
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -14,8 +20,6 @@ export type SuggestionId = Brand<string, 'SuggestionId'>;
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
-
-type MemoryEntryId = Brand<string, 'MemoryEntryId'>;
 
 type DateTime = Brand<string, 'DateTime'>;
 
@@ -85,6 +89,13 @@ export type DiagramSuggestion = SuggestionBase<
 
 export type MemorySuggestion = SuggestionBase<'memory', MemoryChangePayload>;
 
+export interface MemorySuggestionView extends Omit<SuggestionView, 'suggestion'> {
+	readonly suggestion: MemorySuggestion;
+}
+export interface ListPendingMemoryOutput {
+	readonly suggestions: readonly MemorySuggestionView[];
+}
+
 export type Suggestion =
 	TodoSuggestion | BacklinkSuggestion | ReferenceSuggestion | DiagramSuggestion | MemorySuggestion;
 
@@ -103,6 +114,7 @@ export const suggestionPayloadSchemas = {
 			waitingOn: z.string().optional(),
 			dueDate: z
 				.string()
+				.date()
 				.transform((value) => value as LocalDate)
 				.optional(),
 			dueDateVerbatim: z.string().optional(),
@@ -137,16 +149,7 @@ export const suggestionPayloadSchemas = {
 			source: z.string()
 		})
 		.strict(),
-	memory: z
-		.object({
-			projectId: persistedId<ProjectId>().optional(),
-			operation: z.enum(['add', 'update', 'remove']),
-			memoryEntryId: persistedId<MemoryEntryId>().optional(),
-			content: z.string().optional(),
-			shareWithAgents: z.boolean().optional(),
-			justification: z.string().optional()
-		})
-		.strict()
+	memory: storedMemoryChangePayloadSchema
 } satisfies {
 	readonly [K in SuggestionKind]: z.ZodType<Extract<Suggestion, { kind: K }>['payload']>;
 };
@@ -272,21 +275,7 @@ export type StoredSuggestion =
 			readonly reason: string;
 	  };
 
-/**
- * A durable remembered fact. Entries with a project hold project memory; entries
- * without one form the user's profile memory — who they are across all projects.
- */
-type MemoryChangeOperation = 'add' | 'update' | 'remove';
-
-interface MemoryChangePayload {
-	readonly projectId?: ProjectId;
-	readonly operation: MemoryChangeOperation;
-	readonly memoryEntryId?: MemoryEntryId;
-	readonly content?: string;
-	readonly shareWithAgents?: boolean;
-	readonly justification?: string;
-}
-
+/** The task values a proposal can request before acceptance resolves a task identity. */
 interface CreateTodoInput {
 	readonly projectId: ProjectId;
 	readonly title: string;
@@ -342,47 +331,6 @@ export type SuggestionProposal =
 	  })
 	| (SuggestionProposalBase & { readonly kind: 'memory'; readonly payload: MemoryChangePayload });
 
-type SuggestionIdentity = {
-	readonly id: SuggestionId;
-	readonly userId: UserId;
-	readonly now: DateTime;
-};
-export function materializeSuggestion<P extends SuggestionProposal>(
-	proposal: P,
-	identity: SuggestionIdentity
-): Extract<Suggestion, { kind: P['kind'] }>;
-export function materializeSuggestion(
-	proposal: SuggestionProposal,
-	identity: SuggestionIdentity
-): Suggestion {
-	const common = {
-		id: identity.id,
-		userId: identity.userId,
-		status: 'proposed' as const,
-		provenanceId: proposal.provenanceId,
-		isAutoAccepted: false,
-		createdAt: identity.now,
-		updatedAt: identity.now,
-		...(proposal.noteId !== undefined ? { noteId: proposal.noteId } : {}),
-		...(proposal.confidence !== undefined
-			? { confidence: proposal.confidence as Suggestion['confidence'] }
-			: {}),
-		...(proposal.sourceAnchorId !== undefined ? { sourceAnchorId: proposal.sourceAnchorId } : {})
-	};
-	switch (proposal.kind) {
-		case 'todo':
-			return { ...common, kind: 'todo', payload: proposal.payload };
-		case 'backlink':
-			return { ...common, kind: 'backlink', payload: proposal.payload };
-		case 'reference':
-			return { ...common, kind: 'reference', payload: proposal.payload };
-		case 'diagram':
-			return { ...common, kind: 'diagram', payload: proposal.payload };
-		case 'memory':
-			return { ...common, kind: 'memory', payload: proposal.payload };
-	}
-}
-
 /** `autoAccepted` distinguishes a trust-policy auto-accept from a user's manual click, so the two are never conflated in the audit trail. */
 export interface AcceptSuggestionInput {
 	readonly suggestionId: SuggestionId;
@@ -416,6 +364,11 @@ export interface SuggestionView {
 	readonly origin: ProvenanceOrigin;
 }
 
+/** Resolved records used to present a proposal. The controller chooses its presentation. */
+export interface SuggestionContext extends Pick<SuggestionView, 'suggestion' | 'note' | 'anchor'> {
+	readonly provenance: Provenance;
+}
+
 export interface ListSuggestionsInput {
 	readonly status: SuggestionStatus;
 }
@@ -445,46 +398,3 @@ export type ProposalSelectionOrigin = SelectionOrigin<{
 	readonly id: NoteId;
 	readonly projectId: ProjectId;
 }>;
-export function proposalFromSelection<P extends SelectionProposal>(
-	origin: ProposalSelectionOrigin,
-	proposal: P
-): Extract<SuggestionProposal, { kind: P['kind'] }>;
-export function proposalFromSelection(
-	origin: ProposalSelectionOrigin,
-	proposal: SelectionProposal
-): SuggestionProposal {
-	const source = { sourceAnchorId: origin.anchor.id, provenanceId: origin.provenance.id };
-	const common = { ...source, noteId: origin.note.id, confidence: proposal.confidence };
-	switch (proposal.kind) {
-		case 'todo':
-			return {
-				...common,
-				kind: 'todo',
-				payload: { ...proposal.payload, ...source, projectId: origin.note.projectId }
-			};
-		case 'backlink':
-			return {
-				...common,
-				kind: 'backlink',
-				payload: { ...proposal.payload, ...source, sourceNoteId: origin.note.id }
-			};
-		case 'reference':
-			return {
-				...common,
-				kind: 'reference',
-				payload: { ...proposal.payload, ...source, noteId: origin.note.id }
-			};
-	}
-}
-
-export function assembleSuggestionView(
-	suggestion: Suggestion,
-	facts: Omit<SuggestionView, 'suggestion'>
-): SuggestionView {
-	return {
-		suggestion,
-		...(facts.note ? { note: { id: facts.note.id, title: facts.note.title } } : {}),
-		...(facts.anchor ? { anchor: facts.anchor } : {}),
-		origin: facts.origin
-	};
-}

@@ -1,33 +1,10 @@
-import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { describe, expect, it } from 'vitest';
 import type { PromiseCandidate } from '$lib/models/todos';
-import type { TextSelection } from '$lib/models/notes';
-import { Todos, type TodosDependencies } from './controller';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import {
-	InMemoryPromiseExtractor,
-	InMemoryProvenanceRecorder,
-	InMemoryTrustPolicyEvaluator
-} from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import {
-	noteBuilder,
-	testActor,
-	testNoteId,
-	testProjectId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-
-const selection: TextSelection = {
-	noteId: testNoteId(),
-	revision: 1,
-	from: 0,
-	to: 20,
-	text: 'I will send it soon.'
-};
+	promiseExtractionFixture as setup,
+	promiseSelection as selection
+} from '$lib/testing/todos/fixtures/promise-extraction';
+import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const candidate = (
 	action: string,
@@ -40,37 +17,45 @@ const candidate = (
 	...overrides
 });
 
-const setup = () => {
-	const content = new InMemoryNoteContent();
-	const extractor = new InMemoryPromiseExtractor();
-	const provenance = new InMemoryProvenanceRecorder();
-	const suggestions = new InMemorySuggestions();
-	const effects = new InMemorySuggestionEffects();
-	const trust = new InMemoryTrustPolicyEvaluator();
-	const todos = new InMemoryTodos();
-	content.notes = [noteBuilder({ plainText: selection.text })];
-	const controller = new Todos(
-		capabilityDependencies<TodosDependencies>({
-			selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-			promiseExtractor: extractor,
-			suggestionCreator: suggestions,
-			trustPolicyEvaluator: trust,
-			todoCreator: todos,
-			suggestionAccepter: suggestions,
-			suggestionEffects: effects,
-			transactionRunner: new InMemoryTransactionRunner([
-				content,
-				provenance,
-				suggestions,
-				todos,
-				effects
-			])
-		})
-	);
-	return { content, extractor, provenance, suggestions, trust, todos, controller };
-};
-
 describe('Promise extraction orchestration invariants', () => {
+	it.each([false, true])(
+		'preserves the extracted owner when automatic acceptance is %s',
+		async (autoAccept) => {
+			const { content, extractor, trust, controller } = setup();
+			const text = 'Maya will send the draft.';
+			content.notes[0] = {
+				...content.notes[0],
+				plainText: text,
+				document: {
+					type: 'doc',
+					content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+				}
+			};
+			extractor.candidates = [
+				candidate('Send the draft', { responsibility: 'waiting_on', ownerName: 'Maya' })
+			];
+			trust.autoAccept = autoAccept;
+			const result = await controller.extractPromises(testActor(), {
+				selection: { ...selection, text, to: text.length }
+			});
+			expect({
+				proposals: result.suggestions.map((item) => item.payload.waitingOn),
+				tasks: result.createdTodos.map((todo) => todo.waitingOn)
+			}).toEqual({ proposals: ['Maya'], tasks: autoAccept ? ['Maya'] : [] });
+		}
+	);
+
+	it('does not use the current user’s extracted name as a waiting-on party', async () => {
+		const { extractor, trust, controller } = setup();
+		extractor.candidates = [candidate('Send the draft', { ownerName: 'I' })];
+		trust.autoAccept = true;
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect({
+			proposal: result.suggestions[0].payload.waitingOn,
+			task: result.createdTodos[0].waitingOn
+		}).toEqual({ proposal: undefined, task: undefined });
+	});
+
 	it('creates one suggestion for each extracted promise', async () => {
 		const { extractor, controller } = setup();
 		extractor.candidates = [candidate('Send it'), candidate('Review it')];
@@ -115,6 +100,33 @@ describe('Promise extraction orchestration invariants', () => {
 		extractor.candidates = [candidate('Send it')];
 		const result = await controller.extractPromises(testActor(), { selection });
 		expect(result.createdTodos).toEqual([]);
+	});
+
+	it('returns the persisted accepted proposal after automatic acceptance', async () => {
+		const { extractor, trust, controller, suggestions } = setup();
+		extractor.candidates = [candidate('Send it')];
+		trust.autoAccept = true;
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect(result.suggestions).toEqual(suggestions.suggestions);
+	});
+
+	it('returns accepted status and the created task identity', async () => {
+		const { extractor, trust, controller } = setup();
+		extractor.candidates = [candidate('Send it')];
+		trust.autoAccept = true;
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect(result.suggestions[0]).toMatchObject({
+			status: 'accepted',
+			appliedArtifactId: result.createdTodos[0].id,
+			isAutoAccepted: true
+		});
+	});
+
+	it('returns a proposed suggestion when review is required', async () => {
+		const { extractor, controller } = setup();
+		extractor.candidates = [candidate('Send it')];
+		const result = await controller.extractPromises(testActor(), { selection });
+		expect(result.suggestions[0].status).toBe('proposed');
 	});
 
 	it('scopes an auto-created todo to the source note project', async () => {

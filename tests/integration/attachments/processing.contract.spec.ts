@@ -7,9 +7,16 @@ import { PostgresAttachmentClaims } from '$lib/server/repositories/attachments/p
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import { InMemoryAttachmentExtraction } from '$lib/testing/attachments/fakes/extraction';
+import {
+	InMemoryTextParser,
+	InMemoryStorage,
+	InMemoryOcrEngine,
+	InMemoryImageDescriber
+} from '$lib/testing/attachments/fakes/processing';
+import { AttachmentContent } from '$lib/server/services/attachments/content';
+import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import type {
 	AttachmentId,
@@ -17,11 +24,17 @@ import type {
 	AttachmentVersionId
 } from '$lib/models/attachments';
 import { actor, context, now, seedNote } from '../database-harness';
+import {
+	AgentVirtualFiles,
+	type AgentVirtualFilesDependencies
+} from '$lib/server/services/agent-files/virtual-files';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
 	await Promise.all(clients.map((client) => client.end()));
 });
-const setup = async (suffix: string) => {
+const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 	const owner = actor(suffix);
 	await new UserRecords(context.db).ensureLocal(owner);
 	const { note } = await seedNote(suffix, owner);
@@ -57,14 +70,21 @@ const setup = async (suffix: string) => {
 			});
 		});
 	const view = await finalize();
-	const extraction = new InMemoryAttachmentExtraction();
+	const parser = new InMemoryTextParser();
+	parser.text = 'Extracted document';
 	const worker = new AttachmentProcessing({
 		records,
 		claims: new PostgresAttachmentClaims(
 			{ open: () => postgres(context.url, { max: 1, idle_timeout: 0, max_lifetime: 0 }) },
 			transaction.connectionScope
 		),
-		extraction,
+		storage: new InMemoryStorage(),
+		parsers: new AttachmentParserRegistry([parser]),
+		ocr: new InMemoryOcrEngine(),
+		imageDescriber: new InMemoryImageDescriber(),
+		content: new AttachmentContent(),
+		parseLimit: 1024,
+		maxPages: 100,
 		preferences: {
 			get: async () => ({
 				userId: owner.userId,
@@ -74,14 +94,42 @@ const setup = async (suffix: string) => {
 				updatedAt: now
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient()).attachments,
+		indexer: new ContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
 		transactionRunner: transaction.transactionRunner,
 		visionModel: 'test/model',
 		logger: { error: () => {} }
 	});
-	return { owner, records, search, view, extraction, worker, finalize, transaction };
+	return { owner, records, search, view, parser, worker, finalize, transaction };
 };
 describe('attachment processing persistence', () => {
+	it('recovers an old truncated index from saved extraction without parsing again', async () => {
+		const { owner, records, search, view, parser, worker } = await setup(
+			'9751',
+			new TokenAwareChunker(30, 5)
+		);
+		const text =
+			Array.from(
+				{ length: 60 },
+				(_, index) => `Section ${index}. ${'Document evidence. '.repeat(10)}`
+			).join('\n\n') + '\n\nRecovery marker amberfalcon.';
+		await records.updateVersion(owner, {
+			...view.version,
+			processingStatus: 'partial',
+			parserKind: 'text',
+			extractedText: text
+		});
+		parser.beforeParse = async () => {
+			throw new Error('Parsing is unavailable');
+		};
+		await worker.run();
+		const saved = await records.findById(owner, view.attachment.id);
+		const matches = await search.search(owner, 'amberfalcon', 10, view.attachment.projectId);
+		expect({
+			status: saved?.version.processingStatus,
+			tail: matches.map(({ document }) => document.chunkIndex >= 50)
+		}).toEqual({ status: 'ready', tail: [true] });
+	});
+
 	it('rescans interrupted versions and saves searchable text', async () => {
 		const { owner, records, search, view, worker, transaction } = await setup('9711');
 		await transaction.transactionRunner.run(() =>
@@ -94,8 +142,8 @@ describe('attachment processing persistence', () => {
 		}).toEqual({ status: 'ready', text: ['Extracted document'] });
 	});
 	it('does not publish older text when another upload becomes current during extraction', async () => {
-		const { owner, records, search, view, extraction, worker, finalize } = await setup('9712');
-		extraction.beforeExtract = async () => {
+		const { owner, records, search, view, parser, worker, finalize } = await setup('9712');
+		parser.beforeParse = async () => {
 			await finalize();
 		};
 		await worker.process(owner, view.version.id);
@@ -134,4 +182,39 @@ describe('attachment processing persistence', () => {
 			(await records.findById(owner, view.attachment.id))?.version.processingFailure
 		).toBeUndefined();
 	});
+});
+
+it('preserves successful empty extraction when the version is read back', async () => {
+	const { owner, records, view, parser, worker } = await setup('21701');
+	parser.text = '';
+	await worker.process(owner, view.version.id);
+	expect((await records.findById(owner, view.attachment.id))?.version).toMatchObject({
+		processingStatus: 'ready',
+		parserKind: 'text',
+		extractedText: ''
+	});
+});
+
+it('exposes successfully extracted empty text as an empty agent file', async () => {
+	const { owner, records, view, parser, worker } = await setup('21702');
+	parser.text = '';
+	await worker.process(owner, view.version.id);
+	const files = new AgentVirtualFiles(
+		capabilityDependencies<AgentVirtualFilesDependencies>({
+			attachments: records,
+			stored: new InMemoryAgentFiles()
+		})
+	);
+	const path = `/projects/${view.attachment.projectId}/attachments/${view.attachment.id}.txt`;
+	expect(await files.ls(owner, path)).toMatchObject({
+		kind: 'listed',
+		entries: [{ kind: 'file', path, byteSize: 0, lineCount: 0 }]
+	});
+});
+
+it('does not invent extracted text for a queued attachment', async () => {
+	const { owner, records, view } = await setup('21703');
+	expect(
+		(await records.findById(owner, view.attachment.id))?.version.extractedText
+	).toBeUndefined();
 });

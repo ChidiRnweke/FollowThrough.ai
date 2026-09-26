@@ -4,6 +4,7 @@ import {
 	cosineDistance,
 	desc,
 	eq,
+	gt,
 	gte,
 	inArray,
 	isNotNull,
@@ -401,9 +402,17 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 				.where(inArray(schema.searchChunks.id, discard));
 	}
 
-	async listPendingSources(limit: number): Promise<readonly PendingIndexSource[]> {
+	async listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]> {
+		const cursor = sql<string>`(concat(${schema.searchChunks.userId}::text, '/',
+			case
+				when ${schema.searchChunks.diagramId} is not null then concat('diagram:', ${schema.searchChunks.diagramId}::text)
+				when ${schema.searchChunks.noteId} is not null then concat('note:', ${schema.searchChunks.noteId}::text)
+				when ${schema.searchChunks.memoryEntryId} is not null then concat('memory:', ${schema.searchChunks.memoryEntryId}::text)
+				else concat('attachment:', ${schema.searchChunks.attachmentId}::text)
+			end) collate "C")`;
 		const rows = await this.database
 			.selectDistinct({
+				cursor,
 				userId: schema.searchChunks.userId,
 				noteId: schema.searchChunks.noteId,
 				diagramId: schema.searchChunks.diagramId,
@@ -411,11 +420,18 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 				attachmentId: schema.searchChunks.attachmentId
 			})
 			.from(schema.searchChunks)
-			.where(isNull(schema.searchChunks.embedding))
+			.where(
+				and(
+					isNull(schema.searchChunks.embedding),
+					after === undefined ? undefined : gt(cursor, after)
+				)
+			)
+			.orderBy(asc(cursor))
 			.limit(limit);
 
 		return rows.map((row) => ({
 			userId: row.userId as UserId,
+			cursor: row.cursor,
 			source: (row.diagramId
 				? { kind: 'diagram', diagramId: row.diagramId as DiagramId }
 				: row.noteId

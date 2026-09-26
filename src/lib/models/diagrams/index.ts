@@ -1,3 +1,4 @@
+import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -9,6 +10,39 @@ type NoteId = Brand<string, 'NoteId'>;
 export type DiagramId = Brand<string, 'DiagramId'>;
 export type DiagramRevisionId = Brand<string, 'DiagramRevisionId'>;
 export type DiagramEtag = Brand<string, 'DiagramEtag'>;
+
+export type DiagramRevisionChange =
+	| { readonly kind: 'save'; readonly source: string; readonly searchableText: string }
+	| { readonly kind: 'rename'; readonly title: string }
+	| {
+			readonly kind: 'restore';
+			readonly revision: Pick<DiagramRevision, 'title' | 'source' | 'searchableText'>;
+	  }
+	| {
+			readonly kind: 'publish';
+			readonly source: string;
+			readonly renderedSvg: string;
+			readonly searchableText: string;
+	  };
+
+export interface DiagramRevisionWrite {
+	readonly diagram: DrawioDiagram;
+	readonly expectedRevision: number;
+	readonly expectedPublishedRevision: number;
+}
+
+/** A stored diagram-tool result, read without deciding which canvas is current. */
+export type CanvasSessionResult =
+	| { readonly kind: 'written'; readonly diagramId: DiagramId }
+	| { readonly kind: 'unrelated' }
+	| { readonly kind: 'corrupt'; readonly reason: string };
+
+export const diagramWriteResultSchema = z.object({
+	diagramId: z
+		.string()
+		.refine((value) => value.trim() !== '')
+		.transform((value) => value as DiagramId)
+});
 
 type ConversationId = Brand<string, 'ConversationId'>;
 
@@ -74,6 +108,30 @@ export interface DrawioDiagram extends DiagramBase {
 
 export type Diagram = MermaidDiagram | DrawioDiagram;
 
+interface DiagramContentFields {
+	readonly diagramId: DiagramId;
+	readonly source: string;
+	readonly renderedSvg: string;
+	readonly searchableText: string;
+	readonly expectedUpdatedAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+/** Resolved content for generated Mermaid or a newly accepted draw.io conversion. */
+export type DiagramContentWrite = DiagramContentFields &
+	(
+		| {
+				readonly kind: 'mermaid';
+				readonly title: string | undefined;
+				readonly provenanceId: ProvenanceId;
+		  }
+		| {
+				readonly kind: 'drawio';
+				readonly expectedRevision: number;
+				readonly expectedPublishedRevision: number;
+		  }
+	);
+
 export interface DiagramRevision {
 	readonly id: DiagramRevisionId;
 	readonly diagramId: DiagramId;
@@ -132,6 +190,61 @@ export interface ConvertInlineMermaidInput {
 	readonly source: string;
 	readonly instruction?: string;
 }
+
+export type StartGenerateMermaidInput = GenerateMermaidDiagramInput & {
+	readonly requestId: string;
+};
+export type StartReviseInlineMermaidInput = ReviseInlineMermaidInput & {
+	readonly requestId: string;
+};
+export type StartConvertInlineMermaidInput = ConvertInlineMermaidInput & {
+	readonly requestId: string;
+};
+
+const actionNoteIdSchema = z.uuid().transform((value) => value as NoteId);
+export const startGenerateMermaidSchema = z
+	.object({
+		requestId: z.uuid(),
+		selection: z
+			.object({
+				noteId: actionNoteIdSchema,
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+			.refine(
+				(selection) => selection.to >= selection.from,
+				'Selection end must follow its start.'
+			),
+		instruction: z.string().optional()
+	})
+	.strict() satisfies z.ZodType<StartGenerateMermaidInput>;
+export const startReviseInlineMermaidSchema = z
+	.object({
+		requestId: z.uuid(),
+		noteId: actionNoteIdSchema,
+		source: z.string(),
+		instruction: z.string(),
+		renderedPngDataUrl: z.string().max(14_000_000).optional()
+	})
+	.strict() satisfies z.ZodType<StartReviseInlineMermaidInput>;
+export const startConvertInlineMermaidSchema = z
+	.object({
+		requestId: z.uuid(),
+		noteId: actionNoteIdSchema,
+		source: z.string().trim().min(1).max(50_000),
+		instruction: z.string().trim().max(2_000).optional()
+	})
+	.strict() satisfies z.ZodType<StartConvertInlineMermaidInput>;
+
+export const diagramActionSubmissionSchema = z.discriminatedUnion('operation', [
+	startGenerateMermaidSchema.extend({ operation: z.literal('generate') }),
+	startReviseInlineMermaidSchema.extend({ operation: z.literal('revise') }),
+	startConvertInlineMermaidSchema.extend({ operation: z.literal('convert') })
+]);
+export type DiagramActionSubmission = z.infer<typeof diagramActionSubmissionSchema>;
 
 export interface ConvertInlineMermaidOutput<Proposal> {
 	readonly suggestion: Proposal;
@@ -356,26 +469,6 @@ export interface ReadProjectDiagramOutput {
 	readonly labels: string;
 }
 
-export interface SaveProjectDrawioInput {
-	readonly diagramId: DiagramId;
-	readonly source: string;
-	readonly renderedSvg: string;
-}
-
-export interface GetDrawioDiagramInput {
-	readonly noteId: NoteId;
-	readonly diagramId: DiagramId;
-}
-
-export interface SaveDrawioDiagramInput extends GetDrawioDiagramInput {
-	readonly source: string;
-	readonly renderedSvg: string;
-}
-
-export interface SaveDrawioDiagramOutput {
-	readonly diagram: DrawioDiagram;
-}
-
 export interface PromoteDiagramInput {
 	readonly diagramId: DiagramId;
 }
@@ -383,21 +476,6 @@ export interface PromoteDiagramInput {
 export interface PromoteDiagramOutput<Proposal> {
 	readonly source: MermaidDiagram;
 	readonly suggestion: Proposal;
-}
-
-export function decideDiagramTrash(
-	action: 'archive' | 'restore' | 'delete',
-	current: Pick<Diagram, 'archivedAt'>
-): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
-	if (action === 'archive' ? Boolean(current.archivedAt) : !current.archivedAt)
-		return {
-			kind: 'invalid',
-			message:
-				action === 'archive'
-					? 'The diagram is already in the trash'
-					: 'The diagram is not in the trash'
-		};
-	return { kind: 'allowed' };
 }
 
 export interface DrawioRevision {

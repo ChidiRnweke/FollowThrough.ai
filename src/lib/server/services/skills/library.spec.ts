@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SkillLibrary } from './library';
-import { SkillManifestCodec } from './manifest';
+import { serializeSkillManifest } from '$lib/services/skills/manifest';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -13,11 +13,15 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const skills = new InMemorySkillRepository();
 	const notes = new InMemoryNoteRepository();
+	const skills = new InMemorySkillRepository(notes);
 	const provenance = new InMemoryProvenanceRepository();
 	notes.notes = [
-		noteBuilder({ plainText: 'Write decisions clearly.' }),
+		noteBuilder({
+			kind: 'skill',
+			title: 'Decision writing',
+			plainText: 'Write decisions clearly.'
+		}),
 		noteBuilder({ id: testNoteId(2), title: 'Context' })
 	];
 	provenance.provenance = [
@@ -34,11 +38,24 @@ const setup = () => {
 	return {
 		skills,
 		notes,
-		service: new SkillLibrary(skills, notes, provenance, new SkillManifestCodec())
+		service: new SkillLibrary(skills, notes, provenance)
 	};
 };
 
 describe('Skill management invariants', () => {
+	it('exports a skill when its generated portable name is truncated at a word separator', async () => {
+		const { service, notes } = setup();
+		const name = `${'a'.repeat(63)} next word`;
+		notes.notes[0] = { ...notes.notes[0], title: name };
+		await service.create(testActor(), notes.notes[0], {
+			name,
+			description: 'Description',
+			triggerHints: []
+		});
+		const manifest = await service.manifest(testActor(), notes.notes[0].id);
+		expect(serializeSkillManifest(manifest)).toContain(`name: ${'a'.repeat(63)}\n`);
+	});
+
 	it('rejects an empty skill name', async () => {
 		const { service } = setup();
 		await expect(
@@ -54,10 +71,13 @@ describe('Skill management invariants', () => {
 		const { service, skills } = setup();
 		skills.skills = [
 			{
-				note: noteBuilder({ kind: 'skill' }),
-				name: 'Decision writing',
+				note: noteBuilder({ kind: 'skill', title: 'Decision writing' }),
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
+				slug: 'decision-writing',
+				metadata: {},
+				allowImplicitInvocation: true,
 				isEnabled: true
 			}
 		];
@@ -73,10 +93,13 @@ describe('Skill management invariants', () => {
 		const { service, skills, notes } = setup();
 		skills.skills = [
 			{
-				note: noteBuilder({ kind: 'skill' }),
-				name: 'Decision writing',
+				note: noteBuilder({ kind: 'skill', title: 'Decision writing' }),
+
 				description: 'Writes decisions',
 				triggerHints: ['decision'],
+				slug: 'decision-writing',
+				metadata: {},
+				allowImplicitInvocation: true,
 				isEnabled: true
 			}
 		];
@@ -90,109 +113,5 @@ describe('Skill management invariants', () => {
 			provenanceId: testProvenanceId()
 		});
 		expect(skills.usages[0]?.contextNoteId).toBe(testNoteId(2));
-	});
-
-	it('updates skill metadata without touching the note or its revision history (1/4)', async () => {
-		const { service, skills, notes } = setup();
-		const skillNote = noteBuilder({
-			kind: 'skill',
-			title: 'Decision writing',
-			plainText: '## Steps\n1. Write decisions clearly.',
-			currentRevision: 2
-		});
-		notes.notes[0] = skillNote;
-		skills.skills = [
-			{
-				note: skillNote,
-				name: 'Decision writing',
-				description: 'Writes decisions',
-				triggerHints: ['decision'],
-				isEnabled: true
-			}
-		];
-		const updated = await service.prepareEdit(testActor(), {
-			noteId: skillNote.id,
-			description: 'Use when writing or reviewing decisions',
-			isEnabled: false
-		});
-		expect(updated.skill.description).toBe('Use when writing or reviewing decisions');
-	});
-
-	it('updates skill metadata without touching the note or its revision history (2/4)', async () => {
-		const { service, skills, notes } = setup();
-		const skillNote = noteBuilder({
-			kind: 'skill',
-			title: 'Decision writing',
-			plainText: '## Steps\n1. Write decisions clearly.',
-			currentRevision: 2
-		});
-		notes.notes[0] = skillNote;
-		skills.skills = [
-			{
-				note: skillNote,
-				name: 'Decision writing',
-				description: 'Writes decisions',
-				triggerHints: ['decision'],
-				isEnabled: true
-			}
-		];
-		const updated = await service.prepareEdit(testActor(), {
-			noteId: skillNote.id,
-			description: 'Use when writing or reviewing decisions',
-			isEnabled: false
-		});
-		expect(updated.skill.isEnabled).toBe(false);
-	});
-
-	it('updates skill metadata without touching the note or its revision history (3/4)', async () => {
-		const { service, skills, notes } = setup();
-		const skillNote = noteBuilder({
-			kind: 'skill',
-			title: 'Decision writing',
-			plainText: '## Steps\n1. Write decisions clearly.',
-			currentRevision: 2
-		});
-		notes.notes[0] = skillNote;
-		skills.skills = [
-			{
-				note: skillNote,
-				name: 'Decision writing',
-				description: 'Writes decisions',
-				triggerHints: ['decision'],
-				isEnabled: true
-			}
-		];
-		const _updated = await service.prepareEdit(testActor(), {
-			noteId: skillNote.id,
-			description: 'Use when writing or reviewing decisions',
-			isEnabled: false
-		});
-		expect(notes.notes[0]).toEqual(skillNote);
-	});
-
-	it('updates skill metadata without touching the note or its revision history (4/4)', async () => {
-		const { service, skills, notes } = setup();
-		const skillNote = noteBuilder({
-			kind: 'skill',
-			title: 'Decision writing',
-			plainText: '## Steps\n1. Write decisions clearly.',
-			currentRevision: 2
-		});
-		notes.notes[0] = skillNote;
-		skills.skills = [
-			{
-				note: skillNote,
-				name: 'Decision writing',
-				description: 'Writes decisions',
-				triggerHints: ['decision'],
-				isEnabled: true
-			}
-		];
-		const _updated = await service.prepareEdit(testActor(), {
-			noteId: skillNote.id,
-			description: 'Use when writing or reviewing decisions',
-			isEnabled: false
-		});
-		expect(notes.revisions).toHaveLength(0);
 	});
 });

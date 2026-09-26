@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, sql, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, lt, sql, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type {
 	Attachment,
@@ -54,7 +54,7 @@ const toView = (
 		byteSize: version.byteSize,
 		checksumSha256: version.checksumSha256,
 		...(version.parserKind ? { parserKind: version.parserKind } : {}),
-		...(version.extractedText ? { extractedText: version.extractedText } : {}),
+		...(version.extractedText !== null ? { extractedText: version.extractedText } : {}),
 		processingStatus: version.processingStatus as AttachmentVersion['processingStatus'],
 		...(version.processingFailure ? { processingFailure: version.processingFailure } : {}),
 		...(version.processedAt ? { processedAt: instant(version.processedAt) } : {}),
@@ -318,7 +318,15 @@ export class AttachmentRecords implements AttachmentRepository {
 				)
 				.where(
 					and(
-						inArray(schema.attachmentVersions.processingStatus, ['queued', 'processing']),
+						or(
+							inArray(schema.attachmentVersions.processingStatus, ['queued', 'processing']),
+							and(
+								eq(schema.attachmentVersions.processingStatus, 'partial'),
+								isNull(schema.attachmentVersions.processingFailure),
+								isNotNull(schema.attachmentVersions.extractedText),
+								isNotNull(schema.attachmentVersions.parserKind)
+							)
+						),
 						isNotNull(schema.attachments.currentVersionId)
 					)
 				)

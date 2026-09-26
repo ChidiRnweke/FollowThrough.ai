@@ -1,12 +1,15 @@
+import {
+	memoryEntryBuilder,
+	testMemoryEntryId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { MemoryDependencies } from './controller';
 import { describe, expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
-import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { ValidationError } from '$lib/errors';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import { NoteProvenance } from '$lib/server/services/notes/provenance';
+import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { Memory } from './controller';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -23,27 +26,11 @@ import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
-	testNow,
-	testProjectId,
-	testProvenanceId
+	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
-class RecordingProvenanceRecorder implements ProvenanceRecorder {
-	records: Provenance[] = [];
-	constructor(private readonly repository: InMemoryProvenanceRepository) {}
-
-	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
-		const provenance = asProvenance(input, {
-			id: testProvenanceId(this.records.length + 1),
-			userId: actor.userId,
-			createdAt: testNow
-		});
-		this.records.push(provenance);
-		return this.repository.insert(actor, provenance);
-	}
-}
-
-const addInput = (overrides: Partial<ProposeMemoryChangeInput> = {}): ProposeMemoryChangeInput => ({
+type ProjectAddition = Extract<ProposeMemoryChangeInput, { scope: 'project'; operation: 'add' }>;
+const addInput = (overrides: Partial<ProjectAddition> = {}): ProjectAddition => ({
 	scope: 'project',
 	projectId: testProjectId(),
 	operation: 'add',
@@ -56,22 +43,25 @@ const setup = () => {
 	const entries = new InMemoryMemoryEntryRepository();
 	const projects = new InMemoryProjectRepository();
 	const provenanceRepository = new InMemoryProvenanceRepository();
-	const provenance = new RecordingProvenanceRecorder(provenanceRepository);
+	const provenance = new NoteProvenance(provenanceRepository, new InMemoryAnchorRepository());
 	const suggestions = new InMemorySuggestions();
 	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
-	const memoryIndexer = new ContentIndex(search, new InMemoryEmbeddingClient()).memories;
+	const indexEmbeddings = new InMemoryEmbeddingClient();
+	const indexWriter = new ContentIndex(search, indexEmbeddings.model);
 	const memory = new MemoryLibrary(entries, projects, provenanceRepository);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
 			memoryLister: memory,
-			memoryIndexer,
+			memoryIndexer: indexWriter.memories,
+			indexEmbeddings,
+			indexWriter,
 			memoryCreator: memory,
 			memoryEditor: memory,
 			memoryDeleter: memory,
-			memoryChangeApplier: memory,
+			memoryChanges: memory,
 			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
@@ -80,7 +70,16 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([entries, search, suggestions, effects])
 		})
 	);
-	return { entries, provenance, suggestions, trust, controller, search };
+	return {
+		entries,
+		provenance: provenanceRepository,
+		suggestions,
+		trust,
+		controller,
+		search,
+		memory,
+		projects
+	};
 };
 
 describe('Memory proposal orchestration invariants', () => {
@@ -93,7 +92,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('records agent provenance on the memory pipeline', async () => {
 		const { provenance, controller } = setup();
 		await controller.propose(testActor(), addInput());
-		expect(provenance.records[0]).toMatchObject({ pipeline: 'memory' });
+		expect(provenance.provenance[0]).toMatchObject({ pipeline: 'memory' });
 	});
 
 	it('leaves the entry uncreated without an authorizing trust policy', async () => {
@@ -125,10 +124,11 @@ describe('Memory proposal orchestration invariants', () => {
 
 	it('keeps a user-scoped proposal free of any project', async () => {
 		const { controller } = setup();
-		const result = await controller.propose(
-			testActor(),
-			addInput({ scope: 'user', projectId: undefined, content: 'I lead the platform team.' })
-		);
+		const result = await controller.propose(testActor(), {
+			scope: 'user',
+			operation: 'add',
+			content: 'I lead the platform team.'
+		});
 		expect(
 			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
 		).toBeUndefined();
@@ -137,39 +137,54 @@ describe('Memory proposal orchestration invariants', () => {
 	it('creates a profile entry when a trusted user-scoped proposal is applied', async () => {
 		const { entries, trust, controller } = setup();
 		trust.autoAccept = true;
-		await controller.propose(
-			testActor(),
-			addInput({ scope: 'user', projectId: undefined, content: 'I lead the platform team.' })
-		);
+		await controller.propose(testActor(), {
+			scope: 'user',
+			operation: 'add',
+			content: 'I lead the platform team.'
+		});
 		expect(entries.entries[0]?.projectId).toBeUndefined();
 	});
 
-	it('drops the project from a user-scoped proposal that carries one', async () => {
-		const { controller } = setup();
-		const result = await controller.propose(testActor(), addInput({ scope: 'user' }));
-		expect(
-			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
-		).toBeUndefined();
+	it('rejects a profile proposal targeting project memory before recording a suggestion', async () => {
+		const { controller, memory, suggestions } = setup();
+		const target = await memory.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(1),
+				projectId: testProjectId(),
+				content: 'Existing fact'
+			})
+		);
+		const outcome = await controller
+			.propose(testActor(), { scope: 'user', operation: 'remove', memoryEntryId: target.id })
+			.then(
+				() => ({ kind: 'success' }),
+				() => ({ kind: 'failure' })
+			);
+		expect({ outcome, suggestions: suggestions.suggestions }).toEqual({
+			outcome: { kind: 'failure' },
+			suggestions: []
+		});
 	});
-
-	it('rejects a project-scoped proposal without a project', async () => {
-		const { controller } = setup();
+	it('rejects a project proposal targeting another project', async () => {
+		const { controller, memory, projects } = setup();
+		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
+		const target = await memory.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(2),
+				projectId: testProjectId(2),
+				content: 'Existing fact'
+			})
+		);
 		await expect(
-			controller.propose(testActor(), addInput({ projectId: undefined }))
-		).rejects.toBeInstanceOf(ValidationError);
-	});
-
-	it('rejects an update proposal without a target entry', async () => {
-		const { controller } = setup();
-		await expect(
-			controller.propose(testActor(), addInput({ operation: 'update' }))
-		).rejects.toBeInstanceOf(ValidationError);
-	});
-
-	it('rejects an add proposal without content', async () => {
-		const { controller } = setup();
-		await expect(
-			controller.propose(testActor(), addInput({ content: '  ' }))
+			controller.propose(testActor(), {
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: target.id,
+				content: 'Wrong scope'
+			})
 		).rejects.toBeInstanceOf(ValidationError);
 	});
 });
@@ -194,14 +209,12 @@ describe('Memory proposal search updates', () => {
 		trust.autoAccept = true;
 		const original = await controller.propose(testActor(), addInput());
 		if (!original.appliedEntry) throw new Error('Trusted addition must produce a memory');
-		const replacement = await controller.propose(
-			testActor(),
-			addInput({
-				operation: 'update',
-				memoryEntryId: original.appliedEntry.id,
-				content: 'Revised fact'
-			})
-		);
+		const replacement = await controller.propose(testActor(), {
+			...addInput(),
+			operation: 'update',
+			memoryEntryId: original.appliedEntry.id,
+			content: 'Revised fact'
+		});
 		expect(search.documents.map((item) => item.document.memoryEntryId)).toEqual([
 			replacement.appliedEntry?.id
 		]);

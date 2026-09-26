@@ -6,7 +6,7 @@
 	import type { NoteView } from '$lib/client/notes/view';
 
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
-	import { noteCommand, noteHasUnpublishedChanges } from '$lib/models/workspace-mutations';
+	import { noteCommand, noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -29,7 +29,7 @@
 	} from '$lib/models/notes';
 
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { sectionNumberingOverrideFor } from '$lib/models/notes';
+	import { sectionNumberingOverrideFor } from '$lib/services/notes/section-numbering';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';

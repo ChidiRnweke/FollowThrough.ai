@@ -1,5 +1,5 @@
 import { defaultExportSettings, type ExportSettings } from '$lib/models/deliverables';
-import { accessMessage } from '$lib/models/sync';
+import { accessMessage } from '$lib/services/sync/state';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 
 export const loadExportSettings = async (projectId: string): Promise<ExportSettings> => {

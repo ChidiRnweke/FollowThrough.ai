@@ -24,8 +24,8 @@ worktree changes.
 
 ## Attachments, indexing, and exports
 
-- **Attachment indexing stops after 50 chunks.** It indexes the head of a long file and silently
-  makes the rest unavailable to retrieval.
+- **Attachment indexing cutoff resolved.** Every accepted chunk is staged, and historical
+  truncated indexes are repaired from saved text. See [attachment search](attachment-search.md).
 - **Expired upload cleanup can orphan bytes.** Some storage deletion failures are caught before the
   database pointer is removed.
 - **Some exports omit images without a clear user message.** Partial output must state what it

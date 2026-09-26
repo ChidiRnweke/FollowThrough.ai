@@ -19,9 +19,8 @@
 	}: {
 		todoId: TodoId;
 		projectId: ProjectId;
-		value?: NoteId;
 		sourceTitle?: string;
-		hasOrigin?: boolean;
+		hasOrigin: boolean;
 		notes?: readonly NoteSummary[];
 		quiet?: boolean;
 	} = $props();

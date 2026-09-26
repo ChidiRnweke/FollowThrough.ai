@@ -1,5 +1,14 @@
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
+import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { segmentOutput } from '$lib/server/services/agent/runs/output';
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
 import { describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type {
 	Conversation,
 	ConversationId,
@@ -316,6 +325,91 @@ describe('Postgres durable agent run repository invariants', () => {
 		});
 	};
 
+	it('lets a consumer advance past an unreadable terminal event', async () => {
+		const run = await seedQueuedRun('97107');
+		const owner = actor('97107');
+		const events = new AgentRunEventRecords(context.db);
+		const terminal = await events.append(run.id, 1, {
+			type: 'completed',
+			conversationId: run.conversationId
+		});
+		await context.db.execute(
+			sql`update agent_run_events set event = '{"type":"future_completion"}'::jsonb where cursor = ${terminal.cursor}`
+		);
+		const runs = new AgentRunRecords(context.db);
+		await new RunPreparation(runs).claim(run.id, now);
+		await new RunSettlements(runs, events).claim(run.id, {
+			kind: 'completed',
+			conversationId: run.conversationId,
+			model: run.model
+		});
+		const controller = new Agent(capabilityDependencies<AgentDependencies>({ events, runs }));
+		const replay = await controller.listRunEvents(owner, run.id, '0');
+		const tail = replay.at(-1);
+		if (!tail) throw new Error('Replay dropped its terminal cursor');
+		expect({
+			kind: tail.kind,
+			cursor: tail.cursor,
+			latest: await events.latestCursor(owner, run.id),
+			next: await controller.listRunEvents(owner, run.id, tail.cursor),
+			complete: await controller.isRunStreamComplete(owner, run.id, tail.cursor)
+		}).toEqual({
+			kind: 'unreadable',
+			cursor: terminal.cursor,
+			latest: terminal.cursor,
+			next: [],
+			complete: true
+		});
+	});
+
+	it('reconstructs one attempt without merging across an unreadable stored event', async () => {
+		const run = await seedQueuedRun('17901');
+		const other = await seedQueuedRun('17902');
+		const runs = new AgentRunRecords(context.db);
+		await new RunPreparation(runs).claim(run.id, now);
+		const events = new AgentRunEventRecords(context.db);
+		const first = await events.append(run.id, 1, { type: 'text_delta', text: 'Before.' });
+		await events.append(run.id, 2, { type: 'text_delta', text: 'Another attempt.' });
+		const unreadable = await events.append(run.id, 1, {
+			type: 'text_delta',
+			text: 'Future output.'
+		});
+		await context.db.execute(
+			sql`update agent_run_events set event = '{"type":"future_output"}'::jsonb where cursor = ${unreadable.cursor}`
+		);
+		await events.append(other.id, 0, {
+			type: 'run_queued',
+			runId: other.id,
+			attempt: 1,
+			reason: 'submitted'
+		});
+		const last = await events.append(run.id, 1, { type: 'text_delta', text: 'After.' });
+		const records = await events.listAttempt(run.id, 1);
+		expect({
+			kinds: records.map((record) => record.kind),
+			segments: segmentOutput(records)
+		}).toEqual({
+			kinds: ['readable', 'unreadable', 'readable'],
+			segments: [
+				{ kind: 'text', text: 'Before.', cursor: first.cursor },
+				{ kind: 'text', text: 'After.', cursor: last.cursor }
+			]
+		});
+	});
+
+	it('does not expose another actor’s run through event-stream completion', async () => {
+		const run = await seedQueuedRun('17803');
+		const controller = new Agent(
+			capabilityDependencies<AgentDependencies>({
+				runs: new AgentRunRecords(context.db),
+				events: new AgentRunEventRecords(context.db)
+			})
+		);
+		await expect(controller.isRunStreamComplete(actor('17804'), run.id, '0')).rejects.toThrow(
+			'not found'
+		);
+	});
+
 	it('preserves a reviewed note change in PostgreSQL checkpoints and event replay', async () => {
 		const run = await seedQueuedRun('97106');
 		const owner = actor('97106');
@@ -327,13 +421,12 @@ describe('Postgres durable agent run repository invariants', () => {
 			review
 		};
 		const runs = new AgentRunRecords(context.db);
-		await runs.transition(run.id, 'queued', 'running');
-		await runs.update(owner, {
-			...run,
-			status: 'awaiting_approval',
-			serializedState: 'checkpoint',
-			pendingDecisions: [pending]
-		});
+		await new RunPreparation(runs).claim(run.id, now);
+		const checkpoints = new RunCheckpoints(runs);
+		await checkpoints.persist(
+			run.id,
+			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [pending] }, now)
+		);
 		const events = new AgentRunEventRecords(context.db);
 		await events.append(run.id, 1, {
 			type: 'approval_required',
@@ -411,9 +504,14 @@ describe('Postgres durable agent run repository invariants', () => {
 		const parked = {
 			callId: 'call-103',
 			toolName: 'archive_note' as const,
-			arguments: { noteId: 'note-103' }
+			arguments: { noteId: '40000000-0000-4000-8000-000000000103' }
 		};
-		await runs.update(actor('103'), { ...run, pendingDecisions: [parked] });
+		await new RunPreparation(runs).claim(run.id, now);
+		const checkpoints = new RunCheckpoints(runs);
+		await checkpoints.persist(
+			run.id,
+			checkpoints.prepare(run, { serializedState: 'checkpoint', pendingDecisions: [parked] }, now)
+		);
 		const reread = await runs.findById(actor('103'), run.id);
 		expect(reread?.pendingDecisions).toEqual([parked]);
 	});
@@ -469,7 +567,7 @@ describe('Postgres agent session repository invariants', () => {
 		const owner = actor(suffix);
 		await new UserRecords(context.db).ensureLocal(owner);
 		const conversation = await new ConversationRecords(context.db).insert(owner, {
-			id: `20000000-0000-4000-8000-0000000000${suffix}` as ConversationId,
+			id: crypto.randomUUID() as ConversationId,
 			userId: owner.userId,
 			kind: 'chat',
 			createdAt: now,
@@ -492,6 +590,51 @@ describe('Postgres agent session repository invariants', () => {
 		await repository.append(owner, conversationId, transcript);
 		expect((await repository.list(owner, conversationId)).map((row) => row.item)).toEqual(
 			transcript
+		);
+	});
+
+	it('recovers the latest saved canvas through ordered persisted results', async () => {
+		const { owner, conversationId } = await seedConversation('85');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [
+			resultItem('create_diagram', 'old', JSON.stringify({ diagramId: testDiagramId(1) })),
+			resultItem('edit_diagram', 'new', JSON.stringify({ diagramId: testDiagramId(2) })),
+			resultItem('edit_diagram', 'failed', JSON.stringify({ failure: 'Stale revision' }))
+		]);
+		expect(await new PresentedCanvasSource(repository).latest(owner, conversationId)).toBe(
+			testDiagramId(2)
+		);
+	});
+
+	it('refuses to read canvas results from another account conversation', async () => {
+		const { owner, conversationId } = await seedConversation('86');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [
+			resultItem('create_diagram', 'call', JSON.stringify({ diagramId: testDiagramId() }))
+		]);
+		await expect(repository.listCanvasResults(actor('87'), conversationId)).rejects.toThrow(
+			'Conversation was not found'
+		);
+	});
+
+	it('fails when canvas selection reaches corrupt persisted output', async () => {
+		const { owner, conversationId } = await seedConversation('88');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [resultItem('edit_diagram', 'corrupt', '{')]);
+		await expect(
+			new PresentedCanvasSource(repository).latest(owner, conversationId)
+		).rejects.toThrow();
+	});
+
+	it('recovers a newer persisted canvas after a superseded corrupt result', async () => {
+		const { owner, conversationId } = await seedConversation('89');
+		const repository = new AgentSessionRecords(context.db);
+		await repository.append(owner, conversationId, [
+			resultItem('edit_diagram', 'corrupt', '{'),
+			resultItem('create_diagram', 'saved', JSON.stringify({ diagramId: testDiagramId() }))
+		]);
+		expect(await new PresentedCanvasSource(repository).latest(owner, conversationId)).toBe(
+			testDiagramId()
 		);
 	});
 
@@ -561,7 +704,12 @@ describe('Postgres tool-embedding repository invariants', () => {
 
 	it('ranks by cosine distance to the query', async () => {
 		const repository = new ToolEmbeddingRecords(context.db);
-		const ranked = await repository.rankByVector(basis(0), ['contract_beta', 'contract_alpha'], 10);
+		const ranked = await repository.rankByVector(
+			basis(0),
+			['contract_beta', 'contract_alpha'],
+			10,
+			'contract-model'
+		);
 		expect(ranked).toEqual(['contract_alpha', 'contract_beta']);
 	});
 
@@ -570,7 +718,8 @@ describe('Postgres tool-embedding repository invariants', () => {
 		const ranked = await repository.rankByVector(
 			basis(0),
 			['contract_beta', 'contract_alpha', 'contract_not_seeded'],
-			1
+			1,
+			'contract-model'
 		);
 		expect(ranked).toEqual(['contract_alpha']);
 	});
@@ -580,6 +729,16 @@ describe('Postgres tool-embedding repository invariants', () => {
 		await repository.upsert([row('contract_alpha', basis(2), 'hash-v2')]);
 		const updated = (await repository.list()).find((entry) => entry.name === 'contract_alpha');
 		expect(updated?.contentHash).toBe('hash-v2');
+	});
+
+	it('excludes stored vectors from a different embedding model', async () => {
+		const repository = new ToolEmbeddingRecords(context.db);
+		await repository.upsert([
+			{ ...row('contract_other_model', basis(0)), embeddingModel: 'previous-model' }
+		]);
+		expect(
+			await repository.rankByVector(basis(0), ['contract_other_model'], 10, 'contract-model')
+		).toEqual([]);
 	});
 
 	it('drops tools that left the catalog', async () => {

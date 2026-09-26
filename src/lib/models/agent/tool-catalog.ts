@@ -244,7 +244,7 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'create_todos',
 		classification: 'mutation',
 		description:
-			'Create multiple todos in one call. Prefer this over repeated create_todo calls when adding several todos.'
+			'Create multiple todos atomically in one call. Choose a unique requestId (UUID) for this batch and reuse it with identical input after an uncertain outcome. A retry returns the original result without creating more tasks. Prefer this over repeated create_todo calls when adding several todos.'
 	},
 	{
 		name: 'update_todo',
@@ -398,12 +398,14 @@ export const TOOL_DESCRIPTIONS = [
 	{
 		name: 'list_trust_policies',
 		classification: 'read',
-		description: 'Read pipeline-specific trust policies.'
+		description:
+			'Read auto-accept policies for extracted tasks and memory proposals. Chat tool approval is controlled separately by execution mode.'
 	},
 	{
 		name: 'update_trust_policy',
 		classification: 'mutation',
-		description: 'Change a pipeline-specific trust policy.'
+		description:
+			'Change automatic acceptance of extracted tasks or memory proposals. Note links and external references require review. This does not change chat tool approval or tool availability.'
 	},
 	{
 		name: 'list_tool_preferences',

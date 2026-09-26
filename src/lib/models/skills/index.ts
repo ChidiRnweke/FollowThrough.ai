@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { stringify } from 'yaml';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type ProjectId = Brand<string, 'ProjectId'>;
@@ -23,14 +22,13 @@ interface TextSelection {
 /** A skill is a note plus metadata: the instruction text lives in `note`, everything the agent uses to decide whether to load it lives alongside it. */
 export interface Skill<Document> {
 	readonly note: Document;
-	readonly name: string;
-	readonly slug?: string;
+	readonly slug: string;
 	readonly description: string;
 	readonly triggerHints: readonly string[];
 	readonly license?: string;
 	readonly compatibility?: string;
-	readonly metadata?: Readonly<Record<string, string>>;
-	readonly allowImplicitInvocation?: boolean;
+	readonly metadata: Readonly<Record<string, string>>;
+	readonly allowImplicitInvocation: boolean;
 	readonly isEnabled: boolean;
 }
 
@@ -55,14 +53,55 @@ export interface SkillManifest {
 	readonly instructions: string;
 }
 
+export const SKILL_PORTABLE_LIMITS = { slug: 64, description: 1024, compatibility: 500 } as const;
+export const SKILL_PORTABLE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export const skillFrontmatterSchema = z.object({
+	name: z
+		.string()
+		.min(1)
+		.max(SKILL_PORTABLE_LIMITS.slug)
+		.regex(SKILL_PORTABLE_NAME, 'Use lowercase letters, numbers, and single hyphens'),
+	description: z.string().trim().min(1).max(SKILL_PORTABLE_LIMITS.description),
+	license: z.string().trim().min(1).optional(),
+	compatibility: z.string().trim().min(1).max(SKILL_PORTABLE_LIMITS.compatibility).optional(),
+	metadata: z.record(z.string(), z.string()).optional()
+});
+
+/** Document edits carry the revision the user actually edited. Metadata edits need no body revision. */
+export interface SkillEditInput {
+	readonly noteId: NoteId;
+	readonly displayName?: string;
+	readonly description?: string;
+	readonly triggerHints?: readonly string[];
+	readonly isEnabled?: boolean;
+	readonly content?:
+		| { readonly kind: 'instructions'; readonly text: string; readonly baseRevision: number }
+		| {
+				readonly kind: 'manifest';
+				readonly manifest: SkillManifest;
+				readonly baseRevision: number;
+		  };
+}
+
 export type SkillSummary = Pick<
 	Skill<never>,
-	'name' | 'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
+	'slug' | 'description' | 'triggerHints' | 'allowImplicitInvocation' | 'isEnabled'
 > & {
+	readonly name: string;
 	readonly noteId: NoteId;
-	readonly projectId?: ProjectId;
-	readonly isPinned?: boolean;
+	/** The project storing the instruction note, independent of the catalog's pin context. */
+	readonly projectId: ProjectId;
+	/** The selected project's pin; false for an unscoped catalog. */
+	readonly isPinned: boolean;
 };
+
+/** Set whether a skill leads the catalog in one project. This is separate from the note's pin. */
+export interface SkillPinChange {
+	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly pinned: boolean;
+}
 
 /** Recorded every time the agent loads a skill's full instructions, so "which skills actually get used" is answerable later. Reads via `get_skill` don't create one. */
 export interface SkillUsage {
@@ -132,48 +171,12 @@ export interface GetSkillViewInput {
 	readonly noteId: NoteId;
 }
 
-/** Portable text is derived from the current instruction body and metadata, on either side. */
-export const serializeSkillManifest = (manifest: SkillManifest): string => {
-	const header = stringify(
-		{
-			name: manifest.slug,
-			description: manifest.description,
-			...(manifest.license ? { license: manifest.license } : {}),
-			...(manifest.compatibility ? { compatibility: manifest.compatibility } : {}),
-			metadata: {
-				...manifest.metadata,
-				...(manifest.allowImplicitInvocation
-					? {}
-					: { 'followthrough.allow-implicit-invocation': 'false' })
-			}
-		},
-		{ lineWidth: 0 }
-	).trimEnd();
-	return `---\n${header}\n---\n\n${manifest.instructions.trimEnd()}\n`;
-};
-
-/** Metadata edits do not change the instruction document or its revision. */
-export function applySkillMetadataEdit(
-	current: Pick<Skill<never>, 'name' | 'description' | 'triggerHints' | 'isEnabled'>,
-	input: {
-		readonly displayName?: string;
-		readonly description?: string;
-		readonly triggerHints?: readonly string[];
-		readonly isEnabled?: boolean;
-	}
-) {
-	return {
-		name: input.displayName?.trim() || current.name,
-		description: input.description?.trim() || current.description,
-		triggerHints: input.triggerHints
-			? input.triggerHints.map((hint) => hint.trim()).filter(Boolean)
-			: [...current.triggerHints],
-		isEnabled: input.isEnabled ?? current.isEnabled
-	};
-}
-
-/** Metadata and an optional document edit prepared from the same observed skill. */
-export interface PreparedSkillEdit<Document> {
-	readonly skill: Skill<Document>;
-	readonly document: Document | null;
-}
+/** The skill holds the candidate note in every arm; document edits also carry portable validation input. */
+export type PreparedSkillEdit<Document> =
+	| { readonly kind: 'metadata'; readonly skill: Skill<Document> }
+	| { readonly kind: 'title'; readonly skill: Skill<Document> }
+	| {
+			readonly kind: 'document';
+			readonly skill: Skill<Document>;
+			readonly manifest: SkillManifest;
+	  };

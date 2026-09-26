@@ -11,7 +11,7 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const records = new ConversationRecords(database);
 	const parsed = workspaceRecordSchema.parse({
 		type: 'conversations',
@@ -29,7 +29,9 @@ const setup = async (suffix: string) => {
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			conversationJournal: new ConversationArchive(records),
-			syncMutations: sync.mutations
+			syncMutations: sync.mutations,
+			syncRetry: sync.mutationRetry,
+			transactionRunner
 		})
 	);
 	const base = await sync.objects.read(

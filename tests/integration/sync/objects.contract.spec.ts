@@ -79,8 +79,8 @@ describe('conditional normalized object reads', () => {
 		const conversationId = crypto.randomUUID();
 		const runId = crypto.randomUUID();
 		await context.client`insert into conversations (id, user_id) values (${conversationId}, ${owner.userId})`;
-		await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, serialized_state)
-			values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept', 'server-only-state')`;
+		await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, serialized_state, input_snapshot)
+			values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept', 'server-only-state', jsonb_build_object('conversationId', ${conversationId}::text, 'prompt', 'Resume the saved request'))`;
 		const result = await new WorkspaceSyncObjects(context.db).read(
 			owner,
 			{ type: 'agent_runs', id: [runId] },
@@ -120,7 +120,7 @@ it('reads message content and its ordering cursor without loss of precision', as
 	const messageId = crypto.randomUUID();
 	await context.client`insert into conversations (id, user_id) values (${conversationId}, ${owner.userId})`;
 	const runId = crypto.randomUUID();
-	await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode) values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept')`;
+	await context.client`insert into agent_runs (id, kind, user_id, conversation_id, model, execution_mode, input_snapshot) values (${runId}, 'agent', ${owner.userId}, ${conversationId}, 'contract-model', 'auto_accept', jsonb_build_object('conversationId', ${conversationId}::text, 'prompt', 'Save an answer'))`;
 	await context.client`insert into agent_run_events (cursor, run_id, attempt, event) overriding system value values (9007199254740993, ${runId}, 0, '{"type":"text_delta","text":"Saved answer"}'::jsonb)`;
 	await context.client`insert into messages (id, conversation_id, role, content, event_cursor) values (${messageId}, ${conversationId}, 'assistant', '{"type":"text","text":"Saved answer"}'::jsonb, 9007199254740993)`;
 	const result = await new WorkspaceSyncObjects(context.db).read(

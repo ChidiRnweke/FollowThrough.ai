@@ -1,7 +1,11 @@
+import {
+	memoryEntryBuilder,
+	testMemoryEntryId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import type { MemoryChangePayload } from '$lib/models/memory';
 import type { Provenance } from '$lib/models/provenance';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError } from '$lib/errors';
 import { MemoryLibrary } from './library';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -33,34 +37,34 @@ const setup = async () => {
 	return { entries, projects, provenance, service };
 };
 
-const addPayload = (overrides: Partial<MemoryChangePayload> = {}): MemoryChangePayload => ({
+const addPayload = (): Extract<MemoryChangePayload, { scope: 'project'; operation: 'add' }> => ({
+	scope: 'project',
 	projectId: testProjectId(),
 	operation: 'add',
-	content: 'Deploys go out on Tuesdays.',
-	...overrides
+	content: 'Deploys go out on Tuesdays.'
 });
 
 describe('Memory entry management invariants', () => {
 	it('rejects a memory entry for an unknown project', async () => {
 		const { service } = await setup();
 		await expect(
-			service.create(testActor(), { projectId: testProjectId(99), content: 'Fact' })
+			service.create(
+				testActor(),
+				memoryEntryBuilder({
+					id: testMemoryEntryId(1),
+					projectId: testProjectId(99),
+					content: 'Fact'
+				})
+			)
 		).rejects.toBeInstanceOf(NotFoundError);
-	});
-
-	it('rejects an empty memory entry', async () => {
-		const { service } = await setup();
-		await expect(
-			service.create(testActor(), { projectId: testProjectId(), content: '   ' })
-		).rejects.toBeInstanceOf(ValidationError);
 	});
 
 	it('hides a removed entry from the project list', async () => {
 		const { service } = await setup();
-		const entry = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact'
-		});
+		const entry = await service.create(
+			testActor(),
+			memoryEntryBuilder({ id: testMemoryEntryId(2), projectId: testProjectId(), content: 'Fact' })
+		);
 		await service.remove(testActor(), entry.id);
 		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
 	});
@@ -69,24 +73,56 @@ describe('Memory entry management invariants', () => {
 describe('User profile memory invariants', () => {
 	it('creates a profile entry without any project', async () => {
 		const { service } = await setup();
-		const entry = await service.create(testActor(), { content: 'I lead the platform team.' });
+		const entry = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(3),
+				projectId: undefined,
+				content: 'I lead the platform team.'
+			})
+		);
 		expect(entry.projectId).toBeUndefined();
 	});
 
 	it('lists profile entries without project entries', async () => {
 		const { service } = await setup();
-		await service.create(testActor(), { projectId: testProjectId(), content: 'Project fact' });
-		const profile = await service.create(testActor(), { content: 'I prefer short answers.' });
+		await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(4),
+				projectId: testProjectId(),
+				content: 'Project fact'
+			})
+		);
+		const profile = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(5),
+				projectId: undefined,
+				content: 'I prefer short answers.'
+			})
+		);
 		expect((await service.list(testActor(), {})).map((item) => item.id)).toEqual([profile.id]);
 	});
 
 	it('lists project entries without profile entries', async () => {
 		const { service } = await setup();
-		const project = await service.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Project fact'
-		});
-		await service.create(testActor(), { content: 'I prefer short answers.' });
+		const project = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(6),
+				projectId: testProjectId(),
+				content: 'Project fact'
+			})
+		);
+		await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(7),
+				projectId: undefined,
+				content: 'I prefer short answers.'
+			})
+		);
 		expect(
 			(await service.list(testActor(), { projectId: testProjectId() })).map((item) => item.id)
 		).toEqual([project.id]);
@@ -96,7 +132,7 @@ describe('User profile memory invariants', () => {
 		const { service } = await setup();
 		const { entry } = await service.apply(
 			testActor(),
-			{ operation: 'add', content: 'I am the founder.' },
+			{ scope: 'user', operation: 'add', content: 'I am the founder.' },
 			testProvenanceId()
 		);
 		expect(entry.projectId).toBeUndefined();
@@ -104,6 +140,49 @@ describe('User profile memory invariants', () => {
 });
 
 describe('Memory change application invariants', () => {
+	it.each(['update', 'remove'] as const)(
+		'rejects a profile %s against project memory before writing',
+		async (operation) => {
+			const { service, entries } = await setup();
+			const { entry } = await service.apply(testActor(), addPayload(), testProvenanceId());
+			const payload: MemoryChangePayload =
+				operation === 'update'
+					? { scope: 'user', operation, memoryEntryId: entry.id, content: 'Replacement' }
+					: { scope: 'user', operation, memoryEntryId: entry.id };
+			const outcome = await service.apply(testActor(), payload, testProvenanceId()).then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
+			expect({ outcome, entries: entries.entries }).toEqual({
+				outcome: 'Memory target does not belong to the requested scope',
+				entries: [entry]
+			});
+		}
+	);
+	it('rejects a project replacement targeting profile memory', async () => {
+		const { service } = await setup();
+		const target = await service.create(
+			testActor(),
+			memoryEntryBuilder({
+				id: testMemoryEntryId(8),
+				projectId: undefined,
+				content: 'Profile fact'
+			})
+		);
+		await expect(
+			service.apply(
+				testActor(),
+				{
+					scope: 'project',
+					projectId: testProjectId(),
+					operation: 'update',
+					memoryEntryId: target.id,
+					content: 'Replacement'
+				},
+				testProvenanceId()
+			)
+		).rejects.toThrow('Memory target does not belong to the requested scope');
+	});
 	it('rejects an apply with unknown provenance', async () => {
 		const { service } = await setup();
 		await expect(
@@ -122,7 +201,13 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		const { entry: replacement } = await service.apply(
 			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: original.id,
+				content: 'Revised fact'
+			},
 			testProvenanceId()
 		);
 		expect(replacement.replacesEntryId).toBe(original.id);
@@ -133,7 +218,13 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: original.id,
+				content: 'Revised fact'
+			},
 			testProvenanceId()
 		);
 		expect((await service.get(testActor(), original.id)).deletedAt).toBeDefined();
@@ -144,13 +235,24 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
-			addPayload({ operation: 'remove', memoryEntryId: original.id, content: undefined }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'remove',
+				memoryEntryId: original.id
+			},
 			testProvenanceId()
 		);
 		await expect(
 			service.apply(
 				testActor(),
-				addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Too late' }),
+				{
+					scope: 'project',
+					projectId: testProjectId(),
+					operation: 'update',
+					memoryEntryId: original.id,
+					content: 'Too late'
+				},
 				testProvenanceId()
 			)
 		).rejects.toBeInstanceOf(NotFoundError);
@@ -161,7 +263,12 @@ describe('Memory change application invariants', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		await service.apply(
 			testActor(),
-			addPayload({ operation: 'remove', memoryEntryId: original.id, content: undefined }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'remove',
+				memoryEntryId: original.id
+			},
 			testProvenanceId()
 		);
 		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
@@ -174,7 +281,13 @@ describe('Memory application effects', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		const result = await service.apply(
 			testActor(),
-			addPayload({ operation: 'update', memoryEntryId: original.id, content: 'Revised fact' }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'update',
+				memoryEntryId: original.id,
+				content: 'Revised fact'
+			},
 			testProvenanceId()
 		);
 		expect(result.changes).toEqual([
@@ -191,7 +304,12 @@ describe('Memory application effects', () => {
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
 		const result = await service.apply(
 			testActor(),
-			addPayload({ operation: 'remove', memoryEntryId: original.id }),
+			{
+				scope: 'project',
+				projectId: testProjectId(),
+				operation: 'remove',
+				memoryEntryId: original.id
+			},
 			testProvenanceId()
 		);
 		expect(result.changes).toEqual([{ kind: 'modified', before: original, after: result.entry }]);

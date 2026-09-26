@@ -1,39 +1,21 @@
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	BacklinkView,
+	BacklinkContext,
 	CreateRelationshipInput,
-	LinkCandidate,
 	RelationshipId,
-	RelationshipKind
+	RelationshipClassification
 } from '$lib/models/relationships';
-import type { Note, NoteId, NoteRelationship, TextSelection } from '$lib/models/notes';
+import type { Note, NoteId, NoteRelationship } from '$lib/models/notes';
+export type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
 
-export interface LinkFinder {
-	find(
-		actor: ActorContext,
-		selection: TextSelection,
-		signal?: AbortSignal
-	): Promise<readonly LinkCandidate[]>;
-}
-export interface RelationshipClassification {
-	readonly kind: RelationshipKind;
-	readonly justification: string;
-	readonly confidence: number;
-}
 export interface RelationshipClassifier {
 	classify(
 		sourceText: string,
 		targetText: string,
+		model: string,
 		signal?: AbortSignal
 	): Promise<RelationshipClassification>;
-}
-export interface StructuredRelationshipClient {
-	classify(
-		sourceText: string,
-		targetText: string,
-		signal?: AbortSignal
-	): Promise<RelationshipClassification | undefined>;
 }
 export interface RelationshipCreator {
 	create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship>;
@@ -59,9 +41,9 @@ export interface RelationshipFinder {
 export interface NoteLinkReconciler {
 	reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void>;
 }
-export interface BacklinkViewAssembler {
-	assemble(
+export interface BacklinkContextReader {
+	readContexts(
 		actor: ActorContext,
 		relationships: readonly NoteRelationship[]
-	): Promise<readonly BacklinkView[]>;
+	): Promise<readonly BacklinkContext[]>;
 }

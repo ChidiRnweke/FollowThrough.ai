@@ -1,13 +1,5 @@
-import { applyTodoEdit, assembleTodoView, decideTodoCreation } from '$lib/models/todos';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateTodoInput,
-	Todo,
-	TodoId,
-	TodoListFilter,
-	TodoStatus,
-	TodoView
-} from '$lib/models/todos';
+import type { CreateTodoInput, Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -25,23 +17,18 @@ export class TodoCatalog {
 		private readonly projects: ProjectRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly provenance: ProvenanceRepository,
+		private readonly clock: () => DateTime = now
 	) {}
 
-	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		const decision = decideTodoCreation(input, {
-			id: input.id ?? (crypto.randomUUID() as TodoId),
-			userId: actor.userId,
-			timestamp: now()
-		});
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		if (!(await this.projects.findById(actor, input.projectId)))
+	async create(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s task');
+		if (!(await this.projects.findById(actor, todo.projectId)))
 			throw new NotFoundError('Todo project was not found');
-		if (input.sourceAnchorId)
-			await this.validateAnchor(actor, input.sourceAnchorId, input.projectId);
-		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
+		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
+		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
-		return this.todos.insert(actor, decision.todo);
+		return this.todos.insert(actor, todo);
 	}
 
 	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
@@ -50,31 +37,24 @@ export class TodoCatalog {
 		return todo;
 	}
 
+	async getForEdit(actor: ActorContext, todoId: TodoId): Promise<Todo> {
+		const todo = await this.todos.findForUpdate(actor, todoId);
+		if (!todo) throw new NotFoundError('Todo was not found', { todoId });
+		return todo;
+	}
+
 	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
-		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot update another user’s todo');
-		const current = await this.get(actor, todo.id);
-		if (todo.projectId !== current.projectId)
-			throw new ValidationError('A todo cannot move between projects during an edit');
-		const title = todo.title.trim();
-		if (!title) throw new ValidationError('Todo title is required');
-		if (todo.linkedNoteId) await this.validateLinkedNote(actor, todo.linkedNoteId, todo.projectId);
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot edit another user’s task');
+		if (!todo.title) throw new ValidationError('Todo title is required');
 		if (todo.sourceAnchorId) await this.validateAnchor(actor, todo.sourceAnchorId, todo.projectId);
 		if (todo.provenanceId && !(await this.provenance.findById(actor, todo.provenanceId)))
 			throw new NotFoundError('Todo provenance was not found');
-		return this.todos.update(
-			actor,
-			applyTodoEdit(todo, { title, waitingOn: todo.waitingOn ?? null }, now())
-		);
-	}
-
-	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {
-		const todo = await this.get(actor, todoId);
-		return this.todos.update(actor, applyTodoEdit(todo, { status }, now()));
+		return this.todos.update(actor, todo);
 	}
 
 	async softDelete(actor: ActorContext, todoId: TodoId): Promise<void> {
 		await this.get(actor, todoId);
-		await this.todos.softDelete(actor, todoId, now());
+		await this.todos.softDelete(actor, todoId, this.clock());
 	}
 
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
@@ -86,37 +66,35 @@ export class TodoCatalog {
 	listCategories(actor: ActorContext): Promise<readonly string[]> {
 		return this.todos.listCategories(actor);
 	}
-	findDue(actor: ActorContext, through: string): Promise<readonly Todo[]> {
-		return this.list(actor, { dueBefore: through as TodoListFilter['dueBefore'] });
-	}
 	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
 		return this.list(actor, { responsibility: 'waiting_on' });
 	}
 
-	async assemble(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]> {
-		return Promise.all(
-			todos.map(async (todo) => {
-				const anchor = todo.sourceAnchorId
-					? await this.anchors.findById(actor, todo.sourceAnchorId)
-					: undefined;
-				const origin = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
-				const linked = todo.linkedNoteId
-					? await this.notes.findById(actor, todo.linkedNoteId)
-					: undefined;
-				const provenance = todo.provenanceId
-					? await this.provenance.findById(actor, todo.provenanceId)
-					: undefined;
-				return assembleTodoView(todo, {
-					anchor: anchor ?? null,
-					origin: origin ?? null,
-					linked: linked ?? null,
-					provenance: provenance ?? null
-				});
-			})
-		);
+	async readContexts(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoContext[]> {
+		return Promise.all(todos.map((todo) => this.readContext(actor, todo)));
 	}
 
-	private async validateLinkedNote(
+	async readContext(actor: ActorContext, todo: Todo): Promise<TodoContext> {
+		const anchor = todo.sourceAnchorId
+			? await this.anchors.findById(actor, todo.sourceAnchorId)
+			: undefined;
+		const origin = anchor ? await this.notes.findById(actor, anchor.noteId) : undefined;
+		const linked = todo.linkedNoteId
+			? await this.notes.findById(actor, todo.linkedNoteId)
+			: undefined;
+		const provenance = todo.provenanceId
+			? await this.provenance.findById(actor, todo.provenanceId)
+			: undefined;
+		return {
+			todo,
+			anchor: anchor ?? null,
+			origin: origin ?? null,
+			linked: linked ?? null,
+			provenance: provenance ?? null
+		};
+	}
+
+	async validateLinkedNote(
 		actor: ActorContext,
 		noteId: NonNullable<Todo['linkedNoteId']>,
 		projectId: Todo['projectId']

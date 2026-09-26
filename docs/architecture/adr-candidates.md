@@ -125,7 +125,7 @@ decision record.
 - **Reason:** Rolling back a large onboarding import because a few files are malformed loses useful
   work. A reported partial result is recoverable.
 - **Cost:** Users may need to remove or repair blank shells after the import.
-- **Evidence:** `src/lib/server/controllers/imports/controller.ts` and `import.spec.ts`.
+- **Evidence:** `Notes.importMarkdownArchive` and `src/lib/server/controllers/notes/import.spec.ts`.
 - **Readiness:** Ready. Drafted as ADR 0014.
 
 ### C014 — Report a failure instead of silently returning a weaker result

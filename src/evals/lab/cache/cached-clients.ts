@@ -1,10 +1,10 @@
 import type { SearchMatch } from '$lib/models/knowledge-search';
 import type {
-	Condenser,
 	EmbeddingBatch,
 	EmbeddingClient,
 	Reranker
 } from '$lib/server/services/knowledge-search/contracts';
+import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import {
 	DEFAULT_RERANK_MODEL,
 	RERANKING_STRATEGY,
@@ -89,13 +89,15 @@ export class CachedReranker implements Reranker {
 	}
 }
 
-export class CachedCondenser implements Condenser {
+export class CachedSearchQueryGeneration implements ISearchQueryGeneration {
 	constructor(
-		private readonly inner: Condenser,
+		private readonly inner: ISearchQueryGeneration,
 		private readonly cache: DiskCache
 	) {}
 
-	condense(text: string): Promise<string> {
-		return this.cache.resolve(DiskCache.key('condense', { text }), () => this.inner.condense(text));
+	generate(text: string): Promise<string> {
+		return this.cache.resolve(DiskCache.key('search-query-v2', { text }), () =>
+			this.inner.generate(text)
+		);
 	}
 }

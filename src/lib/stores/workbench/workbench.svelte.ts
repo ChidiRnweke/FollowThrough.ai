@@ -2,10 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import {
-	IndexedDbWorkbenchLayout,
-	type WorkbenchLayoutRecord
-} from '$lib/client/workbench/indexeddb-layout';
+import type { WorkbenchLayoutRecord } from '$lib/models/workbench';
 import {
 	addTabInBackgroundInState,
 	closeTabInState,
@@ -33,7 +30,7 @@ export type WorkbenchRouter = {
 	currentUrl: () => URL;
 };
 
-/** The slice of {@link IndexedDbWorkbenchLayout} this store depends on. */
+/** Layout storage is bound to one account before it reaches this store. */
 export type WorkspaceRepository = {
 	get: () => Promise<WorkbenchLayoutRecord | undefined>;
 	put: (record: WorkbenchLayoutRecord) => Promise<void>;
@@ -106,7 +103,7 @@ export class WorkbenchStore {
 	 * Whether the user has collapsed the global tab strip.  Display
 	 * preference only — does not affect open-tab state.  Persists in
 	 * localStorage (fast first-paint read) and in the IndexedDB
-	 * `WorkbenchLayoutRecord` (cross-device source of truth).
+	 * `WorkbenchLayoutRecord` (a device-local copy for this account).
 	 */
 	stripHidden = $state(false);
 
@@ -123,7 +120,7 @@ export class WorkbenchStore {
 	 * Width of the secondary pane as a fraction of 1 (clamped 0.25–0.75).
 	 * Display preference — like `stripHidden`, persists to localStorage
 	 * for instant first-paint and to the IndexedDB `WorkbenchLayoutRecord` for
-	 * cross-device synchronisation.  The URL never encodes the ratio.
+	 * device-local restoration. The URL never encodes the ratio.
 	 */
 	splitRatio = $state(0.5);
 
@@ -140,8 +137,36 @@ export class WorkbenchStore {
 
 	constructor(
 		private readonly router: WorkbenchRouter = sveltekitRouter,
-		private readonly repository: WorkspaceRepository = new IndexedDbWorkbenchLayout()
+		private repository?: WorkspaceRepository
 	) {}
+
+	private generation = 0;
+
+	/** Bind a fresh account-owned repository; a stopped binding cannot restore or save state. */
+	attach(repository: WorkspaceRepository): () => void {
+		this.detach();
+		this.repository = repository;
+		const generation = this.generation;
+		return () => {
+			if (this.generation === generation) this.detach();
+		};
+	}
+
+	private detach(): void {
+		this.generation++;
+		this.repository = undefined;
+		this.hydrated = false;
+		this.openTabs = [];
+		this.focusedTabId = undefined;
+		this.interactionFocusedTabId = undefined;
+		this.splitTabId = undefined;
+		this.pinnedTabs = [];
+		this.recentlyUsed = [];
+		this._activeProjectId = undefined;
+		this.applyingFromUrl = false;
+		this.restoring = false;
+		this.pruning = false;
+	}
 
 	private hydrated = $state(false);
 	/** Suppresses the URL→state effect while we're applying a user action this tick. */
@@ -258,64 +283,38 @@ export class WorkbenchStore {
 	 */
 	async hydrate(projectOfTab: (tabId: TabId) => ProjectId | undefined): Promise<void> {
 		if (this.hydrated) return;
-		this.hydrated = true;
-		// Display preference: read synchronously from localStorage so the
-		// strip never flashes visible-then-hidden on first paint.  Same
-		// reason applies to the split ratio — the compare pane's width
-		// should land at the user's preferred size instead of flashing at
-		// 50% before IndexedDB comes back.
-		this.readStripHiddenFromStorage();
-		this.readSplitRatioFromStorage();
+		const repository = this.repository;
+		if (!repository) throw new Error('Connect the account before restoring workbench tabs');
+		const generation = this.generation;
 		const url = this.router.currentUrl();
 		const urlState = parseWorkbenchUrl(url.pathname, url.searchParams);
-		if (!urlState) {
-			// Not a workbench path on cold start — leave the user on whatever
-			// route they landed on (Today, Todos, …).  The previous working
-			// set stays in IndexedDB until they next hit a `/notes/<id>`
-			// URL, at which point the merge below enriches the deep link.
-			// Still pick up the persisted strip-hidden and any pinned-tab
-			// metadata so the strip renders correctly on non-note routes.
-			try {
-				const record = await this.repository.get();
-				if (record) {
-					if (typeof record.stripHidden === 'boolean') this.stripHidden = record.stripHidden;
-					if (typeof record.splitRatio === 'number')
-						this.splitRatio = WorkbenchStore.clampSplitRatio(record.splitRatio);
-					this.pinnedTabs = record.pinnedTabs;
-					this.recentlyUsed = record.recentlyUsed;
-				}
-				// audit-allow: silent-catch — corrupt workspace state is reported and URL state remains the explicit recovery source.
-			} catch (error) {
-				toast.error(
-					error instanceof Error ? error.message : 'Workspace state could not be restored'
-				);
-			}
-			void this.refreshActiveProjectId(projectOfTab);
-			return;
-		}
-		// Deep link to `/notes/<id>`.  If a previous working set exists in
-		// IndexedDB and contains the focused note, restore that richer set
-		// instead of collapsing to a single tab — returning users get their
-		// open tabs back; brand-new shares still see the single-note URL
-		// because their IndexedDB record is empty.
+		this.hydrated = true;
+		this.restoring = true;
+		this.readStripHiddenFromStorage();
+		this.readSplitRatioFromStorage();
+		let saveCurrent = false;
 		try {
-			const record = await this.repository.get();
+			const record = await repository.get();
+			if (generation !== this.generation) return;
+			if (this.router.currentUrl().href !== url.href) {
+				// The user's newer navigation wins over a delayed device read.
+				this.syncFromUrl();
+				saveCurrent = true;
+				return;
+			}
 			if (record) {
-				if (typeof record.stripHidden === 'boolean') this.stripHidden = record.stripHidden;
-				if (typeof record.splitRatio === 'number')
-					this.splitRatio = WorkbenchStore.clampSplitRatio(record.splitRatio);
+				this.stripHidden = record.stripHidden;
+				this.splitRatio = record.splitRatio;
 				this.pinnedTabs = record.pinnedTabs;
 				this.recentlyUsed = record.recentlyUsed;
 			}
+			// Overview routes retain their URL; a deep link can restore its saved sibling tabs.
+			if (!urlState) return;
 			if (
-				record &&
-				record.focusedNoteId &&
+				record?.focusedNoteId &&
 				record.openTabs.includes(urlState.focusedNoteId) &&
 				(urlState.openTabs.length === 1 || record.openTabs.length > urlState.openTabs.length)
 			) {
-				// Preserve the deep-link's `?split=` if it survives against
-				// the restored tab set; otherwise clear it.  `urlState`
-				// carries it from the deep link so we pass it through.
 				const restored: WorkbenchUrlState = {
 					focusedNoteId: urlState.focusedNoteId,
 					openTabs: record.openTabs,
@@ -323,24 +322,26 @@ export class WorkbenchStore {
 						? { splitNoteId: urlState.splitNoteId }
 						: {})
 				};
-				this.restoring = true;
 				await this.router.goto(
 					serializeWorkbenchUrl(restored, { conversationOf: this.conversationOf }),
-					{
-						replaceState: true,
-						noScroll: true
-					}
+					{ replaceState: true, noScroll: true }
 				);
-				this.restoring = false;
-				void this.refreshActiveProjectId(projectOfTab);
-				return;
+				if (generation !== this.generation) return;
 			}
-			// audit-allow: silent-catch — tab restoration failure is reported before URL state is applied as recovery.
+			this.syncFromUrl();
+			saveCurrent = true;
+			// audit-allow: silent-catch — restoration failure is shown to the user; URL state remains usable and the unreadable stored record is not overwritten.
 		} catch (error) {
+			if (generation !== this.generation) return;
 			toast.error(error instanceof Error ? error.message : 'Workspace tabs could not be restored');
+			this.syncFromUrl();
+		} finally {
+			if (generation === this.generation) {
+				this.restoring = false;
+				this.refreshActiveProjectId(projectOfTab);
+				if (saveCurrent) await this.persist();
+			}
 		}
-		this.applyUrlState(urlState);
-		void this.refreshActiveProjectId(projectOfTab);
 	}
 
 	/**
@@ -348,6 +349,7 @@ export class WorkbenchStore {
 	 * `$effect` calls this so the store always tracks SvelteKit's URL.
 	 */
 	syncFromUrl(): void {
+		if (!this.repository) return;
 		if (this.applyingFromUrl) return;
 		const url = this.router.currentUrl();
 		const urlState = parseWorkbenchUrl(url.pathname, url.searchParams);
@@ -569,6 +571,7 @@ export class WorkbenchStore {
 	 * `goto` + `invalidateAll` would feed itself.
 	 */
 	async pruneClosedNotes(known: ReadonlySet<NoteId>): Promise<void> {
+		const generation = this.generation;
 		if (this.pruning) return;
 		const current = this.toUrlState();
 		if (!current) return;
@@ -617,7 +620,7 @@ export class WorkbenchStore {
 				{ replace: true }
 			);
 		} finally {
-			this.pruning = false;
+			if (generation === this.generation) this.pruning = false;
 		}
 	}
 
@@ -671,21 +674,25 @@ export class WorkbenchStore {
 	private async clearToOverview(
 		persistPatch: Pick<WorkbenchLayoutRecord, 'pinnedTabs' | 'recentlyUsed'>
 	): Promise<void> {
+		const generation = this.generation;
 		this.applyingFromUrl = true;
 		this.openTabs = [];
 		this.focusedTabId = undefined;
 		this.splitTabId = undefined;
 		try {
 			await this.persist({ openTabs: [], focusedNoteId: null, ...persistPatch });
+			if (generation !== this.generation) return;
 			await this.router.goto('/today', { replaceState: false });
 		} finally {
-			this.applyingFromUrl = false;
+			if (generation === this.generation) this.applyingFromUrl = false;
 		}
 	}
 
 	private async navigate(next: WorkbenchUrlState, options: { replace: boolean }): Promise<void> {
+		const generation = this.generation;
 		const url = serializeWorkbenchUrl(next, { conversationOf: this.conversationOf });
 		await this.router.goto(url, { replaceState: options.replace, noScroll: true });
+		if (generation !== this.generation) return;
 		// `syncFromUrl` will pick this up via the layout's $effect, but
 		// persisting eagerly avoids a brief window where the IndexedDB record
 		// disagrees with the URL (e.g. a reload mid-navigation).
@@ -694,6 +701,9 @@ export class WorkbenchStore {
 
 	private async persist(override?: Partial<WorkbenchLayoutRecord>): Promise<void> {
 		if (this.restoring) return;
+		const repository = this.repository;
+		if (!repository) throw new Error('Connect the account before saving workbench tabs');
+		const generation = this.generation;
 		const record: WorkbenchLayoutRecord = {
 			id: 'current',
 			openTabs: override?.openTabs ?? this.openTabs,
@@ -704,9 +714,10 @@ export class WorkbenchStore {
 			splitRatio: override?.splitRatio ?? this.splitRatio
 		};
 		try {
-			await this.repository.put(record);
+			await repository.put(record);
 			// audit-allow: silent-catch — persistence failure is reported while the live workspace remains intact.
 		} catch (error) {
+			if (generation !== this.generation) return;
 			toast.error(error instanceof Error ? error.message : 'Workspace state could not be saved');
 		}
 	}

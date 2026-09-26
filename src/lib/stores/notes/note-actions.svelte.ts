@@ -1,4 +1,7 @@
 import type { AgentRunReceipt } from '$lib/models/agent';
+import { SelectionSubmissions } from '$lib/client/notes/selection-submissions';
+import { DiagramSubmissions } from '$lib/client/notes/diagram-submissions';
+import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import type { DrawioDiagram } from '$lib/models/diagrams';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { Note, TextSelection } from '$lib/models/notes';
@@ -34,16 +37,55 @@ class NoteActionsStore {
 	}
 
 	extractPromises(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => extractPromises({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to extract promises');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new SelectionSubmissions(sessionStorage, 'promises');
+			const input = submissions.prepare(accountId, selection);
+			const receipt = await extractPromises(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	relate(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => relateNote({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to find related notes');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new SelectionSubmissions(sessionStorage, 'relate');
+			const input = submissions.prepare(accountId, selection);
+			const receipt = await relateNote(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	findReferences(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => findReferences({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to search for references');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new SelectionSubmissions(sessionStorage, 'reference');
+			const input = submissions.prepare(accountId, selection);
+			const receipt = await findReferences(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	generateDiagram(selection: TextSelection): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => generateDiagram({ selection }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to generate a diagram');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new DiagramSubmissions(sessionStorage);
+			const { operation: _operation, ...input } = submissions.prepare(accountId, {
+				operation: 'generate',
+				selection
+			});
+			const receipt = await generateDiagram(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 	reviseDiagram(
 		noteId: Note['id'],
@@ -51,15 +93,22 @@ class NoteActionsStore {
 		instruction: string,
 		renderedPngDataUrl?: string
 	): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(
-			() =>
-				reviseDiagram({
-					noteId,
-					source,
-					instruction,
-					renderedPngDataUrl
-				}) as Promise<AgentRunReceipt>
-		);
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to revise a diagram');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new DiagramSubmissions(sessionStorage);
+			const { operation: _operation, ...input } = submissions.prepare(accountId, {
+				operation: 'revise',
+				noteId,
+				source,
+				instruction,
+				renderedPngDataUrl
+			});
+			const receipt = await reviseDiagram(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 
 	convertDiagram(
@@ -67,7 +116,21 @@ class NoteActionsStore {
 		source: string,
 		instruction?: string
 	): Promise<AgentRunReceipt | undefined> {
-		return this.call<AgentRunReceipt>(() => convertDiagram({ noteId, source, instruction }));
+		return this.call<AgentRunReceipt>(async () => {
+			const session = workspaceSession.current;
+			if (!session) throw new Error('The workspace is not ready to convert a diagram');
+			const accountId = session.bootstrap.accountId;
+			const submissions = new DiagramSubmissions(sessionStorage);
+			const { operation: _operation, ...input } = submissions.prepare(accountId, {
+				operation: 'convert',
+				noteId,
+				source,
+				instruction
+			});
+			const receipt = await convertDiagram(input);
+			submissions.acknowledge(accountId, input.requestId);
+			return receipt;
+		});
 	}
 
 	async acceptDrawio(

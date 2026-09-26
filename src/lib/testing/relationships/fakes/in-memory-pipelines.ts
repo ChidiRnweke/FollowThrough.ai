@@ -1,16 +1,12 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { RelationshipClassification } from '$lib/models/relationships';
 import type { PipelineKind } from '$lib/models/agent';
-import type { LinkCandidate } from '$lib/models/relationships';
 import type { PromiseCandidate } from '$lib/models/todos';
-import { asProvenance, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
-import type { ReferenceCandidate } from '$lib/models/references';
+import { provenanceSchema, type Provenance, type ProvenanceRequest } from '$lib/models/provenance';
+import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
-import type {
-	LinkFinder,
-	RelationshipClassification,
-	StructuredRelationshipClient
-} from '$lib/server/services/relationships/contracts';
+import type { StructuredRelationshipClient } from '$lib/server/services/relationships/contracts';
 import type {
 	PromiseExtractor,
 	StructuredPromiseClient,
@@ -19,7 +15,6 @@ import type {
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
 	ReferenceFinder,
-	ReferenceRanker,
 	ReferenceSearchOptions,
 	WebReferenceClient
 } from '$lib/server/services/references/contracts';
@@ -32,14 +27,22 @@ import type {
 
 export class InMemoryPromiseExtractor implements PromiseExtractor {
 	candidates: PromiseCandidate[] = [];
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly modelCandidates = new Map<string, readonly PromiseCandidate[]>();
 
 	async extract(
 		_actor: ActorContext,
-		_selection: TextSelection
+		_selection: TextSelection,
+		context: Parameters<PromiseExtractor['extract']>[2],
+		_signal?: AbortSignal
 	): Promise<readonly PromiseCandidate[]> {
 		void _actor;
 		void _selection;
-		return this.candidates;
+		void _signal;
+		this.started.resolve();
+		await this.completion;
+		return this.modelCandidates.get(context.model) ?? this.candidates;
 	}
 }
 
@@ -54,33 +57,33 @@ export class InMemoryStructuredPromiseClient implements StructuredPromiseClient 
 	}
 }
 
-export class InMemoryLinkFinder implements LinkFinder {
-	candidates: LinkCandidate[] = [];
-	async find(_actor: ActorContext, _selection: TextSelection): Promise<readonly LinkCandidate[]> {
-		void _actor;
-		void _selection;
-		return this.candidates;
-	}
-}
-
 export class InMemoryStructuredRelationshipClient implements StructuredRelationshipClient {
 	result?: RelationshipClassification;
 	failure?: Error;
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly modelResults = new Map<string, RelationshipClassification>();
 
 	async classify(
 		_sourceText: string,
-		_targetText: string
+		_targetText: string,
+		model: string
 	): Promise<RelationshipClassification | undefined> {
 		void _sourceText;
 		void _targetText;
+		this.started.resolve();
+		await this.completion;
 		if (this.failure) throw this.failure;
-		return this.result;
+		return this.modelResults.get(model) ?? this.result;
 	}
 }
 
-export class InMemoryReferencePipeline implements ReferenceFinder, ReferenceRanker {
+export class InMemoryReferencePipeline implements ReferenceFinder {
 	candidates: ReferenceCandidate[] = [];
 	model?: string;
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly modelCandidates = new Map<string, readonly ReferenceCandidate[]>();
 	async find(
 		_actor: ActorContext,
 		_selection: TextSelection,
@@ -89,28 +92,20 @@ export class InMemoryReferencePipeline implements ReferenceFinder, ReferenceRank
 		void _actor;
 		void _selection;
 		this.model = options.model;
-		return this.candidates;
-	}
-	async rank(
-		_actor: ActorContext,
-		_selection: TextSelection,
-		candidates: readonly ReferenceCandidate[]
-	): Promise<readonly ReferenceCandidate[]> {
-		const weight = { official: 0, standard: 1, vendor: 2, community: 3 };
-		return [...candidates].sort(
-			(a, b) => weight[a.tier] - weight[b.tier] || b.confidence - a.confidence
-		);
+		this.started.resolve();
+		await this.completion;
+		return (options.model ? this.modelCandidates.get(options.model) : undefined) ?? this.candidates;
 	}
 }
 
 export class InMemoryWebReferenceClient implements WebReferenceClient {
-	result?: readonly ReferenceCandidate[];
+	result?: readonly ReferenceSource[];
 	failure?: Error;
 	model?: string;
 	async search(
 		_selectionText: string,
 		options: ReferenceSearchOptions = {}
-	): Promise<readonly ReferenceCandidate[] | undefined> {
+	): Promise<readonly ReferenceSource[] | undefined> {
 		void _selectionText;
 		this.model = options.model;
 		if (this.failure) throw this.failure;
@@ -120,11 +115,14 @@ export class InMemoryWebReferenceClient implements WebReferenceClient {
 
 export class InMemoryProvenanceRecorder implements ProvenanceRecorder, SnapshotParticipant {
 	records: Provenance[] = [];
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
 
 	async record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance> {
-		// Built through the model's own parser, exactly as production is, so the
-		// fake cannot hold a record production could never produce.
-		const provenance = asProvenance(input, {
+		this.started.resolve();
+		await this.completion;
+		const provenance = provenanceSchema.parse({
+			...input,
 			id: testProvenanceId(this.records.length + 1),
 			userId: actor.userId,
 			createdAt: testNow

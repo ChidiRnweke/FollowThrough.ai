@@ -2,11 +2,8 @@
 	import type { ShellContext } from '$lib/client/shell/views';
 
 	import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
-	import {
-		sectionNumberingLevelFor,
-		type SectionNumberingLevel,
-		type SectionNumberingView
-	} from '$lib/models/notes';
+	import { type SectionNumberingLevel, type SectionNumberingView } from '$lib/models/notes';
+	import { sectionNumberingLevelFor } from '$lib/services/notes/section-numbering';
 	import type { ProjectId } from '$lib/models/projects';
 
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';

@@ -1,5 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { LocalDate } from '$lib/models/workspace';
+import type { LocalDate, DateTime } from '$lib/models/workspace';
 import type { PromiseCandidate } from '$lib/models/todos';
 import type { TextSelection } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
@@ -49,14 +49,19 @@ export function parsePromises(
 }
 
 export interface IPromiseRules {
-	extract(actor: ActorContext, selection: TextSelection): Promise<readonly PromiseCandidate[]>;
+	extract(
+		actor: ActorContext,
+		selection: TextSelection,
+		requestedAt: DateTime
+	): Promise<readonly PromiseCandidate[]>;
 }
 
 export class DeterministicPromiseExtractor implements IPromiseRules {
 	async extract(
 		_actor: ActorContext,
-		selection: TextSelection
+		selection: TextSelection,
+		requestedAt: DateTime
 	): Promise<readonly PromiseCandidate[]> {
-		return parsePromises(selection);
+		return parsePromises(selection, new Date(requestedAt));
 	}
 }

@@ -1,4 +1,5 @@
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
 import {
@@ -12,6 +13,7 @@ import {
 	suggestionBuilder,
 	memorySuggestionBuilder,
 	testActor,
+	testNow,
 	testProjectId,
 	testNoteId,
 	testSuggestionId,
@@ -26,14 +28,23 @@ describe('Pending memory review invariants', () => {
 			memorySuggestionBuilder(),
 			memorySuggestionBuilder({
 				id: testSuggestionId(2),
-				payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+				payload: {
+					scope: 'project',
+					operation: 'add',
+					content: 'Project rule',
+					projectId: testProjectId()
+				}
 			}),
 			suggestionBuilder({ id: testSuggestionId(3) })
 		];
+		reader.contexts = reader.suggestions.flatMap((suggestion) =>
+			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
+		);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionLister: reader,
-				suggestionViewAssembler: reader
+				suggestionExpirer: reader,
+				suggestionContextReader: reader
 			})
 		);
 		const result = await controller.listPendingMemory(testActor(), {});
@@ -46,17 +57,31 @@ describe('Pending memory review invariants', () => {
 			memorySuggestionBuilder(),
 			memorySuggestionBuilder({
 				id: testSuggestionId(2),
-				payload: { operation: 'add', content: 'Project rule', projectId: testProjectId() }
+				payload: {
+					scope: 'project',
+					operation: 'add',
+					content: 'Project rule',
+					projectId: testProjectId()
+				}
 			}),
 			memorySuggestionBuilder({
 				id: testSuggestionId(3),
-				payload: { operation: 'add', content: 'Other project', projectId: testProjectId(2) }
+				payload: {
+					scope: 'project',
+					operation: 'add',
+					content: 'Other project',
+					projectId: testProjectId(2)
+				}
 			})
 		];
+		reader.contexts = reader.suggestions.flatMap((suggestion) =>
+			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
+		);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
 				suggestionLister: reader,
-				suggestionViewAssembler: reader
+				suggestionExpirer: reader,
+				suggestionContextReader: reader
 			})
 		);
 		const result = await controller.listPendingMemory(testActor(), { projectId: testProjectId() });
@@ -74,7 +99,8 @@ const setup = () => {
 			suggestionAccepter: suggestions,
 			suggestionRejecter: suggestions,
 			suggestionReverter: suggestions,
-			artifactApplier: artifacts,
+			todoCreator: artifacts,
+			now: () => testNow,
 			suggestionEffects: new SuggestionEffects(artifacts.effects),
 			transactionRunner
 		})
@@ -89,6 +115,46 @@ const setup = () => {
 };
 
 describe('Suggestion lifecycle invariants', () => {
+	it('normalizes accepted task content and resolves its actor and timestamps', async () => {
+		const { suggestions, artifacts, accept } = setup();
+		suggestions.suggestions = [
+			suggestionBuilder({
+				payload: {
+					projectId: testProjectId(),
+					title: '  Send the design  ',
+					responsibility: 'mine',
+					waitingOn: 'Sam'
+				}
+			})
+		];
+		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
+		expect(artifacts.artifacts).toEqual([
+			expect.objectContaining({
+				title: 'Send the design',
+				userId: testActor().userId,
+				projectId: testProjectId(),
+				status: 'open',
+				createdAt: testNow,
+				updatedAt: testNow
+			})
+		]);
+	});
+	it('clears the counterparty when accepting personal work', async () => {
+		const { suggestions, artifacts, accept } = setup();
+		suggestions.suggestions = [
+			suggestionBuilder({
+				payload: {
+					projectId: testProjectId(),
+					title: 'Send the design',
+					responsibility: 'mine',
+					waitingOn: 'Sam'
+				}
+			})
+		];
+		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
+		expect(artifacts.artifacts[0]?.waitingOn).toBeUndefined();
+	});
+
 	it('accepting a proposal transitions it to accepted', async () => {
 		const { suggestions, accept } = setup();
 		suggestions.suggestions = [suggestionBuilder()];

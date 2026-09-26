@@ -1,6 +1,13 @@
-import { and, asc, desc, eq, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	NotePublicationWrite,
+	NoteBuiltInRepairWrite
+} from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -12,6 +19,29 @@ import { toAnchor, toNote, toRevision } from '$lib/server/db/mappers';
 
 export class NoteRecords implements NoteRepository {
 	constructor(private readonly database: Database) {}
+
+	async updatePublication(
+		actor: ActorContext,
+		write: NotePublicationWrite
+	): Promise<Note | undefined> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				publishedRevision: write.publishedRevision,
+				publishedAt: new Date(write.publishedAt),
+				updatedAt: new Date(write.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.notes.id, write.noteId),
+					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.currentRevision, write.expectedRevision),
+					isNull(schema.notes.archivedAt)
+				)
+			)
+			.returning();
+		return row ? toNote(row) : undefined;
+	}
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		const [row] = await this.database
@@ -26,6 +56,71 @@ export class NoteRecords implements NoteRepository {
 				)
 			);
 		return row ? toNote(row.note) : undefined;
+	}
+
+	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+		const [row] = await this.database
+			.select({ note: schema.notes })
+			.from(schema.notes)
+			.innerJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
+			.where(
+				and(
+					eq(schema.notes.id, id),
+					eq(schema.notes.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			)
+			.for('update', { of: schema.notes });
+		return row ? toNote(row.note) : undefined;
+	}
+
+	async updateTrash(actor: ActorContext, note: Note): Promise<Note> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				parentId: note.parentId ?? null,
+				position: note.position,
+				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
+				updatedAt: new Date(note.updatedAt)
+			})
+			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, actor.userId)))
+			.returning();
+		if (!row) throw new NotFoundError('Note was not found');
+		return toNote(row);
+	}
+
+	async findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.notes)
+			.where(and(eq(schema.notes.userId, actor.userId), eq(schema.notes.builtInKey, key)))
+			.for('update');
+		return row ? toNote(row) : undefined;
+	}
+
+	async repairBuiltIn(
+		actor: ActorContext,
+		write: NoteBuiltInRepairWrite
+	): Promise<Note | undefined> {
+		const [row] = await this.database
+			.update(schema.notes)
+			.set({
+				projectId: write.projectId,
+				parentId: write.parentId ?? null,
+				position: write.position,
+				kind: write.kind,
+				archivedAt: write.archivedAt,
+				updatedAt: new Date(write.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.notes.id, write.noteId),
+					eq(schema.notes.userId, actor.userId),
+					eq(schema.notes.builtInKey, write.builtInKey)
+				)
+			)
+			.returning();
+		return row ? toNote(row) : undefined;
 	}
 
 	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
@@ -138,28 +233,6 @@ export class NoteRecords implements NoteRepository {
 		return toNote(row!);
 	}
 
-	async update(actor: ActorContext, note: Note): Promise<Note> {
-		const [row] = await this.database
-			.update(schema.notes)
-			.set({
-				kind: note.kind,
-				title: note.title,
-				document: note.document,
-				plainText: note.plainText,
-				parentId: note.parentId,
-				position: note.position,
-				isPinned: note.isPinned,
-				currentRevision: note.currentRevision,
-				publishedRevision: note.publishedRevision,
-				publishedAt: note.publishedAt ? new Date(note.publishedAt) : null,
-				archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
-				updatedAt: new Date(note.updatedAt)
-			})
-			.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, actor.userId)))
-			.returning();
-		return toNote(row!);
-	}
-
 	async updateIfRevision(
 		actor: ActorContext,
 		note: Note,
@@ -187,10 +260,22 @@ export class NoteRecords implements NoteRepository {
 		return row ? toNote(row) : undefined;
 	}
 
-	async delete(actor: ActorContext, id: NoteId): Promise<void> {
-		await this.database
+	async deleteTrashed(
+		actor: ActorContext,
+		id: NoteId
+	): Promise<Pick<Note, 'id' | 'title'> | undefined> {
+		const [row] = await this.database
 			.delete(schema.notes)
-			.where(and(eq(schema.notes.id, id), eq(schema.notes.userId, actor.userId)));
+			.where(
+				and(
+					eq(schema.notes.id, id),
+					eq(schema.notes.userId, actor.userId),
+					isNotNull(schema.notes.archivedAt),
+					ne(schema.notes.kind, 'skill')
+				)
+			)
+			.returning({ id: schema.notes.id, title: schema.notes.title });
+		return row ? { id: row.id as NoteId, title: row.title } : undefined;
 	}
 
 	async setSectionNumbering(

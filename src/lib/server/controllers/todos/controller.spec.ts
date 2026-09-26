@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { Todos, type TodosDependencies } from './controller';
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -16,11 +17,11 @@ const setup = () => {
 		controller: new Todos(
 			capabilityDependencies<TodosDependencies>({
 				todoLister: todos,
-				todoViewAssembler: todos,
+				todoContextReader: todos,
 				todoReader: todos,
 				todoEditor: todos,
-				todoDeleter: todos,
-				todoStatusChanger: todos
+				transactionRunner: new InMemoryTransactionRunner([todos]),
+				todoDeleter: todos
 			})
 		)
 	};

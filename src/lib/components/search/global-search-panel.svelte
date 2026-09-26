@@ -60,9 +60,13 @@
 	const inline = (text: string): string => text.replace(/\n+/g, ' ');
 
 	const projectFilter = $derived(globalSearch.projectId ?? 'all');
-	const replacing = $derived(globalSearch.hits.length > 0 && !globalSearch.searching);
+	const replaceableNotes = $derived(globalSearch.hits.filter((hit) => hit.matches.length > 0));
+	const replaceableMatches = $derived(
+		replaceableNotes.reduce((count, hit) => count + hit.matches.length, 0)
+	);
+	const replacing = $derived(replaceableNotes.length > 0 && !globalSearch.searching);
 	const replaceTitle = $derived(
-		`Replace ${globalSearch.totalMatches} ${globalSearch.totalMatches === 1 ? 'match' : 'matches'} across ${globalSearch.hits.length} ${globalSearch.hits.length === 1 ? 'note' : 'notes'}?`
+		`Replace ${replaceableMatches} ${replaceableMatches === 1 ? 'match' : 'matches'} across ${replaceableNotes.length} ${replaceableNotes.length === 1 ? 'note' : 'notes'}?`
 	);
 
 	const pickProject = (value: string): void => {

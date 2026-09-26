@@ -1,22 +1,15 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
 import type { Project, ProjectId } from '$lib/models/projects';
-import type { Skill, SkillSummary } from '$lib/models/skills';
+import type { Skill } from '$lib/models/skills';
 import { INBOX_PROJECT_NAME } from '$lib/models/projects';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
-export interface BuiltInSkillDefinition {
-	readonly key: string;
-	readonly name: string;
-	readonly description: string;
-	readonly instructions: string;
-	readonly triggerHints: readonly string[];
-	readonly version?: string;
-	readonly allowImplicitInvocation?: boolean;
-}
+import type { BuiltInSkillDefinition } from '$lib/models/skills/built-ins';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -31,9 +24,16 @@ export class BuiltInSkills {
 		}
 	) {}
 
+	/** The calling controller owns the transaction for installation and its lock. */
 	async ensure(actor: ActorContext): Promise<void> {
-		const inbox = await this.ensureInbox(actor);
-		const projects = await this.projects.listActive(actor);
+		await this.skills.lockCatalog(actor);
+		const projects: Project[] = [];
+		const ids = (await this.projects.listActive(actor)).map((project) => project.id).sort();
+		for (const id of ids) {
+			const project = await this.projects.findForWrite(actor, id);
+			if (project) projects.push(project);
+		}
+		const inbox = await this.ensureInbox(actor, projects);
 		const activeProjectIds = new Set(projects.map((project) => project.id));
 		activeProjectIds.add(inbox.id);
 		for (const definition of this.definitions.active)
@@ -48,22 +48,24 @@ export class BuiltInSkills {
 	 * saving something. Now the role says which project it is, and this runs on the
 	 * provisioning path that every actor already goes through.
 	 */
-	private async ensureInbox(actor: ActorContext): Promise<Project> {
-		const existing = await this.projects.findInbox(actor);
-		return (
-			existing ?? (await this.projects.insert(actor, { name: INBOX_PROJECT_NAME, role: 'inbox' }))
-		);
+	private async ensureInbox(actor: ActorContext, projects: readonly Project[]): Promise<Project> {
+		const existing = projects.find((project) => project.role === 'inbox');
+		if (existing) return existing;
+		const names = new Set(projects.map((project) => project.name.toLowerCase()));
+		let name = INBOX_PROJECT_NAME;
+		for (let suffix = 2; names.has(name.toLowerCase()); suffix++)
+			name = `${INBOX_PROJECT_NAME} (${suffix})`;
+		return this.projects.insert(actor, { name, role: 'inbox' });
 	}
 
 	async load(actor: ActorContext, key: string): Promise<Skill<Note>> {
-		await this.ensure(actor);
 		const note = await this.notes.findByBuiltInKey(actor, key);
 		if (!note) throw new NotFoundError(`Built-in skill "${key}" was not found`);
 		const skill = await this.skills.findByNoteId(actor, note.id);
 		if (!skill) throw new NotFoundError(`Built-in skill "${key}" is incomplete`);
 		if (!skill.isEnabled)
 			throw new ValidationError(
-				`The ${skill.name} skill is disabled. Re-enable it in Skills first.`
+				`The ${skill.note.title} skill is disabled. Re-enable it in Skills first.`
 			);
 		return skill;
 	}
@@ -74,26 +76,40 @@ export class BuiltInSkills {
 		defaultProjectId: ProjectId,
 		activeProjectIds: ReadonlySet<ProjectId>
 	): Promise<void> {
-		let note = await this.notes.findByBuiltInKey(actor, definition.key);
+		let note = await this.notes.findBuiltInForWrite(actor, definition.key);
 		if (!note) note = await this.createNote(actor, definition, defaultProjectId);
 		else {
-			const repaired: Note = {
-				...note,
-				projectId: activeProjectIds.has(note.projectId) ? note.projectId : defaultProjectId,
-				kind: 'skill',
-				builtInKey: definition.key,
-				archivedAt: undefined,
-				updatedAt: note.updatedAt
-			};
-			if (
-				repaired.projectId !== note.projectId ||
-				repaired.kind !== note.kind ||
-				repaired.builtInKey !== note.builtInKey ||
-				note.archivedAt !== undefined
-			)
-				note = await this.notes.update(actor, repaired);
+			const moved = !activeProjectIds.has(note.projectId);
+			const projectId = moved ? defaultProjectId : note.projectId;
+			const parent =
+				!moved && note.parentId ? await this.notes.findForWrite(actor, note.parentId) : undefined;
+			const detached =
+				note.parentId !== undefined &&
+				(moved ||
+					!parent ||
+					parent.archivedAt !== undefined ||
+					parent.kind !== 'folder' ||
+					parent.projectId !== projectId);
+			if (moved || detached || note.kind !== 'skill' || note.archivedAt !== undefined) {
+				const parentId = detached ? undefined : note.parentId;
+				const repaired = await this.notes.repairBuiltIn(actor, {
+					noteId: note.id,
+					builtInKey: definition.key,
+					projectId,
+					parentId,
+					position:
+						moved || detached
+							? await this.notes.countSiblings(actor, projectId, parentId)
+							: note.position,
+					kind: 'skill',
+					archivedAt: null,
+					updatedAt: note.updatedAt
+				});
+				if (!repaired) throw new StaleRevisionError('The built-in note changed during repair');
+				note = repaired;
+			}
 		}
-		const existing = await this.skills.findByNoteId(actor, note.id);
+		const existing = await this.skills.findForWrite(actor, note.id);
 		if (!existing) {
 			await this.skills.insert(actor, this.toSkill(note, definition));
 			return;
@@ -122,12 +138,12 @@ export class BuiltInSkills {
 	 * about authorship.
 	 */
 	private isUntouched(note: Note, skill: Skill<Note>, released: BuiltInSkillDefinition): boolean {
-		const metadata = skill.metadata ?? {};
+		const metadata = skill.metadata;
 		const expected = this.metadata(released);
 		return (
 			note.title === released.name &&
 			note.plainText === released.instructions &&
-			skill.name === released.name &&
+			isDeepStrictEqual(note.document, this.stockDocument(released)) &&
 			skill.slug === released.key &&
 			skill.description === released.description &&
 			skill.allowImplicitInvocation === released.allowImplicitInvocation &&
@@ -141,6 +157,13 @@ export class BuiltInSkills {
 		return left.length === right.length && left.every((value, index) => value === right[index]);
 	}
 
+	private stockDocument(definition: BuiltInSkillDefinition): Note['document'] {
+		return {
+			type: 'doc',
+			content: [{ type: 'paragraph', content: [{ type: 'text', text: definition.instructions }] }]
+		};
+	}
+
 	private async upgradeBuiltIn(
 		actor: ActorContext,
 		note: Note,
@@ -148,16 +171,18 @@ export class BuiltInSkills {
 		definition: BuiltInSkillDefinition
 	): Promise<void> {
 		const timestamp = now();
-		const updated = await this.notes.update(actor, {
-			...note,
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: definition.instructions }] }]
+		const updated = await this.notes.updateIfRevision(
+			actor,
+			{
+				...note,
+				document: this.stockDocument(definition),
+				plainText: definition.instructions,
+				currentRevision: note.currentRevision + 1,
+				updatedAt: timestamp
 			},
-			plainText: definition.instructions,
-			currentRevision: note.currentRevision + 1,
-			updatedAt: timestamp
-		});
+			note.currentRevision
+		);
+		if (!updated) throw new StaleRevisionError('The built-in note changed during upgrade');
 		await this.notes.insertRevision(actor, {
 			id: crypto.randomUUID() as NoteRevisionId,
 			noteId: updated.id,
@@ -170,7 +195,6 @@ export class BuiltInSkills {
 		await this.skills.update(actor, {
 			...skill,
 			note: updated,
-			name: definition.name,
 			slug: definition.key,
 			description: definition.description,
 			triggerHints: definition.triggerHints,
@@ -193,10 +217,7 @@ export class BuiltInSkills {
 			position: await this.notes.countSiblings(actor, projectId),
 			title: definition.name,
 			builtInKey: definition.key,
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: definition.instructions }] }]
-			},
+			document: this.stockDocument(definition),
 			plainText: definition.instructions,
 			currentRevision: 1,
 			publishedRevision: 0,
@@ -219,7 +240,6 @@ export class BuiltInSkills {
 	private toSkill(note: Note, definition: BuiltInSkillDefinition): Skill<Note> {
 		return {
 			note,
-			name: definition.name,
 			slug: definition.key,
 			description: definition.description,
 			triggerHints: definition.triggerHints,
@@ -237,33 +257,3 @@ export class BuiltInSkills {
 		};
 	}
 }
-
-interface SkillCollection {
-	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
-}
-
-export class BuiltInSkillLibrary {
-	constructor(
-		private readonly provisioner: BuiltInSkillProvisioner,
-		private readonly delegate: SkillCollection
-	) {}
-
-	async listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		await this.provisioner.ensure(actor);
-		return this.delegate.listEnabled(actor, projectId);
-	}
-
-	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
-		await this.provisioner.ensure(actor);
-		return this.delegate.listAll(actor, projectId);
-	}
-
-	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
-		return this.delegate.load(actor, noteId);
-	}
-}
-
-export type BuiltInSkillProvisioner = Pick<BuiltInSkills, 'ensure' | 'load'>;
-export type BuiltInSkillFinder = Pick<BuiltInSkillLibrary, 'listEnabled' | 'listAll' | 'load'>;

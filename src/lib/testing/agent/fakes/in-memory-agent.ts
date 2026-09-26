@@ -1,26 +1,45 @@
 import type { Note } from '$lib/models/notes';
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentEvent, AgentExecutionUpdate } from '$lib/models/agent';
+import type { AgentEvent, AgentExecutionUpdate, WebResearchSettings } from '$lib/models/agent';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill, SkillSummary } from '$lib/models/skills';
+import type { ProjectId } from '$lib/models/projects';
 import { NotFoundError } from '$lib/errors';
 import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
 import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/contracts';
-import type {
-	ToolDescriptor,
-	ToolRetriever
-} from '$lib/server/services/agent/tools/tool-retriever';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 
 export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];
+	readonly started = Promise.withResolvers<void>();
+	completion: Promise<void> = Promise.resolve();
+	readonly signals: AbortSignal[] = [];
+	readonly researchSettings: WebResearchSettings[] = [];
+	abortable = false;
+	outcome: Extract<AgentExecutionUpdate, { type: 'completed' | 'approval_checkpoint' }> = {
+		type: 'completed',
+		sessionItems: []
+	};
 
 	async *execute(
-		_input: Parameters<AgentRunner['execute']>[0]
+		input: Parameters<AgentRunner['execute']>[0]
 	): AsyncIterable<AgentExecutionUpdate> {
-		void _input;
+		this.signals.push(input.signal);
+		this.researchSettings.push(input.webSearch);
+		this.started.resolve();
 		for (const event of this.events) yield { type: 'event', event };
-		yield { type: 'completed', sessionItems: [] };
+		const aborted = Promise.withResolvers<void>();
+		const onAbort = () => aborted.resolve();
+		if (input.signal.aborted) onAbort();
+		input.signal.addEventListener('abort', onAbort, { once: true });
+		try {
+			await (this.abortable ? Promise.race([this.completion, aborted.promise]) : this.completion);
+		} finally {
+			input.signal.removeEventListener('abort', onAbort);
+		}
+		yield this.outcome;
 	}
 }
 
@@ -69,34 +88,39 @@ export class InMemoryAgentToolbox implements AgentWorkflowToolbox {
 
 export class InMemorySkills implements SkillFinder, SkillUsageRecorder {
 	skills: Skill<Note>[] = [];
-	pinnedNoteIds: NoteId[] = [];
+	pins: { projectId: ProjectId; skillNoteId: NoteId }[] = [];
 	usages: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }[] = [];
 
-	private summarize(skill: Skill<Note>): SkillSummary {
+	private summarize(skill: Skill<Note>, projectId: ProjectId | undefined): SkillSummary {
 		return {
 			noteId: skill.note.id,
-			name: skill.name,
+			projectId: skill.note.projectId,
+			name: skill.note.title,
 			slug: skill.slug,
 			description: skill.description,
 			triggerHints: skill.triggerHints,
 			allowImplicitInvocation: skill.allowImplicitInvocation,
 			isEnabled: skill.isEnabled,
-			isPinned: this.pinnedNoteIds.includes(skill.note.id)
+			isPinned: this.pins.some(
+				(pin) => pin.projectId === projectId && pin.skillNoteId === skill.note.id
+			)
 		};
 	}
 
-	async listEnabled(_actor: ActorContext): Promise<readonly SkillSummary[]> {
+	async listEnabled(_actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		void _actor;
-		return this.skills.filter((skill) => skill.isEnabled).map((skill) => this.summarize(skill));
+		return this.skills
+			.filter((skill) => skill.isEnabled)
+			.map((skill) => this.summarize(skill, projectId));
 	}
-	async listAll(actor: ActorContext): Promise<readonly SkillSummary[]> {
-		const enabled = await this.listEnabled(actor);
+	async listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
+		const enabled = await this.listEnabled(actor, projectId);
 		const enabledIds = new Set(enabled.map((skill) => skill.noteId));
 		return [
 			...enabled,
 			...this.skills
 				.filter((skill) => !enabledIds.has(skill.note.id))
-				.map((skill) => this.summarize(skill))
+				.map((skill) => this.summarize(skill, projectId))
 		];
 	}
 

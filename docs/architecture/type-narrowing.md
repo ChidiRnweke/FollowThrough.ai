@@ -154,7 +154,8 @@ produce.
     `no-json-parse-cast` violation in `buffer.ts`, and the fake's `snapshot as AgentSessionItem[]`.
     Fifteen `Record<string, unknown>` occurrences in the strict layers go with them.
 - [x] **TN-24: Normalize all provider stream events before reasoning logic**
-  - [x] `ProviderStreamEvent` in `models/agent/index.ts`, parsed once by `parseProviderStreamEvent`
+  - [x] `ProviderStreamEvent` and its schemas in `models/agent/index.ts`, decoded by
+        `parseProviderStreamEvent` at `server/repositories/agent/provider-events.ts`
         at the top of the run loop. In the barrel rather than a sibling file because the right type
         for a call's arguments and output is `AgentPayload` from `./payload`, and only the barrel
         may import a sibling — a sibling would have needed a third hand-copy of the JSON type after
@@ -233,7 +234,7 @@ produce.
         below, so `Promise<unknown>` — the catalog's own section-1 example — was claiming an
         uncertainty that had already been resolved. `toolName` is a `ToolName`.
   - [x] `callId` is optional at that seam and is passed through or omitted, never coerced. It was
-        `String(details?.toolCall?.callId ?? '')`, and `AgentRunLifecycle` keys its successful
+        `String(details?.toolCall?.callId ?? '')`, and the Agent controller keys its successful
         mutations by exactly that string: two mutations the provider sent no id for shared the key
         `''`, so the second overwrote the first and one of the two resources was never reported
         stale. An id-less mutation now emits its `resources_stale` at once, because nothing will
@@ -253,12 +254,10 @@ produce.
         `workflow_result.result` carry `AgentPayload`. The persisted JSON shape does not change.
         `ConversationArchive` no longer re-reads an already-read value, and the spec that fed it a
         function-valued output went with that: the fixture described a row no producer can build.
-  - [x] `WorkflowRunTask<Result>` stays unconstrained, deliberately. `Result extends AgentPayload`
-        is what it looks like it wants, but the tasks return domain outputs — `FindReferencesOutput`,
-        `GenerateMermaidDiagramOutput` — that are JSON-shaped and still not assignable to an index
-        signature, so satisfying it meant putting one on each of those domain types. The read moved
-        to `WorkflowRunner.execute` instead, where a domain result becomes wire JSON, and a result
-        that cannot be represented settles the run as failed.
+  - [x] Note-action controllers produce the typed `NoteActionResult` union. The event repository
+        converts those domain outputs into wire JSON through `noteActionEvent` at the storage
+        boundary. A result that cannot be represented fails its transaction. The callback-based
+        `WorkflowRunTask` and `WorkflowRunner` were removed; domain models need no JSON index signature.
   - [x] Three `no-cast-probe` violations retired: the two `createdAt` probes in `filterCreated`,
         which indexed a value whose type already said it was JSON, and the range cast in
         `temporal`'s refinement, where the generic shape leaves zod inferring a union that no
@@ -277,7 +276,8 @@ produce.
     and from provider interruptions, so closing it over the catalog without a parse would be a lie.
     TN-34 owns that key equality.
 - [x] **TN-32: Parse persisted and streamed run events, and split the tool outcome arms**
-  - [x] `readAgentEvent` and `agentEventSchema` in `models/agent/index.ts`, with `StoredAgentEvent`
+  - [x] `readAgentEvent` in `server/repositories/agent/stored-values.ts` and `agentEventSchema`
+        in `models/agent/index.ts`, with `StoredAgentEvent`
         as a read-boundary union rather than a sixth arm on `AgentEvent`. `AgentEvent` is the write
         type too, and an `unrecognised` arm on it is a state a producer could say; `StoredSuggestion`
         set the precedent. The three readers of one stored shape are retired with it:
@@ -299,10 +299,9 @@ produce.
         `drizzle/0049_split_tool_outcome_events.sql` rewrites 30 rows into `tool_reported_failure`
         and 117 into `tool_succeeded`, following `0047_rename_diagram_tools`, which faced the same
         problem — a name the code stopped using and the rows still carried.
-  - [x] `toolActivityFromEvent` is model-owned because two services need it and a service may not
-        import another. `AgentRunLifecycle` and `DiagramAuthoring` held a copy each and had already
-        diverged — the diagram one wrote `output: undefined` onto a `succeeded` row, which the wire
-        type cannot carry.
+  - [x] The Agent and Diagrams controllers use the conversation tool-activity service to project
+        resolved events into journal entries. Both controllers own the journal write. The shared
+        projection preserves reported failures and their output; its types remain in models.
   - [x] `segmentOutput` takes `StoredAgentEvent`, and an unreadable row closes the open segment
         rather than being skipped: it is something that happened between two runs of output, and
         merging across it would give the second run the first one's cursor. The controller drops
@@ -435,8 +434,9 @@ produce.
   - [x] `ProvenanceRequest` distributes: the six hand-written `Omit<Provenance, …>` signatures
         collapsed the union to its shared keys, which is why every caller setting `pipeline`,
         `runId` or `model` was a type error.
-  - [x] `asProvenance` completes a request through the model's own parser, so the four sites that
-        spread a union member into a literal no longer widen it out of every arm.
+  - [x] Services construct complete provenance values from the discriminated request union.
+        TypeScript checks the producer-specific fields. Stored rows are parsed with `provenanceSchema`
+        in the database mapper; models contain the schema instead of procedural parsing wrappers.
   - [x] Delete the seven duplicate open-shaped declarations: `Provenance` in
         `models/{workspace,notes,memory,todos,suggestions}` and `SuggestionView` in
         `models/{memory,notes}`, plus the suggestion type tree `models/notes` had copied to
@@ -705,7 +705,8 @@ the input to a model-local parser or co-located provider adapter schema. The mom
 differently.
 
 **Remedy:** name the shape and parse into it at the zone. Exemplar: `parseRunAgentInput`
-(`src/lib/models/agent/index.ts`) — zod schema in the model, called by the repository mapper.
+(`src/lib/server/repositories/agent/stored-values.ts`) — the repository reader applies the model's
+Zod schema and checks the snapshot's conversation against its owning row.
 
 The rule fires on a parameter, a return type, a field, a type alias, or any of those reached
 through a union, an array, `readonly`, or a generic argument. Two positions stay legal because

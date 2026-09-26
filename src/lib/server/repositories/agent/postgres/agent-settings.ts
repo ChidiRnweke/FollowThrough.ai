@@ -1,26 +1,33 @@
+import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { readCanvasSessionResult } from '../canvas-results';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
-	AgentRunStatus,
+	RunSettlementWrite,
+	RunCancellationWrite,
+	RunApprovalWrite,
+	WorkflowContextWrite,
+	WorkflowSettlementWrite,
+	AgentProvenanceWrite,
+	AgentContextWrite,
+	RunClaimWrite,
+	AgentCheckpointWrite,
+	PreparedAgentRun,
 	AgentSessionItem,
 	ConversationId,
 	PersistedSessionItem,
 	ResolvedAgentRun,
 	WorkflowAgentRun
 } from '$lib/models/agent';
+import { parseSessionItem, workflowRunContextSchema, toStoredSessionItem } from '$lib/models/agent';
 import {
-	assertAgentRunTransition,
-	isTerminalAgentRunStatus,
 	parseAgentRunContextSnapshot,
 	parseRunAgentInput,
-	parseSessionItem,
-	workflowRunContextSchema,
-	readPendingDecisions,
-	toStoredSessionItem
-} from '$lib/models/agent';
+	readPendingDecisions
+} from '../stored-values';
 import { NotFoundError } from '$lib/errors';
 import type {
 	AgentPreferencesRepository,
@@ -60,7 +67,12 @@ const toPreferences = (row: typeof schema.agentPreferences.$inferSelect): AgentP
  * loudly through the interruption check in `reasoning.ts`.
  */
 const toPendingDecisions = (row: typeof schema.agentRuns.$inferSelect) => {
-	const { decisions, dropped } = readPendingDecisions(row.pendingDecisions);
+	const read = readPendingDecisions(row.pendingDecisions);
+	if (read.kind === 'corrupt') {
+		console.warn(`[agent-runs] Pending decisions on run ${row.id} are corrupt: ${read.reason}`);
+		return read.decisions;
+	}
+	const { decisions, dropped } = read;
 	if (dropped.length > 0)
 		console.warn(
 			`[agent-runs] ${dropped.length} pending decision(s) on run ${row.id} could not be read and were dropped: ${dropped.join(', ')}`
@@ -127,6 +139,21 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 		return row ? toPreferences(row) : undefined;
 	}
 
+	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
+		// The same resource lock as synchronized writes also covers an absent preference row.
+		const key =
+			'resource:' + workspaceResourceKey({ type: 'agent_preferences', id: [actor.userId] });
+		await this.database.execute(
+			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${key}))`
+		);
+		const [row] = await this.database
+			.select()
+			.from(schema.agentPreferences)
+			.where(eq(schema.agentPreferences.userId, actor.userId))
+			.for('update');
+		return row ? toPreferences(row) : undefined;
+	}
+
 	async upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
 		// The settable columns are named once: an insert and its conflict update
 		// that drift apart would silently drop a new setting on every save after
@@ -161,6 +188,15 @@ export class AgentRunRecords implements AgentRunRepository {
 			.select()
 			.from(schema.agentRuns)
 			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)));
+		return row ? toRun(row) : undefined;
+	}
+
+	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(and(eq(schema.agentRuns.id, id), eq(schema.agentRuns.userId, actor.userId)))
+			.for('update');
 		return row ? toRun(row) : undefined;
 	}
 
@@ -263,99 +299,133 @@ export class AgentRunRecords implements AgentRunRepository {
 		return row ? toRun(row) : undefined;
 	}
 
-	async update(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
-		const current = await this.findById(actor, run.id);
-		if (!current) throw new NotFoundError('Agent run was not found');
-		if (current.status !== run.status) assertAgentRunTransition(current.status, run.status);
+	async updateCancellation(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunCancellationWrite
+	): Promise<AgentRun> {
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
-				status: run.status,
-				requestId: run.requestId,
-				cancelRequestedAt: run.cancelRequestedAt ? new Date(run.cancelRequestedAt) : null,
-				startedAt: run.startedAt ? new Date(run.startedAt) : null,
-				finishedAt: run.finishedAt ? new Date(run.finishedAt) : null,
-				provenanceId: run.provenanceId ?? null,
-				serializedState: run.serializedState ?? null,
-				traceparent: run.traceparent ?? null,
-				pendingDecisions: toPendingDecisionRows(run),
-				failure: run.failure ?? null,
-				providerErrorCode: run.providerErrorCode ?? null,
-				contextSnapshot: { ...(run.contextSnapshot ?? {}) },
-				inputSnapshot: run.inputSnapshot,
-				retryOfRunId: run.retryOfRunId,
-				definitionVersion: run.definitionVersion ?? 1,
-				updatedAt: new Date(run.updatedAt)
+				status: change.status,
+				cancelRequestedAt: new Date(change.cancelRequestedAt),
+				updatedAt: new Date(change.updatedAt),
+				...(change.status === 'cancelled' ? { finishedAt: new Date(change.finishedAt) } : {})
 			})
-			.where(and(eq(schema.agentRuns.id, run.id), eq(schema.agentRuns.userId, actor.userId)))
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)))
 			.returning();
 		if (!row) throw new NotFoundError('Agent run was not found');
 		return toRun(row);
 	}
 
-	async requestCancellation(
+	async updateAgentProvenance(
 		actor: ActorContext,
-		runId: AgentRun['id'],
-		at: AgentRun['updatedAt']
-	): Promise<AgentRun> {
-		const run = await this.findById(actor, runId);
-		if (!run) throw new NotFoundError('Agent run was not found');
-		if (isTerminalAgentRunStatus(run.status) || run.status === 'cancelling') return run;
-		const status = run.status === 'queued' ? 'cancelled' : 'cancelling';
-		assertAgentRunTransition(run.status, status);
-		const [updated] = await this.database
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun> {
+		const [row] = await this.database
 			.update(schema.agentRuns)
-			.set({
-				status,
-				cancelRequestedAt: new Date(at),
-				...(status === 'cancelled' ? { finishedAt: new Date(at) } : {}),
-				updatedAt: new Date(at)
-			})
+			.set({ provenanceId: change.provenanceId, updatedAt: new Date(change.updatedAt) })
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
 					eq(schema.agentRuns.userId, actor.userId),
-					eq(schema.agentRuns.status, run.status)
+					eq(schema.agentRuns.kind, 'agent')
 				)
 			)
 			.returning();
-		if (updated) return toRun(updated);
-		const concurrent = await this.findById(actor, runId);
-		if (
-			concurrent &&
-			(isTerminalAgentRunStatus(concurrent.status) || concurrent.status === 'cancelling')
-		)
-			return concurrent;
-		throw new NotFoundError('Agent run was not found');
+		if (!row) throw new NotFoundError('Agent run was not found');
+		return toResolvedRun(row);
 	}
 
-	async requeueAfterDecision(
+	async updateAgentContext(
 		actor: ActorContext,
-		runId: AgentRun['id'],
-		at: AgentRun['updatedAt']
-	): Promise<AgentRun> {
-		const run = await this.findById(actor, runId);
-		if (!run) throw new NotFoundError('Agent run was not found');
-		if (run.status === 'queued') return run;
-		assertAgentRunTransition(run.status, 'queued');
-		const [updated] = await this.database
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun> {
+		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
-				status: 'queued',
-				updatedAt: new Date(at)
+				contextSnapshot: { ...change.contextSnapshot },
+				updatedAt: new Date(change.updatedAt)
 			})
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
 					eq(schema.agentRuns.userId, actor.userId),
-					eq(schema.agentRuns.status, run.status)
+					eq(schema.agentRuns.kind, 'agent')
 				)
 			)
 			.returning();
-		if (updated) return toRun(updated);
-		const concurrent = await this.findById(actor, runId);
-		if (concurrent?.status === 'queued') return concurrent;
-		throw new NotFoundError('Agent run was not found');
+		if (!row) throw new NotFoundError('Agent run was not found');
+		const run = toResolvedRun(row);
+		if (!run.contextSnapshot) throw new Error('Saved agent context is missing');
+		return { ...run, contextSnapshot: run.contextSnapshot };
+	}
+
+	async updateWorkflowSettlement(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowSettlementWrite
+	): Promise<WorkflowAgentRun> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: change.status,
+				finishedAt: new Date(change.finishedAt),
+				updatedAt: new Date(change.updatedAt),
+				pendingDecisions: [],
+				...(change.status === 'completed'
+					? { serializedState: change.serializedState }
+					: { failure: change.failure })
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.kind, 'workflow')
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Workflow run was not found');
+		return toWorkflowRun(row);
+	}
+
+	async updateWorkflowContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowContextWrite
+	): Promise<WorkflowAgentRun> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				contextSnapshot: { ...change.contextSnapshot },
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.userId, actor.userId),
+					eq(schema.agentRuns.kind, 'workflow')
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Workflow run was not found');
+		return toWorkflowRun(row);
+	}
+
+	async updateApproval(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunApprovalWrite
+	): Promise<AgentRun> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({ status: change.status, updatedAt: new Date(change.updatedAt) })
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.userId, actor.userId)))
+			.returning();
+		if (!row) throw new NotFoundError('Agent run was not found');
+		return toRun(row);
 	}
 
 	private toInsert(actor: ActorContext, run: AgentRun): typeof schema.agentRuns.$inferInsert {
@@ -386,69 +456,93 @@ export class AgentRunRecords implements AgentRunRepository {
 		};
 	}
 
-	async transition(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<AgentRun> = {}
-	): Promise<AgentRun | undefined> {
-		const row = await this.transitionRow(runId, from, to, patch);
-		return row ? toRun(row) : undefined;
-	}
-
-	async transitionAgent(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<ResolvedAgentRun> = {}
-	): Promise<ResolvedAgentRun | undefined> {
-		const row = await this.transitionRow(runId, from, to, patch, 'agent');
-		return row ? toResolvedRun(row) : undefined;
-	}
-
-	private async transitionRow(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<AgentRun> = {},
-		kind?: AgentRun['kind']
-	): Promise<typeof schema.agentRuns.$inferSelect | undefined> {
-		const fromStatuses = Array.isArray(from) ? from : [from];
-		for (const status of fromStatuses) assertAgentRunTransition(status, to);
-		const now = new Date();
+	async settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined> {
+		const { expected, ...values } = change;
 		const [row] = await this.database
 			.update(schema.agentRuns)
 			.set({
-				status: to,
-				...(patch.cancelRequestedAt
-					? { cancelRequestedAt: new Date(patch.cancelRequestedAt) }
-					: {}),
-				...(patch.startedAt ? { startedAt: new Date(patch.startedAt) } : {}),
-				...(patch.finishedAt ? { finishedAt: new Date(patch.finishedAt) } : {}),
-				...(patch.provenanceId !== undefined ? { provenanceId: patch.provenanceId ?? null } : {}),
-				...(patch.serializedState !== undefined
-					? { serializedState: patch.serializedState ?? null }
-					: {}),
-				...(patch.traceparent !== undefined ? { traceparent: patch.traceparent ?? null } : {}),
-				...(patch.pendingDecisions !== undefined
-					? { pendingDecisions: patch.pendingDecisions }
-					: {}),
-				...(patch.failure !== undefined ? { failure: patch.failure ?? null } : {}),
-				...(patch.providerErrorCode !== undefined
-					? { providerErrorCode: patch.providerErrorCode ?? null }
-					: {}),
-				...(patch.contextSnapshot ? { contextSnapshot: { ...patch.contextSnapshot } } : {}),
-				updatedAt: now
+				...values,
+				finishedAt: new Date(change.finishedAt),
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(and(eq(schema.agentRuns.id, runId), eq(schema.agentRuns.status, expected)))
+			.returning();
+		return row ? toRun(row) : undefined;
+	}
+
+	async claimAgent(
+		runId: AgentRunId,
+		change: RunClaimWrite
+	): Promise<ResolvedAgentRun | undefined> {
+		const row = await this.claimRow(runId, change, 'agent');
+		return row ? toResolvedRun(row) : undefined;
+	}
+
+	async claimWorkflow(
+		runId: AgentRunId,
+		change: RunClaimWrite
+	): Promise<WorkflowAgentRun | undefined> {
+		const row = await this.claimRow(runId, change, 'workflow');
+		return row ? toWorkflowRun(row) : undefined;
+	}
+
+	private async claimRow(runId: AgentRunId, change: RunClaimWrite, kind: AgentRun['kind']) {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: change.status,
+				startedAt: new Date(change.startedAt),
+				updatedAt: new Date(change.updatedAt)
 			})
 			.where(
 				and(
 					eq(schema.agentRuns.id, runId),
-					inArray(schema.agentRuns.status, fromStatuses as [AgentRunStatus, ...AgentRunStatus[]]),
-					...(kind ? [eq(schema.agentRuns.kind, kind)] : [])
+					eq(schema.agentRuns.kind, kind),
+					eq(schema.agentRuns.status, change.expected)
 				)
 			)
 			.returning();
 		return row;
+	}
+
+	async checkpointAgent(
+		runId: AgentRunId,
+		change: AgentCheckpointWrite
+	): Promise<ResolvedAgentRun | undefined> {
+		const [row] = await this.database
+			.update(schema.agentRuns)
+			.set({
+				status: change.status,
+				serializedState: change.serializedState,
+				pendingDecisions: change.pendingDecisions,
+				traceparent: change.traceparent,
+				updatedAt: new Date(change.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.agentRuns.id, runId),
+					eq(schema.agentRuns.kind, 'agent'),
+					eq(schema.agentRuns.status, change.expected)
+				)
+			)
+			.returning();
+		return row ? toResolvedRun(row) : undefined;
+	}
+
+	async listQueuedAgents(): Promise<readonly ResolvedAgentRun[]> {
+		const rows = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(and(eq(schema.agentRuns.kind, 'agent'), eq(schema.agentRuns.status, 'queued')));
+		return rows.map(toResolvedRun);
+	}
+
+	async listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]> {
+		const rows = await this.database
+			.select()
+			.from(schema.agentRuns)
+			.where(and(eq(schema.agentRuns.kind, 'workflow'), eq(schema.agentRuns.status, 'queued')));
+		return rows.map(toWorkflowRun);
 	}
 
 	async listInterrupted(): Promise<readonly AgentRun[]> {
@@ -470,6 +564,10 @@ const toSessionItem = (row: typeof schema.agentSessionItems.$inferSelect): Agent
 
 export class AgentSessionRecords implements AgentSessionRepository {
 	constructor(private readonly database: Database) {}
+
+	async listCanvasResults(actor: ActorContext, conversationId: ConversationId) {
+		return (await this.list(actor, conversationId)).map((row) => readCanvasSessionResult(row.item));
+	}
 
 	private async assertOwned(actor: ActorContext, conversationId: ConversationId): Promise<void> {
 		const [owned] = await this.database

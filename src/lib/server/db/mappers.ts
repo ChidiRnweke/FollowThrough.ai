@@ -1,6 +1,6 @@
 import { suggestionSchema } from '$lib/models/suggestions';
 import type { ApiToken, Session, User } from '$lib/models/identity';
-import type { DateTime, LocalDate } from '$lib/models/workspace';
+import type { DateTime } from '$lib/models/workspace';
 import type { Diagram, DiagramRevision } from '$lib/models/diagrams';
 import type { ExternalReference, Url } from '$lib/models/references';
 import type { MemoryEntry } from '$lib/models/memory';
@@ -10,12 +10,18 @@ import {
 	type NoteRelationship,
 	type NoteRevision
 } from '$lib/models/notes';
-import { parseProvenance, type Provenance, type SourceAnchor } from '$lib/models/provenance';
+import {
+	provenanceSchema,
+	sourceAnchorSchema,
+	type Provenance,
+	type SourceAnchor
+} from '$lib/models/provenance';
 import type { Project } from '$lib/models/projects';
 import type { Skill } from '$lib/models/skills';
 import { skillMetadataSchema } from '$lib/models/skills';
 import { type StoredSuggestion, type Suggestion } from '$lib/models/suggestions';
 import type { Todo } from '$lib/models/todos';
+import { todoRecordSchema } from '$lib/models/workspace-records';
 import type { TrustPolicy } from '$lib/models/agent';
 import type * as schema from '$lib/server/db/schema';
 
@@ -86,7 +92,7 @@ export const toRevision = (row: typeof schema.noteRevisions.$inferSelect): NoteR
 	});
 
 export const toAnchor = (row: typeof schema.sourceAnchors.$inferSelect): SourceAnchor =>
-	domain<SourceAnchor>({
+	sourceAnchorSchema.parse({
 		id: row.id,
 		noteId: row.noteId,
 		nodeId: row.nodeId ?? undefined,
@@ -100,7 +106,7 @@ export const toAnchor = (row: typeof schema.sourceAnchors.$inferSelect): SourceA
 	});
 
 export const toProvenance = (row: typeof schema.provenance.$inferSelect): Provenance =>
-	parseProvenance({
+	provenanceSchema.parse({
 		id: row.id,
 		userId: row.userId,
 		producerKind: row.producerKind,
@@ -114,12 +120,14 @@ export const toProvenance = (row: typeof schema.provenance.$inferSelect): Proven
 	});
 
 export const toTodo = (row: typeof schema.todos.$inferSelect): Todo =>
-	domain<Todo>({
+	todoRecordSchema.parse({
 		...row,
 		description: row.description ?? undefined,
 		priority: row.priority ?? undefined,
 		category: row.category ?? undefined,
-		dueDate: row.dueDate ? (row.dueDate as LocalDate) : undefined,
+		waitingOn: row.waitingOn ?? undefined,
+		linkedNoteId: row.linkedNoteId ?? undefined,
+		dueDate: row.dueDate ?? undefined,
 		dueDateVerbatim: row.dueDateVerbatim ?? undefined,
 		promiseStrength: row.promiseStrength ?? undefined,
 		sourceAnchorId: row.sourceAnchorId ?? undefined,
@@ -195,7 +203,12 @@ export const toDiagramRevision = (
 		createdAt: instant(row.createdAt)
 	});
 
-const suggestionRecord = (row: typeof schema.suggestions.$inferSelect) => ({
+/** JSON stored by older writers is not a resolved proposal until this boundary parses it. */
+type StoredSuggestionRow = Omit<typeof schema.suggestions.$inferSelect, 'payload'> & {
+	readonly payload: unknown;
+};
+
+const suggestionRecord = (row: StoredSuggestionRow) => ({
 	...row,
 	noteId: row.noteId ?? undefined,
 	payload: row.payload,
@@ -208,7 +221,7 @@ const suggestionRecord = (row: typeof schema.suggestions.$inferSelect) => ({
 	updatedAt: instant(row.updatedAt)
 });
 
-export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Suggestion =>
+export const toSuggestion = (row: StoredSuggestionRow): Suggestion =>
 	suggestionSchema.parse(suggestionRecord(row));
 
 /**
@@ -219,9 +232,7 @@ export const toSuggestion = (row: typeof schema.suggestions.$inferSelect): Sugge
  * there is a bug worth throwing on. `list` maps many rows, and a throw from one
  * of them is what took `/today` down on the notes side.
  */
-export const toStoredSuggestion = (
-	row: typeof schema.suggestions.$inferSelect
-): StoredSuggestion => {
+export const toStoredSuggestion = (row: StoredSuggestionRow): StoredSuggestion => {
 	const parsed = suggestionSchema.safeParse(suggestionRecord(row));
 	if (!parsed.success)
 		return {
@@ -251,7 +262,6 @@ export const toSkill = (
 	skill: typeof schema.skills.$inferSelect
 ): Skill<Note> => ({
 	note: toNote(note),
-	name: skill.name,
 	slug: skill.slug,
 	description: skill.description,
 	triggerHints: skill.triggerHints,

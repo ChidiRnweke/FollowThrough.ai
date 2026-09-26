@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { loadExportSettings } from './load-settings';
-	import { accessMessage } from '$lib/models/sync';
+	import { accessMessage } from '$lib/services/sync/state';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { MAX_BUNDLE_ENTRIES, defaultExportSettings } from '$lib/models/deliverables';
@@ -14,7 +14,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { diagramKeepsOwnColours } from '$lib/components/edra/mermaid-rendering';
+	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
 	import { mermaidSourcesIn, renderDiagrams } from './render-diagrams';
 	import ExportSettingsFields from './export-settings-fields.svelte';
 	import { generateBundle, generateDocument } from '$lib/remote/deliverables/deliverables.remote';

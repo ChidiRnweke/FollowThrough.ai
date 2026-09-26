@@ -13,10 +13,12 @@ import { actor, context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const sync = createSyncCapability({ db: database, transactionRunner });
+	const sync = createSyncCapability({ db: database });
 	const preferences = new ToolPreferenceRecords(database);
 	const tools = new ToolPreferences({
 		syncMutations: sync.mutations,
+		syncRetry: sync.mutationRetry,
+		transactionRunner,
 		preferences: new ToolAccess(preferences, {
 			entries: () => [
 				{
@@ -30,6 +32,8 @@ const setup = async (suffix: string) => {
 	});
 	const policies = new TrustPolicies({
 		syncMutations: sync.mutations,
+		syncRetry: sync.mutationRetry,
+		transactionRunner,
 		trustPolicyStore: new ToolTrust(new TrustPolicyRecords(database))
 	});
 	return { ...seeded, sync, preferences, tools, policies };
@@ -117,7 +121,7 @@ describe('guarded tool and policy preferences', () => {
 		const command = workspaceCommandSchema.parse({
 			kind: 'updateTrustPolicy',
 			userId: owner.userId,
-			pipeline: 'agent',
+			pipeline: 'memory',
 			autoAcceptEnabled: true,
 			minimumConfidence: 85
 		});
@@ -129,7 +133,7 @@ describe('guarded tool and policy preferences', () => {
 		});
 		const stored = await sync.objects.read(
 			owner,
-			{ type: 'trust_policies', id: [owner.userId, 'agent'] },
+			{ type: 'trust_policies', id: [owner.userId, 'memory'] },
 			null
 		);
 		expect(
@@ -137,6 +141,23 @@ describe('guarded tool and policy preferences', () => {
 				? stored.snapshot.value.value.minimumConfidence
 				: stored.kind
 		).toBe(85);
+	});
+	it('rejects an old queued chat-policy update without storing an ineffective setting', async () => {
+		const { owner, policies } = await setup('9801');
+		const result = await policies.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: null,
+			command: {
+				kind: 'updateTrustPolicy',
+				userId: owner.userId,
+				pipeline: 'agent',
+				autoAcceptEnabled: true
+			}
+		});
+		expect({
+			kind: result.kind,
+			stored: await new TrustPolicyRecords(context.db).list(owner)
+		}).toEqual({ kind: 'rejected', stored: [] });
 	});
 });
 

@@ -5,17 +5,41 @@ import type {
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
-	AgentRunStatus,
+	RunSettlementWrite,
+	RunCancellationWrite,
+	RunApprovalWrite,
+	WorkflowContextWrite,
+	WorkflowSettlementWrite,
+	AgentProvenanceWrite,
+	AgentContextWrite,
+	RunClaimWrite,
+	AgentCheckpointWrite,
+	PreparedAgentRun,
 	ConversationId,
-	StoredAgentEvent,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
 import type { ResolvedAgentRun } from '$lib/models/agent';
-import type { DateTime } from '$lib/models/workspace';
+import type { WorkflowAgentRun } from '$lib/models/agent';
+import type { ExtractPromisesOutput } from '$lib/models/todos';
+import type {
+	GenerateMermaidDiagramOutput,
+	ReviseInlineMermaidOutput,
+	ConvertInlineMermaidOutput
+} from '$lib/models/diagrams';
+import type {
+	TodoSuggestion,
+	ReferenceSuggestion,
+	BacklinkSuggestion,
+	DiagramSuggestion
+} from '$lib/models/suggestions';
+import type { RelateSelectionOutput } from '$lib/models/relationships';
+import type { FindReferencesOutput } from '$lib/models/references';
 
-/** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. `transition` enforces the run state machine at the storage boundary. */
+/** `insertIdempotent` is what makes `submit` safe to retry: a repeated `requestId` returns the existing run instead of double-firing the agent. Conditional writes persist resolved values only while the expected run state still holds. */
 export interface AgentRunRepository {
 	findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
+	/** Lock an actor-owned run within the caller transaction. */
+	findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined>;
 	findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined>;
 	findByRequestId(actor: ActorContext, requestId: string): Promise<AgentRun | undefined>;
 	findAwaitingByConversation(
@@ -32,26 +56,59 @@ export interface AgentRunRepository {
 	): Promise<AgentRun | undefined>;
 	insert(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
 	insertIdempotent(actor: ActorContext, run: AgentRun): Promise<AgentRun | undefined>;
-	update(actor: ActorContext, run: AgentRun): Promise<AgentRun>;
-	transition(
+	settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined>;
+	claimAgent(runId: AgentRunId, change: RunClaimWrite): Promise<ResolvedAgentRun | undefined>;
+	claimWorkflow(runId: AgentRunId, change: RunClaimWrite): Promise<WorkflowAgentRun | undefined>;
+	checkpointAgent(
 		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch?: Partial<AgentRun>
-	): Promise<AgentRun | undefined>;
-	transitionAgent(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch?: Partial<ResolvedAgentRun>
+		change: AgentCheckpointWrite
 	): Promise<ResolvedAgentRun | undefined>;
-	requestCancellation(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
-	requeueAfterDecision(actor: ActorContext, runId: AgentRunId, at: DateTime): Promise<AgentRun>;
+	updateCancellation(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunCancellationWrite
+	): Promise<AgentRun>;
+	updateAgentProvenance(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun>;
+	updateAgentContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun>;
+	updateWorkflowSettlement(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowSettlementWrite
+	): Promise<WorkflowAgentRun>;
+	updateWorkflowContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowContextWrite
+	): Promise<WorkflowAgentRun>;
+	updateApproval(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunApprovalWrite
+	): Promise<AgentRun>;
 	listInterrupted(): Promise<readonly AgentRun[]>;
+	listQueuedAgents(): Promise<readonly ResolvedAgentRun[]>;
+	listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]>;
 }
 
 /** The append-only event log a client streams by cursor; `replay` is what lets a reconnecting client catch up from `after` instead of re-fetching everything. */
+export type NoteActionResult =
+	| { readonly action: 'diagram'; readonly result: GenerateMermaidDiagramOutput<DiagramSuggestion> }
+	| { readonly action: 'revise'; readonly result: ReviseInlineMermaidOutput }
+	| { readonly action: 'convert'; readonly result: ConvertInlineMermaidOutput<DiagramSuggestion> }
+	| { readonly action: 'relate'; readonly result: RelateSelectionOutput<BacklinkSuggestion> }
+	| { readonly action: 'promises'; readonly result: ExtractPromisesOutput<TodoSuggestion> }
+	| { readonly action: 'reference'; readonly result: FindReferencesOutput<ReferenceSuggestion> };
+
 export interface AgentRunEventRepository {
+	appendNoteActionResult(runId: AgentRunId, result: NoteActionResult): Promise<AgentRunEventRecord>;
 	append(runId: AgentRunId, attempt: number, event: AgentEvent): Promise<AgentRunEventRecord>;
 	replay(
 		actor: ActorContext,
@@ -59,59 +116,9 @@ export interface AgentRunEventRepository {
 		after: string
 	): Promise<readonly StoredAgentRunEventRecord[]>;
 	latestCursor(actor: ActorContext, runId: AgentRunId): Promise<string>;
-	reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]>;
+	/** Read one attempt in cursor order, retaining unreadable rows and their identities. */
+	listAttempt(runId: AgentRunId, attempt: number): Promise<readonly StoredAgentRunEventRecord[]>;
 }
-
-/**
- * A contiguous run of one kind of output, with the cursor it began at.
- *
- * A turn is not "some tools, then a paragraph": the agent thinks, acts, speaks, acts again.
- * Reconstructing it as one string threw that order away, so a reopened conversation showed
- * every tool call before everything the agent said, and its reasoning not at all. Segments
- * keep the shape of what happened, and the cursor is what lets the persisted messages be put
- * back in the order the events arrived.
- */
-export interface OutputSegment {
-	readonly kind: 'text' | 'reasoning';
-	readonly text: string;
-	readonly cursor: string;
-}
-
-/**
- * Fold an ordered event log into those segments. Shared by every implementation of the
- * repository so a fake and Postgres cannot disagree about what a turn looked like.
- */
-export const segmentOutput = (
-	records: readonly { readonly cursor: string; readonly event: StoredAgentEvent }[]
-): readonly OutputSegment[] => {
-	const segments: { kind: 'text' | 'reasoning'; text: string; cursor: string }[] = [];
-	// `open` is what makes this faithful rather than merely grouped: anything else in the
-	// stream — a tool call above all — closes the current run. Merged across a call, a
-	// sentence spoken after the work would carry the cursor from before it and be replayed
-	// ahead of the work it describes.
-	let open: (typeof segments)[number] | undefined;
-	for (const { cursor, event } of records) {
-		// An unreadable row closes the open segment rather than being skipped. It is
-		// something that happened between two runs of output, and merging across it
-		// would give the second run the first one's cursor.
-		if (event.kind === 'unreadable') {
-			open = undefined;
-			continue;
-		}
-		const { event: readable } = event;
-		if (readable.type !== 'text_delta' && readable.type !== 'reasoning_delta') {
-			open = undefined;
-			continue;
-		}
-		const kind = readable.type === 'text_delta' ? 'text' : 'reasoning';
-		if (open?.kind === kind) open.text += readable.text;
-		else {
-			open = { kind, text: readable.text, cursor };
-			segments.push(open);
-		}
-	}
-	return segments.filter((segment) => segment.text.length > 0);
-};
 
 /** Approvals and rejections for parked tool calls, recorded before the run requeues so a decision is never lost between the click and the resume. */
 export interface AgentRunDecisionRepository {
@@ -130,5 +137,5 @@ export interface AgentRunDecisionRepository {
 	 */
 	loadUnconsumed(runId: AgentRunId): Promise<readonly AgentRunDecisionRecord[]>;
 	consume(runId: AgentRunId, callId: string, at: Date): Promise<boolean>;
-	clearPending(runId: AgentRunId): Promise<boolean>;
+	clearPending(runId: AgentRunId): Promise<void>;
 }

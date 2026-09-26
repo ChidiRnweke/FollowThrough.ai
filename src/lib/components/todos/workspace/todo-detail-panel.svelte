@@ -18,7 +18,7 @@
 	import { toast } from 'svelte-sonner';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { TodoId } from '$lib/models/todos';
-	import { accessMessage } from '$lib/models/sync';
+	import { accessMessage } from '$lib/services/sync/state';
 
 	let {
 		todoId,
@@ -28,8 +28,16 @@
 
 	const resources = $derived(workspaceSession.current?.resources);
 	const todo = $derived(todoId && resources?.view({ type: 'todos', id: [todoId] }));
+	const project = $derived(
+		todo?.state.kind === 'ready'
+			? resources?.view({ type: 'projects', id: [todo.state.value.projectId] })
+			: undefined
+	);
+	const state = $derived(
+		todo?.state.kind === 'ready' && !todo.state.value.deletedAt ? project?.state : todo?.state
+	);
 	const view = $derived(
-		todo?.state.kind === 'ready' && !todo.state.value.deletedAt
+		state?.kind === 'ready' && todo?.state.kind === 'ready'
 			? resources?.views.todo(todo.state.value)
 			: undefined
 	);
@@ -52,10 +60,10 @@
 	);
 </script>
 
-{#if todo && todo.state.kind === 'wait'}<p role="status">
+{#if state?.kind === 'wait'}<p role="status">
 		Loading todo…
-	</p>{:else if todo && todo.state.kind !== 'ready'}<p role="alert">
-		{accessMessage(todo.state, 'todo')}
+	</p>{:else if state && state.kind !== 'ready'}<p role="alert">
+		{accessMessage(state, 'todo')}
 	</p>{:else if view}
 	<div class="flex flex-col gap-5 pb-6">
 		<Field.FieldGroup>
@@ -120,7 +128,6 @@
 				<TodoSourceField
 					todoId={view.todo.id}
 					projectId={view.todo.projectId}
-					value={view.todo.linkedNoteId}
 					sourceTitle={view.sourceNote?.title}
 					hasOrigin={view.originNote !== undefined}
 					quiet
@@ -192,6 +199,8 @@
 			{todoUpdates.isPending(view.todo.id) ? 'Saving todo' : 'Todo saved'}
 		</p>
 	</div>
+{:else if todoId}
+	<p role="status" class="text-sm text-muted-foreground">This todo is no longer available.</p>
 {:else}
 	<p class="text-sm text-muted-foreground">Pick a todo to see its details.</p>
 {/if}

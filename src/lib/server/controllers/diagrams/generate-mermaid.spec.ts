@@ -1,8 +1,9 @@
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryMermaidCreator } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -13,17 +14,23 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
+	const generation = diagramGenerationFixture();
 	const notes = new InMemoryNoteContent();
 	notes.notes = [noteBuilder({ plainText: 'Service A calls Service B' })];
 	const suggestions = new InMemorySuggestions();
 	const provenance = new InMemoryProvenanceRecorder();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
-			anchorCreator: notes,
-			mermaidCreator: new InMemoryMermaidCreator(),
-			provenanceRecorder: provenance,
+			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
+			...generation,
 			suggestionCreator: suggestions,
-			transactionRunner: new InMemoryTransactionRunner([notes, provenance, suggestions])
+			transactionRunner: new InMemoryTransactionRunner([
+				notes,
+				provenance,
+				suggestions,
+				generation.persistence,
+				generation.conversations
+			])
 		})
 	);
 	return { controller, notes, suggestions };

@@ -41,6 +41,18 @@ const base = {
 };
 
 describe('NoteVersionDiff', () => {
+	it('shows a paired title change without marking the unchanged body', async () => {
+		const unchanged = doc(para('Unchanged body'));
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: unchanged,
+			candidate: unchanged,
+			titles: { base: 'Old title', candidate: 'New title' }
+		});
+		expect(
+			Array.from(screen.container.querySelectorAll('.diff-block'), (block) => block.textContent)
+		).toEqual(['Old title', 'New title']);
+	});
 	it('renders the base pane label', async () => {
 		const screen = await render(NoteVersionDiff, base);
 		expect(await screen.getByText('Version 2').all()).not.toHaveLength(0);
@@ -91,6 +103,17 @@ describe('NoteVersionDiff', () => {
 		const screen = await render(NoteVersionDiff, base);
 		const panes = Array.from(screen.container.querySelectorAll('.tiptap .ProseMirror'));
 		expect(panes.every((pane) => pane.getAttribute('contenteditable') === 'false')).toBe(true);
+	});
+	it('keeps embedded task references passive in a preview without workspace context', async () => {
+		const tasks = doc({
+			type: 'todoNode',
+			attrs: { todoId: '00000000-0000-4000-8005-000000000001' }
+		});
+		const screen = await render(NoteVersionDiff, { ...base, base: tasks, candidate: tasks });
+		expect({
+			labels: (await screen.getByText('Linked todo', { exact: true }).all()).length,
+			controls: screen.container.querySelectorAll('[role="checkbox"]').length
+		}).toEqual({ labels: 2, controls: 0 });
 	});
 
 	it('summarises the change quietly', async () => {

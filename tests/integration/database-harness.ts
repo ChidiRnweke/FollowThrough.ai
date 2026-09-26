@@ -1,3 +1,6 @@
+import { and, eq } from 'drizzle-orm';
+import * as schema from '$lib/server/db/schema/registry';
+import { toNote } from '$lib/server/db/mappers';
 import { afterAll, beforeAll, inject } from 'vitest';
 import type { AgentRunId } from '$lib/models/agent';
 import type { Artifact, ArtifactId } from '$lib/models/deliverables';
@@ -42,6 +45,34 @@ export const seedNote = async (suffix: string, owner = actor(suffix)) => {
 	};
 	await new NoteRecords(context.db).insert(owner, note);
 	return { owner, project, note };
+};
+
+/** Storage-contract setup only: install a complete note fixture without a production whole-row writer. */
+export const replaceNoteFixture = async (note: Note): Promise<Note> => {
+	const [row] = await context.db
+		.update(schema.notes)
+		.set({
+			projectId: note.projectId,
+			parentId: note.parentId ?? null,
+			kind: note.kind,
+			position: note.position,
+			title: note.title,
+			builtInKey: note.builtInKey ?? null,
+			sectionNumbering: note.sectionNumbering ?? null,
+			document: note.document,
+			plainText: note.plainText,
+			currentRevision: note.currentRevision,
+			publishedRevision: note.publishedRevision,
+			isPinned: note.isPinned,
+			publishedAt: note.publishedAt ? new Date(note.publishedAt) : null,
+			archivedAt: note.archivedAt ? new Date(note.archivedAt) : null,
+			createdAt: new Date(note.createdAt),
+			updatedAt: new Date(note.updatedAt)
+		})
+		.where(and(eq(schema.notes.id, note.id), eq(schema.notes.userId, note.userId)))
+		.returning();
+	if (!row) throw new Error('The note fixture does not exist');
+	return toNote(row);
 };
 
 export const seedProvenance = async (owner: ReturnType<typeof actor>, suffix: string) => {

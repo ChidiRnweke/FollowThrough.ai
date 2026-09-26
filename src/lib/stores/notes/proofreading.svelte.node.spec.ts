@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ProofreadIssue, ProofreadLinter } from '$lib/models/proofreading';
+import type { ProofreadIssue } from '$lib/models/proofreading';
+import type { ProofreadLinter } from '$lib/services/proofreading/contracts';
 import { ProofreadingStore } from './proofreading.svelte';
 
 /** A linter that records what it was told, so no WebAssembly is booted here. */

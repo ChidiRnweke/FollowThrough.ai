@@ -7,7 +7,7 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
-import { toolOutcomeEvent } from '$lib/models/agent';
+import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
@@ -114,7 +114,14 @@ export async function runCase(
 		if (deadline) clearTimeout(deadline);
 	}
 	const snapshot = await agent.getRun(actor, receipt.runId);
-	const events = await agent.listRunEvents(actor, receipt.runId, '');
+	const stored = await agent.listRunEvents(actor, receipt.runId, '0');
+	const events = stored.map((record) => {
+		if (record.kind === 'unreadable')
+			throw new Error(
+				`Cannot evaluate run ${receipt.runId}, event ${record.cursor}: ${record.reason}`
+			);
+		return record;
+	});
 
 	return {
 		runId: receipt.runId,

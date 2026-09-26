@@ -1,3 +1,4 @@
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -22,8 +23,8 @@ const setup = () => {
 	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			notePurger: service,
-			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
+			noteDeletion: service,
+			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})
 	);
 	return { notes, controller };
@@ -82,14 +83,17 @@ describe('Permanent note deletion invariants', () => {
 		expect(result.deletedNoteIds).toEqual([testNoteId(2), testNoteId()]);
 	});
 
-	it('leaves an active note inside a trashed folder alone', async () => {
+	// Older placement races could leave an active child under an archived folder.
+	it('preserves a legacy active child at the root when its trashed folder is deleted', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [
 			noteBuilder({ kind: 'folder', archivedAt: testNow }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId() })
 		];
 		await controller.deleteForever(testActor(), { noteId: testNoteId() });
-		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId(2)]);
+		expect(notes.notes.map((note) => ({ id: note.id, parentId: note.parentId }))).toEqual([
+			{ id: testNoteId(2), parentId: undefined }
+		]);
 	});
 
 	it('rejects deleting a note that is not in the trash', async () => {
@@ -98,6 +102,20 @@ describe('Permanent note deletion invariants', () => {
 		await expect(
 			controller.deleteForever(testActor(), { noteId: testNoteId() })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+
+	it('restores deleted children when deleting their folder fails', async () => {
+		const { notes, controller } = setup();
+		notes.notes = [
+			noteBuilder({ kind: 'folder', archivedAt: testNow }),
+			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
+		];
+		notes.deleteFailures.add(testNoteId());
+		await controller.deleteForever(testActor(), { noteId: testNoteId() }).catch(() => undefined);
+		expect(notes.notes.map((note) => ({ id: note.id, parentId: note.parentId }))).toEqual([
+			{ id: testNoteId(), parentId: undefined },
+			{ id: testNoteId(2), parentId: testNoteId() }
+		]);
 	});
 
 	it('rejects deleting a skill, which the trash never showed', async () => {

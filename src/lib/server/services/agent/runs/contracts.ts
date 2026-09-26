@@ -6,6 +6,8 @@ import type {
 	AgentRun,
 	AgentRunDecisionRecord,
 	AgentRunId,
+	AgentRunImages,
+	WebResearchSettings,
 	Conversation,
 	ConversationId,
 	ConversationImageInput,
@@ -22,9 +24,8 @@ import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
-import type { Note, NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { ProvenanceId } from '$lib/models/provenance';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 
 export interface AgentWorkflowToolbox {
@@ -43,34 +44,19 @@ export interface AgentWorkflowToolbox {
 		instruction?: string
 	): Promise<GenerateMermaidDiagramOutput<Suggestion>>;
 }
-export interface AgentContextBuilder {
-	build(
-		actor: ActorContext,
-		input: RunAgentInput,
-		run: { provenanceId: ProvenanceId }
-	): Promise<AgentRunContext>;
-}
 export interface AgentRunner {
 	execute(input: {
 		readonly actor: ActorContext;
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
+		readonly imageInput: AgentRunImages;
+		readonly webSearch: WebResearchSettings;
 		readonly context: AgentRunContext;
 		/** Decisions to apply before resuming, one per parked tool call. */
 		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate>;
-}
-
-/** Deterministically assembles note, memory, and project retrieval context. */
-export interface InlineCompletionContextBuilder {
-	build(
-		actor: ActorContext,
-		request: InlineSuggestionRequest,
-		note: Note,
-		signal: AbortSignal
-	): Promise<InlineCompletionContext>;
 }
 
 /**
@@ -117,12 +103,12 @@ export interface InlineSuggestionThrottle {
  *
  * `callId` is optional because the provider does not always send one. It used to
  * arrive as `String(details?.toolCall?.callId ?? '')`, which spelled the absence
- * as a value. `AgentRunLifecycle` keys its successful mutations by this id, so
+ * as a value. The Agent controller keys its successful mutations by this id, so
  * two calls without one collided and the second settled under the first one's
  * resource.
  *
- * `AgentRunLifecycle` and `AgentReasoning` declare their own copies of this
- * port. They meet where the lifecycle hands its executor to the runner, so a
+ * `AgentReasoning` declares a local copy of this port. They meet where the
+ * controller hands its executor to the runner, so a
  * copy that drifts fails `pnpm check` there.
  */
 export interface AgentToolExecutor {

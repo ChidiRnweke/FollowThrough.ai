@@ -10,7 +10,8 @@
 		SYNC_VALUE,
 		SYNC_EVIDENCE
 	} from './sync-review';
-	import { reviewFieldLabels, visibleReviewFields } from '$lib/models/workspace-write-review';
+	import { reviewFieldLabels } from '$lib/models/workspace-write-review';
+	import { visibleReviewFields } from '$lib/services/workspace/write-review';
 	let {
 		label,
 		record,
@@ -46,8 +47,10 @@
 			candidate={record.value.document}
 			baseLabel={label}
 			candidateLabel={label}
-			baseTitle={baseline?.type === 'notes' ? baseline.value.title : record.value.title}
-			candidateTitle={record.value.title}
+			titles={{
+				base: baseline?.type === 'notes' ? baseline.value.title : record.value.title,
+				candidate: record.value.title
+			}}
 		/>
 	{:else if record.type === 'diagrams'}
 		<p>{record.value.title}</p>

@@ -48,7 +48,7 @@ describe('Reference management invariants', () => {
 			createdAt: testNow
 		};
 		references.references = [reference];
-		const views = await service.assemble(testActor(), references.references);
+		const views = await service.readContexts(testActor(), references.references);
 		expect(views[0]?.anchor?.id).toBe(testAnchorId());
 	});
 
@@ -65,7 +65,7 @@ describe('Reference management invariants', () => {
 			sourceAnchorId: testAnchorId(2),
 			createdAt: testNow
 		};
-		const views = await service.assemble(testActor(), [reference]);
+		const views = await service.readContexts(testActor(), [reference]);
 		expect(views[0]?.anchor).toBeUndefined();
 	});
 
@@ -81,56 +81,6 @@ describe('Reference management invariants', () => {
 				relevanceNote: 'Relevant'
 			})
 		).rejects.toMatchObject({ code: 'VALIDATION' });
-	});
-
-	it('deduplicates reference candidates by URL', async () => {
-		const { service } = setup();
-		const ranked = await service.rank(
-			testActor(),
-			{ noteId: testNoteId(), text: 'architecture', from: 0, to: 12, revision: 1 },
-			[
-				{
-					url: 'https://example.com' as Url,
-					title: 'A',
-					tier: 'community',
-					relevanceNote: '',
-					confidence: 90
-				},
-				{
-					url: 'https://example.com' as Url,
-					title: 'B',
-					tier: 'official',
-					relevanceNote: '',
-					confidence: 100
-				}
-			]
-		);
-		expect(ranked).toHaveLength(1);
-	});
-
-	it('ranks official sources before community sources', async () => {
-		const { service } = setup();
-		const ranked = await service.rank(
-			testActor(),
-			{ noteId: testNoteId(), text: 'architecture', from: 0, to: 12, revision: 1 },
-			[
-				{
-					url: 'https://community.test' as Url,
-					title: 'Community',
-					tier: 'community',
-					relevanceNote: '',
-					confidence: 100
-				},
-				{
-					url: 'https://official.test' as Url,
-					title: 'Official',
-					tier: 'official',
-					relevanceNote: '',
-					confidence: 50
-				}
-			]
-		);
-		expect(ranked[0]?.tier).toBe('official');
 	});
 
 	it('retains the source anchor on a created reference', async () => {

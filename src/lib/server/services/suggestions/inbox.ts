@@ -1,4 +1,4 @@
-import { assembleSuggestionView } from '$lib/models/suggestions';
+import type { SuggestionContext } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
@@ -9,17 +9,14 @@ import type {
 	ProposalSelectionOrigin,
 	SuggestionId,
 	SuggestionProposal,
-	SuggestionStatus,
-	SuggestionView
+	SuggestionStatus
 } from '$lib/models/suggestions';
-import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
 import { ExpiredSuggestionError, InvalidTransitionError, NotFoundError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type {
 	ProvenanceRepository,
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
-import { provenanceOrigin } from '$lib/models/provenance';
 import type { SuggestionRepository } from '$lib/server/repositories/suggestions/suggestions';
 export interface Clock {
 	now(): DateTime;
@@ -70,10 +67,10 @@ export class SuggestionInbox {
 		origin: ProposalSelectionOrigin,
 		proposal: SelectionProposal
 	): Promise<Suggestion> {
-		return this.persist(actor, proposalFromSelection(origin, proposal));
+		return this.persist(actor, selectionProposal(origin, proposal));
 	}
 	private async persist(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
-		const suggestion = materializeSuggestion(proposal, {
+		const suggestion = createProposalRecord(proposal, {
 			id: crypto.randomUUID() as SuggestionId,
 			userId: actor.userId,
 			now: this.clock.now()
@@ -120,10 +117,10 @@ export class SuggestionInbox {
 		return (await this.listByStatus(actor, status)).length;
 	}
 
-	async assemble(
+	async readContexts(
 		actor: ActorContext,
 		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionView[]> {
+	): Promise<readonly SuggestionContext[]> {
 		return Promise.all(
 			suggestions.map(async (suggestion) => {
 				const [provenance, note, anchor] = await Promise.all([
@@ -134,11 +131,7 @@ export class SuggestionInbox {
 						: undefined
 				]);
 				if (!provenance) throw new NotFoundError('Suggestion provenance was not found');
-				return assembleSuggestionView(suggestion, {
-					note,
-					anchor,
-					origin: provenanceOrigin(provenance)
-				});
+				return { suggestion, note, anchor, provenance };
 			})
 		);
 	}
@@ -218,5 +211,78 @@ export class SuggestionInbox {
 			case 'memory':
 				return proposal.payload.projectId === projectId;
 		}
+	}
+}
+
+type SuggestionIdentity = {
+	readonly id: SuggestionId;
+	readonly userId: ActorContext['userId'];
+	readonly now: DateTime;
+};
+export function createProposalRecord<P extends SuggestionProposal>(
+	proposal: P,
+	identity: SuggestionIdentity
+): Extract<Suggestion, { kind: P['kind'] }>;
+export function createProposalRecord(
+	proposal: SuggestionProposal,
+	identity: SuggestionIdentity
+): Suggestion {
+	const common = {
+		id: identity.id,
+		userId: identity.userId,
+		status: 'proposed' as const,
+		provenanceId: proposal.provenanceId,
+		isAutoAccepted: false,
+		createdAt: identity.now,
+		updatedAt: identity.now,
+		...(proposal.noteId !== undefined ? { noteId: proposal.noteId } : {}),
+		...(proposal.confidence !== undefined
+			? { confidence: proposal.confidence as Suggestion['confidence'] }
+			: {}),
+		...(proposal.sourceAnchorId !== undefined ? { sourceAnchorId: proposal.sourceAnchorId } : {})
+	};
+	switch (proposal.kind) {
+		case 'todo':
+			return { ...common, kind: 'todo', payload: proposal.payload };
+		case 'backlink':
+			return { ...common, kind: 'backlink', payload: proposal.payload };
+		case 'reference':
+			return { ...common, kind: 'reference', payload: proposal.payload };
+		case 'diagram':
+			return { ...common, kind: 'diagram', payload: proposal.payload };
+		case 'memory':
+			return { ...common, kind: 'memory', payload: proposal.payload };
+	}
+}
+
+export function selectionProposal<P extends SelectionProposal>(
+	origin: ProposalSelectionOrigin,
+	proposal: P
+): Extract<SuggestionProposal, { kind: P['kind'] }>;
+export function selectionProposal(
+	origin: ProposalSelectionOrigin,
+	proposal: SelectionProposal
+): SuggestionProposal {
+	const source = { sourceAnchorId: origin.anchor.id, provenanceId: origin.provenance.id };
+	const common = { ...source, noteId: origin.note.id, confidence: proposal.confidence };
+	switch (proposal.kind) {
+		case 'todo':
+			return {
+				...common,
+				kind: 'todo',
+				payload: { ...proposal.payload, ...source, projectId: origin.note.projectId }
+			};
+		case 'backlink':
+			return {
+				...common,
+				kind: 'backlink',
+				payload: { ...proposal.payload, ...source, sourceNoteId: origin.note.id }
+			};
+		case 'reference':
+			return {
+				...common,
+				kind: 'reference',
+				payload: { ...proposal.payload, ...source, noteId: origin.note.id }
+			};
 	}
 }

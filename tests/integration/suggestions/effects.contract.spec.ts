@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import type { SuggestionId } from '$lib/models/suggestions';
+import type { NoteId } from '$lib/models/notes';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { RelationshipId } from '$lib/models/relationships';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
-import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { SuggestionEffects, mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
+import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { RelationshipGraph } from '$lib/server/services/relationships/graph';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
-import { mapAppliedChange } from '$lib/models/proposal-effects';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -24,7 +27,12 @@ const setup = async (suffix: string) => {
 		noteId: seeded.note.id,
 		kind: 'memory',
 		status: 'proposed',
-		payload: { operation: 'add', content: 'Original', projectId: seeded.project.id },
+		payload: {
+			scope: 'project',
+			operation: 'add',
+			content: 'Original',
+			projectId: seeded.project.id
+		},
 		provenanceId: provenance.id,
 		isAutoAccepted: false,
 		createdAt: now,
@@ -119,22 +127,33 @@ describe('Durable proposal application effects', () => {
 	});
 	it('preserves an existing relationship when undo restores its justification', async () => {
 		const state = await setup('9503');
-		const target = await seedNote('9504', state.owner);
+		const target = await new NoteRecords(state.database).insert(state.owner, {
+			...state.note,
+			id: crypto.randomUUID() as NoteId,
+			position: 1
+		});
 		const relationships = new RelationshipRecords(state.database);
+		const graph = new RelationshipGraph(
+			relationships,
+			new NoteRecords(state.database),
+			new SourceAnchorRecords(state.database),
+			new ProvenanceRecords(state.database)
+		);
 		const original = await relationships.insert(state.owner, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: state.owner.userId,
 			sourceNoteId: state.note.id,
-			targetNoteId: target.note.id,
+			targetNoteId: target.id,
 			kind: 'elaborates',
 			justification: 'Original',
 			createdAt: now,
 			updatedAt: now
 		});
 		await state.transactionRunner.run(async () => {
-			const change = await relationships.insertWithChange(state.owner, {
-				...original,
-				id: crypto.randomUUID() as RelationshipId,
+			const change = await graph.createWithChange(state.owner, {
+				sourceNoteId: original.sourceNoteId,
+				targetNoteId: original.targetNoteId,
+				kind: original.kind,
 				justification: 'Suggested'
 			});
 			await state.effects.record(state.owner, state.suggestion.id, [

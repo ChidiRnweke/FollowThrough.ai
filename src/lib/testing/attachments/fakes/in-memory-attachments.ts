@@ -53,6 +53,7 @@ export const attachmentViewBuilder = (
  * loud failure rather than a silent success.
  */
 export class InMemoryAttachments implements AttachmentManager, SnapshotParticipant {
+	downloadUrls = new Map<string, string>();
 	/** Upload reservations `complete` can finalize, keyed by upload id. */
 	uploads = new Map<string, AttachmentView>();
 	finalized: AttachmentView[] = [];
@@ -102,8 +103,10 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 			.filter((link) => link.todoId === todoId)
 			.flatMap((link) => this.finalized.filter((view) => view.attachment.id === link.attachmentId));
 	}
-	downloadById(): Promise<{ url: string }> {
-		throw new Error('not used');
+	async downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }> {
+		const url = this.downloadUrls.get(`${actor.userId}/${id}`);
+		if (!url) throw new NotFoundError('Attachment was not found');
+		return { url };
 	}
 	retry(): Promise<AttachmentView> {
 		throw new Error('not used');

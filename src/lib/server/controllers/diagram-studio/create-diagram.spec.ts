@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -9,6 +11,7 @@ import {
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
@@ -23,8 +26,10 @@ import {
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
 const setup = () => {
+	const sourceNotes = new InMemoryNoteContent();
+	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
-	const projects = new InMemoryProjects();
+	const projects = new InMemoryProjectRepository();
 	// A diagram is created in a project, and creating one verifies the project is
 	// there — the same rule that stopped notes being filed wherever sorted first.
 	projects.projects = [projectBuilder({ id: testProjectId() })];
@@ -39,15 +44,17 @@ const setup = () => {
 		diagrams,
 		controller: new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
+				diagramSourceNotes: sourceNotes,
 				diagramFinder: library,
 				diagramDraftWriter: library,
 				diagramConversations: library,
 				diagramWriter: library,
+				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
-				diagramIndexer: { index: async () => {} },
+				diagramIndexer: { index: async () => ({ kind: 'stored' }) },
 				drawioXmlValidator: { validate: (source: string) => source },
-				drawioTextExtractor: { extract: async () => 'Ingest Index Answer' }
+				drawioLabels: { read: () => ['Ingest Index Answer'] }
 			})
 		)
 	};

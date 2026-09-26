@@ -1,6 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	Project,
 	ProjectId,
@@ -13,18 +12,29 @@ import type {
 	ProjectTreeRepository
 } from '$lib/server/repositories/projects/projects';
 import {
-	noteBuilder,
 	projectBuilder,
-	testNoteId,
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export class InMemoryProjectRepository implements ProjectRepository, ProjectTreeRepository {
 	projects: Project[] = [];
-	entries: Note[] = [];
+	constructor(private readonly entriesStore: { notes: Note[] } = { notes: [] }) {}
+	get entries(): Note[] {
+		return this.entriesStore.notes;
+	}
+	set entries(value: Note[]) {
+		this.entriesStore.notes = value;
+	}
 	private nextProject = 100;
-	private nextEntry = 100;
+	snapshot(): () => void {
+		const projects = structuredClone(this.projects);
+		const entries = structuredClone(this.entries);
+		return () => {
+			this.projects = projects;
+			this.entries = entries;
+		};
+	}
 
 	async insert(actor: ActorContext, input: CreateProjectInput): Promise<Project> {
 		if (
@@ -36,14 +46,27 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 			)
 		)
 			throw new ConflictError('An active project with this name already exists');
+		if (
+			input.role === 'inbox' &&
+			this.projects.some(
+				(project) =>
+					project.userId === actor.userId && project.role === 'inbox' && !project.archivedAt
+			)
+		)
+			throw new ConflictError('This workspace already has an active inbox');
 		const project = projectBuilder({
 			id: input.id ?? testProjectId(this.nextProject++),
 			userId: actor.userId,
 			name: input.name,
+			role: input.role ?? 'workspace',
 			description: input.description
 		});
 		this.projects.push(project);
 		return project;
+	}
+
+	findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
+		return this.findById(actor, projectId);
 	}
 
 	async findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
@@ -122,24 +145,6 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 					entry.userId === actor.userId && entry.projectId === projectId && !entry.archivedAt
 			)
 			.sort((left, right) => left.position - right.position);
-	}
-
-	async insertFolder(
-		actor: ActorContext,
-		input: CreateFolderInput,
-		position: number
-	): Promise<Note> {
-		const folder = noteBuilder({
-			id: input.id ?? testNoteId(this.nextEntry++),
-			userId: actor.userId,
-			projectId: input.projectId,
-			parentId: input.parentId,
-			kind: 'folder',
-			position,
-			title: input.name
-		});
-		this.entries.push(folder);
-		return folder;
 	}
 
 	async persistOrder(

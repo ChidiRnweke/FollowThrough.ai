@@ -1,70 +1,25 @@
-import type { DrawioRevision } from '$lib/models/diagrams';
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type { ConversationId } from '$lib/models/agent';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
-	DiagramEtag,
+	DiagramRevisionWrite,
 	DiagramRevision,
 	DiagramRevisionId,
 	ListProjectDiagramsOutput,
 	ListProjectDiagramsParams,
 	DrawioDiagram,
-	MermaidDiagram,
-	ReviseInlineMermaidInput,
-	ReviseInlineMermaidOutput,
-	ConvertInlineMermaidInput
+	MermaidDiagram
 } from '$lib/models/diagrams';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import type { ProvenanceId } from '$lib/models/provenance';
 export interface DiagramIconSearch {
 	search(query: string, limit?: number): Promise<readonly { name: string; url: string }[]>;
 }
-export interface MermaidDiagramDraft {
-	readonly title?: string;
-	readonly source: string;
-	readonly provenanceId?: ProvenanceId;
-}
-export interface DrawioDiagramDraft {
-	readonly title: string;
-	readonly source: string;
-	readonly provenanceId?: ProvenanceId;
-}
-export interface MermaidDiagramCreator {
-	create(
-		actor: ActorContext,
-		selection: TextSelection,
-		instruction?: string,
-		signal?: AbortSignal
-	): Promise<MermaidDiagramDraft>;
-}
-export interface MermaidDiagramReviser {
-	revise(
-		actor: ActorContext,
-		diagram: MermaidDiagram,
-		instruction: string
-	): Promise<MermaidDiagram>;
-}
-export interface InlineMermaidReviser {
-	reviseInline(
-		actor: ActorContext,
-		input: ReviseInlineMermaidInput,
-		signal?: AbortSignal
-	): Promise<ReviseInlineMermaidOutput>;
-}
-export interface InlineMermaidToDrawioConverter {
-	convertInline(
-		actor: ActorContext,
-		input: ConvertInlineMermaidInput,
-		signal?: AbortSignal
-	): Promise<DrawioDiagramDraft>;
-}
 export interface MermaidDiagramRenderer {
 	render(source: string): Promise<string>;
-}
-export interface DrawioDiagramCreator {
-	createFromMermaid(actor: ActorContext, diagram: MermaidDiagram): Promise<DrawioDiagram>;
 }
 export interface DrawioDiagramExporter {
 	exportSvg(diagram: DrawioDiagram): Promise<string>;
@@ -107,7 +62,7 @@ export interface DiagramLister {
 }
 export interface DiagramWriter {
 	create(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
-	update(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
+	persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram>;
 }
 /** Finds the diagram a studio conversation already produced, so promotion stays idempotent. */
 export interface DiagramConversationFinder {
@@ -120,37 +75,10 @@ export interface DiagramConversationFinder {
 export interface DiagramReferenceCounter {
 	countReferencingNotes(actor: ActorContext, diagramId: DiagramId): Promise<number>;
 }
-export interface DiagramRenamer {
-	rename(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		title: string,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram>;
-}
 export interface DiagramDraftWriter {
-	saveDraftSource(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		source: string,
-		searchableText: string,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram>;
-	publish(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		source: string,
-		renderedSvg: string,
-		searchableText: string,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram>;
+	getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
+	persistEdit(actor: ActorContext, write: DiagramRevisionWrite): Promise<DrawioDiagram | undefined>;
 	recordRevision(actor: ActorContext, diagram: DrawioDiagram): Promise<DiagramRevision>;
-	restore(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		revisionId: DiagramRevisionId,
-		baseEtag: DiagramEtag
-	): Promise<DrawioDiagram>;
 }
 export interface DiagramRevisionReader {
 	revisions(actor: ActorContext, diagramId: DiagramId): Promise<readonly DiagramRevision[]>;
@@ -160,22 +88,12 @@ export interface DiagramRevisionReader {
 		revisionId: DiagramRevisionId
 	): Promise<DiagramRevision>;
 }
-export interface DiagramDeleter {
-	delete(actor: ActorContext, diagramId: DiagramId): Promise<void>;
-}
-/**
- * Soft delete, so an unwanted diagram is recoverable the way an unwanted note is.
- *
- * Separate from `DiagramDeleter`: permanent deletion still exists and still means
- * what it says. These three are the reversible half.
- */
-export interface DiagramArchiver {
-	archive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
-	unarchive(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
-	listArchived(actor: ActorContext, projectId?: ProjectId): Promise<readonly Diagram[]>;
-}
 export interface DiagramIndexer {
-	index(actor: ActorContext, diagram: Diagram): Promise<void>;
+	index(
+		actor: ActorContext,
+		diagram: Diagram,
+		context: DiagramIndexContext
+	): Promise<IndexingResult>;
 }
 /** Parses Mermaid source and throws when it will not render. */
 export interface MermaidSourceValidator {
@@ -186,12 +104,4 @@ export interface DrawioXmlContentValidator {
 }
 export interface DrawioSvgPreviewSanitizer {
 	sanitize(source: string): string;
-}
-
-export interface DrawioWriter {
-	write(
-		actor: ActorContext,
-		current: DrawioDiagram,
-		revision: DrawioRevision
-	): Promise<DrawioDiagram>;
 }

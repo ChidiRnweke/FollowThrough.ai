@@ -1,8 +1,12 @@
-import type { TodoSuggestion, SuggestionLifecycle } from '$lib/models/suggestions';
+import type {
+	TodoSuggestion,
+	SuggestionLifecycle,
+	MemorySuggestion
+} from '$lib/models/suggestions';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { ConversationId, RunAgentInput } from '$lib/models/agent';
 import type { AppContextSnapshotV1, DateTime } from '$lib/models/workspace';
-import type { MemoryEntry, MemoryEntryId, MemorySuggestion } from '$lib/models/memory';
+import type { MemoryEntry, MemoryEntryId } from '$lib/models/memory';
 import type { Note, NoteId, NoteRevision, NoteRevisionId } from '$lib/models/notes';
 import type { DiagramId, MermaidDiagram } from '$lib/models/diagrams';
 import type { Project, ProjectId } from '$lib/models/projects';
@@ -74,17 +78,22 @@ export const noteRevisionBuilder = (overrides: Partial<NoteRevision> = {}): Note
 	...overrides
 });
 
-export const todoBuilder = (overrides: Partial<Todo> = {}): Todo => ({
-	id: testTodoId(),
-	userId: testActor().userId,
-	projectId: testProjectId(),
-	title: 'Send the design',
-	status: 'open',
-	responsibility: 'mine',
-	createdAt: testNow,
-	updatedAt: testNow,
-	...overrides
-});
+export const todoBuilder = (overrides: Partial<Todo> = {}): Todo => {
+	const fields = {
+		id: testTodoId(),
+		userId: testActor().userId,
+		projectId: testProjectId(),
+		title: 'Send the design',
+		responsibility: 'mine' as const,
+		createdAt: testNow,
+		updatedAt: testNow,
+		...overrides
+	};
+	const status = overrides.status ?? 'open';
+	return status === 'done'
+		? { ...fields, status, completedAt: overrides.completedAt ?? testNow }
+		: { ...fields, status, completedAt: undefined };
+};
 
 const suggestionLifecycle = (
 	overrides: Partial<SuggestionLifecycle>,
@@ -144,6 +153,7 @@ export const memorySuggestionBuilder = (
 		userId: testActor().userId,
 		kind: 'memory',
 		payload: {
+			scope: 'user',
 			operation: 'add',
 			content: 'Always answer in English.'
 		},
@@ -170,12 +180,12 @@ export const memoryEntryBuilder = (overrides: Partial<MemoryEntry> = {}): Memory
 export const anchorBuilder = (overrides: Partial<SourceAnchor> = {}): SourceAnchor => ({
 	id: testAnchorId(),
 	noteId: testNoteId(),
-	from: 0,
-	to: 4,
 	quote: 'Send',
 	revision: 1,
 	createdAt: testNow,
-	...overrides
+	...overrides,
+	from: overrides.from ?? 0,
+	to: overrides.to ?? 4
 });
 
 export const appContextBuilder = (

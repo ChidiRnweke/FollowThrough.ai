@@ -1,5 +1,3 @@
-import { sameNoteDraft } from '$lib/models/notes';
-import { applySkillMetadataEdit } from '$lib/models/skills';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -7,6 +5,7 @@ import type { ProvenanceId } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
 import type {
 	Skill,
+	SkillEditInput,
 	PreparedSkillEdit,
 	SkillSummary,
 	SkillManifest,
@@ -14,14 +13,10 @@ import type {
 	SkillUsageId,
 	SkillUsageView
 } from '$lib/models/skills';
-import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
-interface SkillManifests {
-	parse(source: string): SkillManifest;
-	serialize(manifest: SkillManifest & { readonly instructions: string }): string;
-}
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 const slug = (value: string): string =>
@@ -29,15 +24,19 @@ const slug = (value: string): string =>
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '')
-		.slice(0, 64) || `skill-${crypto.randomUUID().slice(0, 8)}`;
+		.slice(0, 64)
+		.replace(/-+$/g, '') || `skill-${crypto.randomUUID().slice(0, 8)}`;
 
 export class SkillLibrary {
 	constructor(
 		private readonly skills: SkillRepository,
 		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository,
-		private readonly manifests: SkillManifests
+		private readonly provenance: ProvenanceRepository
 	) {}
+	/** Acquire before project or note locks; the controller owns the transaction. */
+	lockCatalog(actor: ActorContext): Promise<void> {
+		return this.skills.lockCatalog(actor);
+	}
 	async create(
 		actor: ActorContext,
 		note: Note,
@@ -55,7 +54,6 @@ export class SkillLibrary {
 		if (description.length > 1024) throw new ValidationError('Skill description is too long');
 		return this.skills.insert(actor, {
 			note: owned,
-			name,
 			slug: skillSlug,
 			description,
 			triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean),
@@ -72,7 +70,7 @@ export class SkillLibrary {
 	}
 	async load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
 		const skill = await this.skills.findByNoteId(actor, noteId);
-		if (!skill) throw new NotFoundError('Skill was not found');
+		if (!skill || skill.note.archivedAt) throw new NotFoundError('Skill was not found');
 		return skill;
 	}
 	async record(
@@ -108,58 +106,47 @@ export class SkillLibrary {
 		);
 	}
 
+	/** Lock the note before metadata to match provisioning and the title projection trigger. */
+	async getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
+		const note = await this.notes.findForWrite(actor, noteId);
+		if (!note) throw new NotFoundError('Skill note was not found');
+		if (note.archivedAt) throw new ValidationError('Archived notes cannot be edited');
+		if (note.kind !== 'skill') throw new ValidationError('Skill metadata requires a skill note');
+		const skill = await this.skills.findForWrite(actor, noteId);
+		if (!skill) throw new NotFoundError('Skill was not found');
+		return skill;
+	}
+
 	async prepareEdit(
 		actor: ActorContext,
-		input: {
-			noteId: NoteId;
-			displayName?: string;
-			description?: string;
-			raw?: string;
-			instructions?: string;
-			baseRevision?: number;
-			manifest?: SkillManifest;
-			triggerHints?: readonly string[];
-			isEnabled?: boolean;
-		}
+		current: Skill<Note>,
+		input: Omit<SkillEditInput, 'noteId'>
 	): Promise<PreparedSkillEdit<Note>> {
-		const current = await this.load(actor, input.noteId);
-		if (
-			[input.raw, input.manifest, input.instructions].filter((value) => value !== undefined)
-				.length > 1
-		)
-			throw new ValidationError('Provide raw SKILL.md or structured fields, not both');
-		if (
-			input.raw === undefined &&
-			input.manifest === undefined &&
-			input.instructions === undefined
-		) {
-			// Metadata-only update: the note — its document, revision, and revision
-			// history — belongs to the note sync path and must not be touched here.
-			return { skill: { ...current, ...applySkillMetadataEdit(current, input) }, document: null };
+		const displayName =
+			input.displayName === undefined ? current.note.title : input.displayName.trim();
+		if (!displayName) throw new ValidationError('Skill name is required');
+		if (!input.content) {
+			return displayName === current.note.title
+				? { kind: 'metadata', skill: current }
+				: {
+						kind: 'title',
+						skill: { ...current, note: { ...current.note, title: displayName } }
+					};
 		}
 		const manifest =
-			input.instructions !== undefined
-				? this.manifests.parse(
-						this.manifests.serialize({
-							...this.portable(current),
-							description: input.description?.trim() || current.description,
-							instructions: input.instructions
-						})
-					)
-				: input.raw !== undefined
-					? this.manifests.parse(input.raw)
-					: input.manifest
-						? this.manifests.parse(this.manifests.serialize(input.manifest))
-						: undefined;
+			input.content.kind === 'manifest'
+				? input.content.manifest
+				: {
+						...this.portable(current),
+						instructions: input.content.text.trimEnd()
+					};
 		if (
-			manifest &&
 			(await this.skills.listAll(actor)).some(
-				(skill) => skill.noteId !== input.noteId && skill.slug === manifest.slug
+				(skill) => skill.noteId !== current.note.id && skill.slug === manifest.slug
 			)
 		)
 			throw new ValidationError('A skill with this portable name already exists');
-		const displayName = input.displayName?.trim() || current.name;
-		const instructions = manifest?.instructions ?? current.note.plainText;
+		const instructions = manifest.instructions;
 		const note: Note = {
 			...current.note,
 			title: displayName,
@@ -171,28 +158,19 @@ export class SkillLibrary {
 			},
 			plainText: instructions
 		};
-		if (input.baseRevision !== current.note.currentRevision && !sameNoteDraft(current.note, note))
-			throw new StaleRevisionError('The skill document has changed since it was loaded');
+
 		return {
-			document: note,
+			kind: 'document',
+			manifest,
 			skill: {
 				...current,
 				note,
-				name: displayName,
-				...(manifest
-					? {
-							slug: manifest.slug,
-							description: manifest.description,
-							license: manifest.license,
-							compatibility: manifest.compatibility,
-							metadata: manifest.metadata,
-							allowImplicitInvocation: manifest.allowImplicitInvocation
-						}
-					: {}),
-				...(input.triggerHints
-					? { triggerHints: input.triggerHints.map((hint) => hint.trim()).filter(Boolean) }
-					: {}),
-				...(input.isEnabled !== undefined ? { isEnabled: input.isEnabled } : {})
+				slug: manifest.slug,
+				description: manifest.description,
+				license: manifest.license,
+				compatibility: manifest.compatibility,
+				metadata: manifest.metadata,
+				allowImplicitInvocation: manifest.allowImplicitInvocation
 			}
 		};
 	}
@@ -201,29 +179,20 @@ export class SkillLibrary {
 		return this.skills.update(actor, skill);
 	}
 
-	async serialize(actor: ActorContext, noteId: NoteId): Promise<string> {
+	async manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest> {
 		const skill = await this.load(actor, noteId);
-		return this.manifests.serialize(this.portable(skill));
+		return this.portable(skill);
 	}
 
 	private portable(skill: Skill<Note>): SkillManifest {
 		return {
-			slug: skill.slug ?? slug(skill.name),
+			slug: skill.slug,
 			description: skill.description,
 			...(skill.license ? { license: skill.license } : {}),
 			...(skill.compatibility ? { compatibility: skill.compatibility } : {}),
-			metadata: skill.metadata ?? {},
-			allowImplicitInvocation: skill.allowImplicitInvocation ?? true,
+			metadata: skill.metadata,
+			allowImplicitInvocation: skill.allowImplicitInvocation,
 			instructions: skill.note.plainText
 		};
-	}
-
-	setPinned(
-		actor: ActorContext,
-		noteId: NoteId,
-		projectId: ProjectId,
-		pinned: boolean
-	): Promise<void> {
-		return this.skills.setPinned(actor, noteId, projectId, pinned);
 	}
 }

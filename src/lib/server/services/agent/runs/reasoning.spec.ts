@@ -1,3 +1,4 @@
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { PendingAgentDecision } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import {
@@ -12,7 +13,8 @@ import {
 	type StreamEvent
 } from '@openai/agents';
 import { z } from 'zod';
-import { AgentProviderFailure, parseProviderStreamEvent } from '$lib/models/agent';
+import { AgentProviderFailure } from '$lib/errors';
+import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
 import type {
 	AgentRunContext,
 	ContextSelection,
@@ -21,16 +23,7 @@ import type {
 } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import {
-	noteBuilder,
-	testActor,
-	testConversationId,
-	testNoteId,
-	testProjectId,
-	testProvenanceId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-import { BaseAgentContext } from './base-context';
+import { testActor, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentReasoningEventMapper,
 	AgentToolEventMapper,
@@ -117,6 +110,7 @@ const run: PreparedAgentRun = {
 };
 
 const sessions = {
+	listCanvasResults: async () => [],
 	list: async () => [],
 	append: async () => undefined,
 	pop: async () => undefined,
@@ -494,6 +488,8 @@ describe('Agent runtime boundary', () => {
 		const updates = runner.execute({
 			actor: testActor(),
 			run,
+			imageInput: { kind: 'none' },
+			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			request: { conversationId: run.conversationId, prompt: 'Help' },
 			context: run.contextSnapshot!,
 			signal: new AbortController().signal,
@@ -504,6 +500,27 @@ describe('Agent runtime boundary', () => {
 });
 
 describe('Unknown agent tool recovery', () => {
+	it('orders equally close suggestions by name across both tool surfaces', async () => {
+		expect(await formattedMissingTool('bat', ['hat'], ['cat'])).toMatchObject({
+			suggestions: [
+				{ name: 'cat', invokeVia: 'search_first' },
+				{ name: 'hat', invokeVia: 'direct' }
+			]
+		});
+	});
+
+	it('includes names three edits away and excludes names four edits away', async () => {
+		expect(await formattedMissingTool('abc', ['abcdef', 'abcdefg'], [])).toMatchObject({
+			suggestions: [{ name: 'abcdef', invokeVia: 'direct' }]
+		});
+	});
+
+	it('returns each suggested name once when both surfaces contain duplicates', async () => {
+		expect(
+			await formattedMissingTool('serch', ['search', 'search'], ['search', 'search'])
+		).toMatchObject({ suggestions: [{ name: 'search', invokeVia: 'direct' }] });
+	});
+
 	it('sends an undiscovered catalog tool through search and back to itself', async () => {
 		expect(await formattedMissingTool('save_note', ['search'], ['save_note'])).toEqual({
 			failure: 'Tool "save_note" exists but has not been surfaced in this conversation yet.',
@@ -796,20 +813,6 @@ describe('Agent reasoning event invariants', () => {
 	});
 });
 
-describe('Agent context invariants', () => {
-	it('derives the active project from the current note', async () => {
-		const notes = new InMemoryNoteContent();
-		notes.notes = [noteBuilder()];
-		const agent = new BaseAgentContext(notes);
-		const context = await agent.build(
-			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Summarize this note' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(context.projectId).toBe(testProjectId());
-	});
-});
-
 describe('Agent turn span lifecycle', () => {
 	const encoder = new TextEncoder();
 	const chunk = (delta: unknown, finishReason: string | null = null) =>
@@ -905,6 +908,8 @@ describe('Agent turn span lifecycle', () => {
 			const updates = reasoning.execute({
 				actor: testActor(),
 				run,
+				imageInput: { kind: 'none' },
+				webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 				request: { conversationId: run.conversationId, prompt: 'Save this note' },
 				context: run.contextSnapshot!,
 				signal: new AbortController().signal,
@@ -949,6 +954,8 @@ describe('Agent turn span lifecycle', () => {
 		const updates = recording.execute({
 			actor: testActor(),
 			run: parked,
+			imageInput: { kind: 'none' },
+			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			request: { conversationId: run.conversationId, prompt: 'Save this note' },
 			context: parked.contextSnapshot!,
 			signal: new AbortController().signal,

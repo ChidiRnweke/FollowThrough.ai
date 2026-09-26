@@ -17,6 +17,7 @@ import {
 	type AgentExecutionUpdate,
 	type AgentEvent,
 	type AgentRun,
+	type AgentRunImages,
 	type AgentRunContext,
 	type AgentRunDecisionRecord,
 	type PendingAgentDecision,
@@ -25,7 +26,7 @@ import {
 	type ProviderToolOutput,
 	type RunAgentInput,
 	type ToolClassification,
-	type WebResearchOptions
+	type WebResearchSettings
 } from '$lib/models/agent';
 import {
 	readAgentToolName,
@@ -34,15 +35,12 @@ import {
 	type ToolName
 } from '$lib/models/agent/tool-catalog';
 import {
-	allImages,
-	AgentProviderFailure,
 	parseProviderStreamEvent,
 	parseProviderToolCall
-} from '$lib/models/agent';
+} from '$lib/server/repositories/agent/provider-events';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
-import { ValidationError } from '$lib/errors';
+import { AgentProviderFailure, ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import { suggestToolNames } from '$lib/models/agent/tool-name-matching';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
 import { withReasoning } from '$lib/server/repositories/agent/reasoning-transport';
 import type {
@@ -122,6 +120,33 @@ interface RecoverableToolFailure {
 
 const formatToolNames = (names: readonly string[]): string =>
 	names.map((name) => `"${name}"`).join(', ');
+
+const toolNameDistance = (a: string, b: string): number => {
+	let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+	for (let row = 1; row <= a.length; row++) {
+		const current = [row];
+		for (let column = 1; column <= b.length; column++) {
+			const cost = a[row - 1] === b[column - 1] ? 0 : 1;
+			current[column] = Math.min(
+				current[column - 1]! + 1,
+				previous[column]! + 1,
+				previous[column - 1]! + cost
+			);
+		}
+		previous = current;
+	}
+	return previous[b.length]!;
+};
+
+const suggestToolNames = (query: string, names: readonly string[]) =>
+	names
+		.map((name) => ({ name, distance: toolNameDistance(query, name) }))
+		.filter((suggestion) => suggestion.distance <= 3)
+		.sort(
+			(left, right) =>
+				left.distance - right.distance ||
+				(left.name < right.name ? -1 : left.name > right.name ? 1 : 0)
+		);
 
 /**
  * There is one dispatch path: a tool is either callable right now, or it must be
@@ -438,63 +463,90 @@ export class AgentReasoning {
 			throw new Error('Conversation sessions are not configured');
 		},
 		private readonly observeTurn: AgentTurnObserver = directTurnObserver,
-		private readonly webSearchDefaults: WebResearchOptions = {}
+		private readonly createProvider: (
+			options: WebResearchSettings
+		) => Pick<OpenAIProvider, 'getModel' | 'close'> = (options) => this.provider(options)
 	) {}
 
 	async *execute(input: {
 		readonly actor: ActorContext;
 		readonly run: AgentRun;
 		readonly request: RunAgentInput;
+		readonly imageInput: AgentRunImages;
+		readonly webSearch: WebResearchSettings;
 		readonly context: AgentRunContext;
 		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
 		readonly toolExecutor: AgentToolExecutor;
 	}): AsyncIterable<AgentExecutionUpdate> {
-		const { actor, run, request, context, decisions = [], signal, toolExecutor } = input;
+		const {
+			actor,
+			run,
+			request,
+			imageInput,
+			webSearch,
+			context,
+			decisions = [],
+			signal,
+			toolExecutor
+		} = input;
+		signal.throwIfAborted();
 		if (!this.apiKey)
 			throw new AgentProviderFailure(
 				'Agent chat is disabled until OPENROUTER_API_KEY is configured',
 				'CONFIGURATION',
 				false
 			);
-		const provider = this.provider({ ...this.webSearchDefaults, ...request.webSearch });
-		const registry = await this.tools({
-			actor,
-			request,
-			context,
-			run,
-			executor: toolExecutor
-		});
-		const session = this.createSession(this.sessions, actor, run.conversationId);
-		let visionDescriptions: string[] | undefined;
-		// The app's own images are described too when the chat model cannot see: a
-		// render left out here would simply vanish on a text-only model.
-		const describable = allImages(request);
-		if (describable.length && request.visionModelOverride) {
-			const client = new OpenAI({
-				apiKey: this.apiKey,
-				baseURL: this.baseURL,
-				timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000)
-			});
-			visionDescriptions = await Promise.all(
-				describable.map(async (image) => {
-					const response = await client.chat.completions.create({
-						model: request.visionModelOverride!,
-						messages: [
-							{
-								role: 'user',
-								content: [
-									{ type: 'text', text: 'Describe this image precisely for another assistant.' },
-									{ type: 'image_url', image_url: { url: image.dataUrl } }
-								]
-							}
-						]
-					});
-					return response.choices[0]?.message.content ?? 'The image could not be described.';
-				})
-			);
-		}
+		const provider = this.createProvider(webSearch);
+		const preparation = new AbortController();
+		const preparationSignal = AbortSignal.any([signal, preparation.signal]);
 		try {
+			const registry = await this.tools({
+				actor,
+				request,
+				context,
+				run,
+				executor: toolExecutor
+			});
+			signal.throwIfAborted();
+			const session = this.createSession(this.sessions, actor, run.conversationId);
+			let visionDescriptions: string[] | undefined;
+			// The app's own images are described too when the chat model cannot see: a
+			// render left out here would simply vanish on a text-only model.
+			if (imageInput.kind === 'describe') {
+				const { images: describable, model } = imageInput;
+				const client = new OpenAI({
+					apiKey: this.apiKey,
+					baseURL: this.baseURL,
+					fetch: this.providerFetch,
+					timeout: Number(process.env.PROVIDER_REQUEST_TIMEOUT_MS ?? 120_000)
+				});
+				visionDescriptions = await Promise.all(
+					describable.map(async (image) => {
+						const response = await client.chat.completions.create(
+							{
+								model,
+								messages: [
+									{
+										role: 'user',
+										content: [
+											{
+												type: 'text',
+												text: 'Describe this image precisely for another assistant.'
+											},
+											{ type: 'image_url', image_url: { url: image.dataUrl } }
+										]
+									}
+								]
+							},
+							{ signal: preparationSignal }
+						);
+						const description = response.choices[0]?.message.content?.trim();
+						if (!description) throw new Error('Image description provider returned no usable text');
+						return description;
+					})
+				);
+			}
 			const catalogNames = registry.catalog().map((tool) => tool.name);
 			const catalog = new Set(catalogNames);
 			const promoted = [
@@ -561,25 +613,24 @@ export class AgentReasoning {
 				// they came from: `images` is what the user attached, `contextImages`
 				// is what the app supplies — a render of the diagram the agent drew,
 				// which it otherwise has no way to look at.
-				const visibleImages = allImages(request);
-				const initialInput: string | AgentInputItem[] =
-					visibleImages.length && !visionDescriptions
-						? [
-								{
-									role: 'user' as const,
-									content: [
-										{
-											type: 'input_text' as const,
-											text: `${request.prompt || 'Describe the attached image(s).'}${attachedBlocks}`
-										},
-										...visibleImages.map((image) => ({
-											type: 'input_image' as const,
-											image: image.dataUrl
-										}))
-									]
-								}
-							]
-						: fallbackPrompt;
+				const visibleImages = imageInput.kind === 'native' ? imageInput.images : [];
+				const initialInput: string | AgentInputItem[] = visibleImages.length
+					? [
+							{
+								role: 'user' as const,
+								content: [
+									{
+										type: 'input_text' as const,
+										text: `${request.prompt || 'Describe the attached image(s).'}${attachedBlocks}`
+									},
+									...visibleImages.map((image) => ({
+										type: 'input_image' as const,
+										image: image.dataUrl
+									}))
+								]
+							}
+						]
+					: fallbackPrompt;
 				const runInput: string | AgentInputItem[] | RunState<unknown, typeof agent> =
 					state ?? initialInput;
 				const stream = await runner.run(agent, runInput, {
@@ -657,6 +708,7 @@ export class AgentReasoning {
 				{ cause: error }
 			);
 		} finally {
+			preparation.abort();
 			await provider.close();
 		}
 	}
@@ -680,7 +732,7 @@ export class AgentReasoning {
 		});
 	}
 
-	private provider(webSearch: WebResearchOptions): OpenAIProvider {
+	private provider(webSearch: WebResearchSettings): OpenAIProvider {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.baseURL,

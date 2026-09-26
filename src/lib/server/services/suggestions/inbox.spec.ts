@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { SuggestionInbox } from './inbox';
-import { ExpiringSuggestionLister } from './expiring-lister';
 import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import {
 	InMemoryNoteRepository,
@@ -120,16 +119,13 @@ describe('Suggestion management invariants', () => {
 		];
 		expect(await service.expire(testActor())).toBe(1);
 	});
-	it('expires stale proposals before listing active proposals', async () => {
+	it('lists stored states without expiring proposals as a read side effect', async () => {
 		const { service, suggestions } = setup();
 		suggestions.suggestions = [
 			suggestionBuilder({ expiresAt: '2026-07-10T09:00:00.000Z' as never })
 		];
-		const active = await new ExpiringSuggestionLister(service, service).listByStatus(
-			testActor(),
-			'proposed'
-		);
-		expect(active).toEqual([]);
+		await service.listByStatus(testActor(), 'proposed');
+		expect(suggestions.suggestions[0]?.status).toBe('proposed');
 	});
 
 	// A payload that no longer matches its kind cannot be rendered, decided or

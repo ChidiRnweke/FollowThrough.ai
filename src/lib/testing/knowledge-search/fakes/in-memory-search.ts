@@ -18,7 +18,8 @@ import type {
 } from '$lib/server/repositories/knowledge-search';
 import type {
 	EmbeddingBatch,
-	EmbeddingClient
+	EmbeddingClient,
+	Reranker
 } from '$lib/server/services/knowledge-search/contracts';
 
 interface OwnedSearchDocument {
@@ -265,15 +266,18 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 		];
 	}
 
-	async listPendingSources(limit: number): Promise<readonly PendingIndexSource[]> {
+	async listPendingSources(limit: number, after?: string): Promise<readonly PendingIndexSource[]> {
 		const seen = new Map<string, PendingIndexSource>();
 		for (const item of this.documents) {
 			if (item.document.embedding) continue;
 			const source = sourceOf(item.document);
 			const key = `${item.userId}/${sourceKey(source)}`;
-			if (!seen.has(key)) seen.set(key, { userId: item.userId, source });
+			if (!seen.has(key)) seen.set(key, { userId: item.userId, source, cursor: key });
 		}
-		return [...seen.values()].slice(0, limit);
+		return [...seen.values()]
+			.filter((entry) => after === undefined || entry.cursor > after)
+			.sort((a, b) => (a.cursor < b.cursor ? -1 : a.cursor > b.cursor ? 1 : 0))
+			.slice(0, limit);
 	}
 
 	async listPending(actor: ActorContext, source: IndexSource): Promise<readonly SearchDocument[]> {
@@ -306,16 +310,46 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 }
 
 export class InMemoryEmbeddingClient implements EmbeddingClient {
+	failure?: Error;
+	readonly vectorsByContent = new Map<string, readonly number[]>();
 	model = 'fake-embedding-v1';
 	generation = 1;
 	returnWrongCount = false;
+	rejectedContents = new Set<string>();
 
 	async embed(contents: readonly string[]): Promise<EmbeddingBatch> {
-		const vectors = contents.map((content, index) => [this.generation, index, content.length]);
+		if (this.failure) throw this.failure;
+		if (contents.some((content) => this.rejectedContents.has(content)))
+			throw new Error('Embedding rejected this content');
+		const vectors = contents.map(
+			(content, index) =>
+				this.vectorsByContent.get(content) ?? [this.generation, index, content.length]
+		);
 		this.generation += 1;
 		return {
 			model: this.model,
 			vectors: this.returnWrongCount ? vectors.slice(1) : vectors
 		};
+	}
+}
+
+export class InMemoryReranker implements Reranker {
+	order: 'input' | 'reverse' | 'relevant-first' = 'input';
+	failure?: Error;
+	async rerank(
+		_query: string,
+		matches: readonly SearchMatch[],
+		topN: number
+	): Promise<readonly SearchMatch[]> {
+		if (this.failure) throw this.failure;
+		const ordered = [...matches];
+		if (this.order === 'reverse') ordered.reverse();
+		if (this.order === 'relevant-first')
+			ordered.sort(
+				(left, right) =>
+					Number(right.document.content.includes('relevant')) -
+					Number(left.document.content.includes('relevant'))
+			);
+		return ordered.slice(0, topN);
 	}
 }

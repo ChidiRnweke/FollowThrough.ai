@@ -23,6 +23,10 @@ The second principle follows from the classifications: **agents propose, users a
 
 ## The tool catalog
 
+`ToolDiscovery` coordinates query embeddings and stored tool ranking for both the in-app agent and MCP. `ToolCatalogIndex` owns catalog drift and stored vectors. Ranking accepts only vectors from the active embedding model. A missing query vector or an incomplete seed fails explicitly; it does not produce an empty or partial discovery result.
+
+The same controller seeds tool embeddings during deployment and evaluation setup. It generates changed vectors before opening a transaction, then writes replacements and removes retired tools atomically. An unchanged catalog requires no provider request. Tool-discovery evaluations use the same stored-vector path as production.
+
 The in-app agent gets a context-reducing surface. Frequently used grounding and editing tools are registered directly, including `ls`, `grep`, and read-only `sed`. Everything else stays out of the prompt until `search_tools` returns its exact name and input schema; the harness then promotes that real, flat-schema tool for the next generation. Large notes, attachments, diagram sources, published note versions, and persisted tool results are addressed as virtual files rather than repeated inside tool results or replay.
 
 <Mermaid
@@ -48,7 +52,36 @@ This is a different system from the OAuth2/OIDC flow that signs a user into the 
 
 ## Run lifecycle
 
-The controller's `submit` returns a receipt immediately; `AgentRunLifecycle.execute` (`src/lib/server/services/agent/runs/lifecycle.ts`) runs in the background. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers.
+At startup, the Agent controller settles interrupted executions and resumes queued chat requests from
+their saved input. A request committed before shutdown does not need another browser submission to start.
+
+Promise extraction from a note selection has its own durable input. The Todo controller stores the
+selection and generation settings before execution, and returns a run receipt. Repeated delivery of
+the same request ID returns that run. On startup it resumes queued extractions from stored input.
+Relative due dates use the stored submission time, including when recovery occurs on a later day.
+It saves extracted proposals and the result event in the same transaction as the successful terminal
+transition. Cancellation or a changed source selection prevents those writes.
+
+The References controller follows the same durable request contract for web searches. It stores the
+selection and chosen model, resumes queued searches, and commits proposals and completion together.
+Both controllers share request storage; neither passes an executable callback to another controller.
+The browser retains uncertain request identities separately for each account and action. A missing
+web-search credential produces an explicit failure, not an empty search result.
+
+Related-note discovery is owned by the Relationships controller. Its saved input records the selection
+and whether classification uses rules or a specific model. Retrieval and classification run before the
+transaction that writes backlink proposals and completion. Startup resumes queued requests from those
+values. Enabling or disabling a model does not change the classification mode of an existing request.
+
+The Diagrams controller owns generation, inline Mermaid revision and draw.io conversion requests.
+Each action stores its full input and chosen model before execution, then uses that same run for
+provenance, provider execution, the result and completion. It commits generated proposals and terminal
+events together. Queued actions resume from stored input; interrupted running actions fail explicitly.
+The browser retains uncertain diagram request identities per account. All note actions share
+`NoteActionRequests` for storage and `RunSettlements` for terminal claims. The callback workflow runner
+has been removed.
+
+The Agent controller's `submit` returns a receipt immediately. Its `execute` method (`src/lib/server/controllers/agent/controller.ts`) runs in the background. The same controller owns submission, execution, cancellation and restart recovery. It transitions `queued → running`, records provenance, builds the context snapshot once, then streams the reasoning runner (`reasoning.ts`). Every streamed update is appended to the event log inside a transaction, and an in-process event bus notifies subscribers. Context updates check the stored run status in the write statement so a concurrent cancellation cannot be overwritten.
 
 The state machine is owned by the model layer: `assertAgentRunTransition` in `src/lib/models/agent/agent-runs.ts:93` rejects anything outside it.
 

@@ -1,8 +1,8 @@
 import { AttachmentLibrary } from '$lib/server/services/attachments/library';
-import { AttachmentExtraction } from '$lib/server/services/attachments/extraction';
+import { AttachmentContent } from '$lib/server/services/attachments/content';
 import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemorySearchRepository,
 	InMemoryEmbeddingClient
@@ -13,31 +13,34 @@ import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-build
 import {
 	InMemoryAttachmentRepository,
 	InMemoryTextParser,
-	InMemoryDocumentOcr,
+	InMemoryOcrEngine,
 	InMemoryImageDescriber,
 	InMemoryStorage
 } from '../fakes/processing';
 import { InMemoryAttachmentClaims } from '../fakes/claims';
 import type { AttachmentView } from '$lib/models/attachments';
-export const setupAttachments = () => {
+export const setupAttachments = (chunker = new TokenAwareChunker()) => {
 	const repository = new InMemoryAttachmentRepository();
 	const notes = new InMemoryNoteRepository();
 	const search = new InMemorySearchRepository();
 	const claims = new InMemoryAttachmentClaims();
 	const textParser = new InMemoryTextParser();
-	const ocr = new InMemoryDocumentOcr();
+	const ocr = new InMemoryOcrEngine();
 	const describer = new InMemoryImageDescriber();
 	const storage = new InMemoryStorage();
 	const service = new AttachmentLibrary(repository, notes, storage);
 	const worker = new AttachmentProcessing({
 		records: repository,
 		claims,
-		extraction: new AttachmentExtraction(
-			storage,
-			new AttachmentParserRegistry([textParser]),
-			ocr,
-			describer
+		storage,
+		parsers: new AttachmentParserRegistry([textParser]),
+		ocr,
+		imageDescriber: describer,
+		content: new AttachmentContent(),
+		parseLimit: Number(
+			process.env.ATTACHMENT_PARSE_MAX_BYTES ?? process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024
 		),
+		maxPages: Number(process.env.ATTACHMENT_OCR_MAX_PAGES ?? 100),
 		preferences: {
 			get: async (actor) => ({
 				userId: actor.userId,
@@ -47,7 +50,7 @@ export const setupAttachments = () => {
 				updatedAt: testNow
 			})
 		},
-		indexer: new ContentIndex(search, new InMemoryEmbeddingClient()).attachments,
+		indexer: new ContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
 		transactionRunner: new InMemoryTransactionRunner([repository, search]),
 		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
 		logger: { error: () => {} }

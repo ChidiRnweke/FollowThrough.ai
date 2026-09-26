@@ -1,7 +1,9 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateNoteInput,
 	Note,
+	NoteSaveWrite,
+	NotePublicationWrite,
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
@@ -19,12 +21,6 @@ import type {
 	SelectionProducer
 } from '$lib/models/provenance';
 import type { ProjectId } from '$lib/models/projects';
-export interface NoteCreator {
-	create(
-		actor: ActorContext,
-		input: CreateNoteInput & { documentKind?: 'note' | 'skill' }
-	): Promise<Note>;
-}
 export interface NoteReader {
 	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
 }
@@ -36,11 +32,8 @@ export interface NoteTextSearcher {
 	listSearchable(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
 }
 export interface NoteEditor {
-	save(actor: ActorContext, note: Note): Promise<Note>;
-}
-export interface NoteArchiver {
-	archive(actor: ActorContext, noteId: NoteId): Promise<Note>;
-	restore(actor: ActorContext, noteId: NoteId): Promise<Note>;
+	getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note>;
+	persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note>;
 }
 export interface NoteSectionNumberingEditor {
 	setSectionNumbering(actor: ActorContext, input: SetNoteSectionNumberingInput): Promise<Note>;
@@ -65,34 +58,18 @@ export interface NoteAttachmentRestorer {
 		revisionId: NoteRevisionId
 	): Promise<void>;
 }
-/**
- * Destroying trashed notes for good. Both methods return the ids they removed, which a
- * folder makes wider than what was asked for: its trashed contents go with it.
- */
-export interface NotePurger {
-	deleteForever(
-		actor: ActorContext,
-		noteId: NoteId
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]>;
-	emptyTrash(
-		actor: ActorContext,
-		projectId?: ProjectId
-	): Promise<readonly Pick<Note, 'id' | 'title'>[]>;
-}
 export interface NoteTrashReader {
 	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly TrashedNote[]>;
 }
 export interface NotePublisher {
-	markPublished(actor: ActorContext, noteId: NoteId): Promise<Note>;
+	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note>;
+	persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note>;
 }
 export interface NoteImporter {
 	import(actor: ActorContext, markdown: string): Promise<Note>;
 }
 export interface NoteExporter {
 	export(actor: ActorContext, noteId: NoteId): Promise<string>;
-}
-export interface SelectionAnchorCreator {
-	create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor>;
 }
 export interface SourceAnchorResolver {
 	resolve(
@@ -104,10 +81,11 @@ export interface SourceAnchorRepairer {
 	repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]>;
 }
 export interface NoteIndexer {
-	index(actor: ActorContext, note: Note): Promise<void>;
+	index(actor: ActorContext, note: Note): Promise<IndexingResult>;
 }
 
 export interface SelectionOriginService {
+	validate(actor: ActorContext, selection: TextSelection): Promise<Note>;
 	resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>>;
 	record(
 		actor: ActorContext,

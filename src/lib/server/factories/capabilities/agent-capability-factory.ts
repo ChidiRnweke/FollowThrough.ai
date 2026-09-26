@@ -1,7 +1,18 @@
-import { RunRecovery } from '$lib/server/controllers/run-recovery/controller';
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
-import { normalizeLanguageModelId, webSearchOptionsFromEnvironment } from '$lib/models/agent';
+import {
+	normalizeLanguageModelId,
+	CHAT_WEB_SEARCH_DEFAULTS,
+	type WebResearchSettings
+} from '$lib/models/agent';
+import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
+import { resolveWebResearch } from '$lib/services/agent/web-research';
 import type { Database } from '$lib/server/db';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import {
@@ -15,15 +26,11 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
-import { BaseAgentContext } from '$lib/server/services/agent/runs/base-context';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
-import { AgentRunLifecycle } from '$lib/server/controllers/agent-execution/controller';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
 import {
 	AgentModels,
 	AgentPreferenceCatalog,
@@ -31,14 +38,8 @@ import {
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { WorkflowRunner } from '$lib/server/controllers/workflow-execution/controller';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
-import type { ToolRetriever } from '$lib/server/services/agent/tools/tool-retriever';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { ProjectCatalog } from '$lib/server/services/projects/catalog';
-import type { BuiltInSkillLibrary } from '$lib/server/services/skills/built-ins';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
 import { agentToolCatalog } from '$lib/server/factories/agent/agent-tool-catalog-factory';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
@@ -48,14 +49,8 @@ import { AgentReplayVirtualizer } from '$lib/server/services/agent/conversations
 
 export interface AgentCapabilityInput {
 	readonly db: Database;
-	readonly transactionRunner: TransactionRunner;
 	readonly controllers: () => ProductionControllerFactory;
 	readonly toolRetriever: ToolRetriever;
-	readonly notes: NoteCatalog;
-	readonly skills: BuiltInSkillLibrary;
-	readonly projects: ProjectCatalog;
-	readonly memory: MemoryLibrary;
-	readonly provenance: ProvenanceRecorder;
 	readonly files: AgentFileRepository;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
@@ -67,26 +62,33 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly now: () => DateTime;
+	readonly webSearchDefaults: WebResearchSettings;
+	readonly agentAvailable: boolean;
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceCatalog;
 	readonly models: AgentModelCatalog;
 	readonly toolPreferences: ToolAccess;
 	readonly trust: ToolTrust;
 	readonly runs: AgentRunRecords;
+	readonly cancellations: RunCancellation;
+	readonly approvals: RunApprovals;
+	readonly preparation: RunPreparation;
+	readonly checkpoints: RunCheckpoints;
 	readonly runLedger: AgentRunLedger;
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
 	readonly sessions: AgentSessionRecords;
 	readonly context: AgentContext;
-	readonly executor: AgentRunLifecycle;
+	readonly runner: AgentReasoning;
+	readonly settlements: RunSettlements;
+	readonly noteActionRequests: NoteActionRequests;
 	readonly eventBus: AgentEvents;
-	/** Runs the editor's note actions as cancellable, resumable agent runs. */
-	readonly workflowRunner: WorkflowRunner;
-	readonly recovery: RunRecovery;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
-	const conversations = new ConversationArchive(new ConversationRecords(input.db));
+	const conversationRepository = new ConversationRecords(input.db);
+	const conversations = new ConversationArchive(conversationRepository);
 	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(input.db));
 	const models =
 		input.modelCatalog ??
@@ -101,18 +103,11 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const runs = new AgentRunRecords(input.db);
 	const runLedger = new AgentRunLedger(runs);
 	const runEvents = new AgentRunEventRecords(input.db);
-	const settlements = new RunSettlements(runs, runEvents, input.transactionRunner);
+	const settlements = new RunSettlements(runs, runEvents);
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEvents();
-	const context = new AgentContext(
-		new BaseAgentContext(input.notes),
-		input.skills,
-		input.notes,
-		conversations,
-		input.projects,
-		input.memory
-	);
+	const context = new AgentContext();
 	const runner = new AgentReasoning(
 		agentToolRegistry(input.controllers, input.toolRetriever),
 		sessions,
@@ -127,50 +122,34 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				conversationId,
 				new AgentReplayVirtualizer(input.files)
 			),
-		traceAgentTurn,
-		webSearchOptionsFromEnvironment(process.env)
+		traceAgentTurn
 	);
-	const executor = new AgentRunLifecycle({
-		settlements,
-		runs,
-		events: runEvents,
-		decisions: runDecisions,
-		sessions,
-		transactions: input.transactionRunner,
-		contextBuilder: context,
-		provenance: input.provenance,
-		conversations,
-		runner,
-		eventBus
-	});
 
 	return {
+		webSearchDefaults: resolveWebResearch(
+			webSearchOptionsFromEnvironment(process.env),
+			CHAT_WEB_SEARCH_DEFAULTS
+		),
+		agentAvailable: Boolean(input.openRouterApiKey.trim()),
+		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		preferences,
 		models,
 		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db), agentToolCatalog),
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
 		runs,
+		cancellations: new RunCancellation(runs),
+		approvals: new RunApprovals(runs),
+		preparation: new RunPreparation(runs),
+		checkpoints: new RunCheckpoints(runs),
 		runLedger,
 		runEvents,
 		runDecisions,
 		sessions,
 		context,
-		workflowRunner: new WorkflowRunner({
-			settlements,
-			transactions: input.transactionRunner,
-			runs,
-			events: runEvents,
-			conversations,
-			eventBus,
-			activeRuns: {
-				register: registerActiveRun,
-				release: releaseActiveRun
-			},
-			defaultModel: normalizeLanguageModelId(input.defaultModel)
-		}),
-		executor,
-		recovery: new RunRecovery(runs, executor, settlements, eventBus),
+		runner,
+		settlements,
+		noteActionRequests: new NoteActionRequests(runs, runEvents, conversationRepository),
 		eventBus
 	};
 };

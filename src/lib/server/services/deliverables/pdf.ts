@@ -1,9 +1,4 @@
-import {
-	prepareExport,
-	exportImage,
-	type ExportInput,
-	type PreparedDiagram
-} from '$lib/server/repositories/deliverables/export-preparation';
+import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import {
 	documentNodeContent as nodeContent,
 	documentInlineText as collectText,
@@ -28,7 +23,7 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares, headingSpacingPt } from '$lib/models/deliverables';
+import { columnShares } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 // pdf.spec.ts imports the hash from here; keep the re-export.
@@ -201,6 +196,7 @@ interface ConversionContext {
 	readonly usableHeight: number;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
 	readonly bodyFont: string;
 }
@@ -211,7 +207,7 @@ function imageBlock(
 ): PdfContent | PdfContent[] {
 	const src = attrs.src ?? undefined;
 	if (!src) return [];
-	const data = exportImage(src, context.images);
+	const data = context.images.get(src);
 	if (!data) {
 		return { text: '[image unavailable]', italics: true, color: '#9ca3af', margin: [0, 4, 0, 4] };
 	}
@@ -394,7 +390,7 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 		case 'heading': {
 			const level = Math.min(node.attrs?.level ?? 1, 6);
 			const sizes = [18, 16, 14, 13, 12, 11];
-			const spacing = headingSpacingPt(level);
+			const spacing = context.headingSpacing.get(level);
 			return {
 				text: withFontRuns({ text: collectText(node) }, context.bodyFont),
 				fontSize: sizes[level - 1],
@@ -515,8 +511,8 @@ function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): PdfCo
 	return result;
 }
 
-export async function generatePdf(input: ExportInput): Promise<Buffer> {
-	const { notes, settings, images, diagrams } = await prepareExport(input);
+export async function generatePdf(input: PreparedExport): Promise<Buffer> {
+	const { notes, settings, images, diagrams } = input;
 	const printer = pdfmake;
 	// Embed the repo-shipped Noto fonts; the local-access policy permits only
 	// files inside assets/fonts, never arbitrary filesystem paths.
@@ -541,6 +537,7 @@ export async function generatePdf(input: ExportInput): Promise<Buffer> {
 		usableHeight,
 		images,
 		diagrams,
+		headingSpacing: input.headingSpacing,
 		bodyFont
 	};
 

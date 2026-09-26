@@ -1,6 +1,9 @@
-import type { NoteId, NoteSummary } from '$lib/models/notes';
+import type { NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
-import type { ContextChip, ResourceChip } from '$lib/stores/agent/chat.svelte';
+import type { ResourceChip } from '$lib/models/chat';
+import { MENTION_PATTERN } from '$lib/models/chat';
+export { MENTION_PATTERN } from '$lib/models/chat';
+import { folderNoteIds } from '$lib/services/notes/folder-context';
 
 /**
  * The composer's `@` mentions. The prompt text is the source of truth: picking a
@@ -12,8 +15,6 @@ import type { ContextChip, ResourceChip } from '$lib/stores/agent/chat.svelte';
  * typed, and `[^\s@]*` keeps the query to a single word — which is also what closes
  * the picker once `withMention` writes a (possibly multi-word) title plus a space.
  */
-export const MENTION_PATTERN = /(^|\s)@([^\s@]*)$/;
-
 export const mentionQueryOf = (prompt: string): string | undefined =>
 	MENTION_PATTERN.exec(prompt)?.[2];
 
@@ -22,19 +23,13 @@ const NOTE_CANDIDATES = 6;
 const FOLDER_CANDIDATES = 4;
 const SKILL_CANDIDATES = 4;
 
-/**
- * A tagged folder attaches the notes inside it, exactly as tagging each note would.
- * The cap guards against a large folder fanning out into hundreds of note reads;
- * the server's per-note token budget handles the size of what does come back.
- */
-export const FOLDER_NOTE_LIMIT = 25;
-
 const matches = (title: string, query: string): boolean => title.toLowerCase().includes(query);
 
 export const mentionCandidatesFor = (
 	query: string,
 	noteTree: readonly NoteSummary[],
-	skills: readonly SkillSummary[]
+	skills: readonly SkillSummary[],
+	availability: 'unknown' | 'complete'
 ): ResourceChip[] => {
 	const needle = query.toLowerCase();
 	const live = noteTree.filter((entry) => !entry.archivedAt && matches(entry.title, needle));
@@ -43,7 +38,7 @@ export const mentionCandidatesFor = (
 		.slice(0, NOTE_CANDIDATES)
 		.map((note): ResourceChip => ({ kind: 'note', id: note.id, name: note.title }));
 	const folders = live
-		.filter((entry) => entry.kind === 'folder')
+		.filter((entry) => entry.kind === 'folder' && availability === 'complete')
 		.slice(0, FOLDER_CANDIDATES)
 		.map((folder): ResourceChip => ({
 			kind: 'folder',
@@ -57,50 +52,3 @@ export const mentionCandidatesFor = (
 		.map((skill): ResourceChip => ({ kind: 'skill', id: skill.noteId, name: skill.name }));
 	return [...notes, ...folders, ...matched];
 };
-
-const tokenOf = (chip: ContextChip): string => `@${chip.name}`;
-
-/** Replaces the `@query` being typed with the chosen name, left in the sentence. */
-export const withMention = (prompt: string, chip: ContextChip): string =>
-	prompt.replace(MENTION_PATTERN, `$1${tokenOf(chip)} `);
-
-/** Drops every occurrence of a chip's token, closing the gap it leaves behind. */
-export const withoutMention = (prompt: string, chip: ContextChip): string =>
-	prompt.split(tokenOf(chip)).join('').replace(/ {2,}/g, ' ');
-
-/**
- * The chips still spoken for by the prompt text.
- *
- * A pinned selection is not spoken for by anything: it has no sayable name, so there is no
- * token to keep or delete, and it is held on by having been pinned. Only the tag-driven
- * chips answer to the sentence.
- */
-export const liveChips = (prompt: string, chips: readonly ContextChip[]): ContextChip[] =>
-	chips.filter((chip) => chip.kind === 'selection' || prompt.includes(tokenOf(chip)));
-
-/**
- * Every note under a folder, however deep. Folders themselves carry no content, so
- * only their leaves are attachable; archived entries are left out the same way they
- * are left out of the picker.
- */
-export function folderNoteIds(noteTree: readonly NoteSummary[], folderId: NoteId): NoteId[] {
-	const childrenOf = new Map<NoteId, NoteSummary[]>();
-	for (const entry of noteTree) {
-		if (entry.archivedAt || !entry.parentId) continue;
-		const siblings = childrenOf.get(entry.parentId);
-		if (siblings) siblings.push(entry);
-		else childrenOf.set(entry.parentId, [entry]);
-	}
-	const found: NoteId[] = [];
-	const pending: NoteId[] = [folderId];
-	const seen = new Set<NoteId>([folderId]);
-	while (pending.length > 0 && found.length < FOLDER_NOTE_LIMIT) {
-		for (const child of childrenOf.get(pending.shift()!) ?? []) {
-			if (seen.has(child.id)) continue;
-			seen.add(child.id);
-			if (child.kind === 'folder') pending.push(child.id);
-			else if (found.length < FOLDER_NOTE_LIMIT) found.push(child.id);
-		}
-	}
-	return found;
-}

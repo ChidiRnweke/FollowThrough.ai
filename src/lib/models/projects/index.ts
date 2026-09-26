@@ -101,10 +101,23 @@ export interface ProjectTemplate {
 	readonly objectKey: string;
 	readonly mediaType: string;
 	readonly byteSize: number;
-	readonly extractedStyles?: ProjectTemplateStyles;
+	readonly extractedStyles: ProjectTemplateStyles;
 	readonly isDefault: boolean;
 	readonly createdAt: DateTime;
 	readonly updatedAt: DateTime;
+}
+
+/** A reserved upload is not yet a template that can generate a document. */
+export interface TemplateUpload {
+	readonly id: TemplateId;
+	readonly userId: UserId;
+	readonly projectId: ProjectId;
+	readonly name: string;
+	readonly objectKey: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+	readonly checksumSha256: string;
+	readonly createdAt: DateTime;
 }
 
 /** One entry in the project's document tree; folders nest children, notes never do. */
@@ -143,12 +156,37 @@ export interface GetProjectOutput {
 	readonly tree: readonly ProjectTreeNode[];
 }
 
+export interface ParsedMarkdownNote {
+	readonly path: string;
+	readonly folders: readonly string[];
+	readonly title: string;
+	readonly markdown: string;
+	readonly frontmatterKeys: readonly string[];
+}
+
 export interface ImportMarkdownArchiveInput {
 	readonly projectId: ProjectId;
 	/** Import under an existing folder rather than at the project root. */
 	readonly parentId?: NoteId;
-	readonly archive: Uint8Array;
-	readonly fileName: string;
+	readonly notes: readonly ParsedMarkdownNote[];
+	readonly skipped: readonly { readonly path: string; readonly reason: string }[];
+}
+
+export interface ArchiveLinkIssue {
+	readonly path: string;
+	readonly target: string;
+	readonly reason: 'missing' | 'ambiguous' | 'unavailable' | 'unsupported';
+}
+
+export interface ArchiveNoteReference {
+	readonly path: string;
+	readonly title: string;
+	readonly outcome: { readonly kind: 'created'; readonly id: NoteId } | { readonly kind: 'failed' };
+}
+
+export interface ArchiveReferenceIndex {
+	readonly paths: ReadonlyMap<string, readonly ArchiveNoteReference[]>;
+	readonly titles: ReadonlyMap<string, readonly ArchiveNoteReference[]>;
 }
 
 /**
@@ -167,6 +205,7 @@ export interface ImportMarkdownArchiveOutput {
 	readonly failed: readonly { readonly path: string; readonly message: string }[];
 	/** Frontmatter the importer had nowhere to put, so it is named rather than dropped. */
 	readonly unmappedFrontmatterKeys: readonly string[];
+	readonly unresolvedLinks: readonly ArchiveLinkIssue[];
 }
 
 /**
@@ -183,7 +222,14 @@ export const importMarkdownArchiveOutputSchema = z.object({
 	createdFolderIds: z.array(z.uuid().transform((value) => value as NoteId)),
 	skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
 	failed: z.array(z.object({ path: z.string(), message: z.string() })),
-	unmappedFrontmatterKeys: z.array(z.string())
+	unmappedFrontmatterKeys: z.array(z.string()),
+	unresolvedLinks: z.array(
+		z.object({
+			path: z.string(),
+			target: z.string(),
+			reason: z.enum(['missing', 'ambiguous', 'unavailable', 'unsupported'])
+		})
+	)
 });
 
 export interface CreateFolderInput {
@@ -239,112 +285,8 @@ export interface ArchiveProjectOutput {
 export * from './export-entries';
 import { z } from 'zod';
 
-/** Preserve the adapter's sibling order while assembling the same tree on both sides. */
-export function assembleProjectTree<
-	Entry extends Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind'>
->(entries: readonly Entry[]): readonly ProjectTreeNode<Entry>[] {
-	const children = new Map<NoteId | undefined, Entry[]>();
-	for (const entry of entries) {
-		if (entry.kind === 'skill') continue;
-		const siblings = children.get(entry.parentId) ?? [];
-		siblings.push(entry);
-		children.set(entry.parentId, siblings);
-	}
-	const build = (parentId: NoteId | undefined): ProjectTreeNode<Entry>[] =>
-		(children.get(parentId) ?? []).map((entry) => ({ entry, children: build(entry.id) }));
-	return build(undefined);
-}
-
-/** A move rewrites both sibling lists while preserving their existing relative order. */
-export function decideProjectEntryMove<
-	Entry extends Pick<ProjectEntryReference, 'id' | 'parentId' | 'kind' | 'position'>
->(
-	input: MoveProjectEntryInput,
-	entries: readonly Entry[]
-):
-	| { kind: 'invalid'; code: 'VALIDATION' | 'NOT_FOUND'; message: string }
-	| {
-			kind: 'move';
-			entry: Entry;
-			parentId: NoteId | undefined;
-			position: number;
-			changes: readonly {
-				readonly id: NoteId;
-				readonly parentId: NoteId | undefined;
-				readonly position: number;
-			}[];
-	  } {
-	if (!Number.isInteger(input.position) || input.position < 0)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: 'Entry position must be a non-negative integer'
-		};
-	const entry = entries.find((candidate) => candidate.id === input.entryId);
-	if (!entry) return { kind: 'invalid', code: 'NOT_FOUND', message: 'Project entry was not found' };
-	if (input.parentId === entry.id)
-		return { kind: 'invalid', code: 'VALIDATION', message: 'An entry cannot parent itself' };
-	if (input.parentId) {
-		const parent = entries.find((candidate) => candidate.id === input.parentId);
-		if (!parent)
-			return { kind: 'invalid', code: 'NOT_FOUND', message: 'Project entry was not found' };
-		if (parent.kind !== 'folder')
-			return { kind: 'invalid', code: 'VALIDATION', message: 'A parent must be a folder' };
-		let cursor: NoteId | undefined = input.parentId;
-		while (cursor) {
-			if (cursor === entry.id)
-				return {
-					kind: 'invalid',
-					code: 'VALIDATION',
-					message: 'An entry cannot move below its descendant'
-				};
-			const ancestor = entries.find((candidate) => candidate.id === cursor);
-			if (!ancestor)
-				return { kind: 'invalid', code: 'NOT_FOUND', message: 'Project entry was not found' };
-			cursor = ancestor.parentId;
-		}
-	}
-	const oldSiblings = entries
-		.filter((candidate) => candidate.parentId === entry.parentId && candidate.id !== entry.id)
-		.sort((left, right) => left.position - right.position);
-	const targetSiblings = (
-		entry.parentId === input.parentId
-			? oldSiblings
-			: entries
-					.filter((candidate) => candidate.parentId === input.parentId && candidate.id !== entry.id)
-					.sort((left, right) => left.position - right.position)
-	).slice();
-	targetSiblings.splice(Math.min(input.position, targetSiblings.length), 0, entry);
-	return {
-		kind: 'move',
-		entry,
-		parentId: input.parentId,
-		position: targetSiblings.indexOf(entry),
-		changes: [
-			...(entry.parentId === input.parentId
-				? []
-				: oldSiblings.map((sibling, position) => ({
-						id: sibling.id,
-						parentId: entry.parentId,
-						position
-					}))),
-			...targetSiblings.map((sibling, position) => ({
-				id: sibling.id,
-				parentId: input.parentId,
-				position
-			}))
-		]
-	};
-}
-
-export function decideProjectDetails(input: {
+/** Project details after normalization; absence of a description is an explicit result. */
+export interface ProjectDetails {
 	readonly name: string;
-	readonly description?: string;
-}):
-	| { kind: 'invalid'; message: string }
-	| { kind: 'details'; name: string; description: string | undefined } {
-	const name = input.name.trim();
-	return name
-		? { kind: 'details', name, description: input.description?.trim() || undefined }
-		: { kind: 'invalid', message: 'Project name is required' };
+	readonly description: string | undefined;
 }

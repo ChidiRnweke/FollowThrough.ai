@@ -12,6 +12,18 @@ type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 export type SearchDocumentId = Brand<string, 'SearchDocumentId'>;
 
+/** A source whose stored chunks still need embeddings. */
+export interface PendingIndexSource {
+	readonly userId: Brand<string, 'UserId'>;
+	readonly source: IndexSource;
+	readonly cursor: string;
+}
+
+export interface EmbeddedChunk {
+	readonly id: SearchDocumentId;
+	readonly embedding: readonly number[];
+}
+
 export const searchDocumentIdSchema = z.uuid().transform((value) => value as SearchDocumentId);
 
 type AttachmentId = Brand<string, 'AttachmentId'>;
@@ -78,20 +90,6 @@ export type KnowledgeSearchSource =
 			readonly title: string;
 	  };
 
-/** Preserve the chunk's source instead of presenting every search hit as a note. */
-export function knowledgeSearchSource(document: SearchDocument): KnowledgeSearchSource {
-	const context = {
-		projectId: document.projectId,
-		...(document.sourceTitle ? { title: document.sourceTitle } : {})
-	};
-	if (document.attachmentId) return { ...context, kind: 'attachment', id: document.attachmentId };
-	if (document.diagramId) return { ...context, kind: 'diagram', id: document.diagramId };
-	if (document.memoryEntryId)
-		return { ...context, kind: 'memory', id: document.memoryEntryId, title: document.content };
-	if (document.noteId) return { ...context, kind: 'note', id: document.noteId };
-	return { kind: 'unavailable', projectId: document.projectId };
-}
-
 export type IndexSource =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
 	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
@@ -115,7 +113,15 @@ export interface IndexContent {
 export type IndexPlan =
 	| { readonly kind: 'remove'; readonly source: IndexSource }
 	| ({ readonly kind: 'index' } & IndexContent);
-export const decideIndexPlan = (content: IndexContent): IndexPlan =>
-	content.contents.length
-		? { kind: 'index', ...content }
-		: { kind: 'remove', source: content.source };
+export type IndexingResult =
+	| { readonly kind: 'stored' }
+	| {
+			readonly kind: 'needs_embeddings';
+			readonly source: IndexSource;
+			readonly documents: readonly SearchDocument[];
+			readonly missing: readonly { readonly id: SearchDocumentId; readonly input: string }[];
+			readonly model: string;
+	  };
+
+export type DiagramIndexContext =
+	{ readonly kind: 'standalone' } | { readonly kind: 'note'; readonly title: string };

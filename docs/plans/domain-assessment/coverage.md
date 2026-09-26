@@ -2,6 +2,9 @@
 
 Snapshot source revision: `48f7f457d10f0d7662ff91bd42868b03b19acade`. Source digest: `4d67c5a4c6a215a9c43e0211df76290841a011bb7b8b4c8135198a346c215114`.
 
+See [the continuation register](continuation.md) for merged work, open implementation PRs and
+unresolved review. Counts below belong to this historical inventory, not the current branch.
+
 ## What is complete
 
 - The agreed checklist is persisted with 411 stable workflow IDs across 28 families.
@@ -25,6 +28,10 @@ design tokens, deployment and build configuration need their own evidence when c
 paths is not zero unreviewed behavior. No repository-wide semantic certification is claimed.
 
 ## Model namespace register
+
+Current declaration dispositions for the task namespace are recorded in
+[the task model review](task-values.md). The historical counts below remain unchanged. Workflow
+coverage is separate: the category and list-read dispositions close only W09.07 and W09.09.
 
 Each exported model declaration is enumerated in the JSON. This table gives its semantic review home;
 it does not rubber-stamp optional-field combinations or constructor behavior.

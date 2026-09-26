@@ -1,12 +1,11 @@
 import type { ActorContext } from '$lib/models/identity';
-import { decideSelection, type Note, type TextSelection } from '$lib/models/notes';
-import {
-	asProvenance,
-	type SelectionSource,
-	type SelectionOrigin,
-	type SelectionProducer,
-	type SourceAnchorId,
-	type ProvenanceId
+import type { Note, TextSelection } from '$lib/models/notes';
+import type {
+	SelectionSource,
+	SelectionOrigin,
+	SelectionProducer,
+	SourceAnchorId,
+	ProvenanceId
 } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
@@ -21,7 +20,10 @@ export class SelectionOrigins {
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
+	async validate(actor: ActorContext, selection: TextSelection): Promise<Note> {
+		return this.selectedNote(actor, selection);
+	}
+	private async selectedNote(actor: ActorContext, selection: TextSelection): Promise<Note> {
 		const note = await this.notes.findById(actor, selection.noteId);
 		if (!note) throw new NotFoundError('Selection note was not found');
 		const decision = decideSelection(selection, note);
@@ -29,6 +31,10 @@ export class SelectionOrigins {
 			if (decision.code === 'STALE_REVISION') throw new StaleRevisionError(decision.message);
 			throw new ValidationError(decision.message);
 		}
+		return note;
+	}
+	async resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>> {
+		const note = await this.selectedNote(actor, selection);
 		const anchor = await this.anchors.insert(actor, {
 			id: crypto.randomUUID() as SourceAnchorId,
 			noteId: note.id,
@@ -45,17 +51,50 @@ export class SelectionOrigins {
 		source: SelectionSource<Note>,
 		producer: SelectionProducer
 	): Promise<SelectionOrigin<Note>> {
-		const provenance = await this.provenance.insert(
-			actor,
-			asProvenance(
-				{ ...producer, sourceAnchorId: source.anchor.id },
-				{
-					id: crypto.randomUUID() as ProvenanceId,
-					userId: actor.userId,
-					createdAt: new Date().toISOString() as DateTime
-				}
-			)
-		);
+		const provenance = await this.provenance.insert(actor, {
+			...producer,
+			sourceAnchorId: source.anchor.id,
+			id: crypto.randomUUID() as ProvenanceId,
+			userId: actor.userId,
+			createdAt: new Date().toISOString() as DateTime
+		});
 		return { ...source, provenance };
 	}
+}
+
+/** Selection offsets describe one observed revision of the source document. */
+export function decideSelection(
+	selection: TextSelection,
+	note: Pick<Note, 'id' | 'currentRevision' | 'plainText'>
+): { kind: 'valid' } | { kind: 'invalid'; code: 'VALIDATION' | 'STALE_REVISION'; message: string } {
+	if (!selection.text.trim())
+		return { kind: 'invalid', code: 'VALIDATION', message: 'A non-empty selection is required' };
+	if (selection.revision !== note.currentRevision)
+		return {
+			kind: 'invalid',
+			code: 'STALE_REVISION',
+			message: 'The selected note revision is stale'
+		};
+	if (
+		!Number.isInteger(selection.from) ||
+		!Number.isInteger(selection.to) ||
+		selection.from < 0 ||
+		selection.from > selection.to ||
+		selection.to > note.plainText.length
+	)
+		return {
+			kind: 'invalid',
+			code: 'VALIDATION',
+			message: 'Selection offsets are outside the note'
+		};
+	if (
+		selection.noteId !== note.id ||
+		note.plainText.slice(selection.from, selection.to) !== selection.text
+	)
+		return {
+			kind: 'invalid',
+			code: 'VALIDATION',
+			message: 'Selection text does not match the note at those offsets'
+		};
+	return { kind: 'valid' };
 }

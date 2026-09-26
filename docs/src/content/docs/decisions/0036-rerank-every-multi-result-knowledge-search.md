@@ -68,9 +68,10 @@ delay.
 
 ## Evidence
 
-- `src/lib/server/services/knowledge-search/semantic.ts` reranks every set with at least two
-  candidates.
-- `src/lib/server/services/knowledge-search/reranking.spec.ts` proves that reranker order is used
+- `src/lib/server/controllers/knowledge-search/controller.ts` coordinates vector lookup and
+  reranks every set with at least two candidates. Inline and relationship controllers own the
+  same sequence for their workflows.
+- `src/lib/server/controllers/knowledge-search/reranking.spec.ts` proves that reranker order is used
   when the candidate count is below K and that provider failure preserves vector candidates.
 - `src/lib/server/services/knowledge-search/ranking.ts` sends the original query and YAML fields.
 - `src/evals/lab/cache/cached-clients.spec.ts` proves that a cached order works with new document IDs

@@ -80,6 +80,20 @@ export const workspaceSyncChanges = pgTable(
 
 export const noteKind = pgEnum('note_kind', ['folder', 'note', 'skill']);
 
+export const todoBatchReceipts = pgTable(
+	'todo_batch_receipts',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		requestId: uuid('request_id').notNull(),
+		request: jsonb('request').$type<import('$lib/models/todos').CreateTodoBatchInput>().notNull(),
+		result: jsonb('result').$type<import('$lib/models/todos').CreateTodoBatchOutput>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.requestId] })]
+);
+
 export const workspaceSyncReceipts = pgTable(
 	'workspace_sync_receipts',
 	{
@@ -264,11 +278,11 @@ export const projects = pgTable(
 		uniqueIndex('projects_user_name_unique')
 			.on(table.userId, sql`lower(${table.name})`)
 			.where(sql`${table.archivedAt} is null`),
-		// One inbox per user, so "where does an uncategorised capture go" has exactly
+		// One active inbox per user, so "where does an uncategorised capture go" has exactly
 		// one answer and the database is what guarantees it.
 		uniqueIndex('projects_user_inbox_unique')
 			.on(table.userId)
-			.where(sql`${table.role} = 'inbox'`),
+			.where(sql`${table.role} = 'inbox' and ${table.archivedAt} is null`),
 		index('projects_user_updated_idx').on(table.userId, table.updatedAt)
 	]
 );
@@ -1138,7 +1152,7 @@ export const searchChunks = pgTable(
 		// Set when a newer revision of the source has been staged but not yet embedded.
 		// Superseded rows stay searchable by embedding (stale content beats no content)
 		// and are dropped once their replacements carry vectors. See the worker at
-		// `$lib/server/services/knowledge-search/index-maintenance`.
+		// `$lib/server/controllers/knowledge-indexing/controller`.
 		supersededAt: timestamp('superseded_at', { withTimezone: true }),
 		...timestamps
 	},
@@ -1173,6 +1187,22 @@ export const toolEmbeddings = pgTable('tool_embeddings', {
 	...timestamps
 });
 
+export const templateUploads = pgTable('template_uploads', {
+	id: uuid('id').primaryKey(),
+	userId: uuid('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	projectId: uuid('project_id')
+		.notNull()
+		.references(() => projects.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	objectKey: text('object_key').notNull(),
+	mediaType: text('media_type').notNull(),
+	byteSize: integer('byte_size').notNull(),
+	checksumSha256: text('checksum_sha256').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+});
+
 export const projectTemplates = pgTable(
 	'project_templates',
 	{
@@ -1192,7 +1222,9 @@ export const projectTemplates = pgTable(
 		...timestamps
 	},
 	(table) => [
-		uniqueIndex('project_templates_project_name_unique').on(table.projectId, table.name),
+		uniqueIndex('project_templates_project_name_unique')
+			.on(table.projectId, table.name)
+			.where(sql`${table.extractedStyles} is not null`),
 		index('project_templates_project_idx').on(table.projectId)
 	]
 );

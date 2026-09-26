@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
-	import { noteCommand } from '$lib/models/workspace-mutations';
+	import { noteCommand } from '$lib/services/workspace/commands';
 	import { Input } from '$lib/components/ui/input';
 	import { onMount, untrack } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -19,7 +19,7 @@
 	import { toast } from 'svelte-sonner';
 	import { importSkillMarkdown } from '$lib/remote/skills/skills.remote';
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
-	import { serializeSkillManifest } from '$lib/models/skills';
+	import { serializeSkillManifest } from '$lib/services/skills/manifest';
 	import type { WorkspaceSkill } from '$lib/models/workspace-views';
 	import { parseProseMirrorDocument, type Note } from '$lib/models/notes';
 
@@ -103,12 +103,11 @@
 							kind: 'failure',
 							message: 'The skill details are unavailable. Reopen the skill.'
 						};
-					if (description !== savedDescription || note.title !== details.name) {
+					if (description !== savedDescription) {
 						const result = await metadata.stage({
 							kind: 'updateSkill',
 							noteId: details.noteId,
-							description,
-							displayName: note.title
+							description
 						});
 						if (result.kind === 'failure') return result;
 						savedDescription = description.trim() || details.description;

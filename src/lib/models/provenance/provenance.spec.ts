@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asProvenance, provenanceOrigin, provenanceSchema } from './index';
-import type { Provenance, ProvenanceRequest } from './index';
+import { provenanceSchema } from './index';
 
 const identity = {
 	id: '10000000-0000-4000-8000-000000000001',
@@ -142,54 +141,19 @@ const supportedProducers = [
 	}
 ] as const;
 
-describe('Completing a request into a record', () => {
-	const storedIdentity = {
-		id: identity.id as Provenance['id'],
-		userId: identity.userId as Provenance['userId'],
-		createdAt: identity.createdAt as Provenance['createdAt']
-	};
-
-	const relateRequest = {
-		producerKind: 'pipeline',
-		producerName: 'Relate',
-		pipeline: 'relate',
-		sourceAnchorId: anchorId,
-		metadata: {}
-	} as ProvenanceRequest;
-
-	it('keeps the arm the request was in', () => {
-		expect(asProvenance(relateRequest, storedIdentity)).toMatchObject({ pipeline: 'relate' });
+describe('Reading stored provenance', () => {
+	it.each(supportedProducers)('accepts stored $label provenance', ({ value }) => {
+		expect(provenanceSchema.safeParse(value).success).toBe(true);
 	});
 
-	it('carries the identity storage supplied', () => {
-		expect(asProvenance(relateRequest, storedIdentity).id).toBe(identity.id);
-	});
-
-	it('refuses a request that could never be a valid record', () => {
+	it('refuses stored relationship provenance without its source anchor', () => {
 		const missingAnchor = {
+			...identity,
 			producerKind: 'pipeline',
 			producerName: 'Relate',
 			pipeline: 'relate',
 			metadata: {}
-		} as ProvenanceRequest;
-		expect(() => asProvenance(missingAnchor, storedIdentity)).toThrow();
-	});
-});
-
-describe('Reading where a record came from', () => {
-	it('names the pipeline for a producer that ran as one', () => {
-		const record = provenanceSchema.parse(supportedProducers[2].value);
-		expect(provenanceOrigin(record)).toEqual({
-			pipeline: 'reference',
-			createdAt: identity.createdAt
-		});
-	});
-
-	it('names the producer for one that did not', () => {
-		const record = provenanceSchema.parse(supportedProducers[1].value);
-		expect(provenanceOrigin(record)).toEqual({
-			producerName: 'document-export',
-			createdAt: identity.createdAt
-		});
+		};
+		expect(() => provenanceSchema.parse(missingAnchor)).toThrow();
 	});
 });

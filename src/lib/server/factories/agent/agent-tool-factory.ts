@@ -1,6 +1,9 @@
+import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
 import { z } from 'zod';
+import { memoryChangePayloadSchema } from '$lib/models/memory';
+import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
 import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentSettingsController } from '$lib/server/controllers/agent/settings/controller';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
@@ -40,10 +43,11 @@ import {
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
 import type { NoteEtag, NoteId, NoteRevisionId, TextSelection } from '$lib/models/notes';
-import type { TodoId } from '$lib/models/todos';
+import { createTodoBatchSchema, type TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
+import { exportSettingsSchema } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 import {
 	DOMAIN_ERROR_ADVICE,
@@ -56,21 +60,15 @@ import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
-import type {
-	ToolDescriptor,
-	ToolRetriever
-} from '$lib/server/services/agent/tools/tool-retriever';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
+import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
 import {
 	noteChangeRequestSchema,
 	noteChangeReviewSchema,
 	type NoteChangeReview,
 	type NoteChangeRequest,
-	applyNotePatch,
-	describeNotePatchFailure
+	type NoteChangeTarget
 } from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
 import { toolFailure } from '$lib/models/agent/tool-failure';
@@ -132,6 +130,7 @@ export interface ToolAccessPolicy {
 }
 
 interface CoveredAgentControllers {
+	readonly agent: AgentController;
 	readonly agentFiles: AgentFilesController;
 	readonly workspace: WorkspaceController;
 	readonly projects: ProjectsController;
@@ -163,6 +162,72 @@ const STUDIO_GESTURE =
 	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
 
 export const agentToolCoverage = {
+	agent: {
+		execute: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		finishCancellation: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		failRun: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		recoverInterruptedRuns: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		synchronize: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		submit: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		getRun: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		listRunEvents: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		isRunStreamComplete: {
+			kind: 'excluded',
+			reason: 'Event-stream delivery belongs to the application lifecycle.'
+		},
+		decide: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		decideMany: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		cancel: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		retry: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		listSessions: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		renameSession: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		},
+		deleteSession: {
+			kind: 'excluded',
+			reason: 'Chat run control belongs to the user and application lifecycle.'
+		}
+	},
 	agentFiles: {
 		ls: { kind: 'read', tools: ['ls'] },
 		grep: { kind: 'read', tools: ['grep'] },
@@ -202,6 +267,10 @@ export const agentToolCoverage = {
 		}
 	},
 	notes: {
+		importMarkdownArchive: {
+			kind: 'excluded',
+			reason: 'Archive imports require a user-supplied multipart file.'
+		},
 		synchronize: {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
@@ -212,12 +281,19 @@ export const agentToolCoverage = {
 			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
 		},
 		create: { kind: 'mutation', tools: ['create_note'] },
-		save: { kind: 'mutation', tools: ['save_skill', 'edit_skill'] },
+		save: {
+			kind: 'excluded',
+			reason:
+				'Browser draft saves use synchronized writes; agent body tools apply prepared reviews.'
+		},
 		prepareChange: {
 			kind: 'excluded',
 			reason: 'Prepares the domain review carried by note write tools; does not write.'
 		},
-		applyReviewedChange: { kind: 'mutation', tools: ['save_note', 'edit_note'] },
+		applyReviewedChange: {
+			kind: 'mutation',
+			tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill']
+		},
 
 		publish: { kind: 'mutation', tools: ['publish_note'] },
 		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
@@ -274,13 +350,22 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Board export is a user download; the agent reads todos through list.'
 		},
-		create: { kind: 'mutation', tools: ['create_todo', 'create_todos'] },
+		create: { kind: 'mutation', tools: ['create_todo'] },
+		createBatch: { kind: 'mutation', tools: ['create_todos'] },
 		update: { kind: 'mutation', tools: ['update_todo'] },
 		remove: {
 			kind: 'excluded',
 			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
 		},
 		extractPromises: { kind: 'proposal', tools: ['extract_promises'] },
+		executePromiseRun: {
+			kind: 'excluded',
+			reason: 'The application executes persisted promise extraction requests.'
+		},
+		recoverQueuedPromiseRuns: {
+			kind: 'excluded',
+			reason: 'The application resumes queued promise extraction requests after startup.'
+		},
 		startExtractPromises: {
 			kind: 'excluded',
 			reason:
@@ -289,6 +374,14 @@ export const agentToolCoverage = {
 	},
 	relationships: {
 		suggestFromSelection: { kind: 'proposal', tools: ['relate_selection'] },
+		executeRelatedNoteRun: {
+			kind: 'excluded',
+			reason: 'The Relationships controller executes a saved related-note request.'
+		},
+		recoverQueuedRelatedNoteRuns: {
+			kind: 'excluded',
+			reason: 'Startup resumes queued related-note searches.'
+		},
 		startSuggestFromSelection: {
 			kind: 'excluded',
 			reason:
@@ -297,6 +390,14 @@ export const agentToolCoverage = {
 	},
 	references: {
 		suggestFromSelection: { kind: 'proposal', tools: ['find_references'] },
+		executeReferenceRun: {
+			kind: 'excluded',
+			reason: 'The References controller executes a stored editor request.'
+		},
+		recoverQueuedReferenceRuns: {
+			kind: 'excluded',
+			reason: 'Startup recovers committed reference searches.'
+		},
 		startSuggestFromSelection: {
 			kind: 'excluded',
 			reason:
@@ -318,11 +419,6 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Inline draw.io conversion is scoped to the note editor review workflow.'
 		},
-		getDrawio: {
-			kind: 'excluded',
-			reason: 'The note-scoped draw.io editor loads its own diagram.'
-		},
-		saveDrawio: { kind: 'excluded', reason: 'The draw.io editor owns explicit saves.' },
 		promote: { kind: 'proposal', tools: ['promote_diagram'] },
 		startGenerateMermaid: {
 			kind: 'excluded',
@@ -338,6 +434,14 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason:
 				'The editor starts this as a cancellable run; the agent calls the synchronous method instead.'
+		},
+		executeDiagramRun: {
+			kind: 'excluded',
+			reason: 'Executes a saved diagram action after its durable claim.'
+		},
+		recoverQueuedDiagramRuns: {
+			kind: 'excluded',
+			reason: 'Startup recovery resumes saved diagram actions.'
 		}
 	},
 	diagramStudio: {
@@ -376,10 +480,6 @@ export const agentToolCoverage = {
 		deleteProjectDiagram: {
 			kind: 'excluded',
 			reason: 'Deleting a diagram can break notes that render it; it stays a confirmed user action.'
-		},
-		saveProjectDrawio: {
-			kind: 'excluded',
-			reason: 'The studio canvas owns explicit saves; the agent does not drive the draw.io embed.'
 		},
 		countDiagramReferences: {
 			kind: 'excluded',
@@ -525,7 +625,7 @@ export const agentToolCoverage = {
 	},
 	agentSettings: {
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
-		deploymentDefaults: {
+		bootstrap: {
 			kind: 'excluded',
 			reason:
 				'Deployment metadata for the offline app bootstrap; user overrides are synchronized separately.'
@@ -885,18 +985,8 @@ interface AgentToolOutputMap {
 	readonly reject_suggestion: ControllerResult<SuggestionsController['reject']>;
 	readonly revert_suggestion: ControllerResult<SuggestionsController['revert']>;
 	readonly list_skills: ControllerResult<SkillsController['list']>;
-	readonly save_skill:
-		| ToolFailure
-		| { readonly noteId: NoteId; readonly name: string; readonly currentRevision: number };
-	readonly edit_skill:
-		| ToolFailure
-		| {
-				readonly noteId: NoteId;
-				readonly name: string;
-				readonly currentRevision: number;
-				readonly appliedEdits: number;
-				readonly matchedTexts: readonly string[];
-		  };
+	readonly save_skill: AgentToolOutputMap['save_note'];
+	readonly edit_skill: AgentToolOutputMap['edit_note'];
 	readonly create_skill: ControllerResult<SkillsController['create']>;
 	readonly list_skill_versions: { readonly revisions: readonly NoteRevisionProjection[] };
 	readonly restore_skill_version: ControllerResult<SkillsController['restoreVersion']>;
@@ -1090,7 +1180,8 @@ const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
 	};
 };
 
-const isReviewedNoteTool = (name: string): boolean => name === 'save_note' || name === 'edit_note';
+const isReviewedNoteTool = (name: string): boolean =>
+	name === 'save_note' || name === 'edit_note' || name === 'save_skill' || name === 'edit_skill';
 
 const readStoredNoteReview = (content: string): NoteChangeReview => {
 	try {
@@ -1137,10 +1228,11 @@ const agentToolFailure = (error: unknown): ToolFailure => {
 const prepareNoteReview = async (
 	factory: ControllerFactory,
 	actor: ActorContext,
-	input: NoteChangeRequest
+	input: NoteChangeRequest,
+	target: NoteChangeTarget
 ): Promise<NoteChangeReview> => {
 	try {
-		return await factory.notes().prepareChange(actor, input);
+		return await factory.notes().prepareChange(actor, input, target);
 	} catch (error) {
 		if (error instanceof DomainError) return { kind: 'failure', problems: [error.message] };
 		const report = failureReport(error);
@@ -1151,11 +1243,12 @@ const prepareNoteReview = async (
 const applyNoteReview = async (
 	factory: ControllerFactory,
 	actor: ActorContext,
-	review: NoteChangeReview
+	review: NoteChangeReview,
+	target: NoteChangeTarget
 ) => {
 	if (review.kind === 'failure')
 		return toolFailure('No changes were applied.', { problems: review.problems });
-	const result = await factory.notes().applyReviewedChange(actor, review.change);
+	const result = await factory.notes().applyReviewedChange(actor, review.change, target);
 	if (result.kind === 'failure')
 		return toolFailure(result.message, {
 			code: result.code,
@@ -1229,9 +1322,14 @@ export class AgentTools {
 		if (prepared) return prepared;
 		const request = noteChangeRequestSchema.parse({
 			...args,
-			kind: name === 'save_note' ? 'replace' : 'patch'
+			kind: name === 'save_note' || name === 'save_skill' ? 'replace' : 'patch'
 		});
-		const review = await prepareNoteReview(this.controllers, this.actor, request);
+		const review = await prepareNoteReview(
+			this.controllers,
+			this.actor,
+			request,
+			name.endsWith('_skill') ? 'skill' : 'authored'
+		);
 		this.noteReviews.set(callId, review);
 		return review;
 	}
@@ -1451,7 +1549,8 @@ export class AgentTools {
 						const result = await applyNoteReview(
 							this.controllers,
 							this.actor,
-							review ?? (await this.prepareNoteCall(definition.name, args, callId))
+							review ?? (await this.prepareNoteCall(definition.name, args, callId)),
+							definition.name.endsWith('_skill') ? 'skill' : 'authored'
 						);
 						const payload = readAgentPayload(result);
 						if (payload.kind === 'corrupt') throw new Error(payload.message);
@@ -1695,11 +1794,17 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 				applyNoteReview(
 					factory,
 					actor,
-					await prepareNoteReview(factory, actor, {
-						kind: 'replace',
-						noteId: input.noteId as NoteId,
-						markdown: input.markdown
-					})
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'replace',
+							noteId: input.noteId as NoteId,
+							markdown: input.markdown
+						},
+						'authored'
+					),
+					'authored'
 				)
 		),
 		edit_note: define(
@@ -1711,11 +1816,17 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 				applyNoteReview(
 					factory,
 					actor,
-					await prepareNoteReview(factory, actor, {
-						kind: 'patch',
-						noteId: input.noteId as NoteId,
-						edits: input.edits
-					})
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'patch',
+							noteId: input.noteId as NoteId,
+							edits: input.edits
+						},
+						'authored'
+					),
+					'authored'
 				)
 		),
 		rename_note: define(
@@ -1844,34 +1955,10 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'create_todos',
 			toolDescription('create_todos'),
 			'mutation',
-			z.object({
-				projectId: projectId,
-				todos: z
-					.array(
-						z.object({
-							title: z.string().min(1),
-							description: z.string().optional(),
-							responsibility: z.enum(['mine', 'waiting_on']),
-							waitingOn: z.string().optional(),
-							dueDate: localDate.optional()
-						})
-					)
-					.min(1)
-					.max(20)
-			}),
-			async (input) => {
-				const created = [];
-				for (const todo of input.todos) {
-					const { dueDate, ...fields } = todo;
-					const result = await factory.todos().create(actor, {
-						...fields,
-						projectId: input.projectId,
-						...(dueDate ? { dueDate } : {})
-					});
-					created.push(projectTodoWrite(result.todo));
-				}
-				return { todos: created };
-			}
+			createTodoBatchSchema,
+			async (input) => ({
+				todos: (await factory.todos().createBatch(actor, input)).todos.map(projectTodoWrite)
+			})
 		),
 		update_todo: define(
 			'update_todo',
@@ -1977,59 +2064,45 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'save_skill',
 			toolDescription('save_skill'),
 			'mutation',
-			z.object({ noteId: noteId, markdown: z.string() }),
-			async (input) => {
-				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-				if (view.skill.note.kind !== 'skill')
-					return toolFailure('save_skill only edits skill notes; this note is not a skill.');
-				const content = noteContentFromMarkdown(input.markdown);
-				const saved = await factory.notes().save(actor, {
-					note: { ...view.skill.note, ...content }
-				});
-				return {
-					noteId: saved.note.id,
-					name: view.skill.name,
-					currentRevision: saved.note.currentRevision
-				};
-			}
+			z.object({ noteId, markdown: z.string() }),
+			async (input) =>
+				applyNoteReview(
+					factory,
+					actor,
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'replace',
+							noteId: input.noteId as NoteId,
+							markdown: input.markdown
+						},
+						'skill'
+					),
+					'skill'
+				)
 		),
 		edit_skill: define(
 			'edit_skill',
 			toolDescription('edit_skill'),
 			'mutation',
 			noteEdits,
-			async (input) => {
-				const view = await factory.skills().get(actor, { noteId: input.noteId as NoteId });
-				if (view.skill.note.kind !== 'skill')
-					return toolFailure('edit_skill only edits skill notes; this note is not a skill.');
-				const before = noteMarkdownFromContent(view.skill.note.document);
-				const patched = applyNotePatch(before, input.edits);
-				// A failure is returned rather than thrown so the occurrence counts and
-				// nearest matches survive into the model's next attempt.
-				if (!patched.ok)
-					return toolFailure('No edits were applied.', {
-						problems: patched.failures.map(describeNotePatchFailure)
-					});
-				const content = noteContentFromMarkdown(patched.markdown);
-				const saved = await factory.notes().save(actor, {
-					note: { ...view.skill.note, ...content }
-				});
-				return {
-					noteId: saved.note.id,
-					name: view.skill.name,
-					currentRevision: saved.note.currentRevision,
-					appliedEdits: patched.appliedEdits,
-					matchedTexts: patched.matchedTexts
-				};
-			},
-			async (input) => {
-				const parsed = noteEdits.safeParse(input);
-				if (!parsed.success) return false;
-				const view = await factory.skills().get(actor, { noteId: parsed.data.noteId as NoteId });
-				if (view.skill.note.kind !== 'skill') return false;
-				return applyNotePatch(noteMarkdownFromContent(view.skill.note.document), parsed.data.edits)
-					.ok;
-			}
+			async (input) =>
+				applyNoteReview(
+					factory,
+					actor,
+					await prepareNoteReview(
+						factory,
+						actor,
+						{
+							kind: 'patch',
+							noteId: input.noteId as NoteId,
+							edits: input.edits
+						},
+						'skill'
+					),
+					'skill'
+				)
 		),
 		create_skill: define(
 			'create_skill',
@@ -2168,7 +2241,13 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 					.optional()
 					.describe('Optional integer percentage from 0 to 100; use 90, never 0.9.')
 			}),
-			(input) => factory.memory().propose(actor, input)
+			(input) => {
+				const { confidence, ...payload } = input;
+				return factory.memory().propose(actor, {
+					...memoryChangePayloadSchema.parse(payload),
+					...(confidence !== undefined ? { confidence } : {})
+				});
+			}
 		),
 		list_trust_policies: define(
 			'list_trust_policies',
@@ -2182,7 +2261,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			toolDescription('update_trust_policy'),
 			'mutation',
 			z.object({
-				pipeline: z.enum(['extract_promises', 'relate', 'reference', 'agent', 'memory']),
+				pipeline: z.enum(PROPOSAL_AUTO_ACCEPT_PIPELINES),
 				autoAcceptEnabled: z.boolean(),
 				minimumConfidence: confidence
 					.optional()
@@ -2309,22 +2388,9 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 			'update_export_settings',
 			toolDescription('update_export_settings'),
 			'mutation',
-			z.object({
-				projectId: projectId,
-				fontFamily: z.enum(['helvetica', 'times', 'courier']),
-				fontSize: z.number().min(8).max(18),
-				lineHeight: z.number().min(1).max(2.2),
-				margin: z.number().min(18).max(144),
-				includeTitle: z.boolean().optional()
-			}),
-			(input) =>
-				factory.deliverables().updateExportSettings(actor, input.projectId, {
-					fontFamily: input.fontFamily,
-					fontSize: input.fontSize,
-					lineHeight: input.lineHeight,
-					margin: input.margin,
-					includeTitle: input.includeTitle
-				})
+			exportSettingsSchema.extend({ projectId }),
+			({ projectId, ...settings }) =>
+				factory.deliverables().updateExportSettings(actor, projectId, settings)
 		),
 		get_artifact: define(
 			'get_artifact',

@@ -1,20 +1,22 @@
 import {
+	type WriteReceipt,
+	type WriteBaseResolution,
+	type OutboxEntry,
+	type WriteDraft,
+	type WriteOutcome
+} from '$lib/models/outbox';
+import {
 	authoritativeWriteResource,
 	retryConflictedWrite,
 	retainWriteReceipt,
-	type WriteReceipt,
 	discardWrites,
 	appendWrite,
 	beginWrite,
 	failWrite,
 	nextWrite,
 	settleWrite,
-	resolveWriteBase,
-	type WriteBaseResolution,
-	type OutboxEntry,
-	type WriteDraft,
-	type WriteOutcome
-} from '$lib/models/outbox';
+	resolveWriteBase
+} from '$lib/services/sync/state';
 import type {
 	WorkspaceLocalProjection,
 	WorkspaceLocalRepository
@@ -40,6 +42,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	}
 	snapshotFailure: string | null = null;
 	appendFailure: string | null = null;
+	appendFailures = new Map<string, string>();
 	async receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null> {
 		return this.receipts.get(accountId)?.get(key) ?? null;
 	}
@@ -72,6 +75,8 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	}
 	async append(accountId: string, draft: WriteDraft<C, T>): Promise<string> {
 		if (this.appendFailure) throw new Error(this.appendFailure);
+		const failure = this.appendFailures.get(draft.key);
+		if (failure) throw new Error(failure);
 		const next = appendWrite(
 			await this.list(accountId),
 			draft,

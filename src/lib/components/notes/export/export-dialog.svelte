@@ -2,7 +2,8 @@
 	import { loadExportSettings } from './load-settings';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
-	import { drawioReferencesIn, type ProseMirrorDocument } from '$lib/models/notes';
+	import type { ProseMirrorDocument } from '$lib/models/notes';
+	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -11,7 +12,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { diagramKeepsOwnColours } from '$lib/components/edra/mermaid-rendering';
+	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
 	import {
 		type DiagramRenders,
 		mergeDiagramRenders,

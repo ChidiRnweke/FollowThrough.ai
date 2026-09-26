@@ -1,3 +1,4 @@
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
 import {
@@ -6,16 +7,15 @@ import {
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = (drawio = false) => {
+	const generation = diagramGenerationFixture();
 	const diagrams = new InMemoryDiagrams();
 	const suggestions = new InMemorySuggestions();
-	const provenance = new InMemoryProvenanceRecorder();
 	diagrams.diagrams = [drawio ? drawioBuilder() : mermaidBuilder()];
 	return {
 		diagrams,
@@ -23,11 +23,15 @@ const setup = (drawio = false) => {
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
 				diagramFinder: diagrams,
-				drawioCreator: diagrams,
+				...generation,
 				drawioXmlValidator: new DrawioXmlValidator(),
-				provenanceRecorder: provenance,
 				suggestionCreator: suggestions,
-				transactionRunner: new InMemoryTransactionRunner([suggestions, provenance])
+				transactionRunner: new InMemoryTransactionRunner([
+					suggestions,
+					generation.provenance,
+					generation.persistence,
+					generation.conversations
+				])
 			})
 		)
 	};

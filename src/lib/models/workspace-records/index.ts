@@ -1,8 +1,9 @@
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type { Todo } from '$lib/models/todos';
 import { z } from 'zod';
 import { syncEtagSchema } from '$lib/models/sync';
 import { storedDocumentSchema } from '$lib/models/notes';
-import { provenanceSchema, type Confidence } from '$lib/models/provenance';
+import { provenanceSchema, sourceAnchorSchema, type Confidence } from '$lib/models/provenance';
 import { suggestionSchema } from '$lib/models/suggestions';
 import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
 import { pendingAgentDecisionSchema, webSearchEngines } from '$lib/models/agent';
@@ -58,7 +59,7 @@ export const projectRecordSchema = z.object({
 	...timestamps
 });
 
-export const todoRecordSchema = z.object({
+export const todoRecordFields = {
 	id: id<'TodoId'>(),
 	...projectOwned,
 	title: z.string(),
@@ -80,7 +81,15 @@ export const todoRecordSchema = z.object({
 	completedAt: instant.optional(),
 	deletedAt: instant.optional(),
 	...timestamps
-});
+};
+export const todoRecordSchema: z.ZodType<Todo> = z.discriminatedUnion('status', [
+	z.object({ ...todoRecordFields, status: z.literal('done'), completedAt: instant }),
+	z.object({
+		...todoRecordFields,
+		status: todoRecordFields.status.exclude(['done']),
+		completedAt: z.undefined().optional()
+	})
+]);
 
 const diagramFields = {
 	id: id<'DiagramId'>(),
@@ -136,18 +145,7 @@ export const resourceDataSchemas = {
 	notes: noteRecordSchema,
 	todos: todoRecordSchema,
 	diagrams: diagramRecordSchema,
-	source_anchors: z.object({
-		id: id<'SourceAnchorId'>(),
-		noteId: id<'NoteId'>(),
-		nodeId: z.string().optional(),
-		from: z.number().int().optional(),
-		to: z.number().int().optional(),
-		quote: z.string(),
-		prefix: z.string().optional(),
-		suffix: z.string().optional(),
-		revision: z.number().int(),
-		createdAt: instant
-	}),
+	source_anchors: sourceAnchorSchema,
 	provenance: provenanceSchema,
 	note_relationships: z.object({
 		id: id<'RelationshipId'>(),

@@ -4,8 +4,7 @@ import type {
 	SelectionProposal,
 	ProposalSelectionOrigin,
 	SuggestionId,
-	SuggestionStatus,
-	SuggestionView
+	SuggestionStatus
 } from '$lib/models/suggestions';
 import {
 	ExpiredSuggestionError,
@@ -18,28 +17,54 @@ import type {
 	SuggestionCreator,
 	SuggestionFinder,
 	SuggestionLister,
+	SuggestionExpirer,
 	SuggestionProposal,
 	SuggestionRejecter,
 	SuggestionReverter,
-	SuggestionViewAssembler
+	SuggestionContextReader,
+	SuggestionContext
 } from '$lib/server/services/suggestions/contracts';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { materializeSuggestion, proposalFromSelection } from '$lib/models/suggestions';
+import { createProposalRecord, selectionProposal } from '$lib/server/services/suggestions/inbox';
 
-export class InMemorySuggestionReader implements SuggestionLister, SuggestionViewAssembler {
+export class InMemorySuggestionReader
+	implements SuggestionLister, SuggestionExpirer, SuggestionContextReader
+{
 	suggestions: Suggestion[] = [];
+	contexts: SuggestionContext[] = [];
+	expiryFailure: Error | undefined;
+
+	async expire(actor: ActorContext): Promise<number> {
+		if (this.expiryFailure) throw this.expiryFailure;
+		let expired = 0;
+		this.suggestions = this.suggestions.map((suggestion) => {
+			if (
+				suggestion.userId !== actor.userId ||
+				suggestion.status !== 'proposed' ||
+				suggestion.expiresAt === undefined ||
+				suggestion.expiresAt > testNow
+			)
+				return suggestion;
+			expired += 1;
+			return { ...suggestion, status: 'expired', decidedAt: testNow, updatedAt: testNow };
+		});
+		return expired;
+	}
 
 	async listByStatus(
-		_actor: ActorContext,
+		actor: ActorContext,
 		status: SuggestionStatus,
 		noteId?: Suggestion['noteId']
 	): Promise<readonly Suggestion[]> {
 		return this.suggestions.filter(
-			(suggestion) => suggestion.status === status && (!noteId || suggestion.noteId === noteId)
+			(suggestion) =>
+				suggestion.userId === actor.userId &&
+				suggestion.status === status &&
+				(!noteId || suggestion.noteId === noteId)
 		);
 	}
 
@@ -47,14 +72,18 @@ export class InMemorySuggestionReader implements SuggestionLister, SuggestionVie
 		return (await this.listByStatus(actor, status)).length;
 	}
 
-	async assemble(
+	async readContexts(
 		actor: ActorContext,
 		suggestions: readonly Suggestion[]
-	): Promise<readonly SuggestionView[]> {
-		return suggestions.map((suggestion) => ({
-			suggestion,
-			origin: { pipeline: 'memory' as const, createdAt: suggestion.createdAt }
-		}));
+	): Promise<readonly SuggestionContext[]> {
+		return suggestions.map((suggestion) => {
+			const context = this.contexts.find(
+				(context) =>
+					context.suggestion.id === suggestion.id && context.provenance.userId === actor.userId
+			);
+			if (!context) throw new NotFoundError('Suggestion context was not found');
+			return { ...context, suggestion };
+		});
 	}
 }
 
@@ -77,7 +106,7 @@ export class InMemorySuggestions
 	): Promise<Extract<Suggestion, { kind: P['kind'] }>>;
 	async create(actor: ActorContext, proposal: SuggestionProposal): Promise<Suggestion> {
 		if (this.failCreation) throw new ExternalServiceError('Suggestion creation failed');
-		const suggestion = materializeSuggestion(proposal, {
+		const suggestion = createProposalRecord(proposal, {
 			id: testSuggestionId(this.suggestions.length + 1),
 			userId: actor.userId,
 			now: testNow
@@ -96,7 +125,7 @@ export class InMemorySuggestions
 		origin: ProposalSelectionOrigin,
 		proposal: SelectionProposal
 	): Promise<Suggestion> {
-		return this.create(actor, proposalFromSelection(origin, proposal));
+		return this.create(actor, selectionProposal(origin, proposal));
 	}
 
 	async get(actor: ActorContext, id: SuggestionId): Promise<Suggestion> {

@@ -1,12 +1,6 @@
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateTodoInput,
-	Todo,
-	TodoId,
-	TodoListFilter,
-	TodoStatus,
-	TodoView
-} from '$lib/models/todos';
+import type { Note } from '$lib/models/notes';
+import type { Todo, TodoId, TodoListFilter, TodoContext } from '$lib/models/todos';
 import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type {
 	TodoDeleter,
@@ -14,10 +8,10 @@ import type {
 	TodoCreator,
 	TodoLister,
 	TodoReader,
-	TodoStatusChanger,
-	TodoViewAssembler
+	TodoContextReader,
+	WaitingOnFinder
 } from '$lib/server/services/todos/contracts';
-import { testNow, testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -29,12 +23,36 @@ export class InMemoryTodos
 		TodoReader,
 		TodoEditor,
 		TodoDeleter,
-		TodoStatusChanger,
 		TodoLister,
-		TodoViewAssembler,
+		TodoContextReader,
+		WaitingOnFinder,
 		SnapshotParticipant
 {
 	todos: Todo[] = [];
+	notes: Note[] = [];
+
+	async validateLinkedNote(
+		actor: ActorContext,
+		noteId: NonNullable<Todo['linkedNoteId']>,
+		projectId: Todo['projectId']
+	): Promise<void> {
+		if (
+			!this.notes.some(
+				(note) =>
+					note.id === noteId &&
+					note.userId === actor.userId &&
+					note.projectId === projectId &&
+					note.kind === 'note' &&
+					!note.archivedAt
+			)
+		) {
+			throw new NotFoundError('Todo linked note was not found');
+		}
+	}
+
+	findWaitingOn(actor: ActorContext): Promise<readonly Todo[]> {
+		return this.list(actor, { responsibility: 'waiting_on' });
+	}
 
 	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return (await this.list(actor, filter)).length;
@@ -50,43 +68,29 @@ export class InMemoryTodos
 		].sort();
 	}
 
-	async create(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		if (!input.projectId) throw new ValidationError('Todo project is required');
-		if (!input.title.trim()) throw new ValidationError('Todo title is required');
-		const todo = todoBuilder({
-			id: input.id ?? testTodoId(this.todos.length + 1),
-			userId: actor.userId,
-			projectId: input.projectId,
-			title: input.title.trim(),
-			responsibility: input.responsibility,
-			...(input.description !== undefined ? { description: input.description } : {}),
-			...(input.waitingOn !== undefined ? { waitingOn: input.waitingOn } : {}),
-			...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
-			...(input.dueDateVerbatim !== undefined ? { dueDateVerbatim: input.dueDateVerbatim } : {}),
-			...(input.promiseStrength !== undefined ? { promiseStrength: input.promiseStrength } : {}),
-			...(input.sourceAnchorId !== undefined ? { sourceAnchorId: input.sourceAnchorId } : {}),
-			...(input.provenanceId !== undefined ? { provenanceId: input.provenanceId } : {})
-		});
+	async create(actor: ActorContext, todo: Todo): Promise<Todo> {
+		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot create another user’s task');
 		this.todos.push(todo);
 		return todo;
 	}
 
 	async get(actor: ActorContext, todoId: TodoId): Promise<Todo> {
 		const todo = this.todos.find(
-			(candidate) => candidate.id === todoId && candidate.userId === actor.userId
+			(candidate) =>
+				candidate.id === todoId && candidate.userId === actor.userId && !candidate.deletedAt
 		);
 		if (!todo) throw new NotFoundError('Todo was not found');
 		return todo;
 	}
 
-	async update(actor: ActorContext, todo: Todo): Promise<Todo> {
-		if (todo.userId !== actor.userId) throw new OwnershipError('Cannot update another user’s todo');
-		if (!todo.title.trim()) throw new ValidationError('Todo title is required');
-		const current = await this.get(actor, todo.id);
-		if (todo.projectId !== current.projectId)
-			throw new ValidationError('A todo cannot move between projects during an edit');
-		const updated = { ...todo, title: todo.title.trim(), updatedAt: testNow };
-		this.todos = this.todos.map((candidate) => (candidate.id === todo.id ? updated : candidate));
+	getForEdit(actor: ActorContext, todoId: TodoId): Promise<Todo> {
+		return this.get(actor, todoId);
+	}
+
+	async update(actor: ActorContext, updated: Todo): Promise<Todo> {
+		const current = await this.get(actor, updated.id);
+		if (!updated.title) throw new ValidationError('Todo title is required');
+		this.todos = this.todos.map((candidate) => (candidate.id === current.id ? updated : candidate));
 		return updated;
 	}
 
@@ -94,20 +98,6 @@ export class InMemoryTodos
 		const current = await this.get(actor, todoId);
 		const deleted: Todo = { ...current, deletedAt: testNow, updatedAt: testNow };
 		this.todos = this.todos.map((candidate) => (candidate.id === todoId ? deleted : candidate));
-	}
-
-	async change(actor: ActorContext, todoId: TodoId, status: TodoStatus): Promise<Todo> {
-		const current = await this.get(actor, todoId);
-		const { completedAt: _completedAt, ...withoutCompletion } = current;
-		void _completedAt;
-		const updated: Todo = {
-			...withoutCompletion,
-			status,
-			...(status === 'done' ? { completedAt: testNow } : {}),
-			updatedAt: testNow
-		};
-		this.todos = this.todos.map((candidate) => (candidate.id === todoId ? updated : candidate));
-		return updated;
 	}
 
 	async list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> {
@@ -124,8 +114,18 @@ export class InMemoryTodos
 		);
 	}
 
-	async assemble(_actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoView[]> {
-		return todos.map((todo) => ({ todo }));
+	async readContexts(actor: ActorContext, todos: readonly Todo[]): Promise<readonly TodoContext[]> {
+		return Promise.all(todos.map((todo) => this.readContext(actor, todo)));
+	}
+
+	async readContext(_actor: ActorContext, todo: Todo): Promise<TodoContext> {
+		return {
+			todo,
+			anchor: null,
+			origin: null,
+			linked: null,
+			provenance: null
+		};
 	}
 
 	snapshot(): RestoreSnapshot {

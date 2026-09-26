@@ -1,5 +1,6 @@
 import type { JSONContent } from '@tiptap/core';
-import { editableProseMirrorDocument, type ProseMirrorDocument } from '$lib/models/notes';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+import { editableProseMirrorDocument } from '$lib/services/notes/editor-content';
 
 /**
  * A domain document, ready to hand to Tiptap.

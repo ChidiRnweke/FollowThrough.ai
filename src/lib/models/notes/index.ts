@@ -10,6 +10,20 @@ type ProjectId = Brand<string, 'ProjectId'>;
 
 export type NoteId = Brand<string, 'NoteId'>;
 
+export type NoteReplacementReport =
+	| { kind: 'complete'; saved: readonly { noteId: NoteId; title: string; matches: number }[] }
+	| {
+			kind: 'failure';
+			saved: readonly { noteId: NoteId; title: string; matches: number }[];
+			failed: { noteId: NoteId; title: string; message: string };
+			unattempted: readonly NoteId[];
+	  };
+
+export type FolderContextResolution =
+	| { readonly kind: 'ready'; readonly noteIds: readonly NoteId[] }
+	| { readonly kind: 'incomplete' }
+	| { readonly kind: 'missing'; readonly folderId: NoteId };
+
 export type NoteEtag = Brand<string, 'NoteEtag'>;
 
 export type NoteRevisionId = Brand<string, 'NoteRevisionId'>;
@@ -29,6 +43,29 @@ export interface TextSelection {
 	readonly to: number;
 	readonly text: string;
 }
+
+export interface SelectionSubmission {
+	readonly requestId: string;
+	readonly selection: TextSelection;
+}
+
+export const selectionSubmissionSchema = z
+	.object({
+		requestId: z.string().uuid(),
+		selection: z
+			.object({
+				noteId: z
+					.string()
+					.uuid()
+					.transform((value) => value as NoteId),
+				revision: z.number().int().positive(),
+				from: z.number().int().nonnegative(),
+				to: z.number().int().nonnegative(),
+				text: z.string()
+			})
+			.strict()
+	})
+	.strict() satisfies z.ZodType<SelectionSubmission>;
 
 export type NoteKind = 'folder' | 'note' | 'skill';
 
@@ -118,20 +155,6 @@ export interface SetNoteSectionNumberingOutput {
 	readonly sectionNumbering: SectionNumberingView;
 }
 
-export const noteEtag = (note: Pick<Note, 'id' | 'currentRevision'>): NoteEtag =>
-	`note:${note.id}:r${note.currentRevision}` as NoteEtag;
-
-export const noteMatchesEtag = (
-	note: Pick<Note, 'id' | 'currentRevision'>,
-	etag: NoteEtag
-): boolean => noteEtag(note) === etag;
-
-export const noteSyncContentEquals = (left: Note, right: Note): boolean =>
-	left.title === right.title &&
-	left.plainText === right.plainText &&
-	left.isPinned === right.isPinned &&
-	JSON.stringify(left.document) === JSON.stringify(right.document);
-
 export interface SaveNoteInput {
 	readonly note: Note;
 }
@@ -174,13 +197,6 @@ export interface NoteView<Backlink, Reference, Diagram, Task, Proposal> {
 	readonly pendingSuggestions: readonly Proposal[];
 	/** The note's section-numbering cascade, resolved by the controller across note, project and app. */
 	readonly sectionNumbering: SectionNumberingView;
-}
-
-/** Assemble the same note surface from server records or downloaded records. */
-export function assembleNoteView<Backlink, Reference, Diagram, Task, Proposal>(
-	facts: Omit<NoteView<Backlink, Reference, Diagram, Task, Proposal>, 'etag'>
-): NoteView<Backlink, Reference, Diagram, Task, Proposal> {
-	return { ...facts, etag: noteEtag(facts.note) };
 }
 
 export interface GetNoteViewInput {
@@ -392,8 +408,6 @@ export interface CompareNoteRevisionsOutput {
  * deliberate. An index signature on the types would make `node.attrs.anything`
  * type-check, which is the open-record indexing ADR 0037 exists to remove.
  *
- * This union lives in the notes domain barrel. Sibling model helpers such as
- * `text-search.ts` keep minimal structural views rather than importing the barrel.
  */
 
 export type ProseMirrorTextAlign = 'left' | 'center' | 'right' | 'justify';
@@ -1050,6 +1064,7 @@ export const noteChangeRequestSchema = z.discriminatedUnion('kind', [
 		.strict()
 ]);
 export type NoteChangeRequest = z.infer<typeof noteChangeRequestSchema>;
+export type NoteChangeTarget = 'authored' | 'skill';
 
 /** The content the user reviewed, independent of subsequent browser/server reads. */
 export const preparedNoteChangeSchema = z
@@ -1155,36 +1170,6 @@ export const readProseMirrorDocument = (value: unknown): ProseMirrorDocument => 
 	};
 };
 
-/**
- * A document safe to hand to the editor.
- *
- * `ProseMirrorUnknownNode` is a storage concept: it exists so a list read cannot
- * throw. Tiptap has no such node type, and handing it one produces exactly the
- * failure the arm was added to prevent, one layer further out. So the seam into
- * the editor converts it, and converts it into something *visible and
- * preserved* — a code block holding the block's own JSON — rather than dropping
- * it. If the note is then saved, the user still has their content on screen and
- * in the document, as text they can see and copy, instead of a block that
- * vanished silently.
- *
- * In practice this should never fire: the corpus conformance spec fails if any
- * stored document contains an unknown node. It is here for the case that spec is
- * written to catch, in the window before someone fixes it.
- */
-export const editableProseMirrorDocument = (document: ProseMirrorDocument): ProseMirrorDocument => {
-	const convert = (node: ProseMirrorNode): ProseMirrorNode => {
-		if (node.type === 'unknown')
-			return {
-				type: 'codeBlock',
-				attrs: { language: 'json' },
-				content: [{ type: 'text', text: JSON.stringify(node.raw, null, '\t') }]
-			};
-		if (!('content' in node) || !node.content) return node;
-		return { ...node, content: node.content.map(convert) };
-	};
-	return { ...document, content: document.content?.map(convert) };
-};
-
 /** Every block that failed to parse, for the corpus spec and `check:boundaries`. */
 export const unknownProseMirrorNodes = (
 	document: ProseMirrorDocument
@@ -1225,9 +1210,80 @@ export const findProseMirrorDocumentIssue = (
 
 export * from './note-patch';
 
-export * from './note-links';
+export interface NoteSearchOptions {
+	readonly regex: boolean;
+	readonly caseSensitive: boolean;
+}
 
-export * from './text-search';
+/** Half-open `[start, end)` offsets into the searched text, plus the matched text. */
+export interface NoteTextMatch {
+	readonly start: number;
+	readonly end: number;
+	readonly text: string;
+}
+
+/** A display window around a content match, so results render without shipping whole notes. */
+export interface NoteSearchSnippet {
+	readonly before: string;
+	readonly hit: string;
+	readonly after: string;
+	/** True only when `before` was actually cut short — a UI may prefix an ellipsis, never otherwise. */
+	readonly truncatedBefore: boolean;
+	/** True only when `after` was actually cut short — a UI may suffix an ellipsis, never otherwise. */
+	readonly truncatedAfter: boolean;
+}
+
+/** A content match paired with the snippet a result row renders. */
+export interface NoteSearchContentMatch extends NoteTextMatch {
+	readonly snippet: NoteSearchSnippet;
+}
+
+/** One note's worth of hits: content matches are offsets into `plainText`, title matches into `title`. */
+export interface NoteSearchHit {
+	readonly noteId: NoteId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly titleMatches: readonly NoteTextMatch[];
+	readonly matches: readonly NoteSearchContentMatch[];
+}
+
+export interface NoteDocumentReplaceResult<Document = ProseMirrorDocument> {
+	readonly document: Document;
+	readonly plainText: string;
+	/** Matches actually replaced; zero-length matches are never counted. */
+	readonly replaced: number;
+}
+
+/** The columns a text search needs — a note's document body never travels for search. */
+export interface NoteSearchTarget {
+	readonly id: NoteId;
+	readonly projectId: ProjectId;
+	readonly title: string;
+	readonly plainText: string;
+}
+
+export interface SearchNoteTextInput {
+	readonly query: string;
+	readonly regex: boolean;
+	readonly caseSensitive: boolean;
+	/** Scope the search to one project; omit it to search every active note. */
+	readonly projectId?: ProjectId;
+}
+
+export interface SearchNoteTextOutput {
+	readonly hits: readonly NoteSearchHit[];
+}
+
+export interface ReplaceNoteTextInput extends SearchNoteTextInput {
+	readonly replacement: string;
+	/** Replace only in these notes; omit to replace in every note the search hits. */
+	readonly noteIds?: readonly NoteId[];
+}
+
+export interface ReplaceNoteTextOutput {
+	readonly replacedNotes: number;
+	readonly replacedMatches: number;
+}
 
 export * from './section-numbering';
 
@@ -1235,175 +1291,40 @@ export * from './outline';
 
 export * from './revision-diff';
 
-function collectDrawioIds(node: ProseMirrorNode, ids: string[]): void {
-	if (node.type === 'drawio') {
-		const id = node.attrs?.diagramId;
-		if (id && !ids.includes(id)) ids.push(id);
-		return;
-	}
-	for (const child of 'content' in node ? (node.content ?? []) : []) collectDrawioIds(child, ids);
+export interface NoteCreationIntent {
+	readonly id: NoteId;
+	readonly title: string;
+	readonly kind: 'note' | 'folder' | 'skill';
+	readonly parentId?: NoteId;
 }
 
-/** Every draw.io diagram referenced by a set of documents, in document order. */
-export function drawioReferencesIn(
-	documents: readonly { document: ProseMirrorDocument }[]
-): string[] {
-	const ids: string[] = [];
-	for (const entry of documents)
-		for (const node of entry.document.content ?? []) collectDrawioIds(node, ids);
-	return ids;
+/** Enough of a note to offer it as a link target. */
+export interface NoteLinkTarget {
+	readonly id: NoteId;
+	readonly title: string;
 }
 
-/** Facts needed to archive a note; document content does not affect this decision. */
-export function decideNoteArchive(
-	note: Pick<Note, 'kind' | 'archivedAt'>,
-	hasActiveChildren: boolean
-): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
-	if (note.archivedAt) return { kind: 'invalid', message: 'The note is already archived' };
-	if (note.kind === 'folder' && hasActiveChildren)
-		return { kind: 'invalid', message: 'A folder with active contents cannot be archived' };
-	return { kind: 'allowed' };
-}
-
-/** A missing or archived parent sends a restored note to the end of its project root. */
-export function decideNoteRestore(
-	note: Pick<Note, 'parentId' | 'position' | 'archivedAt'>,
-	parent: Pick<Note, 'archivedAt'> | null
-): { kind: 'invalid'; message: string } | { kind: 'restore'; placement: 'keep' | 'root' } {
-	if (!note.archivedAt) return { kind: 'invalid', message: 'The note is not archived' };
-	return {
-		kind: 'restore',
-		placement: note.parentId && (!parent || parent.archivedAt) ? 'root' : 'keep'
+export interface NoteCreationFacts {
+	readonly project: {
+		readonly id: ProjectId;
+		readonly userId: UserId;
+		readonly archivedAt?: DateTime;
 	};
+	readonly parent: Pick<Note, 'projectId' | 'kind' | 'archivedAt'> | null;
+	readonly siblingCount: number;
 }
 
-/** Resolve creation against a known project, parent and authoritative sibling count. */
-export function decideNoteCreation(
-	input: {
-		readonly id: NoteId;
-		readonly title: string;
-		readonly kind: 'note' | 'folder' | 'skill';
-		readonly parentId?: NoteId;
-	},
-	facts: {
-		readonly project: {
-			readonly id: ProjectId;
-			readonly userId: UserId;
-			readonly archivedAt?: DateTime;
-		};
-		readonly parent: Pick<Note, 'projectId' | 'kind' | 'archivedAt'> | null;
-		readonly siblingCount: number;
-	},
-	timestamp: DateTime
-):
-	| { kind: 'create'; note: Note }
-	| { kind: 'invalid'; code: 'VALIDATION' | 'NOT_FOUND'; message: string } {
-	const title = input.title.trim();
-	if (!title)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: input.kind === 'folder' ? 'Folder name is required' : 'Note title is required'
-		};
-	if (facts.project.archivedAt)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: 'An archived project cannot receive new notes'
-		};
-	if (input.parentId) {
-		if (!facts.parent || facts.parent.projectId !== facts.project.id)
-			return { kind: 'invalid', code: 'NOT_FOUND', message: 'An active parent folder is required' };
-		if (facts.parent.kind !== 'folder')
-			return { kind: 'invalid', code: 'VALIDATION', message: 'A parent must be a folder' };
-		if (facts.parent.archivedAt)
-			return {
-				kind: 'invalid',
-				code: 'VALIDATION',
-				message: 'An active parent folder is required'
-			};
-	}
-	return {
-		kind: 'create',
-		note: {
-			id: input.id,
-			userId: facts.project.userId,
-			projectId: facts.project.id,
-			parentId: input.parentId,
-			kind: input.kind,
-			title,
-			position: facts.siblingCount,
-			document: { type: 'doc', content: [] },
-			plainText: '',
-			currentRevision: 1,
-			publishedRevision: 0,
-			isPinned: false,
-			createdAt: timestamp,
-			updatedAt: timestamp
-		}
-	};
+export interface NoteSaveWrite {
+	readonly note: Note;
+	readonly expectedRevision: number;
 }
 
-/** Apply authored fields while retaining the revision the editor actually observed. */
-export function applyNoteDraftEdit(
-	note: Note,
-	input: Pick<Note, 'document' | 'plainText'> & Partial<Pick<Note, 'title' | 'isPinned'>>,
-	timestamp: DateTime
-): Note {
-	return {
-		...note,
-		document: input.document,
-		plainText: input.plainText,
-		...(input.title !== undefined ? { title: input.title.trim() } : {}),
-		...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
-		updatedAt: timestamp
-	};
-}
-
-export function sameNoteDraft(current: Note, candidate: Note): boolean {
-	return (
-		current.title === candidate.title &&
-		current.plainText === candidate.plainText &&
-		JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-		current.isPinned === candidate.isPinned
-	);
-}
-
-/** Selection offsets describe one observed revision of the source document. */
-export function decideSelection(
-	selection: TextSelection,
-	note: Pick<Note, 'id' | 'currentRevision' | 'plainText'>
-): { kind: 'valid' } | { kind: 'invalid'; code: 'VALIDATION' | 'STALE_REVISION'; message: string } {
-	if (!selection.text.trim())
-		return { kind: 'invalid', code: 'VALIDATION', message: 'A non-empty selection is required' };
-	if (selection.revision !== note.currentRevision)
-		return {
-			kind: 'invalid',
-			code: 'STALE_REVISION',
-			message: 'The selected note revision is stale'
-		};
-	if (
-		!Number.isInteger(selection.from) ||
-		!Number.isInteger(selection.to) ||
-		selection.from < 0 ||
-		selection.from > selection.to ||
-		selection.to > note.plainText.length
-	)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: 'Selection offsets are outside the note'
-		};
-	if (
-		selection.noteId !== note.id ||
-		note.plainText.slice(selection.from, selection.to) !== selection.text
-	)
-		return {
-			kind: 'invalid',
-			code: 'VALIDATION',
-			message: 'Selection text does not match the note at those offsets'
-		};
-	return { kind: 'valid' };
+export interface NotePublicationWrite {
+	readonly noteId: NoteId;
+	readonly expectedRevision: number;
+	readonly publishedRevision: number;
+	readonly publishedAt: DateTime;
+	readonly updatedAt: DateTime;
 }
 
 /** Direct children and inline text use the editor's existing document representation. */
@@ -1431,4 +1352,16 @@ export function documentTextMarks(node: ProseMirrorTextNode): {
 		if (mark.type === 'link' && typeof mark.attrs?.href === 'string') href = mark.attrs.href;
 	}
 	return { bold, italic, code, ...(href !== undefined ? { href } : {}) };
+}
+
+/** Resolved built-in lifecycle and placement repair; authored content is not part of this write. */
+export interface NoteBuiltInRepairWrite {
+	readonly noteId: NoteId;
+	readonly builtInKey: string;
+	readonly projectId: ProjectId;
+	readonly parentId: NoteId | undefined;
+	readonly position: number;
+	readonly kind: 'skill';
+	readonly archivedAt: null;
+	readonly updatedAt: DateTime;
 }

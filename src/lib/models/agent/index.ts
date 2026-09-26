@@ -1,6 +1,6 @@
 import { z } from 'zod';
+export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 import type { PersistedSessionItem } from './session-item';
-import { AgentProviderFailure } from './agent-runs';
 import {
 	AGENT_TOOL_NAME_VALUES,
 	TOOL_NAME_VALUES,
@@ -57,6 +57,9 @@ interface TextSelection {
 type NoteKind = 'folder' | 'note' | 'skill';
 
 export type PipelineKind = 'extract_promises' | 'relate' | 'reference' | 'agent' | 'memory';
+
+/** Proposal workflows that currently apply the user's auto-accept policy. */
+export const PROPOSAL_AUTO_ACCEPT_PIPELINES = ['extract_promises', 'memory'] as const;
 
 export type ToolClassification = 'read' | 'proposal' | 'mutation';
 
@@ -248,13 +251,13 @@ export interface WebResearchOptions {
 	readonly maxTotalResults?: number;
 }
 
-export interface WebResearchDefaults {
-	readonly engine: NonNullable<WebResearchOptions['engine']>;
+export interface WebResearchSettings {
+	readonly engine: WebSearchEngine;
 	readonly maxResults: number;
 	readonly maxTotalResults: number;
 }
 
-export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
+export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 	engine: 'exa',
 	maxResults: 20,
 	maxTotalResults: 40
@@ -262,18 +265,14 @@ export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
 
 export const DEFAULT_AGENT_MAX_TURNS = 20;
 
+/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
 export const normalizeLanguageModelId = (modelId: string): string => {
 	const separator = modelId.indexOf(':');
 	if (separator <= 0 || modelId.includes('/')) return modelId;
 	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
 };
 
-export const resolveAttachmentVisionModel = (
-	preferences: Pick<AgentPreferences, 'attachmentVisionModel'>,
-	environmentDefault: string
-): string => normalizeLanguageModelId(preferences.attachmentVisionModel ?? environmentDefault);
-
-export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
+export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 	engine: 'exa',
 	maxResults: 8,
 	maxTotalResults: 16
@@ -282,44 +281,18 @@ export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchDefaults = {
 export interface WebResearchTool {
 	readonly type: 'openrouter:web_search';
 	readonly parameters: {
-		readonly engine: NonNullable<WebResearchOptions['engine']>;
+		readonly engine: WebSearchEngine;
 		readonly max_results: number;
 		readonly max_total_results: number;
 	};
 }
 
-const webSearchEngineFrom = (value: string | undefined): WebSearchEngine | undefined =>
-	webSearchEngines.includes(value as WebSearchEngine) ? (value as WebSearchEngine) : undefined;
-
-const positiveWebSearchIntegerFrom = (value: string | undefined): number | undefined => {
-	const parsed = Number(value);
-	return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-};
-
-export const webSearchOptionsFromEnvironment = (
-	environment: Readonly<Record<string, string | undefined>>
-): WebResearchOptions => {
-	const engine = webSearchEngineFrom(environment.OPENROUTER_WEB_SEARCH_ENGINE);
-	const maxResults = positiveWebSearchIntegerFrom(environment.OPENROUTER_WEB_SEARCH_MAX_RESULTS);
-	const maxTotalResults = positiveWebSearchIntegerFrom(
-		environment.OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS
-	);
-	return {
-		...(engine ? { engine } : {}),
-		...(maxResults ? { maxResults } : {}),
-		...(maxTotalResults ? { maxTotalResults } : {})
-	};
-};
-
-export const openRouterWebSearchTool = (
-	options: WebResearchOptions = {},
-	defaults: WebResearchDefaults = CHAT_WEB_SEARCH_DEFAULTS
-): WebResearchTool => ({
+export const openRouterWebSearchTool = (options: WebResearchSettings): WebResearchTool => ({
 	type: 'openrouter:web_search',
 	parameters: {
-		engine: options.engine ?? defaults.engine,
-		max_results: options.maxResults ?? defaults.maxResults,
-		max_total_results: options.maxTotalResults ?? defaults.maxTotalResults
+		engine: options.engine,
+		max_results: options.maxResults,
+		max_total_results: options.maxTotalResults
 	}
 });
 
@@ -378,7 +351,7 @@ export type AgentReview = z.infer<typeof agentReviewSchema>;
  *
  * `toolName` is a {@link ToolName}, not a string: a park on a name no tool
  * answers can never be approved, so the value is read where it is produced —
- * `parkedCall` for a provider interruption, {@link readPendingDecisions} for a
+ * `parkedCall` for a provider interruption, the repository decision reader for a
  * stored row. `search_tools` is deliberately not admitted here; it is a read
  * and never parks.
  */
@@ -416,7 +389,84 @@ export interface AgentRunContext extends BaseAgentContextData {
 	readonly skills: AgentSkillCatalog;
 }
 
+export type SelectionGeneration =
+	{ readonly kind: 'rules' } | { readonly kind: 'model'; readonly model: string };
+
+export const selectionGenerationSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('rules') }).strict(),
+	z.object({ kind: z.literal('model'), model: z.string().min(1) }).strict()
+]) satisfies z.ZodType<SelectionGeneration>;
+
+export interface PromiseExtractionRunContext {
+	readonly kind: 'promise_extraction';
+	readonly generation: SelectionGeneration;
+	readonly selection: TextSelection;
+	readonly responsibility?: 'mine' | 'waiting_on';
+}
+
+export interface ReferenceSearchRunContext {
+	readonly kind: 'reference_search';
+	readonly model: string;
+	readonly selection: TextSelection;
+}
+
+export interface RelatedNoteRunContext {
+	readonly kind: 'related_notes';
+	readonly generation: SelectionGeneration;
+	readonly selection: TextSelection;
+}
+
+export type DiagramActionInput =
+	| {
+			readonly operation: 'generate';
+			readonly selection: TextSelection;
+			readonly instruction?: string;
+	  }
+	| {
+			readonly operation: 'revise';
+			readonly noteId: NoteId;
+			readonly source: string;
+			readonly instruction: string;
+			readonly renderedPngDataUrl?: string;
+	  }
+	| {
+			readonly operation: 'convert';
+			readonly noteId: NoteId;
+			readonly source: string;
+			readonly instruction?: string;
+	  };
+
+export interface DiagramActionRunContext {
+	readonly kind: 'diagram_action';
+	readonly model: string;
+	readonly input: DiagramActionInput;
+	readonly prepared?: { readonly context: AgentRunContext; readonly provenanceId: ProvenanceId };
+}
+
+export type NoteActionRunContext =
+	| PromiseExtractionRunContext
+	| ReferenceSearchRunContext
+	| RelatedNoteRunContext
+	| DiagramActionRunContext;
+
+export interface NoteActionRequest {
+	readonly requestId: string;
+	readonly context: NoteActionRunContext;
+}
+
+export type NoteActionIntent =
+	| Omit<PromiseExtractionRunContext, 'generation'>
+	| Omit<ReferenceSearchRunContext, 'model'>
+	| Omit<RelatedNoteRunContext, 'generation'>
+	| Pick<DiagramActionRunContext, 'kind' | 'input'>;
+
+export interface NoteActionIdentity {
+	readonly requestId: string;
+	readonly context: NoteActionIntent;
+}
+
 export type WorkflowRunContext =
+	| NoteActionRunContext
 	| { readonly kind: 'note_action'; readonly action: NoteActionKind; readonly noteId: NoteId }
 	| {
 			readonly kind: 'diagram';
@@ -491,6 +541,58 @@ export interface WorkflowAgentRun extends AgentRunBase {
 }
 
 export type AgentRun = ResolvedAgentRun | WorkflowAgentRun;
+export interface RunClaimWrite {
+	readonly expected: 'queued';
+	readonly status: 'running';
+	readonly startedAt: DateTime;
+	readonly updatedAt: DateTime;
+}
+
+export interface AgentCheckpointWrite {
+	readonly expected: 'running';
+	readonly status: 'awaiting_approval';
+	readonly serializedState: string;
+	readonly pendingDecisions: readonly PendingAgentDecision[];
+	readonly traceparent: string | null;
+	readonly updatedAt: DateTime;
+}
+
+export interface AgentProvenanceWrite {
+	readonly provenanceId: ProvenanceId;
+	readonly updatedAt: DateTime;
+}
+export interface AgentContextWrite {
+	readonly contextSnapshot: AgentRunContext;
+	readonly updatedAt: DateTime;
+}
+
+export type WorkflowSettlementWrite = {
+	readonly finishedAt: DateTime;
+	readonly updatedAt: DateTime;
+	readonly pendingDecisions: readonly [];
+} & (
+	| { readonly status: 'completed'; readonly serializedState: null }
+	| { readonly status: 'failed'; readonly failure: string }
+);
+
+export interface WorkflowContextWrite {
+	readonly contextSnapshot: WorkflowRunContext;
+	readonly updatedAt: DateTime;
+}
+
+export interface RunApprovalWrite {
+	readonly status: 'queued';
+	readonly updatedAt: DateTime;
+}
+
+/** Resolved cancellation fields. An immediate cancellation also fixes its completion time. */
+export type RunCancellationWrite = {
+	readonly cancelRequestedAt: DateTime;
+	readonly updatedAt: DateTime;
+} & (
+	| { readonly status: 'cancelled'; readonly finishedAt: DateTime }
+	| { readonly status: 'cancelling' }
+);
 
 export interface AgentRunReceipt {
 	readonly runId: AgentRunId;
@@ -547,22 +649,15 @@ export interface ContextSelection extends TextSelection {
 	readonly title?: string;
 }
 
-/**
- * Every image the model will see on this turn, in one list.
- *
- * `images` and `contextImages` are separate on the way in — one is what the user
- * attached, the other is what the app supplied — and identical from here on: they
- * share the four-image budget, the same size cap, the same vision-model
- * fallback, and they arrive in the same request. Joining them was written out at
- * four separate call sites, one of which is where the budget is enforced.
- */
-export const allImages = (request: {
-	readonly images?: readonly ConversationImageInput[];
-	readonly contextImages?: readonly ConversationImageInput[];
-}): readonly ConversationImageInput[] => [
-	...(request.images ?? []),
-	...(request.contextImages ?? [])
-];
+/** Image input resolved by the controller before provider execution. */
+export type AgentRunImages =
+	| { readonly kind: 'none' }
+	| { readonly kind: 'native'; readonly images: readonly ConversationImageInput[] }
+	| {
+			readonly kind: 'describe';
+			readonly images: readonly ConversationImageInput[];
+			readonly model: string;
+	  };
 
 export interface StagedAgentRunInput {
 	readonly requestId?: string;
@@ -848,6 +943,21 @@ export type AgentEvent =
  * every replay, diverging from the type the repository wrote and the client
  * parsed.
  */
+/**
+ * A contiguous run of one kind of output, with the cursor it began at.
+ *
+ * A turn is not "some tools, then a paragraph": the agent thinks, acts, speaks, acts again.
+ * Reconstructing it as one string threw that order away, so a reopened conversation showed
+ * every tool call before everything the agent said, and its reasoning not at all. Segments
+ * keep the shape of what happened, and the cursor is what lets the persisted messages be put
+ * back in the order the events arrived.
+ */
+export interface OutputSegment {
+	readonly kind: 'text' | 'reasoning';
+	readonly text: string;
+	readonly cursor: string;
+}
+
 interface AgentRunEventIdentity {
 	readonly cursor: string;
 	readonly runId: AgentRunId;
@@ -870,12 +980,11 @@ export type StoredAgentRunEventRecord =
 	| (AgentRunEventIdentity & { readonly kind: 'unreadable'; readonly reason: string });
 
 /**
- * The same, off the wire, where a frame that does not parse has no identity to
- * report either — the cursor was part of what failed to read.
+ * A frame with an invalid identity cannot provide a trusted resume point.
+ * Unknown event payloads retain their valid identity as unreadable records.
  */
 export type ReadAgentRunEventRecord =
-	| ({ readonly kind: 'readable' } & AgentRunEventRecord)
-	| { readonly kind: 'unreadable'; readonly reason: string };
+	StoredAgentRunEventRecord | { readonly kind: 'invalid'; readonly reason: string };
 
 /**
  * A stored event row, read.
@@ -883,9 +992,8 @@ export type ReadAgentRunEventRecord =
  * A read-boundary union rather than a sixth `unrecognised` arm on `AgentEvent`,
  * for the reason `StoredSuggestion` is one: `AgentEvent` is the *write* type as
  * well, and an arm nothing can produce is a state a producer could nonetheless
- * say. The disjunction stops at the caller that can act on it — the controller
- * drops the unreadable rows and warns with their cursors — so no consumer of a
- * replayed event sees a case it cannot render.
+ * say. The replay retains the row identity so consumers can report the missing
+ * activity and advance their checkpoints.
  */
 export type StoredAgentEvent =
 	| { readonly kind: 'readable'; readonly event: AgentEvent }
@@ -934,6 +1042,21 @@ const toolNameSchema = z.enum(TOOL_NAME_VALUES);
  */
 export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
 
+export const pendingDecisionIdentitySchema = z.object({ callId: z.string() });
+
+export type StoredPendingDecisions =
+	| {
+			readonly kind: 'readable';
+			readonly decisions: readonly PendingAgentDecision[];
+			readonly dropped: readonly string[];
+	  }
+	| {
+			readonly kind: 'corrupt';
+			readonly reason: string;
+			readonly decisions: readonly [];
+			readonly dropped: readonly [];
+	  };
+
 export const pendingAgentDecisionSchema = z
 	.object({
 		callId: z.string().min(1),
@@ -942,40 +1065,6 @@ export const pendingAgentDecisionSchema = z
 		arguments: eventPayloadObjectSchema
 	})
 	.strict() satisfies z.ZodType<PendingAgentDecision>;
-
-/** The call id of a decision that did not parse, for the warning that reports it. */
-// audit-allow: no-unknown-type — Reads a provider row id before anything has parsed the row.
-const readCallId = (row: unknown): string | undefined =>
-	z.object({ callId: z.string() }).safeParse(row).data?.callId;
-
-/**
- * Reads the `agent_runs.pending_decisions` column.
- *
- * A decision that does not read is dropped rather than raised on: the run row
- * still has to be readable so the user can cancel the run, and a resume that
- * lands on none of its interruptions already fails loudly with "The pending
- * approval could not be resumed". The dropped call ids come back so the caller
- * can warn with them, which is what `SuggestionInbox.listByStatus` does with
- * unreadable suggestion rows.
- *
- * Legacy decisions without a review remain readable and rejectable. Note tooling
- * refuses to apply them because they do not identify an authorized base and result.
- */
-export const readPendingDecisions = (
-	// audit-allow: no-unknown-type — The stored pending_decisions jsonb, which the column hands out unparsed.
-	value: unknown
-): { readonly decisions: readonly PendingAgentDecision[]; readonly dropped: readonly string[] } => {
-	if (!Array.isArray(value)) return { decisions: [], dropped: [] };
-	const rows: readonly unknown[] = value;
-	const decisions: PendingAgentDecision[] = [];
-	const dropped: string[] = [];
-	for (const row of rows) {
-		const parsed = pendingAgentDecisionSchema.safeParse(row);
-		if (parsed.success) decisions.push(parsed.data);
-		else dropped.push(readCallId(row) ?? 'unidentified');
-	}
-	return { decisions, dropped };
-};
 
 const toolOutcomeSchemas = [
 	z.object({
@@ -999,7 +1088,7 @@ const toolOutcomeSchemas = [
 	})
 ] as const;
 
-const agentEventSchema = z.discriminatedUnion('type', [
+export const agentEventSchema = z.discriminatedUnion('type', [
 	z.object({
 		type: z.literal('run_queued'),
 		runId: runIdSchema,
@@ -1052,105 +1141,56 @@ export type ToolOutcomeEvent = Extract<
 	{ readonly type: 'tool_succeeded' | 'tool_reported_failure' | 'tool_failed' }
 >;
 
-/**
- * The outcome an event settles, or nothing when it settles none.
- *
- * "Did this call finish?" is one question with one answer, and asking it as a
- * three-way `type` test at every reader is how the old single arm's
- * `!event.failure` test came to mean three different things in three files.
- */
-export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefined =>
-	event.type === 'tool_succeeded' ||
-	event.type === 'tool_reported_failure' ||
-	event.type === 'tool_failed'
-		? event
-		: undefined;
+export const agentRunCursorSchema = z.string().regex(/^\d+$/);
 
-/**
- * The journal row an event calls for, or nothing when the event is not about a
- * tool call.
- *
- * Model-owned because two services need it and a service may not import
- * another: `AgentRunLifecycle` journals every run's calls, and
- * `DiagramAuthoring` journals its own. They held a copy each, and the copies
- * had already diverged — the diagram one wrote `output: undefined` onto a
- * `succeeded` row, which the wire type cannot carry.
- */
-export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
-	if (event.type === 'tool_started')
-		return { callId: event.callId, name: event.name, input: event.arguments, status: 'running' };
-	if (event.type === 'approval_required')
-		return {
-			callId: event.callId,
-			name: event.name,
-			input: event.arguments,
-			...(event.review ? { review: event.review } : {}),
-			status: 'approval_required'
-		};
-	const outcome = toolOutcomeEvent(event);
-	if (!outcome) return undefined;
-	// The arguments are not restated on an outcome, and the row that opened the
-	// call is the one that holds them; both journals key rows by `callId`.
-	const settled = {
-		...(outcome.callId === undefined ? {} : { callId: outcome.callId }),
-		name: outcome.name,
-		input: {}
-	};
-	if (outcome.type === 'tool_succeeded')
-		return {
-			...settled,
-			...(outcome.output === undefined ? {} : { output: outcome.output }),
-			status: 'succeeded'
-		};
-	return outcome.type === 'tool_failed'
-		? { ...settled, failure: outcome.failure, status: 'failed' }
-		: { ...settled, failure: outcome.failure, output: outcome.output, status: 'reported_failure' };
-};
+export interface NoteActionContext {
+	readonly source?: string;
+	readonly insertAt?: number;
+}
 
-/**
- * One stored row as an event, or the reason it could not be read.
- *
- * A row that does not parse degrades to one skipped event rather than throwing:
- * `toNote` mapped every row of a note list and a single unmodelled attribute
- * took `/today` down whole (TN-14). A replay is the same shape of read.
- *
- * There is no mapping for the retired `tool_completed` shape. The rows written
- * under it read as `unreadable` and are dropped from replay with a warning
- * naming their cursors: replay only drives a run still in flight, and a reopened
- * conversation reads the journal instead.
- */
-// audit-allow: no-unknown-type — The stored event row, at the boundary that turns it into a StoredAgentEvent.
-export const readAgentEvent = (value: unknown): StoredAgentEvent => {
-	const parsed = agentEventSchema.safeParse(value);
-	return parsed.success
-		? { kind: 'readable', event: parsed.data }
-		: { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
-};
+export interface StoredNoteActionRun {
+	readonly runId: AgentRunId;
+	readonly action: NoteActionKind;
+	readonly noteId: NoteId;
+	readonly cursor: string;
+	readonly context: NoteActionContext;
+}
 
-const agentRunEventFrameSchema = z.object({
-	cursor: z.string(),
+export const storedNoteActionRunSchema = z
+	.object({
+		runId: z
+			.string()
+			.min(1)
+			.transform((value) => value as AgentRunId),
+		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
+		noteId: z
+			.string()
+			.min(1)
+			.transform((value) => value as NoteId),
+		cursor: agentRunCursorSchema,
+		context: z
+			.object({ source: z.string().optional(), insertAt: z.number().int().optional() })
+			.strict()
+	})
+	.strict() satisfies z.ZodType<StoredNoteActionRun>;
+
+export const agentRunEventIdentitySchema = z.object({
+	cursor: agentRunCursorSchema,
 	runId: runIdSchema,
 	attempt: z.number().int(),
-	event: agentEventSchema,
 	createdAt: z.iso.datetime().transform((value) => new Date(value))
 });
 
-/**
- * One frame off the run's event stream.
- *
- * The server serialized a record it had parsed, but the client receives text
- * from a socket and the two ends are versioned separately: a tab left open
- * across a deploy is served by the new stream and reads it with the old union,
- * or the reverse. The `createdAt` conversion is the visible half of that — JSON
- * has no date — and the rest of the record was riding on the same assertion.
- */
-// audit-allow: no-unknown-type — The SSE frame as it arrives; this function is the frame reader.
-export const readAgentRunEventRecord = (value: unknown): ReadAgentRunEventRecord => {
-	const parsed = agentRunEventFrameSchema.safeParse(value);
-	return parsed.success
-		? { kind: 'readable', ...parsed.data }
-		: { kind: 'unreadable', reason: z.prettifyError(parsed.error) };
-};
+export const agentRunEventFrameSchema = z.union([
+	agentRunEventIdentitySchema.extend({
+		kind: z.literal('readable').default('readable'),
+		event: agentEventSchema
+	}),
+	agentRunEventIdentitySchema.extend({
+		kind: z.literal('unreadable'),
+		reason: z.string().min(1)
+	})
+]);
 
 /**
  * What the provider streamed, as this application acts on it.
@@ -1257,7 +1297,7 @@ const providerRawItemSchema = z.object({
  * kept beside it was reading one field twice — and reading it meant calling a
  * method on a value nothing had parsed.
  */
-const providerItemSchema = z.object({
+export const providerItemSchema = z.object({
 	rawItem: providerRawItemSchema.optional(),
 	toolName: z.string().optional(),
 	callId: z.string().optional(),
@@ -1265,12 +1305,18 @@ const providerItemSchema = z.object({
 	output: providerOutputValue.optional()
 });
 
-type ProviderItem = z.infer<typeof providerItemSchema>;
+export type ProviderItem = z.infer<typeof providerItemSchema>;
 
-const runItemStreamEventSchema = z.object({
+export const runItemStreamEventSchema = z.object({
 	type: z.literal('run_item_stream_event'),
 	name: z.string(),
 	item: providerItemSchema
+});
+
+/** Recognized tool events must not fall through the unfamiliar-event fallback. */
+export const providerToolEventHeaderSchema = z.object({
+	type: z.literal('run_item_stream_event'),
+	name: z.enum(['tool_called', 'tool_output'])
 });
 
 /** The OpenRouter chunk that carries token-level reasoning beside the visible text. */
@@ -1280,117 +1326,13 @@ const providerReasoningChunkSchema = z.object({
 		.optional()
 });
 
-const rawModelStreamEventSchema = z.object({
+export const rawModelStreamEventSchema = z.object({
 	type: z.literal('raw_model_stream_event'),
 	data: z.union([
 		z.object({ type: z.literal('output_text_delta'), delta: z.string() }),
 		z.object({ type: z.literal('model'), event: providerReasoningChunkSchema })
 	])
 });
-
-// audit-allow: no-unknown-type — A tool result straight off the provider SDK, classified rather than trusted.
-const providerToolOutput = (value: unknown): ProviderToolOutput => {
-	if (value === undefined || value === null) return { kind: 'none' };
-	const read = readAgentPayload(value);
-	return read.kind === 'valid'
-		? { kind: 'value', value: read.value }
-		: { kind: 'corrupt', message: read.message };
-};
-
-/**
- * Tool arguments, whether the provider sent them as JSON text or as an object.
- *
- * Both failures are fatal to the turn and always have been: a call whose
- * arguments nobody can read is a call that must not be presented as though it
- * ran.
- */
-// audit-allow: no-unknown-type — The arguments the model produced, before readAgentPayload classifies them.
-const providerArguments = (value: unknown): AgentPayloadObject => {
-	if (value === undefined) return {};
-	let candidate: unknown = value;
-	if (typeof value === 'string') {
-		try {
-			candidate = JSON.parse(value);
-		} catch (error) {
-			throw new AgentProviderFailure(
-				'The provider returned malformed JSON tool arguments',
-				'MALFORMED_TOOL_ARGUMENTS',
-				false,
-				{ cause: error }
-			);
-		}
-	}
-	const read = readAgentPayloadObject(candidate);
-	if (read.kind === 'corrupt')
-		throw new AgentProviderFailure(
-			'The provider returned tool arguments that were not an object',
-			'MALFORMED_TOOL_ARGUMENTS',
-			false,
-			{ cause: new Error(read.message) }
-		);
-	return read.value;
-};
-
-const providerReasoningText = (item: ProviderItem): string => {
-	const raw = item.rawItem;
-	const parts = raw?.rawContent ?? raw?.content ?? raw?.summary;
-	if (!parts) return '';
-	return parts
-		.map((part) => part.text)
-		.filter((text) => text.length > 0)
-		.join('\n');
-};
-
-const providerCall = (item: ProviderItem): ProviderToolCall => {
-	const raw = item.rawItem;
-	const name = item.toolName ?? raw?.name ?? 'tool';
-	const args = providerArguments(item.arguments ?? raw?.arguments);
-	return {
-		callId: item.callId ?? raw?.callId ?? raw?.call_id ?? raw?.id,
-		name,
-		arguments: args,
-		output: providerToolOutput(item.output ?? raw?.output)
-	};
-};
-
-/**
- * One stream event as an arm of {@link ProviderStreamEvent}.
- *
- * Raises only for arguments nobody can read; anything this union does not model
- * settles as `ignored`, so a newer SDK event type cannot fail a turn.
- */
-// audit-allow: no-unknown-type — The provider stream item; this is the run loop single parse point.
-export const parseProviderStreamEvent = (event: unknown): ProviderStreamEvent => {
-	const runItem = runItemStreamEventSchema.safeParse(event);
-	if (runItem.success) {
-		const { name, item } = runItem.data;
-		if (name === 'tool_called') return { type: 'tool_called', call: providerCall(item) };
-		if (name === 'tool_output') return { type: 'tool_output', call: providerCall(item) };
-		if (name !== 'reasoning_item_created') return { type: 'ignored' };
-		const text = providerReasoningText(item);
-		return text ? { type: 'reasoning_item', text } : { type: 'ignored' };
-	}
-	const raw = rawModelStreamEventSchema.safeParse(event);
-	if (!raw.success) return { type: 'ignored' };
-	const { data } = raw.data;
-	if (data.type === 'output_text_delta') return { type: 'text_delta', text: data.delta };
-	const reasoning = data.event.choices?.[0]?.delta?.reasoning;
-	return reasoning ? { type: 'reasoning_delta', text: reasoning } : { type: 'ignored' };
-};
-
-/**
- * A tool call held outside the stream — a `RunState` interruption parked on an
- * approval, which is not a stream event and never reaches the loop above.
- *
- * Absent when the value is not a tool item at all. The caller decides what that
- * means: for an approval it means a parked call nothing can be matched against,
- * which is a failure rather than a call to skip.
- */
-// audit-allow: no-unknown-type — The same provider item, read for the call it names.
-export const parseProviderToolCall = (item: unknown): ProviderToolCall | undefined => {
-	const parsed = providerItemSchema.safeParse(item);
-	return parsed.success ? providerCall(parsed.data) : undefined;
-};
 
 export interface DecideAgentRunInput {
 	readonly runId: AgentRunId;
@@ -1773,17 +1715,70 @@ const preparedDiagramRunContextSchema = z
 	.strict();
 
 export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
+	z
+		.object({
+			kind: z.literal('diagram_action'),
+			model: z.string().min(1),
+			prepared: z
+				.object({ context: agentRunContextSchema, provenanceId: brandedUuid<ProvenanceId>() })
+				.strict()
+				.optional(),
+			input: z.discriminatedUnion('operation', [
+				z
+					.object({
+						operation: z.literal('generate'),
+						selection: textSelectionSchema,
+						instruction: z.string().optional()
+					})
+					.strict(),
+				z
+					.object({
+						operation: z.literal('revise'),
+						noteId: noteIdSchema,
+						source: z.string(),
+						instruction: z.string(),
+						renderedPngDataUrl: z.string().optional()
+					})
+					.strict(),
+				z
+					.object({
+						operation: z.literal('convert'),
+						noteId: noteIdSchema,
+						source: z.string(),
+						instruction: z.string().optional()
+					})
+					.strict()
+			])
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('related_notes'),
+			generation: selectionGenerationSchema,
+			selection: textSelectionSchema
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('reference_search'),
+			model: z.string().min(1),
+			selection: textSelectionSchema
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('promise_extraction'),
+			generation: selectionGenerationSchema,
+			selection: textSelectionSchema,
+			responsibility: z.enum(['mine', 'waiting_on']).optional()
+		})
+		.strict(),
 	noteActionRunContextSchema,
 	unpreparedDiagramRunContextSchema,
 	preparedDiagramRunContextSchema
 ]);
 
-const emptyContextSchema = z.object({}).strict();
-// audit-allow: no-unknown-type — The stored run context snapshot, versioned at the repository and parsed here.
-export const parseAgentRunContextSnapshot = (value: unknown): AgentRunContext | undefined => {
-	if (emptyContextSchema.safeParse(value).success) return undefined;
-	return agentRunContextSchema.parse(value);
-};
+export const emptyAgentRunContextSchema = z.object({}).strict();
 
 const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string().max(12_000) });
 const submittedImagesSchema = z.array(conversationImageSchema).max(4).optional();
@@ -1857,23 +1852,6 @@ export const runAgentInputSchema = stagedAgentRunInputSchema.safeExtend({
 	conversationId: conversationIdSchema
 }) satisfies z.ZodType<RunAgentInput>;
 
-export const resolveAgentRunInput = (
-	input: StagedAgentRunInput,
-	conversationId: ConversationId
-): RunAgentInput => runAgentInputSchema.parse({ ...input, conversationId });
-
-export const parseRunAgentInput = (
-	// audit-allow: no-unknown-type — The remote input; catalog section 1 names this function as the exemplar.
-	input: unknown,
-	expectedConversationId: ConversationId
-): RunAgentInput =>
-	runAgentInputSchema
-		.refine((candidate) => candidate.conversationId === expectedConversationId, {
-			path: ['conversationId'],
-			message: 'Run input conversation does not match its persisted run'
-		})
-		.parse(input);
-
 /**
  * What one turn of a run reports back.
  *
@@ -1899,57 +1877,6 @@ export type AgentExecutionUpdate =
 export * from './agent-runs';
 export * from './session-item';
 
-const preferenceEdit = <K extends string, V>(
-	key: K,
-	value: V | null | undefined
-): Partial<Record<K, V | undefined>> => {
-	if (value === undefined) return {};
-	const result: Partial<Record<K, V | undefined>> = {};
-	result[key] = value === null ? undefined : value;
-	return result;
-};
-
-/** Apply omitted, cleared, and explicit preferences identically on the device and server. */
-export const applyAgentPreferenceUpdate = (
-	current: AgentPreferences,
-	input: UpdateAgentPreferencesInput
-): AgentPreferences => ({
-	...current,
-	...preferenceEdit('defaultModel', input.defaultModel),
-	...preferenceEdit('defaultVisionModel', input.defaultVisionModel),
-	...preferenceEdit('inlineModel', input.inlineModel),
-	...preferenceEdit('attachmentVisionModel', input.attachmentVisionModel),
-	...preferenceEdit('webSearchEngine', input.webSearchEngine),
-	...preferenceEdit('webSearchMaxResults', input.webSearchMaxResults),
-	...preferenceEdit('webSearchMaxTotalResults', input.webSearchMaxTotalResults),
-	...preferenceEdit('agentMaxTurns', input.agentMaxTurns),
-	...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
-	...(input.inlineSuggestionsEnabled !== undefined
-		? { inlineSuggestionsEnabled: input.inlineSuggestionsEnabled }
-		: {})
-});
-
-/** Preserve explicitly configured models when the deployment catalog omits them. */
-export const configuredAgentModels = (
-	models: readonly AgentModel[],
-	defaults: { chatModelId: string; visionModelId: string }
-): readonly AgentModel[] => {
-	const result = [...models];
-	for (const id of new Set([defaults.chatModelId, defaults.visionModelId])) {
-		if (result.some((model) => model.id === id)) continue;
-		result.push({
-			id,
-			name: id,
-			provider: id.split('/')[0],
-			supportsTools: id === defaults.chatModelId,
-			supportsVision: id === defaults.visionModelId,
-			recommended: false,
-			capabilities: ['configured']
-		});
-	}
-	return result;
-};
-
 export type RunSettlementOutcome =
 	| { readonly kind: 'completed'; readonly conversationId: ConversationId; readonly model: string }
 	| {
@@ -1968,52 +1895,28 @@ export type RunSettlementOutcome =
 	  };
 export type RunSettlementResult =
 	{ readonly kind: 'settled'; readonly run: AgentRun } | { readonly kind: 'lost' };
+export type RunSettlementWrite = {
+	readonly finishedAt: DateTime;
+	readonly updatedAt: DateTime;
+} & (
+	| {
+			readonly expected: 'running';
+			readonly status: 'completed';
+			readonly serializedState: null;
+			readonly pendingDecisions: readonly [];
+	  }
+	| { readonly expected: 'cancelling'; readonly status: 'cancelled'; readonly failure: string }
+	| {
+			readonly expected: 'running';
+			readonly status: 'failed';
+			readonly failure: string;
+			readonly providerErrorCode: string;
+	  }
+);
 export interface RunSettlementPlan {
-	readonly expected: 'running' | 'cancelling';
-	readonly status: 'completed' | 'cancelled' | 'failed';
-	readonly patch: Partial<AgentRun>;
+	readonly change: RunSettlementWrite;
 	readonly events: readonly AgentEvent[];
 }
-export function decideRunSettlement(
-	runId: AgentRunId,
-	outcome: RunSettlementOutcome,
-	finishedAt: DateTime
-): RunSettlementPlan {
-	switch (outcome.kind) {
-		case 'completed':
-		case 'workflow_completed':
-			return {
-				expected: 'running',
-				status: 'completed',
-				patch: { finishedAt, serializedState: undefined, pendingDecisions: [] },
-				events: [
-					...(outcome.kind === 'workflow_completed'
-						? [{ type: 'workflow_result' as const, action: outcome.action, result: outcome.result }]
-						: []),
-					{ type: 'completed', runId, conversationId: outcome.conversationId, model: outcome.model }
-				]
-			};
-		case 'cancelled':
-			return {
-				expected: 'cancelling',
-				status: 'cancelled',
-				patch: { finishedAt, failure: 'The request was cancelled' },
-				events: [{ type: 'cancelled', runId, message: outcome.message }]
-			};
-		case 'failed':
-			return {
-				expected: 'running',
-				status: 'failed',
-				patch: { finishedAt, failure: outcome.message, providerErrorCode: outcome.code },
-				events: [
-					{
-						type: 'failed',
-						runId,
-						code: outcome.code,
-						message: outcome.message,
-						retryable: outcome.retryable
-					}
-				]
-			};
-	}
-}
+export type RunSettlementClaim =
+	| { readonly kind: 'claimed'; readonly run: AgentRun; readonly events: readonly AgentEvent[] }
+	| { readonly kind: 'lost' };

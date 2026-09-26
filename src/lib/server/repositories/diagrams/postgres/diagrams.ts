@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, ilike, isNotNull, isNull, or, sql } from 'dr
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Diagram,
+	DiagramContentWrite,
 	DiagramId,
 	DiagramRevision,
 	DiagramRevisionId,
@@ -19,6 +20,14 @@ import { toDiagram, toDiagramRevision } from '$lib/server/db/mappers';
 
 export class DiagramRecords implements DiagramRepository {
 	constructor(private readonly database: Database) {}
+	async findForWrite(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.diagrams)
+			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.for('update');
+		return row ? toDiagram(row) : undefined;
+	}
 	async findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.select()
@@ -178,27 +187,38 @@ export class DiagramRecords implements DiagramRepository {
 			.returning();
 		return toDiagram(row!);
 	}
-	async update(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
+	async updateContent(
+		actor: ActorContext,
+		write: DiagramContentWrite
+	): Promise<Diagram | undefined> {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
-				title: diagram.title,
-				source: diagram.source,
-				renderedSvg: diagram.renderedSvg,
-				searchableText: diagram.searchableText,
-				...(diagram.kind === 'drawio'
-					? {
-							currentRevision: diagram.currentRevision,
-							publishedRevision: diagram.publishedRevision,
-							publishedAt: diagram.publishedAt ? new Date(diagram.publishedAt) : null
-						}
-					: {}),
-				updatedAt: new Date(diagram.updatedAt)
+				source: write.source,
+				renderedSvg: write.renderedSvg,
+				searchableText: write.searchableText,
+				updatedAt: new Date(write.updatedAt),
+				...(write.kind === 'mermaid'
+					? { title: write.title ?? null, provenanceId: write.provenanceId }
+					: {})
 			})
-			.where(and(eq(schema.diagrams.id, diagram.id), eq(schema.diagrams.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.diagrams.id, write.diagramId),
+					eq(schema.diagrams.userId, actor.userId),
+					eq(schema.diagrams.kind, write.kind),
+					isNull(schema.diagrams.archivedAt),
+					eq(schema.diagrams.updatedAt, new Date(write.expectedUpdatedAt)),
+					...(write.kind === 'drawio'
+						? [
+								eq(schema.diagrams.currentRevision, write.expectedRevision),
+								eq(schema.diagrams.publishedRevision, write.expectedPublishedRevision)
+							]
+						: [])
+				)
+			)
 			.returning();
-		if (!row) throw new NotFoundError('Diagram was not found');
-		return toDiagram(row);
+		return row ? toDiagram(row) : undefined;
 	}
 	async updateIfRevision(
 		actor: ActorContext,
@@ -209,9 +229,9 @@ export class DiagramRecords implements DiagramRepository {
 		const [row] = await this.database
 			.update(schema.diagrams)
 			.set({
-				title: diagram.title,
+				title: diagram.title ?? null,
 				source: diagram.source,
-				renderedSvg: diagram.renderedSvg,
+				renderedSvg: diagram.renderedSvg ?? null,
 				searchableText: diagram.searchableText,
 				currentRevision: diagram.currentRevision,
 				publishedRevision: diagram.publishedRevision,
@@ -284,13 +304,16 @@ export class DiagramRecords implements DiagramRepository {
 			);
 		return row ? toDiagramRevision(row) : undefined;
 	}
-	async setArchived(actor: ActorContext, id: DiagramId, archived: boolean): Promise<Diagram> {
+	async updateTrash(actor: ActorContext, diagram: Diagram): Promise<Diagram> {
 		const [row] = await this.database
 			.update(schema.diagrams)
-			.set({ archivedAt: archived ? new Date() : null })
-			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.set({
+				archivedAt: diagram.archivedAt ? new Date(diagram.archivedAt) : null,
+				updatedAt: new Date(diagram.updatedAt)
+			})
+			.where(and(eq(schema.diagrams.id, diagram.id), eq(schema.diagrams.userId, actor.userId)))
 			.returning();
-		if (!row) throw new NotFoundError('Diagram was not found', { diagramId: id });
+		if (!row) throw new NotFoundError('Diagram was not found', { diagramId: diagram.id });
 		return toDiagram(row);
 	}
 
@@ -307,11 +330,17 @@ export class DiagramRecords implements DiagramRepository {
 		).map(toDiagram);
 	}
 
-	async delete(actor: ActorContext, id: DiagramId): Promise<void> {
+	async deleteArchived(actor: ActorContext, id: DiagramId): Promise<boolean> {
 		const [row] = await this.database
 			.delete(schema.diagrams)
-			.where(and(eq(schema.diagrams.id, id), eq(schema.diagrams.userId, actor.userId)))
+			.where(
+				and(
+					eq(schema.diagrams.id, id),
+					eq(schema.diagrams.userId, actor.userId),
+					isNotNull(schema.diagrams.archivedAt)
+				)
+			)
 			.returning({ id: schema.diagrams.id });
-		if (!row) throw new NotFoundError('Diagram was not found');
+		return row !== undefined;
 	}
 }

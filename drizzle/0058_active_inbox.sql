@@ -1,0 +1,2 @@
+DROP INDEX "projects_user_inbox_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "projects_user_inbox_unique" ON "projects" USING btree ("user_id") WHERE "projects"."role" = 'inbox' and "projects"."archived_at" is null;

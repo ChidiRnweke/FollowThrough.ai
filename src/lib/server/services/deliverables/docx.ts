@@ -1,9 +1,4 @@
-import {
-	prepareExport,
-	exportImage,
-	type ExportInput,
-	type PreparedDiagram
-} from '$lib/server/repositories/deliverables/export-preparation';
+import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import {
 	documentNodeContent as nodeContent,
 	documentInlineText as collectText,
@@ -37,7 +32,7 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares, headingSpacingPt } from '$lib/models/deliverables';
+import { columnShares } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 const HEADING_LEVELS = [
@@ -83,6 +78,7 @@ interface DocxContext {
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Printable width in CSS pixels, for image and diagram sizing. */
 	readonly contentWidthPx: number;
 	readonly blockquoteDepth: number;
@@ -437,7 +433,7 @@ function convertNode(
 			const level = Math.min(node.attrs?.level ?? 1, 6);
 			const text = collectText(node);
 			const h = headingFont(ctx.styles, level);
-			const spacing = headingSpacingPt(level);
+			const spacing = ctx.headingSpacing.get(level);
 			results.push(
 				new Paragraph({
 					heading: HEADING_LEVELS[level - 1],
@@ -537,7 +533,7 @@ function convertNode(
 		case 'image': {
 			const src = node.attrs?.src ?? undefined;
 			if (!src) break;
-			const data = exportImage(src, ctx.images);
+			const data = ctx.images.get(src);
 			if (!data) {
 				results.push(
 					new Paragraph({
@@ -565,14 +561,15 @@ function convertNode(
 	return results;
 }
 
-export async function generateDocx(input: ExportInput): Promise<Buffer> {
-	const { notes, settings, images, diagrams } = await prepareExport(input);
+export async function generateDocx(input: PreparedExport): Promise<Buffer> {
+	const { notes, settings, images, diagrams } = input;
 	const styles = resolveStyles(input.styles, settings);
 	const ctx: DocxContext = {
 		styles,
 		settings,
 		images,
 		diagrams,
+		headingSpacing: input.headingSpacing,
 		contentWidthPx:
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
 			PX_PER_INCH,

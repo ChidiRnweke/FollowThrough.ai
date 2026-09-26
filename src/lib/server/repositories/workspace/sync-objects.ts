@@ -1,4 +1,5 @@
 import { suggestionRecordKeys } from '$lib/models/suggestions';
+import { sourceAnchorFields } from '$lib/models/provenance';
 import { sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '$lib/server/db';
@@ -7,6 +8,7 @@ import type { SyncEtag, SyncObjectRead } from '$lib/models/sync';
 import type { WorkspaceResourceIdentity, WorkspaceResourceType } from '$lib/models/workspace-sync';
 import {
 	resourceDataSchemas,
+	todoRecordFields,
 	workspaceObjectReadSchema,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
@@ -30,9 +32,9 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	users: Object.keys(resourceDataSchemas.users.shape),
 	projects: Object.keys(resourceDataSchemas.projects.shape),
 	notes: Object.keys(resourceDataSchemas.notes.shape),
-	todos: Object.keys(resourceDataSchemas.todos.shape),
+	todos: Object.keys(todoRecordFields),
 	diagrams: Object.keys(resourceDataSchemas.diagrams.options[1].shape),
-	source_anchors: Object.keys(resourceDataSchemas.source_anchors.shape),
+	source_anchors: Object.keys(sourceAnchorFields),
 	provenance: [
 		'id',
 		'userId',

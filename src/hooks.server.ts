@@ -41,6 +41,10 @@ export const handleError: HandleServerError = ({ error, message }) => {
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Prerendering and the generated browser shell have no request session.
+	// The public offline page contains no account data at runtime either.
+	if (building || event.url.pathname === '/offline') return resolve(event);
+
 	// Served from the secrets backend's TTL cache, so this is a no-op between refreshes.
 	if (!configurationDisabled()) await hydrateEnvironment();
 

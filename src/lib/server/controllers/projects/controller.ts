@@ -1,9 +1,17 @@
-import type { Note } from '$lib/models/notes';
+import { decideProjectEntryMove } from '$lib/server/services/projects/catalog';
+import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { DateTime } from '$lib/models/workspace';
+import { assembleProjectTree } from '$lib/services/projects/presentation';
+import { decideProjectDetails } from '$lib/services/projects/details';
+import { NotFoundError, ValidationError } from '$lib/errors';
+import { mutationResource } from '$lib/services/workspace/commands';
+import type { Note, NoteId } from '$lib/models/notes';
 import type {
 	ProjectMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveProjectInput,
@@ -23,10 +31,9 @@ import type {
 	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
 import type {
-	FolderCreator,
 	ProjectCreator,
 	ProjectEditor,
-	ProjectEntryMover,
+	ProjectTreeWriter,
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
@@ -35,8 +42,8 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 
 /**
  * Application boundary for projects and their folder tree: listing, loading, creating,
- * renaming, archiving, and moving entries. The move is the only write that needs atomic
- * cross-entry bookkeeping, so it alone runs through the transaction runner.
+ * renaming, archiving, and moving entries. Creation and placement hold the project
+ * lock while reading the tree and persisting its resolved changes.
  */
 export interface ProjectsController {
 	synchronize(actor: ActorContext, input: ProjectMutationRequest): Promise<WorkspaceMutationResult>;
@@ -62,43 +69,63 @@ export interface ProjectsController {
 }
 
 export interface ProjectsDependencies {
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	projectCreator: ProjectCreator;
 	projectReader: ProjectReader;
 	projectLister: ProjectLister;
 	projectEditor: ProjectEditor;
 	projectTreeReader: ProjectTreeReader;
-	folderCreator: FolderCreator;
-	entryMover: ProjectEntryMover;
+	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	entryWriter: ProjectTreeWriter;
 	transactionRunner: TransactionRunner;
 }
 
 export class Projects implements ProjectsController {
-	synchronize(
+	async synchronize(
 		actor: ActorContext,
 		input: ProjectMutationRequest
 	): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			void current;
-			switch (command.kind) {
-				case 'createProject':
-					await this.create(actor, command);
-					break;
-				case 'renameProject':
-					await this.rename(actor, command);
-					break;
-				case 'archiveProject':
-					await this.archive(actor, command);
-					break;
-				case 'projectNumbering':
-					await this.setSectionNumberingDefault(actor, command);
-					break;
-				case 'createFolder':
-					await this.createFolder(actor, command);
-					break;
-			}
-		});
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input);
+					return this.dependencies.syncMutations.complete(actor, input, target);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: ProjectMutationRequest
+	): Promise<void> {
+		const command = input.command;
+
+		switch (command.kind) {
+			case 'createProject':
+				await this.create(actor, command);
+				break;
+			case 'renameProject':
+				await this.rename(actor, command);
+				break;
+			case 'archiveProject':
+				await this.archive(actor, command);
+				break;
+			case 'projectNumbering':
+				await this.setSectionNumberingDefault(actor, command);
+				break;
+			case 'createFolder':
+				await this.createFolder(actor, command);
+				break;
+		}
 	}
 
 	constructor(private readonly dependencies: ProjectsDependencies) {}
@@ -108,19 +135,35 @@ export class Projects implements ProjectsController {
 	}
 
 	async get(actor: ActorContext, input: GetProjectInput): Promise<GetProjectOutput> {
-		const [project, tree] = await Promise.all([
+		const [project, entries] = await Promise.all([
 			this.dependencies.projectReader.get(actor, input.projectId),
-			this.dependencies.projectTreeReader.read(actor, input.projectId)
+			this.dependencies.projectTreeReader.readEntries(actor, input.projectId)
 		]);
-		return { project, tree };
+		return { project, tree: assembleProjectTree(entries) };
 	}
 
 	async create(actor: ActorContext, input: CreateProjectInput): Promise<CreateProjectOutput> {
-		return { project: await this.dependencies.projectCreator.create(actor, input) };
+		const details = decideProjectDetails(input);
+		if (details.kind === 'invalid') throw new ValidationError(details.message);
+		return {
+			project: await this.dependencies.projectCreator.create(actor, {
+				...input,
+				name: details.name,
+				description: details.description
+			})
+		};
 	}
 
 	async rename(actor: ActorContext, input: RenameProjectInput): Promise<RenameProjectOutput> {
-		return { project: await this.dependencies.projectEditor.rename(actor, input) };
+		const details = decideProjectDetails(input);
+		if (details.kind === 'invalid') throw new ValidationError(details.message);
+		return {
+			project: await this.dependencies.projectEditor.rename(actor, {
+				...input,
+				name: details.name,
+				description: details.description
+			})
+		};
 	}
 
 	async archive(actor: ActorContext, input: ArchiveProjectInput): Promise<ArchiveProjectOutput> {
@@ -140,15 +183,41 @@ export class Projects implements ProjectsController {
 		actor: ActorContext,
 		input: CreateFolderInput
 	): Promise<CreateFolderOutput<Note>> {
-		return { folder: await this.dependencies.folderCreator.createFolder(actor, input) };
+		return this.dependencies.transactionRunner.run(async () => {
+			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+			const decision = decideNoteCreation(
+				{
+					id: input.id ?? (crypto.randomUUID() as NoteId),
+					title: input.name,
+					parentId: input.parentId,
+					kind: 'folder'
+				},
+				facts,
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') {
+				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+				throw new ValidationError(decision.message);
+			}
+			return { folder: await this.dependencies.noteCreation.insert(actor, decision.note) };
+		});
 	}
 
 	async move(
 		actor: ActorContext,
 		input: MoveProjectEntryInput
 	): Promise<MoveProjectEntryOutput<Note>> {
-		return this.dependencies.transactionRunner.run(async () => ({
-			entry: await this.dependencies.entryMover.move(actor, input)
-		}));
+		return this.dependencies.transactionRunner.run(async () => {
+			const entries = await this.dependencies.entryWriter.readForMove(actor, input.projectId);
+			const decision = decideProjectEntryMove(input, entries);
+			if (decision.kind === 'invalid') {
+				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+				throw new ValidationError(decision.message);
+			}
+			await this.dependencies.entryWriter.persistOrder(actor, decision.changes);
+			return {
+				entry: { ...decision.entry, parentId: decision.parentId, position: decision.position }
+			};
+		});
 	}
 }

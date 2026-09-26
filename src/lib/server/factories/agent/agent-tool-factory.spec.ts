@@ -1,5 +1,11 @@
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
 import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
+import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import type { FunctionTool, Tool } from '@openai/agents';
 import type { TextSelection } from '$lib/models/notes';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
@@ -10,7 +16,7 @@ import type { ApiTokensController } from '$lib/server/controllers/api-tokens/con
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/models/notes';
+import { noteEtag } from '$lib/services/notes/presentation';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
 	appContextBuilder,
@@ -787,29 +793,8 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	const skillFixture = (body = 'Number every finding.') => {
-		const note = noteBuilder({
-			id: crypto.randomUUID() as never,
-			kind: 'skill',
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
-			} as never
-		});
-		const view = {
-			skill: {
-				note,
-				name: 'Compliance format',
-				description: 'Formats responses for compliance review',
-				triggerHints: ['compliance', 'audit']
-			},
-			usages: [{ usage: { id: 'usage-1' } }, { usage: { id: 'usage-2' } }]
-		};
-		const factory = {
-			skills: () => ({
-				get: async () => view,
-				loadForAgent: async () => view
-			})
-		} as unknown as ControllerFactory;
+		const { note, controller } = loadedSkillFixture(body);
+		const factory = capabilityDependencies<ControllerFactory>({ skills: () => controller });
 		const definitions = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Use a skill' },
@@ -1078,100 +1063,58 @@ describe('Agent tool coverage invariants', () => {
 		expect(received).toEqual({ projectId, noteId });
 	});
 
-	it('creates every todo in a single create_todos dispatch (1/3)', async () => {
-		const projectId = crypto.randomUUID();
-		const calls: { projectId: string; title: string }[] = [];
-		const factory = {
-			todos: () => ({
-				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
-					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = directToolFor('auto_accept', 'create_todos', { factory });
-		const _result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				projectId,
-				todos: [
-					{ title: 'Renew TLS certificates', responsibility: 'mine' },
-					{ title: 'Book offsite flights', responsibility: 'mine' },
-					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-				]
+	it('shares the saved task batch across agent and MCP retries', async () => {
+		const todos = new InMemoryTodos();
+		const receipts = new InMemoryTodoBatchReceipts();
+		const controller = new Todos(
+			capabilityDependencies<TodosDependencies>({
+				todoCreator: todos,
+				todoBatchReceipts: new TodoBatchReceipts(receipts),
+				transactionRunner: new InMemoryTransactionRunner([todos, receipts])
 			})
 		);
-		expect(calls).toHaveLength(3);
-	});
-
-	it('creates every todo in a single create_todos dispatch (2/3)', async () => {
-		const projectId = crypto.randomUUID();
-		const calls: { projectId: string; title: string }[] = [];
-		const factory = {
-			todos: () => ({
-				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
-					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
-				}
-			})
-		} as unknown as ControllerFactory;
+		const factory = capabilityDependencies<ControllerFactory>({ todos: () => controller });
 		const selected = directToolFor('auto_accept', 'create_todos', { factory });
-		const _result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				projectId,
-				todos: [
-					{ title: 'Renew TLS certificates', responsibility: 'mine' },
-					{ title: 'Book offsite flights', responsibility: 'mine' },
-					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-				]
-			})
-		);
-		expect(calls.map((call) => call.projectId)).toEqual([projectId, projectId, projectId]);
-	});
-
-	it('creates every todo in a single create_todos dispatch (3/3)', async () => {
-		const projectId = crypto.randomUUID();
-		const calls: { projectId: string; title: string }[] = [];
-		const factory = {
-			todos: () => ({
-				create: async (_actor: unknown, input: { projectId: string; title: string }) => {
-					calls.push(input);
-					return { todo: { id: `todo-${calls.length}`, status: 'open', ...input } };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = directToolFor('auto_accept', 'create_todos', { factory });
-		const result = await selected.invoke(
-			{} as never,
-			JSON.stringify({
-				projectId,
-				todos: [
-					{ title: 'Renew TLS certificates', responsibility: 'mine' },
-					{ title: 'Book offsite flights', responsibility: 'mine' },
-					{ title: 'Review incident postmortem', responsibility: 'waiting_on', waitingOn: 'Sam' }
-				]
-			})
-		);
-		// Flat, and keyed `todoId`: nested under `todo` the id was one level below where
-		// the transcript looks for it, so every todo the agent created was unopenable.
-		expect(result).toEqual({
+		const payload = {
+			requestId: crypto.randomUUID(),
+			projectId: testProjectId(),
 			todos: [
-				{ todoId: 'todo-1', title: 'Renew TLS certificates', status: 'open' },
-				{ todoId: 'todo-2', title: 'Book offsite flights', status: 'open' },
-				{ todoId: 'todo-3', title: 'Review incident postmortem', status: 'open' }
+				{ title: 'Renew TLS certificates', responsibility: 'mine' },
+				{ title: 'Book flights', responsibility: 'mine' }
 			]
+		};
+		const input = JSON.stringify(payload);
+		const first = await selected.invoke({} as never, input);
+		const retry = await selected.invoke({} as never, input);
+		const mcp = new McpTools(factory, testActor(), { provenanceId: testProvenanceId() }, allTools)
+			.definitions()
+			.find((definition) => definition.name === 'create_todos');
+		if (!mcp) throw new Error('Missing task batch tool');
+		const externalRetry = await mcp.execute(payload);
+		expect({ first, retry, externalRetry, titles: todos.todos.map((todo) => todo.title) }).toEqual({
+			first: {
+				todos: todos.todos.map((todo) => ({
+					todoId: todo.id,
+					title: todo.title,
+					status: todo.status
+				}))
+			},
+			retry: first,
+			externalRetry: first,
+			titles: ['Renew TLS certificates', 'Book flights']
 		});
 	});
 
 	it('rejects invalid create_todos payloads with a model-readable error', async () => {
 		const selected = directToolFor('auto_accept', 'create_todos');
 		const projectId = crypto.randomUUID();
+		const requestId = crypto.randomUUID();
 		const results: string[] = [];
 		for (const payload of [
-			{ projectId, todos: [] },
-			{ projectId, todos: [{ responsibility: 'mine' }] },
-			{ projectId }
+			{ requestId, projectId, todos: [] },
+			{ requestId, projectId, todos: [{ responsibility: 'mine' }] },
+			{ requestId, projectId },
+			{ projectId, todos: [{ title: 'Valid task', responsibility: 'mine' }] }
 		]) {
 			results.push(String(await selected.invoke({} as never, JSON.stringify(payload))));
 		}
@@ -1393,95 +1336,6 @@ describe('Agent tool coverage invariants', () => {
 		expect(result).toMatchObject({ failure: 'No changes were applied.' });
 	});
 
-	const editSkillFixture = () => {
-		const current = noteBuilder({
-			id: crypto.randomUUID() as never,
-			kind: 'skill',
-			title: 'Compliance format',
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Number every finding.' }] }]
-			} as never
-		});
-		const skill = {
-			note: current,
-			name: 'Compliance format',
-			description: 'Formats responses for compliance review',
-			triggerHints: ['compliance']
-		};
-		let saved: typeof current | undefined;
-		const factory = {
-			skills: () => ({ get: async () => ({ skill, usages: [] }) }),
-			notes: () => ({
-				save: async (_actor: unknown, input: { note: typeof current }) => {
-					saved = input.note;
-					return {
-						note: { ...input.note, currentRevision: 2 },
-						etag: 'note:x:r2',
-						repairedAnchorIds: []
-					};
-				}
-			})
-		} as unknown as ControllerFactory;
-		const invoke = (name: string, payload: unknown) =>
-			directToolFor('auto_accept', name, { factory }).invoke({} as never, JSON.stringify(payload));
-		return { current, invoke, saved: () => saved };
-	};
-
-	it('applies a targeted edit to a skill body', async () => {
-		const fixture = editSkillFixture();
-		await fixture.invoke('edit_skill', {
-			noteId: fixture.current.id,
-			edits: [{ oldText: 'Number every finding.', newText: 'Number every finding exactly once.' }]
-		});
-		expect(fixture.saved()?.plainText).toContain('exactly once.');
-	});
-
-	it('replaces a whole skill body with save_skill', async () => {
-		const fixture = editSkillFixture();
-		await fixture.invoke('save_skill', {
-			noteId: fixture.current.id,
-			markdown: 'New instructions.'
-		});
-		expect(fixture.saved()?.plainText).toBe('New instructions.');
-	});
-
-	it('reports how many skill edits applied', async () => {
-		const fixture = editSkillFixture();
-		const result = await fixture.invoke('edit_skill', {
-			noteId: fixture.current.id,
-			edits: [{ oldText: 'Number every finding.', newText: 'Number every finding exactly once.' }]
-		});
-		expect(result).toMatchObject({ appliedEdits: 1 });
-	});
-
-	it('saves nothing when a skill anchor does not match', async () => {
-		const fixture = editSkillFixture();
-		await fixture.invoke('edit_skill', {
-			noteId: fixture.current.id,
-			edits: [{ oldText: 'read-through', newText: 'write-behind' }]
-		});
-		expect(fixture.saved()).toBeUndefined();
-	});
-
-	it('refuses edit_skill on a note that is not a skill', async () => {
-		const note = noteBuilder({ id: crypto.randomUUID() as never, kind: 'note' });
-		const factory = {
-			skills: () => ({
-				get: async () => ({
-					skill: { note, name: 'n', description: 'd', triggerHints: [] },
-					usages: []
-				})
-			}),
-			notes: () => ({ save: async () => ({ note: {}, etag: '', repairedAnchorIds: [] }) })
-		} as unknown as ControllerFactory;
-		const result = await directToolFor('auto_accept', 'edit_skill', { factory }).invoke(
-			{} as never,
-			JSON.stringify({ noteId: note.id, edits: [{ oldText: 'x', newText: 'y' }] })
-		);
-		expect(result).toMatchObject({ failure: expect.stringContaining('not a skill') });
-	});
-
 	it('does not expose the agent controller recursively', () => {
 		const names = registry('approval_required')
 			.tools()
@@ -1670,7 +1524,7 @@ describe('Agent tool coverage invariants', () => {
 /**
  * The id the run correlates a settled call by. It used to reach the executor as
  * `String(details?.toolCall?.callId ?? '')`, so a call the provider sent no id
- * for arrived as a value rather than as an absence — and `AgentRunLifecycle`
+ * for arrived as a value rather than as an absence — and the Agent controller
  * keys its successful mutations by exactly this string, where a second id-less
  * mutation overwrote the first.
  */
@@ -1799,16 +1653,9 @@ describe('Doomed note edits never reach the approval boundary', () => {
 
 	const notesFactory = (note: ReturnType<typeof noteBuilder>) => reviewedNoteFixture(note).factory;
 
-	const skillsFactory = (note: ReturnType<typeof noteBuilder>) =>
-		({
-			skills: () => ({
-				get: async () => ({ skill: { note, name: note.title } })
-			})
-		}) as unknown as ControllerFactory;
-
 	const directTool = (name: 'edit_note' | 'edit_skill', note: ReturnType<typeof noteBuilder>) =>
 		registry('approval_required', {
-			factory: name === 'edit_note' ? notesFactory(note) : skillsFactory(note)
+			factory: notesFactory(note)
 		})
 			.tools()
 			.find((candidate) => candidate.name === name) as FunctionTool;

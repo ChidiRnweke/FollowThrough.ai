@@ -1,19 +1,27 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { WorkflowAgentRun } from '$lib/models/agent';
+import type { NoteActionResult } from '$lib/server/repositories/agent/agent-runs';
+import { noteActionEvent } from '$lib/server/repositories/agent/stored-values';
 import type {
 	AgentEvent,
 	AgentRun,
 	AgentRunDecisionRecord,
 	AgentRunEventRecord,
 	AgentRunId,
-	AgentRunStatus,
+	RunSettlementWrite,
+	RunCancellationWrite,
+	RunApprovalWrite,
+	WorkflowContextWrite,
+	WorkflowSettlementWrite,
+	AgentProvenanceWrite,
+	AgentContextWrite,
+	RunClaimWrite,
+	AgentCheckpointWrite,
+	PreparedAgentRun,
 	ConversationId,
 	ResolvedAgentRun,
 	StoredAgentRunEventRecord
 } from '$lib/models/agent';
-import type { DateTime } from '$lib/models/workspace';
-import type { OutputSegment } from '$lib/server/repositories/agent';
-import { segmentOutput } from '$lib/server/repositories/agent';
-import { agentRunContextSchema, assertAgentRunTransition } from '$lib/models/agent';
 import { ConflictError, NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentRunDecisionRepository,
@@ -33,12 +41,18 @@ export class InMemoryAgentRunPersistence
 		SnapshotParticipant
 {
 	runs: AgentRun[] = [];
+	/** Allows a cancellation to commit while the execution claim is waiting on storage. */
+	executionClaim: Promise<void> = Promise.resolve();
 	events: AgentRunEventRecord[] = [];
 	decisions: AgentRunDecisionRecord[] = [];
 	private cursor = 0n;
 
 	async findById(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
 		return this.runs.find((run) => run.id === id && run.userId === actor.userId);
+	}
+
+	async findForWrite(actor: ActorContext, id: AgentRunId): Promise<AgentRun | undefined> {
+		return this.findById(actor, id);
 	}
 
 	async findAgentById(actor: ActorContext, id: AgentRunId): Promise<ResolvedAgentRun | undefined> {
@@ -106,110 +120,177 @@ export class InMemoryAgentRunPersistence
 		return owned;
 	}
 
-	async update(actor: ActorContext, run: AgentRun): Promise<AgentRun> {
-		const current = await this.findById(actor, run.id);
-		if (!current) throw new NotFoundError('Agent run was not found');
-		if (current.status !== run.status) assertAgentRunTransition(current.status, run.status);
-		this.replace(run);
-		return run;
-	}
-
-	async transition(
-		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<AgentRun> = {}
-	): Promise<AgentRun | undefined> {
-		const fromStatuses = Array.isArray(from) ? from : [from];
-		// Every offered predecessor is checked, not just the one the run happens to
-		// be in, matching the database repository: a caller that names an illegal
-		// `from` must fail here too, whatever the row currently says.
-		for (const status of fromStatuses) assertAgentRunTransition(status, to);
+	async settle(runId: AgentRunId, change: RunSettlementWrite): Promise<AgentRun | undefined> {
 		const run = this.runs.find(
-			(r) => r.id === runId && (fromStatuses as string[]).includes(r.status)
+			(candidate) => candidate.id === runId && candidate.status === change.expected
 		);
 		if (!run) return undefined;
-		const { kind: _kind, inputSnapshot: _inputSnapshot, contextSnapshot, ...statePatch } = patch;
+		const { expected: _expected, ...values } = change;
+		void _expected;
 		const updated: AgentRun =
-			run.kind === 'agent'
+			change.status === 'completed'
 				? {
 						...run,
-						...statePatch,
-						...(contextSnapshot === undefined
-							? {}
-							: { contextSnapshot: agentRunContextSchema.parse(contextSnapshot) }),
-						kind: 'agent',
-						status: to,
-						updatedAt: new Date().toISOString() as DateTime
+						status: change.status,
+						finishedAt: change.finishedAt,
+						updatedAt: change.updatedAt,
+						serializedState: undefined,
+						pendingDecisions: change.pendingDecisions
 					}
-				: {
-						...run,
-						...statePatch,
-						kind: 'workflow',
-						status: to,
-						updatedAt: new Date().toISOString() as DateTime
-					};
-		void _kind;
-		void _inputSnapshot;
+				: { ...run, ...values, serializedState: run.serializedState };
 		this.replace(updated);
 		return updated;
 	}
 
-	async transitionAgent(
+	async claimAgent(
 		runId: AgentRunId,
-		from: AgentRunStatus | readonly AgentRunStatus[],
-		to: AgentRunStatus,
-		patch: Partial<ResolvedAgentRun> = {}
+		change: RunClaimWrite
 	): Promise<ResolvedAgentRun | undefined> {
-		const fromStatuses = Array.isArray(from) ? from : [from];
-		for (const status of fromStatuses) assertAgentRunTransition(status, to);
+		await this.executionClaim;
 		const run = this.runs.find(
 			(candidate): candidate is ResolvedAgentRun =>
-				candidate.kind === 'agent' &&
-				candidate.id === runId &&
-				(fromStatuses as string[]).includes(candidate.status)
+				candidate.kind === 'agent' && candidate.id === runId && candidate.status === change.expected
 		);
 		if (!run) return undefined;
-		const updated: ResolvedAgentRun = {
+		const { expected: _expected, ...values } = change;
+		void _expected;
+		const updated = { ...run, ...values };
+		this.replace(updated);
+		return updated;
+	}
+
+	async claimWorkflow(
+		runId: AgentRunId,
+		change: RunClaimWrite
+	): Promise<WorkflowAgentRun | undefined> {
+		const run = this.runs.find(
+			(candidate): candidate is WorkflowAgentRun =>
+				candidate.kind === 'workflow' &&
+				candidate.id === runId &&
+				candidate.status === change.expected
+		);
+		if (!run) return undefined;
+		const { expected: _expected, ...values } = change;
+		void _expected;
+		const updated = { ...run, ...values };
+		this.replace(updated);
+		return updated;
+	}
+
+	async checkpointAgent(
+		runId: AgentRunId,
+		change: AgentCheckpointWrite
+	): Promise<ResolvedAgentRun | undefined> {
+		const run = this.runs.find(
+			(candidate): candidate is ResolvedAgentRun =>
+				candidate.kind === 'agent' && candidate.id === runId && candidate.status === change.expected
+		);
+		if (!run) return undefined;
+		const { expected: _expected, traceparent, ...values } = change;
+		void _expected;
+		const updated = { ...run, ...values, traceparent: traceparent ?? undefined };
+		this.replace(updated);
+		return updated;
+	}
+
+	async updateCancellation(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: RunCancellationWrite
+	): Promise<AgentRun> {
+		const run = await this.findById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		const updated = { ...run, ...change };
+		this.replace(updated);
+		return updated;
+	}
+
+	async updateAgentProvenance(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun> {
+		const run = await this.findAgentById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		const updated = { ...run, ...change };
+		this.replace(updated);
+		return updated;
+	}
+
+	async updateAgentContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun> {
+		const run = await this.findAgentById(actor, runId);
+		if (!run) throw new NotFoundError('Agent run was not found');
+		const updated = { ...run, ...change };
+		this.replace(updated);
+		return updated;
+	}
+
+	async updateWorkflowSettlement(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowSettlementWrite
+	): Promise<WorkflowAgentRun> {
+		const run = await this.findById(actor, runId);
+		if (!run || run.kind !== 'workflow') throw new NotFoundError('Workflow run was not found');
+		const updated: WorkflowAgentRun = {
 			...run,
-			...patch,
-			status: to,
-			updatedAt: new Date().toISOString() as DateTime
+			status: change.status,
+			finishedAt: change.finishedAt,
+			updatedAt: change.updatedAt,
+			pendingDecisions: [],
+			...(change.status === 'completed'
+				? { serializedState: undefined }
+				: { failure: change.failure })
 		};
 		this.replace(updated);
 		return updated;
 	}
 
-	async requestCancellation(
+	async updateWorkflowContext(
 		actor: ActorContext,
 		runId: AgentRunId,
-		at: DateTime
-	): Promise<AgentRun> {
+		change: WorkflowContextWrite
+	): Promise<WorkflowAgentRun> {
 		const run = await this.findById(actor, runId);
-		if (!run) throw new NotFoundError('Agent run was not found');
-		if (['completed', 'failed', 'cancelled', 'cancelling'].includes(run.status)) return run;
-		const updated: AgentRun = {
-			...run,
-			status: run.status === 'queued' ? 'cancelled' : 'cancelling',
-			cancelRequestedAt: at,
-			...(run.status === 'queued' ? { finishedAt: at } : {}),
-			updatedAt: at
-		};
+		if (!run || run.kind !== 'workflow') throw new NotFoundError('Workflow run was not found');
+		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;
 	}
 
-	async requeueAfterDecision(
+	async updateApproval(
 		actor: ActorContext,
 		runId: AgentRunId,
-		at: DateTime
+		change: RunApprovalWrite
 	): Promise<AgentRun> {
 		const run = await this.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
-		if (run.status === 'queued') return run;
-		const updated: AgentRun = { ...run, status: 'queued', updatedAt: at };
+		const updated = { ...run, ...change };
 		this.replace(updated);
 		return updated;
+	}
+
+	failedEvent?: AgentEvent['type'];
+	async listQueuedAgents(): Promise<readonly ResolvedAgentRun[]> {
+		return this.runs.filter(
+			(run): run is ResolvedAgentRun => run.kind === 'agent' && run.status === 'queued'
+		);
+	}
+	async listQueuedWorkflows(): Promise<readonly WorkflowAgentRun[]> {
+		return this.runs.filter(
+			(run): run is WorkflowAgentRun => run.kind === 'workflow' && run.status === 'queued'
+		);
+	}
+
+	appendNoteActionResult(
+		runId: AgentRunId,
+		result: NoteActionResult
+	): Promise<AgentRunEventRecord> {
+		return this.append(runId, 1, noteActionEvent(result));
 	}
 
 	async listInterrupted(): Promise<readonly AgentRun[]> {
@@ -221,6 +302,7 @@ export class InMemoryAgentRunPersistence
 		attempt: number,
 		event: AgentEvent
 	): Promise<AgentRunEventRecord> {
+		if (event.type === this.failedEvent) throw new Error('Event storage unavailable');
 		this.cursor += 1n;
 		const record = { cursor: this.cursor.toString(), runId, attempt, event, createdAt: new Date() };
 		this.events.push(record);
@@ -245,15 +327,13 @@ export class InMemoryAgentRunPersistence
 		return this.events.filter((event) => event.runId === runId).at(-1)?.cursor ?? '0';
 	}
 
-	async reconstructOutput(runId: AgentRunId, attempt: number): Promise<readonly OutputSegment[]> {
-		return segmentOutput(
-			this.events
-				.filter((record) => record.runId === runId && record.attempt === attempt)
-				.map((record) => ({
-					cursor: record.cursor,
-					event: { kind: 'readable', event: record.event }
-				}))
-		);
+	async listAttempt(
+		runId: AgentRunId,
+		attempt: number
+	): Promise<readonly StoredAgentRunEventRecord[]> {
+		return this.events
+			.filter((record) => record.runId === runId && record.attempt === attempt)
+			.map((record) => ({ ...record, kind: 'readable' as const }));
 	}
 
 	async record(
@@ -286,11 +366,10 @@ export class InMemoryAgentRunPersistence
 		return true;
 	}
 
-	async clearPending(runId: AgentRunId): Promise<boolean> {
+	async clearPending(runId: AgentRunId): Promise<void> {
 		const run = this.runs.find((r) => r.id === runId);
-		if (!run) return false;
+		if (!run) throw new NotFoundError('Agent run was not found');
 		this.replace({ ...run, pendingDecisions: [] });
-		return true;
 	}
 
 	snapshot(): RestoreSnapshot {

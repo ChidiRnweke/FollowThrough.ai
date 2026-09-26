@@ -1,50 +1,19 @@
 import { RunEventSubscription } from '$lib/client/agent/runs/subscription';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
-import { type AgentRunEventRecord, type AgentRunId, type NoteActionKind } from '$lib/models/agent';
+import {
+	type StoredNoteActionRun as StoredRun,
+	type NoteActionContext,
+	type StoredAgentRunEventRecord,
+	type AgentRunId,
+	type NoteActionKind
+} from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
-import { z } from 'zod';
+import {
+	SessionRunStorage,
+	type NoteActionRunStorage as RunStorage
+} from '$lib/client/notes/action-run-storage';
+export type { NoteActionContext } from '$lib/models/agent';
 import { cancelAgentRun } from '$lib/remote/agent/chat.remote';
-
-const KEY = 'followthrough.notes.active-actions';
-
-/** Whatever the completion handler needs that the result itself does not carry. */
-export interface NoteActionContext {
-	readonly source?: string;
-	readonly insertAt?: number;
-}
-
-interface StoredRun {
-	readonly runId: AgentRunId;
-	readonly action: NoteActionKind;
-	readonly noteId: NoteId;
-	/** Last event consumed, so a reattach replays only what this client missed. */
-	readonly cursor: string;
-	readonly context: NoteActionContext;
-}
-
-const storedRunSchema = z
-	.object({
-		runId: z.string().min(1),
-		action: z.enum(['promises', 'relate', 'reference', 'diagram', 'revise', 'convert']),
-		noteId: z.string().min(1),
-		cursor: z.string(),
-		context: z
-			.object({ source: z.string().optional(), insertAt: z.number().int().optional() })
-			.strict()
-	})
-	.strict();
-
-const parseStoredRuns = (value: string): readonly StoredRun[] =>
-	storedRunSchema
-		.array()
-		.parse(JSON.parse(value))
-		.map((run) => ({
-			runId: run.runId as AgentRunId,
-			action: run.action,
-			noteId: run.noteId as NoteId,
-			cursor: run.cursor,
-			context: run.context
-		}));
 
 export interface NoteActionRun extends StoredRun {
 	readonly cancelling: boolean;
@@ -71,7 +40,7 @@ interface NoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void | Promise<void>,
+		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>,
 		onError: () => void
 	): EventStream;
 	cancel(runId: AgentRunId): Promise<void>;
@@ -81,7 +50,7 @@ class BrowserTransport implements NoteActionRunTransport {
 	open(
 		runId: AgentRunId,
 		after: string,
-		onEvent: (record: AgentRunEventRecord) => void | Promise<void>,
+		onEvent: (record: StoredAgentRunEventRecord) => void | Promise<void>,
 		onError: () => void
 	): EventStream {
 		return new RunEventSubscription({
@@ -90,7 +59,11 @@ class BrowserTransport implements NoteActionRunTransport {
 			onOpen: () => {},
 			onError,
 			onEvent: async (record) => {
-				if (record.event.type === 'workflow_result' || record.event.type === 'resources_stale')
+				if (
+					record.kind === 'unreadable' ||
+					record.event.type === 'workflow_result' ||
+					record.event.type === 'resources_stale'
+				)
 					await workspaceSession.synchronize();
 				await onEvent(record);
 			}
@@ -99,25 +72,6 @@ class BrowserTransport implements NoteActionRunTransport {
 
 	async cancel(runId: AgentRunId): Promise<void> {
 		await cancelAgentRun({ runId });
-	}
-}
-
-interface RunStorage {
-	load(): readonly StoredRun[];
-	save(runs: readonly StoredRun[]): void;
-}
-
-class SessionRunStorage implements RunStorage {
-	load(): readonly StoredRun[] {
-		if (typeof sessionStorage === 'undefined') return [];
-		const stored = sessionStorage.getItem(KEY);
-		return stored === null ? [] : parseStoredRuns(stored);
-	}
-
-	save(runs: readonly StoredRun[]): void {
-		if (typeof sessionStorage === 'undefined') return;
-		if (runs.length === 0) sessionStorage.removeItem(KEY);
-		else sessionStorage.setItem(KEY, JSON.stringify(runs));
 	}
 }
 
@@ -146,8 +100,8 @@ export class NoteActionRunsStore {
 	constructor(
 		/** One store per note: a split pane must never show its sibling's work. */
 		private readonly noteId: NoteId,
-		private readonly transport: NoteActionRunTransport = new BrowserTransport(),
-		private readonly storage: RunStorage = new SessionRunStorage()
+		private readonly transport: NoteActionRunTransport,
+		private readonly storage: RunStorage
 	) {}
 
 	/** Every run currently in flight, for the progress rows to render. */
@@ -253,7 +207,15 @@ export class NoteActionRunsStore {
 		this.streams.set(entry.runId, stream);
 	}
 
-	private async consume(runId: AgentRunId, record: AgentRunEventRecord): Promise<void> {
+	private async consume(runId: AgentRunId, record: StoredAgentRunEventRecord): Promise<void> {
+		if (record.kind === 'unreadable') {
+			this.settle(runId, {
+				status: 'failed',
+				message:
+					'Saved note action activity could not be restored. Reload the note to check its saved result.'
+			});
+			return;
+		}
 		const event = record.event;
 		if (event.type === 'workflow_result') {
 			const entry = this.entries.find((candidate) => candidate.runId === runId);
@@ -297,13 +259,21 @@ export class NoteActionRunsStore {
 }
 
 // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a registry of stores, not rendered state; each store publishes its own.
-const stores = new Map<NoteId, NoteActionRunsStore>();
+const stores = new Map<string, NoteActionRunsStore>();
 
-/** One store per note id, so a split pane's two editors never share run state. */
+/** Bind each note store to the signed-in account that created it. */
 export const noteActionRunsFor = (noteId: NoteId): NoteActionRunsStore => {
-	const existing = stores.get(noteId);
+	const session = workspaceSession.current;
+	if (!session) throw new Error('The workspace is not ready to track note actions');
+	const accountId = session.bootstrap.accountId;
+	const key = JSON.stringify([accountId, noteId]);
+	const existing = stores.get(key);
 	if (existing) return existing;
-	const created = new NoteActionRunsStore(noteId);
-	stores.set(noteId, created);
+	const created = new NoteActionRunsStore(
+		noteId,
+		new BrowserTransport(),
+		new SessionRunStorage(sessionStorage, accountId)
+	);
+	stores.set(key, created);
 	return created;
 };

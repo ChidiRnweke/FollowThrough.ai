@@ -1,9 +1,6 @@
-import {
-	proofreadSuggestion,
-	type ProofreadIssue,
-	type ProofreadLinter,
-	type ProofreadSuggestion
-} from '$lib/models/proofreading';
+import type { ProofreadIssue, ProofreadSuggestion } from '$lib/models/proofreading';
+import type { ProofreadLinter } from '$lib/services/proofreading/contracts';
+import { proofreadSuggestion } from '$lib/services/proofreading/rules';
 import type { Lint, Linter, Suggestion } from 'harper.js';
 
 /** The checker is a browser capability; SSR renders the document without it. */

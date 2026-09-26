@@ -42,6 +42,24 @@ const inspect = (files: Readonly<Record<string, string>>): readonly string[] => 
 };
 
 describe('Shared service and controller placement', () => {
+	it('classifies server-only upload readers as transport boundary helpers', () => {
+		expect(
+			inspect({
+				'src/lib/remote/notes/archive-reader.server.ts':
+					'export const read = (bytes: Uint8Array) => bytes.length;'
+			})
+		).toEqual([]);
+	});
+	it('keeps services from importing upload boundary readers', () => {
+		expect(
+			inspect({
+				'src/lib/remote/notes/archive-reader.server.ts':
+					'export const read = (bytes: Uint8Array) => bytes.length;',
+				'src/lib/server/services/notes/import.ts':
+					"import { read } from '$lib/remote/notes/archive-reader.server'; export const parse = read;"
+			})
+		).toContain('import-boundary:banned-layer-import');
+	});
 	it('allows a browser store to call a shared controller and its shared service', () => {
 		expect(
 			inspect({

@@ -1,7 +1,6 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateFolderInput,
 	CreateProjectInput,
 	Project,
 	ProjectId,
@@ -42,7 +41,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 			if (isUniqueViolation(error, PROJECT_NAME_CONSTRAINT))
 				throw new ConflictError('An active project with this name already exists');
 			if (isUniqueViolation(error, PROJECT_INBOX_CONSTRAINT))
-				throw new ConflictError('This workspace already has an inbox');
+				throw new ConflictError('This workspace already has an active inbox');
 			throw error;
 		}
 	}
@@ -52,7 +51,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 	 *
 	 * Not by name: the name is the user's to change, and matching on it is what
 	 * let a renamed project stop being the inbox while a new one silently became
-	 * it. Absent only before provisioning has run.
+	 * it. Absent before provisioning or after the previous Inbox is archived.
 	 */
 	async findInbox(actor: ActorContext): Promise<Project | undefined> {
 		const [row] = await this.database
@@ -65,6 +64,22 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 					isNull(schema.projects.archivedAt)
 				)
 			);
+		return row ? toProject(row) : undefined;
+	}
+
+	async findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined> {
+		const [row] = await this.database
+			.select()
+			.from(schema.projects)
+			.where(
+				and(
+					eq(schema.projects.id, projectId),
+					eq(schema.projects.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
+			)
+			// Serialize project writers without blocking foreign-key checks from note indexing.
+			.for('no key update');
 		return row ? toProject(row) : undefined;
 	}
 
@@ -106,7 +121,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		try {
 			const [row] = await this.database
 				.update(schema.projects)
-				.set({ name: input.name, description: input.description })
+				.set({ name: input.name, description: input.description ?? null })
 				.where(
 					and(
 						eq(schema.projects.id, input.projectId),
@@ -168,26 +183,6 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		).map(toNote);
 	}
 
-	async insertFolder(
-		actor: ActorContext,
-		input: CreateFolderInput,
-		position: number
-	): Promise<Note> {
-		const [row] = await this.database
-			.insert(schema.notes)
-			.values({
-				...(input.id !== undefined ? { id: input.id } : {}),
-				userId: actor.userId,
-				projectId: input.projectId,
-				parentId: input.parentId,
-				kind: 'folder',
-				position,
-				title: input.name
-			})
-			.returning();
-		return toNote(row!);
-	}
-
 	async persistOrder(
 		actor: ActorContext,
 		entries: readonly { id: NoteId; parentId?: NoteId; position: number }[]
@@ -195,7 +190,7 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		for (const entry of entries)
 			await this.database
 				.update(schema.notes)
-				.set({ parentId: entry.parentId, position: entry.position })
+				.set({ parentId: entry.parentId ?? null, position: entry.position })
 				.where(and(eq(schema.notes.id, entry.id), eq(schema.notes.userId, actor.userId)));
 	}
 

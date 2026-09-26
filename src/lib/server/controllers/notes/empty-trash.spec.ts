@@ -1,3 +1,4 @@
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
@@ -23,8 +24,8 @@ const setup = () => {
 	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			notePurger: service,
-			transactionRunner: { run: <T>(work: () => Promise<T>): Promise<T> => work() }
+			noteDeletion: service,
+			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})
 	);
 	return { notes, controller };
@@ -85,5 +86,16 @@ describe('Empty trash invariants', () => {
 		const { controller } = setup();
 		const result = await controller.emptyTrash(testActor(), {});
 		expect(result.deletedNoteIds).toEqual([]);
+	});
+
+	it('rolls back earlier deletions when emptying another project fails', async () => {
+		const { notes, controller } = setup();
+		notes.notes = [
+			noteBuilder({ archivedAt: testNow }),
+			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2), archivedAt: testNow })
+		];
+		notes.deleteFailures.add(testNoteId(2));
+		await controller.emptyTrash(testActor(), {}).catch(() => undefined);
+		expect(notes.notes.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
 	});
 });

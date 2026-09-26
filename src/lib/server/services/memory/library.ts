@@ -1,18 +1,15 @@
 import type { AppliedChange } from '$lib/models/proposal-effects';
-import { decideMemoryCreation, decideMemoryEdit } from '$lib/models/memory';
 import type { ActorContext } from '$lib/models/identity';
 import type {
-	CreateMemoryEntryInput,
 	MemoryChangePayload,
 	MemoryEntry,
 	MemoryEntryId,
-	MemoryApplication,
-	UpdateMemoryEntryInput
+	MemoryApplication
 } from '$lib/models/memory';
 import type { DateTime } from '$lib/models/workspace';
 import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, OwnershipError, ValidationError } from '$lib/errors';
 import type { MemoryEntryRepository } from '$lib/server/repositories/memory';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
@@ -38,24 +35,17 @@ export class MemoryLibrary {
 		return this.entries.list(actor, filter);
 	}
 
-	async create(actor: ActorContext, input: CreateMemoryEntryInput): Promise<MemoryEntry> {
-		const decision = decideMemoryCreation(input, {
-			id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
-			userId: actor.userId,
-			timestamp: now()
-		});
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		if (input.projectId) await this.requireProject(actor, input.projectId);
-		const entry = await this.entries.insert(actor, decision.entry);
-		return entry;
+	async create(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
+		if (entry.userId !== actor.userId)
+			throw new OwnershipError('Cannot create another user’s memory');
+		if (entry.projectId) await this.requireProject(actor, entry.projectId);
+		return this.entries.insert(actor, entry);
 	}
 
-	async update(actor: ActorContext, input: UpdateMemoryEntryInput): Promise<MemoryEntry> {
-		const current = await this.getActive(actor, input.memoryEntryId);
-		const decision = decideMemoryEdit(current, input, now());
-		if (decision.kind === 'invalid') throw new ValidationError(decision.message);
-		const entry = await this.entries.update(actor, decision.entry);
-		return entry;
+	async update(actor: ActorContext, entry: MemoryEntry): Promise<MemoryEntry> {
+		if (entry.userId !== actor.userId)
+			throw new OwnershipError('Cannot edit another user’s memory');
+		return this.entries.update(actor, entry);
 	}
 
 	async remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
@@ -85,12 +75,25 @@ export class MemoryLibrary {
 		}
 	}
 
+	async validate(actor: ActorContext, payload: MemoryChangePayload): Promise<void> {
+		if (payload.scope === 'project') await this.requireProject(actor, payload.projectId);
+		if (payload.operation !== 'add') {
+			const target = await this.getActive(actor, payload.memoryEntryId);
+			this.requireScope(target, payload);
+		}
+	}
+
+	private requireScope(target: MemoryEntry, payload: MemoryChangePayload): void {
+		if (target.projectId !== payload.projectId)
+			throw new ValidationError('Memory target does not belong to the requested scope');
+	}
+
 	private async applyAdd(
 		actor: ActorContext,
-		payload: MemoryChangePayload,
+		payload: Extract<MemoryChangePayload, { operation: 'add' }>,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		const content = payload.content?.trim();
+		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
 		if (payload.projectId) await this.requireProject(actor, payload.projectId);
 		const timestamp = now();
@@ -109,13 +112,13 @@ export class MemoryLibrary {
 
 	private async applyUpdate(
 		actor: ActorContext,
-		payload: MemoryChangePayload,
+		payload: Extract<MemoryChangePayload, { operation: 'update' }>,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		if (!payload.memoryEntryId) throw new ValidationError('Memory updates require a target entry');
-		const content = payload.content?.trim();
+		const content = payload.content.trim();
 		if (!content) throw new ValidationError('Memory entry content is required');
-		const target = await this.getActiveForUpdate(actor, payload.memoryEntryId);
+		const target = await this.getForEdit(actor, payload.memoryEntryId);
+		this.requireScope(target, payload);
 		const timestamp = now();
 		const replacement = await this.entries.insert(actor, {
 			id: crypto.randomUUID() as MemoryEntryId,
@@ -140,18 +143,15 @@ export class MemoryLibrary {
 
 	private async applyRemove(
 		actor: ActorContext,
-		payload: MemoryChangePayload
+		payload: Extract<MemoryChangePayload, { operation: 'remove' }>
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>> {
-		if (!payload.memoryEntryId) throw new ValidationError('Memory removals require a target entry');
-		const target = await this.getActiveForUpdate(actor, payload.memoryEntryId);
+		const target = await this.getForEdit(actor, payload.memoryEntryId);
+		this.requireScope(target, payload);
 		const entry = await this.softDelete(actor, target);
 		return { entry, changes: [{ kind: 'modified', before: target, after: entry }] };
 	}
 
-	private async getActiveForUpdate(
-		actor: ActorContext,
-		memoryEntryId: MemoryEntryId
-	): Promise<MemoryEntry> {
+	async getForEdit(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
 		const entry = await this.entries.findByIdForUpdate(actor, memoryEntryId);
 		if (!entry || entry.deletedAt)
 			throw new NotFoundError('Memory entry was not found', { memoryEntryId });

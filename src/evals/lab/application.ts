@@ -3,20 +3,22 @@ import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
 import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
-import { ConversationSummary } from '$lib/server/services/agent/conversations/summary';
+import { SearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
-import { CachedCondenser, CachedEmbeddingClient, CachedReranker } from './cache/cached-clients';
+import {
+	CachedSearchQueryGeneration,
+	CachedEmbeddingClient,
+	CachedReranker
+} from './cache/cached-clients';
 import type { Database } from '$lib/server/db';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import {
-	seedToolEmbeddings,
-	toolEmbeddingText
-} from '$lib/server/services/agent/tools/tool-embedding-seed';
+import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
+import { ToolCatalogIndex, toolEmbeddingText } from '$lib/server/services/agent/tools/tool-index';
 import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
 
 const CACHE_PATH = fileURLToPath(new URL('../fixtures/auxiliary-cache.json', import.meta.url));
@@ -92,8 +94,8 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		overrides: {
 			embeddingClient,
 			reranker: new CachedReranker(new SearchRanking(openRouterApiKey, clientOptions), cache),
-			condenser: new CachedCondenser(
-				new ConversationSummary(openRouterApiKey, clientOptions),
+			queryGenerator: new CachedSearchQueryGeneration(
+				new SearchQueryGeneration(openRouterApiKey, clientOptions),
 				cache
 			),
 			attachmentStorage: new InMemoryAttachmentStorage(),
@@ -101,12 +103,15 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		}
 	});
 
-	// `PgToolRetriever` ranks against stored vectors, so an unseeded database
-	// makes `search_tools` return nothing and every long-tail tool becomes
-	// undiscoverable — the agent searches, finds an empty list and gives up.
+	// Tool discovery ranks against stored vectors. An unseeded database now fails
+	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await seedToolEmbeddings(new ToolEmbeddingRecords(database), embeddingClient);
+	await new ToolDiscovery(
+		new ToolCatalogIndex(new ToolEmbeddingRecords(database)),
+		embeddingClient,
+		transactionRunner
+	).seed();
 
 	return {
 		...application,

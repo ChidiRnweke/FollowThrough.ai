@@ -1,7 +1,9 @@
 import type { ActorContext } from '$lib/models/identity';
+import type { DateTime } from '$lib/models/workspace';
 import type { Todo, TodoId, TodoListFilter } from '$lib/models/todos';
 
 export interface TodoRepository {
+	findForUpdate(actor: ActorContext, id: TodoId): Promise<Todo | undefined>;
 	findById(actor: ActorContext, id: TodoId): Promise<Todo | undefined>;
 	list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]>;
 	/**
@@ -13,5 +15,5 @@ export interface TodoRepository {
 	listCategories(actor: ActorContext): Promise<readonly string[]>;
 	insert(actor: ActorContext, todo: Todo): Promise<Todo>;
 	update(actor: ActorContext, todo: Todo): Promise<Todo>;
-	softDelete(actor: ActorContext, id: TodoId, deletedAt: Todo['deletedAt']): Promise<void>;
+	softDelete(actor: ActorContext, id: TodoId, deletedAt: DateTime): Promise<void>;
 }

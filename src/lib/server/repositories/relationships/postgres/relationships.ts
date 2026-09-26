@@ -1,5 +1,3 @@
-import { decideRelationshipWrite } from '$lib/models/relationships';
-import type { AppliedChange } from '$lib/models/proposal-effects';
 import { and, eq, or, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { NoteId, NoteRelationship } from '$lib/models/notes';
@@ -39,67 +37,63 @@ export class RelationshipRecords implements NoteRelationshipRepository {
 	}
 
 	async insert(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
-		return (await this.insertWithChange(actor, relationship)).after;
+		const [row] = await this.database
+			.insert(schema.noteRelationships)
+			.values({
+				id: relationship.id,
+				userId: actor.userId,
+				sourceNoteId: relationship.sourceNoteId,
+				targetNoteId: relationship.targetNoteId,
+				kind: relationship.kind,
+				justification: relationship.justification,
+				sourceAnchorId: relationship.sourceAnchorId,
+				provenanceId: relationship.provenanceId,
+				createdAt: new Date(relationship.createdAt),
+				updatedAt: new Date(relationship.updatedAt)
+			})
+			.returning();
+		if (!row) throw new Error('Relationship insert returned no record');
+		return toRelationship(row);
 	}
-	async insertWithChange(
+	async findForWrite(
 		actor: ActorContext,
-		relationship: NoteRelationship
-	): Promise<AppliedChange<NoteRelationship>> {
-		return this.database.transaction(async (transaction) => {
-			const key = JSON.stringify([
-				relationship.sourceNoteId,
-				relationship.targetNoteId,
-				relationship.kind
-			]);
-			await transaction.execute(
-				sql`select pg_advisory_xact_lock(hashtext(${actor.userId}),hashtext(${key}))`
-			);
-			const [existing] = await transaction
-				.select()
-				.from(schema.noteRelationships)
-				.where(
-					and(
-						eq(schema.noteRelationships.userId, actor.userId),
-						eq(schema.noteRelationships.sourceNoteId, relationship.sourceNoteId),
-						eq(schema.noteRelationships.targetNoteId, relationship.targetNoteId),
-						eq(schema.noteRelationships.kind, relationship.kind)
-					)
+		edge: Pick<NoteRelationship, 'sourceNoteId' | 'targetNoteId' | 'kind'>
+	): Promise<NoteRelationship | undefined> {
+		const key = JSON.stringify([edge.sourceNoteId, edge.targetNoteId, edge.kind]);
+		await this.database.execute(
+			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}),hashtext(${key}))`
+		);
+		const [row] = await this.database
+			.select()
+			.from(schema.noteRelationships)
+			.where(
+				and(
+					eq(schema.noteRelationships.userId, actor.userId),
+					eq(schema.noteRelationships.sourceNoteId, edge.sourceNoteId),
+					eq(schema.noteRelationships.targetNoteId, edge.targetNoteId),
+					eq(schema.noteRelationships.kind, edge.kind)
 				)
-				.for('update');
-			const change = decideRelationshipWrite(
-				relationship,
-				existing ? toRelationship(existing) : null
-			);
-			if (change.kind === 'unchanged') return change;
-			if (change.kind === 'modified') {
-				await transaction
-					.update(schema.noteRelationships)
-					.set({
-						justification: change.after.justification ?? null,
-						updatedAt: new Date(change.after.updatedAt)
-					})
-					.where(
-						and(
-							eq(schema.noteRelationships.id, change.after.id),
-							eq(schema.noteRelationships.userId, actor.userId)
-						)
-					);
-			} else {
-				await transaction.insert(schema.noteRelationships).values({
-					id: relationship.id,
-					userId: actor.userId,
-					sourceNoteId: relationship.sourceNoteId,
-					targetNoteId: relationship.targetNoteId,
-					kind: relationship.kind,
-					justification: relationship.justification,
-					sourceAnchorId: relationship.sourceAnchorId,
-					provenanceId: relationship.provenanceId,
-					createdAt: new Date(relationship.createdAt),
-					updatedAt: new Date(relationship.updatedAt)
-				});
-			}
-			return change;
-		});
+			)
+			.for('update');
+		return row ? toRelationship(row) : undefined;
+	}
+
+	async update(actor: ActorContext, relationship: NoteRelationship): Promise<NoteRelationship> {
+		const [row] = await this.database
+			.update(schema.noteRelationships)
+			.set({
+				justification: relationship.justification ?? null,
+				updatedAt: new Date(relationship.updatedAt)
+			})
+			.where(
+				and(
+					eq(schema.noteRelationships.id, relationship.id),
+					eq(schema.noteRelationships.userId, actor.userId)
+				)
+			)
+			.returning();
+		if (!row) throw new NotFoundError('Relationship was not found');
+		return toRelationship(row);
 	}
 
 	async delete(actor: ActorContext, id: RelationshipId): Promise<void> {

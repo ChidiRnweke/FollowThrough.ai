@@ -1,22 +1,52 @@
+import { noteTrashChange } from '$lib/services/notes/trash';
+import { prepareNotePublication } from '$lib/services/notes/publication';
+import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
+import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { DateTime } from '$lib/models/workspace';
+import { assembleTodoView } from '$lib/services/todos/presentation';
+import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes/presentation';
+import { assembleBacklinkView } from '$lib/services/relationships/presentation';
+import { assembleReferenceView } from '$lib/services/references/presentation';
+import { mutationResource } from '$lib/services/workspace/commands';
+import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
+import { provenanceOrigin } from '$lib/services/provenance/presentation';
+import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
+import type { IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { applyNotePatch, describeNotePatchFailure } from '$lib/server/services/notes/patches';
+import { diffNoteRevisionTexts } from '$lib/server/services/notes/revision-diff';
 import {
-	assembleNoteView,
-	applyNotePatch,
-	describeNotePatchFailure,
 	type NoteChangeRequest,
+	type NoteChangeTarget,
 	type NoteChangeReview,
 	type PreparedNoteChange,
 	type ApplyReviewedNoteChangeOutput
 } from '$lib/models/notes';
 import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
-import { applyNoteDraftEdit } from '$lib/models/notes';
+import { applyNoteDraftEdit, prepareNoteSave } from '$lib/services/notes/editing';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
 import type { Diagram } from '$lib/models/diagrams';
 import type { TodoView } from '$lib/models/todos';
 import type { SuggestionView } from '$lib/models/suggestions';
 import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { SyncMutationTransactions } from '$lib/server/services/workspace/mutations';
+import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
+import type {
+	ImportMarkdownArchiveInput,
+	ImportMarkdownArchiveOutput,
+	ArchiveNoteReference,
+	ArchiveLinkIssue,
+	ParsedMarkdownNote
+} from '$lib/models/projects';
+import {
+	resolveArchiveLinks,
+	indexArchiveReferences,
+	uniqueTitleIn,
+	unmappedFrontmatterKeys
+} from '$lib/server/services/notes/import';
 import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
@@ -43,6 +73,7 @@ import type {
 	RestoreNoteRevisionInput,
 	RestoreNoteRevisionOutput,
 	Note,
+	NoteId,
 	NoteDocument,
 	NoteRevision,
 	NoteSearchOptions,
@@ -63,49 +94,44 @@ import type {
 	ReplaceNoteTextInput,
 	ReplaceNoteTextOutput
 } from '$lib/models/notes';
-import {
-	MAX_NOTE_DOCUMENTS,
-	buildNoteSearchPattern,
-	collectNoteLinkTargets,
-	diffNoteRevisionTexts,
-	noteEtag,
-	noteMatchesEtag,
-	replaceInNoteDocument,
-	searchNoteTargets,
-	sectionNumberingView
-} from '$lib/models/notes';
+import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
+import { collectNoteLinkTargets } from '$lib/services/notes/references';
+import { sectionNumberingView } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
+import {
+	buildNoteSearchPattern,
+	replaceInNoteDocument,
+	searchNoteTargets
+} from '$lib/services/notes/text-search';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
 import type {
-	BacklinkViewAssembler,
+	BacklinkContextReader,
 	NoteLinkReconciler,
 	RelationshipFinder
 } from '$lib/server/services/relationships/contracts';
 import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
 import type {
-	NoteCreator,
 	NoteReader,
 	NoteTextSearcher,
 	NoteTreeReader
 } from '$lib/server/services/notes/contracts';
 import type {
 	ReferenceLister,
-	ReferenceViewAssembler
+	ReferenceContextReader
 } from '$lib/server/services/references/contracts';
 import type {
 	SuggestionLister,
-	SuggestionViewAssembler
+	SuggestionExpirer,
+	SuggestionContextReader
 } from '$lib/server/services/suggestions/contracts';
-import type { TodoLister, TodoViewAssembler } from '$lib/server/services/todos/contracts';
+import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/contracts';
 import type {
-	NoteArchiver,
 	NoteAttachmentRestorer,
 	NoteEditor,
 	NoteIndexer,
 	NotePublisher,
-	NotePurger,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
 	NoteSectionNumberingEditor,
@@ -121,10 +147,19 @@ import type {
  * runner so a save and its link/index side effects commit atomically.
  */
 export interface NotesController {
-	prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview>;
+	importMarkdownArchive(
+		actor: ActorContext,
+		input: ImportMarkdownArchiveInput
+	): Promise<ImportMarkdownArchiveOutput>;
+	prepareChange(
+		actor: ActorContext,
+		input: NoteChangeRequest,
+		target: NoteChangeTarget
+	): Promise<NoteChangeReview>;
 	applyReviewedChange(
 		actor: ActorContext,
-		change: PreparedNoteChange
+		change: PreparedNoteChange,
+		target: NoteChangeTarget
 	): Promise<ApplyReviewedNoteChangeOutput>;
 	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult>;
 	/**
@@ -290,33 +325,37 @@ export interface NotesController {
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
 	markdown: NoteMarkdown;
-	syncMutations: Pick<SyncMutationTransactions, 'run'>;
+	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncRetry: 'database-only' | 'never';
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
-	noteCreator: NoteCreator;
+	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
 	noteSectionNumbering: NoteSectionNumberingEditor;
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
 	relationshipFinder: RelationshipFinder;
-	backlinkViewAssembler: BacklinkViewAssembler;
+	backlinkContextReader: BacklinkContextReader;
 	referenceLister: ReferenceLister;
-	referenceViewAssembler: ReferenceViewAssembler;
+	referenceContextReader: ReferenceContextReader;
 	diagramLister: DiagramLister;
 	todoLister: TodoLister;
-	todoViewAssembler: TodoViewAssembler;
+	todoContextReader: TodoContextReader;
 	suggestionLister: SuggestionLister;
-	suggestionViewAssembler: SuggestionViewAssembler;
+	suggestionExpirer: SuggestionExpirer;
+	suggestionContextReader: SuggestionContextReader;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
-	noteArchiver: NoteArchiver;
+	noteTrash: Pick<NoteCatalog, 'archiveFacts' | 'restoreFacts' | 'persistTrash'>;
 	noteTrashReader: NoteTrashReader;
-	notePurger: NotePurger;
+	noteDeletion: Pick<NoteCatalog, 'deletionFacts' | 'trashForDeletion' | 'persistDeletion'>;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
 	revisionReader: NoteRevisionReader;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }
@@ -331,60 +370,198 @@ const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
 	);
 };
 
+async function importAttempt<T>(
+	work: () => Promise<T>
+): Promise<{ kind: 'success'; value: T } | { kind: 'failure'; message: string }> {
+	try {
+		return { kind: 'success', value: await work() };
+	} catch (error) {
+		return {
+			kind: 'failure',
+			message: error instanceof Error ? error.message : 'Could not be imported.'
+		};
+	}
+}
+
+function importedFolderId(folders: ReadonlyMap<string, NoteId>, path: string): NoteId {
+	const id = folders.get(path);
+	if (!id) throw new Error(`Imported parent folder is missing: ${path}`);
+	return id;
+}
+
 export class Notes implements NotesController {
-	synchronize(actor: ActorContext, input: NoteMutationRequest): Promise<WorkspaceMutationResult> {
-		return this.dependencies.syncMutations.run(actor, input, async (current) => {
-			const command = input.command;
-			switch (command.kind) {
-				case 'createNote':
-					await this.create(actor, command);
-					break;
-				case 'renameNote':
-					await this.rename(actor, command);
-					break;
-				case 'archiveNote':
-					await this.archive(actor, command);
-					break;
-				case 'restoreNote':
-					await this.restore(actor, command);
-					break;
-				case 'publishNote':
-					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
-						throw new ValidationError('The note no longer exists');
-					await this.publish(actor, {
-						noteId: command.noteId,
-						baseEtag: noteEtag(current.snapshot.value.value)
-					});
-					break;
-				case 'discardNoteDraft':
-					await this.discardDraft(actor, command);
-					break;
-				case 'noteNumbering':
-					await this.setSectionNumbering(actor, command);
-					break;
-				case 'saveNote': {
-					if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
-						throw new ValidationError('The note no longer exists');
-					await this.save(actor, {
-						note: applyNoteDraftEdit(
-							current.snapshot.value.value,
-							command,
-							current.snapshot.value.value.updatedAt
-						)
-					});
-					if (command.sectionNumbering !== undefined)
-						await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
-							noteId: command.noteId,
-							enabled: command.sectionNumbering ?? undefined
-						});
-					break;
-				}
+	/** Import keeps independent successes and uses the ordinary note write consequences. */
+	async importMarkdownArchive(
+		actor: ActorContext,
+		input: ImportMarkdownArchiveInput
+	): Promise<ImportMarkdownArchiveOutput> {
+		const failed: { path: string; message: string }[] = [];
+		const folders = new Map<string, NoteId>();
+		const blocked = new Set<string>();
+		const paths = new Set<string>();
+		for (const note of input.notes)
+			for (let depth = 1; depth <= note.folders.length; depth++)
+				paths.add(note.folders.slice(0, depth).join('/'));
+		for (const path of [...paths].sort((a, b) => a.split('/').length - b.split('/').length)) {
+			const parts = path.split('/');
+			const parentPath = parts.slice(0, -1).join('/');
+			if (blocked.has(parentPath)) {
+				blocked.add(path);
+				failed.push({ path, message: `Parent folder ${parentPath} could not be imported.` });
+				continue;
 			}
-		});
+			const parentId = parentPath ? importedFolderId(folders, parentPath) : input.parentId;
+			const result = await importAttempt(() =>
+				this.createDocument(
+					actor,
+					{
+						projectId: input.projectId,
+						title: parts.at(-1)!,
+						...(parentId ? { parentId } : {})
+					},
+					'folder'
+				)
+			);
+			if (result.kind === 'failure') {
+				blocked.add(path);
+				failed.push({ path, message: result.message });
+			} else folders.set(path, result.value.id);
+		}
+
+		const takenByFolder = new Map<string, Set<string>>();
+		const pending: { note: ParsedMarkdownNote; created: Note }[] = [];
+		const references: ArchiveNoteReference[] = [];
+		for (const note of input.notes) {
+			const folderPath = note.folders.join('/');
+			if (blocked.has(folderPath)) {
+				failed.push({
+					path: note.path,
+					message: `Destination folder ${folderPath} could not be imported.`
+				});
+				references.push({ path: note.path, title: note.title, outcome: { kind: 'failed' } });
+				continue;
+			}
+			const parentId = folderPath ? importedFolderId(folders, folderPath) : input.parentId;
+			const taken = takenByFolder.get(folderPath) ?? new Set<string>();
+			takenByFolder.set(folderPath, taken);
+			const result = await importAttempt(() =>
+				this.create(actor, {
+					projectId: input.projectId,
+					title: uniqueTitleIn(taken, note.title),
+					...(parentId ? { parentId } : {})
+				})
+			);
+			if (result.kind === 'failure') {
+				failed.push({ path: note.path, message: result.message });
+				references.push({ path: note.path, title: note.title, outcome: { kind: 'failed' } });
+			} else {
+				pending.push({ note, created: result.value.note });
+				references.push({
+					path: note.path,
+					title: note.title,
+					outcome: { kind: 'created', id: result.value.note.id }
+				});
+			}
+		}
+		const unresolvedLinks: ArchiveLinkIssue[] = [];
+		const referenceIndex = indexArchiveReferences(references);
+		for (const { note, created } of pending) {
+			if (!note.markdown.trim()) continue;
+			const resolved = resolveArchiveLinks(note, referenceIndex);
+			unresolvedLinks.push(...resolved.issues);
+			const result = await importAttempt(() =>
+				this.save(actor, {
+					note: { ...created, ...this.dependencies.markdown.read(resolved.markdown) }
+				})
+			);
+			if (result.kind === 'failure') failed.push({ path: note.path, message: result.message });
+		}
+		return {
+			importedNoteIds: pending.map(({ created }) => created.id),
+			createdFolderIds: [...folders.values()],
+			skipped: input.skipped,
+			failed,
+			unmappedFrontmatterKeys: unmappedFrontmatterKeys(input.notes),
+			unresolvedLinks
+		};
+	}
+	async synchronize(
+		actor: ActorContext,
+		input: NoteMutationRequest
+	): Promise<WorkspaceMutationResult> {
+		try {
+			return await this.dependencies.transactionRunner.run(
+				async () => {
+					const target = mutationResource(input.command);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					if (prepared.kind === 'finished') return prepared.result;
+					await this.applySynchronizedCommand(actor, input, prepared.current);
+					return this.dependencies.syncMutations.complete(actor, input, target);
+				},
+				{ retry: this.dependencies.syncRetry }
+			);
+		} catch (error) {
+			if (!(error instanceof Error)) throw error;
+			return this.dependencies.syncMutations.reject(error);
+		}
+	}
+
+	private async applySynchronizedCommand(
+		actor: ActorContext,
+		input: NoteMutationRequest,
+		current: WorkspaceMutationCurrent
+	): Promise<void> {
+		const command = input.command;
+		switch (command.kind) {
+			case 'createNote':
+				await this.create(actor, command);
+				break;
+			case 'renameNote':
+				await this.rename(actor, command);
+				break;
+			case 'archiveNote':
+				await this.archive(actor, command);
+				break;
+			case 'restoreNote':
+				await this.restore(actor, command);
+				break;
+			case 'publishNote':
+				if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+					throw new ValidationError('The note no longer exists');
+				await this.publish(actor, {
+					noteId: command.noteId,
+					baseEtag: noteEtag(current.snapshot.value.value)
+				});
+				break;
+			case 'discardNoteDraft':
+				await this.discardDraft(actor, command);
+				break;
+			case 'noteNumbering':
+				await this.setSectionNumbering(actor, command);
+				break;
+			case 'saveNote': {
+				if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
+					throw new ValidationError('The note no longer exists');
+				await this.save(actor, {
+					note: applyNoteDraftEdit(
+						current.snapshot.value.value,
+						command,
+						current.snapshot.value.value.updatedAt
+					)
+				});
+				if (command.sectionNumbering !== undefined)
+					await this.dependencies.noteSectionNumbering.setSectionNumbering(actor, {
+						noteId: command.noteId,
+						enabled: command.sectionNumbering ?? undefined
+					});
+				break;
+			}
+		}
 	}
 
 	constructor(private readonly dependencies: NotesDependencies) {}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<ResolvedNoteView> {
+		await this.dependencies.suggestionExpirer.expire(actor);
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
 			this.dependencies.noteReader.get(actor, input.noteId),
 			this.dependencies.relationshipFinder.findForNote(actor, input.noteId),
@@ -393,21 +570,27 @@ export class Notes implements NotesController {
 			this.dependencies.todoLister.list(actor, { noteId: input.noteId }),
 			this.dependencies.suggestionLister.listByStatus(actor, 'proposed', input.noteId)
 		]);
-		const [backlinks, referenceViews, todoViews, pendingSuggestions, sectionNumbering] =
+		const [backlinkContexts, referenceContexts, todoContexts, pendingContexts, sectionNumbering] =
 			await Promise.all([
-				this.dependencies.backlinkViewAssembler.assemble(actor, relationships),
-				this.dependencies.referenceViewAssembler.assemble(actor, references),
-				this.dependencies.todoViewAssembler.assemble(actor, todos),
-				this.dependencies.suggestionViewAssembler.assemble(actor, pending),
+				this.dependencies.backlinkContextReader.readContexts(actor, relationships),
+				this.dependencies.referenceContextReader.readContexts(actor, references),
+				this.dependencies.todoContextReader.readContexts(actor, todos),
+				this.dependencies.suggestionContextReader.readContexts(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
 		return assembleNoteView({
 			note,
-			backlinks,
-			references: referenceViews,
+			backlinks: backlinkContexts.map(({ relationship, source, target }) =>
+				assembleBacklinkView(relationship, source, target)
+			),
+			references: referenceContexts.map(({ reference, anchor }) =>
+				assembleReferenceView(reference, { anchor })
+			),
 			diagrams,
-			todos: todoViews,
-			pendingSuggestions,
+			todos: todoContexts.map((context) => assembleTodoView(context.todo, context)),
+			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>
+				assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+			),
 			sectionNumbering
 		});
 	}
@@ -453,11 +636,45 @@ export class Notes implements NotesController {
 		);
 	}
 	async create(actor: ActorContext, input: CreateNoteInput): Promise<CreateNoteOutput> {
-		return { note: await this.dependencies.noteCreator.create(actor, input) };
+		return { note: await this.createDocument(actor, input, 'note') };
 	}
+	private async createDocument(
+		actor: ActorContext,
+		input: CreateNoteInput,
+		kind: 'note' | 'folder'
+	): Promise<Note> {
+		return this.dependencies.transactionRunner.run(async () => {
+			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
+			const decision = decideNoteCreation(
+				{
+					id: input.id ?? (crypto.randomUUID() as NoteId),
+					title: input.title,
+					parentId: input.parentId,
+					kind: kind
+				},
+				facts,
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') {
+				if (decision.code === 'NOT_FOUND') throw new NotFoundError(decision.message);
+				throw new ValidationError(decision.message);
+			}
+			return this.dependencies.noteCreation.insert(actor, decision.note);
+		});
+	}
+
 	/** Resolve a body proposal once; later approval never reruns the requested patch. */
-	async prepareChange(actor: ActorContext, input: NoteChangeRequest): Promise<NoteChangeReview> {
+	async prepareChange(
+		actor: ActorContext,
+		input: NoteChangeRequest,
+		target: NoteChangeTarget
+	): Promise<NoteChangeReview> {
 		const note = await this.dependencies.noteReader.get(actor, input.noteId);
+		if (target === 'skill' && note.kind !== 'skill')
+			return {
+				kind: 'failure',
+				problems: ['This tool only edits skill notes; this note is not a skill.']
+			};
 		if (note.archivedAt || note.kind === 'folder')
 			return {
 				kind: 'failure',
@@ -494,12 +711,17 @@ export class Notes implements NotesController {
 
 	async applyReviewedChange(
 		actor: ActorContext,
-		change: PreparedNoteChange
+		change: PreparedNoteChange,
+		target: NoteChangeTarget
 	): Promise<ApplyReviewedNoteChangeOutput> {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async (): Promise<ApplyReviewedNoteChangeOutput> => {
 					const current = await this.dependencies.noteReader.get(actor, change.noteId);
+					if (target === 'skill' && current.kind !== 'skill')
+						throw new ValidationError(
+							'This tool only edits skill notes; this note is not a skill.'
+						);
 					if (current.archivedAt || current.kind === 'folder')
 						throw new ValidationError(
 							'Only active authored content can receive a reviewed note change'
@@ -533,9 +755,17 @@ export class Notes implements NotesController {
 		}
 	}
 
+	private async persistEditedNote(actor: ActorContext, candidate: Note): Promise<Note> {
+		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
+		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		return decision.kind === 'unchanged'
+			? decision.note
+			: this.dependencies.noteEditor.persistEdit(actor, decision.write);
+	}
+
 	save(actor: ActorContext, input: SaveNoteInput): Promise<SaveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteEditor.save(actor, input.note);
+			const note = await this.persistEditedNote(actor, input.note);
 			const anchors = await this.dependencies.anchorRepairer.repairForNote(actor, note);
 			// In the same transaction as the save, beside anchor repair: the note's links are
 			// derived from the document that just landed, so a committed body with stale
@@ -545,17 +775,18 @@ export class Notes implements NotesController {
 				note,
 				collectNoteLinkTargets(note.document)
 			);
-			await this.dependencies.noteIndexer.index(actor, note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
 		});
 	}
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteReader.get(actor, input.noteId);
+			const note = await this.dependencies.notePublisher.getForPublication(actor, input.noteId);
 			if (!noteMatchesEtag(note, input.baseEtag))
 				throw new StaleRevisionError('The note has changed since it was loaded');
+			const write = prepareNotePublication(note, new Date().toISOString() as DateTime);
 			await this.dependencies.revisionRecorder.record(actor, note);
-			const published = await this.dependencies.notePublisher.markPublished(actor, note.id);
+			const published = await this.dependencies.notePublisher.persistPublication(actor, write);
 			return { note: published, etag: noteEtag(published) };
 		});
 	}
@@ -572,7 +803,7 @@ export class Notes implements NotesController {
 				throw new NotFoundError('No published version exists for this note', {
 					noteId: input.noteId
 				});
-			const restored = await this.dependencies.noteEditor.save(actor, {
+			const restored = await this.persistEditedNote(actor, {
 				...note,
 				title: revision.title,
 				document: revision.document,
@@ -589,7 +820,7 @@ export class Notes implements NotesController {
 				restored,
 				collectNoteLinkTargets(restored.document)
 			);
-			await this.dependencies.noteIndexer.index(actor, restored);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
 			return { note: restored, etag: noteEtag(restored) };
 		});
 	}
@@ -606,52 +837,76 @@ export class Notes implements NotesController {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
 		assertValidSearch(input.query, options);
 		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);
-		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
-		const hits = searchNoteTargets(
-			scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
-			input.query,
-			options
-		);
-		let replacedNotes = 0;
-		let replacedMatches = 0;
-		for (const hit of hits) {
-			// Title matches are display-only: replace rewrites document bodies, never titles.
-			if (hit.matches.length === 0) continue;
-			const note = await this.dependencies.noteReader.get(actor, hit.noteId);
-			const result = replaceInNoteDocument(note.document, input.query, input.replacement, options);
-			if (result === undefined) continue;
-			await this.save(actor, {
-				note: { ...note, document: result.document, plainText: result.plainText }
-			});
-			replacedNotes += 1;
-			replacedMatches += result.replaced;
-		}
-		return { replacedNotes, replacedMatches };
+		return this.dependencies.transactionRunner.run(async () => {
+			const targets = await this.dependencies.noteTextSearcher.listSearchable(
+				actor,
+				input.projectId
+			);
+			const hits = searchNoteTargets(
+				scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
+				input.query,
+				options
+			);
+			let replacedNotes = 0;
+			let replacedMatches = 0;
+			for (const hit of hits) {
+				// Title matches are display-only: replace rewrites document bodies, never titles.
+				if (hit.matches.length === 0) continue;
+				const note = await this.dependencies.noteReader.get(actor, hit.noteId);
+				const result = replaceInNoteDocument(
+					note.document,
+					input.query,
+					input.replacement,
+					options
+				);
+				if (result === undefined) continue;
+				await this.save(actor, {
+					note: { ...note, document: result.document, plainText: result.plainText }
+				});
+				replacedNotes += 1;
+				replacedMatches += result.replaced;
+			}
+			return { replacedNotes, replacedMatches };
+		});
 	}
 	rename(actor: ActorContext, input: RenameNoteInput): Promise<RenameNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.noteReader.get(actor, input.noteId);
-			const note = await this.dependencies.noteEditor.save(actor, {
+			const note = await this.persistEditedNote(actor, {
 				...current,
 				title: input.title
 			});
 			// Deliberately no revision: history is bounded, and a title correction should not
 			// evict a snapshot of the body somebody may still want back.
-			await this.dependencies.noteIndexer.index(actor, note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
 	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteArchiver.archive(actor, input.noteId);
-			await this.dependencies.noteIndexer.index(actor, note);
+			const facts = await this.dependencies.noteTrash.archiveFacts(actor, input.noteId);
+			const decision = noteTrashChange(
+				facts.note,
+				{ kind: 'archive', ...facts },
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
 	async restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteArchiver.restore(actor, input.noteId);
-			await this.dependencies.noteIndexer.index(actor, note);
+			const facts = await this.dependencies.noteTrash.restoreFacts(actor, input.noteId);
+			const decision = noteTrashChange(
+				facts.note,
+				{ kind: 'restore', ...facts },
+				new Date().toISOString() as DateTime
+			);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 			return { note };
 		});
 	}
@@ -665,13 +920,25 @@ export class Notes implements NotesController {
 		// Transactional because a folder is several deletes: a half-purged folder would
 		// leave its contents at the project root with no way back to where they were.
 		return this.dependencies.transactionRunner.run(async () => {
-			const deletedNotes = await this.dependencies.notePurger.deleteForever(actor, input.noteId);
+			const facts = await this.dependencies.noteDeletion.deletionFacts(actor, input.noteId);
+			const decision = prepareNoteDeletion(facts.trashed, { kind: 'one', note: facts.note });
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
+				actor,
+				decision.notes
+			);
 			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
 		});
 	}
 	async emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const deletedNotes = await this.dependencies.notePurger.emptyTrash(actor, input.projectId);
+			const trashed = await this.dependencies.noteDeletion.trashForDeletion(actor, input.projectId);
+			const decision = prepareNoteDeletion(trashed, { kind: 'all' });
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
+				actor,
+				decision.notes
+			);
 			return { deletedNoteIds: deletedNotes.map((note) => note.id), deletedNotes };
 		});
 	}
@@ -782,7 +1049,7 @@ export class Notes implements NotesController {
 					noteId: input.noteId,
 					revisionId: input.revisionId
 				});
-			const restored = await this.dependencies.noteEditor.save(actor, {
+			const restored = await this.persistEditedNote(actor, {
 				...note,
 				title: revision.title,
 				document: revision.document,
@@ -799,9 +1066,16 @@ export class Notes implements NotesController {
 				restored,
 				collectNoteLinkTargets(restored.document)
 			);
-			await this.dependencies.noteIndexer.index(actor, restored);
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
 			return { note: restored, etag: noteEtag(restored) };
 		});
+	}
+	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }
 

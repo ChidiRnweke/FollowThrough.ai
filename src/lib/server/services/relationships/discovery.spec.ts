@@ -10,25 +10,18 @@ describe('Relationship classification invariants', () => {
 			justification: 'The target adds deployment details.',
 			confidence: 88
 		};
-		const result = await new RelationshipDiscovery({ client }).classify(
+		const result = await new RelationshipDiscovery(client).classify(
 			'Deploy through a pipeline.',
-			'The pipeline has staging and production gates.'
+			'The pipeline has staging and production gates.',
+			'test/model'
 		);
 		expect(result.kind).toBe('elaborates');
-	});
-
-	it('uses deterministic classification without model configuration', async () => {
-		const result = await new RelationshipDiscovery({ apiKey: '' }).classify(
-			'Do not use synchronous calls.',
-			'The service uses synchronous HTTP.'
-		);
-		expect(result.kind).toBe('contradicts');
 	});
 
 	it('rejects absent structured output', async () => {
 		const client = new InMemoryStructuredRelationshipClient();
 		await expect(
-			new RelationshipDiscovery({ client }).classify('source', 'target')
+			new RelationshipDiscovery(client).classify('source', 'target', 'test/model')
 		).rejects.toMatchObject({ code: 'INVALID_GENERATED_CONTENT' });
 	});
 
@@ -36,7 +29,7 @@ describe('Relationship classification invariants', () => {
 		const client = new InMemoryStructuredRelationshipClient();
 		client.failure = new Error('provider unavailable');
 		await expect(
-			new RelationshipDiscovery({ client }).classify('source', 'target')
+			new RelationshipDiscovery(client).classify('source', 'target', 'test/model')
 		).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE' });
 	});
 });

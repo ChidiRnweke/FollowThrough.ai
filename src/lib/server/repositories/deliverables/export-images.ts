@@ -1,55 +1,21 @@
 import { createHash } from 'node:crypto';
-import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
-import { svgViewBoxSize } from '$lib/models/deliverables';
 
 /**
- * Helpers shared by the PDF and DOCX generators: mermaid source hashing, SVG
- * sizing, and remote-image fetching. Both formats embed the same browser-rendered
+ * Helpers shared by the PDF and DOCX generators: mermaid source hashing
+ * and remote-image fetching. Both formats embed the same browser-rendered
  * diagrams and fetched images, so the fetching and hashing live here exactly once.
  */
 
 export const mermaidSourceHash = (source: string): string =>
 	createHash('sha256').update(source, 'utf8').digest('hex');
 
-/** Natural size of an SVG, from its viewBox. The parse is shared with the browser. */
-export const svgDimensions = svgViewBoxSize;
-
 const IMAGE_FETCH_TIMEOUT_MS = 8000;
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const EMBEDDABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg']);
 
 /**
- * App-owned images live as relative, cookie-authenticated attachment URLs
- * (`/api/attachments/<id>/content`) inside a note document. The generator cannot
- * fetch those itself — it has no session — so the service resolves each one to a
- * presigned download URL before embedding it.
- */
-const ATTACHMENT_SRC = /\/api\/attachments\/([^/]+)\/content$/;
-
-const isRemoteSource = (src: string): boolean => /^https?:\/\//.test(src);
-
-/** The attachment id behind an app-owned content URL, or `undefined` for any other source. */
-export function attachmentIdFromSrc(src: string): string | undefined {
-	return ATTACHMENT_SRC.exec(src)?.[1];
-}
-
-export function collectImageSources(doc: ProseMirrorDocument): string[] {
-	const sources: string[] = [];
-	const walk = (node: ProseMirrorNode): void => {
-		if (node.type === 'image') {
-			const src = node.attrs?.src;
-			if (typeof src === 'string' && (isRemoteSource(src) || ATTACHMENT_SRC.test(src)))
-				sources.push(src);
-		}
-		if ('content' in node) for (const child of node.content ?? []) walk(child);
-	};
-	for (const child of doc.content ?? []) walk(child);
-	return sources;
-}
-
-/**
  * Fetch a single image URL and inline it as a data URL. Returns `undefined` for
- * non-embeddable responses, oversized payloads, or any fetch failure.
+ * non-embeddable responses or oversized payloads. Network and HTTP failures propagate.
  */
 export async function fetchRemoteDataUrl(url: string): Promise<string | undefined> {
 	const response = await fetch(url, {
@@ -62,34 +28,4 @@ export async function fetchRemoteDataUrl(url: string): Promise<string | undefine
 	const bytes = Buffer.from(await response.arrayBuffer());
 	if (bytes.byteLength > IMAGE_MAX_BYTES) return undefined;
 	return `data:${mediaType};base64,${bytes.toString('base64')}`;
-}
-
-/**
- * A source-specific fetcher: returns a data URL for a src the caller knows how to
- * reach (an app-owned attachment via the actor), or `undefined` when it cannot.
- */
-export type ImageSourceResolver = (src: string) => Promise<string | undefined>;
-
-/**
- * Fetch remote images and inline them as data URLs; failures are skipped, never fatal.
- *
- * Remote `http(s)` sources are fetched directly. App-owned relative attachment sources
- * are handed to `resolve`, which returns a data URL minted through the actor's download
- * URL (or `undefined`, degrading the image to a placeholder).
- */
-export async function fetchImages(
-	sources: readonly string[],
-	resolve: ImageSourceResolver = async () => undefined
-): Promise<Map<string, string>> {
-	const images = new Map<string, string>();
-	await Promise.all(
-		[...new Set(sources)].map(async (src) => {
-			// Document-authored URLs are untrusted. The injected resolver is the only
-			// authority allowed to turn a source into bytes (for example, by resolving
-			// an actor-authorized attachment to a short-lived storage URL).
-			const data = await resolve(src);
-			if (data) images.set(src, data);
-		})
-	);
-	return images;
 }

@@ -7,11 +7,12 @@ import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' 
 import suggestionPayloads from '../corpus/suggestion-payloads.json' with { type: 'json' };
 import { readProseMirrorDocument, unknownProseMirrorNodes } from '$lib/models/notes';
 import { z } from 'zod';
-import { parseSessionItem, readAgentEvent } from '$lib/models/agent';
+import { parseSessionItem } from '$lib/models/agent';
+import { readAgentEvent } from '$lib/server/repositories/agent/stored-values';
 import { readAgentToolName } from '$lib/models/agent/tool-catalog';
 import { readAgentPayloadObject } from '$lib/models/agent/payload';
 import { readJournalledTool } from '$lib/stores/agent/chat-tools';
-import { parseProvenance } from '$lib/models/provenance';
+import { provenanceSchema } from '$lib/models/provenance';
 import { suggestionPayloadSchemas, type SuggestionKind } from '$lib/models/suggestions';
 
 let runEvents: readonly unknown[];
@@ -204,7 +205,7 @@ describe('the stored provenance rows', () => {
 	it('all parse', () => {
 		const failures = provenanceRows.flatMap((row) => {
 			try {
-				parseProvenance(row);
+				provenanceSchema.parse(row);
 				return [];
 			} catch (error) {
 				return [error instanceof Error ? error.message : String(error)];

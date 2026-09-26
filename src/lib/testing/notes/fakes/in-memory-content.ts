@@ -1,11 +1,13 @@
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Note,
+	NoteSaveWrite,
+	NotePublicationWrite,
 	NoteId,
 	NoteRevision,
 	NoteSearchTarget,
-	SetNoteSectionNumberingInput,
-	TextSelection
+	SetNoteSectionNumberingInput
 } from '$lib/models/notes';
 import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import type { SourceAnchor } from '$lib/models/provenance';
@@ -13,8 +15,7 @@ import {
 	ExternalServiceError,
 	NotFoundError,
 	OwnershipError,
-	StaleRevisionError,
-	ValidationError
+	StaleRevisionError
 } from '$lib/errors';
 import type {
 	NoteAttachmentRestorer,
@@ -27,7 +28,6 @@ import type {
 	NoteTreeReader,
 	NoteRevisionReader,
 	NoteRevisionRecorder,
-	SelectionAnchorCreator,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
@@ -35,7 +35,6 @@ import type {
 	RestoreSnapshot,
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { anchorBuilder, testAnchorId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 interface ContentSnapshot {
 	restoredAttachmentRevisionIds: NoteRevision['id'][];
@@ -57,7 +56,6 @@ export class InMemoryNoteContent
 		NoteRevisionReader,
 		NoteAttachmentRestorer,
 		NoteSectionNumberingEditor,
-		SelectionAnchorCreator,
 		SourceAnchorRepairer,
 		NoteIndexer,
 		NoteLinkReconciler,
@@ -71,14 +69,17 @@ export class InMemoryNoteContent
 	}
 
 	notes: Note[] = [];
+	saveFailure: Error | undefined;
 	/** Snapshots taken by `record`, oldest first — named apart from the `revisions` reader. */
 	recordedRevisions: NoteRevision[] = [];
 	anchors: SourceAnchor[] = [];
 	indexedNoteIds: NoteId[] = [];
 	failIndex = false;
-	private nextAnchor = 100;
+	readFailure: Error | undefined;
+	failIndexFor = new Set<NoteId>();
 
 	async get(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		if (this.readFailure) throw this.readFailure;
 		const note = this.notes.find(
 			(candidate) => candidate.id === noteId && candidate.userId === actor.userId
 		);
@@ -117,37 +118,25 @@ export class InMemoryNoteContent
 		}));
 	}
 
-	async create(actor: ActorContext, selection: TextSelection): Promise<SourceAnchor> {
-		const note = await this.get(actor, selection.noteId);
-		if (!selection.text.trim()) throw new ValidationError('A non-empty selection is required');
-		if (selection.revision !== note.currentRevision)
-			throw new StaleRevisionError('The selected note revision is stale');
-		const anchor = anchorBuilder({
-			id: testAnchorId(this.nextAnchor++),
-			noteId: note.id,
-			from: selection.from,
-			to: selection.to,
-			quote: selection.text,
-			revision: selection.revision
-		});
-		this.anchors.push(anchor);
-		return anchor;
+	async getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note> {
+		if (candidate.userId !== actor.userId)
+			throw new OwnershipError('Cannot save another user’s note');
+		return this.get(actor, candidate.id);
 	}
 
-	async save(actor: ActorContext, note: Note): Promise<Note> {
-		if (note.userId !== actor.userId) throw new OwnershipError('Cannot save another user’s note');
-		const current = this.notes.find(
-			(candidate) => candidate.id === note.id && candidate.userId === actor.userId
-		);
-		if (!current) throw new NotFoundError('Note was not found');
-		if (!note.title.trim()) throw new ValidationError('Note title is required');
-		if (note.currentRevision !== current.currentRevision)
-			throw new StaleRevisionError('The note has changed since it was loaded');
-		if (this.isUnchanged(current, note)) return current;
+	async persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note> {
+		if (this.saveFailure) throw this.saveFailure;
+		const current = await this.get(actor, write.note.id);
+		if (current.currentRevision !== write.expectedRevision || current.archivedAt)
+			throw new StaleRevisionError('The note changed while it was being saved');
 		const updated = {
-			...note,
-			title: note.title.trim(),
-			currentRevision: current.currentRevision + 1
+			...current,
+			title: write.note.title,
+			document: write.note.document,
+			plainText: write.note.plainText,
+			isPinned: write.note.isPinned,
+			currentRevision: write.note.currentRevision,
+			updatedAt: write.note.updatedAt
 		};
 		this.notes = this.notes.map((candidate) => (candidate.id === updated.id ? updated : candidate));
 		return updated;
@@ -218,16 +207,23 @@ export class InMemoryNoteContent
 		this.restoredAttachmentRevisionIds.push(revisionId);
 	}
 
-	async markPublished(actor: ActorContext, noteId: NoteId): Promise<Note> {
-		const note = await this.get(actor, noteId);
-		const ts = new Date().toISOString() as Note['updatedAt'];
+	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note> {
+		return this.get(actor, noteId);
+	}
+
+	publicationFailure: Error | undefined;
+	async persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note> {
+		if (this.publicationFailure) throw this.publicationFailure;
+		const current = await this.get(actor, write.noteId);
+		if (current.currentRevision !== write.expectedRevision || current.archivedAt)
+			throw new StaleRevisionError('The note changed while it was being published');
 		const published = {
-			...note,
-			publishedRevision: note.currentRevision,
-			publishedAt: ts,
-			updatedAt: ts
+			...current,
+			publishedRevision: write.publishedRevision,
+			publishedAt: write.publishedAt,
+			updatedAt: write.updatedAt
 		};
-		this.notes = this.notes.map((n) => (n.id === noteId ? published : n));
+		this.notes = this.notes.map((note) => (note.id === write.noteId ? published : note));
 		return published;
 	}
 
@@ -236,10 +232,12 @@ export class InMemoryNoteContent
 		return this.anchors.filter((anchor) => anchor.noteId === note.id);
 	}
 
-	async index(actor: ActorContext, note: Note): Promise<void> {
-		if (this.failIndex) throw new ExternalServiceError('Indexing failed');
+	async index(actor: ActorContext, note: Note): Promise<IndexingResult> {
+		if (this.failIndex || this.failIndexFor.has(note.id))
+			throw new ExternalServiceError('Indexing failed');
 		if (note.userId !== actor.userId) throw new OwnershipError('Cannot index another user’s note');
 		this.indexedNoteIds = [...this.indexedNoteIds.filter((noteId) => noteId !== note.id), note.id];
+		return { kind: 'stored' };
 	}
 
 	snapshot(): RestoreSnapshot {
@@ -259,16 +257,5 @@ export class InMemoryNoteContent
 			this.anchors = state.anchors;
 			this.indexedNoteIds = state.indexedNoteIds;
 		};
-	}
-
-	private isUnchanged(current: Note, candidate: Note): boolean {
-		return (
-			current.title === candidate.title &&
-			current.plainText === candidate.plainText &&
-			JSON.stringify(current.document) === JSON.stringify(candidate.document) &&
-			current.parentId === candidate.parentId &&
-			current.position === candidate.position &&
-			current.isPinned === candidate.isPinned
-		);
 	}
 }

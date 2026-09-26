@@ -1,4 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	Artifact,
 	ArtifactId,
@@ -6,7 +7,7 @@ import type {
 	ListArtifactsParams,
 	TemplateId
 } from '$lib/models/deliverables';
-import type { ProjectId, ProjectTemplate } from '$lib/models/projects';
+import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
 import type { ArtifactRepository, TemplateRepository } from '$lib/server/repositories/deliverables';
 import type {
 	IAttachmentStorage,
@@ -19,8 +20,10 @@ import type {
 
 export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotParticipant {
 	artifacts: Artifact[] = [];
+	insertFailure?: Error;
 
 	async insert(_actor: ActorContext, artifact: Artifact): Promise<Artifact> {
+		if (this.insertFailure) throw this.insertFailure;
 		this.artifacts.push(artifact);
 		return artifact;
 	}
@@ -67,16 +70,39 @@ export class InMemoryArtifactRepository implements ArtifactRepository, SnapshotP
 
 export class InMemoryTemplateRepository implements TemplateRepository, SnapshotParticipant {
 	templates: ProjectTemplate[] = [];
+	uploads: TemplateUpload[] = [];
+	insertFailure?: Error;
+	nextTemplateReadGate?: Promise<void>;
+	async insertUpload(_actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
+		this.uploads.push(upload);
+		return upload;
+	}
+	async findUpload(actor: ActorContext, id: TemplateId): Promise<TemplateUpload | undefined> {
+		return this.uploads.find((upload) => upload.id === id && upload.userId === actor.userId);
+	}
+	findUploadForUpdate(actor: ActorContext, id: TemplateId) {
+		return this.findUpload(actor, id);
+	}
+	async deleteUpload(actor: ActorContext, id: TemplateId): Promise<void> {
+		this.uploads = this.uploads.filter(
+			(upload) => upload.id !== id || upload.userId !== actor.userId
+		);
+	}
 
 	async insert(_actor: ActorContext, template: ProjectTemplate): Promise<ProjectTemplate> {
+		if (this.insertFailure) throw this.insertFailure;
 		this.templates.push(template);
 		return template;
 	}
 
 	async findById(actor: ActorContext, id: TemplateId): Promise<ProjectTemplate | undefined> {
-		return this.templates.find(
+		const snapshot = this.templates.find(
 			(template) => template.id === id && template.userId === actor.userId
 		);
+		const gate = this.nextTemplateReadGate;
+		this.nextTemplateReadGate = undefined;
+		await gate;
+		return snapshot;
 	}
 
 	async listByProject(
@@ -103,14 +129,19 @@ export class InMemoryTemplateRepository implements TemplateRepository, SnapshotP
 
 	snapshot(): RestoreSnapshot {
 		const templates = structuredClone(this.templates);
+		const uploads = structuredClone(this.uploads);
 		return () => {
 			this.templates = templates;
+			this.uploads = uploads;
 		};
 	}
 }
 
 export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotParticipant {
 	objects = new Map<string, { data: Uint8Array; mediaType: string; checksumSha256?: string }>();
+	putFailure?: Error;
+	removeFailure?: Error;
+	downloadFailure?: Error;
 
 	async createUploadUrl(input: {
 		objectKey: string;
@@ -127,11 +158,13 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 		_expiresInSeconds: number,
 		downloadFilename?: string
 	): Promise<string> {
+		if (this.downloadFailure) throw this.downloadFailure;
 		const suffix = downloadFilename ? `?filename=${encodeURIComponent(downloadFilename)}` : '';
 		return `https://storage.test/download/${objectKey}${suffix}`;
 	}
 
 	async put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void> {
+		if (this.putFailure) throw this.putFailure;
 		this.objects.set(objectKey, { data: new Uint8Array(data), mediaType });
 	}
 
@@ -145,7 +178,11 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 	}
 
 	async read(objectKey: string, maximumBytes: number): Promise<Uint8Array> {
-		return (this.objects.get(objectKey)?.data ?? new Uint8Array()).slice(0, maximumBytes);
+		const object = this.objects.get(objectKey);
+		if (!object) throw new NotFoundError('Stored object not found');
+		if (object.data.byteLength > maximumBytes)
+			throw new ValidationError('Stored object exceeds the read limit');
+		return new Uint8Array(object.data);
 	}
 
 	async promote(sourceKey: string, destinationKey: string): Promise<void> {
@@ -155,6 +192,7 @@ export class InMemoryAttachmentStorage implements IAttachmentStorage, SnapshotPa
 	}
 
 	async remove(objectKey: string): Promise<void> {
+		if (this.removeFailure) throw this.removeFailure;
 		this.objects.delete(objectKey);
 	}
 

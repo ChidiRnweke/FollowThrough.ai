@@ -42,15 +42,17 @@
 	import { Button } from '$lib/components/ui/button';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
+	import { folderNoteIds, resolveFolderContext } from '$lib/services/notes/folder-context';
 	import {
-		MENTION_PATTERN,
-		folderNoteIds,
-		liveChips,
-		mentionCandidatesFor,
-		mentionQueryOf,
-		withMention,
-		withoutMention
-	} from './mentions';
+		addMention,
+		removeMention,
+		editMentions,
+		createMentionHistory,
+		restoreMentions
+	} from '$lib/services/chat/mentions';
+	import type { ComposerSelection, MentionHistory } from '$lib/models/chat';
+	import { readMentionInput } from '$lib/client/agent/mention-input';
+	import { MENTION_PATTERN, mentionCandidatesFor, mentionQueryOf } from './mentions';
 
 	let {
 		chat,
@@ -148,7 +150,7 @@
 		else void openConversation(chat.hydrate(resources));
 		const staged = consumeChatHandoff();
 		if (staged) prefill(staged);
-		else prompt = sessionStorage.getItem(draftKey()) ?? '';
+		else replacePrompt(sessionStorage.getItem(draftKey()) ?? '');
 		return () => releaseComposerFocus?.();
 	});
 
@@ -167,7 +169,7 @@
 	 * can be asked for, and an edit is always one keystroke away.
 	 */
 	function prefill(request: ChatHandoff): void {
-		prompt = request.prompt;
+		replacePrompt(request.prompt);
 		handoff = request;
 		// A selection arrives as a chip rather than as hidden request state, so the composer
 		// shows the passage the question is about before the question is asked. Pinning the
@@ -326,7 +328,7 @@
 	}
 
 	// The open note travels along automatically, like Copilot's current file.
-	const autoChip = $derived.by((): ContextChip | undefined => {
+	const autoChip = $derived.by((): ResourceChip | undefined => {
 		if (!activeNoteId || chat.autoChipDismissedFor === activeNoteId) return undefined;
 		if (chat.chips.some((chip) => chip.kind === 'note' && chip.id === activeNoteId))
 			return undefined;
@@ -369,7 +371,14 @@
 	const mentionCandidates = $derived(
 		mentionQuery === undefined || !shell
 			? []
-			: mentionCandidatesFor(mentionQuery, shell.noteTree, shell.skills)
+			: mentionCandidatesFor(mentionQuery, shell.noteTree, shell.skills, resources.availability)
+	);
+	const visibleChips = $derived(
+		chat.chips.map((chip) =>
+			chip.kind === 'folder' && shell && resources.availability === 'complete'
+				? { ...chip, noteCount: folderNoteIds(shell.noteTree, chip.id).length }
+				: chip
+		)
 	);
 
 	$effect(() => {
@@ -378,17 +387,24 @@
 	});
 
 	/** The tag stays in the sentence; the chip is the same choice, shown as a badge. */
-	function pick(candidate: ContextChip): void {
-		prompt = withMention(prompt, candidate);
+	function pick(candidate: ResourceChip): void {
+		replacePrompt(prompt);
+		chat.mentionDraft = addMention(chat.mentionDraft, candidate);
+		prompt = chat.mentionDraft.present.text;
 		chat.addChip(candidate);
+		saveDraft();
 		textareaRef?.focus();
 	}
 
 	function unpick(chip: ContextChip): void {
 		// A pinned selection put no token in the sentence, so there is nothing to take back
 		// out of it — and its name is a note title the user may well have typed themselves.
-		if (chip.kind !== 'selection') prompt = withoutMention(prompt, chip);
+		if (chip.kind !== 'selection') {
+			chat.mentionDraft = removeMention(chat.mentionDraft, chip);
+			prompt = chat.mentionDraft.present.text;
+		}
 		chat.removeChip(chip);
+		saveDraft();
 	}
 
 	/**
@@ -396,13 +412,46 @@
 	 * Done on input rather than in an `$effect` so clearing the prompt to send does
 	 * not drop the chips out from under the request being built.
 	 */
-	function handleInput(): void {
-		saveDraft();
-		const live = liveChips(prompt, chat.chips);
-		const stale = chat.chips.filter(
-			(chip) => !live.some((kept) => kept.kind === chip.kind && kept.id === chip.id)
+	let beforeInput: ComposerSelection | undefined;
+	function captureInput(event: InputEvent): void {
+		const target = event.currentTarget;
+		if (!(target instanceof HTMLTextAreaElement)) throw new Error('Expected the chat textarea');
+		beforeInput = { from: target.selectionStart, to: target.selectionEnd };
+	}
+	function replacePrompt(text: string): void {
+		prompt = text;
+		if (chat.mentionDraft.present.text !== text) {
+			chat.mentionDraft = createMentionHistory(text);
+			chat.chips = chat.chips.filter((chip) => chip.kind === 'selection');
+		}
+	}
+	function handleInput(event: Event): void {
+		const target = event.currentTarget;
+		if (!(target instanceof HTMLTextAreaElement)) throw new Error('Expected the chat textarea');
+		const text = target.value;
+		const inputType = event instanceof InputEvent ? event.inputType : '';
+		let next: MentionHistory | undefined;
+		if (inputType === 'historyUndo' || inputType === 'historyRedo') {
+			const restored = restoreMentions(
+				chat.mentionDraft,
+				text,
+				inputType === 'historyUndo' ? 'undo' : 'redo'
+			);
+			if (restored.kind === 'restored') next = restored.history;
+		} else if (beforeInput) {
+			const change = readMentionInput(chat.mentionDraft.present.text, text, beforeInput, inputType);
+			if (change.kind === 'edit') next = editMentions(chat.mentionDraft, change.edit);
+		} else if (text === chat.mentionDraft.present.text) next = chat.mentionDraft;
+		beforeInput = undefined;
+		if (!next && chat.mentionDraft.present.references.length)
+			toast.info('Context mentions were cleared by this edit. Add them again before sending.');
+		chat.mentionDraft = next ?? createMentionHistory(text);
+		prompt = text;
+		const mentioned = new Map(
+			chat.mentionDraft.present.references.map(({ chip }) => [`${chip.kind}:${chip.id}`, chip])
 		);
-		for (const chip of stale) chat.removeChip(chip);
+		chat.chips = [...chat.chips.filter((chip) => chip.kind === 'selection'), ...mentioned.values()];
+		saveDraft();
 	}
 
 	/**
@@ -415,48 +464,70 @@
 	 * editor's own selection is never read at this point, so what the agent gets is what the
 	 * composer showed — including the case where the user dismissed the chip and gets nothing.
 	 */
-	function requestFor(text: string): Omit<RunAgentInput, 'conversationId'> {
-		const folderNotes = shell
-			? chat.chips
-					.filter((chip): chip is ResourceChip => chip.kind === 'folder')
-					.flatMap((chip) => folderNoteIds(shell.noteTree, chip.id))
-			: [];
-		const contextNoteIds = [
-			...new Set([...(autoChip ? [autoChip.id] : []), ...folderNotes])
-		] as NoteId[];
+	function requestFor(
+		text: string
+	):
+		| { kind: 'ready'; request: Omit<RunAgentInput, 'conversationId'> }
+		| { kind: 'unavailable'; message: string } {
+		const folderIds = chat.chips
+			.filter((chip): chip is ResourceChip => chip.kind === 'folder')
+			.map((chip) => chip.id);
+		const folders = resolveFolderContext(
+			shell?.noteTree ?? [],
+			folderIds,
+			shell ? resources.availability : 'unknown'
+		);
+		if (folders.kind === 'incomplete')
+			return {
+				kind: 'unavailable',
+				message: 'The workspace is still loading. Wait before sending a folder as context.'
+			};
+		if (folders.kind === 'missing')
+			return {
+				kind: 'unavailable',
+				message: 'An attached folder is no longer available. Remove it or choose another folder.'
+			};
+		const contextNoteIds = [...new Set([...(autoChip ? [autoChip.id] : []), ...folders.noteIds])];
 		const interactionNoteId = focusedNoteId;
 		const interactionProjectId = interactionNoteId
-			? (shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId as
-					ProjectId | undefined)
+			? shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId
 			: activeProjectId;
 		return {
-			prompt: text,
-			...(selectedImages.length ? { images: selectedImages } : {}),
-			modelOverride: chat.modelOverride,
-			executionModeOverride: chat.executionModeOverride,
-			...(handoff?.noteId !== undefined
-				? { noteId: handoff.noteId }
-				: interactionNoteId !== undefined
-					? { noteId: interactionNoteId }
-					: {}),
-			...(handoff?.projectId !== undefined
-				? { projectId: handoff.projectId }
-				: interactionProjectId !== undefined
-					? { projectId: interactionProjectId }
-					: {}),
-			// A tagged folder rides in as the notes inside it; the store unions these
-			// with the note chips it maps itself.
-			...(contextNoteIds.length ? { contextNoteIds } : {}),
-			...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
-			...(handoff?.requestedSkillNames
-				? { requestedSkillNames: [...handoff.requestedSkillNames] }
-				: {})
+			kind: 'ready',
+			request: {
+				prompt: text,
+				...(selectedImages.length ? { images: selectedImages } : {}),
+				modelOverride: chat.modelOverride,
+				executionModeOverride: chat.executionModeOverride,
+				...(handoff?.noteId !== undefined
+					? { noteId: handoff.noteId }
+					: interactionNoteId !== undefined
+						? { noteId: interactionNoteId }
+						: {}),
+				...(handoff?.projectId !== undefined
+					? { projectId: handoff.projectId }
+					: interactionProjectId !== undefined
+						? { projectId: interactionProjectId }
+						: {}),
+				// A tagged folder rides in as the notes inside it; the store unions these
+				// with the note chips it maps itself.
+				...(contextNoteIds.length ? { contextNoteIds } : {}),
+				...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
+				...(handoff?.requestedSkillNames
+					? { requestedSkillNames: [...handoff.requestedSkillNames] }
+					: {})
+			}
 		};
 	}
 
 	async function send(): Promise<void> {
 		const text = prompt.trim();
 		if ((!text && !selectedImages.length) || chat.isStreaming) return;
+		const prepared = requestFor(text);
+		if (prepared.kind === 'unavailable') {
+			toast.error(prepared.message);
+			return;
+		}
 		if (chatRegistry.atStreamLimit()) {
 			toast.error(`Only ${MAX_CONCURRENT_STREAMS} chats can run at once. Wait for one to finish.`);
 			return;
@@ -474,12 +545,13 @@
 		selectedImages = [];
 		saveDraft();
 		const request = chat.send({
-			...requestFor(text),
+			...prepared.request,
 			images: sentImages,
 			...(render ? { contextImages: [render] } : {})
 		});
 		// The tags left with the prompt, so the chips they stood for go too.
 		chat.chips = [];
+		chat.mentionDraft = createMentionHistory('');
 		handoff = undefined;
 		await tick();
 		pinLatestQuestion();
@@ -509,8 +581,13 @@
 	async function resubmit(entry: ChatEntry, text: string): Promise<void> {
 		const trimmed = text.trim();
 		if (!trimmed) return;
+		const prepared = requestFor(trimmed);
+		if (prepared.kind === 'unavailable') {
+			toast.error(prepared.message);
+			return;
+		}
 		cancelEditing();
-		const started = await chat.resubmit(entry, requestFor(trimmed));
+		const started = await chat.resubmit(entry, prepared.request);
 		if (!started) {
 			toast.error(
 				chat.isStreaming ? 'Wait for the current answer to finish.' : 'That could not be resent.'
@@ -567,7 +644,16 @@
 			}
 			if (event.key === 'Escape') {
 				event.preventDefault();
-				prompt = prompt.replace(MENTION_PATTERN, '$1');
+				const match = MENTION_PATTERN.exec(prompt);
+				if (match) {
+					chat.mentionDraft = editMentions(chat.mentionDraft, {
+						from: match.index + match[1]!.length,
+						to: prompt.length,
+						text: ''
+					});
+					prompt = chat.mentionDraft.present.text;
+					saveDraft();
+				}
 				return;
 			}
 		}
@@ -600,7 +686,7 @@
 	}
 
 	function useStarter(text: string): void {
-		prompt = text;
+		replacePrompt(text);
 		saveDraft();
 		textareaRef?.focus();
 	}
@@ -701,7 +787,7 @@
 				bind:textareaRef
 				{autoChip}
 				liveSelection={liveSelectionChip}
-				chips={chat.chips}
+				chips={visibleChips}
 				{mentionCandidates}
 				{highlighted}
 				{selectedImages}
@@ -731,6 +817,7 @@
 				onfiles={(files) => void addImages(files)}
 				onkeydown={handleKeydown}
 				oninput={handleInput}
+				onbeforeinput={captureInput}
 				onpaste={pasteImages}
 				ontoggleexecutionmode={toggleExecutionMode}
 				onsend={() => void send()}

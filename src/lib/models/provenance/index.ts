@@ -29,18 +29,46 @@ export type ProducerKind = 'user' | 'pipeline' | 'agent';
  * (re-pointed), not recomputed from scratch, when a note is edited, so a still-unique
  * quote keeps its anchor even as surrounding text changes.
  */
-export interface SourceAnchor {
+interface SourceAnchorFields {
 	readonly id: SourceAnchorId;
 	readonly noteId: NoteId;
 	readonly nodeId?: string;
-	readonly from?: number;
-	readonly to?: number;
 	readonly quote: string;
 	readonly prefix?: string;
 	readonly suffix?: string;
 	readonly revision: number;
 	readonly createdAt: DateTime;
 }
+
+/** Offsets are one recorded range: both ends exist, or neither does. */
+export type SourceAnchor = SourceAnchorFields &
+	({ readonly from: number; readonly to: number } | { readonly from?: never; readonly to?: never });
+
+export const sourceAnchorFields = {
+	id: z.uuid().transform((value) => value as SourceAnchorId),
+	noteId: z.uuid().transform((value) => value as NoteId),
+	nodeId: z.string().optional(),
+	from: z.number().int().nonnegative().optional(),
+	to: z.number().int().nonnegative().optional(),
+	quote: z.string(),
+	prefix: z.string().optional(),
+	suffix: z.string().optional(),
+	revision: z.number().int(),
+	createdAt: z.iso
+		.datetime({ offset: true })
+		.transform((value) => new Date(value).toISOString() as DateTime)
+};
+
+export const sourceAnchorSchema: z.ZodType<SourceAnchor> = z.union([
+	z
+		.object({
+			...sourceAnchorFields,
+			from: sourceAnchorFields.from.unwrap(),
+			to: sourceAnchorFields.to.unwrap()
+		})
+		.refine((range) => range.from <= range.to, 'Anchor end must follow its start'),
+	z.object({ ...sourceAnchorFields, from: z.undefined().optional(), to: z.undefined().optional() })
+]);
 
 /**
  * Who or what produced something, and how. Every suggestion, memory change, and
@@ -173,12 +201,6 @@ export type ProducerName = Provenance['producerName'];
 export type ProvenanceOrigin = { readonly createdAt: DateTime } & (
 	{ readonly pipeline: PipelineKind } | { readonly producerName: ProducerName }
 );
-
-/** The origin of a stored record. A pipeline names itself; anything else is its producer. */
-export const provenanceOrigin = (provenance: Provenance): ProvenanceOrigin =>
-	'pipeline' in provenance
-		? { pipeline: provenance.pipeline, createdAt: provenance.createdAt }
-		: { producerName: provenance.producerName, createdAt: provenance.createdAt };
 
 /**
  * The three facts only storage can supply.
@@ -337,22 +359,6 @@ const provenanceSchemas = [
 ] as const;
 
 export const provenanceSchema: z.ZodType<Provenance> = z.union(provenanceSchemas);
-
-/** Parse a stored provenance row before its producer-specific facts enter domain logic. */
-// audit-allow: no-unknown-type — The persisted provenance row, parsed at the model that owns the union.
-export const parseProvenance = (value: unknown): Provenance => provenanceSchema.parse(value);
-
-/**
- * A request plus the identity storage gave it, as one record.
- *
- * Parsed rather than spread into a literal. Spreading a union member widens it —
- * the result is one object carrying every arm's fields, which no longer matches
- * any arm — and the four call sites that did it each answered the resulting
- * error differently. Parsing keeps the arm and refuses a request that could
- * never be a valid record, at the point it is built rather than at the database.
- */
-export const asProvenance = (request: ProvenanceRequest, identity: StoredIdentity): Provenance =>
-	parseProvenance({ ...request, ...identity });
 
 export interface SelectionSource<Document> {
 	readonly note: Document;

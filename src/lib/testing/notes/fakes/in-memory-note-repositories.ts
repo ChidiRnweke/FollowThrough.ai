@@ -1,5 +1,12 @@
 import type { ActorContext, UserId } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	NotePublicationWrite,
+	NoteBuiltInRepairWrite
+} from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { SourceAnchor, SourceAnchorId } from '$lib/models/provenance';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
@@ -7,6 +14,19 @@ import type { SourceAnchorRepository } from '$lib/server/repositories/provenance
 import { NotFoundError } from '$lib/errors';
 
 export class InMemoryNoteRepository implements NoteRepository {
+	insertFailures = new Set<string>();
+	saveFailures = new Set<string>();
+	deleteFailures = new Set<NoteId>();
+	snapshot(): () => void {
+		const notes = structuredClone(this.notes);
+		const revisions = structuredClone(this.revisions);
+		const restoredAttachmentSnapshots = [...this.restoredAttachmentSnapshots];
+		return () => {
+			this.notes = notes;
+			this.revisions = revisions;
+			this.restoredAttachmentSnapshots = restoredAttachmentSnapshots;
+		};
+	}
 	notes: Note[] = [];
 	revisions: NoteRevision[] = [];
 	restoredAttachmentSnapshots: NoteRevision['id'][] = [];
@@ -14,6 +34,55 @@ export class InMemoryNoteRepository implements NoteRepository {
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
+	}
+
+	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+		return this.findById(actor, id);
+	}
+
+	async updateTrash(actor: ActorContext, note: Note): Promise<Note> {
+		const current = await this.findById(actor, note.id);
+		if (!current) throw new NotFoundError('Note was not found');
+		const { archivedAt, parentId, ...rest } = current;
+		void archivedAt;
+		void parentId;
+		const updated: Note = {
+			...rest,
+			...(note.archivedAt ? { archivedAt: note.archivedAt } : {}),
+			...(note.parentId ? { parentId: note.parentId } : {}),
+			position: note.position,
+			updatedAt: note.updatedAt
+		};
+		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? updated : candidate));
+		return updated;
+	}
+
+	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined> {
+		return this.findByBuiltInKey(actor, key);
+	}
+
+	async repairBuiltIn(
+		actor: ActorContext,
+		write: NoteBuiltInRepairWrite
+	): Promise<Note | undefined> {
+		const current = this.notes.find(
+			(note) =>
+				note.id === write.noteId &&
+				note.userId === actor.userId &&
+				note.builtInKey === write.builtInKey
+		);
+		if (!current) return undefined;
+		const repaired: Note = {
+			...current,
+			projectId: write.projectId,
+			parentId: write.parentId,
+			position: write.position,
+			kind: write.kind,
+			archivedAt: undefined,
+			updatedAt: write.updatedAt
+		};
+		this.notes = this.notes.map((note) => (note.id === current.id ? repaired : note));
+		return repaired;
 	}
 
 	async findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined> {
@@ -71,15 +140,32 @@ export class InMemoryNoteRepository implements NoteRepository {
 	}
 
 	async insert(_actor: ActorContext, note: Note): Promise<Note> {
+		if (this.insertFailures.has(note.title)) throw new Error('Note could not be stored');
 		void _actor;
 		this.notes.push(note);
 		return note;
 	}
 
-	async update(_actor: ActorContext, note: Note): Promise<Note> {
-		void _actor;
-		this.notes = this.notes.map((candidate) => (candidate.id === note.id ? note : candidate));
-		return note;
+	async updatePublication(
+		actor: ActorContext,
+		write: NotePublicationWrite
+	): Promise<Note | undefined> {
+		const current = this.notes.find(
+			(note) =>
+				note.id === write.noteId &&
+				note.userId === actor.userId &&
+				note.currentRevision === write.expectedRevision &&
+				!note.archivedAt
+		);
+		if (!current) return undefined;
+		const published = {
+			...current,
+			publishedRevision: write.publishedRevision,
+			publishedAt: write.publishedAt,
+			updatedAt: write.updatedAt
+		};
+		this.notes = this.notes.map((note) => (note.id === write.noteId ? published : note));
+		return published;
 	}
 
 	async updateIfRevision(
@@ -87,6 +173,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 		note: Note,
 		expectedRevision: number
 	): Promise<Note | undefined> {
+		if (this.saveFailures.has(note.title)) throw new Error('Note body could not be stored');
 		if (this.failNextConditionalUpdate) {
 			this.failNextConditionalUpdate = false;
 			return undefined;
@@ -103,12 +190,26 @@ export class InMemoryNoteRepository implements NoteRepository {
 		return note;
 	}
 
-	async delete(actor: ActorContext, id: NoteId): Promise<void> {
-		const owned = this.notes.some((note) => note.id === id && note.userId === actor.userId);
-		if (!owned) return;
-		this.notes = this.notes.filter((note) => note.id !== id);
-		// Revisions cascade from the note in Postgres, so they cannot outlive it here either.
+	async deleteTrashed(
+		actor: ActorContext,
+		id: NoteId
+	): Promise<Pick<Note, 'id' | 'title'> | undefined> {
+		const current = this.notes.find(
+			(note) =>
+				note.id === id && note.userId === actor.userId && note.archivedAt && note.kind !== 'skill'
+		);
+		if (!current) return undefined;
+		if (this.deleteFailures.has(id)) throw new Error('Note could not be deleted');
+		this.notes = this.notes
+			.filter((note) => note.id !== id)
+			.map((note) => {
+				if (note.parentId !== id) return note;
+				const { parentId, ...detached } = note;
+				void parentId;
+				return detached;
+			});
 		this.revisions = this.revisions.filter((revision) => revision.noteId !== id);
+		return { id: current.id, title: current.title };
 	}
 
 	async setSectionNumbering(

@@ -1,9 +1,22 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { Note, NoteId, NoteRevision, NoteSearchTarget } from '$lib/models/notes';
+import type {
+	Note,
+	NoteId,
+	NoteRevision,
+	NoteSearchTarget,
+	NotePublicationWrite,
+	NoteBuiltInRepairWrite
+} from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 /** `updateIfRevision` is the compare-and-swap write the sync protocol depends on: a stale expected revision fails instead of overwriting. */
 export interface NoteRepository {
+	updatePublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note | undefined>;
+	/** Retain the note row lock until the caller transaction ends. */
+	findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
+	updateTrash(actor: ActorContext, note: Note): Promise<Note>;
 	findById(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
+	findBuiltInForWrite(actor: ActorContext, key: string): Promise<Note | undefined>;
+	repairBuiltIn(actor: ActorContext, write: NoteBuiltInRepairWrite): Promise<Note | undefined>;
 	findByBuiltInKey(actor: ActorContext, key: string): Promise<Note | undefined>;
 	listActive(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
 	/**
@@ -15,10 +28,9 @@ export interface NoteRepository {
 	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly Note[]>;
 	countSiblings(actor: ActorContext, projectId: ProjectId, parentId?: NoteId): Promise<number>;
 	insert(actor: ActorContext, note: Note): Promise<Note>;
-	update(actor: ActorContext, note: Note): Promise<Note>;
 	/**
 	 * Targeted write for the note's section-numbering override (`null` clears it back to
-	 * inherit), kept off {@link update} so the sync protocol can never clobber it with a
+	 * inherit), kept off document writes so the sync protocol can never clobber it with a
 	 * stale device copy.
 	 */
 	setSectionNumbering(actor: ActorContext, id: NoteId, enabled: boolean | null): Promise<Note>;
@@ -27,7 +39,7 @@ export interface NoteRepository {
 		note: Note,
 		expectedRevision: number
 	): Promise<Note | undefined>;
-	delete(actor: ActorContext, id: NoteId): Promise<void>;
+	deleteTrashed(actor: ActorContext, id: NoteId): Promise<Pick<Note, 'id' | 'title'> | undefined>;
 	insertRevision(actor: ActorContext, revision: NoteRevision): Promise<NoteRevision>;
 	listRevisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
 	/** Drop all but the newest `keepNewest` revisions of a note, so history stays bounded. */
