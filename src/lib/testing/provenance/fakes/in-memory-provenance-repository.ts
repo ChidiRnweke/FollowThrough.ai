@@ -3,6 +3,13 @@ import { provenanceSchema, type Provenance, type ProvenanceId } from '$lib/model
 import type { ProvenanceRepository } from '$lib/server/repositories/provenance/provenance';
 
 export class InMemoryProvenanceRepository implements ProvenanceRepository {
+	snapshot(): () => void {
+		const provenance = [...this.provenance];
+		return () => {
+			this.provenance = provenance;
+		};
+	}
+
 	provenance: Provenance[] = [];
 	async findById(actor: ActorContext, id: ProvenanceId): Promise<Provenance | undefined> {
 		return this.provenance.find((item) => item.id === id && item.userId === actor.userId);
