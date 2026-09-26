@@ -9,12 +9,15 @@ integration checks passed, including PostgreSQL contracts and full browser tests
 unit suite passed 445 files and 4,162 tests. The entries below preserve observations from the
 original branches; their open/merged labels are historical.
 
-Workflow assessment completion remains separate from delivery: 21 of 411 reviews are recorded
-complete, including the [suggestion rejection review](suggestion-rejection.md). The
+Workflow assessment completion remains separate from delivery: 25 of 411 reviews are recorded
+complete, including the [suggestion rejection review](suggestion-rejection.md) and four
+[memory read workflows](memory-reads.md). The
 [memory project lifecycle correction](memory-project-lifecycle.md) merged in
 [PR #221](https://github.com/ChidiRnweke/FollowThrough.ai/pull/221) after all required checks passed.
 It closes the reproduced archived-project guard gap in direct writes and proposal application.
-Browser memory projections, suggestion listing and the wider assessment remain open.
+The memory surface guard merged in [PR #222](https://github.com/ChidiRnweke/FollowThrough.ai/pull/222).
+The [knowledge retrieval guard](https://github.com/ChidiRnweke/FollowThrough.ai/pull/225) also passed
+all required checks. Suggestion listing and the wider assessment remain open.
 
 Status observed on 2026-09-23. This register separates delivered changes from implementation on
 unmerged branches. The original inventory, findings and workflow checkboxes remain historical
@@ -126,7 +129,7 @@ boundary and verifies passive references in actual note previews. Focused regres
 files and 59 tests. Extraction, provenance, screenshots and exports retain separate review entries.
 
 [PR #211](https://github.com/ChidiRnweke/FollowThrough.ai/pull/211) hides task details after
-project archival, with matched actual-component captures and three previously failing regressions.
+project archival, with matched actual-component captures and four previously failing regressions.
 The full local unit suite passed 444 files and 4,099 tests. All required checks passed, including
 [full browser tests, PostgreSQL contracts and sync PWA](https://github.com/ChidiRnweke/FollowThrough.ai/actions/runs/35918900933).
 

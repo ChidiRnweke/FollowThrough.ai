@@ -175,14 +175,14 @@ from [the execution plan](../domain-assessment-plan.md).
 
 ## 11 — Memory
 
-- [ ] W11.01 List user memory.
-- [ ] W11.02 List project memory.
+- [x] W11.01 List user memory. See [memory read review](memory-reads.md).
+- [x] W11.02 List project memory. See [memory read review](memory-reads.md).
 - [ ] W11.03 Create, edit, and delete memory directly.
 - [ ] W11.04 Propose additions, changes, and removals.
 - [ ] W11.05 Review memory proposals.
 - [ ] W11.06 Apply automatic acceptance under trust policies.
-- [ ] W11.07 Supply user-profile memory to runs.
-- [ ] W11.08 Retrieve project memory for agent work.
+- [x] W11.07 Supply user-profile memory to runs. See [memory read review](memory-reads.md).
+- [x] W11.08 Retrieve project memory for agent work. See [memory read review](memory-reads.md).
 - [ ] W11.09 Preserve memory scope and provenance.
 
 ## 12 — Skills
