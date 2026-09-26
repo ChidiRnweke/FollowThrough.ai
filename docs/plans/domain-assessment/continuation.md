@@ -1,5 +1,12 @@
 # Domain assessment continuation
 
+## Stack integration
+
+See [the stack landing record](stack-landing.md) for the 139 PRs consolidated after #71
+merged. The entries below preserve observations from the original branches; their open/merged
+labels are historical. The integration PR is the delivery authority for the consolidated code.
+Workflow assessment completion remains separate from delivery.
+
 Status observed on 2026-09-23. This register separates delivered changes from implementation on
 unmerged branches. The original inventory, findings and workflow checkboxes remain historical
 assessment evidence. They do not establish repository-wide completion.
