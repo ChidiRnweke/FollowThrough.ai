@@ -6,6 +6,11 @@ not that implementation has shipped. No unchecked item may be called fully revie
 because its containing folder was read. Family assessments and source inventory are linked
 from [the execution plan](../domain-assessment-plan.md).
 
+The original implementation stack is landed: #71 merged individually, and the remaining 139 PRs
+landed through [integration PR #220](https://github.com/ChidiRnweke/FollowThrough.ai/pull/220).
+Older assessment snapshots that describe those changes as unmerged record their status at review
+time. Delivery of that stack does not complete the unchecked workflow assessments below.
+
 ## 01 — Account access and identity
 
 - [ ] W01.01 Enter the public landing page or authenticated workspace.
@@ -32,10 +37,10 @@ from [the execution plan](../domain-assessment-plan.md).
 
 ## 03 — Projects and folders
 
-- [ ] W03.01 Create, list, and open projects.
+- [x] W03.01 Create, list, and open projects. See [creation and opening review](project-creation-opening.md).
 - [x] W03.02 Rename projects. See [rename review](project-rename-description.md).
 - [ ] W03.03 Archive projects and resolve child visibility.
-- [ ] W03.04 Create folders.
+- [x] W03.04 Create folders. See [creation and opening review](project-creation-opening.md).
 - [ ] W03.05 Browse and expand project trees.
 - [ ] W03.06 Move notes and folders between parent locations.
 - [ ] W03.07 Reorder project entries.
@@ -135,24 +140,24 @@ from [the execution plan](../domain-assessment-plan.md).
 
 ## 09 — Tasks and commitments
 
-- [x] W09.01 Create individual tasks. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.02 Create task batches. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.03 Create tasks through quick entry. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.04 Edit task text and descriptions. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.05 Change status and completion. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.06 Set responsibility, priority, category, and due date. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.07 Discover and reuse categories. [Current callers, values and retained evidence](task-reads.md); implementation remains on the open stack.
-- [x] W09.08 Delete tasks. [Current command disposition](task-commands.md); implementation remains on the open stack.
-- [x] W09.09 List, filter, sort, and count tasks. [Ownership and boundary disposition](task-reads.md); implementation remains on the open stack.
-- [x] W09.10 View tasks as a board or table. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
-- [x] W09.11 Move tasks between board statuses. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
-- [x] W09.12 Open details and return to the originating view. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
-- [x] W09.13 Display and update tasks embedded in notes. [Current surface disposition](task-surfaces.md); implementation remains on the open stack.
-- [x] W09.14 Extract commitments from selected passages. [Current origin disposition](task-origins.md); implementation remains on the open stack.
-- [x] W09.15 Preserve task provenance through source changes. [Current origin disposition](task-origins.md); implementation remains on the open stack.
+- [x] W09.01 Create individual tasks. [Current command disposition](task-commands.md).
+- [x] W09.02 Create task batches. [Current command disposition](task-commands.md).
+- [x] W09.03 Create tasks through quick entry. [Current command disposition](task-commands.md).
+- [x] W09.04 Edit task text and descriptions. [Current command disposition](task-commands.md).
+- [x] W09.05 Change status and completion. [Current command disposition](task-commands.md).
+- [x] W09.06 Set responsibility, priority, category, and due date. [Current command disposition](task-commands.md).
+- [x] W09.07 Discover and reuse categories. [Current callers, values and retained evidence](task-reads.md).
+- [x] W09.08 Delete tasks. [Current command disposition](task-commands.md).
+- [x] W09.09 List, filter, sort, and count tasks. [Ownership and boundary disposition](task-reads.md).
+- [x] W09.10 View tasks as a board or table. [Current surface disposition](task-surfaces.md).
+- [x] W09.11 Move tasks between board statuses. [Current surface disposition](task-surfaces.md).
+- [x] W09.12 Open details and return to the originating view. [Current surface disposition](task-surfaces.md).
+- [x] W09.13 Display and update tasks embedded in notes. [Current surface disposition](task-surfaces.md).
+- [x] W09.14 Extract commitments from selected passages. [Current origin disposition](task-origins.md).
+- [x] W09.15 Preserve task provenance through source changes. [Current origin disposition](task-origins.md).
 - [x] W09.16 Attach screenshots to descriptions. See [current disposition](task-screenshots.md).
-- [x] W09.17 Export boards as Markdown. [Current export disposition](task-exports.md); implementation remains on the open stack.
-- [x] W09.18 Export boards as PDF. [Current export disposition](task-exports.md); implementation remains on the open stack.
+- [x] W09.17 Export boards as Markdown. [Current export disposition](task-exports.md).
+- [x] W09.18 Export boards as PDF. [Current export disposition](task-exports.md).
 
 ## 10 — Suggestions, relationships, and references
 
@@ -198,11 +203,11 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W12.09 Save skill content.
 - [ ] W12.10 Propose, preview, approve, and apply targeted edits.
 - [ ] W12.11 Propose, preview, approve, and replace complete content.
-- [x] W12.12 Pin and unpin skills. [Disposition and observed contracts](skill-pins.md); implementation remains in open PR #200.
+- [x] W12.12 Pin and unpin skills. [Disposition and observed contracts](skill-pins.md).
 - [ ] W12.13 Browse skill versions.
 - [ ] W12.14 Restore earlier versions.
 - [ ] W12.15 Discover and load skills for execution.
-- [x] W12.16 Record skill usage. [Ownership, failure and storage evidence](skill-loads.md); implementation remains in open PR #203.
+- [x] W12.16 Record skill usage. [Ownership, failure and storage evidence](skill-loads.md).
 
 ## 13 — Diagrams
 
