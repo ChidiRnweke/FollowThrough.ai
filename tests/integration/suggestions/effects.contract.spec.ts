@@ -1,57 +1,88 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
-import type { SuggestionId } from '$lib/models/suggestions';
-import type { NoteId } from '$lib/models/notes';
 import type { MemoryEntryId } from '$lib/models/memory';
+import type { NoteId } from '$lib/models/notes';
 import type { RelationshipId } from '$lib/models/relationships';
+import {
+	Suggestions,
+	type SuggestionsDependencies
+} from '$lib/server/controllers/suggestions/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
-import { SuggestionEffects, mapAppliedChange } from '$lib/server/services/suggestions/effects';
+import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { RelationshipGraph } from '$lib/server/services/relationships/graph';
+import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
 
+const application = (
+	transaction: ReturnType<typeof createTransactionContext<typeof context.db>>
+) => {
+	const { database, transactionRunner } = transaction;
+	const suggestions = new SuggestionRecords(database);
+	const notes = new NoteRecords(database);
+	const provenance = new ProvenanceRecords(database);
+	const anchors = new SourceAnchorRecords(database);
+	const inbox = new SuggestionInbox(suggestions, notes, provenance, anchors);
+	const repository = new SuggestionEffectRecords(database);
+	const entries = new MemoryRecords(database);
+	const relationships = new RelationshipRecords(database);
+	const search = new KnowledgeIndexRecords(database);
+	const embeddings = new InMemoryEmbeddingClient();
+	for (const content of ['Original', 'Replacement', 'Accepted']) {
+		embeddings.vectorsByContent.set(
+			`Project memory\n${content}`,
+			Array.from({ length: 3072 }, (_, i) => (i === 0 ? 1 : 0))
+		);
+	}
+	const index = new ContentIndex(search, embeddings.model);
+	const controller = new Suggestions(
+		capabilityDependencies<SuggestionsDependencies>({
+			suggestionFinder: inbox,
+			suggestionAccepter: inbox,
+			suggestionReverter: inbox,
+			suggestionEffects: new SuggestionEffects(repository),
+			memoryChanges: new MemoryLibrary(entries, new ProjectRecords(database), provenance),
+			relationshipCreator: new RelationshipGraph(relationships, notes, anchors, provenance),
+			memoryIndexer: index.memories,
+			indexWriter: index,
+			indexEmbeddings: embeddings,
+			transactionRunner,
+			now: () => now
+		})
+	);
+	return {
+		...transaction,
+		suggestions,
+		inbox,
+		repository,
+		entries,
+		relationships,
+		notes,
+		search,
+		embeddings,
+		controller
+	};
+};
 const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const provenance = await seedProvenance(seeded.owner, suffix);
-	const transaction = createTransactionContext(context.db);
-	const suggestions = new SuggestionRecords(transaction.database);
-	const suggestion = await suggestions.insert(seeded.owner, {
-		id: crypto.randomUUID() as SuggestionId,
-		userId: seeded.owner.userId,
-		noteId: seeded.note.id,
-		kind: 'memory',
-		status: 'proposed',
-		payload: {
-			scope: 'project',
-			operation: 'add',
-			content: 'Original',
-			projectId: seeded.project.id
-		},
-		provenanceId: provenance.id,
-		isAutoAccepted: false,
-		createdAt: now,
-		updatedAt: now
-	});
-	const repository = new SuggestionEffectRecords(transaction.database);
-	return {
-		...seeded,
-		...transaction,
-		suggestions,
-		suggestion,
-		repository,
-		effects: new SuggestionEffects(repository)
-	};
+	return { ...seeded, provenance, ...application(createTransactionContext(context.db)) };
 };
 const memoryReplacement = async (suffix: string) => {
 	const state = await setup(suffix);
-	const entries = new MemoryRecords(state.database);
-	const original = await entries.insert(state.owner, {
+	const original = await state.entries.insert(state.owner, {
 		id: crypto.randomUUID() as MemoryEntryId,
 		userId: state.owner.userId,
 		projectId: state.project.id,
@@ -60,86 +91,79 @@ const memoryReplacement = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	const replacement = await state.transactionRunner.run(async () => {
-		await state.effects.lock(state.owner, state.suggestion.id);
-		const replacement = await entries.insert(state.owner, {
-			...original,
-			id: crypto.randomUUID() as MemoryEntryId,
-			content: 'Replacement',
-			replacesEntryId: original.id
-		});
-		const deleted = await entries.update(state.owner, { ...original, deletedAt: now });
-		await state.effects.record(state.owner, state.suggestion.id, [
-			{
-				kind: 'modified',
-				before: { type: 'memory_entries', value: original },
-				after: { type: 'memory_entries', value: deleted }
-			},
-			{ kind: 'created', after: { type: 'memory_entries', value: replacement } }
-		]);
-		await state.suggestions.transition(state.owner, state.suggestion.id, 'proposed', {
-			status: 'accepted',
-			appliedArtifactId: replacement.id,
-			decidedAt: now
-		});
-		return replacement;
+	const suggestion = await state.inbox.create(state.owner, {
+		kind: 'memory',
+		provenanceId: state.provenance.id,
+		payload: {
+			scope: 'project',
+			projectId: state.project.id,
+			operation: 'update',
+			memoryEntryId: original.id,
+			content: 'Replacement'
+		}
 	});
-	const accepted = {
-		...state.suggestion,
-		status: 'accepted' as const,
-		appliedArtifactId: replacement.id,
-		decidedAt: now
-	};
-	return { ...state, entries, original, replacement, accepted };
+	const accepted = await state.controller.accept(state.owner, { suggestionId: suggestion.id });
+	const replacement = await state.entries.findById(
+		state.owner,
+		accepted.artifact.id as MemoryEntryId
+	);
+	if (!replacement) throw new Error('Accepted memory replacement was not stored');
+	return { ...state, original, replacement, suggestion };
 };
+const activeMemory = async (state: Awaited<ReturnType<typeof memoryReplacement>>) =>
+	(await state.entries.list(state.owner, { projectId: state.project.id })).map(
+		({ id, content }) => ({ id, content })
+	);
+
 describe('Durable proposal application effects', () => {
-	it('restores both memory records from the recorded replacement', async () => {
+	it('restores both memory records and their search index through the controller', async () => {
 		const state = await memoryReplacement('9501');
-		await state.transactionRunner.run(async () => {
-			await state.effects.lock(state.owner, state.suggestion.id);
-			await state.effects.restore(state.owner, state.accepted);
+		const result = await state.controller.revert(state.owner, {
+			suggestionId: state.suggestion.id
 		});
-		expect(
-			(await state.entries.list(state.owner, { projectId: state.project.id })).map((entry) => ({
-				id: entry.id,
-				content: entry.content
-			}))
-		).toEqual([{ id: state.original.id, content: 'Original' }]);
+		expect({
+			status: result.status,
+			stored: await state.suggestions.findById(state.owner, result.id),
+			active: await activeMemory(state),
+			originalChunks: (await state.search.listForMemoryEntry(state.owner, state.original.id)).map(
+				(c) => c.content
+			),
+			replacementChunks: await state.search.listForMemoryEntry(state.owner, state.replacement.id)
+		}).toEqual({
+			status: 'reverted',
+			stored: result,
+			active: [{ id: state.original.id, content: 'Original' }],
+			originalChunks: ['Original'],
+			replacementChunks: []
+		});
 	});
 	it('refuses stale undo before restoring either memory record', async () => {
 		const state = await memoryReplacement('9502');
 		await state.entries.update(state.owner, { ...state.replacement, content: 'Later edit' });
-		const refused = await state.transactionRunner
-			.run(async () => {
-				await state.effects.lock(state.owner, state.suggestion.id);
-				await state.effects.restore(state.owner, state.accepted);
-			})
+		const outcome = await state.controller
+			.revert(state.owner, { suggestionId: state.suggestion.id })
 			.then(
-				() => false,
-				() => true
+				() => 'unexpected success',
+				(error: Error) => error.message
 			);
 		expect({
-			refused,
-			active: (await state.entries.list(state.owner, { projectId: state.project.id })).map(
-				(entry) => entry.content
-			)
-		}).toEqual({ refused: true, active: ['Later edit'] });
+			outcome,
+			active: await activeMemory(state),
+			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
+		}).toEqual({
+			outcome: 'Cannot undo this suggestion because its saved data has changed.',
+			active: [{ id: state.replacement.id, content: 'Later edit' }],
+			status: 'accepted'
+		});
 	});
 	it('preserves an existing relationship when undo restores its justification', async () => {
 		const state = await setup('9503');
-		const target = await new NoteRecords(state.database).insert(state.owner, {
+		const target = await state.notes.insert(state.owner, {
 			...state.note,
 			id: crypto.randomUUID() as NoteId,
 			position: 1
 		});
-		const relationships = new RelationshipRecords(state.database);
-		const graph = new RelationshipGraph(
-			relationships,
-			new NoteRecords(state.database),
-			new SourceAnchorRecords(state.database),
-			new ProvenanceRecords(state.database)
-		);
-		const original = await relationships.insert(state.owner, {
+		const original = await state.relationships.insert(state.owner, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: state.owner.userId,
 			sourceNoteId: state.note.id,
@@ -149,32 +173,20 @@ describe('Durable proposal application effects', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		await state.transactionRunner.run(async () => {
-			const change = await graph.createWithChange(state.owner, {
+		const suggestion = await state.inbox.create(state.owner, {
+			kind: 'backlink',
+			noteId: state.note.id,
+			provenanceId: state.provenance.id,
+			payload: {
 				sourceNoteId: original.sourceNoteId,
 				targetNoteId: original.targetNoteId,
 				kind: original.kind,
 				justification: 'Suggested'
-			});
-			await state.effects.record(state.owner, state.suggestion.id, [
-				mapAppliedChange(change, (value) => ({ type: 'note_relationships' as const, value }))
-			]);
-			await state.suggestions.transition(state.owner, state.suggestion.id, 'proposed', {
-				status: 'accepted',
-				appliedArtifactId: original.id,
-				decidedAt: now
-			});
+			}
 		});
-		await state.transactionRunner.run(async () => {
-			await state.effects.lock(state.owner, state.suggestion.id);
-			await state.effects.restore(state.owner, {
-				...state.suggestion,
-				status: 'accepted',
-				appliedArtifactId: original.id,
-				decidedAt: now
-			});
-		});
-		expect(await relationships.findById(state.owner, original.id)).toMatchObject({
+		await state.controller.accept(state.owner, { suggestionId: suggestion.id });
+		await state.controller.revert(state.owner, { suggestionId: suggestion.id });
+		expect(await state.relationships.findById(state.owner, original.id)).toMatchObject({
 			id: original.id,
 			justification: 'Original'
 		});
@@ -183,83 +195,73 @@ describe('Durable proposal application effects', () => {
 		const state = await memoryReplacement('9505');
 		await state.transactionRunner
 			.run(async () => {
-				await state.effects.lock(state.owner, state.suggestion.id);
-				await state.effects.restore(state.owner, state.accepted);
-				throw new Error('Rejected state write');
+				await state.controller.revert(state.owner, { suggestionId: state.suggestion.id });
+				throw new Error('Rejected surrounding write');
 			})
 			.catch((error) => ({ kind: 'failure', error }));
-		expect(
-			(await state.entries.list(state.owner, { projectId: state.project.id })).map(
-				(entry) => entry.id
-			)
-		).toEqual([state.replacement.id]);
+		expect({
+			active: await activeMemory(state),
+			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status,
+			replacementChunks: (
+				await state.search.listForMemoryEntry(state.owner, state.replacement.id)
+			).map((c) => c.content),
+			originalChunks: await state.search.listForMemoryEntry(state.owner, state.original.id)
+		}).toEqual({
+			active: [{ id: state.replacement.id, content: 'Replacement' }],
+			status: 'accepted',
+			replacementChunks: ['Replacement'],
+			originalChunks: []
+		});
 	});
-	it('serializes two undo attempts with one completed state transition', async () => {
+	it('serializes two controller undo attempts with one completed state transition', async () => {
 		const state = await memoryReplacement('9506');
 		const connection = connectPostgresTestDatabase(context.url);
-		const second = createTransactionContext(connection.db);
-		const undo = async (transaction: typeof second) =>
-			transaction.transactionRunner.run(async () => {
-				const effects = new SuggestionEffects(new SuggestionEffectRecords(transaction.database));
-				const suggestions = new SuggestionRecords(transaction.database);
-				await effects.lock(state.owner, state.suggestion.id);
-				const stored = await suggestions.findById(state.owner, state.suggestion.id);
-				if (!stored) throw new Error('Missing suggestion');
-				await effects.restore(state.owner, stored);
-				return suggestions.transition(state.owner, state.suggestion.id, 'accepted', {
-					status: 'reverted',
-					decidedAt: now
-				});
-			});
 		try {
-			const results = await Promise.allSettled([undo(state), undo(second)]);
-			expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+			const second = application(createTransactionContext(connection.db));
+			const results = await Promise.allSettled([
+				state.controller.revert(state.owner, { suggestionId: state.suggestion.id }),
+				second.controller.revert(state.owner, { suggestionId: state.suggestion.id })
+			]);
+			expect({
+				outcomes: results.map((r) => r.status).sort(),
+				active: await activeMemory(state),
+				status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
+			}).toEqual({
+				outcomes: ['fulfilled', 'rejected'],
+				active: [{ id: state.original.id, content: 'Original' }],
+				status: 'reverted'
+			});
 		} finally {
 			await connection.close();
 		}
 	});
-	it('serializes competing acceptances with one effect and one artifact', async () => {
+	it('serializes competing controller acceptances with one effect and one artifact', async () => {
 		const state = await setup('9508');
+		const suggestion = await state.inbox.create(state.owner, {
+			kind: 'memory',
+			provenanceId: state.provenance.id,
+			payload: {
+				scope: 'project',
+				projectId: state.project.id,
+				operation: 'add',
+				content: 'Accepted'
+			}
+		});
 		const connection = connectPostgresTestDatabase(context.url);
-		const second = createTransactionContext(connection.db);
-		const accept = async (transaction: typeof second) =>
-			transaction.transactionRunner.run(async () => {
-				const effects = new SuggestionEffects(new SuggestionEffectRecords(transaction.database));
-				const suggestions = new SuggestionRecords(transaction.database);
-				const entries = new MemoryRecords(transaction.database);
-				await effects.lock(state.owner, state.suggestion.id);
-				const pending = await suggestions.findById(state.owner, state.suggestion.id);
-				if (pending?.status !== 'proposed') throw new Error('No longer pending');
-				const entry = await entries.insert(state.owner, {
-					id: crypto.randomUUID() as MemoryEntryId,
-					userId: state.owner.userId,
-					projectId: state.project.id,
-					content: 'Accepted',
-					shareWithAgents: true,
-					createdAt: now,
-					updatedAt: now
-				});
-				await effects.record(state.owner, pending.id, [
-					{ kind: 'created', after: { type: 'memory_entries', value: entry } }
-				]);
-				await suggestions.transition(state.owner, pending.id, 'proposed', {
-					status: 'accepted',
-					decidedAt: now,
-					appliedArtifactId: entry.id
-				});
-				return entry.id;
-			});
 		try {
-			const results = await Promise.allSettled([accept(state), accept(second)]);
-			const accepted = await state.suggestions.findById(state.owner, state.suggestion.id);
-			const effect = await state.repository.find(state.owner, state.suggestion.id);
-			const entries = await new MemoryRecords(state.database).list(state.owner, {
-				projectId: state.project.id
-			});
+			const second = application(createTransactionContext(connection.db));
+			const results = await Promise.allSettled([
+				state.controller.accept(state.owner, { suggestionId: suggestion.id }),
+				second.controller.accept(state.owner, { suggestionId: suggestion.id })
+			]);
+			const accepted = await state.suggestions.findById(state.owner, suggestion.id);
 			expect({
-				outcomes: results.map((result) => result.status).sort(),
-				artifactIds: entries.map((entry) => entry.id),
-				effectId: effect?.changes[0]?.after.value.id
+				outcomes: results.map((r) => r.status).sort(),
+				artifactIds: (await state.entries.list(state.owner, { projectId: state.project.id })).map(
+					(e) => e.id
+				),
+				effectId: (await state.repository.find(state.owner, suggestion.id))?.changes[0]?.after.value
+					.id
 			}).toEqual({
 				outcomes: ['fulfilled', 'rejected'],
 				artifactIds: [accepted?.appliedArtifactId],
@@ -271,9 +273,47 @@ describe('Durable proposal application effects', () => {
 	});
 	it('rejects an invalid stored effect at the repository boundary', async () => {
 		const state = await setup('9507');
+		const suggestion = await state.inbox.create(state.owner, {
+			kind: 'memory',
+			provenanceId: state.provenance.id,
+			payload: { scope: 'user', operation: 'add', content: 'Original' }
+		});
 		await state.database.execute(
-			sql`insert into suggestion_application_effects(suggestion_id,user_id,effect) values (${state.suggestion.id},${state.owner.userId},'{"changes":[]}'::jsonb)`
+			sql`insert into suggestion_application_effects(suggestion_id,user_id,effect) values (${suggestion.id},${state.owner.userId},'{"changes":[]}'::jsonb)`
 		);
-		await expect(state.repository.find(state.owner, state.suggestion.id)).rejects.toThrow();
+		await expect(state.repository.find(state.owner, suggestion.id)).rejects.toThrow();
+	});
+	it('keeps acceptance and replacement intact when restored memory cannot be indexed', async () => {
+		const state = await memoryReplacement('23101');
+		state.embeddings.failure = new Error('Embedding unavailable');
+		const outcome = await state.controller
+			.revert(state.owner, { suggestionId: state.suggestion.id })
+			.then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
+		expect({
+			outcome,
+			active: await activeMemory(state),
+			status: (await state.suggestions.findById(state.owner, state.suggestion.id))?.status
+		}).toEqual({
+			outcome: 'Embedding unavailable',
+			active: [{ id: state.replacement.id, content: 'Replacement' }],
+			status: 'accepted'
+		});
+	});
+	it('refuses a different actor without restoring the owned replacement', async () => {
+		const state = await memoryReplacement('23102');
+		const foreign = await seedNote('23112');
+		const outcome = await state.controller
+			.revert(foreign.owner, { suggestionId: state.suggestion.id })
+			.then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
+		expect({ outcome, active: await activeMemory(state) }).toEqual({
+			outcome: 'Suggestion was not found',
+			active: [{ id: state.replacement.id, content: 'Replacement' }]
+		});
 	});
 });
