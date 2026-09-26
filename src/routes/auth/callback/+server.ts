@@ -37,7 +37,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		const { session } = await oauthService.completeOAuthFlow(code, pkceData.codeVerifier);
 
 		// Set session cookie
-		setSessionCookie(cookies, session.id, process.env.NODE_ENV === 'production');
+		setSessionCookie(cookies, session.id, process.env.NODE_ENV === 'production', session.expiresAt);
 	} catch (err) {
 		console.error('OAuth callback error:', err);
 		throw error(500, 'Failed to complete authentication. Please try again.');

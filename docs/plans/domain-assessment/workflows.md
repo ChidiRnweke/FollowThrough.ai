@@ -12,7 +12,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W01.02 Begin sign-in and validate the authentication callback.
 - [ ] W01.03 Create an account or link an existing provider identity.
 - [ ] W01.04 Route waiting and admitted users.
-- [ ] W01.05 Create, validate, renew, and expire sessions.
+- [x] W01.05 Create, validate, renew, and expire sessions. See [session lifetime review](session-cookie-renewal.md).
 - [ ] W01.06 Sign out and detach account-specific browser state.
 - [ ] W01.07 Authenticate API-token requests.
 - [ ] W01.08 Create, list, and revoke API tokens.
