@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { ProjectCatalog } from '$lib/server/services/projects/catalog';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
@@ -12,15 +13,16 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const projects = new InMemoryProjects();
+	const projects = new InMemoryProjectRepository();
+	const catalog = new ProjectCatalog(projects, projects);
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: projects,
-			projectReader: projects,
-			projectLister: projects,
-			projectEditor: projects,
-			projectTreeReader: projects,
-			entryWriter: projects,
+			projectCreator: catalog,
+			projectReader: catalog,
+			projectLister: catalog,
+			projectEditor: catalog,
+			projectTreeReader: catalog,
+			entryWriter: catalog,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);
