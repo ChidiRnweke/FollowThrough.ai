@@ -32,6 +32,10 @@ import type {
 } from '$lib/server/repositories/knowledge-search';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/knowledge-search';
+import { projects } from '$lib/server/db/schema/projects';
+
+const activeProject = (actor: ActorContext) =>
+	sql`exists (select 1 from ${projects} where ${projects.id} = ${schema.searchChunks.projectId} and ${projects.userId} = ${actor.userId} and ${projects.archivedAt} is null)`;
 
 /**
  * Narrows a query to exactly the chunks belonging to one source. Note chunks
@@ -265,6 +269,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		// for semantic recall, wrong to surface as a literal match.
 		const conditions = [
 			eq(schema.searchChunks.userId, actor.userId),
+			activeProject(actor),
 			isNull(schema.searchChunks.supersededAt),
 			sql`${schema.searchChunks.content} ilike ${`%${query}%`}`
 		];
@@ -295,6 +300,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		// one — without this they would crowd out the matches they are meant to replace.
 		const conditions = [
 			eq(schema.searchChunks.userId, actor.userId),
+			activeProject(actor),
 			isNotNull(schema.searchChunks.embedding)
 		];
 		if (projectId) conditions.push(eq(schema.searchChunks.projectId, projectId));
