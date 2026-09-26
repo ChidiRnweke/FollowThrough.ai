@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { accessMessage } from '$lib/services/sync/state';
 	import { Form } from '$lib/components/ui/form';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import type { MemoryEntry, MemoryEntryId, MemoryEntryType } from '$lib/models/memory';
@@ -53,6 +54,20 @@
 	} = $props();
 
 	const resources = $derived(workspace ?? workspaceSession.current?.resources);
+	const project = $derived(
+		projectId ? resources?.view({ type: 'projects', id: [projectId] }) : undefined
+	);
+	const projectState = $derived(project?.state);
+	const projectAvailable = $derived(
+		!projectId || (projectState?.kind === 'ready' && !projectState.value.archivedAt)
+	);
+	$effect(() => {
+		if (!projectAvailable) {
+			editing = null;
+			deletion = null;
+			addOpen = false;
+		}
+	});
 	const entries = $derived(resources?.views.memories(projectId) ?? []);
 	const pending = $derived(resources?.views.memorySuggestions(projectId) ?? []);
 	let loadError = $state<string | null>(null);
@@ -206,237 +221,245 @@
 	}
 </script>
 
-<!-- Adding is an occasional act, so it sits behind a CTA and a dialog instead of an
+{#if projectId && (!projectState || projectState.kind === 'wait')}
+	<p role="status">Loading project memory…</p>
+{:else if projectId && projectState && projectState.kind !== 'ready'}
+	<p role="alert">{accessMessage(projectState, 'project')}</p>
+{:else if !projectAvailable}
+	<p role="status">This project is no longer available.</p>
+{:else}
+	<!-- Adding is an occasional act, so it sits behind a CTA and a dialog instead of an
      always-on composer competing with what is already remembered. The spacing ladder:
      a 24px step between the action row and the sections, 8px inside each section. -->
-<div class="flex h-full min-h-0 flex-col gap-6">
-	{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
-		<p class="text-sm text-muted-foreground">Still downloading memory.</p>
-		{@render addButton()}
-	{:else if isEmpty && resources?.collectionReadiness() !== 'ready'}<p role="status">
-			Still downloading memory.
-		</p>
-		{@render addButton()}{:else if isEmpty}
-		<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
-		     EmptyState; the side panel keeps the slot size. -->
-		<EmptyState
-			icon={Brain}
-			title={emptyText}
-			hint={emptyHint}
-			size={heroEmpty ? 'large' : 'default'}
-			label={heroEmpty ? 'Empty memory' : undefined}
-		>
-			{#snippet action()}
-				{@render addButton()}
-			{/snippet}
-		</EmptyState>
-	{:else}
-		<div class="flex justify-end">
+	<div class="flex h-full min-h-0 flex-col gap-6">
+		{#if loadError}<p role="alert">{loadError}</p>{:else if loading && isEmpty}
+			<p class="text-sm text-muted-foreground">Still downloading memory.</p>
 			{@render addButton()}
-		</div>
-		<!-- Proposals first, then what is kept: the two are different in kind, and the
+		{:else if isEmpty && resources?.collectionReadiness() !== 'ready'}<p role="status">
+				Still downloading memory.
+			</p>
+			{@render addButton()}{:else if isEmpty}
+			<!-- Whole-page contexts (profile, project memory) get the hero-sized shared
+		     EmptyState; the side panel keeps the slot size. -->
+			<EmptyState
+				icon={Brain}
+				title={emptyText}
+				hint={emptyHint}
+				size={heroEmpty ? 'large' : 'default'}
+				label={heroEmpty ? 'Empty memory' : undefined}
+			>
+				{#snippet action()}
+					{@render addButton()}
+				{/snippet}
+			</EmptyState>
+		{:else}
+			<div class="flex justify-end">
+				{@render addButton()}
+			</div>
+			<!-- Proposals first, then what is kept: the two are different in kind, and the
 		     24px step between the sections is what says so. Both lists are homogeneous
 		     rows, so divided borderless lists rather than bordered boxes — nesting
 		     same-weight rectangles is the failure the surface rule exists to prevent. -->
-		<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
-			{#if pendingItems.length > 0}
-				<section class="flex flex-col gap-2">
-					<h2 class="eyebrow">Suggested by the agent</h2>
-					<ul class="divide-y divide-border">
-						{#each pendingItems as view (view.suggestion.id)}
-							{@render pendingRow(view)}
-						{/each}
-					</ul>
-				</section>
-			{/if}
-			{#if savedItems.length > 0}
-				<section class="flex flex-col gap-2">
-					<h2 class="eyebrow">Remembered · {savedItems.length}</h2>
-					<ul class="divide-y divide-border">
-						{#each savedItems as entry (entry.id)}
-							{@render savedRow(entry)}
-						{/each}
-					</ul>
-				</section>
-			{/if}
-		</div>
-	{/if}
-</div>
-
-{#snippet addButton()}
-	<Button size="sm" onclick={() => (addOpen = true)}>
-		<Plus data-icon />
-		Add memory
-	</Button>
-{/snippet}
-
-{#snippet pendingRow(view: MemorySuggestionView)}
-	{@const suggestion = view.suggestion}
-	{@const busy = busyIds.includes(suggestion.id)}
-	<li class="row-interactive px-3 py-2.5">
-		<div class="flex items-start gap-3">
-			<Checkbox
-				checked={false}
-				disabled={busy}
-				aria-label="Accept memory suggestion"
-				onCheckedChange={(checked) => {
-					if (checked === true) void accept(view);
-				}}
-			/>
-			<div class="min-w-0 flex-1">
-				<div class="flex flex-wrap items-center gap-1.5">
-					<Badge variant="secondary">Suggested</Badge>
-					<Badge variant="ghost">{suggestion.payload.operation}</Badge>
-				</div>
-				<p class="mt-2 text-sm whitespace-pre-wrap">{proposalContent(view)}</p>
-				{#if suggestion.payload.justification}
-					<p class="mt-1 text-xs text-muted-foreground">
-						{suggestion.payload.justification}
-					</p>
-				{/if}
-				<div class="mt-2 flex items-center justify-between gap-2">
-					<span class="text-xs text-muted-foreground">
-						{formatRelativeTime(suggestion.createdAt)}
-					</span>
-					<Button size="sm" variant="ghost" disabled={busy} onclick={() => void dismiss(view)}>
-						Dismiss
-					</Button>
-				</div>
-			</div>
-		</div>
-	</li>
-{/snippet}
-
-{#snippet savedRow(entry: MemoryEntry)}
-	<li class="row-interactive px-3 py-2.5">
-		{#if editing && editing.resource.identity.id[0] === entry.id}
-			<div class="flex flex-col gap-2">
-				<Textarea bind:value={editing.content} rows={3} aria-label="Edit memory entry" />
-				<div class="flex justify-end gap-2">
-					<Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
-					<Button size="sm" disabled={!editing.content.trim()} onclick={() => saveEdit()}>
-						Save
-					</Button>
-				</div>
-			</div>
-		{:else}
-			<div class="flex items-start justify-between gap-3">
-				<div class="min-w-0 flex-1">
-					{#if entry.type}
-						<Badge variant="ghost" class="mb-1 text-muted-foreground"
-							>{memoryEntryTypeLabels[entry.type]}</Badge
-						>
-					{/if}
-					<p class="text-sm whitespace-pre-wrap">{entry.content}</p>
-				</div>
-				<div class="flex shrink-0 items-center gap-1.5">
-					<span class="text-xs text-muted-foreground">
-						{formatRelativeTime(entry.updatedAt)}
-					</span>
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} variant="ghost" size="icon-sm" aria-label="Memory actions">
-									<MoreHorizontal data-icon />
-								</Button>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Content align="end">
-							<DropdownMenu.Item
-								onSelect={() => {
-									editing = { resource: editorFor(entry), content: entry.content };
-								}}
-							>
-								Edit
-							</DropdownMenu.Item>
-							<DropdownMenu.Item variant="destructive" onSelect={() => askDelete(entry)}>
-								Delete
-							</DropdownMenu.Item>
-						</DropdownMenu.Content>
-					</DropdownMenu.Root>
-				</div>
-			</div>
-			{#if !hideShare}
-				<Label class="mt-1.5 flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
-					<Checkbox
-						checked={entry.shareWithAgents}
-						aria-label="Share with agents"
-						onCheckedChange={(checked) => toggleShare(entry, checked === true)}
-					/>
-					Share with agents
-				</Label>
-			{/if}
-		{/if}
-	</li>
-{/snippet}
-
-<AlertDialog.Root
-	open={deletion !== null}
-	onOpenChange={(open) => {
-		if (!open) deletion = null;
-	}}
->
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>Delete this memory?</AlertDialog.Title>
-			<AlertDialog.Description>
-				The agent will no longer remember this. This cannot be undone.
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<Button
-				variant="destructive"
-				disabled={deletion?.status === 'saving'}
-				onclick={() => void confirmDelete()}
-			>
-				Delete
-			</Button>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
-
-<Dialog.Root bind:open={addOpen}>
-	<Dialog.Content class="sm:max-w-md">
-		<Dialog.Header>
-			<Dialog.Title>Add a memory</Dialog.Title>
-			{#if scopeLabel}
-				<Dialog.Description>{scopeLabel}</Dialog.Description>
-			{/if}
-		</Dialog.Header>
-		<Form class="flex flex-col gap-4" onsubmit={submitAdd}>
-			<Textarea
-				bind:value={draft}
-				disabled={adding}
-				{placeholder}
-				rows={3}
-				aria-label="New memory entry"
-				autofocus
-			/>
-			<div class="flex items-center justify-between gap-2">
-				<Select.Root
-					type="single"
-					disabled={adding}
-					value={draftType}
-					onValueChange={(next) => (draftType = next as MemoryEntryType | 'none')}
-				>
-					<Select.Trigger size="sm" aria-label="Memory type">
-						{draftType === 'none' ? 'No type' : memoryEntryTypeLabels[draftType]}
-					</Select.Trigger>
-					<Select.Content>
-						<Select.Group>
-							<Select.Item value="none">No type</Select.Item>
-							{#each entryTypes as entryType (entryType)}
-								<Select.Item value={entryType}>{memoryEntryTypeLabels[entryType]}</Select.Item>
+			<div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+				{#if pendingItems.length > 0}
+					<section class="flex flex-col gap-2">
+						<h2 class="eyebrow">Suggested by the agent</h2>
+						<ul class="divide-y divide-border">
+							{#each pendingItems as view (view.suggestion.id)}
+								{@render pendingRow(view)}
 							{/each}
-						</Select.Group>
-					</Select.Content>
-				</Select.Root>
-				<div class="flex items-center gap-2">
-					<Button type="button" variant="ghost" onclick={() => (addOpen = false)}>Cancel</Button>
-					<Button type="submit" disabled={adding || !draft.trim()}>Add memory</Button>
+						</ul>
+					</section>
+				{/if}
+				{#if savedItems.length > 0}
+					<section class="flex flex-col gap-2">
+						<h2 class="eyebrow">Remembered · {savedItems.length}</h2>
+						<ul class="divide-y divide-border">
+							{#each savedItems as entry (entry.id)}
+								{@render savedRow(entry)}
+							{/each}
+						</ul>
+					</section>
+				{/if}
+			</div>
+		{/if}
+	</div>
+
+	{#snippet addButton()}
+		<Button size="sm" onclick={() => (addOpen = true)}>
+			<Plus data-icon />
+			Add memory
+		</Button>
+	{/snippet}
+
+	{#snippet pendingRow(view: MemorySuggestionView)}
+		{@const suggestion = view.suggestion}
+		{@const busy = busyIds.includes(suggestion.id)}
+		<li class="row-interactive px-3 py-2.5">
+			<div class="flex items-start gap-3">
+				<Checkbox
+					checked={false}
+					disabled={busy}
+					aria-label="Accept memory suggestion"
+					onCheckedChange={(checked) => {
+						if (checked === true) void accept(view);
+					}}
+				/>
+				<div class="min-w-0 flex-1">
+					<div class="flex flex-wrap items-center gap-1.5">
+						<Badge variant="secondary">Suggested</Badge>
+						<Badge variant="ghost">{suggestion.payload.operation}</Badge>
+					</div>
+					<p class="mt-2 text-sm whitespace-pre-wrap">{proposalContent(view)}</p>
+					{#if suggestion.payload.justification}
+						<p class="mt-1 text-xs text-muted-foreground">
+							{suggestion.payload.justification}
+						</p>
+					{/if}
+					<div class="mt-2 flex items-center justify-between gap-2">
+						<span class="text-xs text-muted-foreground">
+							{formatRelativeTime(suggestion.createdAt)}
+						</span>
+						<Button size="sm" variant="ghost" disabled={busy} onclick={() => void dismiss(view)}>
+							Dismiss
+						</Button>
+					</div>
 				</div>
 			</div>
-		</Form>
-	</Dialog.Content>
-</Dialog.Root>
+		</li>
+	{/snippet}
+
+	{#snippet savedRow(entry: MemoryEntry)}
+		<li class="row-interactive px-3 py-2.5">
+			{#if editing && editing.resource.identity.id[0] === entry.id}
+				<div class="flex flex-col gap-2">
+					<Textarea bind:value={editing.content} rows={3} aria-label="Edit memory entry" />
+					<div class="flex justify-end gap-2">
+						<Button size="sm" variant="ghost" onclick={() => (editing = null)}>Cancel</Button>
+						<Button size="sm" disabled={!editing.content.trim()} onclick={() => saveEdit()}>
+							Save
+						</Button>
+					</div>
+				</div>
+			{:else}
+				<div class="flex items-start justify-between gap-3">
+					<div class="min-w-0 flex-1">
+						{#if entry.type}
+							<Badge variant="ghost" class="mb-1 text-muted-foreground"
+								>{memoryEntryTypeLabels[entry.type]}</Badge
+							>
+						{/if}
+						<p class="text-sm whitespace-pre-wrap">{entry.content}</p>
+					</div>
+					<div class="flex shrink-0 items-center gap-1.5">
+						<span class="text-xs text-muted-foreground">
+							{formatRelativeTime(entry.updatedAt)}
+						</span>
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<Button {...props} variant="ghost" size="icon-sm" aria-label="Memory actions">
+										<MoreHorizontal data-icon />
+									</Button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="end">
+								<DropdownMenu.Item
+									onSelect={() => {
+										editing = { resource: editorFor(entry), content: entry.content };
+									}}
+								>
+									Edit
+								</DropdownMenu.Item>
+								<DropdownMenu.Item variant="destructive" onSelect={() => askDelete(entry)}>
+									Delete
+								</DropdownMenu.Item>
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
+					</div>
+				</div>
+				{#if !hideShare}
+					<Label class="mt-1.5 flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+						<Checkbox
+							checked={entry.shareWithAgents}
+							aria-label="Share with agents"
+							onCheckedChange={(checked) => toggleShare(entry, checked === true)}
+						/>
+						Share with agents
+					</Label>
+				{/if}
+			{/if}
+		</li>
+	{/snippet}
+
+	<AlertDialog.Root
+		open={deletion !== null}
+		onOpenChange={(open) => {
+			if (!open) deletion = null;
+		}}
+	>
+		<AlertDialog.Content>
+			<AlertDialog.Header>
+				<AlertDialog.Title>Delete this memory?</AlertDialog.Title>
+				<AlertDialog.Description>
+					The agent will no longer remember this. This cannot be undone.
+				</AlertDialog.Description>
+			</AlertDialog.Header>
+			<AlertDialog.Footer>
+				<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+				<Button
+					variant="destructive"
+					disabled={deletion?.status === 'saving'}
+					onclick={() => void confirmDelete()}
+				>
+					Delete
+				</Button>
+			</AlertDialog.Footer>
+		</AlertDialog.Content>
+	</AlertDialog.Root>
+
+	<Dialog.Root bind:open={addOpen}>
+		<Dialog.Content class="sm:max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>Add a memory</Dialog.Title>
+				{#if scopeLabel}
+					<Dialog.Description>{scopeLabel}</Dialog.Description>
+				{/if}
+			</Dialog.Header>
+			<Form class="flex flex-col gap-4" onsubmit={submitAdd}>
+				<Textarea
+					bind:value={draft}
+					disabled={adding}
+					{placeholder}
+					rows={3}
+					aria-label="New memory entry"
+					autofocus
+				/>
+				<div class="flex items-center justify-between gap-2">
+					<Select.Root
+						type="single"
+						disabled={adding}
+						value={draftType}
+						onValueChange={(next) => (draftType = next as MemoryEntryType | 'none')}
+					>
+						<Select.Trigger size="sm" aria-label="Memory type">
+							{draftType === 'none' ? 'No type' : memoryEntryTypeLabels[draftType]}
+						</Select.Trigger>
+						<Select.Content>
+							<Select.Group>
+								<Select.Item value="none">No type</Select.Item>
+								{#each entryTypes as entryType (entryType)}
+									<Select.Item value={entryType}>{memoryEntryTypeLabels[entryType]}</Select.Item>
+								{/each}
+							</Select.Group>
+						</Select.Content>
+					</Select.Root>
+					<div class="flex items-center gap-2">
+						<Button type="button" variant="ghost" onclick={() => (addOpen = false)}>Cancel</Button>
+						<Button type="submit" disabled={adding || !draft.trim()}>Add memory</Button>
+					</div>
+				</div>
+			</Form>
+		</Dialog.Content>
+	</Dialog.Root>
+{/if}
