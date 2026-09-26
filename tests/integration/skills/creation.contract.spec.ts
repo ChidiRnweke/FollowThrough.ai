@@ -7,7 +7,7 @@ import { context, seedNote } from '../database-harness';
 import { skillController } from './edit-harness';
 
 it('persists initial instructions with the generated description and returns the saved note', async () => {
-	const { owner, project } = await seedNote('20901');
+	const { owner, project } = await seedNote('21101');
 	const tx = createTransactionContext(context.db);
 	const { skill } = await skillController(tx.database, tx.transactionRunner).create(owner, {
 		name: 'Reviewing changes',
@@ -28,7 +28,7 @@ it('persists initial instructions with the generated description and returns the
 });
 
 it('rolls back the candidate note and metadata when the initial description is invalid', async () => {
-	const { owner, project } = await seedNote('20902');
+	const { owner, project } = await seedNote('21102');
 	const id = crypto.randomUUID() as NoteId;
 	const tx = createTransactionContext(context.db);
 	const result = await skillController(tx.database, tx.transactionRunner)
