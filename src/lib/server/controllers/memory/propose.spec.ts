@@ -8,8 +8,6 @@ import type { MemoryDependencies } from './controller';
 import { describe, expect, it } from 'vitest';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { ValidationError } from '$lib/errors';
-import { NoteProvenance } from '$lib/server/services/notes/provenance';
-import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
 import { Memory } from './controller';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -26,11 +24,14 @@ import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
-	testProjectId
+	testProjectId,
+	testProvenanceId,
+	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 type ProjectAddition = Extract<ProposeMemoryChangeInput, { scope: 'project'; operation: 'add' }>;
 const addInput = (overrides: Partial<ProjectAddition> = {}): ProjectAddition => ({
+	provenanceId: testProvenanceId(),
 	scope: 'project',
 	projectId: testProjectId(),
 	operation: 'add',
@@ -43,7 +44,17 @@ const setup = () => {
 	const entries = new InMemoryMemoryEntryRepository();
 	const projects = new InMemoryProjectRepository();
 	const provenanceRepository = new InMemoryProvenanceRepository();
-	const provenance = new NoteProvenance(provenanceRepository, new InMemoryAnchorRepository());
+	provenanceRepository.provenance = [
+		{
+			id: testProvenanceId(),
+			userId: testActor().userId,
+			producerKind: 'agent',
+			producerName: 'MCP client',
+			pipeline: 'agent',
+			metadata: { scope: 'full' },
+			createdAt: testNow
+		}
+	];
 	const suggestions = new InMemorySuggestions();
 	const effects = new InMemorySuggestionEffects();
 	const trust = new InMemoryTrustPolicyEvaluator();
@@ -62,7 +73,6 @@ const setup = () => {
 			memoryEditor: memory,
 			memoryDeleter: memory,
 			memoryChanges: memory,
-			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
@@ -89,10 +99,10 @@ describe('Memory proposal orchestration invariants', () => {
 		expect(result.suggestion.kind).toBe('memory');
 	});
 
-	it('records agent provenance on the memory pipeline', async () => {
-		const { provenance, controller } = setup();
-		await controller.propose(testActor(), addInput());
-		expect(provenance.provenance[0]).toMatchObject({ pipeline: 'memory' });
+	it('retains the caller provenance on the proposal', async () => {
+		const { controller } = setup();
+		const result = await controller.propose(testActor(), addInput());
+		expect(result.suggestion.provenanceId).toBe(testProvenanceId());
 	});
 
 	it('leaves the entry uncreated without an authorizing trust policy', async () => {
@@ -125,6 +135,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('keeps a user-scoped proposal free of any project', async () => {
 		const { controller } = setup();
 		const result = await controller.propose(testActor(), {
+			provenanceId: testProvenanceId(),
 			scope: 'user',
 			operation: 'add',
 			content: 'I lead the platform team.'
@@ -138,6 +149,7 @@ describe('Memory proposal orchestration invariants', () => {
 		const { entries, trust, controller } = setup();
 		trust.autoAccept = true;
 		await controller.propose(testActor(), {
+			provenanceId: testProvenanceId(),
 			scope: 'user',
 			operation: 'add',
 			content: 'I lead the platform team.'
@@ -156,7 +168,12 @@ describe('Memory proposal orchestration invariants', () => {
 			})
 		);
 		const outcome = await controller
-			.propose(testActor(), { scope: 'user', operation: 'remove', memoryEntryId: target.id })
+			.propose(testActor(), {
+				provenanceId: testProvenanceId(),
+				scope: 'user',
+				operation: 'remove',
+				memoryEntryId: target.id
+			})
 			.then(
 				() => ({ kind: 'success' }),
 				() => ({ kind: 'failure' })
@@ -179,6 +196,7 @@ describe('Memory proposal orchestration invariants', () => {
 		);
 		await expect(
 			controller.propose(testActor(), {
+				provenanceId: testProvenanceId(),
 				scope: 'project',
 				projectId: testProjectId(),
 				operation: 'update',

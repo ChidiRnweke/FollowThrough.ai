@@ -589,7 +589,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			memoryEditor: memory,
 			memoryDeleter: memory,
 			memoryChanges: memory,
-			provenanceRecorder: provenance,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: suggestionCapability.effects,

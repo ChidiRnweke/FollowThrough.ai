@@ -33,7 +33,6 @@ import type {
 	MemoryEntryEditor,
 	MemoryEntryLister
 } from '$lib/server/services/memory/contracts';
-import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type {
 	SuggestionAccepter,
 	SuggestionCreator
@@ -63,7 +62,7 @@ export interface MemoryController {
 	/**
 	 * Propose a memory change from the agent.
 	 *
-	 * Runs in one transaction: provenance is recorded, a memory suggestion is created,
+	 * Runs in one transaction: the owned source is validated, a memory suggestion is created,
 	 * and — when the trust policy deems the proposal safe — the change is applied and the
 	 * suggestion auto-accepted. Otherwise it lands as a pending suggestion for the user to
 	 * review. Either way the entry can be traced back to the run that proposed it.
@@ -88,7 +87,6 @@ export interface MemoryDependencies {
 	memoryEditor: MemoryEntryEditor;
 	memoryDeleter: MemoryEntryDeleter;
 	memoryChanges: MemoryChanges;
-	provenanceRecorder: ProvenanceRecorder;
 	suggestionCreator: SuggestionCreator;
 	suggestionAccepter: SuggestionAccepter;
 	suggestionEffects: SuggestionEffectService;
@@ -188,19 +186,14 @@ export class Memory implements MemoryController {
 		actor: ActorContext,
 		input: ProposeMemoryChangeInput
 	): Promise<ProposeMemoryChangeOutput<Suggestion>> {
-		const { confidence, ...payload } = input;
+		const { confidence, provenanceId, ...payload } = input;
 		return this.dependencies.transactionRunner.run(async () => {
 			await this.dependencies.memoryChanges.validate(actor, payload);
-			const provenance = await this.dependencies.provenanceRecorder.record(actor, {
-				producerKind: 'agent',
-				producerName: 'Agent memory',
-				pipeline: 'memory',
-				metadata: {}
-			});
+
 			const suggestion = await this.dependencies.suggestionCreator.create(actor, {
 				kind: 'memory',
 				...(confidence !== undefined ? { confidence } : {}),
-				provenanceId: provenance.id,
+				provenanceId,
 				payload
 			});
 

@@ -1357,7 +1357,9 @@ export class AgentTools {
 			: undefined;
 		const selection = this.context.input.selection;
 		return [
-			...Object.values(sharedToolDefinitions(this.controllers, this.actor)),
+			...Object.values(
+				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId)
+			),
 			...Object.values(appToolDefinitions(this.controllers, this.actor, this.context)),
 			...(selection
 				? Object.values(
@@ -1573,7 +1575,11 @@ export class AgentTools {
  * to be an array, which has no key type at all, and the only thing standing
  * behind it was one runtime spec exercising one configuration.
  */
-const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) => {
+const sharedToolDefinitions = (
+	factory: ControllerFactory,
+	actor: ActorContext,
+	provenanceId: ProvenanceId
+) => {
 	const define = defineTool;
 	const retrieval = () => ({
 		ls: define(
@@ -2245,6 +2251,7 @@ const sharedToolDefinitions = (factory: ControllerFactory, actor: ActorContext) 
 				const { confidence, ...payload } = input;
 				return factory.memory().propose(actor, {
 					...memoryChangePayloadSchema.parse(payload),
+					provenanceId,
 					...(confidence !== undefined ? { confidence } : {})
 				});
 			}
@@ -2652,7 +2659,9 @@ export class McpTools {
 			? new Set<Definition['classification']>(options.classifications)
 			: undefined;
 		return [
-			...Object.values(sharedToolDefinitions(this.controllers, this.actor)),
+			...Object.values(
+				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId)
+			),
 			...Object.values(mcpOnlyDefinitions(this.controllers, this.actor, this.context))
 		].filter(
 			(definition) =>
