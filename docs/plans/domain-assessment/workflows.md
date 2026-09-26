@@ -192,7 +192,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 
 ## 12 — Skills
 
-- [x] W12.01 Provision and reconcile built-in definitions. See [built-in lifecycle review](built-in-skill-lifecycle.md).
+- [ ] W12.01 Provision and reconcile built-in definitions. Current paths reviewed in [built-in lifecycle](built-in-skill-lifecycle.md); legacy portable-name collisions remain open.
 - [x] W12.02 Preserve user changes when built-ins evolve. See [built-in lifecycle review](built-in-skill-lifecycle.md).
 - [ ] W12.03 Create a skill directly.
 - [ ] W12.04 Create a skill from selected content.

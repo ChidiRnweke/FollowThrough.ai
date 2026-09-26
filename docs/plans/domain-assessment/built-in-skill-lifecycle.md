@@ -17,8 +17,9 @@ is written with installation. Failures roll back the transaction.
 
 An existing guide upgrades only when its title, plain text, document, slug, description, trigger hints,
 implicit-invocation setting and metadata match a released definition. Document comparison ignores JSONB
-object-key ordering and still preserves formatting edits. A user edit to either content or metadata
-prevents automatic replacement. Publication and revision count alone do not prove an edit; publishing
+object-key ordering and still preserves formatting edits. A user edit to any compared content or metadata value
+prevents automatic replacement. Independent license and compatibility fields survive the metadata
+update without freezing otherwise untouched guidance. Publication and revision count alone do not prove an edit; publishing
 untouched instructions does not freeze the old release. Disabled state is preserved independently and
 does not prevent a safe content upgrade.
 
@@ -50,7 +51,10 @@ body and revision. A disable preserves false while untouched content upgrades. A
 cases against PostgreSQL as well. These fixtures are produced through the same write operations rather
 than by pairing current documents with retired plain text. The focused unit suite passed 22 tests.
 
-W12.01 and W12.02 are assessed. This completes the workflow trace around the earlier
+W12.02 is assessed. W12.01 remains open for the legacy portable-name collision policy identified in
+[skill name transactions](skill-name-transactions.md): an authored skill may predate installation of a
+built-in with the same portable name. The current stable-key behavior is retained; this review does
+not invent a rename or overwrite policy. The current provisioning trace extends the earlier
 [built-in note repair](built-in-note-writes.md) and [project selection](project-selection.md) work.
 No production behavior, released instructions or UI controls change. Metadata editing, explicit version
 restoration, surface discovery and execution retain their separate workflow assessments. Local SQL
