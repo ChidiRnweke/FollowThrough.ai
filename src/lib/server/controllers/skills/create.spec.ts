@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { InMemorySkillCreator } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { SkillLibrary } from '$lib/server/services/skills/library';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
@@ -22,15 +25,21 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const notes = new NoteCatalog(noteRepository, new InMemoryAnchorRepository(), projects);
-	const skills = new InMemorySkillCreator();
+	const skills = new InMemorySkillRepository(noteRepository);
+	const library = new SkillLibrary(skills, noteRepository, new InMemoryProvenanceRepository());
+	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
-			skillCreator: skills,
+			skillCreator: library,
+			noteEditor: notes,
+			anchorRepairer: notes,
+			noteLinkReconciler: content,
+			noteIndexer: content,
 			noteCreation: notes,
-			transactionRunner: new InMemoryTransactionRunner([skills])
+			transactionRunner: new InMemoryTransactionRunner([noteRepository, skills, content])
 		})
 	);
-	return { controller, skills, noteRepository };
+	return { controller, skills, noteRepository, content };
 };
 
 describe('Create skill invariants', () => {
@@ -77,5 +86,56 @@ describe('Create skill invariants', () => {
 		).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
+	});
+});
+
+it('creates the initial instructions with the default description in one operation', async () => {
+	const { controller } = setup();
+	const input = {
+		name: 'Reviewing changes',
+		projectId: testProjectId(),
+		instructions: 'Read the diff carefully.',
+		description: ''
+	};
+	const { skill } = await controller.create(testActor(), input);
+	expect({ text: skill.note.plainText, description: skill.description }).toEqual({
+		text: input.instructions,
+		description: 'Reusable instructions for Reviewing changes.'
+	});
+});
+it('does not leave an empty skill when initial instruction indexing fails', async () => {
+	const { controller, content, noteRepository, skills } = setup();
+	content.failIndex = true;
+	const input = {
+		name: 'Reviewing changes',
+		projectId: testProjectId(),
+		instructions: 'Read the diff carefully.'
+	};
+	const outcome = await controller.create(testActor(), input).then(
+		() => 'created',
+		() => 'failed'
+	);
+	expect({ outcome, notes: noteRepository.notes.length, skills: skills.skills.length }).toEqual({
+		outcome: 'failed',
+		notes: 0,
+		skills: 0
+	});
+});
+it('does not leave a note when the supplied description is invalid', async () => {
+	const { controller, noteRepository, skills } = setup();
+	const input = {
+		name: 'Reviewing changes',
+		projectId: testProjectId(),
+		instructions: 'Read the diff carefully.',
+		description: 'x'.repeat(1025)
+	};
+	const outcome = await controller.create(testActor(), input).then(
+		() => 'created',
+		() => 'failed'
+	);
+	expect({ outcome, notes: noteRepository.notes.length, skills: skills.skills.length }).toEqual({
+		outcome: 'failed',
+		notes: 0,
+		skills: 0
 	});
 });
