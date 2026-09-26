@@ -3,7 +3,7 @@ import { SelectionSubmissions } from '$lib/client/notes/selection-submissions';
 import { DiagramSubmissions } from '$lib/client/notes/diagram-submissions';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 import type { DrawioDiagram } from '$lib/models/diagrams';
-import type { SuggestionId } from '$lib/models/suggestions';
+import type { Suggestion, SuggestionId } from '$lib/models/suggestions';
 import type { Note, TextSelection } from '$lib/models/notes';
 import {
 	extractPromises,
@@ -153,7 +153,7 @@ class NoteActionsStore {
 		);
 	}
 
-	rejectDrawio(suggestionId: SuggestionId): Promise<unknown | undefined> {
+	rejectDrawio(suggestionId: SuggestionId): Promise<Suggestion | undefined> {
 		return this.call(() => rejectSuggestion({ suggestionId }), { run: true });
 	}
 }
