@@ -22,7 +22,7 @@ from [the execution plan](../domain-assessment-plan.md).
 ## 02 — Workspace initialization and preferences
 
 - [ ] W02.01 Bootstrap identity, preferences, and available resources.
-- [ ] W02.02 Provision the inbox project and built-in skills.
+- [x] W02.02 Provision the inbox project and built-in skills. See [project selection review](project-selection.md).
 - [ ] W02.03 Read and update account preferences.
 - [ ] W02.04 Restore account-specific local workspace data.
 - [ ] W02.05 Switch between online and offline workspace access.
@@ -41,7 +41,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W03.07 Reorder project entries.
 - [ ] W03.08 Drag project entries into navigation and editing surfaces.
 - [ ] W03.09 Configure project section-numbering defaults.
-- [ ] W03.10 Resolve the project for new resources.
+- [x] W03.10 Resolve the project for new resources. See [project selection review](project-selection.md).
 
 ## 04 — Note lifecycle
 

@@ -9,9 +9,6 @@ export interface ProjectRepository {
 	findForWrite(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined>;
 	findById(actor: ActorContext, projectId: ProjectId): Promise<Project | undefined>;
 	listActive(actor: ActorContext): Promise<readonly Project[]>;
-	findFirstActive(actor: ActorContext): Promise<Project | undefined>;
-	/** The user's inbox, found by role rather than by name. */
-	findInbox(actor: ActorContext): Promise<Project | undefined>;
 	update(actor: ActorContext, input: ProjectRename): Promise<Project>;
 	/** `null` clears the project default so its notes inherit the app default again. */
 	setSectionNumberingDefault(

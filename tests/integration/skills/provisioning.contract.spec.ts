@@ -96,7 +96,9 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 	const state = setup();
 	const owner = actor('19801');
 	const initial = await state.skills.list(owner);
-	const previous = (await state.projects.findInbox(owner))!;
+	const previous = (await state.projects.listActive(owner)).find(
+		(project) => project.role === 'inbox'
+	)!;
 	const ordinary = await state.notes.insert(owner, {
 		id: crypto.randomUUID() as NoteId,
 		userId: owner.userId,
@@ -114,7 +116,9 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 	});
 	await state.projects.archive(owner, previous.id);
 	const results = await Promise.all([state.skills.list(owner), state.skills.list(owner)]);
-	const replacement = (await state.projects.findInbox(owner))!;
+	const replacement = (await state.projects.listActive(owner)).find(
+		(project) => project.role === 'inbox'
+	)!;
 	const [archived] = await context.client<{ archived: boolean }[]>`
 		select archived_at is not null as archived from projects where id = ${previous.id}`;
 	const [stored] = await context.client<{ projectId: string; archived: boolean }[]>`
@@ -146,13 +150,15 @@ it('keeps an existing project named Inbox when choosing the replacement name', a
 	const state = setup();
 	const owner = actor('19802');
 	await state.skills.list(owner);
-	const previous = (await state.projects.findInbox(owner))!;
+	const previous = (await state.projects.listActive(owner)).find(
+		(project) => project.role === 'inbox'
+	)!;
 	await state.projects.update(owner, { projectId: previous.id, name: 'Old captures' });
 	const ordinary = await state.projects.insert(owner, { name: 'inbox', role: 'workspace' });
 	await state.projects.archive(owner, previous.id);
 	await state.skills.list(owner);
 	expect({
-		inbox: await state.projects.findInbox(owner),
+		inbox: (await state.projects.listActive(owner)).find((project) => project.role === 'inbox'),
 		ordinary: await state.projects.findById(owner, ordinary.id)
 	}).toMatchObject({ inbox: { name: 'Inbox (2)', role: 'inbox' }, ordinary });
 });
