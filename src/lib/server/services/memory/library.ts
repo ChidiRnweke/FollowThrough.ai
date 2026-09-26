@@ -51,7 +51,7 @@ export class MemoryLibrary {
 	}
 
 	async remove(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<MemoryEntry> {
-		const current = await this.getActive(actor, memoryEntryId);
+		const current = await this.getForEdit(actor, memoryEntryId);
 		const entry = await this.entries.update(actor, {
 			...current,
 			deletedAt: now(),
