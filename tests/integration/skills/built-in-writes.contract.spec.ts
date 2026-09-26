@@ -25,11 +25,14 @@ const controller = (
 	const projects = new ProjectRecords(database);
 	const notes = new NoteRecords(database);
 	const skills = new SkillRecords(database);
+	const library = new SkillLibrary(skills, notes, new ProvenanceRecords(database));
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			transactionRunner,
 			builtInSkills: new BuiltInSkills(projects, notes, skills, definitions),
-			skillFinder: new SkillLibrary(skills, notes, new ProvenanceRecords(database))
+			skillFinder: library,
+			skillEditor: library,
+			skillUsageLister: library
 		})
 	);
 };
@@ -188,3 +191,36 @@ it.each([
 		await Promise.all([writer.close(), blocker.end()]);
 	}
 });
+
+it.each(['description', 'hints'] as const)(
+	'keeps user-edited %s when a stock upgrade becomes available',
+	async (field) => {
+		const owner = actor(field === 'description' ? '23901' : '23902');
+		const { database, transactionRunner } = createTransactionContext(context.db);
+		const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
+		if (!released) throw new Error('The released guide fixture is required');
+		await controller(database, transactionRunner, { active: [released], retired: [] }).list(owner);
+		const note = await new NoteRecords(context.db).findByBuiltInKey(owner, released.key);
+		if (!note) throw new Error('The installed guide is required');
+		const current = controller(database, transactionRunner, currentDefinitions);
+		const edited = await current.update(owner, {
+			noteId: note.id,
+			...(field === 'description'
+				? { description: 'My team workflow' }
+				: { triggerHints: ['my workflow'] })
+		});
+		await current.list(owner);
+		const retained = await new SkillRecords(context.db).findByNoteId(owner, note.id);
+		expect({
+			text: retained?.note.plainText,
+			revision: retained?.note.currentRevision,
+			description: retained?.description,
+			hints: retained?.triggerHints
+		}).toEqual({
+			text: released.instructions,
+			revision: 1,
+			description: edited.skill.description,
+			hints: edited.skill.triggerHints
+		});
+	}
+);
