@@ -2,10 +2,17 @@
 
 ## Stack integration
 
-See [the stack landing record](stack-landing.md) for the 139 PRs consolidated after #71
-merged. The entries below preserve observations from the original branches; their open/merged
-labels are historical. The integration PR is the delivery authority for the consolidated code.
-Workflow assessment completion remains separate from delivery.
+On 2026-09-26, [PR #220](https://github.com/ChidiRnweke/FollowThrough.ai/pull/220) merged the
+139 remaining implementation PRs after #71 merged separately. See
+[the stack landing record](stack-landing.md) for their original heads and evidence. Required
+integration checks passed, including PostgreSQL contracts and full browser tests. The local
+unit suite passed 445 files and 4,162 tests. The entries below preserve observations from the
+original branches; their open/merged labels are historical.
+
+Workflow assessment completion remains separate from delivery: 20 of 411 reviews are recorded
+complete. The next [memory project lifecycle correction](memory-project-lifecycle.md) fixes a
+reproduced archived-project guard gap in direct writes and proposal application. Browser memory
+projections, suggestion listing and the wider assessment remain open.
 
 Status observed on 2026-09-23. This register separates delivered changes from implementation on
 unmerged branches. The original inventory, findings and workflow checkboxes remain historical

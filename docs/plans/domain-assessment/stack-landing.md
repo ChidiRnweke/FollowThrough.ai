@@ -1,6 +1,8 @@
 # Domain assessment stack landing
 
-The remaining assessment stack is consolidated for one integration review and CI run.
+The remaining assessment stack landed through
+[PR #220](https://github.com/ChidiRnweke/FollowThrough.ai/pull/220) on 2026-09-26 in master commit
+`418c201a003fd61b4aac19fa38d76876804bc286`. All required integration checks passed.
 PR #71 merged separately. The 139 PRs below retain their original problem statements,
 regressions and screenshot evidence; their code is replayed in dependency order on top of
 master at `2d79ee63`. The original stack tip is `78bed6e627a6e0af9ead54c98798dd4a2e0e9f0a`.
