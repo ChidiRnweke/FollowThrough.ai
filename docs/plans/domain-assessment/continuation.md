@@ -9,15 +9,19 @@ integration checks passed, including PostgreSQL contracts and full browser tests
 unit suite passed 445 files and 4,162 tests. The entries below preserve observations from the
 original branches; their open/merged labels are historical.
 
-Workflow assessment completion remains separate from delivery: 25 of 411 reviews are recorded
+Workflow assessment completion remains separate from delivery: 28 of 411 reviews are recorded
 complete, including the [suggestion rejection review](suggestion-rejection.md) and four
-[memory read workflows](memory-reads.md). The
+[memory read workflows](memory-reads.md), plus three [memory proposal workflows](memory-proposals.md). The
 [memory project lifecycle correction](memory-project-lifecycle.md) merged in
 [PR #221](https://github.com/ChidiRnweke/FollowThrough.ai/pull/221) after all required checks passed.
 It closes the reproduced archived-project guard gap in direct writes and proposal application.
 The memory surface guard merged in [PR #222](https://github.com/ChidiRnweke/FollowThrough.ai/pull/222).
 The [knowledge retrieval guard](https://github.com/ChidiRnweke/FollowThrough.ai/pull/225) also passed
-all required checks. Suggestion listing and the wider assessment remain open.
+all required checks. The archived note-less proposal correction merged in
+[PR #227](https://github.com/ChidiRnweke/FollowThrough.ai/pull/227). Source preservation and replacement
+classification merged in [PR #228](https://github.com/ChidiRnweke/FollowThrough.ai/pull/228) and
+[PR #229](https://github.com/ChidiRnweke/FollowThrough.ai/pull/229), each with all required checks.
+The complete review surfaces and wider assessment remain open.
 
 Status observed on 2026-09-23. This register separates delivered changes from implementation on
 unmerged branches. The original inventory, findings and workflow checkboxes remain historical
