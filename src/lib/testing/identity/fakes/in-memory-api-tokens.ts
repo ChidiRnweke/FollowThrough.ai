@@ -13,7 +13,7 @@ export class InMemoryApiTokenRepository implements ApiTokenRepository {
 
 	async create(data: CreateApiTokenData): Promise<ApiToken> {
 		const token: ApiToken = {
-			id: `token-${++this.sequence}` as ApiTokenId,
+			id: `00000000-0000-4000-8000-${String(++this.sequence).padStart(12, '0')}` as ApiTokenId,
 			userId: data.userId,
 			name: data.name,
 			scope: data.scope,

@@ -9,7 +9,7 @@ integration checks passed, including PostgreSQL contracts and full browser tests
 unit suite passed 445 files and 4,162 tests. The entries below preserve observations from the
 original branches; their open/merged labels are historical.
 
-Workflow assessment completion remains separate from delivery: 28 of 411 reviews are recorded
+Workflow assessment completion remains separate from delivery: 32 of 411 reviews are recorded
 complete, including the [suggestion rejection review](suggestion-rejection.md) and four
 [memory read workflows](memory-reads.md), plus three [memory proposal workflows](memory-proposals.md). The
 [memory project lifecycle correction](memory-project-lifecycle.md) merged in
@@ -21,7 +21,12 @@ all required checks. The archived note-less proposal correction merged in
 [PR #227](https://github.com/ChidiRnweke/FollowThrough.ai/pull/227). Source preservation and replacement
 classification merged in [PR #228](https://github.com/ChidiRnweke/FollowThrough.ai/pull/228) and
 [PR #229](https://github.com/ChidiRnweke/FollowThrough.ai/pull/229), each with all required checks.
-The complete review surfaces and wider assessment remain open.
+The [reversal and effect review](suggestion-reversal.md) merged in
+[PR #231](https://github.com/ChidiRnweke/FollowThrough.ai/pull/231). The
+[session lifetime correction](session-cookie-renewal.md) merged in
+[PR #232](https://github.com/ChidiRnweke/FollowThrough.ai/pull/232). Both passed all required checks.
+The [API-token verification review](api-token-verification.md) adds one further assessed workflow.
+Complete review surfaces, token-creation UI behavior and the wider assessment remain open.
 
 Status observed on 2026-09-23. This register separates delivered changes from implementation on
 unmerged branches. The original inventory, findings and workflow checkboxes remain historical
