@@ -14,7 +14,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 ## 01 — Account access and identity
 
 - [ ] W01.01 Enter the public landing page or authenticated workspace.
-- [ ] W01.02 Begin sign-in and validate the authentication callback.
+- [x] W01.02 Begin sign-in and validate the authentication callback. See [sign-in boundary review](sign-in-boundary.md).
 - [ ] W01.03 Create an account or link an existing provider identity.
 - [ ] W01.04 Route waiting and admitted users.
 - [x] W01.05 Create, validate, renew, and expire sessions. See [session lifetime review](session-cookie-renewal.md).

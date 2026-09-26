@@ -42,3 +42,50 @@ describe('Authentik response boundary', () => {
 		await expect(client.getUserInfo('test-token')).rejects.toThrow();
 	});
 });
+
+it('binds the authorization code exchange to its verifier and configured callback', async () => {
+	const requests: { url: string; method: string; body: Record<string, string> }[] = [];
+	const fetch: typeof globalThis.fetch = async (url, init) => {
+		const request = new Request(url, init);
+		requests.push({
+			url: request.url,
+			method: request.method,
+			body: Object.fromEntries(new URLSearchParams(await request.text()))
+		});
+		return Response.json({ access_token: 'test-access', token_type: 'Bearer', expires_in: 3600 });
+	};
+	await new AuthentikClient(config, fetch).exchangeCode('returned-code', 'original-verifier');
+	expect(requests).toEqual([
+		{
+			url: 'https://identity.test/application/o/token/',
+			method: 'POST',
+			body: {
+				grant_type: 'authorization_code',
+				client_id: config.clientId,
+				client_secret: config.clientSecret,
+				code: 'returned-code',
+				redirect_uri: config.callbackUrl,
+				code_verifier: 'original-verifier'
+			}
+		}
+	]);
+});
+it('uses the exchanged access token only as the profile request bearer credential', async () => {
+	const requests: { url: string; authorization: string | null }[] = [];
+	const fetch: typeof globalThis.fetch = async (url, init) => {
+		const request = new Request(url, init);
+		requests.push({ url: request.url, authorization: request.headers.get('Authorization') });
+		return Response.json({
+			sub: 'provider-person',
+			email: 'person@example.test',
+			email_verified: true
+		});
+	};
+	await new AuthentikClient(config, fetch).getUserInfo('exchanged-access-token');
+	expect(requests).toEqual([
+		{
+			url: 'https://identity.test/application/o/userinfo/',
+			authorization: 'Bearer exchanged-access-token'
+		}
+	]);
+});
