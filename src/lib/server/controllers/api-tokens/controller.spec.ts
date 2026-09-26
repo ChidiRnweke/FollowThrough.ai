@@ -1,81 +1,51 @@
-import { NotFoundError } from '$lib/errors';
 import { describe, expect, it } from 'vitest';
-import type {
-	ActorContext,
-	ApiToken,
-	ApiTokenId,
-	ApiTokenScope,
-	UserId
-} from '$lib/models/identity';
-import type {
-	IAccessTokens,
-	MintedApiToken,
-	VerifiedApiToken
-} from '$lib/server/services/identity/api-tokens';
-import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import {
+	InMemoryApiTokenRepository,
+	testTokenUser
+} from '$lib/testing/identity/fakes/in-memory-api-tokens';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { ApiTokens } from './controller';
 
-const tokenId = '00000000-0000-4000-8000-000000000071' as ApiTokenId;
-const token = (): ApiToken => ({
-	id: tokenId,
-	userId: testActor().userId,
-	name: 'Local integration',
-	scope: 'read',
-	createdAt: testNow
-});
-
-class FakeAccessTokens implements IAccessTokens {
-	tokens: ApiToken[] = [token()];
-
-	async mint(
-		_userId: UserId,
-		_input: { name: string; scope: ApiTokenScope; expiresAt?: Date }
-	): Promise<MintedApiToken> {
-		void _userId;
-		void _input;
-		throw new Error('Minting is outside this controller');
-	}
-
-	async verify(_authorizationHeader: string | null): Promise<VerifiedApiToken | null> {
-		void _authorizationHeader;
-		throw new Error('Verification is outside this controller');
-	}
-
-	async list(actor: ActorContext): Promise<readonly ApiToken[]> {
-		return this.tokens.filter((candidate) => candidate.userId === actor.userId);
-	}
-
-	async revoke(actor: ActorContext, id: ApiTokenId): Promise<Pick<ApiToken, 'id' | 'name'>> {
-		const revoked = this.tokens.find(
-			(candidate) => candidate.id === id && candidate.userId === actor.userId
-		);
-		if (!revoked) throw new NotFoundError('Access token not found');
-		this.tokens = this.tokens.filter(
-			(candidate) => candidate.id !== id || candidate.userId !== actor.userId
-		);
-		return { id: revoked.id, name: revoked.name };
-	}
-}
-
+const setup = async () => {
+	const actor = testActor();
+	const tokens = new AccessTokens(
+		new InMemoryApiTokenRepository([
+			testTokenUser(actor.userId),
+			testTokenUser(testActor(2).userId)
+		])
+	);
+	const minted = await tokens.mint(actor.userId, { name: 'Local integration', scope: 'read' });
+	return { tokens, minted, controller: new ApiTokens({ tokens }) };
+};
 describe('API token controller behavior', () => {
-	it('lists credentials owned by the actor', async () => {
-		const tokens = new FakeAccessTokens();
-		const controller = new ApiTokens({ tokens });
-		expect(await controller.list(testActor())).toEqual([token()]);
+	it('lists only credentials owned by the actor without exposing plaintext', async () => {
+		const { tokens, minted, controller } = await setup();
+		await tokens.mint(testActor(2).userId, { name: 'Other account', scope: 'full' });
+		expect(await controller.list(testActor())).toEqual([minted.token]);
 	});
-
-	it('revokes an owned credential', async () => {
-		const tokens = new FakeAccessTokens();
-		const controller = new ApiTokens({ tokens });
-		await controller.revoke(testActor(), tokenId);
-		expect(tokens.tokens).toEqual([]);
+	it('revokes the credential used for subsequent authentication', async () => {
+		const { tokens, minted, controller } = await setup();
+		const result = await controller.revoke(testActor(), minted.token.id);
+		expect({
+			result,
+			verified: await tokens.verify(`Bearer ${minted.plaintext}`),
+			listed: await controller.list(testActor())
+		}).toEqual({
+			result: { id: minted.token.id, name: minted.token.name },
+			verified: null,
+			listed: []
+		});
 	});
-
 	it('does not revoke another actor’s credential', async () => {
-		const tokens = new FakeAccessTokens();
-		const controller = new ApiTokens({ tokens });
-		await expect(controller.revoke(testActor(2), tokenId)).rejects.toThrow(
-			'Access token not found'
+		const { tokens, minted, controller } = await setup();
+		const outcome = await controller.revoke(testActor(2), minted.token.id).then(
+			() => 'unexpected success',
+			(error: Error) => error.message
 		);
+		expect({
+			outcome,
+			verified: (await tokens.verify(`Bearer ${minted.plaintext}`))?.user.id
+		}).toEqual({ outcome: 'Access token not found', verified: testActor().userId });
 	});
 });
