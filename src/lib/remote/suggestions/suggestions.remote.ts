@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import type { RejectSuggestionInput, SuggestionId } from '$lib/models/suggestions';
+import type { SuggestionId } from '$lib/models/suggestions';
 import type { NoteId } from '$lib/models/notes';
 
 const suggestionId = z
@@ -31,7 +31,5 @@ export const acceptSuggestion = command(
 );
 
 export const rejectSuggestion = command(z.object({ suggestionId }), async (input) => {
-	return AppFactory.controllers()
-		.suggestions()
-		.reject(requestActor(), input as RejectSuggestionInput);
+	return AppFactory.controllers().suggestions().reject(requestActor(), input);
 });

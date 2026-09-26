@@ -168,7 +168,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W10.10 Accept reference suggestions.
 - [ ] W10.11 Accept memory suggestions.
 - [ ] W10.12 Accept diagram suggestions.
-- [ ] W10.13 Reject suggestions.
+- [x] W10.13 Reject suggestions. See [rejection review](suggestion-rejection.md).
 - [ ] W10.14 Revert accepted suggestions.
 - [ ] W10.15 Keep status and applied effects consistent.
 - [ ] W10.16 Maintain relationships and references after source changes.

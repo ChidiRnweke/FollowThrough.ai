@@ -9,10 +9,12 @@ integration checks passed, including PostgreSQL contracts and full browser tests
 unit suite passed 445 files and 4,162 tests. The entries below preserve observations from the
 original branches; their open/merged labels are historical.
 
-Workflow assessment completion remains separate from delivery: 20 of 411 reviews are recorded
-complete. The next [memory project lifecycle correction](memory-project-lifecycle.md) fixes a
-reproduced archived-project guard gap in direct writes and proposal application. Browser memory
-projections, suggestion listing and the wider assessment remain open.
+Workflow assessment completion remains separate from delivery: 21 of 411 reviews are recorded
+complete, including the [suggestion rejection review](suggestion-rejection.md). The
+[memory project lifecycle correction](memory-project-lifecycle.md) merged in
+[PR #221](https://github.com/ChidiRnweke/FollowThrough.ai/pull/221) after all required checks passed.
+It closes the reproduced archived-project guard gap in direct writes and proposal application.
+Browser memory projections, suggestion listing and the wider assessment remain open.
 
 Status observed on 2026-09-23. This register separates delivered changes from implementation on
 unmerged branches. The original inventory, findings and workflow checkboxes remain historical
