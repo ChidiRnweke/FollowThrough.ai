@@ -40,7 +40,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [ ] W03.06 Move notes and folders between parent locations.
 - [ ] W03.07 Reorder project entries.
 - [ ] W03.08 Drag project entries into navigation and editing surfaces.
-- [ ] W03.09 Configure project section-numbering defaults.
+- [x] W03.09 Configure project section-numbering defaults. See [project numbering review](project-numbering.md).
 - [x] W03.10 Resolve the project for new resources. See [project selection review](project-selection.md).
 
 ## 04 — Note lifecycle

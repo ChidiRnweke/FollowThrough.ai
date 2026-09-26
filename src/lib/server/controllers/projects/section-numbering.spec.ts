@@ -1,39 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { ProjectCatalog } from '$lib/server/services/projects/catalog';
 import {
 	projectBuilder,
 	testActor,
-	testProjectId
+	testProjectId,
+	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const setup = () => {
-	const projects = new InMemoryProjects();
+	const projects = new InMemoryProjectRepository();
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: projects,
-			projectReader: projects,
-			projectLister: projects,
-			projectEditor: projects,
-			projectTreeReader: projects,
-			entryWriter: projects,
-			transactionRunner: new InMemoryTransactionRunner([])
+			projectEditor: new ProjectCatalog(projects, projects)
 		})
 	);
 	return { projects, controller };
 };
 
 describe('Project section-numbering default', () => {
-	it('stores the chosen default', async () => {
+	it.each([true, false])('stores the explicit %s default', async (enabled) => {
 		const { projects, controller } = setup();
 		projects.projects = [projectBuilder()];
 		const output = await controller.setSectionNumberingDefault(testActor(), {
 			projectId: testProjectId(),
-			enabled: true
+			enabled
 		});
-		expect(output.project.sectionNumberingDefault).toBe(true);
+		expect(output.project.sectionNumberingDefault).toBe(enabled);
 	});
 
 	it('clears back to inheriting the app default', async () => {
@@ -55,4 +50,15 @@ describe('Project section-numbering default', () => {
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
+});
+
+it('rejects changing the default of an archived project', async () => {
+	const { projects, controller } = setup();
+	projects.projects = [projectBuilder({ archivedAt: testNow })];
+	await expect(
+		controller.setSectionNumberingDefault(testActor(), {
+			projectId: testProjectId(),
+			enabled: true
+		})
+	).rejects.toMatchObject({ code: 'NOT_FOUND' });
 });
