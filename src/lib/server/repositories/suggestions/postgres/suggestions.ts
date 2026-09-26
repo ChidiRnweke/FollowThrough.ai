@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type {
@@ -37,7 +37,13 @@ export class SuggestionRecords implements SuggestionRepository {
 				.from(schema.suggestions)
 				.leftJoin(schema.notes, eq(schema.notes.id, schema.suggestions.noteId))
 				.leftJoin(schema.projects, eq(schema.projects.id, schema.notes.projectId))
-				.where(and(...conditions, isNull(schema.projects.archivedAt)))
+				.where(
+					and(
+						...conditions,
+						isNull(schema.projects.archivedAt),
+						sql`not exists (select 1 from ${schema.projects} where ${schema.projects.id}::text = lower(${schema.suggestions.payload}->>'projectId') and ${schema.projects.archivedAt} is not null)`
+					)
+				)
 				.orderBy(asc(schema.suggestions.createdAt))
 		).map((row) => toStoredSuggestion(row.suggestion));
 	}
