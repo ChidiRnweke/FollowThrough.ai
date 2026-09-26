@@ -29,8 +29,8 @@ Settings action through its authenticated remote command.
 Settings defaults to read scope and submits a validated name/scope. The command returns plaintext
 only from minting; subsequent list/revoke results contain public metadata. The component stores the
 new credential in local component state, supports explicit copying and reports creation/revocation
-failure. A page revisit cannot recover the plaintext. This source trace does not complete W01.08's
-browser interaction and refresh-failure review; its checkbox remains open.
+failure. A page revisit cannot recover the plaintext. The subsequent [Settings review](api-token-settings.md) covers W01.08's browser interactions and
+corrects the list-refresh failure boundary.
 
 Token optional timestamps are independent: expiration, revocation and last use can each exist alone.
 MintedApiToken contains both the public token and its one-time credential. VerifiedApiToken requires
@@ -52,6 +52,5 @@ current role, expiration and foreign ownership. These use real token/user reposi
 service/controller. The focused service/controller/MCP suite passed three files and 30 tests.
 Database contracts require CI because local Docker is unavailable.
 
-W01.07 is assessed, with the new database contracts required before merge. W01.08, session cookies,
-OAuth linking and repository-wide ownership remain separately tracked. No live external MCP client
+W01.07 is assessed, with the new database contracts required before merge. Session cookies, OAuth linking and repository-wide ownership remain separately tracked. No live external MCP client
 or live identity provider is claimed by these deterministic checks.

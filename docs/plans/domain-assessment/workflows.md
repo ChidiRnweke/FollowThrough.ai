@@ -15,7 +15,7 @@ from [the execution plan](../domain-assessment-plan.md).
 - [x] W01.05 Create, validate, renew, and expire sessions. See [session lifetime review](session-cookie-renewal.md).
 - [ ] W01.06 Sign out and detach account-specific browser state.
 - [x] W01.07 Authenticate API-token requests. See [API-token review](api-token-verification.md).
-- [ ] W01.08 Create, list, and revoke API tokens.
+- [x] W01.08 Create, list, and revoke API tokens. See [token Settings review](api-token-settings.md).
 - [ ] W01.09 Enforce ownership across reads, writes, downloads, streams, and tools.
 - [ ] W01.10 Initialize the application with authentication disabled.
 
