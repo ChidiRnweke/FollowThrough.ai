@@ -127,6 +127,8 @@ export interface DeleteMemoryEntryInput {
 }
 
 export type ProposeMemoryChangeInput = MemoryChangePayload & {
+	/** Source supplied by the authenticated tool context, not by model arguments. */
+	readonly provenanceId: ProvenanceId;
 	readonly confidence?: number;
 };
 
