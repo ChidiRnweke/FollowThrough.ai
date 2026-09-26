@@ -184,6 +184,23 @@
 					</ul>
 				</div>
 			{/if}
+
+			{#snippet failed(_error, reset)}
+				<div
+					role="alert"
+					class="flex flex-col items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4"
+				>
+					<p class="text-sm text-destructive">Could not load tokens.</p>
+					<!-- Refresh the query before resetting. A repeated failure returns to this notice. -->
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => void listApiTokens().refresh().then(reset, reset)}
+					>
+						Try again
+					</Button>
+				</div>
+			{/snippet}
 		</svelte:boundary>
 	</div>
 </section>
