@@ -1,10 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateProjectInput,
-	Project,
-	ProjectId,
-	RenameProjectInput
-} from '$lib/models/projects';
+import type { CreateProjectInput, Project, ProjectId, ProjectRename } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
@@ -93,7 +88,7 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		return (await this.listActive(actor))[0];
 	}
 
-	async update(actor: ActorContext, input: RenameProjectInput): Promise<Project> {
+	async update(actor: ActorContext, input: ProjectRename): Promise<Project> {
 		if (
 			this.projects.some(
 				(project) =>
@@ -105,7 +100,12 @@ export class InMemoryProjectRepository implements ProjectRepository, ProjectTree
 		)
 			throw new ConflictError('An active project with this name already exists');
 		const current = (await this.findById(actor, input.projectId))!;
-		const updated = { ...current, ...input, updatedAt: testNow };
+		const updated = {
+			...current,
+			name: input.name,
+			...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
+			updatedAt: testNow
+		};
 		this.projects = this.projects.map((project) => (project.id === updated.id ? updated : project));
 		return updated;
 	}

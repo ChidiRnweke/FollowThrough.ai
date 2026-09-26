@@ -1,11 +1,6 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateProjectInput,
-	Project,
-	ProjectId,
-	RenameProjectInput
-} from '$lib/models/projects';
+import type { CreateProjectInput, Project, ProjectId, ProjectRename } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 import { ConflictError, NotFoundError } from '$lib/errors';
 import type {
@@ -117,11 +112,11 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 		).map(toProject);
 	}
 
-	async update(actor: ActorContext, input: RenameProjectInput): Promise<Project> {
+	async update(actor: ActorContext, input: ProjectRename): Promise<Project> {
 		try {
 			const [row] = await this.database
 				.update(schema.projects)
-				.set({ name: input.name, description: input.description ?? null })
+				.set({ name: input.name, description: input.description })
 				.where(
 					and(
 						eq(schema.projects.id, input.projectId),

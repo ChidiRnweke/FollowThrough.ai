@@ -33,7 +33,7 @@ from [the execution plan](../domain-assessment-plan.md).
 ## 03 — Projects and folders
 
 - [ ] W03.01 Create, list, and open projects.
-- [ ] W03.02 Rename projects.
+- [x] W03.02 Rename projects. See [rename review](project-rename-description.md).
 - [ ] W03.03 Archive projects and resolve child visibility.
 - [ ] W03.04 Create folders.
 - [ ] W03.05 Browse and expand project trees.

@@ -13,6 +13,7 @@ const setup = () => {
 		capabilityDependencies<ProjectsDependencies>({
 			projectCreator: catalog,
 			projectReader: catalog,
+			projectEditor: catalog,
 			projectTreeReader: catalog
 		})
 	);
@@ -33,3 +34,26 @@ describe('Project detail preparation', () => {
 		});
 	});
 });
+
+it.each([
+	{ description: undefined, expected: 'Keep this context' },
+	{ description: '  ', expected: undefined },
+	{ description: '  New context  ', expected: 'New context' }
+])(
+	'respects omitted, cleared and replaced descriptions: $description',
+	async ({ description, expected }) => {
+		const { repository, controller } = setup();
+		const original = projectBuilder({ description: 'Keep this context' });
+		repository.projects = [original];
+		const { project } = await controller.rename(testActor(), {
+			projectId: original.id,
+			name: '  Renamed  ',
+			description
+		});
+		expect({
+			name: project.name,
+			description: project.description,
+			stored: repository.projects[0]?.description
+		}).toEqual({ name: 'Renamed', description: expected, stored: expected });
+	}
+);

@@ -4,7 +4,7 @@ import type {
 	Project,
 	ProjectId,
 	ProjectDetails,
-	RenameProjectInput,
+	ProjectRename,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -71,13 +71,13 @@ export class InMemoryProjects
 			.sort((a, b) => a.name.localeCompare(b.name));
 	}
 
-	async rename(actor: ActorContext, input: RenameProjectInput & ProjectDetails): Promise<Project> {
+	async rename(actor: ActorContext, input: ProjectRename): Promise<Project> {
 		const current = await this.get(actor, input.projectId);
 		const name = input.name;
 		const updated: Project = {
 			...current,
 			name,
-			description: input.description,
+			...(input.description !== undefined ? { description: input.description ?? undefined } : {}),
 			updatedAt: testNow
 		};
 		this.replaceProject(updated);

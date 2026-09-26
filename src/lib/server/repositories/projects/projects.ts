@@ -1,10 +1,5 @@
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	CreateProjectInput,
-	Project,
-	ProjectId,
-	RenameProjectInput
-} from '$lib/models/projects';
+import type { CreateProjectInput, Project, ProjectId, ProjectRename } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
 
 /** Owns the project record itself; the document tree is `ProjectTreeRepository`'s. */
@@ -17,7 +12,7 @@ export interface ProjectRepository {
 	findFirstActive(actor: ActorContext): Promise<Project | undefined>;
 	/** The user's inbox, found by role rather than by name. */
 	findInbox(actor: ActorContext): Promise<Project | undefined>;
-	update(actor: ActorContext, input: RenameProjectInput): Promise<Project>;
+	update(actor: ActorContext, input: ProjectRename): Promise<Project>;
 	/** `null` clears the project default so its notes inherit the app default again. */
 	setSectionNumberingDefault(
 		actor: ActorContext,

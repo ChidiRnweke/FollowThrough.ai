@@ -6,7 +6,7 @@ import type {
 	ProjectId,
 	ProjectEntryReference,
 	ProjectDetails,
-	RenameProjectInput,
+	ProjectRename,
 	SetProjectSectionNumberingInput
 } from '$lib/models/projects';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -35,7 +35,7 @@ export class ProjectCatalog {
 		return this.projects.listActive(actor);
 	}
 
-	async rename(actor: ActorContext, input: RenameProjectInput & ProjectDetails): Promise<Project> {
+	async rename(actor: ActorContext, input: ProjectRename): Promise<Project> {
 		await this.get(actor, input.projectId);
 		return this.projects.update(actor, input);
 	}
