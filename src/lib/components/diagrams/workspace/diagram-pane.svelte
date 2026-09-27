@@ -48,11 +48,22 @@
 	let conflictOpen = $state(false);
 	let reviewSource = $state<string | null>(null);
 	let selectedRevisionId = $state<DiagramRevisionId>();
-	const current = $derived(
+	const candidate = $derived(
 		draft.state.kind === 'ready' ? (resources.views.diagram(diagramId) ?? draft.state.value) : null
 	);
+	const archivedProject = $derived(
+		candidate ? resources.views.get('projects', candidate.projectId)?.archivedAt : undefined
+	);
+	// Keep a mounted canvas available for recovery, but do not open a new archived-project canvas.
+	let opened = $state(false);
+	$effect.pre(() => {
+		if (candidate && !archivedProject) opened = true;
+	});
+	const current = $derived(archivedProject && !opened ? null : candidate);
 	const local = $derived(draft.value);
-	const title = $derived(current?.title ?? 'Untitled diagram');
+	const title = $derived(
+		current?.title ?? (archivedProject ? 'Diagram unavailable' : 'Untitled diagram')
+	);
 	let history = $state<
 		| { kind: 'loading' }
 		| { kind: 'ready'; revisions: readonly DiagramRevisionSummary[] }
@@ -319,7 +330,16 @@
 				The latest diagram could not be refreshed. Your current canvas is still available.
 			</p>
 		{/if}
-		{#if draft.state.kind !== 'ready' && draft.state.kind !== 'wait'}
+		{#if archivedProject && opened}
+			<p role="status" class="text-sm text-muted-foreground">
+				This project was archived. This canvas remains open so you can preserve your work.
+			</p>
+		{/if}
+		{#if archivedProject && !opened}
+			<p role="status" class="text-sm text-muted-foreground">
+				This diagram belongs to an archived project.
+			</p>
+		{:else if draft.state.kind !== 'ready' && draft.state.kind !== 'wait'}
 			<p class="text-sm text-muted-foreground">{accessMessage(draft.state, 'diagram')}</p>
 			<Button variant="outline" onclick={() => void draft.open()}>Retry</Button>
 		{:else if !current}
