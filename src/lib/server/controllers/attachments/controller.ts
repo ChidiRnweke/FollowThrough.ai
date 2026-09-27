@@ -87,7 +87,7 @@ export interface AttachmentsController {
 		offset?: number,
 		limit?: number
 	): ReturnType<AttachmentManager['read']>;
-	/** Permanently delete the attachment at a note-relative path, atomically. */
+	/** Detach an unreferenced note attachment while retaining file versions for revision restore. */
 	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
 }
 
