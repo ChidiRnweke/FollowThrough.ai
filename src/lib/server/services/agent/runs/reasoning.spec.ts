@@ -182,7 +182,7 @@ describe('Agent runtime boundary', () => {
 	it('formats the server clock in the client IANA timezone', () => {
 		const instructions = buildAgentInstructions(
 			{ appContext: { client: { timeZone: 'Europe/Brussels', localDate: 'stale' } } },
-			'',
+			{ items: [] },
 			new Date('2026-08-01T12:30:00.000Z')
 		);
 		expect(instructions).toContain('14:30:00');
@@ -192,7 +192,7 @@ describe('Agent runtime boundary', () => {
 		expect(() =>
 			buildAgentInstructions(
 				{ appContext: { client: { timeZone: 'Mars/Olympus' } } },
-				'',
+				{ items: [] },
 				new Date('2026-08-01T12:30:00.000Z')
 			)
 		).toThrow('Invalid time zone');
