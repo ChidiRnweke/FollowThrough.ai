@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { ActorContext, UserId } from '$lib/models/identity';
+import { seedActor } from './workspace';
+import type { ActorContext } from '$lib/models/identity';
 import type { AgentRunId, AgentRunStatus } from '$lib/models/agent';
 import { createLab, type Lab } from './application';
 
@@ -31,9 +32,7 @@ describe('eval lab smoke', () => {
 	});
 
 	it('submits a run through the production graph', async () => {
-		actor = { userId: randomUUID() as UserId };
-		// Materializes the user row, the way seedWorkspace does for eval cases.
-		await lab.controllers.workspace().getShellContext(actor);
+		actor = await seedActor(lab);
 		const receipt = await lab.controllers.agent().submit(actor, {
 			requestId: randomUUID(),
 			input: 'Smoke test, no answer needed.'
