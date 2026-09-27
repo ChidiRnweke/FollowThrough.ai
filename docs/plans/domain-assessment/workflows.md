@@ -55,8 +55,8 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W04.03 List and open notes.
 - [ ] W04.04 Rename notes through the editor, tree, and agent.
 - [ ] W04.05 Edit and autosave drafts.
-- [ ] W04.06 Publish notes.
-- [ ] W04.07 Discard unpublished changes.
+- [x] W04.06 Publish notes. See [publication workflow review](note-publication-workflows.md).
+- [x] W04.07 Discard unpublished changes. See [publication workflow review](note-publication-workflows.md).
 - [ ] W04.08 Browse revision history.
 - [ ] W04.09 Read individual revisions.
 - [ ] W04.10 Compare revisions.
