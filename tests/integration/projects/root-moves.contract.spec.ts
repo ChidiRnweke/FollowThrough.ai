@@ -9,10 +9,10 @@ import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context } from '../database-harness';
+import { seedUser, context } from '../database-harness';
 
 it('keeps a folder at the project root after reloading a completed move', async () => {
-	const owner = actor('13901');
+	const owner = await seedUser('13901');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const repository = new ProjectRecords(database);
 	const catalog = new ProjectCatalog(repository, repository);
@@ -44,7 +44,7 @@ it('keeps a folder at the project root after reloading a completed move', async 
 });
 
 it('restores a note at the root when its previous folder is archived', async () => {
-	const owner = actor('13902');
+	const owner = await seedUser('13902');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const projects = new ProjectRecords(database);
 	const project = await projects.insert(owner, { name: 'Restore at root' });

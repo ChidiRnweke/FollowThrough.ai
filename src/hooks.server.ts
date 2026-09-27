@@ -108,10 +108,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	} else {
 		// Auth disabled — single-user mode (dev)
-		// No session validation, actor() handles the local user
+		// Establish the local profile before any workspace or tool write.
 		setWorkspaceAccountCookie(
 			event.cookies,
-			AppFactory.actor(event.locals).userId,
+			(await AppFactory.localActor()).userId,
 			event.url.protocol === 'https:'
 		);
 	}

@@ -4,7 +4,7 @@ import type { Note, NoteId, NoteRevisionId } from '$lib/models/notes';
 import * as schema from '$lib/server/db/schema/registry';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { replaceNoteFixture, actor, context, now, seedNote } from '../database-harness';
+import { seedUser, replaceNoteFixture, actor, context, now, seedNote } from '../database-harness';
 import corpusDocuments from '../../corpus/note-documents.json' with { type: 'json' };
 import { parseProseMirrorDocument } from '$lib/models/notes';
 
@@ -26,7 +26,7 @@ const richDocument = parseProseMirrorDocument(
 
 describe('Postgres note repository invariants', () => {
 	it('maps an inserted note back to the domain model', async () => {
-		const owner = actor('11');
+		const owner = await seedUser('11');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Note repository'
 		});
@@ -51,7 +51,7 @@ describe('Postgres note repository invariants', () => {
 		expect(await repository.findById(owner, note.id)).toEqual(note);
 	});
 	it('does not reveal a note to another actor', async () => {
-		const owner = actor('12');
+		const owner = await seedUser('12');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Private note repository'
 		});
@@ -80,7 +80,7 @@ describe('Postgres note repository invariants', () => {
 		expect(await new NoteRecords(context.db).findById(owner, note.id)).toBeUndefined();
 	});
 	it('prevents duplicate built-in skill keys for one actor', async () => {
-		const owner = actor('76');
+		const owner = await seedUser('76');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'General'
 		});

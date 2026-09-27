@@ -1,3 +1,4 @@
+import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { AgentEventBus } from '../services/agent/runs/events';
@@ -27,6 +28,7 @@ class DeferredValue<T> {
 }
 
 const application = new DeferredValue(createProductionFactory);
+const localUsers = new DeferredValue(() => new UserDirectory(new UserRecords(db)));
 const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
 const accessTokens = new DeferredValue(() => new AccessTokens(new ApiTokenRecords(db)));
 const signIn = new DeferredValue(() => {
@@ -65,6 +67,14 @@ export class AppFactory {
 
 	static actor(locals?: App.Locals): ActorContext {
 		return requestActor(locals?.user);
+	}
+
+	/** Provisioning is only reached through the explicit authentication-disabled branch. */
+	static async localActor(): Promise<ActorContext> {
+		// With authentication enabled, an absent session identity is rejected here.
+		const actor = requestActor();
+		await localUsers.get().initializeLocal(actor);
+		return actor;
 	}
 
 	static sessions(): ISessionRegistry {

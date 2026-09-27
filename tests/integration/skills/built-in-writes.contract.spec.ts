@@ -14,7 +14,7 @@ import { SkillLibrary } from '$lib/server/services/skills/library';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { replaceNoteFixture, actor, context, now } from '../database-harness';
+import { seedUser, replaceNoteFixture, context, now } from '../database-harness';
 
 const currentDefinitions = { active: BUILT_INS, retired: RETIRED_BUILT_INS };
 const controller = (
@@ -38,7 +38,7 @@ const controller = (
 };
 
 it('upgrades an untouched stored guide and records the new revision', async () => {
-	const owner = actor('19503');
+	const owner = await seedUser('19503');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const retired = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
 	await controller(database, transactionRunner, { active: [retired], retired: [] }).list(owner);
@@ -57,7 +57,7 @@ it('upgrades an untouched stored guide and records the new revision', async () =
 });
 
 it('repairs legacy built-ins from an archived project while preserving authored content and identity', async () => {
-	const owner = actor('19501');
+	const owner = await seedUser('19501');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const skills = controller(database, transactionRunner, currentDefinitions);
 	const initial = await skills.list(owner);
@@ -124,7 +124,7 @@ it.each([
 	{ change: 'document', suffix: '19502' },
 	{ change: 'disabled state', suffix: '19504' }
 ])('preserves a concurrent $change while a stock upgrade waits', async ({ change, suffix }) => {
-	const owner = actor(suffix);
+	const owner = await seedUser(suffix);
 	const seed = createTransactionContext(context.db);
 	const retired = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough')!;
 	await controller(seed.database, seed.transactionRunner, { active: [retired], retired: [] }).list(
@@ -195,7 +195,7 @@ it.each([
 it.each(['description', 'hints'] as const)(
 	'keeps user-edited %s when a stock upgrade becomes available',
 	async (field) => {
-		const owner = actor(field === 'description' ? '23901' : '23902');
+		const owner = await seedUser(field === 'description' ? '23901' : '23902');
 		const { database, transactionRunner } = createTransactionContext(context.db);
 		const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
 		if (!released) throw new Error('The released guide fixture is required');

@@ -5,10 +5,10 @@ import type { SearchDocument, SearchDocumentId } from '$lib/models/knowledge-sea
 import * as schema from '$lib/server/db/schema';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { actor, context, seedNote } from '../database-harness';
+import { seedUser, actor, context, seedNote } from '../database-harness';
 describe('Postgres search repository invariants', () => {
 	it('limits vector search to the requested project', async () => {
-		const owner = actor('10');
+		const owner = await seedUser('10');
 		const projects = new ProjectRecords(context.db);
 		const first = await projects.insert(owner, { name: 'Search one' });
 		const second = await projects.insert(owner, { name: 'Search two' });

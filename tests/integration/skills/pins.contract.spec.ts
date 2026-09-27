@@ -7,7 +7,7 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
-import { actor, context, replaceNoteFixture, seedNote } from '../database-harness';
+import { seedUser, context, replaceNoteFixture, seedNote } from '../database-harness';
 import { competingSkillWrites, skillController } from './edit-harness';
 
 const setup = async (suffix: string) => {
@@ -112,7 +112,7 @@ it.each([
 });
 
 it('preserves a project pin while concurrent built-in provisioning waits', async () => {
-	const owner = actor('20004');
+	const owner = await seedUser('20004');
 	const tx = createTransactionContext(context.db);
 	await skillController(tx.database, tx.transactionRunner).list(owner);
 	const note = (await new NoteRecords(context.db).findByBuiltInKey(owner, 'followthrough'))!;

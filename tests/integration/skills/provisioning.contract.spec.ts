@@ -15,7 +15,7 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context, now } from '../database-harness';
+import { seedUser, context, now } from '../database-harness';
 import type { NoteId } from '$lib/models/notes';
 
 const clients: ReturnType<typeof postgres>[] = [];
@@ -55,7 +55,7 @@ const setup = () => {
 
 it('returns one complete built-in installation to simultaneous first requests', async () => {
 	const state = setup();
-	const owner = actor('811');
+	const owner = await seedUser('811');
 	const results = await Promise.all([
 		state.skills.list(owner),
 		state.skills.list(owner),
@@ -80,7 +80,10 @@ it('returns one complete built-in installation to simultaneous first requests', 
 
 it('includes built-in skills and their Inbox in the first browser synchronization page', async () => {
 	const state = setup();
-	const page = await state.workspace.pullChangePage(actor('812'), syncCursorSchema.parse('0'));
+	const page = await state.workspace.pullChangePage(
+		await seedUser('812'),
+		syncCursorSchema.parse('0')
+	);
 	const records = page.records.flatMap((record) =>
 		record.resource.kind === 'found' ? [record.resource.snapshot.value] : []
 	);
@@ -94,7 +97,7 @@ it('includes built-in skills and their Inbox in the first browser synchronizatio
 
 it('provisions one replacement Inbox after archive without moving ordinary content', async () => {
 	const state = setup();
-	const owner = actor('19801');
+	const owner = await seedUser('19801');
 	const initial = await state.skills.list(owner);
 	const previous = (await state.projects.listActive(owner)).find(
 		(project) => project.role === 'inbox'
@@ -148,7 +151,7 @@ it('provisions one replacement Inbox after archive without moving ordinary conte
 
 it('keeps an existing project named Inbox when choosing the replacement name', async () => {
 	const state = setup();
-	const owner = actor('19802');
+	const owner = await seedUser('19802');
 	await state.skills.list(owner);
 	const previous = (await state.projects.listActive(owner)).find(
 		(project) => project.role === 'inbox'
