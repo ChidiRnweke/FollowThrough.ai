@@ -15,6 +15,8 @@ export interface OwnedAttachmentUpload {
 	readonly upload: AttachmentUpload;
 }
 
+export type UploadRetentionCursor = Pick<AttachmentUpload, 'expiresAt' | 'id'>;
+
 /** `finalize` is the only path that makes an attachment visible: nothing before it is observable to any reader but the uploader. */
 export interface AttachmentRepository {
 	createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload>;
@@ -56,5 +58,9 @@ export interface AttachmentRepository {
 	 * Their staged objects are still sitting in the bucket; the sweep worker uses
 	 * this to reclaim both.
 	 */
-	listExpiredUploads(before: Date, limit: number): Promise<readonly OwnedAttachmentUpload[]>;
+	listExpiredUploads(
+		before: Date,
+		limit: number,
+		after?: UploadRetentionCursor
+	): Promise<readonly OwnedAttachmentUpload[]>;
 }

@@ -472,7 +472,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W26.03 Initialize instrumentation.
 - [ ] W26.04 Start scheduled tasks.
 - [ ] W26.05 Run embedding maintenance.
-- [ ] W26.06 Run expired-upload cleanup.
+- [x] W26.06 Run expired-upload cleanup. See [reclamation and fairness review](upload-retention-fairness.md).
 - [ ] W26.07 Handle maintenance failures and retries.
 - [ ] W26.08 Drain work during shutdown. Partial: [process shutdown ordering](process-telemetry-shutdown.md).
 - [ ] W26.09 Build and start web and worker processes.
