@@ -1,5 +1,62 @@
 # Changelog
 
+## [1.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.12...v1.0.0) (2026-09-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **domains:** create_todos requires a UUID requestId. Reuse it with identical input when retrying an uncertain outcome.
+
+### Bug Fixes
+
+* **agent:** preserve cancellation ownership on approval resume ([#265](https://github.com/ChidiRnweke/FollowThrough.ai/issues/265)) ([bf48e3e](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bf48e3ef7cf5b926605d27e955ade7a366529052))
+* **agent:** retain discovery guidance for truncated skill catalogs ([#248](https://github.com/ChidiRnweke/FollowThrough.ai/issues/248)) ([35909b9](https://github.com/ChidiRnweke/FollowThrough.ai/commit/35909b9440e31ea6229cadaede7d308c7d5759fd))
+* **attachments:** advance cleanup past failed reservations ([#270](https://github.com/ChidiRnweke/FollowThrough.ai/issues/270)) ([b60fc64](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b60fc64d91faf82b4d12fabaa4b4130d3a47b5a9))
+* **attachments:** hide archived project files ([#272](https://github.com/ChidiRnweke/FollowThrough.ai/issues/272)) ([e0c7118](https://github.com/ChidiRnweke/FollowThrough.ai/commit/e0c7118d598c8c4bdb60c7edcfc0629c25fa1a1d))
+* **attachments:** preserve note versions during path removal ([#268](https://github.com/ChidiRnweke/FollowThrough.ai/issues/268)) ([eeba1da](https://github.com/ChidiRnweke/FollowThrough.ai/commit/eeba1da93f1c338baa96f625db30cd7baf5139af))
+* **auth:** refuse missing authenticated request actors ([#250](https://github.com/ChidiRnweke/FollowThrough.ai/issues/250)) ([1f47c13](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1f47c134fd6cdcd8e85a67d163d507ee57872f13))
+* **auth:** renew browser cookies with stored session expiry ([#232](https://github.com/ChidiRnweke/FollowThrough.ai/issues/232)) ([c875bcf](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c875bcf17a40efa5dbc317a6207c057c40153431))
+* **diagrams:** guard cached opens after project archive ([#252](https://github.com/ChidiRnweke/FollowThrough.ai/issues/252)) ([81e5a25](https://github.com/ChidiRnweke/FollowThrough.ai/commit/81e5a25abfcbbb5b322f95a24ea7b451e9c9dba6))
+* **domains:** land assessed workflow and data integrity fixes ([#220](https://github.com/ChidiRnweke/FollowThrough.ai/issues/220)) ([418c201](https://github.com/ChidiRnweke/FollowThrough.ai/commit/418c201a003fd61b4aac19fa38d76876804bc286))
+* **evals:** initialize fixture accounts explicitly ([#257](https://github.com/ChidiRnweke/FollowThrough.ai/issues/257)) ([a8e0f91](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a8e0f91f9a52b95a6f3931cbfcffd0321a08b104))
+* **feedback:** show and enforce the report length limit ([#266](https://github.com/ChidiRnweke/FollowThrough.ai/issues/266)) ([9cb94e0](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9cb94e0bfa6e97c16007e0a4986d750ac0f7cf90))
+* **identity:** provision local accounts before workspace writes ([#255](https://github.com/ChidiRnweke/FollowThrough.ai/issues/255)) ([374afe9](https://github.com/ChidiRnweke/FollowThrough.ai/commit/374afe96f5d8ef2c9a5d940e5f281acd2f0a3b8b))
+* **memory:** guard retained entries after project archival ([#221](https://github.com/ChidiRnweke/FollowThrough.ai/issues/221)) ([071dbcb](https://github.com/ChidiRnweke/FollowThrough.ai/commit/071dbcb6f2f1d39a280f81c763235d55e0b0dfd3))
+* **memory:** hide archived project memory in open panels ([#222](https://github.com/ChidiRnweke/FollowThrough.ai/issues/222)) ([370d4f8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/370d4f8ef97e01cb06cde2df53cfed94925b2efa))
+* **memory:** preserve caller provenance in proposals ([#228](https://github.com/ChidiRnweke/FollowThrough.ai/issues/228)) ([b6327da](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b6327daa08d7efb2c01fcdfd603f51eb0b37d24a))
+* **memory:** retain classification on proposed updates ([#229](https://github.com/ChidiRnweke/FollowThrough.ai/issues/229)) ([0ac5f6e](https://github.com/ChidiRnweke/FollowThrough.ai/commit/0ac5f6effaa19420f2be23cb95a069a42e1a93fa))
+* **memory:** serialize deletion with concurrent edits ([#224](https://github.com/ChidiRnweke/FollowThrough.ai/issues/224)) ([7f726da](https://github.com/ChidiRnweke/FollowThrough.ai/commit/7f726da35435811846d27d9a50f08b75cf209a9b))
+* **notes:** count header-like body lines in revision diffs ([#259](https://github.com/ChidiRnweke/FollowThrough.ai/issues/259)) ([472215f](https://github.com/ChidiRnweke/FollowThrough.ai/commit/472215f51169fd0273e3ee934eb6038ba1f6dfe3))
+* **notes:** discard against the latest locked publication ([#253](https://github.com/ChidiRnweke/FollowThrough.ai/issues/253)) ([2b7d808](https://github.com/ChidiRnweke/FollowThrough.ai/commit/2b7d808873973cc980521b19363eb8444ce8721e))
+* **notes:** guard cached opens after project archive ([#249](https://github.com/ChidiRnweke/FollowThrough.ai/issues/249)) ([a25f3f5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a25f3f503260647234d17268fc8537c7f072ae74))
+* **notes:** report unreadable import outcomes accurately ([#263](https://github.com/ChidiRnweke/FollowThrough.ai/issues/263)) ([2073653](https://github.com/ChidiRnweke/FollowThrough.ai/commit/20736539029ad90200866c2192b99be66999c6b6))
+* **notes:** retain the latest history selection and restore outcome ([#256](https://github.com/ChidiRnweke/FollowThrough.ai/issues/256)) ([68339e5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/68339e57ba9fc0ca70df1fa1d60aab0ab52e0d4b))
+* **notes:** show truthful version history feedback ([#254](https://github.com/ChidiRnweke/FollowThrough.ai/issues/254)) ([b1a35b5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b1a35b57dc97c0750524d955261bd4063ad20d11))
+* **observability:** retain oversized browser error reports ([#267](https://github.com/ChidiRnweke/FollowThrough.ai/issues/267)) ([0debba8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/0debba83997e7d64edc2d8c3718898bcd4249367))
+* **projects:** count visible siblings when moving tree entries ([#261](https://github.com/ChidiRnweke/FollowThrough.ai/issues/261)) ([a2619ba](https://github.com/ChidiRnweke/FollowThrough.ai/commit/a2619ba6c713e22e1ff65707256766839006c6bb))
+* **projects:** keep deeply nested notes reachable in the tree ([#260](https://github.com/ChidiRnweke/FollowThrough.ai/issues/260)) ([68f3145](https://github.com/ChidiRnweke/FollowThrough.ai/commit/68f3145d71b72d80a56a1778778f8838869c1b4b))
+* **projects:** retain descriptions during name-only renames ([#234](https://github.com/ChidiRnweke/FollowThrough.ai/issues/234)) ([c148f46](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c148f467f32a71ba5bd217a76f232c674d59c876))
+* **runtime:** drain web and worker before stopping telemetry ([#264](https://github.com/ChidiRnweke/FollowThrough.ai/issues/264)) ([62fc7c8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/62fc7c8145598bc8f9f0131c9fd5b4b0fd6aa445))
+* **search:** exclude archived projects from knowledge retrieval ([#225](https://github.com/ChidiRnweke/FollowThrough.ai/issues/225)) ([4f7c671](https://github.com/ChidiRnweke/FollowThrough.ai/commit/4f7c6717ab9308873d075e33ab4c4c8bd6fde31e))
+* **settings:** retain minted tokens when the list fails ([#237](https://github.com/ChidiRnweke/FollowThrough.ai/issues/237)) ([1dca4a0](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1dca4a09d3926d895366638b1d1c98d9c021a659))
+* **skills:** create initial instructions atomically ([#241](https://github.com/ChidiRnweke/FollowThrough.ai/issues/241)) ([84f79b0](https://github.com/ChidiRnweke/FollowThrough.ai/commit/84f79b0ba473dc2f0e4fc3a70093a10f1c9eab67))
+* **skills:** enforce the description limit on metadata edits ([#246](https://github.com/ChidiRnweke/FollowThrough.ai/issues/246)) ([3de29dc](https://github.com/ChidiRnweke/FollowThrough.ai/commit/3de29dc0535f424d13dcc55b6e59f08009c6e835))
+* **skills:** hide archived content from cached details ([#243](https://github.com/ChidiRnweke/FollowThrough.ai/issues/243)) ([928c1cf](https://github.com/ChidiRnweke/FollowThrough.ai/commit/928c1cf159c4610c5619ec7c422a9afc0a84a4e4))
+* **skills:** list newest history snapshots first ([#245](https://github.com/ChidiRnweke/FollowThrough.ai/issues/245)) ([c57ee7d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c57ee7d27cf5bec9e94c50ad1744092020be01e4))
+* **suggestions:** hide archived project proposals without notes ([#227](https://github.com/ChidiRnweke/FollowThrough.ai/issues/227)) ([1814b42](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1814b420277825d9ff970c9a6cff91ba3ef0ee1a))
+* **telemetry:** preserve aborted transaction failures ([#271](https://github.com/ChidiRnweke/FollowThrough.ai/issues/271)) ([8979bc3](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8979bc36809d956e25ba37e91979520e5bd069d7))
+* **trash:** distinguish incomplete inventories before bulk deletion ([#262](https://github.com/ChidiRnweke/FollowThrough.ai/issues/262)) ([cc99fdd](https://github.com/ChidiRnweke/FollowThrough.ai/commit/cc99fdda9bd1812729e46d1c3da486469e4e2316))
+* **workspace:** hide archived project collections ([#251](https://github.com/ChidiRnweke/FollowThrough.ai/issues/251)) ([04ed5e5](https://github.com/ChidiRnweke/FollowThrough.ai/commit/04ed5e52265d440cf9b28701a8c4539a96f0dda8))
+* **workspace:** hide archived project context in retained records ([#258](https://github.com/ChidiRnweke/FollowThrough.ai/issues/258)) ([034dbbd](https://github.com/ChidiRnweke/FollowThrough.ai/commit/034dbbdf31aebd9ad3b9e7bf9e85d876e25db063))
+
+
+### Code Refactoring
+
+* **architecture:** permit explicit shared service layers ([#71](https://github.com/ChidiRnweke/FollowThrough.ai/issues/71)) ([2d79ee6](https://github.com/ChidiRnweke/FollowThrough.ai/commit/2d79ee63fd0f1933d78ffdb7ee68fa13509da55a))
+* **projects:** retain explicit project selection paths ([#235](https://github.com/ChidiRnweke/FollowThrough.ai/issues/235)) ([c0c5325](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c0c53259a1b82987901ba06445c09ef509f62ec4))
+* **skills:** remove unused save and export paths ([#244](https://github.com/ChidiRnweke/FollowThrough.ai/issues/244)) ([8d4723d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8d4723d8cc181b91bdcd1a6017821494065f2aff))
+* **suggestions:** retain typed dismissal outcomes ([#223](https://github.com/ChidiRnweke/FollowThrough.ai/issues/223)) ([0a41655](https://github.com/ChidiRnweke/FollowThrough.ai/commit/0a41655fe2faec82667fa1ccf4dc61f0176de6d5))
+
 ## [0.5.12](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.11...v0.5.12) (2026-09-18)
 
 
