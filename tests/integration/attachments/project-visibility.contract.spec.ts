@@ -144,11 +144,16 @@ it('still discovers expired upload reservations in archived projects', async () 
 		expiresAt: '2000-01-01T00:00:00.000Z' as DateTime
 	});
 	await archive();
-	expect(
-		(await records.listExpiredUploads(new Date('2000-01-02'), 100)).some(
-			({ upload }) => upload.id === expired.id
-		)
-	).toBe(true);
+	try {
+		expect(
+			(await records.listExpiredUploads(new Date('2000-01-02'), 100)).some(
+				({ upload }) => upload.id === expired.id
+			)
+		).toBe(true);
+	} finally {
+		// Global maintenance tests share this database; remove this scenario's expired row.
+		await records.deleteUpload(owner, expired.id);
+	}
 });
 
 it('still deletes reclaimed upload reservations in archived projects', async () => {
