@@ -531,7 +531,6 @@ export const agentToolCoverage = {
 		listVersions: { kind: 'read', tools: ['list_skill_versions'] },
 		restoreVersion: { kind: 'mutation', tools: ['restore_skill_version'] },
 		update: { kind: 'mutation', tools: ['update_skill'] },
-		serialize: { kind: 'excluded', reason: 'The full skill is available through load_skill.' },
 		setPinned: { kind: 'mutation', tools: ['set_skill_pinned'] }
 	},
 	attachments: {

@@ -197,8 +197,8 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W12.03 Create a skill directly. See [creation review](skill-creation.md).
 - [x] W12.04 Create a skill from selected content. See [selection creation review](skill-selection.md).
 - [x] W12.05 Browse and open skills. See [catalog and detail visibility](skill-visibility.md).
-- [ ] W12.06 Import Markdown and metadata.
-- [ ] W12.07 Serialize skills for external use.
+- [x] W12.06 Import Markdown and metadata. See [portable import/export review](skill-portability.md).
+- [x] W12.07 Serialize skills for external use. See [portable import/export review](skill-portability.md).
 - [ ] W12.08 Edit metadata and enabled state.
 - [ ] W12.09 Save skill content.
 - [ ] W12.10 Propose, preview, approve, and apply targeted edits.

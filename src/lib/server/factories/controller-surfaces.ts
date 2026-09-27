@@ -133,7 +133,6 @@ export const controllerSurfaces = {
 		listVersions: true,
 		restoreVersion: true,
 		update: true,
-		serialize: true,
 		setPinned: true
 	},
 	agent: {
