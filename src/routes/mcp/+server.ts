@@ -15,14 +15,13 @@ const unauthorized = (detail: string): Response =>
 	});
 
 /**
- * Bearer token when auth is on. With auth disabled (single-user dev) there are
- * no users to mint tokens against, so fall through to the local actor — same
- * rule the rest of the app follows via `AppFactory.actor()`.
+ * Bearer token when auth is on. With auth disabled (single-user dev) there is
+ * no session token. Establish the configured local account before provenance or tool writes.
  */
 const authenticate = async (
 	request: Request
 ): Promise<{ actor: ActorContext; scope: ApiTokenScope } | Response> => {
-	if (!AppFactory.isAuthEnabled()) return { actor: AppFactory.actor(), scope: 'full' };
+	if (!AppFactory.isAuthEnabled()) return { actor: await AppFactory.localActor(), scope: 'full' };
 
 	const verified = await AppFactory.accessTokens().verify(request.headers.get('authorization'));
 	if (!verified) return unauthorized('Provide a FollowThrough API token as a Bearer credential.');

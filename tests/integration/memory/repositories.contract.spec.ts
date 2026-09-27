@@ -7,10 +7,10 @@ import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-e
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { MemoryLibrary } from '$lib/server/services/memory/library';
-import { actor, context, now, seedProvenance } from '../database-harness';
+import { seedUser, actor, context, now, seedProvenance } from '../database-harness';
 describe('Postgres memory-entry repository invariants', () => {
 	const seedEntry = async (suffix: string) => {
-		const owner = actor(suffix);
+		const owner = await seedUser(suffix);
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: `Memory project ${suffix}`
 		});

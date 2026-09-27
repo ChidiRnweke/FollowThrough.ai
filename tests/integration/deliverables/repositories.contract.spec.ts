@@ -4,10 +4,10 @@ import * as schema from '$lib/server/db/schema';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { actor, context, seedArtifact, seedNote } from '../database-harness';
+import { seedUser, actor, context, seedArtifact, seedNote } from '../database-harness';
 describe('Postgres artifact repository listing invariants', () => {
 	it('matches artifact titles with a case-insensitive substring', async () => {
-		const owner = actor('301');
+		const owner = await seedUser('301');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Artifact search title'
 		});
@@ -18,7 +18,7 @@ describe('Postgres artifact repository listing invariants', () => {
 		expect(result.total).toBe(1);
 	});
 	it('matches artifact formats with a case-insensitive substring', async () => {
-		const owner = actor('302');
+		const owner = await seedUser('302');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Artifact search format'
 		});
@@ -29,7 +29,7 @@ describe('Postgres artifact repository listing invariants', () => {
 		expect(result.total).toBe(1);
 	});
 	it('matches template names with a case-insensitive substring', async () => {
-		const owner = actor('303');
+		const owner = await seedUser('303');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Artifact search template'
 		});
@@ -50,7 +50,7 @@ describe('Postgres artifact repository listing invariants', () => {
 		expect(result.total).toBe(1);
 	});
 	it('does not match a null template for an unrelated search', async () => {
-		const owner = actor('304');
+		const owner = await seedUser('304');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Artifact null template'
 		});
@@ -61,8 +61,8 @@ describe('Postgres artifact repository listing invariants', () => {
 		expect(result.artifacts).toEqual([]);
 	});
 	it('keeps artifact listings scoped to the actor and project', async () => {
-		const owner = actor('305');
-		const other = actor('306');
+		const owner = await seedUser('305');
+		const other = await seedUser('306');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Owned artifacts'
 		});
@@ -75,7 +75,7 @@ describe('Postgres artifact repository listing invariants', () => {
 		expect(result.total).toBe(0);
 	});
 	it('counts all filtered artifacts before pagination', async () => {
-		const owner = actor('307');
+		const owner = await seedUser('307');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Artifact count'
 		});
@@ -89,7 +89,7 @@ describe('Postgres artifact repository listing invariants', () => {
 		expect(result.total).toBe(12);
 	});
 	it('returns non-overlapping deterministic pages', async () => {
-		const owner = actor('308');
+		const owner = await seedUser('308');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Artifact pages'
 		});
@@ -107,7 +107,7 @@ describe('Postgres artifact repository listing invariants', () => {
 		);
 	});
 	it('keeps omitted listing parameters unbounded', async () => {
-		const owner = actor('309');
+		const owner = await seedUser('309');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Unbounded artifacts'
 		});

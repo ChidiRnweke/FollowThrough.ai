@@ -3,10 +3,10 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { ProjectCatalog } from '$lib/server/services/projects/catalog';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { actor, context } from '../database-harness';
+import { seedUser, actor, context } from '../database-harness';
 
 const setup = async (suffix: string) => {
-	const owner = actor(suffix);
+	const owner = await seedUser(suffix);
 	const repository = new ProjectRecords(context.db);
 	const project = await repository.insert(owner, { name: 'Numbering contract' });
 	const controller = new Projects(

@@ -19,7 +19,6 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 	constructor(private readonly database: Database) {}
 
 	async insert(actor: ActorContext, input: CreateProjectInput): Promise<Project> {
-		await this.ensureUser(actor);
 		try {
 			const [row] = await this.database
 				.insert(schema.projects)
@@ -156,16 +155,5 @@ export class ProjectRecords implements ProjectRepository, ProjectTreeRepository 
 				.update(schema.notes)
 				.set({ parentId: entry.parentId ?? null, position: entry.position })
 				.where(and(eq(schema.notes.id, entry.id), eq(schema.notes.userId, actor.userId)));
-	}
-
-	private async ensureUser(actor: ActorContext): Promise<void> {
-		await this.database
-			.insert(schema.users)
-			.values({
-				id: actor.userId,
-				email: `${actor.userId}@local.invalid`,
-				displayName: 'Architect'
-			})
-			.onConflictDoNothing();
 	}
 }

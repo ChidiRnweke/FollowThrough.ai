@@ -28,6 +28,5 @@ retains its first-read Inbox and built-in skill result.
 The review also traced root landing redirects, waiting-user routes, session/account cookies,
 authentication-disabled request handling, bootstrap account identity and MCP's separate bearer path.
 It does not claim end-to-end browser admission coverage, nor settle D08's provider-email linking
-policy. W01.01, W01.04, W01.09 and W01.10 remain open for their complete workflows. In particular,
-ProjectRecords.ensureUser and UserRecords.ensureLocal both create local profile rows with different
-role defaults; reconcile that ownership before treating single-user initialization as fully assessed.
+policy. W01.01, W01.04 and W01.09 remain open for their complete workflows. The later [local identity review](local-profile-initialization.md) resolves the duplicate profile
+creation policy and completes W01.10.

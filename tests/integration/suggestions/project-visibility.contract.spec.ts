@@ -4,10 +4,10 @@ import type { MemorySuggestion, SuggestionId } from '$lib/models/suggestions';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import type { ProjectId } from '$lib/models/projects';
-import { actor, context, now, seedProvenance } from '../database-harness';
+import { seedUser, context, now, seedProvenance } from '../database-harness';
 
 const setup = async (suffix: string) => {
-	const owner = actor(suffix);
+	const owner = await seedUser(suffix);
 	const project = await new ProjectRecords(context.db).insert(owner, {
 		id: `abcdef00-0000-4000-8000-${suffix.padStart(12, '0')}` as ProjectId,
 		name: `Memory proposals ${suffix}`

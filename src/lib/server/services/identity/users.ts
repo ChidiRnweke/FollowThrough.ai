@@ -8,8 +8,12 @@ export interface UserReader {
 export class UserDirectory implements UserReader {
 	constructor(private readonly users: UserRepository) {}
 
-	async get(actor: ActorContext): Promise<User> {
+	async initializeLocal(actor: ActorContext): Promise<User> {
 		await this.users.ensureLocal(actor);
+		return this.get(actor);
+	}
+
+	async get(actor: ActorContext): Promise<User> {
 		const user = await this.users.findById(actor, actor.userId);
 		if (!user) throw new NotFoundError('User was not found');
 		return user;

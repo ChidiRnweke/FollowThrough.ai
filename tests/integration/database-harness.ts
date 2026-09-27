@@ -7,6 +7,7 @@ import type { Artifact, ArtifactId } from '$lib/models/deliverables';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { Provenance, ProvenanceId } from '$lib/models/provenance';
+import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { PostgresDatabaseContext } from '$lib/server/db/testcontainer';
@@ -24,7 +25,14 @@ export const actor = (suffix: string) => ({
 
 export const now = '2026-07-12T08:00:00.000Z' as DateTime;
 
+export const seedUser = async (suffix: string) => {
+	const owner = actor(suffix);
+	await new UserRecords(context.db).ensureLocal(owner);
+	return owner;
+};
+
 export const seedNote = async (suffix: string, owner = actor(suffix)) => {
+	await new UserRecords(context.db).ensureLocal(owner);
 	const project = await new ProjectRecords(context.db).insert(owner, {
 		name: `Contract project ${suffix}`
 	});
