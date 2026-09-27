@@ -1,9 +1,5 @@
-<script lang="ts" module>
-	export type NoteHistoryReadState =
-		{ kind: 'ready' } | { kind: 'loading' } | { kind: 'failure'; message: string };
-</script>
-
 <script lang="ts">
+	import type { NoteHistoryReadState } from '$lib/stores/notes/history.svelte';
 	import type { Note, NoteId, NoteRevision, NoteRevisionSummary } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
 	import { countNoteDiff, diffNoteDocuments, withTitleBlock } from '$lib/services/notes/note-diff';
@@ -46,7 +42,7 @@
 		diagrams?: readonly Diagram[];
 		noteId?: NoteId;
 		onselect: (revisionId: NoteRevision['id']) => void;
-		onrestore: (revisionId: NoteRevision['id']) => Promise<void>;
+		onrestore: (revisionId: NoteRevision['id']) => Promise<boolean>;
 	} = $props();
 
 	let restoring = $state(false);
@@ -69,8 +65,7 @@
 	async function restore(revisionId: NoteRevision['id']): Promise<void> {
 		restoring = true;
 		try {
-			await onrestore(revisionId);
-			open = false;
+			if (await onrestore(revisionId)) open = false;
 		} finally {
 			restoring = false;
 		}

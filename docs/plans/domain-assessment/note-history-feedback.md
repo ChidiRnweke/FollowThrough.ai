@@ -29,6 +29,6 @@ resources with an in-memory offline transport. Opening View changes after a fail
 request leaves a persistent failure in the dialog. This is browser failure-path evidence, not a
 successful database history round trip. Temporary fixture/session substitutions were removed.
 
-W04.08–W04.11 remain open. Out-of-order selection responses and restore failure/unsynchronized outcomes
-still need their own caller-level review. Preserve the existing comparison and storage tests; do not
+At this stage W04.08–W04.11 remained open. The later [history request review](note-history-requests.md)
+completes W04.08 and W04.09 and addresses out-of-order selection responses and blocked restore feedback. Preserve the existing comparison and storage tests; do not
 count this UI correction as a completed history assessment.

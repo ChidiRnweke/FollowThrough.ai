@@ -47,7 +47,7 @@ const base = {
 	note,
 	revisions: [summary],
 	onselect: () => undefined,
-	onrestore: async () => undefined
+	onrestore: async () => true
 };
 
 describe('NoteVersionHistory', () => {
@@ -156,4 +156,25 @@ it('withholds restoration while the selected snapshot is loading', async () => {
 	expect(await screen.getByRole('button', { name: 'Restore previous version' }).all()).toHaveLength(
 		0
 	);
+});
+
+it('keeps history open when restoration is blocked or fails', async () => {
+	const screen = await render(NoteVersionHistory, {
+		...base,
+		selected: revision,
+		onrestore: async () => false
+	});
+	await screen.getByRole('button', { name: 'Restore previous version' }).click();
+	await screen.getByRole('button', { name: 'Restore', exact: true }).click();
+	await expect
+		.element(screen.getByRole('dialog', { name: 'Version history', exact: true }))
+		.toBeVisible();
+});
+it('closes history after restoration succeeds', async () => {
+	const screen = await render(NoteVersionHistory, { ...base, selected: revision });
+	await screen.getByRole('button', { name: 'Restore previous version' }).click();
+	await screen.getByRole('button', { name: 'Restore', exact: true }).click();
+	await expect
+		.element(screen.getByRole('dialog', { name: 'Version history', exact: true }))
+		.not.toBeInTheDocument();
 });

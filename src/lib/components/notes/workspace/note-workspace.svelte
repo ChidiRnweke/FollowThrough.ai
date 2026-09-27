@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NoteHistoryReadState } from '../note-version-history.svelte';
+	import { NoteHistory } from '$lib/stores/notes/history.svelte';
 	import type { DiagramSuggestion, Suggestion } from '$lib/models/suggestions';
 
 	import type { ShellContext } from '$lib/client/shell/views';
@@ -22,9 +22,7 @@
 	import type { RelateSelectionOutput } from '$lib/models/relationships';
 	import type {
 		NoteId,
-		NoteRevision,
 		NoteRevisionId,
-		NoteRevisionSummary,
 		SectionNumberingLevel,
 		TextSelection
 	} from '$lib/models/notes';
@@ -85,10 +83,17 @@
 
 	let exportOpen = $state(false);
 	let historyOpen = $state(false);
-	let historyReadState = $state<NoteHistoryReadState>({ kind: 'ready' });
-	let historyRevisions = $state<readonly NoteRevisionSummary[]>([]);
-	let historySelectedId = $state<NoteRevisionId | undefined>(undefined);
-	let historySelected = $state<NoteRevision | undefined>(undefined);
+	const history = untrack(
+		() =>
+			new NoteHistory(
+				view.note.id,
+				async (noteId) => (await listNoteRevisions(noteId)).revisions,
+				async (noteId, revisionId) => (await getNoteRevision({ noteId, revisionId })).revision
+			)
+	);
+	$effect(() => {
+		if (!historyOpen) history.cancel();
+	});
 	let reviewingSuggestion = $state<DiagramSuggestion | null>(null);
 	let reviewDialogOpen = $state(false);
 	let editorRef = $state<NoteEditor | null>(null);
@@ -161,6 +166,7 @@
 		actionRuns.hydrate();
 		return () => {
 			editorSession.close();
+			history.cancel();
 			actionRuns.detach();
 		};
 	});
@@ -641,55 +647,8 @@
 		}
 	}
 
-	/**
-	 * Loads the history and preselects the published snapshot, so opening it from the
-	 * "Unpublished changes" hint lands directly on the draft-versus-published comparison
-	 * the reader asked for. Falls back to the newest snapshot when nothing is published.
-	 */
-	async function openHistory(): Promise<void> {
-		historyOpen = true;
-		historyRevisions = [];
-		historySelected = undefined;
-		historySelectedId = undefined;
-		historyReadState = { kind: 'loading' };
-		try {
-			const { revisions } = await listNoteRevisions(note.id);
-			historyRevisions = revisions;
-			const preferred = revisions.find((revision) => revision.isPublished) ?? revisions.at(0);
-			if (!preferred) {
-				historyReadState = { kind: 'ready' };
-				return;
-			}
-			historySelectedId = preferred.id;
-			historySelected = (await getNoteRevision({ noteId: note.id, revisionId: preferred.id }))
-				.revision;
-			historyReadState = { kind: 'ready' };
-			// audit-allow: silent-catch — failure is rendered in the open version-history dialog.
-		} catch {
-			historyReadState = {
-				kind: 'failure',
-				message: 'Could not load the version history. Close this dialog and try again.'
-			};
-		}
-	}
-
-	async function selectRevision(revisionId: NoteRevisionId): Promise<void> {
-		historyReadState = { kind: 'loading' };
-		historySelected = undefined;
-		try {
-			historySelected = (await getNoteRevision({ noteId: note.id, revisionId })).revision;
-			historyReadState = { kind: 'ready' };
-			// audit-allow: silent-catch — failure is rendered in the open version-history dialog.
-		} catch {
-			historyReadState = {
-				kind: 'failure',
-				message: 'Could not load that version. Close this dialog and try again.'
-			};
-		}
-	}
-
-	async function restoreRevision(revisionId: NoteRevisionId): Promise<void> {
-		if (!(await ensureSynchronized('Sync the note before restoring a version.'))) return;
+	async function restoreRevision(revisionId: NoteRevisionId): Promise<boolean> {
+		if (!(await ensureSynchronized('Sync the note before restoring a version.'))) return false;
 		try {
 			const isCurrent = editorSession.checkpoint();
 			await restoreNoteRevision({
@@ -700,7 +659,7 @@
 			const opened = await draft.read(() => isCurrent());
 			if (opened.kind === 'superseded') {
 				toast.info('The server version changed. Your later edits are retained for review.');
-				return;
+				return true;
 			}
 			if (opened.kind !== 'ready') throw new Error('The saved note could not be reopened');
 			const local = opened.value;
@@ -708,10 +667,11 @@
 			editorRef?.replaceDocument(local.document);
 			editorSession.accept();
 			toast.success('Restored that version');
-			await workspaceSession.synchronize();
+			return true;
 			// audit-allow: silent-catch — restore failure is reported and the current note remains authoritative.
 		} catch {
 			toast.error('Could not restore that version. Try again.');
+			return false;
 		}
 	}
 
@@ -796,7 +756,10 @@
 			if (confirm('Discard all changes since last publish?')) void discardDraft();
 		}}
 		onarchive={() => void archive()}
-		onhistory={() => void openHistory()}
+		onhistory={() => {
+			historyOpen = true;
+			void history.open();
+		}}
 	/>
 
 	{#if view.backlinks.length > 0 || pendingCount > 0}
@@ -859,10 +822,10 @@
 		bind:conflictOpen
 		bind:reviewDialogOpen
 		bind:historyOpen
-		bind:historySelectedId
-		{historyRevisions}
-		{historySelected}
-		{historyReadState}
+		historySelectedId={history.selectedId}
+		historyRevisions={history.revisions}
+		historySelected={history.selected}
+		historyReadState={history.readState}
 		{note}
 		conflictRecord={draft.conflict}
 		{reviewingSuggestion}
@@ -870,7 +833,7 @@
 		diagrams={view.diagrams}
 		onUseRemote={useRemoteVersion}
 		onKeepLocal={keepLocalVersion}
-		onSelectRevision={(revisionId) => void selectRevision(revisionId)}
+		onSelectRevision={(revisionId) => void history.select(revisionId)}
 		onRestoreRevision={restoreRevision}
 		onAcceptDrawio={async (output) => {
 			const suggestion = reviewingSuggestion;
