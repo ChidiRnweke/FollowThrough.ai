@@ -455,7 +455,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 
 ## 25 — Feedback and observability
 
-- [ ] W25.01 Submit feedback.
+- [x] W25.01 Submit feedback. See [feedback submission review](feedback-submission.md).
 - [ ] W25.02 Report browser errors.
 - [ ] W25.03 Return user-facing server failures.
 - [ ] W25.04 Display error recovery surfaces.
