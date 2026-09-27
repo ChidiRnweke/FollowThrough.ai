@@ -241,17 +241,17 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 
 ## 14 — Attachments
 
-- [ ] W14.01 Reserve uploads and issue destinations.
-- [ ] W14.02 Upload and finalize note attachments.
+- [ ] W14.01 Reserve uploads and issue destinations. Partial: [archived-project visibility](attachment-project-visibility.md).
+- [ ] W14.02 Upload and finalize note attachments. Partial: [archived-project visibility](attachment-project-visibility.md).
 - [ ] W14.03 Upload and finalize task screenshots.
 - [ ] W14.04 Validate content and duplicate-upload behavior.
 - [ ] W14.05 Extract text from documents.
 - [ ] W14.06 Describe uploaded images.
 - [ ] W14.07 Report processing failures and retry extraction.
-- [ ] W14.08 List attachments by note, task, and project.
-- [ ] W14.09 Read extracted content.
-- [ ] W14.10 Download by identity or note-relative path.
-- [ ] W14.11 Serve authenticated browser content requests.
+- [ ] W14.08 List attachments by note, task, and project. Partial: [archived-project visibility](attachment-project-visibility.md).
+- [ ] W14.09 Read extracted content. Partial: [archived-project visibility](attachment-project-visibility.md).
+- [ ] W14.10 Download by identity or note-relative path. Partial: [archived-project visibility](attachment-project-visibility.md).
+- [ ] W14.11 Serve authenticated browser content requests. Partial: [archived-project visibility](attachment-project-visibility.md).
 - [ ] W14.12 Remove records and stored objects. Partial: [note removal and retained revisions](attachment-path-removal.md).
 - [ ] W14.13 Snapshot attachments with revisions.
 - [ ] W14.14 Restore attachment snapshots.

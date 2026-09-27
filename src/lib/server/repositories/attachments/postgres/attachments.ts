@@ -66,12 +66,23 @@ const toView = (
 export class AttachmentRecords implements AttachmentRepository {
 	constructor(private readonly database: Database) {}
 
+	private activeProjectIds() {
+		return this.database
+			.select({ id: schema.projects.id })
+			.from(schema.projects)
+			.where(isNull(schema.projects.archivedAt));
+	}
+
 	async createUpload(actor: ActorContext, upload: AttachmentUpload): Promise<AttachmentUpload> {
 		const [project] = await this.database
 			.select({ id: schema.projects.id })
 			.from(schema.projects)
 			.where(
-				and(eq(schema.projects.id, upload.projectId), eq(schema.projects.userId, actor.userId))
+				and(
+					eq(schema.projects.id, upload.projectId),
+					eq(schema.projects.userId, actor.userId),
+					isNull(schema.projects.archivedAt)
+				)
 			);
 		if (!project) throw new NotFoundError('Project was not found');
 		const [row] = await this.database
@@ -98,7 +109,11 @@ export class AttachmentRecords implements AttachmentRepository {
 			.select()
 			.from(schema.attachmentUploads)
 			.where(
-				and(eq(schema.attachmentUploads.id, id), eq(schema.attachmentUploads.userId, actor.userId))
+				and(
+					eq(schema.attachmentUploads.id, id),
+					eq(schema.attachmentUploads.userId, actor.userId),
+					inArray(schema.attachmentUploads.projectId, this.activeProjectIds())
+				)
 			);
 		return row ? toUpload(row) : undefined;
 	}
@@ -149,7 +164,11 @@ export class AttachmentRecords implements AttachmentRepository {
 					eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
 				)
 				.where(
-					and(eq(schema.attachments.noteId, noteId), eq(schema.attachments.userId, actor.userId))
+					and(
+						eq(schema.attachments.noteId, noteId),
+						eq(schema.attachments.userId, actor.userId),
+						inArray(schema.attachments.projectId, this.activeProjectIds())
+					)
 				)
 				.orderBy(asc(schema.attachments.path))
 		).map(({ attachment, version }) => toView(attachment, version));
@@ -171,6 +190,7 @@ export class AttachmentRecords implements AttachmentRepository {
 					and(
 						eq(schema.attachments.projectId, projectId),
 						eq(schema.attachments.userId, actor.userId),
+						inArray(schema.attachments.projectId, this.activeProjectIds()),
 						sql`${schema.attachments.noteId} is null`
 					)
 				)
@@ -206,7 +226,8 @@ export class AttachmentRecords implements AttachmentRepository {
 				.where(
 					and(
 						eq(schema.todoAttachments.todoId, todoId),
-						eq(schema.attachments.userId, actor.userId)
+						eq(schema.attachments.userId, actor.userId),
+						inArray(schema.attachments.projectId, this.activeProjectIds())
 					)
 				)
 				.orderBy(asc(schema.attachments.path))
@@ -221,7 +242,13 @@ export class AttachmentRecords implements AttachmentRepository {
 				schema.attachmentVersions,
 				eq(schema.attachmentVersions.id, schema.attachments.currentVersionId)
 			)
-			.where(and(eq(schema.attachments.id, id), eq(schema.attachments.userId, actor.userId)));
+			.where(
+				and(
+					eq(schema.attachments.id, id),
+					eq(schema.attachments.userId, actor.userId),
+					inArray(schema.attachments.projectId, this.activeProjectIds())
+				)
+			);
 		return row ? toView(row.attachment, row.version) : undefined;
 	}
 
@@ -345,7 +372,8 @@ export class AttachmentRecords implements AttachmentRepository {
 								isNotNull(schema.attachmentVersions.parserKind)
 							)
 						),
-						isNotNull(schema.attachments.currentVersionId)
+						isNotNull(schema.attachments.currentVersionId),
+						inArray(schema.attachments.projectId, this.activeProjectIds())
 					)
 				)
 		).map((row) => ({
@@ -365,7 +393,8 @@ export class AttachmentRecords implements AttachmentRepository {
 				and(
 					eq(schema.attachments.userId, actor.userId),
 					eq(schema.attachmentVersions.id, versionId),
-					isNotNull(schema.attachments.currentVersionId)
+					isNotNull(schema.attachments.currentVersionId),
+					inArray(schema.attachments.projectId, this.activeProjectIds())
 				)
 			)
 			.for('update');
