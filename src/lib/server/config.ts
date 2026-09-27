@@ -32,8 +32,11 @@ export const localActor = () => ({
 export const authenticationEnabled = (): boolean =>
 	Boolean(process.env.AUTHENTIK_CLIENT_ID?.trim());
 
-export const requestActor = (user?: { readonly id: UserId }) =>
-	authenticationEnabled() && user ? { userId: user.id } : localActor();
+export const requestActor = (user?: { readonly id: UserId }) => {
+	if (!authenticationEnabled()) return localActor();
+	if (!user) throw new Error('Authenticated user is required when authentication is enabled');
+	return { userId: user.id };
+};
 
 export const authentikConfiguration = () => {
 	const domain = process.env.AUTHENTIK_DOMAIN;
