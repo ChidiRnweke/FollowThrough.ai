@@ -196,7 +196,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W12.02 Preserve user changes when built-ins evolve. See [built-in lifecycle review](built-in-skill-lifecycle.md).
 - [x] W12.03 Create a skill directly. See [creation review](skill-creation.md).
 - [x] W12.04 Create a skill from selected content. See [selection creation review](skill-selection.md).
-- [ ] W12.05 Browse and open skills.
+- [x] W12.05 Browse and open skills. See [catalog and detail visibility](skill-visibility.md).
 - [ ] W12.06 Import Markdown and metadata.
 - [ ] W12.07 Serialize skills for external use.
 - [ ] W12.08 Edit metadata and enabled state.

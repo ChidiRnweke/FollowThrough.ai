@@ -105,8 +105,10 @@ export class WorkspaceViews {
 
 	skill(noteId: NoteId): WorkspaceSkill | null {
 		const note = this.get('notes', noteId);
+		if (!note || note.archivedAt || note.kind !== 'skill') return null;
+		const project = this.get('projects', note.projectId);
 		const metadata = this.get('skills', noteId);
-		return note && metadata && note.kind === 'skill'
+		return project && !project.archivedAt && metadata
 			? { ...metadata, name: note.title, note }
 			: null;
 	}
