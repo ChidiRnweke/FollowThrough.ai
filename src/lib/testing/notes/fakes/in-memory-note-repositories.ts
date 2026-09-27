@@ -31,12 +31,26 @@ export class InMemoryNoteRepository implements NoteRepository {
 	revisions: NoteRevision[] = [];
 	restoredAttachmentSnapshots: NoteRevision['id'][] = [];
 	failNextConditionalUpdate = false;
+	private nextWriteRead: { started(): void; ready: Promise<void> } | null = null;
+
+	pauseNextWriteRead(): { started: Promise<void>; release(): void } {
+		const started = Promise.withResolvers<void>();
+		const ready = Promise.withResolvers<void>();
+		this.nextWriteRead = { started: started.resolve, ready: ready.promise };
+		return { started: started.promise, release: ready.resolve };
+	}
 
 	async findById(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
 		return this.notes.find((note) => note.id === id && note.userId === actor.userId);
 	}
 
 	async findForWrite(actor: ActorContext, id: NoteId): Promise<Note | undefined> {
+		const paused = this.nextWriteRead;
+		this.nextWriteRead = null;
+		if (paused) {
+			paused.started();
+			await paused.ready;
+		}
 		return this.findById(actor, id);
 	}
 

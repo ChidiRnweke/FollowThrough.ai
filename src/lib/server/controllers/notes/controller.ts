@@ -795,7 +795,10 @@ export class Notes implements NotesController {
 		input: DiscardNoteDraftInput
 	): Promise<DiscardNoteDraftOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const note = await this.dependencies.noteReader.get(actor, input.noteId);
+			const note = await this.dependencies.noteEditor.getForEdit(actor, {
+				id: input.noteId,
+				userId: actor.userId
+			});
 			const revision = (await this.dependencies.revisionReader.revisions(actor, input.noteId)).find(
 				(candidate) => candidate.revision === note.publishedRevision
 			);
