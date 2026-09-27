@@ -8,7 +8,7 @@
 	import { DrawioReviewDialog } from '$lib/components/diagrams';
 	import ExportDialog from '../export/export-dialog.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
-	import NoteVersionHistory from '../note-version-history.svelte';
+	import NoteVersionHistory, { type NoteHistoryReadState } from '../note-version-history.svelte';
 
 	let {
 		exportOpen = $bindable(false),
@@ -18,7 +18,7 @@
 		historySelectedId = $bindable(undefined),
 		historyRevisions,
 		historySelected,
-		historyLoading = false,
+		historyReadState = { kind: 'ready' },
 		note,
 		conflictRecord,
 		reviewingSuggestion,
@@ -37,7 +37,7 @@
 		historySelectedId?: NoteRevisionId;
 		historyRevisions: readonly NoteRevisionSummary[];
 		historySelected?: NoteRevision;
-		historyLoading?: boolean;
+		historyReadState?: NoteHistoryReadState;
 		note: Note;
 		conflictRecord?: WriteConflictView<Note>;
 		reviewingSuggestion: DiagramSuggestion | null;
@@ -58,7 +58,7 @@
 	{note}
 	revisions={historyRevisions}
 	selected={historySelected}
-	loading={historyLoading}
+	readState={historyReadState}
 	{perNote}
 	{diagrams}
 	noteId={note.id}
