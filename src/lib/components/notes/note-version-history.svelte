@@ -1,3 +1,8 @@
+<script lang="ts" module>
+	export type NoteHistoryReadState =
+		{ kind: 'ready' } | { kind: 'loading' } | { kind: 'failure'; message: string };
+</script>
+
 <script lang="ts">
 	import type { Note, NoteId, NoteRevision, NoteRevisionSummary } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
@@ -18,7 +23,7 @@
 		open = $bindable(false),
 		note,
 		revisions,
-		loading = false,
+		readState = { kind: 'ready' },
 		selectedId = $bindable(undefined),
 		selected,
 		perNote,
@@ -31,7 +36,7 @@
 		/** The note as it stands — always the right-hand side of the diff. */
 		note: Pick<Note, 'title' | 'plainText' | 'document' | 'publishedRevision' | 'currentRevision'>;
 		revisions: readonly NoteRevisionSummary[];
-		loading?: boolean;
+		readState?: NoteHistoryReadState;
 		selectedId?: NoteRevision['id'];
 		/** The full body of `selectedId`, once its fetch settles. */
 		selected?: NoteRevision;
@@ -85,7 +90,13 @@
 			>
 		</Dialog.Header>
 
-		{#if revisions.length === 0}
+		{#if readState.kind === 'failure'}
+			<p role="alert" class="py-6 text-sm text-destructive">{readState.message}</p>
+		{:else if readState.kind === 'loading' && revisions.length === 0}
+			<p role="status" class="flex items-center gap-2 py-6 text-sm text-muted-foreground">
+				<Spinner />Loading version history…
+			</p>
+		{:else if revisions.length === 0}
 			<EmptyState
 				icon={FtHistory}
 				title="No versions yet"
@@ -127,7 +138,7 @@
 				</ul>
 
 				<div class="min-h-0 overflow-hidden">
-					{#if loading}
+					{#if readState.kind === 'loading'}
 						<p class="flex items-center gap-2 py-6 text-sm text-muted-foreground">
 							<Spinner />Loading that version…
 						</p>
@@ -155,15 +166,17 @@
 		{/if}
 
 		<Dialog.Footer class="sm:items-center sm:justify-between">
-			{#if selected}
-				<p class="text-xs text-muted-foreground">Your current draft remains in history.</p>
+			{#if selected && readState.kind === 'ready'}
+				<p class="text-xs text-muted-foreground">
+					Published versions remain in history. Unpublished changes will be replaced.
+				</p>
 			{/if}
 			<div class="flex flex-wrap items-center justify-end gap-2">
 				<Button variant="outline" onclick={() => (open = false)}>Close</Button>
-				{#if selected}
+				{#if selected && readState.kind === 'ready'}
 					<ConfirmDelete
 						title="Restore this version?"
-						description="The note's current content is replaced. It stays in the history, so you can undo this the same way."
+						description="This replaces the current note, including unpublished changes. Only published versions remain in history."
 						confirmLabel="Restore"
 						busy={restoring}
 						onconfirm={() => restore(selected.id)}

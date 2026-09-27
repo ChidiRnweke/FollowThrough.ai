@@ -34,7 +34,10 @@ const revision: NoteRevision = {
 	noteId,
 	revision: 2,
 	title: 'Architecture note',
-	document: { type: 'doc', content: [] },
+	document: {
+		type: 'doc',
+		content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The original body' }] }]
+	},
 	plainText: 'The original body',
 	createdAt: '2026-07-12T08:00:00.000Z' as NoteRevision['createdAt']
 };
@@ -99,4 +102,58 @@ describe('NoteVersionHistory', () => {
 		const screen = await render(NoteVersionHistory, { ...base, revisions: [] });
 		expect(await screen.getByText('No versions yet').all()).not.toHaveLength(0);
 	});
+});
+
+describe('NoteVersionHistory feedback', () => {
+	it('explains that restoring replaces unpublished changes', async () => {
+		const screen = await render(NoteVersionHistory, { ...base, selected: revision });
+		expect(
+			await screen
+				.getByText('Published versions remain in history. Unpublished changes will be replaced.')
+				.all()
+		).toHaveLength(1);
+	});
+	it('warns about unpublished changes before confirmation', async () => {
+		const screen = await render(NoteVersionHistory, { ...base, selected: revision });
+		await screen.getByRole('button', { name: 'Restore previous version' }).click();
+		expect(
+			await screen
+				.getByText(
+					'This replaces the current note, including unpublished changes. Only published versions remain in history.'
+				)
+				.all()
+		).toHaveLength(1);
+	});
+	it('shows initial loading before an empty history is known', async () => {
+		const screen = await render(NoteVersionHistory, {
+			...base,
+			revisions: [],
+			readState: { kind: 'loading' }
+		});
+		expect(await screen.getByText('Loading version history…').all()).toHaveLength(1);
+	});
+});
+
+it('keeps a failed history read distinct from an empty history', async () => {
+	const screen = await render(NoteVersionHistory, {
+		...base,
+		revisions: [],
+		readState: {
+			kind: 'failure',
+			message: 'Could not load the version history. Close this dialog and try again.'
+		}
+	});
+	await expect
+		.element(screen.getByRole('alert'))
+		.toHaveTextContent('Could not load the version history.');
+});
+it('withholds restoration while the selected snapshot is loading', async () => {
+	const screen = await render(NoteVersionHistory, {
+		...base,
+		selected: revision,
+		readState: { kind: 'loading' }
+	});
+	expect(await screen.getByRole('button', { name: 'Restore previous version' }).all()).toHaveLength(
+		0
+	);
 });

@@ -94,3 +94,17 @@ describe('NoteWorkspaceDialogs conflict resolution', () => {
 		expect(await screen.getByRole('dialog', { name: /Architecture/ }).all()).not.toHaveLength(0);
 	});
 });
+
+it('shows the workspace history failure in the open dialog', async () => {
+	const screen = await render(NoteWorkspaceDialogs, {
+		...base,
+		historyOpen: true,
+		historyReadState: {
+			kind: 'failure',
+			message: 'Could not load the version history. Close this dialog and try again.'
+		}
+	});
+	await expect
+		.element(screen.getByRole('alert'))
+		.toHaveTextContent('Could not load the version history.');
+});

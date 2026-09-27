@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { NoteHistoryReadState } from '../note-version-history.svelte';
 	import type { DiagramSuggestion, Suggestion } from '$lib/models/suggestions';
 
 	import type { ShellContext } from '$lib/client/shell/views';
@@ -84,7 +85,7 @@
 
 	let exportOpen = $state(false);
 	let historyOpen = $state(false);
-	let historyLoading = $state(false);
+	let historyReadState = $state<NoteHistoryReadState>({ kind: 'ready' });
 	let historyRevisions = $state<readonly NoteRevisionSummary[]>([]);
 	let historySelectedId = $state<NoteRevisionId | undefined>(undefined);
 	let historySelected = $state<NoteRevision | undefined>(undefined);
@@ -647,33 +648,43 @@
 	 */
 	async function openHistory(): Promise<void> {
 		historyOpen = true;
-		historyLoading = true;
+		historyRevisions = [];
+		historySelected = undefined;
+		historySelectedId = undefined;
+		historyReadState = { kind: 'loading' };
 		try {
 			const { revisions } = await listNoteRevisions(note.id);
 			historyRevisions = revisions;
 			const preferred = revisions.find((revision) => revision.isPublished) ?? revisions.at(0);
-			if (!preferred) return;
+			if (!preferred) {
+				historyReadState = { kind: 'ready' };
+				return;
+			}
 			historySelectedId = preferred.id;
 			historySelected = (await getNoteRevision({ noteId: note.id, revisionId: preferred.id }))
 				.revision;
-			// audit-allow: silent-catch — history load failure is reported and no empty history is presented as success.
+			historyReadState = { kind: 'ready' };
+			// audit-allow: silent-catch — failure is rendered in the open version-history dialog.
 		} catch {
-			toast.error('Could not load the version history. Try again.');
-		} finally {
-			historyLoading = false;
+			historyReadState = {
+				kind: 'failure',
+				message: 'Could not load the version history. Close this dialog and try again.'
+			};
 		}
 	}
 
 	async function selectRevision(revisionId: NoteRevisionId): Promise<void> {
-		historyLoading = true;
+		historyReadState = { kind: 'loading' };
 		historySelected = undefined;
 		try {
 			historySelected = (await getNoteRevision({ noteId: note.id, revisionId })).revision;
-			// audit-allow: silent-catch — revision load failure is reported and the current selection remains intact.
+			historyReadState = { kind: 'ready' };
+			// audit-allow: silent-catch — failure is rendered in the open version-history dialog.
 		} catch {
-			toast.error('Could not load that version. Try again.');
-		} finally {
-			historyLoading = false;
+			historyReadState = {
+				kind: 'failure',
+				message: 'Could not load that version. Close this dialog and try again.'
+			};
 		}
 	}
 
@@ -851,7 +862,7 @@
 		bind:historySelectedId
 		{historyRevisions}
 		{historySelected}
-		{historyLoading}
+		{historyReadState}
 		{note}
 		conflictRecord={draft.conflict}
 		{reviewingSuggestion}
