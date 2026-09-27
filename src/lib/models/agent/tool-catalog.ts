@@ -142,7 +142,8 @@ export const TOOL_DESCRIPTIONS = [
 	{
 		name: 'move_project_entry',
 		classification: 'mutation',
-		description: 'Move or reorder a note or folder.'
+		description:
+			'Move or reorder a note or folder by its zero-based position in the visible project tree.'
 	},
 	{
 		name: 'get_note',

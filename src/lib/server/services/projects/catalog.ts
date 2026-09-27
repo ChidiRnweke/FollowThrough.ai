@@ -131,7 +131,16 @@ export function decideProjectEntryMove<
 					.filter((candidate) => candidate.parentId === input.parentId && candidate.id !== entry.id)
 					.sort((left, right) => left.position - right.position)
 	).slice();
-	targetSiblings.splice(Math.min(input.position, targetSiblings.length), 0, entry);
+	// Tree callers count visible notes and folders. Hidden skill records still need
+	// their persisted slots, but must not shift a requested visible position.
+	// Preserve the existing full-sibling semantics for direct skill moves.
+	const positionedSiblings =
+		entry.kind === 'skill'
+			? targetSiblings
+			: targetSiblings.filter((sibling) => sibling.kind !== 'skill');
+	const before = positionedSiblings[input.position];
+	const targetIndex = before ? targetSiblings.indexOf(before) : targetSiblings.length;
+	targetSiblings.splice(targetIndex, 0, entry);
 	return {
 		kind: 'move',
 		entry,
