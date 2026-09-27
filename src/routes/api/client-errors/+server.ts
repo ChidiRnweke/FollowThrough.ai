@@ -1,5 +1,5 @@
 // chisel-ignore-file error-flow:raw-http-status -- A one-way browser telemetry beacon succeeds with an intentionally empty 204 response.
-import { z } from 'zod';
+import { clientErrorReportSchema } from '$lib/models/telemetry/client-error';
 import type { RequestHandler } from './$types';
 
 /**
@@ -12,16 +12,8 @@ import type { RequestHandler } from './$types';
  * the remote-function machinery working.
  */
 
-const reportSchema = z.object({
-	message: z.string().max(2000),
-	stack: z.string().max(8000).optional(),
-	route: z.string().max(500).optional(),
-	pathname: z.string().max(500).optional(),
-	status: z.number().int().optional()
-});
-
 export const POST: RequestHandler = async ({ request, locals }) => {
-	const report = reportSchema.parse(await request.json());
+	const report = clientErrorReportSchema.parse(await request.json());
 	const where = report.route ?? report.pathname ?? 'unknown route';
 
 	console.error(
