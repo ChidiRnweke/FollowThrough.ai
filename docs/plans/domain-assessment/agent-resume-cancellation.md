@@ -35,7 +35,9 @@ its own local handle.
 ## Test dispositions and limits
 
 Add the controller regression and a registry regression for stale cleanup; both fail before the fix.
-Upgrade the existing registry abort test to inspect the actual signal. Retain approval requeue,
+Upgrade the existing registry abort test to inspect the actual signal. Remove the concurrent PostgreSQL approval fixture’s wait for a second provider execution: that
+execution is the defect this repair prevents. Its row-lock, event-count and persisted-decision
+assertions remain intact. Retain approval requeue,
 duplicate decision, batch rollback, cancellation and restart recovery tests. All 45 focused tests
 passed; full local and CI results are recorded in the PR. No live model call is required.
 

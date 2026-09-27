@@ -89,7 +89,7 @@ it('does not append another requeue after a concurrent approval already queued t
 	const { owner, run } = await seed('17201');
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
-	const { controller, runner, completion } = approvalController(writer.db);
+	const { controller, completion } = approvalController(writer.db);
 	const locked = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
 	const queuing = blocker.begin(async (transaction) => {
@@ -114,7 +114,7 @@ it('does not append another requeue after a concurrent approval already queued t
 		release.resolve();
 		await queuing;
 		await decision;
-		await runner.started.promise;
+		// The concurrent writer owns the queued execution. This decision must not start another.
 		const events = await new AgentRunEventRecords(context.db).replay(owner, run.id, '0');
 		const decisions = await new AgentRunDecisionRecords(context.db).loadUnconsumed(run.id);
 		expect({
