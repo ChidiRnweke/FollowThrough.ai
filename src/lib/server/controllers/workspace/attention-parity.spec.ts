@@ -66,6 +66,10 @@ it('shows the same profile and visible-project memory attention from server and 
 	const browser = new WorkspaceViews(
 		new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 	);
+	// The SQL suggestion read excludes the archived project; the cache retains its raw row.
+	suggestions.suggestions = suggestions.suggestions.filter(
+		(suggestion) => suggestion.id !== testSuggestionId(3)
+	);
 	const server = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
 			...builtInSkillsFixture(),

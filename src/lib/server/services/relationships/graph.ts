@@ -124,15 +124,15 @@ export class RelationshipGraph {
 		actor: ActorContext,
 		relationships: readonly NoteRelationship[]
 	): Promise<readonly BacklinkContext[]> {
-		return Promise.all(
+		const contexts = await Promise.all(
 			relationships.map(async (relationship) => {
 				const [source, target] = await Promise.all([
 					this.notes.findById(actor, relationship.sourceNoteId),
 					this.notes.findById(actor, relationship.targetNoteId)
 				]);
-				if (!source || !target) throw new NotFoundError('Related note was not found');
-				return { relationship, source, target };
+				return source && target ? [{ relationship, source, target }] : [];
 			})
 		);
+		return contexts.flat();
 	}
 }
