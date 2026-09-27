@@ -24,6 +24,8 @@ export default defineConfig({
 		emptyOutDir: true,
 		target: 'node22',
 		rollupOptions: {
+			// Share the exact preloaded SDK and shutdown coordinator at runtime.
+			external: ['../scripts/otel-instrumentation.js'],
 			input: {
 				worker: 'src/worker.ts',
 				// Deploy-time seeder for the tool_embeddings table; runs next to migrations.

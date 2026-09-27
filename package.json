@@ -16,7 +16,7 @@
 		"build:worker": "vite build --config vite.config.worker.ts",
 		"build:audit": "node --experimental-strip-types scripts/audit-build-output.ts",
 		"preview": "vite preview",
-		"start": "node --import ./scripts/otel-instrumentation.js build",
+		"start": "node --import ./scripts/otel-instrumentation.js scripts/start-web.js",
 		"worker": "node --import ./scripts/otel-instrumentation.js build-worker/worker.js",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "NODE_OPTIONS='--max-old-space-size=1024' svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
