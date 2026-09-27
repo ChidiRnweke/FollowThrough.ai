@@ -159,7 +159,7 @@ export class References implements ReferencesController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId);
+			releaseActiveRun(runId, active);
 		}
 	}
 

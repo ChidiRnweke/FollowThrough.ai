@@ -27,7 +27,7 @@ export const abortActiveRun = (runId: AgentRunId): boolean => {
 	return true;
 };
 
-/** Drops the slot for `runId`, whatever its outcome was. Safe to call twice. */
-export const releaseActiveRun = (runId: AgentRunId): void => {
-	controllers.delete(runId);
+/** Only the attempt that owns the slot can release it. A resumed run may already own a new slot. */
+export const releaseActiveRun = (runId: AgentRunId, controller: AbortController): void => {
+	if (controllers.get(runId) === controller) controllers.delete(runId);
 };

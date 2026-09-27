@@ -445,7 +445,7 @@ export class Diagrams implements DiagramsController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId);
+			releaseActiveRun(runId, active);
 		}
 	}
 

@@ -172,7 +172,7 @@ export class Relationships implements RelationshipsController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId);
+			releaseActiveRun(runId, active);
 		}
 	}
 
