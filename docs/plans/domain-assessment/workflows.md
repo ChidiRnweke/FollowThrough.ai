@@ -64,8 +64,8 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W04.12 Archive notes and folders. See [note trash workflow review](note-trash-workflows.md).
 - [x] W04.13 Restore archived notes with unavailable parents. See [note trash workflow review](note-trash-workflows.md).
 - [x] W04.14 Browse note trash. See [note trash workflow review](note-trash-workflows.md).
-- [ ] W04.15 Permanently delete individual notes.
-- [ ] W04.16 Empty note trash.
+- [x] W04.15 Permanently delete individual notes. See [permanent deletion review](note-permanent-deletion.md).
+- [x] W04.16 Empty note trash. See [permanent deletion review](note-permanent-deletion.md).
 - [ ] W04.17 Import a Markdown archive and reconstruct folders.
 - [ ] W04.18 Report partial import success and individual failures. Partial: [response outcomes](import-response.md).
 

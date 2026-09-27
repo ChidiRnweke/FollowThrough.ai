@@ -1,6 +1,6 @@
 # Archive, restore and browse note trash
 
-Assessment: W04.12, W04.13 and W04.14. Permanent deletion and emptying trash remain separate reviews.
+Assessment: W04.12, W04.13 and W04.14. Permanent deletion and emptying trash are covered by the [permanent deletion review](note-permanent-deletion.md).
 
 ## Entry points and state
 
@@ -63,6 +63,6 @@ in CI because Docker is unavailable locally. Observed gate results are recorded 
 
 ## Remaining boundaries
 
-W04.15 and W04.16 remain open. A successful permanent deletion followed by a failed client refresh
-needs a separate presentation review. Emptying mixed note and diagram trash remains a sequence of
-operations, not one atomic transaction. This assessment does not change those contracts.
+W04.15 and W04.16 are now assessed in the [permanent deletion review](note-permanent-deletion.md).
+It confirms that a failed client refresh is an explicit synchronization result, not a thrown deletion
+failure. Mixed note and diagram emptying remains a sequence of operations, not one transaction.
