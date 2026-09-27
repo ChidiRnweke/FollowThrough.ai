@@ -33,8 +33,8 @@ export interface Lab extends ProductionApplication {
 	 */
 	readonly embeddingClient: EmbeddingClient;
 	/**
-	 * Raw database handle, used only by the seeding helpers to backdate
-	 * `createdAt` on fixtures. Every write otherwise goes through the real
+	 * Raw database handle, used by seeding helpers for explicit account initialization and to backdate
+	 * `createdAt` on fixtures. Content writes go through the real
 	 * controllers so the search index and revision history are produced exactly
 	 * as production would.
 	 */

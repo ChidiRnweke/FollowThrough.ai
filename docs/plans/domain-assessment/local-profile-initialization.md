@@ -45,3 +45,14 @@ The request-actor cases cover enabled-auth refusal, configured/default local UUI
 identity rejection and invalid configuration. Caller wiring was traced through the hook and MCP;
 this is not a new full HTTP authentication end-to-end test. W01.10 is assessed. Provider identity
 linking (D08), general admission and every ownership boundary remain separate workflows.
+
+## Evaluation lab follow-up
+
+The evaluation lab calls controllers directly and does not pass through the HTTP or MCP local-mode
+boundary. Its seedWorkspace and smoke setup also relied on implicit user creation. Give those entry
+points one explicit seedActor helper that initializes the profile before requesting the provisioned
+shell. The schema smoke expectation now includes the Inbox, matching existing first-shell behavior.
+
+A deterministic PGlite test with the production application graph reproduced the missing-user foreign
+key failure. It verifies the repaired profile and initial Inbox without submitting an agent run or
+calling a model provider. Existing live-model evals remain separate from this local setup check.

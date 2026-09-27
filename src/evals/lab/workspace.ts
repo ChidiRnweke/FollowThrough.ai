@@ -1,3 +1,5 @@
+import { UserDirectory } from '$lib/server/services/identity/users';
+import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { ActorContext, UserId } from '$lib/models/identity';
@@ -97,6 +99,14 @@ export async function selectionFromSeededNote(
 	};
 }
 
+/** The lab has no HTTP local-mode boundary, so establish its account before workspace writes. */
+export async function seedActor(lab: Pick<Lab, 'db' | 'controllers'>): Promise<ActorContext> {
+	const actor: ActorContext = { userId: randomUUID() as UserId };
+	await new UserDirectory(new UserRecords(lab.db)).initializeLocal(actor);
+	await lab.controllers.workspace().getShellContext(actor);
+	return actor;
+}
+
 /**
  * Builds a workspace through the real controllers rather than by inserting
  * rows, so memories land in both the entry table and the pgvector index and
@@ -107,9 +117,7 @@ export async function selectionFromSeededNote(
  * isolate from one another without truncating between runs.
  */
 export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promise<SeededWorkspace> {
-	const actor: ActorContext = { userId: randomUUID() as UserId };
-	// Materializes the user row via UserDirectory.ensureLocal.
-	await lab.controllers.workspace().getShellContext(actor);
+	const actor = await seedActor(lab);
 
 	const projectIds = new Map<string, ProjectId>();
 	const noteIds = new Map<string, NoteId>();
