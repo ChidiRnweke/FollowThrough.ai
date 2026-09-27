@@ -393,7 +393,7 @@ export class Todos implements TodosController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId);
+			releaseActiveRun(runId, active);
 		}
 	}
 

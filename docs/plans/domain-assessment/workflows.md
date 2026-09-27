@@ -315,7 +315,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W17.11 Pause for approval.
 - [ ] W17.12 Approve or reject individual calls.
 - [ ] W17.13 Approve or reject batches.
-- [ ] W17.14 Resume after decisions.
+- [ ] W17.14 Resume after decisions. Partial: [cancellation ownership](agent-resume-cancellation.md).
 - [ ] W17.15 Apply automatic approval and trust.
 - [ ] W17.16 Return inapplicable proposals as actionable failures before approval.
 - [ ] W17.17 Cancel running and approval-paused work.

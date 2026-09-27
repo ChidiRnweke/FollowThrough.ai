@@ -8,10 +8,11 @@ const runId = (value: number): AgentRunId =>
 describe('active run registry', () => {
 	it('aborts a run that was registered as executing', () => {
 		const id = runId(1);
-		registerActiveRun(id);
+		const controller = registerActiveRun(id);
 
-		expect(abortActiveRun(id)).toBe(true);
-		releaseActiveRun(id);
+		abortActiveRun(id);
+		expect(controller.signal.aborted).toBe(true);
+		releaseActiveRun(id, controller);
 	});
 
 	it('reports nothing to abort for an unknown run', () => {
@@ -20,9 +21,22 @@ describe('active run registry', () => {
 
 	it('forgets a run once it is released', () => {
 		const id = runId(3);
-		registerActiveRun(id);
-		releaseActiveRun(id);
+		const controller = registerActiveRun(id);
+		releaseActiveRun(id, controller);
 
 		expect(abortActiveRun(id)).toBe(false);
 	});
+});
+
+it('keeps the current cancellation handle when an older attempt releases its slot', () => {
+	const id = runId(4);
+	const previous = registerActiveRun(id);
+	const current = registerActiveRun(id);
+	try {
+		releaseActiveRun(id, previous);
+		abortActiveRun(id);
+		expect(current.signal.aborted).toBe(true);
+	} finally {
+		releaseActiveRun(id, current);
+	}
 });

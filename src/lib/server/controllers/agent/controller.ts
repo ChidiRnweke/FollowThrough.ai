@@ -458,7 +458,7 @@ export class Agent implements AgentController {
 		actor: ActorContext,
 		input: DecideAgentRunBatchInput
 	): Promise<AgentRunSnapshot> {
-		const snapshot = await this.dependencies.transactionRunner.run(async () => {
+		const result = await this.dependencies.transactionRunner.run(async () => {
 			const run = await this.dependencies.approvals.getForWrite(actor, input.runId);
 			const change = this.dependencies.approvals.plan(run, input.callIds, now());
 			for (const callId of input.callIds)
@@ -478,10 +478,10 @@ export class Agent implements AgentController {
 					attempt: 1,
 					reason: 'resumed'
 				});
-			return this.snapshot(actor, queued);
+			return { snapshot: await this.snapshot(actor, queued), requeued: change !== null };
 		});
-		this.executeInBackground(input.runId);
-		return snapshot;
+		if (result.requeued) this.executeInBackground(input.runId);
+		return result.snapshot;
 	}
 
 	async cancel(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot> {
@@ -588,7 +588,7 @@ export class Agent implements AgentController {
 
 	private executeInBackground(runId: AgentRunId): void {
 		const controller = registerActiveRun(runId);
-		const cleanup = () => releaseActiveRun(runId);
+		const cleanup = () => releaseActiveRun(runId, controller);
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
 		void this.execute(runId, controller.signal)
 			.then(cleanup, async (error) => {
