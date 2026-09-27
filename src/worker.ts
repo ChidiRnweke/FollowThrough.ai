@@ -9,9 +9,12 @@
 import { createProductionFactory } from '$lib/server/factories/production-factory';
 import { hydrateEnvironment } from '$lib/server/config';
 import { startScheduler } from '$lib/server/services/scheduler';
+import {
+	drainBeforeTelemetryShutdown,
+	shutdownTelemetry
+} from '../scripts/otel-instrumentation.js';
 
 const shutdownTimeoutMs = Number(process.env.WORKER_SHUTDOWN_TIMEOUT_MS ?? 30_000);
-const telemetryFlushMs = Number(process.env.WORKER_TELEMETRY_FLUSH_MS ?? 2_000);
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
@@ -19,6 +22,10 @@ const main = async (): Promise<void> => {
 	const tasks = application.backgroundTasks;
 
 	const scheduler = startScheduler(tasks, { runOnStart: true });
+	drainBeforeTelemetryShutdown(async () => {
+		await scheduler.stop();
+		console.log('[worker] stopped');
+	});
 	console.log(
 		`[worker] started with ${tasks.length} task(s): ${tasks
 			.map((task) => `${task.name} every ${Math.round(task.intervalMs / 1000)}s`)
@@ -37,13 +44,8 @@ const main = async (): Promise<void> => {
 			process.exit(1);
 		}, shutdownTimeoutMs);
 		forced.unref();
-		await scheduler.stop();
-		// `scripts/otel-instrumentation.js` registers its own SIGTERM handler to flush
-		// the exporters. Give it room to finish before tearing the process down, or the
-		// spans for the tick we just waited on are lost.
-		await new Promise((resolve) => setTimeout(resolve, telemetryFlushMs));
+		await shutdownTelemetry();
 		clearTimeout(forced);
-		console.log('[worker] stopped');
 		process.exit(0);
 	};
 

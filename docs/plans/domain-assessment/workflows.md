@@ -462,7 +462,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W25.05 Trace controller operations.
 - [ ] W25.06 Trace runs, provider calls, and tools.
 - [ ] W25.07 Associate logs, traces, and run identities.
-- [ ] W25.08 Export and flush telemetry.
+- [ ] W25.08 Export and flush telemetry. Partial: [process shutdown ordering](process-telemetry-shutdown.md).
 - [ ] W25.09 Inspect and audit recorded traces.
 
 ## 26 — Startup and background work
@@ -474,7 +474,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W26.05 Run embedding maintenance.
 - [ ] W26.06 Run expired-upload cleanup.
 - [ ] W26.07 Handle maintenance failures and retries.
-- [ ] W26.08 Drain work during shutdown.
+- [ ] W26.08 Drain work during shutdown. Partial: [process shutdown ordering](process-telemetry-shutdown.md).
 - [ ] W26.09 Build and start web and worker processes.
 
 ## 27 — Verification and safeguards

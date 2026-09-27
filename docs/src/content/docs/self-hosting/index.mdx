@@ -53,7 +53,7 @@ Telemetry is optional but wired in from the start: both processes boot with `scr
 
 ## The image
 
-`Dockerfile` is a four-stage node:22-alpine build: `base` (pnpm via corepack) → `prod-deps` (production `node_modules`) → `builder` (`pnpm build`, which builds both the SvelteKit app and the worker entrypoint via `vite.config.worker.ts`) → `runtime`. The runtime stage carries `build/`, `build-worker/`, `drizzle/` (the migration SQL), `scripts/` (migration and provisioning), and `assets/` (embedded fonts for PDF export): everything the app, the worker, and the one-shot migrate job need, in one image. The default command serves the app on `:3000`; the worker is the same image with `command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']`.
+`Dockerfile` is a four-stage node:22-alpine build: `base` (pnpm via corepack) → `prod-deps` (production `node_modules`) → `builder` (`pnpm build`, which builds both the SvelteKit app and the worker entrypoint via `vite.config.worker.ts`) → `runtime`. The runtime stage carries `build/`, `build-worker/`, `drizzle/` (the migration SQL), `scripts/` (migration and provisioning), and `assets/` (embedded fonts for PDF export): everything the app, the worker, and the one-shot migrate job need, in one image. The default command serves the app on `:3000` through `scripts/start-web.js`, which waits for active HTTP requests before shutting down telemetry; the worker is the same image with `command: ['node', '--import', './scripts/otel-instrumentation.js', 'build-worker/worker.js']`.
 
 ## Configuration: bootstrap vs application
 

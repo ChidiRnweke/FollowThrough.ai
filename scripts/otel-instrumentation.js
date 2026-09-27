@@ -27,6 +27,7 @@ import { logs, SeverityNumber } from '@opentelemetry/api-logs';
 import { OpenAIAgentsInstrumentation } from '@arizeai/openinference-instrumentation-openai-agents';
 import * as agents from '@openai/agents';
 import { formatBody, recordAttributes } from './log-record.js';
+import { createTelemetryShutdown } from './telemetry-shutdown.js';
 
 /** The collector routes on this resource attribute; without it nothing reaches Phoenix. */
 const OPENINFERENCE_PROJECT_NAME = 'openinference.project.name';
@@ -193,13 +194,24 @@ export function initTelemetry(projectNameOverride) {
 	return sdk;
 }
 
-export async function shutdownTelemetry() {
+const telemetryShutdown = createTelemetryShutdown(async () => {
 	try {
 		if (sdk) await sdk.shutdown();
 		process.stdout.write('[OTel] Telemetry shut down successfully.\n');
 	} catch (error) {
 		process.stderr.write(`[OTel] Error shutting down telemetry: ${error}\n`);
 	}
+});
+
+/** The application registers its drain before it starts accepting shutdown signals.
+ * @param {() => Promise<void>} drain
+ */
+export function drainBeforeTelemetryShutdown(drain) {
+	telemetryShutdown.waitFor(drain);
+}
+
+export function shutdownTelemetry() {
+	return telemetryShutdown.shutdown();
 }
 
 const otelGlobal = /** @type {typeof globalThis & { __otel_initialized__?: boolean }} */ (

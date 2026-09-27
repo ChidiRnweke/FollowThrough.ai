@@ -52,4 +52,4 @@ COPY --from=builder /app/assets ./assets
 
 EXPOSE 3000
 
-CMD ["node", "--import", "./scripts/otel-instrumentation.js", "build"]
+CMD ["node", "--import", "./scripts/otel-instrumentation.js", "scripts/start-web.js"]
