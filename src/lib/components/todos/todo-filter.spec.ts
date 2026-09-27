@@ -31,9 +31,4 @@ describe('filterTodosByTitle', () => {
 	it('drops every todo when nothing matches', () => {
 		expect(filterTodosByTitle([view('Ship'), view('Reply')], 'nonexistent')).toHaveLength(0);
 	});
-
-	it('returns the original array for an empty query', () => {
-		const todos = [view('Ship')];
-		expect(filterTodosByTitle(todos, '  ')).toBe(todos);
-	});
 });

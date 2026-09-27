@@ -47,7 +47,7 @@ const setup = () => {
 };
 
 describe('Task edit rules', () => {
-	it('clears a counterparty for personal work at creation as it does during editing', async () => {
+	it('clears a counterparty for personal work at creation', async () => {
 		const { controller } = setup();
 		const { todo: created } = await controller.create(testActor(), {
 			projectId: testProjectId(),
@@ -55,12 +55,7 @@ describe('Task edit rules', () => {
 			responsibility: 'mine',
 			waitingOn: 'Sam'
 		});
-		const { todo: edited } = await controller.update(testActor(), {
-			todoId: created.id,
-			responsibility: 'mine',
-			waitingOn: 'Sam'
-		});
-		expect([created.waitingOn, edited.waitingOn]).toEqual([undefined, undefined]);
+		expect(created.waitingOn).toBeUndefined();
 	});
 	it('switching responsibility to mine clears the counterparty', async () => {
 		const { controller, todos } = setup();

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TodoId } from '$lib/models/todos';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
+import { testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { actor, context, now, seedNote } from '../database-harness';
 describe('Postgres todo repository invariants', () => {
 	it('does not reveal a todo to another actor', async () => {
@@ -19,6 +20,31 @@ describe('Postgres todo repository invariants', () => {
 		};
 		await repository.insert(owner, todo);
 		expect(await repository.findById(actor('22'), todo.id)).toBeUndefined();
+	});
+	it('does not list another actor’s todos', async () => {
+		const { owner, project } = await seedNote('63');
+		const repository = new TodoRecords(context.db);
+		await repository.insert(
+			owner,
+			todoBuilder({ id: testTodoId(6301), userId: owner.userId, projectId: project.id })
+		);
+		expect(await repository.list(actor('64'), {})).toEqual([]);
+	});
+	it('lists only todos in the selected project', async () => {
+		const { owner, project } = await seedNote('61');
+		const other = await seedNote('62', owner);
+		const repository = new TodoRecords(context.db);
+		const selected = await repository.insert(
+			owner,
+			todoBuilder({ id: testTodoId(6101), userId: owner.userId, projectId: project.id })
+		);
+		await repository.insert(
+			owner,
+			todoBuilder({ id: testTodoId(6201), userId: owner.userId, projectId: other.project.id })
+		);
+		expect(
+			(await repository.list(owner, { projectId: project.id })).map((todo) => todo.id)
+		).toEqual([selected.id]);
 	});
 	it('makes a status update visible through filtered listing', async () => {
 		const { owner, project } = await seedNote('45');

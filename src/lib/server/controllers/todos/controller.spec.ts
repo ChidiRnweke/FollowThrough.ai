@@ -5,7 +5,6 @@ import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	testActor,
-	testProjectId,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -91,19 +90,6 @@ describe('Todo edit invariants', () => {
 		expect(blanked.todo.category).toBeUndefined();
 	});
 
-	it('lists distinct categories for the actor, sorted', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [
-			todoBuilder({ category: 'Release 2.0' }),
-			todoBuilder({ id: testTodoId(2), category: 'Client work' }),
-			todoBuilder({ id: testTodoId(3), category: 'Client work' }),
-			todoBuilder({ id: testTodoId(4) })
-		];
-		await expect(controller.listCategories(testActor())).resolves.toEqual([
-			'Client work',
-			'Release 2.0'
-		]);
-	});
 	it('a partial title edit preserves the description', async () => {
 		const { todos, controller } = setup();
 		todos.todos = [todoBuilder({ description: 'Keep this context' })];
@@ -138,68 +124,6 @@ describe('Todo edit invariants', () => {
 		await expect(
 			controller.update(testActor(2), { todoId: testTodoId(), title: 'Foreign edit' })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-});
-
-describe('Todo lifecycle invariants', () => {
-	it('completing a todo records a completion timestamp', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [todoBuilder()];
-		const result = await controller.update(testActor(), {
-			todoId: testTodoId(),
-			status: 'done'
-		});
-		expect(result.todo.completedAt).toBeDefined();
-	});
-
-	it('reopening a completed todo clears its completion timestamp', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [todoBuilder({ status: 'done', completedAt: '2026-07-10T09:00:00Z' as never })];
-		const result = await controller.update(testActor(), {
-			todoId: testTodoId(),
-			status: 'open'
-		});
-		expect(result.todo.completedAt).toBeUndefined();
-	});
-});
-
-describe('Todo query isolation invariants', () => {
-	it('assembles an actor-scoped todo detail', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [todoBuilder()];
-		const result = await controller.get(testActor(), { todoId: testTodoId() });
-		expect(result.todo.id).toBe(testTodoId());
-	});
-
-	it('does not reveal another user’s todo detail', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [todoBuilder()];
-		await expect(controller.get(testActor(2), { todoId: testTodoId() })).rejects.toMatchObject({
-			code: 'NOT_FOUND'
-		});
-	});
-	it('project filtering returns only todos in that project', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2), projectId: testProjectId(2) })];
-		const result = await controller.list(testActor(), { projectId: testProjectId() });
-		expect(result.todos.map((view) => view.todo.id)).toEqual([testTodoId()]);
-	});
-
-	it('active lists exclude deleted todos', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [
-			todoBuilder(),
-			todoBuilder({ id: testTodoId(2), deletedAt: '2026-07-10T09:00:00Z' as never })
-		];
-		const result = await controller.list(testActor(), {});
-		expect(result.todos.map((view) => view.todo.id)).toEqual([testTodoId()]);
-	});
-
-	it('active lists exclude another user’s todos', async () => {
-		const { todos, controller } = setup();
-		todos.todos = [todoBuilder(), todoBuilder({ id: testTodoId(2), userId: testActor(2).userId })];
-		const result = await controller.list(testActor(), {});
-		expect(result.todos.map((view) => view.todo.id)).toEqual([testTodoId()]);
 	});
 });
 

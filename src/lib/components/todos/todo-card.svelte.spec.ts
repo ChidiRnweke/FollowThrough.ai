@@ -26,11 +26,7 @@ const view = (overrides: Partial<TodoView> = {}): TodoView => ({
 describe('TodoCard metadata badges', () => {
 	it('omits badges when no metadata is set', async () => {
 		const screen = await render(TodoCard, { view: view() });
-		expect({
-			noPriority: (await screen.getByText('No priority').all()).length,
-			noDueDate: (await screen.getByText('No due date').all()).length,
-			noSource: (await screen.getByText('No source').all()).length
-		}).toEqual({ noPriority: 0, noDueDate: 0, noSource: 0 });
+		expect(screen.container.querySelectorAll('[data-slot="badge"]')).toHaveLength(0);
 	});
 
 	it('renders a due-date badge when the todo carries one', async () => {

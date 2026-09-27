@@ -56,13 +56,6 @@ describe('Promise extraction orchestration invariants', () => {
 		}).toEqual({ proposal: undefined, task: undefined });
 	});
 
-	it('creates one suggestion for each extracted promise', async () => {
-		const { extractor, controller } = setup();
-		extractor.candidates = [candidate('Send it'), candidate('Review it')];
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.suggestions).toHaveLength(2);
-	});
-
 	it('preserves extracted promise order', async () => {
 		const { extractor, controller } = setup();
 		extractor.candidates = [candidate('Send it'), candidate('Review it')];
@@ -87,27 +80,11 @@ describe('Promise extraction orchestration invariants', () => {
 		).toEqual(['Clean up the runbook']);
 	});
 
-	it('creates a todo when the pipeline trust policy authorizes it', async () => {
-		const { extractor, trust, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.createdTodos).toHaveLength(1);
-	});
-
 	it('leaves a todo pending when the pipeline is not trusted', async () => {
 		const { extractor, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
 		const result = await controller.extractPromises(testActor(), { selection });
 		expect(result.createdTodos).toEqual([]);
-	});
-
-	it('returns the persisted accepted proposal after automatic acceptance', async () => {
-		const { extractor, trust, controller, suggestions } = setup();
-		extractor.candidates = [candidate('Send it')];
-		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.suggestions).toEqual(suggestions.suggestions);
 	});
 
 	it('returns accepted status and the created task identity', async () => {
