@@ -204,7 +204,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W12.10 Propose, preview, approve, and apply targeted edits.
 - [ ] W12.11 Propose, preview, approve, and replace complete content.
 - [x] W12.12 Pin and unpin skills. [Disposition and observed contracts](skill-pins.md).
-- [ ] W12.13 Browse skill versions.
+- [x] W12.13 Browse skill versions. See [history read review](skill-history.md).
 - [ ] W12.14 Restore earlier versions.
 - [ ] W12.15 Discover and load skills for execution.
 - [x] W12.16 Record skill usage. [Ownership, failure and storage evidence](skill-loads.md).
