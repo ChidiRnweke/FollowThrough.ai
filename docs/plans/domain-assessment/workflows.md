@@ -67,7 +67,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W04.15 Permanently delete individual notes.
 - [ ] W04.16 Empty note trash.
 - [ ] W04.17 Import a Markdown archive and reconstruct folders.
-- [ ] W04.18 Report partial import success and individual failures.
+- [ ] W04.18 Report partial import success and individual failures. Partial: [response outcomes](import-response.md).
 
 ## 05 — Proposed note changes
 
