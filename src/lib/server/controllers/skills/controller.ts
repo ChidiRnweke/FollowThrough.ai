@@ -265,7 +265,7 @@ export class Skills implements SkillsController {
 		input: GetSkillViewInput
 	): Promise<readonly NoteRevision[]> {
 		await this.dependencies.skillFinder.load(actor, input.noteId);
-		return [...(await this.dependencies.revisionReader.revisions(actor, input.noteId))].reverse();
+		return this.dependencies.revisionReader.revisions(actor, input.noteId);
 	}
 	async restoreVersion(
 		actor: ActorContext,
