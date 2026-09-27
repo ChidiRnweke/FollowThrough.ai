@@ -135,9 +135,7 @@ export class WorkspaceViews {
 		const user = this.get('users', userId);
 		if (!user) return null;
 		const projects = this.projects;
-		const suggestions = this.all('suggestions').filter(
-			(suggestion) => suggestion.status === 'proposed'
-		);
+		const suggestions = this.pendingSuggestions;
 		return {
 			user,
 			projects,
@@ -146,6 +144,16 @@ export class WorkspaceViews {
 			pendingSuggestionCount: suggestions.length,
 			pendingMemoryNotifications: pendingMemoryNotifications(projects, suggestions)
 		};
+	}
+	private get pendingSuggestions() {
+		return this.all('suggestions').filter((suggestion) => {
+			if (suggestion.status !== 'proposed') return false;
+			const source = suggestion.noteId ? this.get('notes', suggestion.noteId) : undefined;
+			if (source && this.get('projects', source.projectId)?.archivedAt) return false;
+			const projectId =
+				'projectId' in suggestion.payload ? suggestion.payload.projectId : undefined;
+			return !projectId || !this.get('projects', projectId)?.archivedAt;
+		});
 	}
 	private isActiveProject(projectId: ProjectId): boolean {
 		const project = this.get('projects', projectId);
@@ -159,14 +167,9 @@ export class WorkspaceViews {
 	}
 	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[] {
 		if (projectId && !this.isActiveProject(projectId)) return [];
-		return this.all('suggestions')
+		return this.pendingSuggestions
 			.flatMap((suggestion) => {
-				if (
-					suggestion.kind !== 'memory' ||
-					suggestion.status !== 'proposed' ||
-					suggestion.payload.projectId !== projectId
-				)
-					return [];
+				if (suggestion.kind !== 'memory' || suggestion.payload.projectId !== projectId) return [];
 				const provenance = suggestion.provenanceId
 					? this.get('provenance', suggestion.provenanceId)
 					: undefined;
@@ -362,7 +365,13 @@ export class WorkspaceViews {
 				const target = this.get('notes', relationship.targetNoteId);
 				if (!source) missing.push({ type: 'notes', id: [relationship.sourceNoteId] });
 				if (!target) missing.push({ type: 'notes', id: [relationship.targetNoteId] });
-				return source && target ? [assembleBacklinkView(relationship, source, target)] : [];
+				if (!source || !target) return [];
+				if (
+					this.get('projects', source.projectId)?.archivedAt ||
+					this.get('projects', target.projectId)?.archivedAt
+				)
+					return [];
+				return [assembleBacklinkView(relationship, source, target)];
 			});
 		const references = this.all('references')
 			.filter((reference) => reference.noteId === noteId)
@@ -375,8 +384,8 @@ export class WorkspaceViews {
 				const { projectId: _projectId, ...domainReference } = reference;
 				return assembleReferenceView(domainReference, { anchor });
 			});
-		const pendingSuggestions = this.all('suggestions')
-			.filter((suggestion) => suggestion.noteId === noteId && suggestion.status === 'proposed')
+		const pendingSuggestions = this.pendingSuggestions
+			.filter((suggestion) => suggestion.noteId === noteId)
 			.flatMap((suggestion) => {
 				const provenance = this.get('provenance', suggestion.provenanceId);
 				if (!provenance) {
@@ -471,9 +480,7 @@ export class WorkspaceViews {
 			due,
 			waiting: this.todos({ responsibility: 'waiting_on' }),
 			notes,
-			pendingSuggestionCount: this.all('suggestions').filter(
-				(suggestion) => suggestion.status === 'proposed'
-			).length
+			pendingSuggestionCount: this.pendingSuggestions.length
 		});
 	}
 }
