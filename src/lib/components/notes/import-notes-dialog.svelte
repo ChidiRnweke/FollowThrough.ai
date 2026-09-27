@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { z } from 'zod';
 	import type {
 		ImportMarkdownArchiveOutput,
 		ProjectId,
 		ArchiveLinkIssue
 	} from '$lib/models/projects';
-	import { importMarkdownArchiveOutputSchema } from '$lib/models/projects';
+	import { readArchiveImportResponse } from '$lib/client/notes/import-response';
 	import type { NoteId } from '$lib/models/notes';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -40,9 +39,6 @@
 	let error = $state('');
 	let report = $state<ImportMarkdownArchiveOutput | undefined>(undefined);
 
-	/** What `/api/imports` answers with when it rejects the archive. */
-	const failureSchema = z.object({ message: z.string() });
-
 	async function run(): Promise<void> {
 		if (!archive) return;
 		busy = true;
@@ -53,24 +49,13 @@
 			body.set('projectId', projectId);
 			if (parentId) body.set('parentId', parentId);
 			const response = await fetch('/api/imports', { method: 'POST', body });
-			const payload: unknown = await response.json();
-			if (!response.ok) {
-				error = failureSchema.safeParse(payload).data?.message ?? 'The import failed.';
-				return;
-			}
-			const parsed = importMarkdownArchiveOutputSchema.safeParse(payload);
-			if (!parsed.success) {
-				// Deliberately not an empty report: the import ran, and saying so
-				// while admitting the report is unreadable is the honest pair. An
-				// empty report would claim it imported nothing.
-				error = 'The import finished, but its report could not be read. Reload to see what landed.';
-				return;
-			}
-			report = parsed.data;
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — submission failure is rendered and the selected files remain available for retry.
+			const result = await readArchiveImportResponse(response);
+			if (response.ok) await workspaceSession.synchronize();
+			if (result.kind === 'failure') error = result.message;
+			else report = result.report;
+			// audit-allow: silent-catch — an uncertain import outcome is rendered with advice to inspect the project before retrying.
 		} catch {
-			error = 'The import could not be sent. Check your connection and try again.';
+			error = 'The import outcome could not be confirmed. Check the project before trying again.';
 		} finally {
 			busy = false;
 		}
