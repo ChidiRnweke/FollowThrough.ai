@@ -34,6 +34,10 @@
 	const editorSelection = untrack(() => editorSelectionRegistry.for(noteId));
 
 	const projection = $derived(resources.views.note(noteId));
+	const archivedProject = $derived.by(() => {
+		const current = resources.views.get('notes', noteId);
+		return current ? resources.views.get('projects', current.projectId)?.archivedAt : undefined;
+	});
 	// A server deletion removes the projection; the open document stays so its work can be kept.
 	let view = $state(untrack(() => projection?.view));
 	$effect.pre(() => {
@@ -76,6 +80,9 @@
 					This note was deleted on the server. This document remains open so you can preserve your
 					work.
 				</p>{/if}
+			{#if archivedProject}<p role="status" class="px-4 py-1 text-xs text-muted-foreground">
+					This project was archived. This document remains open so you can preserve your work.
+				</p>{/if}
 			{#if projection?.missing.length}<p
 					role="status"
 					class="px-4 py-1 text-xs text-muted-foreground"
@@ -90,6 +97,12 @@
 				{editorSelection}
 				{onCloseSplit}
 			/>
+		</div>
+	{:else if archivedProject}
+		<div
+			class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-sm text-muted-foreground"
+		>
+			<p role="status">This note belongs to an archived project.</p>
 		</div>
 	{:else if note.state.kind === 'wait' || note.state.kind === 'ready'}
 		<div class="flex min-h-96 flex-1 flex-col gap-3 p-8" aria-label="Loading note">
