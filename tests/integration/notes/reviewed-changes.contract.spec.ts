@@ -157,3 +157,38 @@ describe('Reviewed note writes on PostgreSQL', () => {
 		expect(outcomes.map((outcome) => outcome.kind).sort()).toEqual(['failure', 'saved']);
 	});
 });
+
+it('applies a reviewed skill patch once while preserving metadata and published history', async () => {
+	const { controller, change, owner, note } = await setup('97108', 'skill');
+	await controller.applyReviewedChange(owner, change, 'skill');
+	const skills = new SkillRecords(context.db);
+	const before = await skills.findByNoteId(owner, note.id);
+	if (!before) throw new Error('Expected the skill metadata');
+	const records = new NoteRecords(context.db);
+	const history = await records.listRevisions(owner, note.id);
+	const patch = requirePreparedChange(
+		await controller.prepareChange(
+			owner,
+			{ kind: 'patch', noteId: note.id, edits: [{ oldText: 'Tuesday', newText: 'Friday' }] },
+			'skill'
+		)
+	);
+	await controller.applyReviewedChange(owner, patch, 'skill');
+	await controller.applyReviewedChange(owner, patch, 'skill');
+	expect({
+		skill: await skills.findByNoteId(owner, note.id),
+		history: await records.listRevisions(owner, note.id)
+	}).toMatchObject({
+		skill: {
+			...before,
+			note: {
+				...patch.result,
+				title: note.title,
+				currentRevision: 3,
+				publishedRevision: 0,
+				kind: 'skill'
+			}
+		},
+		history
+	});
+});
