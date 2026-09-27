@@ -8,7 +8,8 @@
 	import { DrawioReviewDialog } from '$lib/components/diagrams';
 	import ExportDialog from '../export/export-dialog.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
-	import NoteVersionHistory, { type NoteHistoryReadState } from '../note-version-history.svelte';
+	import NoteVersionHistory from '../note-version-history.svelte';
+	import type { NoteHistoryReadState } from '$lib/stores/notes/history.svelte';
 
 	let {
 		exportOpen = $bindable(false),
@@ -48,7 +49,7 @@
 		onKeepLocal: () => Promise<void>;
 		onAcceptDrawio: (output: { readonly xml: string; readonly svg: string }) => Promise<void>;
 		onSelectRevision: (revisionId: NoteRevisionId) => void;
-		onRestoreRevision: (revisionId: NoteRevisionId) => Promise<void>;
+		onRestoreRevision: (revisionId: NoteRevisionId) => Promise<boolean>;
 	} = $props();
 </script>
 

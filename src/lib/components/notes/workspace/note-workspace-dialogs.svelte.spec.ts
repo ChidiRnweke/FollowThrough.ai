@@ -41,7 +41,7 @@ const base = {
 	onAcceptDrawio: async () => undefined,
 	historyRevisions: [],
 	onSelectRevision: () => undefined,
-	onRestoreRevision: async () => undefined
+	onRestoreRevision: async () => true
 };
 
 describe('NoteWorkspaceDialogs conflict resolution', () => {

@@ -57,8 +57,8 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W04.05 Edit and autosave drafts.
 - [x] W04.06 Publish notes. See [publication workflow review](note-publication-workflows.md).
 - [x] W04.07 Discard unpublished changes. See [publication workflow review](note-publication-workflows.md).
-- [ ] W04.08 Browse revision history.
-- [ ] W04.09 Read individual revisions.
+- [x] W04.08 Browse revision history. See [history request review](note-history-requests.md).
+- [x] W04.09 Read individual revisions. See [history request review](note-history-requests.md).
 - [ ] W04.10 Compare revisions.
 - [ ] W04.11 Restore an earlier revision as current content.
 - [ ] W04.12 Archive notes and folders.
