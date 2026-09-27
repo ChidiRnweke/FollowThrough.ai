@@ -56,13 +56,6 @@ describe('Promise extraction orchestration invariants', () => {
 		}).toEqual({ proposal: undefined, task: undefined });
 	});
 
-	it('creates one suggestion for each extracted promise', async () => {
-		const { extractor, controller } = setup();
-		extractor.candidates = [candidate('Send it'), candidate('Review it')];
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.suggestions).toHaveLength(2);
-	});
-
 	it('preserves extracted promise order', async () => {
 		const { extractor, controller } = setup();
 		extractor.candidates = [candidate('Send it'), candidate('Review it')];

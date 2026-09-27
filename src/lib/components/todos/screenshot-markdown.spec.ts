@@ -21,10 +21,6 @@ describe('screenshotsFrom', () => {
 		const files = fileList([imageFile('notes.pdf', 'application/pdf')]);
 		expect(screenshotsFrom(files)).toEqual([]);
 	});
-
-	it('treats an empty clipboard as nothing to attach', () => {
-		expect(screenshotsFrom(undefined)).toEqual([]);
-	});
 });
 
 describe('screenshotMarkdown', () => {

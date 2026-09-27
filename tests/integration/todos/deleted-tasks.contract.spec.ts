@@ -26,6 +26,11 @@ it('does not return a deleted task through its identity', async () => {
 	expect(await repository.findById(owner, task.id)).toBeUndefined();
 });
 
+it('does not list a deleted task', async () => {
+	const { owner, repository } = await setup('14804', 14804);
+	expect(await repository.list(owner, {})).toEqual([]);
+});
+
 it('rejects a stale edit without restoring a deleted task', async () => {
 	const { owner, repository, task } = await setup('14802', 14802);
 	const outcome = await repository.update(owner, { ...task, title: 'Late edit' }).then(
