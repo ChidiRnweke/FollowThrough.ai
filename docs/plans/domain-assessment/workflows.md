@@ -59,7 +59,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W04.07 Discard unpublished changes. See [publication workflow review](note-publication-workflows.md).
 - [x] W04.08 Browse revision history. See [history request review](note-history-requests.md).
 - [x] W04.09 Read individual revisions. See [history request review](note-history-requests.md).
-- [ ] W04.10 Compare revisions.
+- [x] W04.10 Compare revisions. See [revision comparison review](revision-comparison.md).
 - [ ] W04.11 Restore an earlier revision as current content.
 - [ ] W04.12 Archive notes and folders.
 - [ ] W04.13 Restore archived notes with unavailable parents.
