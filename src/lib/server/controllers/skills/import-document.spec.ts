@@ -191,21 +191,20 @@ describe('Skill document imports', () => {
 	it('does not save instructions when their portable metadata is incomplete', async () => {
 		const { controller, notes } = importSkill();
 		const original = structuredClone(notes.notes);
-		await controller
+		const result = await controller
 			.update(testActor(), {
 				noteId: input.noteId,
 				description: 'x'.repeat(1025),
 				content: { kind: 'instructions', text: 'Replacement body', baseRevision: 1 }
 			})
 			.then(
-				() => {
-					throw new Error('Expected invalid portable metadata');
-				},
-				(error: Error) => {
-					if (!error.message.includes('Invalid SKILL.md')) throw error;
-				}
+				() => ({ kind: 'saved' }),
+				(error: Error) => ({ kind: 'failure', error })
 			);
-		expect(notes.notes).toEqual(original);
+		expect({ result, notes: notes.notes }).toMatchObject({
+			result: { kind: 'failure', error: { code: 'VALIDATION' } },
+			notes: original
+		});
 	});
 	it('rejects an imported portable name already used by another skill', async () => {
 		const { controller, skills, notes } = importSkill();
@@ -308,5 +307,19 @@ describe('Skill document imports', () => {
 			description: 'Wizard description',
 			text: 'Wizard instructions'
 		});
+	});
+});
+
+it('refuses an oversized metadata-only description without replacing the existing one', async () => {
+	const { controller, note, skills } = importSkill();
+	const result = await controller
+		.update(testActor(), { noteId: note.id, description: 'x'.repeat(1025) })
+		.then(
+			() => 'saved',
+			() => 'failed'
+		);
+	expect({ result, description: skills.skills[0].description }).toEqual({
+		result: 'failed',
+		description: 'Writes decisions'
 	});
 });
