@@ -41,7 +41,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W03.02 Rename projects. See [rename review](project-rename-description.md).
 - [ ] W03.03 Archive projects and resolve child visibility.
 - [x] W03.04 Create folders. See [creation and opening review](project-creation-opening.md).
-- [ ] W03.05 Browse and expand project trees.
+- [x] W03.05 Browse and expand project trees. See [tree browsing review](project-tree-browsing.md).
 - [ ] W03.06 Move notes and folders between parent locations.
 - [ ] W03.07 Reorder project entries.
 - [ ] W03.08 Drag project entries into navigation and editing surfaces.

@@ -6,6 +6,7 @@
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
+	import { ancestorFolderIds } from '$lib/services/projects/tree-expansion';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -128,12 +129,7 @@
 		const node = byId.get(activeNoteId);
 		if (!node) return;
 		toggled.delete(`project:${node.projectId}`);
-		let parentId = node.parentId;
-		let guard = 0;
-		while (parentId && guard++ < 32) {
-			toggled.add(parentId);
-			parentId = byId.get(parentId)?.parentId;
-		}
+		for (const parentId of ancestorFolderIds(node, byId)) toggled.add(parentId);
 	});
 
 	// --- Drag and drop (within a project only; the zone type enforces it) ---

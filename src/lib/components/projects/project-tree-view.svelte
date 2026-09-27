@@ -11,7 +11,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { mergeProps } from '$lib/utils';
+	import { cn, mergeProps } from '$lib/utils';
 	import {
 		FtChevronRight as ChevronRight,
 		FtEllipsis as Ellipsis,
@@ -102,7 +102,8 @@
 		onrenameproject: (project: Project) => void;
 	} = $props();
 
-	const MAX_DEPTH = 8;
+	// Keep deeper rows readable in the sidebar without hiding their children.
+	const MAX_INDENT_DEPTH = 8;
 </script>
 
 <!-- The one place creation lives. Rendered by the hover `+` action, and reused at
@@ -389,11 +390,14 @@
 				</DropdownMenu.Root>
 			</div>
 		{/if}
-		{#if isFolder && depth < MAX_DEPTH}
+		{#if isFolder}
 			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
 				<div class="min-h-0 overflow-hidden">
 					<ul
-						class="ml-2 flex min-h-1.5 min-w-0 flex-col gap-0 border-l border-sidebar-border py-1 pl-2"
+						class={cn(
+							'flex min-h-1.5 min-w-0 flex-col gap-0 py-1',
+							depth < MAX_INDENT_DEPTH && 'ml-2 border-l border-sidebar-border pl-2'
+						)}
 						use:dragHandleZone={{
 							items: zoneItems(entry.projectId, entry.id),
 							type: `tree-${entry.projectId}`,
