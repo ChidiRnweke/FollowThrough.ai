@@ -235,8 +235,10 @@ export class AttachmentLibrary {
 	): Promise<AttachmentId | undefined> {
 		const validatedPath = validateAttachmentPath(path);
 		const found = await this.attachments.findByPath(actor, noteId, validatedPath);
-		await this.attachments.remove(actor, noteId, validatedPath);
-		if (found) await this.storage.remove(found.version.objectKey);
-		return found?.attachment.id;
+		if (!found) return undefined;
+		const result = await this.removeById(actor, found.attachment.id);
+		if (result.kind === 'referenced-by-note')
+			throw new ValidationError('The note still embeds this attachment. Remove the image first.');
+		return found.attachment.id;
 	}
 }

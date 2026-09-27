@@ -103,8 +103,14 @@ export class InMemoryAttachmentRepository implements AttachmentRepository {
 	async findById(): Promise<AttachmentView | undefined> {
 		return this.found;
 	}
-	async findByPath(): Promise<AttachmentView | undefined> {
-		return undefined;
+	async findByPath(
+		_actor: ActorContext,
+		noteId: NoteId,
+		path: string
+	): Promise<AttachmentView | undefined> {
+		return this.found?.attachment.noteId === noteId && this.found.attachment.path === path
+			? this.found
+			: undefined;
 	}
 	async finalize(
 		_actor: ActorContext,

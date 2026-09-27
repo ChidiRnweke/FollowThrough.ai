@@ -252,7 +252,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W14.09 Read extracted content.
 - [ ] W14.10 Download by identity or note-relative path.
 - [ ] W14.11 Serve authenticated browser content requests.
-- [ ] W14.12 Remove records and stored objects.
+- [ ] W14.12 Remove records and stored objects. Partial: [note removal and retained revisions](attachment-path-removal.md).
 - [ ] W14.13 Snapshot attachments with revisions.
 - [ ] W14.14 Restore attachment snapshots.
 - [ ] W14.15 Reclaim expired reservations and abandoned objects.
