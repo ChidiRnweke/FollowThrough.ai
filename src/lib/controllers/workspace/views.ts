@@ -147,12 +147,18 @@ export class WorkspaceViews {
 			pendingMemoryNotifications: pendingMemoryNotifications(projects, suggestions)
 		};
 	}
+	private isActiveProject(projectId: ProjectId): boolean {
+		const project = this.get('projects', projectId);
+		return project !== undefined && !project.archivedAt;
+	}
 	memories(projectId?: ProjectId): readonly MemoryEntry[] {
+		if (projectId && !this.isActiveProject(projectId)) return [];
 		return this.all('memory_entries')
 			.filter((entry) => !entry.deletedAt && entry.projectId === projectId)
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	}
 	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[] {
+		if (projectId && !this.isActiveProject(projectId)) return [];
 		return this.all('suggestions')
 			.flatMap((suggestion) => {
 				if (
@@ -179,10 +185,12 @@ export class WorkspaceViews {
 	}
 	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[] {
 		return this.all('attachments')
-			.filter((attachment) =>
-				owner.kind === 'project'
-					? attachment.projectId === owner.id && !attachment.noteId
-					: attachment.noteId === owner.id
+			.filter(
+				(attachment) =>
+					this.isActiveProject(attachment.projectId) &&
+					(owner.kind === 'project'
+						? attachment.projectId === owner.id && !attachment.noteId
+						: attachment.noteId === owner.id)
 			)
 			.flatMap((attachment) => {
 				const version = attachment.currentVersionId
@@ -213,13 +221,19 @@ export class WorkspaceViews {
 	}
 	trashedDiagrams(projectId?: ProjectId): readonly Diagram[] {
 		return this.all('diagrams')
-			.filter((diagram) => diagram.archivedAt && (!projectId || diagram.projectId === projectId))
+			.filter(
+				(diagram) =>
+					diagram.archivedAt &&
+					this.isActiveProject(diagram.projectId) &&
+					(!projectId || diagram.projectId === projectId)
+			)
 			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
 	}
 	diagram(diagramId: string): Diagram | null {
 		return this.all('diagrams').find((diagram) => diagram.id === diagramId) ?? null;
 	}
 	diagrams(projectId: ProjectId, query = ''): readonly Diagram[] {
+		if (!this.isActiveProject(projectId)) return [];
 		const search = query.toLowerCase();
 		return this.all('diagrams')
 			.filter(
@@ -235,7 +249,7 @@ export class WorkspaceViews {
 	}
 	artifacts(projectId: ProjectId, query = ''): readonly ArtifactView[] {
 		const project = this.get('projects', projectId);
-		if (!project) return [];
+		if (!project || project.archivedAt) return [];
 		const search = query.toLowerCase();
 		return this.all('artifacts')
 			.filter((artifact) => artifact.projectId === projectId)

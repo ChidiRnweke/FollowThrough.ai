@@ -37,6 +37,7 @@ describe('shared memory lists', () => {
 		});
 		expect(
 			views(
+				{ type: 'projects', value: projectBuilder() },
 				...[profile, project, removed].map((value) => ({ type: 'memory_entries' as const, value }))
 			)
 				.memories()
@@ -54,6 +55,7 @@ describe('shared memory lists', () => {
 		});
 		expect(
 			views(
+				{ type: 'projects', value: projectBuilder() },
 				{ type: 'suggestions', value: suggestion },
 				{
 					type: 'provenance',
@@ -101,6 +103,7 @@ describe('shared attachment lists', () => {
 	it('does not mix a notes attachments into the projects own file list', () => {
 		expect(
 			views(
+				{ type: 'projects', value: projectBuilder() },
 				{ type: 'attachments', value: { ...attachment, noteId: testNoteId() } },
 				{ type: 'attachment_versions', value: version }
 			).attachments({ kind: 'project', id: testProjectId() })
@@ -109,6 +112,7 @@ describe('shared attachment lists', () => {
 	it('joins the current version for an available project attachment', () => {
 		expect(
 			views(
+				{ type: 'projects', value: projectBuilder() },
 				{ type: 'attachments', value: attachment },
 				{ type: 'attachment_versions', value: version }
 			)
@@ -143,6 +147,7 @@ describe('shared project collections', () => {
 		});
 		expect(
 			views(
+				{ type: 'projects', value: projectBuilder() },
 				{ type: 'diagrams', value: diagram },
 				{ type: 'diagrams', value: { ...diagram, id: testDiagramId(2), archivedAt: testNow } },
 				{ type: 'diagrams', value: diagramBuilder({ id: testDiagramId(3) }) }
