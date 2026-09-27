@@ -9,7 +9,7 @@
  * server (agent tools) and anywhere else a text diff is wanted.
  */
 
-import { createTwoFilesPatch } from 'diff';
+import { formatPatch, structuredPatch } from 'diff';
 import {
 	REVISION_DIFF_LINE_LIMIT,
 	type RevisionText,
@@ -30,7 +30,7 @@ export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText)
 	if (before.plainText === after.plainText) {
 		return { patch: titleLine.trimEnd(), addedLines: 0, removedLines: 0, truncated: false };
 	}
-	const patch = createTwoFilesPatch(
+	const changes = structuredPatch(
 		revisionLabel(before),
 		revisionLabel(after),
 		before.plainText,
@@ -39,12 +39,10 @@ export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText)
 		'',
 		{ context: 3 }
 	);
-	const addedLines = patch
-		.split('\n')
-		.filter((line) => line.startsWith('+') && !line.startsWith('+++')).length;
-	const removedLines = patch
-		.split('\n')
-		.filter((line) => line.startsWith('-') && !line.startsWith('---')).length;
+	const changedLines = changes.hunks.flatMap((hunk) => hunk.lines);
+	const addedLines = changedLines.filter((line) => line.startsWith('+')).length;
+	const removedLines = changedLines.filter((line) => line.startsWith('-')).length;
+	const patch = formatPatch(changes);
 	const lines = patch.split('\n');
 	if (lines.length <= REVISION_DIFF_LINE_LIMIT) {
 		return { patch: titleLine + patch, addedLines, removedLines, truncated: false };

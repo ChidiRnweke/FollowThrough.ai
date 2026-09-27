@@ -135,7 +135,7 @@ describe('Diffing a note revision against a baseline', () => {
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
-	it('rejects the default baseline when the note was never published', async () => {
+	it('rejects a comparison requested before the first publication', async () => {
 		const { content, controller } = setup();
 		content.notes = [noteBuilder()];
 		await expect(

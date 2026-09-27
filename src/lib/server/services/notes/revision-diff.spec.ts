@@ -44,3 +44,34 @@ describe('Diffing note revision texts', () => {
 		expect(diffNoteRevisionTexts(before, after).truncated).toBe(true);
 	});
 });
+
+it('counts added body lines that resemble unified patch headers', () => {
+	const before = revisionText({ plainText: 'before\n' });
+	const after = revisionText({ revision: 2, plainText: '++counter\n+++flag\n' });
+	expect(diffNoteRevisionTexts(before, after).addedLines).toBe(2);
+});
+it('counts removed body lines that resemble unified patch headers', () => {
+	const before = revisionText({ plainText: '--counter\n---\n' });
+	const after = revisionText({ revision: 2, plainText: 'after\n' });
+	expect(diffNoteRevisionTexts(before, after).removedLines).toBe(2);
+});
+
+it('reports a title-only change without inventing changed body lines', () => {
+	const before = revisionText({ plainText: 'Same body' });
+	const after = revisionText({ title: 'Renamed note', plainText: 'Same body' });
+	expect(diffNoteRevisionTexts(before, after)).toEqual({
+		patch: 'title: Architecture note → Renamed note',
+		addedLines: 0,
+		removedLines: 0,
+		truncated: false
+	});
+});
+it('keeps full change totals when the displayed patch is truncated', () => {
+	const before = revisionText({ plainText: longText('--old') });
+	const after = revisionText({ revision: 2, plainText: longText('++new') });
+	expect(diffNoteRevisionTexts(before, after)).toMatchObject({
+		addedLines: REVISION_DIFF_LINE_LIMIT * 2,
+		removedLines: REVISION_DIFF_LINE_LIMIT * 2,
+		truncated: true
+	});
+});
