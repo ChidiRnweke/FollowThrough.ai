@@ -397,3 +397,23 @@ describe('Grouped and heterogeneous results preserve their targets', () => {
 		expect(toolDisclosure(call({ name: 'list_todos' }), shell)).toEqual({ kind: 'none' });
 	});
 });
+
+it('opens the newly created skill rather than its source selection note', () => {
+	const skillNoteId = '6b6577e5-d7c9-494a-a624-125ca2c9066f';
+	expect(
+		toolDisclosure(
+			call({
+				name: 'create_skill_from_selection',
+				arguments: {
+					name: 'Decision quality',
+					description: 'Improves decisions',
+					triggerHints: []
+				},
+				output: { skillNoteId, sourceNoteId: NOTE_ID }
+			})
+		)
+	).toMatchObject({
+		kind: 'link',
+		entity: { kind: 'skill', id: skillNoteId, title: 'Decision quality' }
+	});
+});

@@ -267,6 +267,15 @@ export class InMemoryNoteRepository implements NoteRepository {
 }
 
 export class InMemoryAnchorRepository implements SourceAnchorRepository {
+	snapshot(): () => void {
+		const anchors = [...this.anchors];
+		const ownerIds = new Map(this.ownerIds);
+		return () => {
+			this.anchors = anchors;
+			this.ownerIds = ownerIds;
+		};
+	}
+
 	anchors: SourceAnchor[] = [];
 	ownerIds = new Map<SourceAnchorId, UserId>();
 

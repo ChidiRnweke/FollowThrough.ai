@@ -1,4 +1,5 @@
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
+import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
+import { SkillLibrary } from '$lib/server/services/skills/library';
 import { describe, expect, it } from 'vitest';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import {
@@ -9,8 +10,8 @@ import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Skills, type SkillsDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySkillCreator } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -21,27 +22,45 @@ import {
 
 const setup = () => {
 	const notes = new InMemoryNoteContent();
-	notes.notes = [noteBuilder({ plainText: 'Always capture consequences.' })];
+	notes.notes = [
+		noteBuilder({
+			plainText: 'Always capture consequences.',
+			document: {
+				type: 'doc',
+				content: [
+					{ type: 'paragraph', content: [{ type: 'text', text: 'Always capture consequences.' }] }
+				]
+			}
+		})
+	];
 	const repository = new InMemoryNoteRepository();
 	repository.notes = [...notes.notes];
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(repository, new InMemoryAnchorRepository(), projects);
-	const skills = new InMemorySkillCreator();
-	const provenance = new InMemoryProvenanceRecorder();
+	const anchors = new InMemoryAnchorRepository();
+	const catalog = new NoteCatalog(repository, anchors, projects);
+	const skills = new InMemorySkillRepository(repository);
+	const provenance = new InMemoryProvenanceRepository();
+	const library = new SkillLibrary(skills, repository, provenance);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
-			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
+			selectionOrigins: new SelectionOrigins(repository, anchors, provenance),
 			noteCreation: catalog,
 			noteEditor: catalog,
 			anchorRepairer: catalog,
 			noteLinkReconciler: notes,
 			noteIndexer: notes,
-			skillCreator: skills,
-			transactionRunner: new InMemoryTransactionRunner([notes, provenance, skills, repository])
+			skillCreator: library,
+			transactionRunner: new InMemoryTransactionRunner([
+				notes,
+				provenance,
+				skills,
+				repository,
+				anchors
+			])
 		})
 	);
-	return { controller, notes, skills, provenance, repository };
+	return { controller, notes, skills, provenance, repository, anchors };
 };
 
 const input = {
@@ -65,22 +84,37 @@ describe('Create skill workflow invariants', () => {
 	});
 
 	it('records provenance against the source selection anchor', async () => {
-		const { controller, notes, provenance } = setup();
+		const { controller, anchors, provenance } = setup();
 		await controller.createFromSelection(testActor(), input);
-		expect(provenance.records[0]?.sourceAnchorId).toBe(notes.anchors[0]?.id);
+		expect({ anchors: anchors.anchors, provenance: provenance.provenance }).toMatchObject({
+			anchors: [{ noteId: input.selection.noteId, quote: input.selection.text }],
+			provenance: [
+				{ sourceAnchorId: anchors.anchors[0]?.id, userId: testActor().userId, producerKind: 'user' }
+			]
+		});
 	});
 
-	it('rolls back the anchor when skill creation fails', async () => {
-		const { controller, notes, skills } = setup();
-		skills.failCreation = true;
-		await controller.createFromSelection(testActor(), input).catch(() => undefined);
-		expect(notes.anchors).toEqual([]);
-	});
-	it('rolls back the new note when skill creation fails', async () => {
-		const { controller, repository, skills } = setup();
-		skills.failCreation = true;
-		await controller.createFromSelection(testActor(), input).catch(() => undefined);
-		expect(repository.notes.map((note) => note.id)).toEqual([testNoteId()]);
+	it('rolls back the source records and candidate skill when metadata validation fails', async () => {
+		const { controller, anchors, provenance, repository, skills } = setup();
+		const result = await controller
+			.createFromSelection(testActor(), { ...input, description: 'x'.repeat(1025) })
+			.then(
+				() => 'created',
+				() => 'failed'
+			);
+		expect({
+			result,
+			anchors: anchors.anchors,
+			provenance: provenance.provenance,
+			skills: skills.skills,
+			notes: repository.notes.map((note) => note.id)
+		}).toEqual({
+			result: 'failed',
+			anchors: [],
+			provenance: [],
+			skills: [],
+			notes: [testNoteId()]
+		});
 	});
 	it('creates the skill document in the source project', async () => {
 		const { controller, skills } = setup();
@@ -88,10 +122,41 @@ describe('Create skill workflow invariants', () => {
 		expect(skills.skills[0]?.note.projectId).toBe(noteBuilder().projectId);
 	});
 	it('rejects an empty name before inserting the skill document', async () => {
-		const { controller, repository } = setup();
-		await controller
-			.createFromSelection(testActor(), { ...input, name: ' ' })
-			.catch(() => undefined);
-		expect(repository.notes).toHaveLength(1);
+		const { controller } = setup();
+		await expect(
+			controller.createFromSelection(testActor(), { ...input, name: ' ' })
+		).rejects.toMatchObject({ code: 'VALIDATION' });
+	});
+	it.each([
+		{
+			label: 'stale revision',
+			selection: { ...input.selection, revision: 2 },
+			code: 'STALE_REVISION'
+		},
+		{
+			label: 'mismatched text',
+			selection: { ...input.selection, text: 'Wrong quote' },
+			code: 'VALIDATION'
+		},
+		{ label: 'outside range', selection: { ...input.selection, to: 99 }, code: 'VALIDATION' }
+	])('rejects $label without creating a skill', async ({ selection, code }) => {
+		const { controller, repository, anchors, provenance, skills } = setup();
+		const result = await controller.createFromSelection(testActor(), { ...input, selection }).then(
+			() => ({ kind: 'success' }),
+			(error: Error & { code: string }) => ({ kind: 'failure', code: error.code })
+		);
+		expect({
+			result,
+			notes: repository.notes.map((note) => note.id),
+			anchors: anchors.anchors,
+			provenance: provenance.provenance,
+			skills: skills.skills
+		}).toEqual({
+			result: { kind: 'failure', code },
+			notes: [testNoteId()],
+			anchors: [],
+			provenance: [],
+			skills: []
+		});
 	});
 });

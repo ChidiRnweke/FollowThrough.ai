@@ -12,6 +12,7 @@ import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { SkillPins } from '$lib/server/services/skills/pins';
+import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import { NoteCatalog } from '$lib/server/services/notes/catalog';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -23,13 +24,15 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const projects = new ProjectRecords(database);
 	const notes = new NoteRecords(database);
 	const skills = new SkillRecords(database);
-	const library = new SkillLibrary(skills, notes, new ProvenanceRecords(database));
+	const provenance = new ProvenanceRecords(database);
+	const library = new SkillLibrary(skills, notes, provenance);
 	const catalog = new NoteCatalog(notes, new SourceAnchorRecords(database), projects);
 	const content = new InMemoryNoteContent();
 	const sync = createSyncCapability({ db: database });
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			transactionRunner,
+			selectionOrigins: new SelectionOrigins(notes, new SourceAnchorRecords(database), provenance),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			builtInSkills: new BuiltInSkills(projects, notes, skills, {
