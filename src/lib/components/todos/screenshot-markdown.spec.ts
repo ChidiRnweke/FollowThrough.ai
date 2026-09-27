@@ -61,8 +61,4 @@ describe('insertAtCaret', () => {
 	it('leaves the caret after the inserted snippet', () => {
 		expect(insertAtCaret('one', 3, 3, '![a](b)').caret).toBe('one\n\n![a](b)'.length);
 	});
-
-	it('clamps a caret past the end of the text', () => {
-		expect(insertAtCaret('one', 99, 99, 'x').text).toBe('one\n\nx');
-	});
 });

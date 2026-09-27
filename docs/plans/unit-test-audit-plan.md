@@ -8,7 +8,7 @@ For each capability, record the baseline, retained guarantees, removals, replace
 
 ## Todos pilot
 
-The 25 Todos unit spec files in `src/lib/{client,components,services,server/services,server/controllers}/todos/` had 159 test declarations before this audit and have 148 after it. The source of truth is the [Todos subsystem](../src/content/docs/subsystems/todos/index.mdx), [user guide](../src/content/docs/using/todos/index.mdx), and ADRs [0003](../src/content/docs/decisions/0003-require-approval-before-agent-proposed-changes-become-saved-data.md), [0008](../src/content/docs/decisions/0008-scope-notes-tasks-files-memory-diagrams-and-search-to-projects.md), [0013](../src/content/docs/decisions/0013-let-users-name-their-own-task-categories.md), and [0041](../src/content/docs/decisions/0041-share-domain-decisions-between-browser-and-server.md).
+The 25 Todos unit spec files in `src/lib/{client,components,services,server/services,server/controllers}/todos/` had 159 test declarations before this audit and have 144 after it. The source of truth is the [Todos subsystem](../src/content/docs/subsystems/todos/index.mdx), [user guide](../src/content/docs/using/todos/index.mdx), and ADRs [0003](../src/content/docs/decisions/0003-require-approval-before-agent-proposed-changes-become-saved-data.md), [0008](../src/content/docs/decisions/0008-scope-notes-tasks-files-memory-diagrams-and-search-to-projects.md), [0013](../src/content/docs/decisions/0013-let-users-name-their-own-task-categories.md), and [0041](../src/content/docs/decisions/0041-share-domain-decisions-between-browser-and-server.md).
 
 | Guarantee or boundary                                                                                                                         | Retained unit spec files                                                                                                                       |
 | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,6 +34,10 @@ PostgreSQL contracts remain the authority for actor and project list filtering, 
 | Title filter returns the same array object               | Empty-query output is tested separately; array identity is not part of the user contract.                                        |
 | Empty clipboard returns an empty array                   | This restated `Array.from(files ?? [])`; accepted-image and rejected-file cases remain.                                          |
 | Card contains no three invented placeholder phrases      | Those phrases never appear in the component. The replacement checks that an unset card renders no badges.                        |
+| Extraction creates one todo when trusted                 | The accepted-status test already dereferences the created todo and verifies its ID matches the accepted proposal.                |
+| Extraction returns the fake's proposal list              | Comparing the result to the fake's internal list adds no independent acceptance or persistence guarantee.                        |
+| Empty project export uses its project name               | The project export filename test already covers resolution to a real project name; the PDF bytes test covers empty board output. |
+| Screenshot insertion clamps an out-of-range caret        | The only caller uses textarea selection positions or the current text length; neither can exceed the current text length.        |
 
 ### Open findings
 
