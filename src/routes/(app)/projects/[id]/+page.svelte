@@ -177,6 +177,7 @@
 			<ProjectOverview
 				{view}
 				{counts}
+				trashInventoryReady={data.session.resources.collectionReadiness() === 'ready'}
 				trashed={views.trashedNotes(data.projectId)}
 				trashedDiagrams={views.trashedDiagrams(data.projectId)}
 				{overdueTodoCount}
