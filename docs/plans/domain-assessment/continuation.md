@@ -9,8 +9,8 @@ integration checks passed, including PostgreSQL contracts and full browser tests
 unit suite passed 445 files and 4,162 tests. The entries below preserve observations from the
 original branches; their open/merged labels are historical.
 
-Workflow assessment completion remains separate from delivery: 32 of 411 reviews are recorded
-complete, including the [suggestion rejection review](suggestion-rejection.md) and four
+Workflow assessment completion remains separate from delivery. The current status is in the
+[workflow ledger](workflows.md). At PR #233, 32 of 411 reviews were recorded complete, including the [suggestion rejection review](suggestion-rejection.md) and four
 [memory read workflows](memory-reads.md), plus three [memory proposal workflows](memory-proposals.md). The
 [memory project lifecycle correction](memory-project-lifecycle.md) merged in
 [PR #221](https://github.com/ChidiRnweke/FollowThrough.ai/pull/221) after all required checks passed.

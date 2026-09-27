@@ -52,8 +52,10 @@ describe('Skill management invariants', () => {
 			description: 'Description',
 			triggerHints: []
 		});
-		const manifest = await service.manifest(testActor(), notes.notes[0].id);
-		expect(serializeSkillManifest(manifest)).toContain(`name: ${'a'.repeat(63)}\n`);
+		const skill = await service.load(testActor(), notes.notes[0].id);
+		expect(serializeSkillManifest({ ...skill, instructions: skill.note.plainText })).toContain(
+			`name: ${'a'.repeat(63)}\n`
+		);
 	});
 
 	it('rejects an empty skill name', async () => {

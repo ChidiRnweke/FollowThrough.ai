@@ -4,7 +4,7 @@ import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
-import { serializeSkillManifest, validatePortableSkill } from '$lib/services/skills/manifest';
+import { validatePortableSkill } from '$lib/services/skills/manifest';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -91,8 +91,6 @@ export interface SkillsController {
 	restoreVersion(actor: ActorContext, input: RestoreSkillVersionInput): Promise<SkillView<Note>>;
 	/** Edit a skill's content, returning the refreshed view with its usage counts. */
 	update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>>;
-	/** Serialize a skill into the compact form the agent consumes. */
-	serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string>;
 	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
 	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void>;
 }
@@ -345,10 +343,6 @@ export class Skills implements SkillsController {
 		return note;
 	}
 
-	async serialize(actor: ActorContext, input: GetSkillViewInput): Promise<string> {
-		const manifest = await this.dependencies.skillEditor.manifest(actor, input.noteId);
-		return serializeSkillManifest(manifest);
-	}
 	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const change = await this.dependencies.skillPinWriter.prepare(actor, input);

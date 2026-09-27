@@ -6,7 +6,6 @@ import type {
 	Skill,
 	SkillSummary,
 	SkillUsageView,
-	SkillManifest,
 	SkillEditInput,
 	PreparedSkillEdit,
 	SkillPinChange
@@ -35,7 +34,6 @@ export interface SkillEditor {
 		input: Omit<SkillEditInput, 'noteId'>
 	): Promise<PreparedSkillEdit<Note>>;
 	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
-	manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest>;
 }
 export interface SkillPinWriter {
 	prepare(actor: ActorContext, input: SkillPinChange): Promise<SkillPinChange>;

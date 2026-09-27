@@ -179,11 +179,6 @@ export class SkillLibrary {
 		return this.skills.update(actor, skill);
 	}
 
-	async manifest(actor: ActorContext, noteId: NoteId): Promise<SkillManifest> {
-		const skill = await this.load(actor, noteId);
-		return this.portable(skill);
-	}
-
 	private portable(skill: Skill<Note>): SkillManifest {
 		return {
 			slug: skill.slug,
