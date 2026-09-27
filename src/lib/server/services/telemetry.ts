@@ -1,3 +1,4 @@
+import { APIUserAbortError } from 'openai';
 import {
 	context,
 	createContextKey,
@@ -117,8 +118,7 @@ const errorMessage = (error: unknown): string =>
 
 // audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this classifies one.
 const isExpectedCancellation = (error: unknown): boolean =>
-	error instanceof Error &&
-	(error.name === 'AbortError' || error.message.toLowerCase().includes('aborted'));
+	error instanceof Error && (error.name === 'AbortError' || error instanceof APIUserAbortError);
 
 // audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this records one on a span.
 const recordError = (span: Span, error: unknown): void => {

@@ -459,7 +459,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W25.02 Report browser errors. Partial: [transport limits](browser-error-transport.md).
 - [ ] W25.03 Return user-facing server failures.
 - [ ] W25.04 Display error recovery surfaces.
-- [ ] W25.05 Trace controller operations.
+- [x] W25.05 Trace controller operations. See [runtime boundary review](runtime-boundaries.md).
 - [ ] W25.06 Trace runs, provider calls, and tools.
 - [ ] W25.07 Associate logs, traces, and run identities.
 - [ ] W25.08 Export and flush telemetry. Partial: [process shutdown ordering](process-telemetry-shutdown.md).
@@ -470,7 +470,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [ ] W26.01 Load and validate configuration and secrets.
 - [ ] W26.02 Construct web and worker dependencies.
 - [ ] W26.03 Initialize instrumentation.
-- [ ] W26.04 Start scheduled tasks.
+- [x] W26.04 Start scheduled tasks. See [runtime boundary review](runtime-boundaries.md).
 - [ ] W26.05 Run embedding maintenance.
 - [x] W26.06 Run expired-upload cleanup. See [reclamation and fairness review](upload-retention-fairness.md).
 - [ ] W26.07 Handle maintenance failures and retries.
