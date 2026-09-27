@@ -458,7 +458,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W25.01 Submit feedback. See [feedback submission review](feedback-submission.md).
 - [ ] W25.02 Report browser errors. Partial: [transport limits](browser-error-transport.md).
 - [ ] W25.03 Return user-facing server failures.
-- [ ] W25.04 Display error recovery surfaces.
+- [ ] W25.04 Display error recovery surfaces. Partial: [rendering retries and account recovery](error-recovery-surfaces.md).
 - [x] W25.05 Trace controller operations. See [runtime boundary review](runtime-boundaries.md).
 - [ ] W25.06 Trace runs, provider calls, and tools.
 - [ ] W25.07 Associate logs, traces, and run identities.

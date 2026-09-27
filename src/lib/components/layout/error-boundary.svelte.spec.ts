@@ -41,4 +41,27 @@ describe('ErrorBoundary', () => {
 		const screen = await render(ErrorBoundary, { children: throwing });
 		await expect.element(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
 	});
+
+	it('renders the recovered child when the user retries', async () => {
+		let ready = false;
+		const child = createRawSnippet(() => ({
+			render: () => {
+				if (!ready) throw new Error('The content is not available yet');
+				return '<p>Recovered content</p>';
+			}
+		}));
+		const screen = await render(ErrorBoundary, { children: child });
+		ready = true;
+		await screen.getByRole('button', { name: 'Try again' }).click();
+		await expect.element(screen.getByText('Recovered content')).toBeVisible();
+	});
+
+	it('keeps the fallback available when retry still fails', async () => {
+		const screen = await render(ErrorBoundary, {
+			source: 'Preserved document',
+			children: throwing
+		});
+		await screen.getByRole('button', { name: 'Try again' }).click();
+		await expect.element(screen.getByText('Preserved document')).toBeVisible();
+	});
 });
