@@ -12,6 +12,7 @@
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
+	const inventoryReady = $derived(data.session.resources.collectionReadiness() === 'ready');
 
 	// One list, newest first, so "what did I just delete" is the top row whichever
 	// kind it was. Sorting per kind would bury a diagram under older notes.
@@ -70,5 +71,17 @@
 	title="Trash"
 	description="Notes and diagrams you have deleted, across every project. Nothing here is gone yet."
 >
-	<TrashList {entries} onrestore={restore} ondelete={remove} onempty={empty} />
+	{#if !inventoryReady}
+		<p role="status" class="py-6 text-sm text-muted-foreground">
+			Trash is not fully available on this device yet.
+		</p>
+	{/if}
+	{#if inventoryReady || entries.length > 0}
+		<TrashList
+			{entries}
+			onrestore={restore}
+			ondelete={remove}
+			onempty={inventoryReady ? empty : undefined}
+		/>
+	{/if}
 </PageShell>

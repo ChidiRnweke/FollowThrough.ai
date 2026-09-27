@@ -54,6 +54,7 @@
 		counts,
 		trashed = [],
 		trashedDiagrams = [],
+		trashInventoryReady,
 		overdueTodoCount = 0,
 		tipSeed = 0,
 		renderedAt,
@@ -66,6 +67,7 @@
 		/** This project's deleted notes, so they can be brought back from where they were lost. */
 		trashed?: readonly TrashedNote[];
 		trashedDiagrams?: readonly Diagram[];
+		trashInventoryReady: boolean;
 		overdueTodoCount?: number;
 		// Comes from the loader so SSR and hydration pick the same tips.
 		tipSeed?: number;
@@ -435,13 +437,18 @@
 		</Collapsible.Trigger>
 		<Collapsible.Content>
 			<div class="pt-2">
+				{#if !trashInventoryReady}
+					<p role="status" class="pb-3 text-sm text-muted-foreground">
+						Trash is not fully available on this device yet.
+					</p>
+				{/if}
 				<TrashList
 					entries={trashEntries}
 					showProject={false}
 					emptyHint="Notes you move to the trash land here, and can be restored from it."
 					onrestore={restoreEntry}
 					ondelete={deleteEntryForever}
-					onempty={emptyTrash}
+					onempty={trashInventoryReady ? emptyTrash : undefined}
 				/>
 			</div>
 		</Collapsible.Content>

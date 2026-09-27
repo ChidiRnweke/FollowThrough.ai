@@ -61,9 +61,9 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W04.09 Read individual revisions. See [history request review](note-history-requests.md).
 - [x] W04.10 Compare revisions. See [revision comparison review](revision-comparison.md).
 - [ ] W04.11 Restore an earlier revision as current content.
-- [ ] W04.12 Archive notes and folders.
-- [ ] W04.13 Restore archived notes with unavailable parents.
-- [ ] W04.14 Browse note trash.
+- [x] W04.12 Archive notes and folders. See [note trash workflow review](note-trash-workflows.md).
+- [x] W04.13 Restore archived notes with unavailable parents. See [note trash workflow review](note-trash-workflows.md).
+- [x] W04.14 Browse note trash. See [note trash workflow review](note-trash-workflows.md).
 - [ ] W04.15 Permanently delete individual notes.
 - [ ] W04.16 Empty note trash.
 - [ ] W04.17 Import a Markdown archive and reconstruct folders.
