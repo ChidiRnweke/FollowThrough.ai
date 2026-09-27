@@ -206,7 +206,7 @@ time. Delivery of that stack does not complete the unchecked workflow assessment
 - [x] W12.12 Pin and unpin skills. [Disposition and observed contracts](skill-pins.md).
 - [x] W12.13 Browse skill versions. See [history read review](skill-history.md).
 - [ ] W12.14 Restore earlier versions.
-- [ ] W12.15 Discover and load skills for execution.
+- [x] W12.15 Discover and load skills for execution. See [discovery review](skill-discovery.md).
 - [x] W12.16 Record skill usage. [Ownership, failure and storage evidence](skill-loads.md).
 
 ## 13 — Diagrams
