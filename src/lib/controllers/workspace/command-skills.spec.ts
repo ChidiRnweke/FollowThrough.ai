@@ -36,3 +36,9 @@ describe('local skill metadata edits', () => {
 		).toEqual({ type: 'skills', value: { ...entry, name: 'Renamed' } });
 	});
 });
+
+it('refuses a local description that cannot be exported as SKILL.md', () => {
+	expect(() => skillMetadataWrite(entry, { description: 'x'.repeat(1025) })).toThrow(
+		'Skill description is too long'
+	);
+});
