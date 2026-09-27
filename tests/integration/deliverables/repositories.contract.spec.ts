@@ -62,7 +62,7 @@ describe('Postgres artifact repository listing invariants', () => {
 	});
 	it('keeps artifact listings scoped to the actor and project', async () => {
 		const owner = await seedUser('305');
-		const other = actor('306');
+		const other = await seedUser('306');
 		const project = await new ProjectRecords(context.db).insert(owner, {
 			name: 'Owned artifacts'
 		});

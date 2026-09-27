@@ -3,7 +3,7 @@ import type { NoteRevisionId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { actor, context, now, replaceNoteFixture, seedNote } from '../database-harness';
+import { seedUser, context, now, replaceNoteFixture, seedNote } from '../database-harness';
 import { competingSkillWrites, skillController } from './edit-harness';
 
 const seedSkill = async (suffix: string) => {
@@ -100,7 +100,7 @@ it('rejects a stale document base after a concurrent skill edit commits', async 
 });
 
 it('preserves a disabled built-in while concurrent provisioning waits', async () => {
-	const owner = actor('19705');
+	const owner = await seedUser('19705');
 	// First provisioning uses the real controller transaction; subsequent calls share the same identity.
 	const initial = createTransactionContext(context.db);
 	await skillController(initial.database, initial.transactionRunner).list(owner);
