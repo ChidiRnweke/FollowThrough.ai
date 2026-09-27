@@ -333,6 +333,7 @@ export class WorkspaceViews {
 		if (!note) return null;
 		const missing: WorkspaceResourceIdentity[] = [];
 		const project = this.get('projects', note.projectId);
+		if (project?.archivedAt) return null;
 		if (!project) missing.push({ type: 'projects', id: [note.projectId] });
 		const preferences = this.get('user_preferences', note.userId);
 		const backlinks = this.all('note_relationships')
