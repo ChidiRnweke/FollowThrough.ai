@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, sql, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, lt, gt, sql, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type {
 	Attachment,
@@ -13,6 +13,7 @@ import type { TodoId } from '$lib/models/todos';
 import { NotFoundError } from '$lib/errors';
 import type {
 	AttachmentRepository,
+	UploadRetentionCursor,
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
 import type { Database } from '$lib/server/db';
@@ -110,13 +111,30 @@ export class AttachmentRecords implements AttachmentRepository {
 			);
 	}
 
-	async listExpiredUploads(before: Date, limit: number): Promise<readonly OwnedAttachmentUpload[]> {
+	async listExpiredUploads(
+		before: Date,
+		limit: number,
+		after?: UploadRetentionCursor
+	): Promise<readonly OwnedAttachmentUpload[]> {
 		return (
 			await this.database
 				.select()
 				.from(schema.attachmentUploads)
-				.where(lt(schema.attachmentUploads.expiresAt, before))
-				.orderBy(asc(schema.attachmentUploads.expiresAt))
+				.where(
+					and(
+						lt(schema.attachmentUploads.expiresAt, before),
+						after
+							? or(
+									gt(schema.attachmentUploads.expiresAt, new Date(after.expiresAt)),
+									and(
+										eq(schema.attachmentUploads.expiresAt, new Date(after.expiresAt)),
+										gt(schema.attachmentUploads.id, after.id)
+									)
+								)
+							: undefined
+					)
+				)
+				.orderBy(asc(schema.attachmentUploads.expiresAt), asc(schema.attachmentUploads.id))
 				.limit(limit)
 		).map((row) => ({ userId: row.userId as UserId, upload: toUpload(row) }));
 	}

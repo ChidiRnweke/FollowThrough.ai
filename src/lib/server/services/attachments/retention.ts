@@ -1,6 +1,7 @@
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentRepository,
+	UploadRetentionCursor,
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
 export interface AttachmentStorage {
@@ -47,6 +48,7 @@ export class UploadRetention implements ScheduledTask {
 	private readonly graceMs: number;
 	private readonly now: () => Date;
 	private readonly logger: Pick<Console, 'error' | 'log'>;
+	private traversal: { cutoff: Date; after: UploadRetentionCursor } | undefined;
 
 	constructor(
 		private readonly repository: UploadRetentionRepository,
@@ -61,8 +63,19 @@ export class UploadRetention implements ScheduledTask {
 	}
 
 	async run(): Promise<void> {
-		const cutoff = new Date(this.now().getTime() - this.graceMs);
-		const expired = await this.repository.listExpiredUploads(cutoff, this.maxPerTick);
+		// Finish a bounded pass before including newly expired rows. Persistent failures
+		// cannot monopolize the first page or be starved by a stream of new uploads.
+		let cutoff = this.traversal?.cutoff ?? new Date(this.now().getTime() - this.graceMs);
+		let expired = await this.repository.listExpiredUploads(
+			cutoff,
+			this.maxPerTick,
+			this.traversal?.after
+		);
+		if (!expired.length && this.traversal) {
+			this.traversal = undefined;
+			cutoff = new Date(this.now().getTime() - this.graceMs);
+			expired = await this.repository.listExpiredUploads(cutoff, this.maxPerTick);
+		}
 		if (!expired.length) return;
 
 		let swept = 0;
@@ -75,6 +88,11 @@ export class UploadRetention implements ScheduledTask {
 				this.logger.error(`[expired-upload-sweep] ${entry.upload.id} failed:`, error);
 			}
 		}
+		const last = expired[expired.length - 1]!;
+		this.traversal =
+			expired.length === this.maxPerTick
+				? { cutoff, after: { expiresAt: last.upload.expiresAt, id: last.upload.id } }
+				: undefined;
 		this.logger.log(`[expired-upload-sweep] reclaimed ${swept} of ${expired.length} upload(s)`);
 	}
 
