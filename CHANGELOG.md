@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v1.1.0...v2.0.0) (2026-09-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **agent:** application tool failures use kind, code, message, recovery, and details. Prior envelopes have no compatibility reader or migration.
+
+### Bug Fixes
+
+* **agent:** recover tool failures before approval ([#280](https://github.com/ChidiRnweke/FollowThrough.ai/issues/280)) ([7c22488](https://github.com/ChidiRnweke/FollowThrough.ai/commit/7c22488a83cff206ca68e26d2a0b52abe4607471))
+* **workbench:** blend tab-strip edge controls into the strip ([#279](https://github.com/ChidiRnweke/FollowThrough.ai/issues/279)) ([4b81c34](https://github.com/ChidiRnweke/FollowThrough.ai/commit/4b81c34a1bb548a5630a49bc5c37a6f53b2301e9))
+
 ## [1.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v1.0.1...v1.1.0) (2026-09-28)
 
 
