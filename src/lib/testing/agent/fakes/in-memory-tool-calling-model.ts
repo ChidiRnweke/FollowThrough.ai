@@ -28,7 +28,7 @@ export class InMemoryToolCallingModel implements Model {
 				: outputValue;
 		const blocked = readToolFailure(text) !== undefined;
 		const terminal = blocked && typeof text === 'string' && text.includes('INTERNAL_ERROR');
-		const failed = history.includes(this.failureText);
+		const failed = blocked && JSON.stringify(text).includes(this.failureText);
 		const output: Extract<StreamEvent, { type: 'response_done' }>['response']['output'] =
 			corrected || terminal || (last !== undefined && !blocked)
 				? [
