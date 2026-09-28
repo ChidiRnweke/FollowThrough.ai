@@ -12,8 +12,6 @@ explain the area you are changing. Run `pnpm test:architecture` after structural
 its topology and test-quality audits supplement Chisel — do not silence one checker to satisfy
 another.
 
-`node` is not on `PATH` by default — prepend the nvm bin directory before any `pnpm` script.
-
 ## Commit messages
 
 Commits and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/): a type
