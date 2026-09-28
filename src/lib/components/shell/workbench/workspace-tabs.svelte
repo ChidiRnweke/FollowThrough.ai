@@ -238,7 +238,9 @@
 >
 	{#if hidden}
 		<!-- Collapsed strip: the 24px height keeps the reveal affordance visible
-		     while the persistent outer container animates between endpoints. -->
+		     while the persistent outer container animates between endpoints. The
+		     chevron wears the same recipe as the expanded strip's edge controls
+		     (see there), shrunk to fit the 24px row. -->
 		<div class="flex h-6 items-center justify-end">
 			<Tip text="Show tab strip" side="bottom">
 				{#snippet children({ props })}
@@ -246,7 +248,8 @@
 						variant="ghost"
 						{...props}
 						type="button"
-						class="mr-2 mt-1 tactile flex size-7 shrink-0 items-center justify-center rounded-md text-foreground hover:bg-accent hover:text-accent-foreground"
+						size="icon-xs"
+						class="tactile mr-1.5 rounded-md text-brand-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
 						aria-label="Show tab strip"
 						aria-expanded={false}
 						onclick={() => ontoggleHidden?.()}
@@ -269,10 +272,15 @@
 				</div>
 			{/if}
 			<!-- `pr-2`, not `px-2`: the first group band is meant to be fused to the pane's
-			     left edge, not floating 8px in from it. -->
+			     left edge, not floating 8px in from it.
+
+			     The trailing 1.5rem fades out rather than stopping at a rule: tabs that
+			     overflow dissolve into the strip just before the edge controls, the way a
+			     browser's tab row does, instead of being cut off against a wall. `pr-2`
+			     keeps a tab that merely fits clear of the fade. -->
 			<div
 				data-tab-strip-scroller
-				class="flex h-10 flex-1 items-stretch gap-0 overflow-x-auto overflow-y-hidden pr-2"
+				class="flex h-10 flex-1 items-stretch gap-0 overflow-x-auto overflow-y-hidden pr-2 [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]"
 			>
 				{#if hasTabs}
 					<!-- A group is a run of tabs headed by a label pill that folds it. The tint
@@ -498,16 +506,19 @@
 
 			<!-- Pinned right-edge controls: a sibling of the scroll area (not a
 			     sticky child), so the new-note, close-all, and strip-hide controls
-			     stay reachable even when the tabs overflow. The hairline separates
-			     the cluster from the scrolling tabs. No background of its own — it
-			     sits on the strip's wash like everything else that is not a tile,
-			     the way a browser's `+` and window controls do. It used to repaint
-			     the strip's surface here to cover the seam, which is only necessary
-			     when the tabs scrolling past it are painted. -->
-			<div
-				data-tab-strip-controls
-				class="flex shrink-0 items-center gap-0 border-l border-border pl-2"
-			>
+			     stay reachable even when the tabs overflow. No background and no
+			     rule of its own — it sits on the strip's wash like everything else
+			     that is not a tile, the way a browser's `+` and window controls do,
+			     and the scroller's trailing fade is what separates it from the tabs.
+			     A full-height neutral hairline here read as a grey wall on a teal
+			     surface.
+
+			     Every control shares one recipe: a 28px ghost square with a
+			     `rounded-md` corner, the resting tabs' teal-muted ink, and the
+			     resting tabs' own `foreground/5` hover wash. Nothing here paints
+			     until it is hovered — the controls are ink on the strip, not chips
+			     laid over it. -->
+			<div data-tab-strip-controls class="flex shrink-0 items-center gap-0.5 pr-1.5 pl-1">
 				{#if oncreateNote}
 					<Tip text="New note" side="bottom">
 						{#snippet children({ props })}
@@ -515,7 +526,7 @@
 								{...props}
 								variant="ghost"
 								size="icon-sm"
-								class="shrink-0 self-center text-brand-muted-foreground hover:text-brand-muted-foreground"
+								class="tactile size-7 rounded-md text-brand-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/10"
 								aria-label="New note"
 								onclick={oncreateNote}
 							>
@@ -523,9 +534,10 @@
 							</Button>
 						{/snippet}
 					</Tip>
-					<!-- Divider between the `+` action and the strip-hide chevron so the
-			     chevron reads as a strip control, not as a second action. -->
-					<div class="mr-1 ml-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
+					<!-- Divider between the `+` action and the controls that act on the strip
+			     itself, so they do not read as more creation actions. Teal-tinted like
+			     the group dividers: the neutral hairline clashes with the brand wash. -->
+					<div class="mx-1 h-4 w-px shrink-0 bg-brand/40" aria-hidden="true"></div>
 				{/if}
 				<!-- Close every open tab across all projects. Sits next to the strip
 			     controls so bulk cleanup is one click from any strip state.
@@ -542,7 +554,7 @@
 								size="xs"
 								{...props}
 								type="button"
-								class="tactile shrink-0 self-center rounded-sm text-brand-muted-foreground hover:bg-destructive/10 hover:text-destructive-muted-foreground"
+								class="tactile h-7 rounded-md text-brand-muted-foreground hover:bg-destructive/10 hover:text-destructive-muted-foreground"
 								aria-label={`Close all ${tabCount} tabs`}
 								onclick={() => void workbench.closeTabs(workbench.openTabs)}
 							>
@@ -552,24 +564,28 @@
 							</Button>
 						{/snippet}
 					</Tip>
-					<div class="mr-1 ml-1 h-4 w-px shrink-0 self-center bg-border" aria-hidden="true"></div>
+					<div class="mx-1 h-4 w-px shrink-0 bg-brand/40" aria-hidden="true"></div>
 				{/if}
 				<!-- Edge chevron: always at the very right end of the strip so the
-		     toggle is a stable click target regardless of tab count. `text-foreground`
-		     keeps it visible (black in light, white in dark) rather than melting
-		     into the strip's background. -->
+		     toggle is a stable click target regardless of tab count.
+
+		     `aria-expanded` is true here, and the ghost variant answers it with
+		     `aria-expanded:bg-muted aria-expanded:text-foreground` — a grey chip that
+		     sat on the teal wash permanently. Same trap as the group labels; both
+		     are neutralised on the class, where the caller wins the merge. -->
 				<Tip text="Hide tab strip" side="bottom">
 					{#snippet children({ props })}
 						<Button
 							variant="ghost"
 							{...props}
 							type="button"
-							class="tactile flex size-5 shrink-0 items-center justify-center rounded-sm text-foreground hover:bg-accent hover:text-accent-foreground"
+							size="icon-sm"
+							class="tactile size-7 rounded-md text-brand-muted-foreground hover:bg-foreground/5 hover:text-foreground aria-expanded:bg-transparent aria-expanded:text-brand-muted-foreground dark:hover:bg-foreground/10 aria-expanded:hover:bg-foreground/5 aria-expanded:hover:text-foreground dark:aria-expanded:hover:bg-foreground/10"
 							aria-label="Hide tab strip"
 							aria-expanded={true}
 							onclick={() => ontoggleHidden?.()}
 						>
-							<ChevronUp class="size-3.5" />
+							<ChevronUp class="size-4" />
 						</Button>
 					{/snippet}
 				</Tip>
