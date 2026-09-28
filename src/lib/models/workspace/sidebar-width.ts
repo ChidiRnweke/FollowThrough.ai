@@ -1,6 +1,11 @@
-/** Sidebar width values and the space constraints supplied by the app shell. */
+/**
+ * Sidebar width values and the space constraints supplied by the app shell.
+ *
+ * The sidebar is an icon rail plus a project panel. The resizable width, and every
+ * bound below, is the panel's alone; the rail is a fixed gutter added beside it.
+ */
 
-/** Below this the sidebar is narrower than its own labels are readable. */
+/** Below this the panel is narrower than its own labels are readable. */
 export const SIDEBAR_WIDTH_MIN_PX = 192; // 12rem
 /** The historical fixed width, and the double-click reset target. */
 export const SIDEBAR_WIDTH_DEFAULT_PX = 256; // 16rem
@@ -18,7 +23,10 @@ export const CONTENT_MIN_PX = 480; // 30rem
  */
 export const CONTENT_MIN_SPLIT_PX = 768; // 48rem
 
-/** Slack for the inset's `m-2` and the sidebar container's `p-2`. */
+/** The icon rail, always on screen beside the panel. Mirrors `SIDEBAR_WIDTH_ICON`. */
+export const SIDEBAR_RAIL_PX = 56; // 3.5rem
+
+/** Slack for the content inset's `m-2` margins; its start margin is the gutter beside the panel. */
 export const SHELL_CHROME_PX = 32; // 2rem
 
 export interface SidebarConstraints {

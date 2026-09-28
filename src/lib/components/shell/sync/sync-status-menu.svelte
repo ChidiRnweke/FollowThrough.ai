@@ -14,8 +14,14 @@
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
 	let {
 		resources,
-		startupFailure = null
-	}: { resources: WorkspaceResources; startupFailure?: string | null } = $props();
+		startupFailure = null,
+		side = 'bottom'
+	}: {
+		resources: WorkspaceResources;
+		startupFailure?: string | null;
+		/** `right` from the sidebar's icon rail; `bottom` from the mobile header. */
+		side?: 'bottom' | 'right';
+	} = $props();
 	let review = $state(false);
 	const indicator = $derived(
 		syncIndicator({
@@ -77,7 +83,7 @@
 			</Button>
 		{/snippet}
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-72">
+	<DropdownMenu.Content {side} align={side === 'right' ? 'start' : 'end'} class="w-72">
 		<DropdownMenu.Label class="pb-1 text-sm font-medium text-foreground"
 			>{indicator.headline}</DropdownMenu.Label
 		>

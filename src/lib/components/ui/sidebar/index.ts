@@ -18,6 +18,7 @@ import MenuSubItem from './sidebar-menu-sub-item.svelte';
 import MenuSub from './sidebar-menu-sub.svelte';
 import Menu from './sidebar-menu.svelte';
 import Provider from './sidebar-provider.svelte';
+import IconRail from './sidebar-icon-rail.svelte';
 import Rail from './sidebar-rail.svelte';
 import Separator from './sidebar-separator.svelte';
 import Trigger from './sidebar-trigger.svelte';
@@ -43,6 +44,7 @@ export {
 	MenuSubButton,
 	MenuSubItem,
 	Provider,
+	IconRail,
 	Rail,
 	Root,
 	Separator,
@@ -67,6 +69,7 @@ export {
 	MenuSubButton as SidebarMenuSubButton,
 	MenuSubItem as SidebarMenuSubItem,
 	Provider as SidebarProvider,
+	IconRail as SidebarIconRail,
 	Rail as SidebarRail,
 	Separator as SidebarSeparator,
 	Trigger as SidebarTrigger,
