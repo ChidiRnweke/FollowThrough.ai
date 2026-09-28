@@ -9,7 +9,7 @@
 - surface rule: homogeneous scannable rows = borderless divided list (hairline + row-interactive wash). card ONLY for heterogeneous content or self-owned actions. never card-wrapping-bordered-rows
 - principles: color=information | chrome-defers-to-document | data=gray
 - teal=interactive/primary + identity accents (active nav, selected segment, provenance chips, product mark). red=destructive-only. all else gray.
-- brand token: --brand (=primary light, lifted teal dark) for identity accents/washes. mark=brand-mark.svelte, always in sidebar header.
+- brand token: --brand (=primary light, lifted teal dark) for identity accents/washes. mark=brand-mark.svelte, always at top of sidebar icon rail.
 - project identity=brand teal, NEVER per-project hues. sidebar project icon, Badge variant="brand", breadcrumb links, chat origin line, artifact format badges, project-overview resource icon chips. canonical wash recipe=badge brand variant (text-brand + bg-brand/10, dark:bg-brand/15) — no separate wash tokens.
 - voice: calm/dry/second-person, one sentence w/ period, no exclamations, celebrates absence of work. empty states=empty-state.svelte (icon+voice line+≤1 action), never blank space. two sizes: default slot (bare muted icon, inline gaps/panels) vs size="large" hero (brand-wash icon tile size-16 bg-brand/10 text-brand, foreground statement, pages/whole sections).
 
@@ -52,6 +52,7 @@
 
 - radius base 0.625rem: md=buttons/inputs/chips, lg=cards/popovers/suggestion-cards, xl+=modals, full=avatars/dots
 - density: compact. controls 32–36px chrome. roomy only in editor/reading
+- sidebar = fixed 3.5rem icon rail (gutter: mark, panel toggle, destinations, jump tools, chrome, initials avatar→/profile; groups by spacing, tips side=right) + resizable project panel. panel + content = two sibling insets (rounded-xl, outward ring-foreground/10, 8px margins, 8px gutter); panel wordmark row h-10 = strip height. collapse hides panel, rail stays. --sidebar-width = panel only
 - layout: 3 zones sidebar|document|right-panel(chat/review/todo, collapsible). boundaries=border hairlines, no shadows/blocks
 
 ## components

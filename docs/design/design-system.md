@@ -18,8 +18,8 @@
   `bg-input/30` fill is dark-mode-only. The border, not a fill contrast, marks the control in
   light mode.
 - **Product mark:** a flat teal tile with a continuous white F-to-check path, rendered via
-  `brand-mark.svelte` (semantic tokens, both color modes). Always present in the sidebar header
-  (alone in icon-collapsed mode) and on the offline page. Never decorated, recolored
+  `brand-mark.svelte` (semantic tokens, both color modes). Always present at the top of the
+  sidebar's icon rail and on the offline page. Never decorated, recolored
   per-context, or repeated inside content surfaces.
 - **Accent discipline:** Teal marks the live thing; olive-neutral is everything at rest. Active
   sidebar navigation, the selected segment of tabs/toggle groups, and provenance chips carry
@@ -133,6 +133,16 @@
 - **Ambiguous spacing is a violation.** Wherever spacing is the only thing grouping elements,
   within-group gaps are strictly smaller than between-group gaps; equal gaps at nested levels
   flatten the grouping, and the fix is a spacing step, never a divider.
+- **The app rail is the gutter; the panel and the content are two sibling insets.** The sidebar
+  is a fixed 3.5rem icon rail plus a resizable project panel. The rail sits on the shell surface
+  and holds the mark, the panel toggle, destinations, jump tools, app chrome, and the account
+  avatar (initials on the `bg-brand/15` wash, linking to Profile); its groups are separated by
+  spacing, never dividers, and every button carries a right-side tooltip. The panel and the
+  content are separate cards with the same recipe — `rounded-xl`, the outward
+  `ring-foreground/10` hairline, 8px margins — split by an 8px gutter, so each keeps its own
+  corners and the tab strip always tops a rounded card. The panel's wordmark row matches the
+  strip's 40px. Collapsing removes the panel card and leaves the rail. `--sidebar-width` and the
+  stored width preference are the panel's alone.
 - **Chrome takes a fixed width; content flexes.** The sidebar, the 24rem right panel, and
   drawers are sized for their contents — never as viewport fractions or grid-column shares.
 - **Centered single-purpose surfaces use `max-w-*` or a measure token,** so they shrink only
@@ -271,7 +281,7 @@ while the region is empty; the empty state and its one action are the whole surf
   single status line in the same box and the selected text holds a brand wash until the result
   settles (revealing after `--duration-micro`); the header spinner is only the fallback for a
   selection scrolled out of view.
-- Workspace synchronization stays in the sidebar utility row, with the same compact control in
+- Workspace synchronization stays in the sidebar's icon rail, with the same compact control in
   the mobile header. Its icon and badge summarize offline access, pending saves, downloads, and
   decisions. Routine autosave does not add a strip or move the workspace geometry.
 - The sync menu opens a grouped review: decisions, waiting changes, and sending changes. A detail

@@ -4,6 +4,7 @@ import {
 	CONTENT_MIN_SPLIT_PX,
 	RIGHT_PANEL_WIDTH_PX,
 	SHELL_CHROME_PX,
+	SIDEBAR_RAIL_PX,
 	SIDEBAR_WIDTH_MAX_PX,
 	SIDEBAR_WIDTH_MIN_PX,
 	type SidebarConstraints
@@ -29,7 +30,7 @@ describe('effectiveSidebarWidth', () => {
 		const viewportWidth = SIDEBAR_WIDTH_MAX_PX + CONTENT_MIN_PX + RIGHT_PANEL_WIDTH_PX;
 		expect(
 			effectiveSidebarWidth(SIDEBAR_WIDTH_MAX_PX, { ...roomy, viewportWidth, panelDocked: true })
-		).toBe(SIDEBAR_WIDTH_MAX_PX - SHELL_CHROME_PX);
+		).toBe(SIDEBAR_WIDTH_MAX_PX - SIDEBAR_RAIL_PX - SHELL_CHROME_PX);
 	});
 
 	it('leaves the sidebar alone when the panel is open but rendering as a sheet', () => {
@@ -43,7 +44,7 @@ describe('effectiveSidebarWidth', () => {
 		const viewportWidth = 1200;
 		expect(
 			effectiveSidebarWidth(SIDEBAR_WIDTH_MAX_PX, { ...roomy, viewportWidth, splitActive: true })
-		).toBe(viewportWidth - CONTENT_MIN_SPLIT_PX - SHELL_CHROME_PX);
+		).toBe(viewportWidth - CONTENT_MIN_SPLIT_PX - SIDEBAR_RAIL_PX - SHELL_CHROME_PX);
 	});
 
 	it('never narrows past the minimum, however tight the viewport', () => {

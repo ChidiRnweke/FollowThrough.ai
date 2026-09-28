@@ -6,6 +6,7 @@ import {
 	CONTENT_MIN_SPLIT_PX,
 	RIGHT_PANEL_WIDTH_PX,
 	SHELL_CHROME_PX,
+	SIDEBAR_RAIL_PX,
 	type SidebarConstraints
 } from '$lib/models/workspace';
 
@@ -17,8 +18,8 @@ export function clampPreferred(width: number): number {
 }
 
 /**
- * The width to actually render: the preference, reduced by however much space
- * the content and a docked panel need. Never drops below `SIDEBAR_WIDTH_MIN_PX`
+ * The panel width to actually render: the preference, reduced by however much
+ * space the rail, the content and a docked panel need. Never drops below `SIDEBAR_WIDTH_MIN_PX`
  * — a sidebar narrower than its icons is worse than a cramped editor, and the
  * shell already cues the user to collapse it entirely in that case.
  */
@@ -28,7 +29,8 @@ export function effectiveSidebarWidth(preferred: number, constraints: SidebarCon
 
 	const contentFloor = constraints.splitActive ? CONTENT_MIN_SPLIT_PX : CONTENT_MIN_PX;
 	const reservedRight = constraints.panelDocked ? RIGHT_PANEL_WIDTH_PX : 0;
-	const budget = constraints.viewportWidth - contentFloor - reservedRight - SHELL_CHROME_PX;
+	const budget =
+		constraints.viewportWidth - contentFloor - reservedRight - SIDEBAR_RAIL_PX - SHELL_CHROME_PX;
 
 	if (budget < SIDEBAR_WIDTH_MIN_PX) return SIDEBAR_WIDTH_MIN_PX;
 	return Math.min(wanted, Math.round(budget));

@@ -78,14 +78,14 @@ test.describe('without JavaScript', () => {
 		const shellFitsViewport = await page.evaluate(() => {
 			const wrapper = document.querySelector('[data-slot="sidebar-wrapper"]');
 			const inset = document.querySelector('[data-slot="sidebar-inset"]');
-			const footer = document.querySelector('[data-slot="sidebar-footer"]');
+			const rail = document.querySelector('[data-slot="sidebar-icon-rail"]');
 
 			return (
 				wrapper !== null &&
 				inset !== null &&
-				footer !== null &&
+				rail !== null &&
 				wrapper.contains(inset) &&
-				wrapper.contains(footer) &&
+				wrapper.contains(rail) &&
 				document.documentElement.scrollWidth === document.documentElement.clientWidth &&
 				document.documentElement.scrollHeight === document.documentElement.clientHeight
 			);

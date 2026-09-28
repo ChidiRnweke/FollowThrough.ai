@@ -10,10 +10,13 @@
 
 	let {
 		notifications,
-		class: className
+		class: className,
+		side = 'bottom'
 	}: {
 		notifications: readonly PendingMemoryNotification[];
 		class?: string;
+		/** `right` from the sidebar's icon rail; `bottom` from the mobile header. */
+		side?: 'bottom' | 'right';
 	} = $props();
 
 	const total = $derived(notifications.reduce((sum, notification) => sum + notification.count, 0));
@@ -22,7 +25,7 @@
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger>
 		{#snippet child({ props: menuProps })}
-			<Tip text="Pending memories">
+			<Tip text="Pending memories" side={side === 'right' ? 'right' : 'top'}>
 				{#snippet children({ props: tipProps })}
 					<Button
 						{...mergeProps(menuProps, tipProps)}
@@ -47,7 +50,7 @@
 			</Tip>
 		{/snippet}
 	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end" class="w-64">
+	<DropdownMenu.Content {side} align={side === 'right' ? 'start' : 'end'} class="w-64">
 		<DropdownMenu.Label>Pending memories</DropdownMenu.Label>
 		<DropdownMenu.Group>
 			{#if notifications.length === 0}

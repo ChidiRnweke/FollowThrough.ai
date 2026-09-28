@@ -73,9 +73,11 @@
 				'transition-[width] duration-200 ease-linear relative w-(--sidebar-width) bg-transparent',
 				'group-data-[collapsible=offcanvas]:w-0',
 				'group-data-[side=right]:rotate-180',
-				variant === 'floating' || variant === 'inset'
+				variant === 'floating'
 					? 'group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]'
-					: 'group-data-[collapsible=icon]:w-(--sidebar-width-icon)'
+					: 'group-data-[collapsible=icon]:w-(--sidebar-width-icon)',
+				// Inset is an icon rail beside the panel: `--sidebar-width` is the panel alone.
+				variant === 'inset' && 'w-[calc(var(--sidebar-width-icon)+var(--sidebar-width))]'
 			)}
 		></div>
 		<div
@@ -85,18 +87,22 @@
 				side === 'left'
 					? 'start-0 group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]'
 					: 'end-0 group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]',
-				// Adjust the padding for floating and inset variants.
-				variant === 'floating' || variant === 'inset'
+				// Floating pads a card; inset runs its rail flush and lets the panel set its margin.
+				variant === 'floating'
 					? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]'
-					: 'group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-e group-data-[side=right]:border-s',
+					: variant === 'inset'
+						? 'w-[calc(var(--sidebar-width-icon)+var(--sidebar-width))] group-data-[collapsible=icon]:w-(--sidebar-width-icon)'
+						: 'group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-e group-data-[side=right]:border-s',
 				className
 			)}
 			{...restProps}
 		>
+			<!-- Inset lets the wrapper's surface show through, so the rail and the gutter
+			     around the content are one surface in both themes. -->
 			<div
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
-				class="bg-sidebar group-data-[variant=floating]:ring-sidebar-border group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 flex size-full flex-col"
+				class="bg-sidebar group-data-[variant=inset]:bg-transparent group-data-[variant=floating]:ring-sidebar-border group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 flex size-full flex-col"
 			>
 				{@render children?.()}
 			</div>
