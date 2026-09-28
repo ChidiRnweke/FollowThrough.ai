@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v1.0.1...v1.1.0) (2026-09-28)
+
+
+### Features
+
+* **shell:** move app navigation to an icon rail beside an inset project panel ([#276](https://github.com/ChidiRnweke/FollowThrough.ai/issues/276)) ([85be6ce](https://github.com/ChidiRnweke/FollowThrough.ai/commit/85be6ce978f8713c765ec0423f3cb095a4c51732))
+
 ## [1.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v1.0.0...v1.0.1) (2026-09-28)
 
 
