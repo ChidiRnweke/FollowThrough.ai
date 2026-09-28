@@ -10,7 +10,7 @@ import {
 } from '@openai/agents';
 import OpenAI from 'openai';
 import type { ActorContext } from '$lib/models/identity';
-import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { readToolFailure, toolFailure } from '$lib/models/agent/tool-failure';
 import {
 	DEFAULT_AGENT_MAX_TURNS,
 	openRouterWebSearchTool,
@@ -112,12 +112,6 @@ interface RecoverableToolSuggestion {
 	readonly invokeVia: ToolInvocation;
 }
 
-interface RecoverableToolFailure {
-	readonly failure: string;
-	readonly suggestions: readonly RecoverableToolSuggestion[];
-	readonly recovery: string;
-}
-
 const formatToolNames = (names: readonly string[]): string =>
 	names.map((name) => `"${name}"`).join(', ');
 
@@ -166,7 +160,15 @@ export const createToolRecoveryConfig = (
 	const candidates = [...new Set([...enabled, ...catalog])];
 	return {
 		toolNotFoundBehavior: 'return_error_to_model',
-		toolErrorFormatter: ({ kind, toolType, toolName }) => {
+		toolErrorFormatter: ({ kind, toolType, toolName, defaultMessage }) => {
+			if (kind === 'approval_rejected' && toolType === 'function')
+				return JSON.stringify(
+					toolFailure(
+						'APPROVAL_REJECTED',
+						defaultMessage,
+						'The user rejected this action. Continue without making this change.'
+					)
+				);
 			if (kind !== 'tool_not_found' || toolType !== 'function') return undefined;
 			const suggestions = suggestToolNames(toolName, candidates).map(
 				(suggestion): RecoverableToolSuggestion => ({
@@ -187,7 +189,11 @@ export const createToolRecoveryConfig = (
 				: suggestions.length === 0
 					? 'Call "search_tools" to discover the capability, then call the name it returns directly with flat top-level arguments.'
 					: 'Retry with one of the suggestions. Names marked "direct" can be called immediately; names marked "search_first" need one "search_tools" call before they become callable.';
-			return JSON.stringify({ failure, suggestions, recovery } satisfies RecoverableToolFailure);
+			return JSON.stringify(
+				toolFailure('TOOL_NOT_AVAILABLE', failure, recovery, {
+					suggestions: suggestions.map((suggestion) => ({ ...suggestion }))
+				})
+			);
 		}
 	};
 };
@@ -438,6 +444,7 @@ export class AgentReasoning {
 			readonly context: AgentRunContext;
 			readonly run: AgentRun;
 			readonly executor: AgentToolExecutor;
+			readonly signal: AbortSignal;
 		}) => Promise<{
 			// audit-allow: no-unknown-type — Tool type parameter belongs to @openai/agents; naming it locally would be a double cast.
 			agentTools(alreadyPromoted?: readonly string[]): Tool<unknown>[];
@@ -506,7 +513,8 @@ export class AgentReasoning {
 				request,
 				context,
 				run,
-				executor: toolExecutor
+				executor: toolExecutor,
+				signal
 			});
 			signal.throwIfAborted();
 			const session = this.createSession(this.sessions, actor, run.conversationId);

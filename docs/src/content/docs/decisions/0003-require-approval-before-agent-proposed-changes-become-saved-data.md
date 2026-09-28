@@ -46,8 +46,8 @@ returns unchanged without another write, as described in ADR 0010. This does not
 which call produced that result. We do not promise exactly-once tool execution.
 
 The checkpoint and its approval event commit together before the user can act on the
-prompt. Older body-change approvals without a saved preparation remain rejectable but cannot
-write. Automatic acceptance uses the same preparation and conditional write.
+prompt. Body-change approvals without a valid saved preparation cannot write; an accepted resume
+with missing or corrupt preparation fails as a lifecycle error. Automatic acceptance uses the same preparation and conditional write.
 
 Skill body tools also require a skill note when preparing and applying the change. Their approval
 card shows the saved text comparison and revision, using the same review as note body tools.
@@ -105,7 +105,7 @@ anyone else yet.
 - `src/lib/server/controllers/notes/reviewed-changes.spec.ts` checks prepared results,
   stale reviews, unchanged retries, ownership, and transactional consequences.
 - `src/lib/server/factories/agent/reviewed-note-tools.spec.ts` checks checkpoint resume,
-  partial approvals, legacy calls, and automatic acceptance.
+  partial approvals, invalid checkpoints, and automatic acceptance.
 - `src/lib/server/factories/agent/reviewed-skill-tools.spec.ts` checks the same contract for skill
   bodies, including stale reviews and skill-only targets.
 - `tests/integration/notes/reviewed-changes.contract.spec.ts` checks that reviewed skill drafts

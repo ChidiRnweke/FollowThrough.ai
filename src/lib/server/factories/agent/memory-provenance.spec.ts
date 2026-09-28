@@ -91,7 +91,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const tool = tools.definitions().find((item) => item.name === 'propose_memory_change');
 	if (!tool) throw new Error('Memory proposal tool is missing');
 	const propose = () =>
-		tool.execute({ scope: 'user', operation: 'add', content: 'Prefer concise answers.' });
+		tool.prepare({ scope: 'user', operation: 'add', content: 'Prefer concise answers.' }).execute();
 	return { propose, tool, origin, provenance, suggestions, entries };
 };
 it.each(['agent', 'mcp'] as const)(
@@ -115,12 +115,14 @@ it('does not replace the known source with a generic memory source', async () =>
 
 it('rejects a model-supplied source identifier', async () => {
 	const { tool } = setup('agent');
-	await expect(
-		tool.execute({
-			scope: 'user',
-			operation: 'add',
-			content: 'Prefer concise answers.',
-			provenanceId: testProvenanceId(2)
-		})
-	).rejects.toMatchObject({ issues: [{ code: 'unrecognized_keys', keys: ['provenanceId'] }] });
+	expect(() =>
+		tool
+			.prepare({
+				scope: 'user',
+				operation: 'add',
+				content: 'Prefer concise answers.',
+				provenanceId: testProvenanceId(2)
+			})
+			.execute()
+	).toThrow('provenanceId');
 });

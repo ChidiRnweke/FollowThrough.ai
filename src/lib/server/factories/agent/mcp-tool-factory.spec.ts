@@ -1,3 +1,13 @@
+import { z } from 'zod';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
+import { toolFailureSchema } from '$lib/models/agent/tool-failure';
+import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import {
+	noteContentFromMarkdown,
+	noteMarkdownFromContent
+} from '$lib/server/services/notes/markdown';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -180,5 +190,153 @@ describe('Deselected tools over MCP', () => {
 			arguments: { query: 'archive project' }
 		});
 		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
+	});
+});
+
+const failureResult = z.object({
+	isError: z.literal(true),
+	content: z.tuple([z.object({ type: z.literal('text'), text: z.string() })])
+});
+const readFailure = (result: Awaited<ReturnType<Client['callTool']>>) => {
+	const payload = failureResult.parse(result);
+	return toolFailureSchema.parse(JSON.parse(payload.content[0].text));
+};
+
+describe('MCP lifecycle failure contract', () => {
+	it.each([[], Array.from({ length: 6 }, () => ({ oldText: 'Monday', newText: 'Tuesday' }))])(
+		'returns application validation as a structured tool error for edits %j',
+		async (edits) => {
+			const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+			const fixture = reviewedNoteFixture(note);
+			const client = await connect('full', { factory: fixture.factory });
+			const failure = readFailure(
+				await client.callTool({ name: 'edit_note', arguments: { noteId: note.id, edits } })
+			);
+			expect({
+				code: failure.code,
+				recovery: failure.recovery,
+				body: fixture.content.notes[0].plainText
+			}).toEqual({
+				code: 'VALIDATION',
+				recovery: 'Read the failure, correct the arguments it names, and call the tool again.',
+				body: 'Launch Monday.'
+			});
+		}
+	);
+	it('allows a corrected call after validation fails', async () => {
+		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+		const fixture = reviewedNoteFixture(note);
+		const client = await connect('full', { factory: fixture.factory });
+		await client.callTool({ name: 'edit_note', arguments: { noteId: note.id, edits: [] } });
+		await client.callTool({
+			name: 'edit_note',
+			arguments: { noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }
+		});
+		expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
+	});
+	it('marks returned preparation failures as tool errors', async () => {
+		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+		const client = await connect('full', { factory: reviewedNoteFixture(note).factory });
+		const failure = readFailure(
+			await client.callTool({
+				name: 'edit_note',
+				arguments: { noteId: note.id, edits: [{ oldText: 'Friday', newText: 'Tuesday' }] }
+			})
+		);
+		expect(failure).toMatchObject({
+			kind: 'failure',
+			code: 'NOTE_REVIEW_FAILED',
+			details: { problems: [expect.stringContaining('not found')] }
+		});
+	});
+	it('keeps internal preparation details out of the MCP response', async () => {
+		const note = noteBuilder();
+		const fixture = reviewedNoteFixture(note, {
+			read: () => {
+				throw new TypeError('private converter implementation');
+			},
+			write: noteMarkdownFromContent
+		});
+		const client = await connect('full', { factory: fixture.factory });
+		const failure = readFailure(
+			await client.callTool({
+				name: 'save_note',
+				arguments: { noteId: note.id, markdown: '# Release' }
+			})
+		);
+		expect(failure).toEqual({
+			kind: 'failure',
+			code: 'INTERNAL_ERROR',
+			message:
+				'The application failed while handling this call. The fault is ours, not your arguments.',
+			recovery:
+				'Do not retry this call. Changing the arguments will not change the result. Tell the user what you were trying to do, then continue with the rest of the task or stop.',
+			details: {}
+		});
+	});
+	it('uses the common envelope for discovery validation', async () => {
+		const client = await connect('full');
+		expect(
+			readFailure(await client.callTool({ name: 'search_tools', arguments: { query: 42 } })).code
+		).toBe('VALIDATION');
+	});
+	it('uses the common envelope for an unavailable tool', async () => {
+		const client = await connect('read');
+		expect(readFailure(await client.callTool({ name: 'save_note', arguments: {} })).code).toBe(
+			'TOOL_NOT_AVAILABLE'
+		);
+	});
+});
+
+it('returns an execution-time domain refusal as a canonical MCP failure', async () => {
+	const note = noteBuilder();
+	const fixture = reviewedNoteFixture(note);
+	fixture.content.notes = [];
+	const client = await connect('full', { factory: fixture.factory });
+	expect(
+		readFailure(
+			await client.callTool({
+				name: 'save_note',
+				arguments: { noteId: note.id, markdown: 'Changed body' }
+			})
+		).code
+	).toBe('NOT_FOUND');
+});
+
+it('preserves the exact file recovery call in an MCP error result', async () => {
+	const nextActions = [
+		{ reason: 'List available files', tool: 'ls' as const, arguments: { path: '/' } }
+	];
+	const files = capabilityDependencies<AgentFilesController>({
+		ls: async () => ({
+			kind: 'error',
+			code: 'path_not_found',
+			message: 'Path does not exist.',
+			requestedPath: '/missing',
+			nextActions
+		})
+	});
+	const factory = capabilityDependencies<ControllerFactory>({ agentFiles: () => files });
+	const client = await connect('full', { factory });
+	expect(
+		readFailure(await client.callTool({ name: 'ls', arguments: { path: '/missing' } }))
+	).toEqual({
+		kind: 'failure',
+		code: 'path_not_found',
+		message: 'Path does not exist.',
+		recovery: 'Follow the exact nextActions below.',
+		details: { requestedPath: '/missing', nextActions }
+	});
+});
+
+it('accepts omitted MCP arguments when every application field is optional', async () => {
+	const files = capabilityDependencies<AgentFilesController>({
+		ls: async () => ({ kind: 'listed', path: '/', entries: [] })
+	});
+	const factory = capabilityDependencies<ControllerFactory>({ agentFiles: () => files });
+	const client = await connect('full', { factory });
+	const result = await client.callTool({ name: 'ls' });
+	expect(result).toMatchObject({
+		content: [{ type: 'text', text: JSON.stringify({ kind: 'listed', path: '/', entries: [] }) }]
 	});
 });

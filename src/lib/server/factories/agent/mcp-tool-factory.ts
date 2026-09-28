@@ -1,16 +1,13 @@
-// chisel-ignore-file structural:factory-contains-logic -- MCP protocol adapter maps the shared capability surface to protocol schemas and error envelopes; it is not application composition.
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+// chisel-ignore-file structural:factory-contains-logic -- MCP protocol adapter owns registration and wire results, not application composition.
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
-import { DomainError } from '$lib/errors';
-import {
-	readAgentPayload,
-	type AgentPayload,
-	type AgentPayloadObject
-} from '$lib/models/agent/payload';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
+import { readAgentPayload, type AgentPayload } from '$lib/models/agent/payload';
+import { readToolFailure, toolFailure } from '$lib/models/agent/tool-failure';
 import {
 	McpTools,
 	FIRST_CLASS_TOOL_NAMES,
@@ -18,6 +15,13 @@ import {
 	type AgentToolDefinition,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
+import {
+	ToolLifecycleError,
+	jsonObjectSchema,
+	bindToolArguments,
+	executeToolAction,
+	prepareToolCall
+} from './tool-call-boundary';
 
 export interface McpToolSurfaceOptions {
 	readonly controllers: ControllerFactory;
@@ -25,170 +29,109 @@ export interface McpToolSurfaceOptions {
 	readonly scope: ApiTokenScope;
 	readonly provenanceId: ProvenanceId;
 	readonly toolRetriever: ToolRetriever;
-	/** The user's resolved tool authority for this MCP request. */
 	readonly toolAccess: ToolAccessPolicy;
 }
 
-/**
- * MCP carries results as content blocks; every tool here returns JSON text.
- *
- * The parameter is {@link AgentPayload} rather than `unknown`, so the runtime
- * `undefined` check this used to carry is gone with it: a definition's `execute`
- * has already read its result into that type and raises on anything that cannot
- * be represented as JSON, which is the check the guard was standing in for.
- */
-const ok = (result: AgentPayload) => ({
-	content: [{ type: 'text' as const, text: JSON.stringify(result) }]
+const result = (value: AgentPayload) => ({
+	...(readToolFailure(value) === undefined ? {} : { isError: true }),
+	content: [{ type: 'text' as const, text: JSON.stringify(value) }]
 });
 
-interface McpToolFailure {
-	readonly kind: 'error';
-	readonly code: string;
-	readonly message: string;
-}
-
-const failed = (failure: McpToolFailure) => ({
-	isError: true,
-	content: [{ type: 'text' as const, text: JSON.stringify(failure) }]
-});
-
-/**
- * Runs a tool body, turning domain failures into MCP tool errors. A thrown
- * error would fail the whole JSON-RPC call; `isError` lets the host's model
- * see what went wrong and try something else.
- */
-const attempt = async (run: () => Promise<AgentPayload>) => {
-	try {
-		return ok(await run());
-		// audit-allow: silent-catch — the MCP adapter converts every thrown domain failure into its explicit failed tool result.
-	} catch (error) {
-		if (error instanceof DomainError)
-			return failed({ kind: 'error', code: error.code, message: error.message });
-		return failed({
-			kind: 'error',
-			code: 'INTERNAL_ERROR',
-			message: error instanceof Error ? error.message : String(error)
-		});
-	}
-};
-
-/**
- * Read-classified tools are safe to retry and never write; mutations change
- * state irreversibly. Hosts use these hints to decide what to auto-approve.
- */
-const annotationsFor = (definition: AgentToolDefinition) => ({
-	readOnlyHint: definition.classification === 'read',
-	destructiveHint: definition.classification === 'mutation'
-});
-
-/**
- * Exposes the agent's capabilities to an external MCP host, mirroring the
- * in-app surface built by `AgentTools.agentTools()`: a handful of
- * first-class tools, plus `search_tools` for the long tail. Search promotes a
- * result into a real top-level MCP tool and emits tools/list_changed. That
- * keeps the advertised tool list small enough to sit in a host's context
- * alongside its own tools.
- *
- * The scope filter and the user's tool selection are applied to a single
- * `permitted` list that both direct registration and search promotion use, so
- * neither a `read` token nor a deselected tool can be reached by name.
- */
-export const createMcpToolSurface = (options: McpToolSurfaceOptions): McpServer => {
+/** Validate inside our boundary, so schema errors and domain errors have one format. */
+export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => {
 	const registry = new McpTools(
 		options.controllers,
 		options.actor,
-		{
-			provenanceId: options.provenanceId
-		},
+		{ provenanceId: options.provenanceId },
 		options.toolAccess
 	);
-
 	const permitted = registry.definitions(
 		options.scope === 'read' ? { classifications: ['read'] } : {}
 	);
-	// Keyed by `string` for the same reason as in `AgentTools.agentTools`: the
-	// retriever answers with names from the embedding store, and the lookup is
-	// what turns one of those into a definition.
 	const byName = new Map<string, AgentToolDefinition>(
 		permitted.map((definition) => [definition.name, definition])
 	);
-	const server = new McpServer(
+	const registered = new Set<string>(FIRST_CLASS_TOOL_NAMES.filter((name) => byName.has(name)));
+	const server = new Server(
 		{ name: 'followthrough', version: '1.0.0' },
 		{
+			capabilities: { tools: { listChanged: true } },
 			instructions:
-				'FollowThrough is a connected workspace of notes, projects, todos and references. ' +
-				'Ground yourself with `search` or `get_workspace_context` before acting. ' +
-				'Tools beyond the ones listed here are available: find them with `search_tools`. Each result is then registered as a real top-level tool; call that exact name with the flat arguments in its `input_schema`. There is no wrapper tool.'
+				'Ground yourself with search or get_workspace_context before acting. Use search_tools to discover other tools, then call their exact names with flat arguments matching input_schema.'
 		}
 	);
-
-	const registered = new Set<string>();
-	const register = (definition: AgentToolDefinition): void => {
-		if (registered.has(definition.name)) return;
-		server.registerTool(
-			definition.name,
-			{
-				description: definition.description,
-				inputSchema: definition.parameters.shape,
-				annotations: annotationsFor(definition)
-			},
-			(input: AgentPayloadObject) => attempt(() => definition.execute(input))
-		);
-		registered.add(definition.name);
-	};
-
-	for (const name of FIRST_CLASS_TOOL_NAMES) {
-		const definition = byName.get(name);
-		if (!definition) continue;
-		register(definition);
-	}
-
-	// First-class tools are already registered above and carry no stored embedding,
-	// so they cannot be ranked here. App-only definitions never enter McpTools.
-	const discoverable = permitted.filter((definition) => !FIRST_CLASS_TOOL_SET.has(definition.name));
-
-	server.registerTool(
-		'search_tools',
-		{
-			description:
-				'Find more FollowThrough tools relevant to what you want to do. Every returned match is registered as a real top-level tool; call its exact name with flat arguments matching input_schema.',
-			inputSchema: {
-				query: z.string().min(1),
-				limit: z.number().int().min(1).max(15).optional()
-			},
-			annotations: { readOnlyHint: true, destructiveHint: false }
-		},
-		async (input) => {
-			const catalog = discoverable.map((definition) => ({
-				name: definition.name,
-				description: definition.description
-			}));
-			const ranked = await options.toolRetriever.retrieve(catalog, input.query, input.limit ?? 5);
-			const matches = ranked
-				.map((name) => byName.get(name))
-				.filter((definition): definition is AgentToolDefinition => definition !== undefined);
-			for (const definition of matches) register(definition);
-			// Read rather than asserted: `z.toJSONSchema` answers with zod's own
-			// payload type, which is the one value on this surface that is not
-			// already known to be JSON.
-			const results = readAgentPayload(
-				matches.map((definition) => ({
+	const searchParameters = z
+		.object({ query: z.string().min(1), limit: z.number().int().min(1).max(15).optional() })
+		.strict();
+	const searchDescription =
+		'Find more FollowThrough tools. Every match becomes a top-level tool; call its exact name with flat arguments matching input_schema.';
+	server.setRequestHandler(ListToolsRequestSchema, async () => ({
+		tools: [
+			...permitted
+				.filter((definition) => registered.has(definition.name))
+				.map((definition) => ({
 					name: definition.name,
 					description: definition.description,
-					classification: definition.classification,
-					input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
-					callable_directly: true
-				}))
+					inputSchema: jsonObjectSchema(definition.parameters),
+					annotations: {
+						readOnlyHint: definition.classification === 'read',
+						destructiveHint: definition.classification === 'mutation'
+					}
+				})),
+			{
+				name: 'search_tools',
+				description: searchDescription,
+				inputSchema: jsonObjectSchema(searchParameters),
+				annotations: { readOnlyHint: true, destructiveHint: false }
+			}
+		]
+	}));
+	server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+		const { name, arguments: input = {} } = request.params;
+		if (name !== 'search_tools' && !registered.has(name))
+			return result(
+				toolFailure(
+					'TOOL_NOT_AVAILABLE',
+					`Tool "${name}" is not available.`,
+					'Use search_tools to discover an available capability.'
+				)
 			);
-			if (results.kind === 'corrupt')
-				return failed({
-					kind: 'error',
-					code: 'INTERNAL_ERROR',
-					message: `A tool schema could not be represented as JSON: ${results.message}`
-				});
-			return ok(results.value);
-		}
-	);
-
+		const prepared = await prepareToolCall(async () => {
+			if (name === 'search_tools')
+				return {
+					kind: 'ready',
+					action: bindToolArguments(searchParameters, input, async ({ query, limit }) => {
+						const catalog = permitted
+							.filter((definition) => !FIRST_CLASS_TOOL_SET.has(definition.name))
+							.map(({ name, description }) => ({ name, description }));
+						const ranked = await options.toolRetriever.retrieve(catalog, query, limit ?? 5);
+						const matches = ranked
+							.map((name) => byName.get(name))
+							.filter((definition): definition is AgentToolDefinition => definition !== undefined);
+						for (const definition of matches) registered.add(definition.name);
+						const payload = readAgentPayload(
+							matches.map((definition) => ({
+								name: definition.name,
+								description: definition.description,
+								classification: definition.classification,
+								input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
+								callable_directly: true
+							}))
+						);
+						if (payload.kind === 'corrupt') throw new Error(payload.message);
+						return payload.value;
+					})
+				};
+			const definition = byName.get(name);
+			if (!definition)
+				throw new ToolLifecycleError('Registered MCP tool is absent from its permitted catalog');
+			return { kind: 'ready', action: definition.prepare(input) };
+		}, extra.signal);
+		if (prepared.kind === 'failure') return result(prepared.failure);
+		const output = await executeToolAction(prepared.action, extra.signal);
+		if (name === 'search_tools' && readToolFailure(output) === undefined)
+			await server.sendToolListChanged();
+		return result(output);
+	});
 	return server;
 };

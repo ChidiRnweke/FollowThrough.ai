@@ -336,3 +336,51 @@ describe('source audit rules', () => {
 		).toHaveLength(1);
 	});
 });
+
+describe('tool lifecycle ownership', () => {
+	it.each([
+		"import { tool } from '@openai/agents';",
+		"import { tool as makeTool } from '@openai/agents';",
+		"import * as sdk from '@openai/agents';",
+		"export { tool as makeTool } from '@openai/agents';",
+		"export * from '@openai/agents';",
+		"import { McpServer as Server } from '@modelcontextprotocol/sdk/server/mcp.js';",
+		"import { Server } from '@modelcontextprotocol/sdk/server/index.js';"
+	])('rejects a construction bypass: %s', (source) => {
+		expect(
+			analyzeSource('src/lib/server/factories/other.ts', source).map((item) => item.rule)
+		).toEqual(['tool-boundary']);
+	});
+	it('allows SDK construction in its designated adapter', () => {
+		expect(
+			analyzeSource(
+				'src/lib/server/factories/agent/sdk-tool-adapter.ts',
+				"import { tool } from '@openai/agents';"
+			)
+		).toEqual([]);
+	});
+	it('allows MCP construction in its designated adapter', () => {
+		expect(
+			analyzeSource(
+				'src/lib/server/factories/agent/mcp-tool-factory.ts',
+				"import { Server } from '@modelcontextprotocol/sdk/server/index.js';"
+			)
+		).toEqual([]);
+	});
+	it('allows SDK type imports elsewhere', () => {
+		expect(
+			analyzeSource(
+				'src/lib/server/factories/other.ts',
+				"import type { Tool } from '@openai/agents';"
+			)
+		).toEqual([]);
+	});
+	it('allows the separate diagram submission protocol', () => {
+		expect(
+			analyzeSource(
+				'src/lib/server/services/diagrams/generation.ts',
+				"import { tool } from '@openai/agents';"
+			)
+		).toEqual([]);
+	});
+});

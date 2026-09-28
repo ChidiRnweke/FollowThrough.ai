@@ -115,30 +115,17 @@ describe('Revision-bound note tool approvals', () => {
 			.needsApproval(context(), fixture.call.arguments, fixture.call.callId);
 		expect(resumed.reviewDecision(fixture.call)).toEqual(pending);
 	});
-	it('preserves a legacy approval as an explicit failure', async () => {
+	it('rejects a checkpoint without its prepared review', () => {
 		const fixture = setup();
-		expect(await fixture.invoke(fixture.registry([fixture.call]))).toMatchObject({
-			failure: 'No changes were applied.',
-			problems: [
-				'This older approval has no saved review. Read the note and submit a new tool call.'
-			]
-		});
+		expect(() => fixture.registry([fixture.call])).toThrow('missing its prepared review');
 	});
-	it('does not save when a legacy approval resumes', async () => {
-		const fixture = setup();
-		await fixture.invoke(fixture.registry([fixture.call]));
-		expect(fixture.content.notes[0]).toEqual(fixture.note);
-	});
-	it('keeps an unreadable review resumable as an explicit failure', async () => {
+	it('rejects an unreadable checkpoint', () => {
 		const fixture = setup();
 		const pending: PendingAgentDecision = {
 			...fixture.call,
 			review: { kind: 'note_change', content: '{broken' }
 		};
-		expect(await fixture.invoke(fixture.registry([pending]))).toMatchObject({
-			failure: 'No changes were applied.',
-			problems: ['The saved note review is unreadable. Reject it and submit a new tool call.']
-		});
+		expect(() => fixture.registry([pending])).toThrow();
 	});
 	it('keeps a second pending review intact across partial approvals', async () => {
 		const fixture = setup();
@@ -179,7 +166,8 @@ describe('Revision-bound note tool approvals', () => {
 			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
 		];
 		expect(await fixture.invoke(tools, call)).toMatchObject({
-			failure: 'No changes were applied.'
+			kind: 'failure',
+			message: 'No changes were applied.'
 		});
 	});
 	it('binds whole-body replacements to their reviewed revision too', async () => {

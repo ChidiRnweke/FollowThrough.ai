@@ -502,29 +502,33 @@ describe('Agent runtime boundary', () => {
 describe('Unknown agent tool recovery', () => {
 	it('orders equally close suggestions by name across both tool surfaces', async () => {
 		expect(await formattedMissingTool('bat', ['hat'], ['cat'])).toMatchObject({
-			suggestions: [
-				{ name: 'cat', invokeVia: 'search_first' },
-				{ name: 'hat', invokeVia: 'direct' }
-			]
+			details: {
+				suggestions: [
+					{ name: 'cat', invokeVia: 'search_first' },
+					{ name: 'hat', invokeVia: 'direct' }
+				]
+			}
 		});
 	});
 
 	it('includes names three edits away and excludes names four edits away', async () => {
 		expect(await formattedMissingTool('abc', ['abcdef', 'abcdefg'], [])).toMatchObject({
-			suggestions: [{ name: 'abcdef', invokeVia: 'direct' }]
+			details: { suggestions: [{ name: 'abcdef', invokeVia: 'direct' }] }
 		});
 	});
 
 	it('returns each suggested name once when both surfaces contain duplicates', async () => {
 		expect(
 			await formattedMissingTool('serch', ['search', 'search'], ['search', 'search'])
-		).toMatchObject({ suggestions: [{ name: 'search', invokeVia: 'direct' }] });
+		).toMatchObject({ details: { suggestions: [{ name: 'search', invokeVia: 'direct' }] } });
 	});
 
 	it('sends an undiscovered catalog tool through search and back to itself', async () => {
 		expect(await formattedMissingTool('save_note', ['search'], ['save_note'])).toEqual({
-			failure: 'Tool "save_note" exists but has not been surfaced in this conversation yet.',
-			suggestions: [{ name: 'save_note', invokeVia: 'search_first' }],
+			kind: 'failure',
+			code: 'TOOL_NOT_AVAILABLE',
+			message: 'Tool "save_note" exists but has not been surfaced in this conversation yet.',
+			details: { suggestions: [{ name: 'save_note', invokeVia: 'search_first' }] },
 			recovery:
 				'Call "search_tools" with a query describing what you want to do, then call "save_note" directly by that name with flat top-level arguments matching the schema it returns.'
 		});
@@ -532,16 +536,18 @@ describe('Unknown agent tool recovery', () => {
 
 	it('treats an already-enabled catalog tool as directly callable', async () => {
 		expect(await formattedMissingTool('save_nte', ['save_note'], ['save_note'])).toMatchObject({
-			suggestions: [{ name: 'save_note', invokeVia: 'direct' }]
+			details: { suggestions: [{ name: 'save_note', invokeVia: 'direct' }] }
 		});
 	});
 
 	it('returns every close enabled and undiscovered suggestion', async () => {
 		expect(await formattedMissingTool('save_nte', ['save_notes'], ['save_note'])).toMatchObject({
-			suggestions: [
-				{ name: 'save_note', invokeVia: 'search_first' },
-				{ name: 'save_notes', invokeVia: 'direct' }
-			]
+			details: {
+				suggestions: [
+					{ name: 'save_note', invokeVia: 'search_first' },
+					{ name: 'save_notes', invokeVia: 'direct' }
+				]
+			}
 		});
 	});
 
@@ -549,7 +555,7 @@ describe('Unknown agent tool recovery', () => {
 		expect(
 			await formattedMissingTool('completely_different', ['search'], ['save_note'])
 		).toMatchObject({
-			suggestions: [],
+			details: { suggestions: [] },
 			recovery:
 				'Call "search_tools" to discover the capability, then call the name it returns directly with flat top-level arguments.'
 		});
@@ -662,14 +668,20 @@ describe('Agent tool event invariants', () => {
 	 */
 	it('maps a failure the tool returned as a value, keeping the value', () => {
 		const event = new AgentToolEventMapper().map(
-			toolOutput({ callId: 'call-2', name: 'create_note', output: '{"failure":"Denied"}' })
+			toolOutput({
+				callId: 'call-2',
+				name: 'create_note',
+				output:
+					'{"kind":"failure","code":"OWNERSHIP","message":"Denied","recovery":"Stop.","details":{}}'
+			})
 		);
 		expect(event).toEqual({
 			type: 'tool_reported_failure',
 			callId: 'call-2',
 			name: 'create_note',
 			failure: 'Denied',
-			output: '{"failure":"Denied"}'
+			output:
+				'{"kind":"failure","code":"OWNERSHIP","message":"Denied","recovery":"Stop.","details":{}}'
 		});
 	});
 

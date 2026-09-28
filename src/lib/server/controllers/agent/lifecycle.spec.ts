@@ -1,3 +1,12 @@
+import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
+import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
+import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
+import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
+import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -619,5 +628,60 @@ describe('Durable note approval publication', () => {
 		const { lifecycle, toolRows } = checkpoint();
 		await lifecycle.execute(testRunId, new AbortController().signal);
 		expect(toolRows).toMatchObject([{ status: 'approval_required', review: pending.review }]);
+	});
+});
+
+it('journals a failed tool call and its correction through the production runner', async () => {
+	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+	const notes = reviewedNoteFixture(note);
+	const model = new InMemoryToolCallingModel(
+		'edit_note',
+		JSON.stringify({ noteId: note.id, edits: [] }),
+		JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }),
+		'Too small'
+	);
+	const reasoning = new AgentReasoning(
+		async ({ run, executor, signal }) => {
+			if (!run.inputSnapshot) throw new Error('Run input is missing');
+			return new AgentTools(
+				notes.factory,
+				testActor(),
+				run.executionMode,
+				{ provenanceId: testProvenanceId(), input: run.inputSnapshot, model: run.model },
+				executor,
+				new InMemoryToolRetriever(),
+				{ isEnabled: () => true },
+				run.pendingDecisions,
+				signal
+			);
+		},
+		new InMemoryAgentSessionRepository(),
+		'test-key',
+		'https://unused.test',
+		'https://unused.test',
+		undefined,
+		(repository, actor, conversationId) =>
+			new ConversationBuffer(repository, actor, conversationId, {
+				virtualize: async (_actor, _id, item) => item
+			}),
+		undefined,
+		() => new InMemoryModelProvider(model)
+	);
+	const fixture = setup(reasoning);
+	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));
+	await fixture.lifecycle.execute(testRunId, new AbortController().signal);
+	expect({
+		status: currentRun(fixture.runs).status,
+		body: notes.content.notes[0].plainText,
+		rows: fixture.toolRows
+			.filter((row) => row.status !== 'running')
+			.map((row) => ({ status: row.status, callId: row.callId }))
+	}).toEqual({
+		status: 'completed',
+		body: 'Launch Tuesday.',
+		rows: [
+			{ status: 'reported_failure', callId: 'call-invalid' },
+			{ status: 'succeeded', callId: 'call-corrected' }
+		]
 	});
 });
