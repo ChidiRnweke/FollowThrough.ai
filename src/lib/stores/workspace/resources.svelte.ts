@@ -1,3 +1,4 @@
+import { workspaceReadiness } from '$lib/services/workspace/startup';
 import { SvelteDate, SvelteMap, createSubscriber } from 'svelte/reactivity';
 import {
 	DexieWorkspaceRepository,
@@ -137,6 +138,22 @@ export class WorkspaceResources {
 		identity: WorkspaceResourceIdentity & { type: K }
 	): WorkspaceDraft<K> {
 		return new WorkspaceDraft<K>(this, identity);
+	}
+
+	get startupReadiness() {
+		const shell = this.views.shell(this.accountId);
+		const preferences = this.views.get('agent_preferences', this.accountId);
+		const state = this.state({ type: 'agent_preferences', id: [this.accountId] });
+		const read = this.readStatus;
+		return workspaceReadiness({
+			userKnown: shell !== null,
+			inboxKnown: shell?.projects.some((project) => project.role === 'inbox') === true,
+			preferencesKnown:
+				preferences !== undefined || state?.kind === 'deleted' || this.availability === 'complete',
+			inventoryComplete: this.availability === 'complete',
+			online: this.online,
+			failure: read.kind === 'failure' ? read.message : null
+		});
 	}
 
 	get records(): ReadonlyMap<string, WorkspaceRecord> {

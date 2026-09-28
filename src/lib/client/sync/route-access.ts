@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, isHttpError, isRedirect } from '@sveltejs/kit';
 import type { z } from 'zod';
 import { type CacheAccess } from '$lib/models/sync';
 import { accessMessage } from '$lib/services/sync/state';
@@ -18,3 +18,27 @@ export const requireRouteResource = <T>(
 	if (access.kind === 'unavailable' && online) error(404, `This ${name} was not found`);
 	error(access.kind === 'deleted' ? 410 : 503, accessMessage(access, name));
 };
+
+export type RouteReadiness =
+	| { kind: 'ready' }
+	| { kind: 'redirect'; location: string }
+	| { kind: 'failure'; status: number; message: string };
+
+/** Handle failures immediately even when the outlet has not mounted yet. */
+export async function prepareRoute(work: () => Promise<void>): Promise<RouteReadiness> {
+	try {
+		await work();
+		return { kind: 'ready' };
+	} catch (cause) {
+		if (isRedirect(cause)) return { kind: 'redirect', location: cause.location };
+		return {
+			kind: 'failure',
+			status: isHttpError(cause) ? cause.status : 503,
+			message: isHttpError(cause)
+				? cause.body.message
+				: cause instanceof Error
+					? cause.message
+					: 'This screen could not be loaded'
+		};
+	}
+}

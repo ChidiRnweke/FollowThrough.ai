@@ -14,11 +14,13 @@
 	import ProjectTreeView from './project-tree-view.svelte';
 
 	let {
+		inventoryReady = true,
 		projects,
 		noteTree,
 		activeNoteId,
 		activePath
 	}: {
+		inventoryReady?: boolean;
 		projects: readonly Project[];
 		noteTree: readonly NoteSummary[];
 		activeNoteId?: NoteId;
@@ -339,6 +341,7 @@
 </script>
 
 <ProjectTreeView
+	{inventoryReady}
 	{projects}
 	{activeNoteId}
 	{activePath}

@@ -1,4 +1,4 @@
-import { requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
+import { prepareRoute, requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { redirect } from '@sveltejs/kit';
 import { projectRecordSchema } from '$lib/models/workspace-records';
 import type { PageLoad } from './$types';
@@ -13,18 +13,20 @@ export const load: PageLoad = async ({ parent, url }) => {
 		: null;
 	const query = url.searchParams.get('q')?.trim() ?? '';
 	const requested = Number(url.searchParams.get('page') ?? '1');
-	let page = Number.isInteger(requested) && requested > 0 ? requested : 1;
-	if (selectedProjectId) {
-		const opened = await session.resources.open({ type: 'projects', id: [selectedProjectId] });
-		requireRouteResource(opened, session.resources.online, 'project');
-		await session.resources.prepare();
-		const total = session.resources.views.artifacts(selectedProjectId, query).length;
-		page = Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
-		const params = new URLSearchParams({ projectId: selectedProjectId });
-		if (query) params.set('q', query);
-		if (page > 1) params.set('page', String(page));
-		const canonical = `/artifacts?${params}`;
-		if (`${url.pathname}${url.search}` !== canonical) redirect(303, canonical);
-	}
-	return { selectedProjectId, query, page, pageSize: PAGE_SIZE };
+	const page = Number.isInteger(requested) && requested > 0 ? requested : 1;
+	const routeReady = prepareRoute(async () => {
+		if (selectedProjectId) {
+			const opened = await session.resources.open({ type: 'projects', id: [selectedProjectId] });
+			requireRouteResource(opened, session.resources.online, 'project');
+			await session.resources.requireCollections();
+			const total = session.resources.views.artifacts(selectedProjectId, query).length;
+			const canonicalPage = Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
+			const params = new URLSearchParams({ projectId: selectedProjectId });
+			if (query) params.set('q', query);
+			if (canonicalPage > 1) params.set('page', String(canonicalPage));
+			const canonical = `/artifacts?${params}`;
+			if (`${url.pathname}${url.search}` !== canonical) redirect(303, canonical);
+		}
+	});
+	return { routeReady, selectedProjectId, query, page, pageSize: PAGE_SIZE };
 };

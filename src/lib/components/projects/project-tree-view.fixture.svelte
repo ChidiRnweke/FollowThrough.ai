@@ -5,10 +5,12 @@
 	import type { Project } from '$lib/models/projects';
 
 	let {
+		inventoryReady = true,
 		projects,
 		notes,
 		onopen = () => undefined
 	}: {
+		inventoryReady?: boolean;
 		projects: readonly Project[];
 		notes: readonly NoteSummary[];
 		onopen?: (noteId: NoteId) => void;
@@ -37,6 +39,7 @@
 
 <Sidebar.Provider>
 	<ProjectTreeView
+		{inventoryReady}
 		{projects}
 		activeNoteId={undefined}
 		activePath=""

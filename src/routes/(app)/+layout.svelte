@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { WorkspaceStartup, WorkspaceRouteOutlet } from '$lib/components/shell';
+	import type { RouteReadiness } from '$lib/client/sync/route-access';
 	import type { NoteId } from '$lib/models/notes';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { afterNavigate } from '$app/navigation';
@@ -33,6 +35,17 @@
 			? data.session.resources.views.shell(data.session.bootstrap.accountId)
 			: null
 	);
+
+	const inventoryLoading = $derived(data.session.resources.availability !== 'complete');
+	const prerequisitesReady = $derived(data.session.resources.startupReadiness.kind === 'ready');
+	// Workbench detail panes already have record-level loading states. Collection
+	// screens must not turn a partial inventory into empty results or exact counts.
+	const recordRoute = $derived(/^\/(notes|diagrams|skills|todos)\/[^/]+$/.test(page.url.pathname));
+	const contentReady = $derived(
+		shell !== null && prerequisitesReady && (!inventoryLoading || recordRoute)
+	);
+	const settledRoute: Promise<RouteReadiness> = Promise.resolve({ kind: 'ready' });
+	const routeReady = $derived(page.data.routeReady ?? settledRoute);
 
 	const isNavigating = $derived(navigating.to !== null);
 	// Suppress the thin progress bar during workbench-internal navigations
@@ -176,7 +189,7 @@
 
 	const keyboard = new CommandKeyboardHandler();
 	function onkeydown(event: KeyboardEvent): void {
-		keyboard.handle(event);
+		if (prerequisitesReady && !inventoryLoading) keyboard.handle(event);
 	}
 
 	/**
@@ -199,76 +212,91 @@
 
 <svelte:window {onkeydown} bind:innerWidth />
 
-{#if shell}
-	<Sidebar.Provider
-		open={data.sidebarOpen}
-		width={sidebarWidth}
-		onWidthChange={(width) => (preferredSidebarWidth = width)}
-		class="h-dvh min-h-0 overflow-hidden dark:has-data-[variant=inset]:bg-background"
+<Sidebar.Provider
+	open={data.sidebarOpen}
+	width={sidebarWidth}
+	onWidthChange={(width) => (preferredSidebarWidth = width)}
+	class="h-dvh min-h-0 overflow-hidden dark:has-data-[variant=inset]:bg-background"
+>
+	<AppSidebar
+		{shell}
+		{inventoryLoading}
+		activePath={page.url.pathname}
+		activeNoteId={highlightedNoteId}
+		loading={isNavigating}
+		squeezed={sidebarWidth < preferredSidebarWidth}
+	/>
+	<Sidebar.Inset
+		bind:ref={insetRef}
+		class={cn(
+			'relative min-h-0 min-w-0 dark:bg-card md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-foreground/10',
+			hostsWorkbenchPanes ? 'overflow-hidden' : 'overflow-y-auto'
+		)}
+		data-note-workbench={isNoteWorkbench ? '' : undefined}
 	>
-		<AppSidebar
-			{shell}
-			activePath={page.url.pathname}
-			activeNoteId={highlightedNoteId}
-			loading={isNavigating}
-			squeezed={sidebarWidth < preferredSidebarWidth}
-		/>
-		<Sidebar.Inset
-			bind:ref={insetRef}
-			class={cn(
-				'relative min-h-0 min-w-0 dark:bg-card md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-foreground/10',
-				hostsWorkbenchPanes ? 'overflow-hidden' : 'overflow-y-auto'
-			)}
-			data-note-workbench={isNoteWorkbench ? '' : undefined}
+		<header
+			class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden dark:bg-card"
 		>
-			<header
-				class="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:hidden dark:bg-card"
+			<Sidebar.Trigger class="size-11" />
+			<p class="min-w-0 flex-1 truncate px-1 text-sm font-semibold capitalize">{currentScreen}</p>
+			<Button
+				variant="ghost"
+				size="icon"
+				class="size-11"
+				aria-label="Search notes, todos and commands"
+				disabled={!contentReady || inventoryLoading}
+				onclick={() => palette.open()}
 			>
-				<Sidebar.Trigger class="size-11" />
-				<p class="min-w-0 flex-1 truncate px-1 text-sm font-semibold capitalize">{currentScreen}</p>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="size-11"
-					aria-label="Search notes, todos and commands"
-					onclick={() => palette.open()}
-				>
-					<Search />
-				</Button>
-				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} />
-				<SyncStatusMenu
-					resources={data.session.resources}
-					startupFailure={data.session.startupError}
-				/>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="size-11"
-					aria-label="Open chat"
-					onclick={(event) => openChatSurface(event.currentTarget)}
-				>
-					<MessageSquare />
-				</Button>
-			</header>
+				<Search />
+			</Button>
+			{#if shell && !inventoryLoading}<MemoryNotificationMenu
+					notifications={shell.pendingMemoryNotifications}
+				/>{/if}
+			<SyncStatusMenu
+				resources={data.session.resources}
+				startupFailure={data.session.startupError}
+			/>
+			<Button
+				variant="ghost"
+				size="icon"
+				class="size-11"
+				aria-label="Open chat"
+				disabled={!prerequisitesReady || inventoryLoading}
+				onclick={(event) => openChatSurface(event.currentTarget)}
+			>
+				<MessageSquare />
+			</Button>
+		</header>
 
-			{#if showProgressBar}
-				<div
-					data-navigation-progress
-					aria-hidden="true"
-					class="navigation-progress absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden"
-				>
-					<div class="motion-safe:animate-pulse bg-primary h-full w-full origin-left"></div>
-				</div>
-			{/if}
+		{#if showProgressBar}
+			<div
+				data-navigation-progress
+				aria-hidden="true"
+				class="navigation-progress absolute inset-x-0 top-9 z-40 h-0.5 overflow-hidden"
+			>
+				<div class="motion-safe:animate-pulse bg-primary h-full w-full origin-left"></div>
+			</div>
+		{/if}
+		{#if shell && prerequisitesReady}
 			<WorkspaceTabs
 				{shell}
 				sessions={data.session.sessions}
 				hidden={workbench.stripHidden}
-				oncreateNote={() => void createNoteFromStrip()}
+				oncreateNote={inventoryLoading ? undefined : () => void createNoteFromStrip()}
 				ontoggleHidden={() => workbench.toggleStripHidden()}
 			/>
-			{@render children()}
-		</Sidebar.Inset>
+		{/if}
+		{#if contentReady}
+			<WorkspaceRouteOutlet ready={routeReady}>{@render children()}</WorkspaceRouteOutlet>
+		{:else}
+			<WorkspaceStartup
+				resources={data.session.resources}
+				readiness={data.session.resources.startupReadiness}
+				startupFailure={data.session.startupError}
+			/>
+		{/if}
+	</Sidebar.Inset>
+	{#if shell && prerequisitesReady && !inventoryLoading}
 		<RightPanel
 			{shell}
 			sessions={data.session.sessions}
@@ -279,11 +307,9 @@
 			{activeNoteId}
 			{activeProjectId}
 		/>
-	</Sidebar.Provider>
+	{/if}
+</Sidebar.Provider>
 
+{#if shell && prerequisitesReady && !inventoryLoading}
 	<CommandPalette {shell} />
-{:else}
-	<div class="grid min-h-dvh place-items-center p-8 text-sm text-muted-foreground">
-		This workspace is not available on this device. Reconnect to sign in.
-	</div>
 {/if}

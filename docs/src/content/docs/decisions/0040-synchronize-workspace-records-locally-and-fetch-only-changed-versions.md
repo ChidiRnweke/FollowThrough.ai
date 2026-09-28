@@ -73,8 +73,17 @@ requests can use a retained copy. Runtime attempts are not persisted as resource
 
 Partial inventory never proves absence. Optional preferences use product defaults only after
 an authoritative absent/deleted result or completed inventory. Opening a default-valued form does
-not stage an operation. Cached startup can render from its known shell records while synchronization
-continues; first-ever startup needs the required server records before rendering.
+not stage an operation. The browser session opens after bootstrap and local storage initialization. Initial inventory
+synchronization runs in the background. The user record is also read on demand so the sidebar can
+render independently of journal order. The sidebar projects each committed page and marks its
+inventory incomplete; it never treats partial lists as empty or permits tree mutations against them.
+
+The app frame renders while required records are loading. Record-oriented content opens once its
+prerequisites are known; collection screens wait for complete initial inventory. Page-specific reads
+resolve inside the content outlet, so they cannot block the shell. Missing inbox records become
+errors only after inventory completes. Unknown preferences never become default-valued forms.
+Progress counts downloaded records without claiming a known total. Interrupted downloads retain
+committed records and checkpoints for retry; cached startup remains usable during background pulls.
 
 ### Durable commands and editor buffers
 

@@ -56,7 +56,10 @@ const synchronize = async (force = false): Promise<SessionSynchronization> => {
 	session.resources.setOnline(navigator.onLine);
 	try {
 		if (session.startupError && navigator.onLine) await refreshBootstrap();
-		await session.resources.synchronize(force);
+		await Promise.all([
+			session.resources.open({ type: 'users', id: [session.bootstrap.accountId] }),
+			session.resources.synchronize(force)
+		]);
 		if (current === session && !stillBound()) {
 			stop();
 			window.location.reload();
@@ -156,17 +159,11 @@ const begin = async (): Promise<WorkspaceSession> => {
 	};
 	const session = current;
 	await resources.initialize();
-	const cachedShell = resources.views.shell(bootstrap.accountId);
-	const preferencesKnown =
-		resources.views.get('agent_preferences', bootstrap.accountId) !== undefined ||
-		resources.availability !== 'unknown';
-	if (!cachedShell?.projects.some((project) => project.role === 'inbox') || !preferencesKnown)
-		await resources.requireCollections();
-	void session.shell;
-	void session.preferences;
-	void resources.synchronize();
+	// Publish the account before the initial inventory finishes. Targeted identity
+	// reads do not move the journal checkpoint and cannot delay the background pull.
 	if (generation !== openingGeneration || current !== session)
 		throw new Error('The workspace account changed while opening');
+	void synchronize();
 	const refresh = (): void => {
 		void synchronize();
 	};

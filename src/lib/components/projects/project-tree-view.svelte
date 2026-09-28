@@ -33,6 +33,7 @@
 		| { mode: 'rename'; entryId: NoteId; current: string; draft: WorkspaceDraft<'notes'> };
 
 	let {
+		inventoryReady = true,
 		projects,
 		activeNoteId,
 		activePath,
@@ -61,6 +62,7 @@
 		onopensplit,
 		onrenameproject
 	}: {
+		inventoryReady?: boolean;
 		projects: readonly Project[];
 		activeNoteId?: NoteId;
 		activePath: string;
@@ -113,15 +115,15 @@
 	parentId: NoteId | undefined,
 	Menu: typeof ContextMenu | typeof DropdownMenu
 )}
-	<Menu.Item onclick={() => startCreate('note', projectId, parentId)}>
+	<Menu.Item disabled={!inventoryReady} onclick={() => startCreate('note', projectId, parentId)}>
 		<FileText class="size-4" />
 		New note
 	</Menu.Item>
-	<Menu.Item onclick={() => startCreate('folder', projectId, parentId)}>
+	<Menu.Item disabled={!inventoryReady} onclick={() => startCreate('folder', projectId, parentId)}>
 		<FolderPlus class="size-4" />
 		New folder
 	</Menu.Item>
-	<Menu.Item onclick={() => startCreate('skill', projectId, parentId)}>
+	<Menu.Item disabled={!inventoryReady} onclick={() => startCreate('skill', projectId, parentId)}>
 		<Wrench class="size-4" />
 		New skill
 	</Menu.Item>
@@ -139,6 +141,7 @@
 		<Menu.Separator />
 	{/if}
 	<Menu.Item
+		disabled={!inventoryReady}
 		onclick={() =>
 			(inlineEdit = {
 				mode: 'rename',
@@ -153,14 +156,14 @@
 		<Menu.SubTrigger>Move to</Menu.SubTrigger>
 		<Menu.SubContent>
 			<Menu.Item
-				disabled={entry.parentId === undefined}
+				disabled={!inventoryReady || entry.parentId === undefined}
 				onclick={() => void moveEntry(entry, undefined)}
 			>
 				Project root
 			</Menu.Item>
 			{#each foldersOf(entry.projectId).filter((folder) => folder.id !== entry.id) as folder (folder.id)}
 				<Menu.Item
-					disabled={folder.id === entry.parentId}
+					disabled={!inventoryReady || folder.id === entry.parentId}
 					onclick={() => void moveEntry(entry, folder.id)}
 				>
 					{folder.title}
@@ -169,7 +172,10 @@
 		</Menu.SubContent>
 	</Menu.Sub>
 	<Menu.Separator />
-	<Menu.Item variant="destructive" onclick={() => void archiveEntry(entry)}>Move to trash</Menu.Item
+	<Menu.Item
+		disabled={!inventoryReady}
+		variant="destructive"
+		onclick={() => void archiveEntry(entry)}>Move to trash</Menu.Item
 	>
 {/snippet}
 
@@ -243,6 +249,7 @@
 						     the exact pixels of the icon. `type` is dropped: it's button-only. -->
 						<span
 							use:dragHandle
+							aria-disabled={!inventoryReady}
 							{...props}
 							class="absolute top-0 bottom-0 left-0 z-10 my-auto flex size-5 -translate-x-1/2 cursor-grab items-center justify-center rounded-sm {entry.id ===
 							activeNoteId
@@ -303,7 +310,7 @@
 												href="/notes/{entry.id}"
 												{...props}
 												{...tip}
-												draggable={entry.kind === 'note'}
+												draggable={inventoryReady && entry.kind === 'note'}
 												ondragstart={(event) => {
 													if (entry.kind !== 'note' || !event.dataTransfer) return;
 													event.stopPropagation();
@@ -399,6 +406,7 @@
 							depth < MAX_INDENT_DEPTH && 'ml-2 border-l border-sidebar-border pl-2'
 						)}
 						use:dragHandleZone={{
+							dragDisabled: !inventoryReady,
 							items: zoneItems(entry.projectId, entry.id),
 							type: `tree-${entry.projectId}`,
 							flipDurationMs: 125,
@@ -418,12 +426,13 @@
 					{/if}
 					<!-- Creation lives on the row's hover `+`; the dashed button survives only
 					     as an empty state, where there is nothing else to aim at. -->
-					{#if !isCreatingIn(entry.projectId, entry.id) && zoneItems(entry.projectId, entry.id).length === 0}
+					{#if inventoryReady && !isCreatingIn(entry.projectId, entry.id) && zoneItems(entry.projectId, entry.id).length === 0}
 						<div class="ml-2 pl-2">
 							<Button
 								variant="ghost"
 								type="button"
 								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								disabled={!inventoryReady}
 								onclick={() => startCreate('note', entry.projectId, entry.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
@@ -440,8 +449,12 @@
 {#snippet projectMenuItems(project: Project, Menu: typeof ContextMenu | typeof DropdownMenu)}
 	{@render createMenuItems(project.id, undefined, Menu)}
 	<Menu.Separator />
-	<Menu.Item onclick={() => onrenameproject(project)}>Rename</Menu.Item>
-	<Menu.Item variant="destructive" onclick={() => void archiveProject(project)}>
+	<Menu.Item disabled={!inventoryReady} onclick={() => onrenameproject(project)}>Rename</Menu.Item>
+	<Menu.Item
+		disabled={!inventoryReady}
+		variant="destructive"
+		onclick={() => void archiveProject(project)}
+	>
 		Archive project
 	</Menu.Item>
 {/snippet}
@@ -492,7 +505,11 @@
 							{#snippet child({ props: menuProps })}
 								<Tip text="Actions for {project.name}">
 									{#snippet children({ props: tipProps })}
-										<Button variant="ghost" {...mergeProps(actionProps, menuProps, tipProps)}>
+										<Button
+											variant="ghost"
+											{...mergeProps(actionProps, menuProps, tipProps)}
+											disabled={!inventoryReady}
+										>
 											<Ellipsis class="size-3.5" />
 										</Button>
 									{/snippet}
@@ -512,7 +529,11 @@
 							{#snippet child({ props: menuProps })}
 								<Tip text="Create in {project.name}">
 									{#snippet children({ props: tipProps })}
-										<Button variant="ghost" {...mergeProps(actionProps, menuProps, tipProps)}>
+										<Button
+											variant="ghost"
+											{...mergeProps(actionProps, menuProps, tipProps)}
+											disabled={!inventoryReady}
+										>
 											<Plus class="size-3.5" />
 										</Button>
 									{/snippet}
@@ -556,6 +577,7 @@
 						<ul
 							class="flex min-h-1.5 min-w-0 flex-col gap-0"
 							use:dragHandleZone={{
+								dragDisabled: !inventoryReady,
 								items: entries,
 								type: `tree-${project.id}`,
 								flipDurationMs: 125,
@@ -571,11 +593,12 @@
 						{#if inlineEdit?.mode === 'create' && isCreatingIn(project.id, undefined)}
 							{@render inlineCreateRow(inlineEdit, 'inline')}
 						{/if}
-						{#if !isCreatingIn(project.id, undefined) && entries.length === 0}
+						{#if inventoryReady && !isCreatingIn(project.id, undefined) && entries.length === 0}
 							<Button
 								variant="ghost"
 								type="button"
 								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+								disabled={!inventoryReady}
 								onclick={() => startCreate('note', project.id)}
 							>
 								<Plus class="size-3.5 shrink-0" />
@@ -587,7 +610,7 @@
 			</div>
 		</Sidebar.MenuItem>
 	{/each}
-	{#if projects.length === 0}
+	{#if inventoryReady && projects.length === 0}
 		<li class="px-2 py-1 text-xs text-muted-foreground">No projects yet. Create one to start.</li>
 	{/if}
 </Sidebar.Menu>

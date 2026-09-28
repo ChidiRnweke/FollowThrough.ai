@@ -6,6 +6,11 @@
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
+	const inboxProjectId = $derived.by(() => {
+		const inbox = data.session.resources.views.projects.find((project) => project.role === 'inbox');
+		if (!inbox) throw new Error('This workspace has no inbox; provisioning did not run.');
+		return inbox.id;
+	});
 	const view = $derived(data.session.resources.views.today(data.today));
 
 	const now = new Date();
@@ -31,7 +36,7 @@
 		<AgentAction action={agentActions.today} />
 	{/snippet}
 	<QuickCapture
-		projectId={data.inboxProjectId}
+		projectId={inboxProjectId}
 		focusOnMount={page.url.searchParams.has('quickCapture')}
 	/>
 	<TodayTriage {view} projects={data.session.shell.projects} />

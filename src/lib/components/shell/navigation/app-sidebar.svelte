@@ -41,9 +41,11 @@
 		activePath,
 		activeNoteId,
 		loading = false,
-		squeezed = false
+		squeezed = false,
+		inventoryLoading = false
 	}: {
-		shell: ShellContext;
+		shell: ShellContext | null;
+		inventoryLoading?: boolean;
 		activePath: string;
 		activeNoteId?: NoteId;
 		loading?: boolean;
@@ -117,6 +119,7 @@
 			type="button"
 			class="tactile flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground group-data-[collapsible=icon]:hidden"
 			aria-label="Go to a note or run an action"
+			disabled={!shell || inventoryLoading}
 			onclick={() => palette.open()}
 		>
 			<ArrowRight class="size-4 shrink-0" />
@@ -128,6 +131,7 @@
 			size="icon-sm"
 			class="hidden self-center group-data-[collapsible=icon]:flex"
 			aria-label="Go to a note or run an action"
+			disabled={!shell || inventoryLoading}
 			onclick={() => palette.open()}
 		>
 			<ArrowRight class="size-4" />
@@ -191,6 +195,7 @@
 					<Sidebar.GroupAction
 						{...props}
 						class="top-3 rounded-full"
+						disabled={inventoryLoading || !shell}
 						onclick={() => tree?.openNewProject()}
 					>
 						<Plus class="size-4" />
@@ -199,7 +204,7 @@
 				{/snippet}
 			</Tip>
 			<Sidebar.GroupContent>
-				{#if loading && !shell.projects.length}
+				{#if !shell || ((loading || inventoryLoading) && !shell.projects.length)}
 					<Sidebar.Menu>
 						{#each [0, 1, 2, 3] as index (index)}
 							<Sidebar.MenuItem data-skeleton-index={index}>
@@ -210,6 +215,7 @@
 				{:else}
 					<ProjectTree
 						bind:this={tree}
+						inventoryReady={!inventoryLoading}
 						projects={shell.projects}
 						noteTree={shell.noteTree}
 						{activeNoteId}
@@ -217,6 +223,9 @@
 					/>
 				{/if}
 			</Sidebar.GroupContent>
+			{#if inventoryLoading}<p class="px-2 py-1 text-xs text-muted-foreground">
+					Downloading workspace…
+				</p>{/if}
 		</Sidebar.Group>
 	</Sidebar.Content>
 	<Sidebar.Separator />
@@ -227,22 +236,23 @@
 		<div
 			class="px-2 pt-2 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center"
 		>
-			<Tip text={shell.user.email} side="top">
-				{#snippet children({ props })}
-					<Button
-						{...props}
-						variant="ghost"
-						href="/profile"
-						class="tactile flex h-8 w-full min-w-0 items-center justify-start gap-2 rounded-md px-2 text-sm font-normal group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
-						aria-label="Profile for {shell.user.displayName}"
-					>
-						<UserRound class="size-4 shrink-0 text-muted-foreground" />
-						<span class="truncate group-data-[collapsible=icon]:hidden"
-							>{shell.user.displayName}</span
+			{#if shell}<Tip text={shell.user.email} side="top">
+					{#snippet children({ props })}
+						<Button
+							{...props}
+							variant="ghost"
+							href="/profile"
+							class="tactile flex h-8 w-full min-w-0 items-center justify-start gap-2 rounded-md px-2 text-sm font-normal group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
+							aria-label="Profile for {shell.user.displayName}"
 						>
-					</Button>
-				{/snippet}
-			</Tip>
+							<UserRound class="size-4 shrink-0 text-muted-foreground" />
+							<span class="truncate group-data-[collapsible=icon]:hidden"
+								>{shell.user.displayName}</span
+							>
+						</Button>
+					{/snippet}
+				</Tip>
+			{:else}<span class="px-2 text-sm text-muted-foreground">Loading your account…</span>{/if}
 		</div>
 		<Sidebar.Separator class="mx-0 my-1" />
 		<!-- One airy strip, not a segmented control: ticks only mark the jump cluster
@@ -268,6 +278,7 @@
 							aria-label="Find in notes"
 							aria-pressed={rightPanel.mode === 'search'}
 							class={cn('size-7', rightPanel.mode === 'search' && 'bg-accent text-brand')}
+							disabled={inventoryLoading || !shell}
 							onclick={() => rightPanel.toggle('search')}
 						>
 							<Search class="size-4" />
@@ -275,7 +286,10 @@
 					{/snippet}
 				</Tip>
 				<Separator orientation="vertical" class="h-3.5! group-data-[collapsible=icon]:hidden" />
-				<MemoryNotificationMenu notifications={shell.pendingMemoryNotifications} class="size-7" />
+				{#if shell && !inventoryLoading}<MemoryNotificationMenu
+						notifications={shell.pendingMemoryNotifications}
+						class="size-7"
+					/>{/if}
 				{#if workspaceSession.current}<SyncStatusMenu
 						resources={workspaceSession.current.resources}
 						startupFailure={workspaceSession.current.startupError}
@@ -289,6 +303,7 @@
 							size="icon-sm"
 							class="hidden size-7 lg:inline-flex"
 							aria-label="Toggle chat panel"
+							disabled={inventoryLoading || !shell}
 							onclick={() => rightPanel.toggle('chat')}
 						>
 							<MessageSquare class="size-4" />

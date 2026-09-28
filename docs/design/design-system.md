@@ -504,3 +504,16 @@ items. The title uses `text-lg font-semibold`, group headings use `eyebrow`, val
 use foreground body text and labels use muted `text-label`. Changed values use the
 shared brand evidence wash. Connection state is inline. Queued changes sync without
 a required action. Removing local intent requires a separate confirmation step.
+
+### Initial workspace download
+
+The app frame and sidebar appear while the first workspace download is in progress. Projects and
+notes fill in after each committed page. Incomplete lists show loading, never empty-state creation
+prompts. Tree expansion and navigation remain available; creation, moves, and reorder controls wait
+for complete inventory. Record views use their own readiness; collection screens wait for the full
+initial inventory before showing counts and empty states.
+
+The content area says “Downloading your workspace…” and shows the number of downloaded items.
+Use an indeterminate, reduced-motion-aware indicator: the total is not yet known. Announce status
+changes politely without announcing every record. Failures and offline state keep the sidebar and
+saved records visible, with retry when connected. Preserve the existing shell geometry and themes.
