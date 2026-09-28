@@ -20,6 +20,24 @@ const noteTitleCrumb = (page: Page) =>
 		.getByRole('navigation', { name: 'breadcrumb' })
 		.locator('[aria-current="page"]');
 
+// Cold startup must paint before even the first inventory response arrives.
+test('shows the workspace shell while its first inventory download is pending', async ({
+	page
+}) => {
+	const paused = Promise.withResolvers<void>();
+	await page.route('**/*', async (route) => {
+		if (route.request().url().includes('pullWorkspaceChangePage')) await paused.promise;
+		await route.continue();
+	});
+	try {
+		await page.goto('/today');
+		await expect(page.getByText('Downloading your workspace…', { exact: true })).toBeVisible();
+	} finally {
+		paused.resolve();
+		await page.unrouteAll({ behavior: 'wait' });
+	}
+});
+
 test('exposes installable FollowThrough metadata', async ({ page, context }) => {
 	await page.goto('/today');
 	const session = await context.newCDPSession(page);

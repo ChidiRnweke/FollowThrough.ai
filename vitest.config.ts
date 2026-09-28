@@ -112,6 +112,7 @@ export default defineConfig({
 						// the path a route takes, which nothing covered while opening a note
 						// was broken twice over.
 						'src/lib/components/notes/open-note.svelte.spec.ts',
+						'src/lib/components/projects/project-tree-startup.svelte.spec.ts',
 						'src/lib/client/notes/selection-submissions.svelte.spec.ts',
 						'src/lib/client/notes/diagram-submissions.svelte.spec.ts',
 						'src/lib/client/notes/action-run-storage.svelte.spec.ts',
