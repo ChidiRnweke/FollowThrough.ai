@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.0...v2.0.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **chat:** keep the compact diff label clear while its pane scrolls ([#282](https://github.com/ChidiRnweke/FollowThrough.ai/issues/282)) ([bdbe0ed](https://github.com/ChidiRnweke/FollowThrough.ai/commit/bdbe0ed19a33b55e69878f7a78c4c773ca73b61a))
+
 ## [2.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v1.1.0...v2.0.0) (2026-09-28)
 
 
