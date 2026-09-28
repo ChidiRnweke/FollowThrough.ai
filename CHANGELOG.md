@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v1.0.0...v1.0.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **workspace:** show the sidebar during initial sync ([#275](https://github.com/ChidiRnweke/FollowThrough.ai/issues/275)) ([9869295](https://github.com/ChidiRnweke/FollowThrough.ai/commit/9869295c76d9d9a649f9a868c26dad2daac28814))
+
 ## [1.0.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v0.5.12...v1.0.0) (2026-09-27)
 
 
