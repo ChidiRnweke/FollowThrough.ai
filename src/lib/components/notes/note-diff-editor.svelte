@@ -157,10 +157,13 @@
 	{#if showLabel}
 		<header
 			class={cn(
-				'sticky top-0 z-10 flex min-w-0 items-baseline justify-between gap-2 border-b border-border',
+				'flex min-w-0 shrink-0 items-baseline justify-between gap-2 border-b border-border',
 				// A compact pane has no gutter, so neither does its header — otherwise the label
-				// sits inset from the content it heads.
-				compact ? 'bg-transparent px-0 py-1' : 'bg-background px-3 py-1.5'
+				// sits inset from the content it heads. It also scrolls its own body, so the
+				// header sits above the scroller instead of sticking inside it: it has no fill to
+				// match an unknown surface, and a transparent sticky label let the text scrolling
+				// under it print straight through.
+				compact ? 'px-0 py-1' : 'sticky top-0 z-10 bg-background px-3 py-1.5'
 			)}
 		>
 			<span class="truncate text-xs font-semibold">{label}</span>
@@ -172,7 +175,7 @@
 	<div
 		class={cn(
 			'prose min-w-0 flex-1 dark:prose-invert',
-			compact ? 'prose-sm px-0 pt-0 pb-2' : 'px-4 pt-2 pb-4'
+			compact ? 'prose-sm min-h-0 overflow-y-auto px-0 pt-0 pb-2' : 'px-4 pt-2 pb-4'
 		)}
 	>
 		<div bind:this={rootEl} class="tiptap note-diff-content"></div>
