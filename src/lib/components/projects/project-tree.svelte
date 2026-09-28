@@ -3,10 +3,10 @@
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { goto } from '$app/navigation';
-	import type { DndEvent } from 'svelte-dnd-action';
+	import { TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
-	import { ancestorFolderIds } from '$lib/services/projects/tree-expansion';
+	import { ancestorFolderIds, isWithinSubtree } from '$lib/services/projects/tree-expansion';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -142,8 +142,56 @@
 	// template reads back, and it fired on every unrelated `invalidateAll`.
 	const dndOverrides = new SvelteMap<string, NoteSummary[]>();
 
+	// Keys whose override stands in for a move the server has not confirmed yet.
+	const awaitingServer = new SvelteSet<string>();
+
 	function zoneItems(projectId: ProjectId, parentId?: NoteId): NoteSummary[] {
 		return dndOverrides.get(zoneKey(projectId, parentId)) ?? entriesUnder(projectId, parentId);
+	}
+
+	// A zone the drag only passed over gets `consider` events but no `finalize`, so
+	// its override would outlive the drag and hide what the server later puts there
+	// (a note dropped on a folder row vanished this way). Once a drag ends, only
+	// overrides still waiting on the server may stay.
+	function releaseIdleOverrides(): void {
+		for (const key of [...dndOverrides.keys()])
+			if (!awaitingServer.has(key)) dndOverrides.delete(key);
+	}
+
+	function holdUntilServer(overrides: ReadonlyMap<string, NoteSummary[]>, move: Promise<unknown>) {
+		for (const [key, items] of overrides) {
+			dndOverrides.set(key, items);
+			awaitingServer.add(key);
+		}
+		void move.finally(() => {
+			// Server truth has landed (moveEntry synchronizes); on failure the tree
+			// should snap back to it rather than keep showing the dropped order.
+			for (const key of overrides.keys()) {
+				awaitingServer.delete(key);
+				dndOverrides.delete(key);
+			}
+		});
+	}
+
+	// The entry being dragged, so its own subtree can refuse the drop: the server
+	// rejects a move below a descendant, and the tree should not offer one.
+	let draggingId = $state<NoteId | undefined>(undefined);
+	// Where the shadow last sat in a list, read when it moves into a folder row.
+	let lastShadow: { key: string; index: number } | undefined;
+	// The folder row currently holding the shadow, and whether the shadow reached
+	// it from above within the same list.
+	let folderHover = $state<{ folderId: NoteId; fromAbove: boolean } | undefined>(undefined);
+
+	function endDrag(): void {
+		draggingId = undefined;
+		lastShadow = undefined;
+		folderHover = undefined;
+	}
+
+	function isDropBlocked(folderId: NoteId): boolean {
+		if (draggingId === undefined) return false;
+		const folder = byId.get(folderId);
+		return folder !== undefined && isWithinSubtree(folder, draggingId, byId);
 	}
 
 	function handleDndConsider(
@@ -151,7 +199,12 @@
 		parentId: NoteId | undefined,
 		event: CustomEvent<DndEvent<NoteSummary>>
 	): void {
-		dndOverrides.set(zoneKey(projectId, parentId), event.detail.items);
+		if (event.detail.info.trigger === TRIGGERS.DRAG_STARTED)
+			draggingId = event.detail.info.id as NoteId;
+		const key = zoneKey(projectId, parentId);
+		const index = event.detail.items.findIndex((item) => item.id === draggingId);
+		if (index >= 0) lastShadow = { key, index };
+		dndOverrides.set(key, event.detail.items);
 	}
 
 	function handleDndFinalize(
@@ -159,26 +212,114 @@
 		parentId: NoteId | undefined,
 		event: CustomEvent<DndEvent<NoteSummary>>
 	): void {
+		endDrag();
 		const key = zoneKey(projectId, parentId);
-		dndOverrides.set(key, event.detail.items);
 		const draggedId = event.detail.info.id as NoteId;
 		const index = event.detail.items.findIndex((item) => item.id === draggedId);
 		const original = index < 0 ? undefined : byId.get(draggedId);
 		const moved =
 			original !== undefined &&
 			((original.parentId ?? undefined) !== parentId || original.position !== index);
-		if (!moved) {
-			// Nothing to ask the server for, so nothing will arrive to supersede the
-			// override — release it now (it already matches the rendered order).
-			dndOverrides.delete(key);
+		if (moved) {
+			const move = projectActions.moveEntry(projectId, draggedId, parentId, index);
+			void move.then((output) => {
+				if (!output) toast.error(failureMessage('Could not move it. Try again.'));
+			});
+			holdUntilServer(new Map([[key, event.detail.items]]), move);
+		}
+		// Anything else already matches the rendered order, or nothing will arrive
+		// to supersede it.
+		releaseIdleOverrides();
+	}
+
+	// Each folder row carries a second zone that means "into this folder". It only
+	// ever holds the drag shadow while the pointer rests on the row.
+	function intoKey(folderId: NoteId): string {
+		return `into:${folderId}`;
+	}
+
+	function intoItems(folderId: NoteId): NoteSummary[] {
+		return dndOverrides.get(intoKey(folderId)) ?? [];
+	}
+
+	// How a folder row splits between "into" and reordering around it. The library
+	// puts the shadow at the index of whatever row it hovers, so hovering a folder
+	// from below means "before it" and from above means "after it". The reorder
+	// band therefore sits on the edge away from the shadow, and the near edge
+	// belongs to "into"; otherwise approaching a row would push the folder out from
+	// under the pointer. The band stays put while the shadow is inside.
+	//
+	// Entering the row also takes the shadow out of the list. When it sat above the
+	// folder, the folder would jump up a row and leave the pointer below it, so the
+	// row holds the vacated space (`holdsSlot`) until the shadow leaves again.
+	function folderDrop(folder: NoteSummary): { band: 'top' | 'bottom'; holdsSlot: boolean } {
+		if (folderHover?.folderId === folder.id)
+			return {
+				band: folderHover.fromAbove ? 'bottom' : 'top',
+				holdsSlot: folderHover.fromAbove
+			};
+		const siblings = zoneItems(folder.projectId, folder.parentId);
+		const shadow = siblings.findIndex((entry) => entry.id === draggingId);
+		const self = siblings.findIndex((entry) => entry.id === folder.id);
+		return { band: shadow >= 0 && shadow < self ? 'bottom' : 'top', holdsSlot: false };
+	}
+
+	function handleIntoConsider(
+		folder: NoteSummary,
+		event: CustomEvent<DndEvent<NoteSummary>>
+	): void {
+		dndOverrides.set(intoKey(folder.id), event.detail.items);
+		const holdsShadow = event.detail.items.some((item) => item.id === draggingId);
+		if (!holdsShadow) {
+			if (folderHover?.folderId === folder.id) folderHover = undefined;
 			return;
 		}
-		void projectActions.moveEntry(projectId, draggedId, parentId, index).then((output) => {
-			if (!output) toast.error(failureMessage('Could not move it. Try again.'));
-			// Server truth has landed (moveEntry invalidates); on failure the tree
-			// should snap back to it rather than keep showing the dropped order.
-			dndOverrides.delete(key);
-		});
+		if (folderHover?.folderId === folder.id) return;
+		// The list has already dropped the shadow, so compare against where the
+		// folder stood beside it: the shadow was above if it sat at or before the
+		// folder's current index.
+		const parentKey = zoneKey(folder.projectId, folder.parentId);
+		const self = zoneItems(folder.projectId, folder.parentId).findIndex(
+			(entry) => entry.id === folder.id
+		);
+		folderHover = {
+			folderId: folder.id,
+			fromAbove: lastShadow?.key === parentKey && lastShadow.index <= self
+		};
+	}
+
+	function handleIntoFinalize(
+		folder: NoteSummary,
+		event: CustomEvent<DndEvent<NoteSummary>>
+	): void {
+		endDrag();
+		dndOverrides.delete(intoKey(folder.id));
+		const draggedId = event.detail.info.id as NoteId;
+		const dragged = byId.get(draggedId);
+		const dropped = event.detail.items.some((item) => item.id === draggedId);
+		if (dragged && dropped && (dragged.parentId ?? undefined) !== folder.id) {
+			const target = entriesUnder(folder.projectId, folder.id);
+			const move = projectActions.moveEntry(folder.projectId, dragged.id, folder.id, target.length);
+			void move.then((output) => {
+				if (!output) toast.error(failureMessage('Could not move it. Try again.'));
+			});
+			// Show the drop at once: the entry leaves its list and ends the folder's,
+			// which opens so the result is visible.
+			holdUntilServer(
+				new Map([
+					[
+						zoneKey(dragged.projectId, dragged.parentId),
+						entriesUnder(dragged.projectId, dragged.parentId).filter(
+							(entry) => entry.id !== dragged.id
+						)
+					],
+					[zoneKey(folder.projectId, folder.id), [...target, dragged]]
+				]),
+				move
+			);
+			expandTo(folder.projectId, folder.id);
+		}
+		releaseIdleOverrides();
 	}
 
 	// --- Inline creation / rename ---
@@ -362,6 +503,11 @@
 	{submitInline}
 	{handleDndConsider}
 	{handleDndFinalize}
+	{intoItems}
+	{handleIntoConsider}
+	{handleIntoFinalize}
+	{isDropBlocked}
+	{folderDrop}
 	{moveEntry}
 	{archiveEntry}
 	{archiveProject}
