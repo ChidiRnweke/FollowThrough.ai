@@ -111,11 +111,10 @@ describe('Revision-bound skill content approvals', () => {
 		}
 	);
 	it.each(['replace', 'patch'] as const)(
-		'refuses a legacy %s approval without its reviewed content',
+		'rejects a %s checkpoint without its reviewed content',
 		async (operation) => {
 			const fixture = setup('skill', operation);
-			await fixture.invoke(fixture.registry([fixture.call]));
-			expect(fixture.content.notes[0]).toEqual(fixture.note);
+			expect(() => fixture.registry([fixture.call])).toThrow('missing its prepared review');
 		}
 	);
 	it.each(['replace', 'patch'] as const)(
@@ -160,7 +159,7 @@ describe('Revision-bound skill content approvals', () => {
 		const before = fixture.content.notes[0];
 		const result = await fixture.invoke(fixture.registry([], 'auto_accept'));
 		expect({ result, note: fixture.content.notes[0] }).toMatchObject({
-			result: { failure: 'No changes were applied.' },
+			result: { kind: 'failure', message: 'No changes were applied.' },
 			note: before
 		});
 	});

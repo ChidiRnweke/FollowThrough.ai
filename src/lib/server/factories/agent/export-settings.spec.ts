@@ -38,7 +38,7 @@ describe('agent export settings', () => {
 			includeTitle: true,
 			diagramTheme: { base: 'dark', colors: { primaryColor: '#123456' } }
 		};
-		await tool.execute({ projectId: testProjectId(), ...settings });
+		await tool.prepare({ projectId: testProjectId(), ...settings }).execute();
 		expect(await service.getExportSettings(testActor(), testProjectId())).toEqual(settings);
 	});
 });

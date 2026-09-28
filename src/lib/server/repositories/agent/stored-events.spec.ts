@@ -55,7 +55,13 @@ describe('The three ways a call settles', () => {
 			callId: 'call-9',
 			name: 'edit_note',
 			failure: 'No edits were applied.',
-			output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
+			output: {
+				kind: 'failure',
+				code: 'NOTE_REVIEW_FAILED',
+				message: 'No edits were applied.',
+				recovery: 'Correct the problems below and submit a new tool call.',
+				details: { problems: ['oldText was not found.'] }
+			}
 		};
 		expect(read(event)).toEqual({ kind: 'readable', event });
 	});

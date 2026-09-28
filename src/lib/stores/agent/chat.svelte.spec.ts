@@ -287,7 +287,13 @@ describe('chat event projection', () => {
 				callId: 'call-9',
 				name: 'edit_note',
 				failure: 'No edits were applied.',
-				output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] }
+				output: {
+					kind: 'failure',
+					code: 'NOTE_REVIEW_FAILED',
+					message: 'No edits were applied.',
+					recovery: 'Correct the problems below and submit a new tool call.',
+					details: { problems: ['oldText was not found.'] }
+				}
 			}
 		]);
 		expect(entryTools(reply)).toEqual([
@@ -296,7 +302,13 @@ describe('chat event projection', () => {
 				name: 'edit_note',
 				arguments: { noteId: 'n1' },
 				failure: 'No edits were applied.',
-				output: { failure: 'No edits were applied.', problems: ['oldText was not found.'] },
+				output: {
+					kind: 'failure',
+					code: 'NOTE_REVIEW_FAILED',
+					message: 'No edits were applied.',
+					recovery: 'Correct the problems below and submit a new tool call.',
+					details: { problems: ['oldText was not found.'] }
+				},
 				status: 'reported_failure'
 			}
 		]);

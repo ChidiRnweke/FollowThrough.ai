@@ -252,7 +252,7 @@ export const toolOutput = (tool: ChatToolActivity): AgentPayload | undefined => 
  * One field read now, off whichever arm carries it. It used to be two questions
  * asked here — `tool.failure` when the row said `failed`, and
  * `readToolFailure(tool.output)` when it said `succeeded` — because
- * `edit_note` returns `{ failure, problems }` as a *value* rather than throwing
+ * `edit_note` returns `{ kind: 'failure', code, message, recovery, details }` as a *value* rather than throwing
  * (ADR 0035) and the run journalled that call as a success, so nothing
  * downstream saw it: a no-op edit rendered "Edited note · <title>" in ordinary
  * colour and the turn's touched list claimed the verb `edited`. The classifier

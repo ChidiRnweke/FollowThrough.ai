@@ -121,6 +121,32 @@ An approval checkpoint is a durable pause, not an in-memory wait. When the SDK r
 
 On `decideMany`, the run requeues and the runner rebuilds the provider state with `RunState.fromString`, applies each decision to its matching interruption, and continues the same turn (`reasoning.ts:366-386`). A decision with no matching interruption is skipped, since it was applied on an earlier pass, but a resume that matches none fails with a `ValidationError`, because state and decisions have genuinely diverged. Undecided interruptions stay parked and are re-announced on the next checkpoint.
 
+## Tool failure recovery
+
+Chat and MCP use one application tool boundary. It validates arguments before approval and returns
+`{ kind: 'failure', code, message, recovery, details }` when a call can report a tool-local failure.
+An empty edit batch therefore reaches the next model generation as `VALIDATION`; it cannot create an
+approval prompt or end the run merely because validation occurred in `needsApproval`.
+
+Preparation produces a ready action, an action awaiting approval, or a failure. Execution uses the
+same bound arguments. Reviewed note and skill actions retain the exact saved review across checkpoint
+serialization. Stale reviews report failure; missing or corrupt review checkpoints stop the run.
+
+Internal application errors return a safe message and advice not to retry. Cancellation, provider
+transport, checkpoint and journal failures remain terminal. The journal sits outside tool recovery,
+so a failure to record an already completed write cannot become advice to repeat that write. MCP
+uses the same envelope with `isError: true`. These envelopes replace all earlier application failure
+formats; there are no legacy readers or historical conversions.
+
+The SDKs still own malformed protocol messages. The installed chat SDK returns its own correction
+message for invalid JSON before it invokes application callbacks. Valid JSON with invalid application
+arguments reaches the shared recovery boundary.
+
+Real SDK lifecycle tests cover correction, approval, serialized resume, rejection, stale reviews and
+terminal failures. A controller lifecycle test verifies the stored failure and corrected success.
+The source audit restricts SDK and MCP construction to their designated adapters. The complete
+invariant-to-test map is in `docs/architecture/tool-recovery-invariants.md`.
+
 ## Tracing
 
 Telemetry is opt-in. `scripts/otel-instrumentation.js` is a Node preload: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, a `NodeSDK` starts with auto-instrumentations plus the OpenInference instrumentation for `@openai/agents`, exporting to one OTLP collector; spans with the `openinference.project.name` resource attribute route on to Phoenix. `OTEL_*` and `PHOENIX_*` are platform keys, so the secrets hydration never reads them from the secrets backend.

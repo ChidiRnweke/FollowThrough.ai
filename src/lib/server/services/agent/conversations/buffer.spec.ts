@@ -112,7 +112,13 @@ describe('ConversationBuffer', () => {
 			resultItem(
 				'create_diagram',
 				'diagram-call',
-				JSON.stringify({ failure: 'draw.io XML is malformed' })
+				JSON.stringify({
+					kind: 'failure',
+					code: 'VALIDATION',
+					message: 'draw.io XML is malformed',
+					recovery: 'Correct the XML.',
+					details: {}
+				})
 			)
 		]);
 		expect(JSON.stringify(await buffer.getItems())).toContain('<mxfile>rejected</mxfile>');

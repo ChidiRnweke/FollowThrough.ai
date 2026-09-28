@@ -87,7 +87,7 @@ describe('Merging a tool event into its row', () => {
 });
 
 /**
- * `edit_note` returns `{ failure, problems }` as a value rather than throwing, and that is
+ * `edit_note` returns `{ kind: 'failure', code, message, recovery, details }` as a value rather than throwing, and that is
  * deliberate: a throw is stringified to a bare message and strips the occurrence counts and
  * nearest matches the model needs to correct itself on the next turn (ADR 0035).
  *
@@ -104,7 +104,13 @@ describe('A failure a tool returned as a value is still a failure', () => {
 		arguments: { noteId: 'note-1' },
 		status: 'reported_failure',
 		failure: 'No edits were applied.',
-		output: { failure: 'No edits were applied.', problems: ['Edit 1: oldText was not found.'] }
+		output: {
+			kind: 'failure',
+			code: 'NOTE_REVIEW_FAILED',
+			message: 'No edits were applied.',
+			recovery: 'Correct the problems below and submit a new tool call.',
+			details: { problems: ['Edit 1: oldText was not found.'] }
+		}
 	};
 
 	it('reads the failure off the arm that carries it', () => {
@@ -113,8 +119,11 @@ describe('A failure a tool returned as a value is still a failure', () => {
 
 	it('keeps the detail the failure was read out of, which is what the model was given', () => {
 		expect(toolOutput(noOpEdit)).toEqual({
-			failure: 'No edits were applied.',
-			problems: ['Edit 1: oldText was not found.']
+			kind: 'failure',
+			code: 'NOTE_REVIEW_FAILED',
+			message: 'No edits were applied.',
+			recovery: 'Correct the problems below and submit a new tool call.',
+			details: { problems: ['Edit 1: oldText was not found.'] }
 		});
 	});
 
@@ -158,7 +167,13 @@ describe('Reading a journalled tool row back into the transcript', () => {
 				callId: 'call-9',
 				name: 'edit_note',
 				input: {},
-				output: { failure: 'No edits were applied.' },
+				output: {
+					kind: 'failure',
+					code: 'NOTE_REVIEW_FAILED',
+					message: 'No edits were applied.',
+					recovery: 'Correct the problems below and submit a new tool call.',
+					details: {}
+				},
 				failure: 'No edits were applied.',
 				status: 'reported_failure'
 			})
@@ -170,7 +185,13 @@ describe('Reading a journalled tool row back into the transcript', () => {
 				arguments: {},
 				runId: 'run-1',
 				failure: 'No edits were applied.',
-				output: { failure: 'No edits were applied.' },
+				output: {
+					kind: 'failure',
+					code: 'NOTE_REVIEW_FAILED',
+					message: 'No edits were applied.',
+					recovery: 'Correct the problems below and submit a new tool call.',
+					details: {}
+				},
 				status: 'reported_failure'
 			}
 		});

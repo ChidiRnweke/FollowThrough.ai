@@ -1,6 +1,14 @@
 import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
-import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
+import type { Tool } from '@openai/agents';
+import { projectFileResult } from './tool-result-projectors';
+import { createSdkTool } from './sdk-tool-adapter';
+import {
+	bindToolArguments,
+	ToolLifecycleError,
+	type PreparedAction,
+	type ToolPreparation
+} from './tool-call-boundary';
 import { z } from 'zod';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
 import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
@@ -38,7 +46,6 @@ import {
 	agentPayloadItems,
 	isAgentPayloadObject,
 	readAgentPayload,
-	readAgentPayloadObject,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
@@ -49,13 +56,7 @@ import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { ArtifactId, TemplateId } from '$lib/models/deliverables';
 import { exportSettingsSchema } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
-import {
-	DOMAIN_ERROR_ADVICE,
-	DomainError,
-	NotFoundError,
-	ValidationError,
-	failureReport
-} from '$lib/errors';
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type { Confidence, ProvenanceId } from '$lib/models/provenance';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -849,84 +850,22 @@ export interface AgentToolDefinition {
 	readonly description: string;
 	readonly classification: ToolClassification;
 	readonly parameters: z.ZodObject;
-	readonly execute: (input: AgentPayloadObject) => Promise<AgentPayload>;
-	/**
-	 * Optional gate consulted by the approval boundary, never by the tool itself.
-	 *
-	 * When a mutation would otherwise be parked for approval in approval-required
-	 * mode, preflight decides whether the call can even succeed before the run
-	 * stops to ask the user. A call that is doomed — edit anchors that match
-	 * nothing in the note, a body that cannot parse — must NOT park: parking
-	 * costs a fresh trace, a replayed transcript and another billed turn, and
-	 * hands the model back the same dead end after the user approves. So a
-	 * preflight returning false sends the call straight to `execute`, which
-	 * returns its structured failure inside the same turn for the model to
-	 * recover from (re-read, re-anchor, or fall back to save_note).
-	 *
-	 * Rules for implementers:
-	 * - It runs only when the boundary would otherwise engage: never in
-	 *   auto-accept mode and never for read/proposal calls, so a rejected gate
-	 *   costs no extra reads.
-	 * - It must be dry — read and patch in memory, never write.
-	 * - Keep it consistent with `execute`: same read, same serializer, same
-	 *   patch, so the gate and the outcome cannot disagree.
-	 */
-	readonly preflight?: (input: AgentPayloadObject) => Promise<boolean>;
+	readonly prepare: (input: unknown) => PreparedAction;
 }
 
 type Definition = AgentToolDefinition;
-
-/**
- * Zod issues as a sentence the model can act on.
- *
- * The raw `ZodError` message is a JSON dump of issue objects. A model handed one has to
- * guess which of its arguments the paths refer to, and the schema's own refinement text —
- * the part actually written for it — is buried inside.
- */
-const describeIssues = (error: z.ZodError): string =>
-	error.issues
-		.map((issue) => (issue.path.length > 0 ? `${issue.path.join('.')}: ` : '') + issue.message)
-		.join('; ');
-
-/**
- * Parse the tool's own parameter schema and carry the result to the seam as the
- * wire type, so no interface below the factory sees an open-keyed record. The
- * provider hands every call's arguments down as already-JSON, and zod validates
- * them; a value that passes the schema but still fails the JSON representation
- * check is corruption this application produced itself, so it raises rather
- * than inventing a value.
- *
- * Optional fields the schema preprocesses to `undefined` — the tools' spelling
- * of "blank means omitted" — are dropped by the reader itself, at every depth,
- * because that is what `JSON.stringify` does with them. This used to be a
- * hand-rolled filter here, and it could only reach the top level: a schema that
- * nested a preprocessed optional would have had its whole call refused, and the
- * comment could do no more than ask nobody to write one.
- */
-const parseArguments = (schema: z.ZodObject, input: unknown): AgentPayloadObject => {
-	const result = schema.safeParse(input);
-	// A `ValidationError` rather than the raw `ZodError`: these are the model's own
-	// arguments failing the tool's own schema, so the failure is the model's to fix and
-	// must be classified as such. A bare `ZodError` is indistinguishable from one thrown
-	// deep inside the application, which is a failure no argument can fix.
-	if (!result.success) throw new ValidationError(describeIssues(result.error));
-	const parsed: unknown = result.data;
-	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
-		throw new Error('Tool arguments must parse to an object');
-	const read = readAgentPayloadObject(parsed);
-	if (read.kind === 'corrupt')
-		throw new Error(`Tool arguments could not be represented as JSON: ${read.message}`);
-	return read.value;
-};
 
 type ControllerResult<Method> = Method extends (...args: never[]) => Promise<infer Output>
 	? Output
 	: never;
 
 interface AgentToolOutputMap {
-	readonly ls: ControllerResult<AgentFilesController['ls']>;
-	readonly grep: ControllerResult<AgentFilesController['grep']>;
-	readonly sed: ControllerResult<AgentFilesController['sed']>;
+	readonly ls:
+		Exclude<ControllerResult<AgentFilesController['ls']>, { kind: 'error' }> | ToolFailure;
+	readonly grep:
+		Exclude<ControllerResult<AgentFilesController['grep']>, { kind: 'error' }> | ToolFailure;
+	readonly sed:
+		Exclude<ControllerResult<AgentFilesController['sed']>, { kind: 'error' }> | ToolFailure;
 	readonly search: ControllerResult<RetrievalController['search']>;
 	readonly search_note: ControllerResult<RetrievalController['search']>;
 	readonly get_workspace_context: {
@@ -1063,13 +1002,12 @@ type Total<T extends never> = T;
 type _OutputMapCoversCatalog = Total<Exclude<ToolName, keyof AgentToolOutputMap>>;
 type _OutputMapNamesNothingElse = Total<Exclude<keyof AgentToolOutputMap, ToolName>>;
 
-const defineTool = <Name extends ToolName, T extends z.ZodObject>(
+const defineTool = <Name extends ToolName, Shape extends z.ZodRawShape>(
 	name: Name,
 	description: string,
 	classification: Definition['classification'],
-	parameters: T,
-	execute: (input: z.infer<T>) => Promise<AgentToolOutput<Name>>,
-	preflight?: (input: z.infer<T>) => Promise<boolean>
+	parameters: z.ZodObject<Shape>,
+	execute: (input: z.infer<z.ZodObject<Shape>>) => Promise<AgentToolOutput<Name>>
 ): Definition => {
 	const strictParameters = parameters.strict();
 	return {
@@ -1077,25 +1015,16 @@ const defineTool = <Name extends ToolName, T extends z.ZodObject>(
 		description,
 		classification,
 		parameters: strictParameters,
-		...(preflight ? { preflight: async (input) => preflight(parameters.parse(input)) } : {}),
-		execute: async (input) => {
-			strictParameters.parse(input);
-			const parsed = parameters.parse(input);
-			const result = await execute(parsed);
-			const read = readAgentPayload(result);
-			if (read.kind === 'corrupt')
-				throw new Error(`Tool output could not be represented as JSON: ${read.message}`);
-			return filterCreated(read.value, createdRange(parseArguments(parameters, input)));
-		}
+		prepare: (input) =>
+			bindToolArguments(parameters, input, async (parsed, payload) => {
+				const result = await execute(parsed);
+				const read = readAgentPayload(result);
+				if (read.kind === 'corrupt')
+					throw new Error(`Tool output could not be represented as JSON: ${read.message}`);
+				return filterCreated(read.value, createdRange(payload));
+			})
 	};
 };
-
-/**
- * True when a tool asks the model for nothing at all — the server resolves the
- * actor and workspace from run context, so the only valid argument object is
- * `{}`.
- */
-const declaresNoFields = (schema: z.ZodObject): boolean => Object.keys(schema.shape).length === 0;
 
 /**
  * Refuse a write that did not say which project, naming the ones it could mean.
@@ -1124,120 +1053,15 @@ const requireProject = async (
 	);
 };
 
-/**
- * The Agents SDK uses a different Zod major, so it cannot consume this app's
- * Zod objects directly. Keep Zod as the execution validator and publish the
- * exact strict object schema Zod generates for the model-facing protocol.
- */
-const jsonObjectSchema = (schema: z.ZodObject) => {
-	const converted = z.toJSONSchema(schema, { io: 'input' });
-	if (
-		converted.type !== 'object' ||
-		converted.additionalProperties !== false ||
-		typeof converted.properties !== 'object' ||
-		converted.properties === null
-	)
-		throw new Error('Tool parameters must convert to a strict object schema');
-	// audit-allow: no-record-unknown — JSON Schema property nodes are an open dialect by specification and are passed verbatim to the SDK protocol.
-	const properties: Record<string, Record<string, unknown>> = {};
-	for (const [name, property] of Object.entries(converted.properties)) {
-		if (typeof property !== 'object' || property === null)
-			throw new Error(`Tool parameter ${name} did not convert to an object schema`);
-		properties[name] = property;
-	}
-	const required = Array.isArray(converted.required)
-		? converted.required.filter((name): name is string => typeof name === 'string')
-		: [];
-	return {
-		type: 'object' as const,
-		properties,
-		required,
-		additionalProperties: false as const,
-		...(converted.description ? { description: converted.description } : {})
-	};
-};
-
-/**
- * The SDK parses a tool call's raw argument string with `JSON.parse` before our
- * handler runs, so a model that answers an argument-free tool with `""` — there
- * is nothing to fill in, after all — fails inside the SDK with
- * `InvalidToolInputError` and never reaches the tool. A production run spun
- * through thirteen consecutive workspace-grounding calls this way, growing the
- * prompt each time, and died on the token ceiling.
- *
- * Only a blank string on a tool that declares no fields is repaired, and only to
- * the `{}` the model meant. Malformed non-empty JSON still fails its normal
- * validation, and tools that take arguments are untouched.
- */
-const withBlankInputTolerated = (built: Tool<unknown>): Tool<unknown> => {
-	if (built.type !== 'function') return built;
-	const invoke = built.invoke.bind(built);
-	return {
-		...built,
-		invoke: (runContext, input, details) =>
-			invoke(runContext, input.trim().length === 0 ? '{}' : input, details)
-	};
-};
-
 const isReviewedNoteTool = (name: string): boolean =>
 	name === 'save_note' || name === 'edit_note' || name === 'save_skill' || name === 'edit_skill';
 
-const readStoredNoteReview = (content: string): NoteChangeReview => {
-	try {
-		return noteChangeReviewSchema.parse(JSON.parse(content));
-	} catch {
-		return {
-			kind: 'failure',
-			problems: ['The saved note review is unreadable. Reject it and submit a new tool call.']
-		};
-	}
-};
-
-/**
- * The failure a tool hands back to the model, with advice drawn from the fault itself.
- *
- * Three kinds, and telling them apart is the whole point. A `ModelBehaviorError` is the
- * SDK saying the model's own call was malformed — `InvalidToolInputError` for arguments
- * that failed the tool's schema extends it — so its message names what the model sent and
- * is repeated verbatim. A `DomainError` is a refusal the product wrote for the model.
- * Anything else is our fault, and saying so is what stops the model from rewriting
- * arguments that were never wrong.
- */
-const agentToolFailure = (error: unknown): ToolFailure => {
-	if (error instanceof ModelBehaviorError)
-		return toolFailure(error.message, { recovery: DOMAIN_ERROR_ADVICE.VALIDATION });
-	const report = failureReport(error);
-	return toolFailure(report.message, { recovery: report.advice });
-};
-
-/**
- * Preparation answers with a failure, never by throwing.
- *
- * This runs inside `needsApproval`, which sits outside the runner's `errorFunction`, so a
- * throw here does not become a tool result — it aborts the whole turn, and the model is
- * never told anything at all. That is how a schema mismatch in the Markdown converter
- * became six identical retries in production: each attempt killed its turn, so there was
- * never a failure for the agent to read and correct.
- *
- * A `DomainError` keeps its own message, which is written for the model. Anything else is
- * our fault and is reported as one, so the model is not advised to fix arguments that
- * were never the problem. Neither branch is silent: the boundary logging already recorded
- * the original error before it reached here.
- */
 const prepareNoteReview = async (
 	factory: ControllerFactory,
 	actor: ActorContext,
 	input: NoteChangeRequest,
 	target: NoteChangeTarget
-): Promise<NoteChangeReview> => {
-	try {
-		return await factory.notes().prepareChange(actor, input, target);
-	} catch (error) {
-		if (error instanceof DomainError) return { kind: 'failure', problems: [error.message] };
-		const report = failureReport(error);
-		return { kind: 'failure', problems: [report.message, report.advice] };
-	}
-};
+): Promise<NoteChangeReview> => factory.notes().prepareChange(actor, input, target);
 
 const applyNoteReview = async (
 	factory: ControllerFactory,
@@ -1246,13 +1070,19 @@ const applyNoteReview = async (
 	target: NoteChangeTarget
 ) => {
 	if (review.kind === 'failure')
-		return toolFailure('No changes were applied.', { problems: review.problems });
+		return toolFailure(
+			'NOTE_REVIEW_FAILED',
+			'No changes were applied.',
+			'Correct the problems below and submit a new tool call.',
+			{ problems: [...review.problems] }
+		);
 	const result = await factory.notes().applyReviewedChange(actor, review.change, target);
 	if (result.kind === 'failure')
-		return toolFailure(result.message, {
-			code: result.code,
-			recovery: 'Read the note and submit a new tool call for review.'
-		});
+		return toolFailure(
+			result.code,
+			result.message,
+			'Read the note and submit a new tool call for review.'
+		);
 	const projection = projectNoteWrite(result.note);
 	return review.change.operation.kind === 'patch'
 		? {
@@ -1281,7 +1111,8 @@ export class AgentTools {
 		toolExecutor: AgentToolExecutor,
 		toolRetriever: ToolRetriever,
 		toolAccess: ToolAccessPolicy,
-		pendingDecisions: readonly PendingAgentDecision[] = []
+		pendingDecisions: readonly PendingAgentDecision[] = [],
+		private readonly signal: AbortSignal = new AbortController().signal
 	) {
 		this.controllers = controllers;
 		this.actor = actor;
@@ -1292,14 +1123,9 @@ export class AgentTools {
 		this.toolAccess = toolAccess;
 		for (const pending of pendingDecisions) {
 			if (!isReviewedNoteTool(pending.toolName)) continue;
-			const review: NoteChangeReview = pending.review
-				? readStoredNoteReview(pending.review.content)
-				: {
-						kind: 'failure',
-						problems: [
-							'This older approval has no saved review. Read the note and submit a new tool call.'
-						]
-					};
+			if (!pending.review)
+				throw new ToolLifecycleError('A saved note approval is missing its prepared review');
+			const review = noteChangeReviewSchema.parse(JSON.parse(pending.review.content));
 			this.noteReviews.set(pending.callId, review);
 		}
 	}
@@ -1421,30 +1247,36 @@ export class AgentTools {
 				limit: z.number().int().min(1).max(15).optional()
 			})
 			.strict();
-		const searchSchema = jsonObjectSchema(searchParameters);
-		const searchTools = tool({
+		const searchTools = createSdkTool({
 			name: 'search_tools',
 			description:
 				'Find more FollowThrough tools relevant to what you want to do, when the tool you need is not already available directly. Each match comes back with its exact input schema and becomes a direct tool from your next message onward: call it by its own name with its arguments as flat top-level fields, exactly as the schema describes. There is no wrapper tool and no nested payload.',
-			parameters: searchSchema,
-			strict: true,
-			execute: async (input) => {
-				const { query: toolQuery, limit } = searchParameters.parse(input);
-				const ranked = await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5);
-				return ranked
-					.map((name) => byName.get(name))
-					.filter((definition): definition is Definition => definition !== undefined)
-					.map((definition) => {
-						promoted.add(definition.name);
-						return {
-							name: definition.name,
-							description: definition.description,
-							classification: definition.classification,
-							input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
-							callable_directly: true
-						};
-					});
-			}
+			parameters: searchParameters,
+			signal: this.signal,
+			execute: (_action, _callId, run) => run(),
+			prepare: async (input) => ({
+				kind: 'ready',
+				action: bindToolArguments(searchParameters, input, async ({ query: toolQuery, limit }) => {
+					const ranked = await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5);
+					const result = readAgentPayload(
+						ranked
+							.map((name) => byName.get(name))
+							.filter((definition): definition is Definition => definition !== undefined)
+							.map((definition) => {
+								promoted.add(definition.name);
+								return {
+									name: definition.name,
+									description: definition.description,
+									classification: definition.classification,
+									input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
+									callable_directly: true
+								};
+							})
+					);
+					if (result.kind === 'corrupt') throw new Error(result.message);
+					return result.value;
+				})
+			})
 		});
 
 		return [...direct, ...discoverable, searchTools];
@@ -1486,81 +1318,67 @@ export class AgentTools {
 		definition: Definition,
 		options: { isEnabled?: () => boolean } = {}
 	): Tool<unknown> {
-		// Captured so the approval callback below can narrow it: property narrowing
-		// does not survive into a nested closure.
-		const gate = definition.preflight;
-		const schema = jsonObjectSchema(definition.parameters);
-		const built = tool({
+		return createSdkTool({
 			name: definition.name,
 			description: definition.description,
-			parameters: schema,
-			strict: true,
-			...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
-			// The approval boundary consults the tool's preflight gate before parking:
-			// a mutation that can only fail is not paused for the user — it executes
-			// in-turn and returns its failure to the model instead. See
-			// `AgentToolDefinition.preflight` for the rules implementers must follow.
-			needsApproval: async (_context, input, callId) => {
+			parameters: definition.parameters,
+			signal: this.signal,
+			...options,
+			prepare: async (input, callId, phase): Promise<ToolPreparation> => {
+				const action = definition.prepare(input);
+				let prepared = action;
 				if (isReviewedNoteTool(definition.name)) {
-					if (this.mode === 'auto_accept') return false;
-					if (!callId) throw new Error('A note change requires a tool call identity');
-					const review = await this.prepareNoteCall(
-						definition.name,
-						parseArguments(definition.parameters, input),
-						callId
-					);
-					return this.mode === 'approval_required' && review.kind === 'prepared';
+					if (!callId) throw new ToolLifecycleError('A note change requires a tool call identity');
+					const saved = this.noteReviews.get(callId);
+					if (!saved && phase === 'execute' && this.mode === 'approval_required')
+						throw new ToolLifecycleError('A resumed note approval is missing its prepared review');
+					const review =
+						saved ?? (await this.prepareNoteCall(definition.name, action.arguments, callId));
+					if (review.kind === 'failure')
+						return {
+							kind: 'failure',
+							failure: toolFailure(
+								'NOTE_REVIEW_FAILED',
+								'No changes were applied.',
+								'Correct the problems below and submit a new tool call.',
+								{ problems: [...review.problems] }
+							)
+						};
+					prepared = {
+						arguments: action.arguments,
+						execute: async () => {
+							const result = readAgentPayload(
+								await applyNoteReview(
+									this.controllers,
+									this.actor,
+									review,
+									definition.name.endsWith('_skill') ? 'skill' : 'authored'
+								)
+							);
+							if (result.kind === 'corrupt') throw new Error(result.message);
+							return result.value;
+						}
+					};
 				}
-				return (
-					definition.classification === 'mutation' &&
-					this.mode === 'approval_required' &&
-					(!gate || (await gate(parseArguments(definition.parameters, input))))
-				);
+				return {
+					kind:
+						definition.classification === 'mutation' && this.mode === 'approval_required'
+							? 'approval_required'
+							: 'ready',
+					action: prepared
+				};
 			},
-			// `failure` first, and always: `ConversationBuffer` recognises the envelope
-			// by that prefix to decide which calls the model still needs to re-read.
-			// `recovery` because a bare message left the model guessing — it re-sent
-			// the same rejected document twice rather than inspecting what it sent.
-			// Both fields come from `failureReport`, so the advice follows the failure
-			// rather than telling every caller to fix arguments that may not be at fault.
-			errorFunction: (_context, error) => JSON.stringify(agentToolFailure(error)),
-			execute: async (input, _runContext, details) => {
-				const args = parseArguments(definition.parameters, input);
-				// The id is passed through or omitted, never coerced. It was
-				// `String(details?.toolCall?.callId ?? '')`, so a call the provider
-				// sent no id for arrived as `''` — a value the lifecycle then used as
-				// a map key, where a second id-less call overwrote the first.
-				const callId = details?.toolCall?.callId;
-				return this.toolExecutor.execute(
+			execute: (action, callId, run) =>
+				this.toolExecutor.execute(
 					{
 						...(callId === undefined ? {} : { callId }),
 						toolName: definition.name,
-						arguments: args,
+						arguments: action.arguments,
 						classification: definition.classification
 					},
-					async () => {
-						if (!isReviewedNoteTool(definition.name)) return definition.execute(args);
-						if (!callId) throw new Error('A note change requires a tool call identity');
-						const review = this.noteReviews.get(callId);
-						// Approved resumes must carry the checkpoint; never prepare a replacement for it.
-						if (!review && this.mode === 'approval_required')
-							throw new ValidationError(
-								'The saved note review is unavailable. Read the note and submit a new tool call.'
-							);
-						const result = await applyNoteReview(
-							this.controllers,
-							this.actor,
-							review ?? (await this.prepareNoteCall(definition.name, args, callId)),
-							definition.name.endsWith('_skill') ? 'skill' : 'authored'
-						);
-						const payload = readAgentPayload(result);
-						if (payload.kind === 'corrupt') throw new Error(payload.message);
-						return payload.value;
-					}
-				);
-			}
+					run
+				)
 		});
-		return declaresNoFields(definition.parameters) ? withBlankInputTolerated(built) : built;
 	}
 }
 
@@ -1586,7 +1404,7 @@ const sharedToolDefinitions = (
 			toolDescription('ls'),
 			'read',
 			z.object({ path: z.string().min(1).optional() }),
-			(input) => factory.agentFiles().ls(actor, input.path)
+			async (input) => projectFileResult(await factory.agentFiles().ls(actor, input.path))
 		),
 		grep: define(
 			'grep',
@@ -1598,13 +1416,15 @@ const sharedToolDefinitions = (
 				fixed: z.boolean().optional(),
 				ignoreCase: z.boolean().optional()
 			}),
-			(input) =>
-				factory.agentFiles().grep(actor, {
-					pattern: input.pattern,
-					path: input.path,
-					fixed: input.fixed ?? false,
-					ignoreCase: input.ignoreCase ?? false
-				})
+			async (input) =>
+				projectFileResult(
+					await factory.agentFiles().grep(actor, {
+						pattern: input.pattern,
+						path: input.path,
+						fixed: input.fixed ?? false,
+						ignoreCase: input.ignoreCase ?? false
+					})
+				)
 		),
 		sed: define(
 			'sed',
@@ -1624,7 +1444,8 @@ const sharedToolDefinitions = (
 					})
 				])
 			}),
-			(input) => factory.agentFiles().sed(actor, input.path, input.range)
+			async (input) =>
+				projectFileResult(await factory.agentFiles().sed(actor, input.path, input.range))
 		),
 		search: define(
 			'search',
@@ -2676,12 +2497,14 @@ export const agentToolRegistry =
 		actor,
 		request,
 		run,
-		executor
+		executor,
+		signal
 	}: {
 		actor: ActorContext;
 		request: RunAgentInput;
 		run: AgentRun;
 		executor: AgentToolExecutor;
+		signal: AbortSignal;
 	}) => {
 		const factory = controllers();
 		const preferences = await factory
@@ -2702,6 +2525,7 @@ export const agentToolRegistry =
 			executor,
 			toolRetriever,
 			{ isEnabled: (toolName) => !disabled.has(toolName) },
-			run.pendingDecisions
+			run.pendingDecisions,
+			signal
 		);
 	};

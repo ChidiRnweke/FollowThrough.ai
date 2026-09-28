@@ -10,13 +10,20 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { Note, PreparedNoteChange, NoteChangeReview } from '$lib/models/notes';
 
-export const reviewedNoteFixture = (note: Note = noteBuilder()) => {
+export const reviewedNoteFixture = (
+	note: Note = noteBuilder(),
+	markdown: NotesDependencies['markdown'] = {
+		read: noteContentFromMarkdown,
+		write: noteMarkdownFromContent
+	}
+) => {
 	const content = new InMemoryNoteContent();
 	content.notes = [note];
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
+			markdown,
 			noteReader: content,
+			revisionReader: content,
 			noteEditor: content,
 			anchorRepairer: content,
 			noteLinkReconciler: content,

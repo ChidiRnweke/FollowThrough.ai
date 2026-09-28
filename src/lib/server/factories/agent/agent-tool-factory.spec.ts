@@ -283,7 +283,7 @@ describe('Accepting a suggestion on the user\u2019s behalf', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'accept_suggestion');
-		await tool?.execute({ suggestionId: '9f1c2f18-0b1a-4a5e-9c3d-2f7b8e4a1d55' });
+		await tool?.prepare({ suggestionId: '9f1c2f18-0b1a-4a5e-9c3d-2f7b8e4a1d55' }).execute();
 	};
 
 	// Bound to the raw `accept`, this tool was the only caller in the system that
@@ -519,7 +519,7 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'search_note');
-		await searchNote?.execute({ noteId, query: 'messaging' });
+		await searchNote?.prepare({ noteId, query: 'messaging' }).execute();
 		expect(received).toEqual({ query: 'messaging', noteId });
 	});
 
@@ -550,7 +550,7 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'read_canvas_diagram');
-		expect(await tool?.execute({})).toEqual({
+		expect(await tool?.prepare({}).execute()).toEqual({
 			kind: 'present',
 			diagramId: testDiagramId(),
 			source: '<mxfile />',
@@ -669,7 +669,7 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.execute({ noteId: note.id })).resolves.toMatchObject({
+		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.toMatchObject({
 			noteId: note.id,
 			title: note.title,
 			etag: noteEtag(note),
@@ -708,7 +708,7 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.execute({ noteId: note.id })).resolves.toMatchObject({
+		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.toMatchObject({
 			backlinks: [{ id: 'bl' }],
 			references: [{ id: 'ref' }],
 			diagrams: [{ id: 'dg' }],
@@ -739,7 +739,9 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('document');
+		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.not.toHaveProperty(
+			'document'
+		);
 	});
 
 	it('keeps the storage Note row off the get_note wire', () => {
@@ -764,7 +766,9 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('note');
+		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.not.toHaveProperty(
+			'note'
+		);
 	});
 
 	it('keeps the redundant plainText off the get_note wire', () => {
@@ -789,7 +793,9 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.execute({ noteId: note.id })).resolves.not.toHaveProperty('plainText');
+		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.not.toHaveProperty(
+			'plainText'
+		);
 	});
 
 	const skillFixture = (body = 'Number every finding.') => {
@@ -807,14 +813,14 @@ describe('Agent tool coverage invariants', () => {
 	it('returns the skill body as Markdown', async () => {
 		const fixture = skillFixture();
 		expect(
-			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
 		).toMatchObject({ instructions: expect.stringContaining('Number every finding.') });
 	});
 
 	it('keeps the skill name, description, and trigger hints on the load', async () => {
 		const fixture = skillFixture();
 		expect(
-			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
 		).toMatchObject({
 			name: 'Compliance format',
 			description: 'Formats responses for compliance review',
@@ -825,21 +831,21 @@ describe('Agent tool coverage invariants', () => {
 	it('keeps the ProseMirror document off the skill wire', async () => {
 		const fixture = skillFixture();
 		expect(
-			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
 		).not.toHaveProperty('document');
 	});
 
 	it('keeps the note row off the skill wire', async () => {
 		const fixture = skillFixture();
 		expect(
-			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
 		).not.toHaveProperty('note');
 	});
 
 	it('keeps usage telemetry off the skill wire', async () => {
 		const fixture = skillFixture();
 		expect(
-			await fixture.skillTool('load_skill')?.execute({ noteId: fixture.noteId })
+			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
 		).not.toHaveProperty('usages');
 	});
 
@@ -892,7 +898,8 @@ describe('Agent tool coverage invariants', () => {
 			actor: testActor(),
 			request: { prompt: 'Help' } as never,
 			run: run as never,
-			executor: { execute: async (_input, action) => action() }
+			executor: { execute: async (_input, action) => action() },
+			signal: new AbortController().signal
 		});
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
 		expect(loadSkill).toBeDefined();
@@ -932,7 +939,8 @@ describe('Agent tool coverage invariants', () => {
 			actor: testActor(),
 			request: { prompt: 'Help' } as never,
 			run: run as never,
-			executor: { execute: async (_input, action) => action() }
+			executor: { execute: async (_input, action) => action() },
+			signal: new AbortController().signal
 		});
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
 		await (loadSkill as FunctionTool).invoke(
@@ -1002,7 +1010,9 @@ describe('Agent tool coverage invariants', () => {
 		);
 		// The direct path validates against the tool's own schema in the SDK, so the
 		// refusal reaches the model as a `failure` carrying the zod issues.
-		expect(String(result)).toContain('createdAfter must be before or equal to createdBefore');
+		expect(JSON.stringify(result)).toContain(
+			'createdAfter must be before or equal to createdBefore'
+		);
 	});
 
 	it('advertises create-note parent scope as an existing folder only', () => {
@@ -1090,7 +1100,7 @@ describe('Agent tool coverage invariants', () => {
 			.definitions()
 			.find((definition) => definition.name === 'create_todos');
 		if (!mcp) throw new Error('Missing task batch tool');
-		const externalRetry = await mcp.execute(payload);
+		const externalRetry = await mcp.prepare(payload).execute();
 		expect({ first, retry, externalRetry, titles: todos.todos.map((todo) => todo.title) }).toEqual({
 			first: {
 				todos: todos.todos.map((todo) => ({
@@ -1116,7 +1126,7 @@ describe('Agent tool coverage invariants', () => {
 			{ requestId, projectId },
 			{ projectId, todos: [{ title: 'Valid task', responsibility: 'mine' }] }
 		]) {
-			results.push(String(await selected.invoke({} as never, JSON.stringify(payload))));
+			results.push(JSON.stringify(await selected.invoke({} as never, JSON.stringify(payload))));
 		}
 		expect(results.every((result) => result.includes('failure'))).toBe(true);
 	});
@@ -1134,7 +1144,7 @@ describe('Agent tool coverage invariants', () => {
 	it('returns model-readable validation errors for invalid long-tail payloads', async () => {
 		const selected = directToolFor('auto_accept', 'create_note');
 		const result = await selected.invoke({} as never, JSON.stringify({}));
-		expect(String(result)).toContain('failure');
+		expect(JSON.stringify(result)).toContain('failure');
 	});
 
 	it('keeps a searched tool callable in a later turn of the same conversation', async () => {
@@ -1145,11 +1155,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(await enabledToolNames(laterTurn)).toContain('create_note');
 	});
 
-	// A payload that cannot pass the tool's schema no longer needs its own approval
-	// carve-out: the SDK validates against the flat schema before dispatch, so it
-	// never reaches the approval boundary. The remaining case — a schema-valid call
-	// that is still doomed, such as an edit whose anchors match nothing — is held
-	// by `preflight` and covered by the edit_note approval tests below.
+	// Schema validation is owned by the application boundary before approval.
 	it('still parks an approval on a mutation whose payload is complete', async () => {
 		const current = noteBuilder();
 		const selected = directToolFor('approval_required', 'save_note', {
@@ -1333,7 +1339,7 @@ describe('Agent tool coverage invariants', () => {
 	it('explains a failed edit instead of throwing, so the model can correct it', async () => {
 		const fixture = editNoteFixture();
 		const result = await fixture.invoke([{ oldText: 'read-through', newText: 'x' }]);
-		expect(result).toMatchObject({ failure: 'No changes were applied.' });
+		expect(result).toMatchObject({ kind: 'failure', message: 'No changes were applied.' });
 	});
 
 	it('does not expose the agent controller recursively', () => {
@@ -1341,10 +1347,6 @@ describe('Agent tool coverage invariants', () => {
 			.tools()
 			.map((candidate) => candidate.name);
 		expect(names.some((name) => name === 'run_agent')).toBe(false);
-	});
-
-	it('pauses mutation tools in approval-required mode', async () => {
-		expect(await approvalFor('approval_required', 'create_note')).toBe(true);
 	});
 
 	it('executes proposal tools without approval', async () => {
@@ -1594,7 +1596,7 @@ describe('Explicit mutation receipts', () => {
 			projectId: '8e0b1a27-9c2d-4f18-8a5e-1d55b3c7f902',
 			pinned: true
 		};
-		expect(await tool?.execute(input)).toEqual(input);
+		expect(await tool?.prepare(input).execute()).toEqual(input);
 	});
 
 	it('reports the revoked token id', async () => {
@@ -1605,7 +1607,9 @@ describe('Explicit mutation receipts', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((definition) => definition.name === 'revoke_api_token');
-		expect(await tool?.execute({ tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013' })).toEqual({
+		expect(
+			await tool?.prepare({ tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013' }).execute()
+		).toEqual({
 			tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013',
 			name: 'Local integration',
 			revoked: true
@@ -1620,7 +1624,9 @@ describe('Explicit mutation receipts', () => {
 		const tool = registry('auto_accept', { factory })
 			.definitions()
 			.find((definition) => definition.name === 'delete_artifact');
-		expect(await tool?.execute({ artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124' })).toEqual({
+		expect(
+			await tool?.prepare({ artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124' }).execute()
+		).toEqual({
 			artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124',
 			title: 'Report',
 			deleted: true
@@ -1636,7 +1642,7 @@ describe('Explicit mutation receipts', () => {
 			.definitions()
 			.find((definition) => definition.name === 'get_artifact');
 		await expect(
-			tool?.execute({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' })
+			tool?.prepare({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' }).execute()
 		).rejects.toThrow('Artifact not found');
 	});
 });
@@ -1731,27 +1737,6 @@ describe('Doomed note edits never reach the approval boundary', () => {
 				'call-1'
 			)
 		).toBe(true);
-	});
-
-	it('skips the preflight read entirely when no approval boundary exists', async () => {
-		let reads = 0;
-		const factory = {
-			notes: () => ({
-				get: async () => {
-					reads += 1;
-					return { note: noteWithBody('# Knowledge layer') };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = registry('auto_accept', { factory })
-			.tools()
-			.find((candidate) => candidate.name === 'edit_note') as FunctionTool;
-		const parks = await selected.needsApproval(
-			{} as never,
-			edits(crypto.randomUUID(), 'anything') as never,
-			'call-1'
-		);
-		expect({ parks, reads }).toEqual({ parks: false, reads: 0 });
 	});
 });
 

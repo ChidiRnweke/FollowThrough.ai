@@ -8,6 +8,7 @@ import ts from 'typescript';
  * points at the wrong file.
  */
 const RULES = [
+	'tool-boundary',
 	'shape-cast',
 	'silent-catch',
 	'no-instanceof-models',
@@ -336,7 +337,72 @@ export const analyzeSource = (
 		if (violations.some((v) => v.rule === rule && v.line === localLine + lineOffset)) return;
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
+	const sdkAdapter = 'src/lib/server/factories/agent/sdk-tool-adapter.ts';
+	const mcpAdapter = 'src/lib/server/factories/agent/mcp-tool-factory.ts';
+	const diagramProtocol = 'src/lib/server/services/diagrams/generation.ts';
+	const toolBoundaryImport = (node: ts.Node): boolean => {
+		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+			const clause = node.importClause;
+			if (!clause || clause.isTypeOnly) return false;
+			const module = node.moduleSpecifier.text;
+			const bindings = clause.namedBindings;
+			if (module.startsWith('@modelcontextprotocol/sdk/server/')) {
+				return (
+					fileName !== mcpAdapter &&
+					!!bindings &&
+					(ts.isNamespaceImport(bindings) ||
+						bindings.elements.some(
+							(binding) =>
+								!binding.isTypeOnly &&
+								['Server', 'McpServer'].includes(binding.propertyName?.text ?? binding.name.text)
+						))
+				);
+			}
+			if (module !== '@openai/agents' && module !== '@openai/agents-core') return false;
+			if (fileName === sdkAdapter || fileName === diagramProtocol) return false;
+			return (
+				!!bindings &&
+				(ts.isNamespaceImport(bindings) ||
+					bindings.elements.some(
+						(binding) =>
+							!binding.isTypeOnly && (binding.propertyName?.text ?? binding.name.text) === 'tool'
+					))
+			);
+		}
+		if (
+			ts.isExportDeclaration(node) &&
+			!node.isTypeOnly &&
+			node.moduleSpecifier &&
+			ts.isStringLiteral(node.moduleSpecifier)
+		) {
+			const module = node.moduleSpecifier.text;
+			if (
+				module !== '@openai/agents' &&
+				module !== '@openai/agents-core' &&
+				!module.startsWith('@modelcontextprotocol/sdk/server/')
+			)
+				return false;
+			return (
+				!node.exportClause ||
+				ts.isNamespaceExport(node.exportClause) ||
+				node.exportClause.elements.some(
+					(binding) =>
+						!binding.isTypeOnly &&
+						['tool', 'Server', 'McpServer'].includes(
+							binding.propertyName?.text ?? binding.name.text
+						)
+				)
+			);
+		}
+		return false;
+	};
 	const visit = (node: ts.Node): void => {
+		if (toolBoundaryImport(node))
+			report(
+				'tool-boundary',
+				node,
+				'constructs or re-exports tools outside the designated protocol adapter'
+			);
 		if (shapeCast(node)) report('shape-cast', node, 'asserts a type onto an object literal');
 		if (responseJsonCast(node))
 			report('no-response-json-cast', node, 'casts a response JSON result without parsing it');
