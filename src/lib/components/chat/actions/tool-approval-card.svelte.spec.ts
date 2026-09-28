@@ -251,3 +251,18 @@ describe('Reviewed note approval controls', () => {
 			.toBeDisabled();
 	});
 });
+
+describe('The compact note preview scrolls beneath its labels', () => {
+	it('keeps the proposed change label outside the part that scrolls', async () => {
+		const review = noteReviewBuilder();
+		const screen = await renderCard({
+			...pendingCall('save_note', { noteId: review.change.noteId, markdown: 'Tuesday' }),
+			status: 'approval_required',
+			noteReview: review
+		});
+		const label = screen.getByText('Proposed change', { exact: true }).element();
+		const pane = label.closest('.note-diff-pane');
+		const scroller = label.closest('.overflow-y-auto');
+		expect(scroller !== null && pane?.contains(scroller)).toBe(false);
+	});
+});

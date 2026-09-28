@@ -66,10 +66,13 @@
 	const diff = $derived(diffNoteDocuments(baseDocument, candidateDocument));
 	const counts = $derived(countNoteDiff(diff));
 
-	/** Stacked and compact, each half is bounded so the second is never below the fold. */
-	const stackedPane = $derived(
-		layout === 'stacked' && compact ? 'max-h-40 overflow-y-auto overscroll-contain' : ''
-	);
+	/**
+	 * Stacked and compact, each half is bounded so the second is never below the fold. The
+	 * pane scrolls its body below its label rather than scrolling as a whole, and lets the
+	 * scroll carry on into the conversation at either end: contained, a wheel over a 160px
+	 * half stopped the thread dead.
+	 */
+	const stackedPane = $derived(layout === 'stacked' && compact ? 'max-h-40' : '');
 </script>
 
 <section
