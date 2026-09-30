@@ -3,7 +3,7 @@
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import type { NoteId, NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
-	import { dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
+	import { dndzone, dragHandle, dragHandleZone, type DndEvent } from 'svelte-dnd-action';
 	import { writeNoteDrag } from '$lib/client/notes/note-drag';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -54,6 +54,11 @@
 		submitInline,
 		handleDndConsider,
 		handleDndFinalize,
+		intoItems,
+		handleIntoConsider,
+		handleIntoFinalize,
+		isDropBlocked,
+		folderDrop,
 		moveEntry,
 		archiveEntry,
 		archiveProject,
@@ -95,6 +100,11 @@
 			parentId: NoteId | undefined,
 			event: CustomEvent<DndEvent<NoteSummary>>
 		) => void;
+		intoItems: (folderId: NoteId) => NoteSummary[];
+		handleIntoConsider: (folder: NoteSummary, event: CustomEvent<DndEvent<NoteSummary>>) => void;
+		handleIntoFinalize: (folder: NoteSummary, event: CustomEvent<DndEvent<NoteSummary>>) => void;
+		isDropBlocked: (folderId: NoteId) => boolean;
+		folderDrop: (folder: NoteSummary) => { band: 'top' | 'bottom'; holdsSlot: boolean };
 		moveEntry: (entry: NoteSummary, parentId?: NoteId) => Promise<void>;
 		archiveEntry: (entry: NoteSummary) => Promise<void>;
 		archiveProject: (project: Project) => Promise<void>;
@@ -223,7 +233,9 @@
 {#snippet entryRow(entry: NoteSummary, depth: number)}
 	{@const isFolder = entry.kind === 'folder'}
 	{@const isOpen = isFolderOpen(entry.id)}
-	<Sidebar.MenuSubItem>
+	<!-- `mt-7` is one row: the space the drag shadow left when it moved into this
+	     folder from above, held so the folder stays under the pointer. -->
+	<Sidebar.MenuSubItem class={cn(isFolder && folderDrop(entry).holdsSlot && 'mt-7')}>
 		{#if inlineEdit?.mode === 'rename' && inlineEdit.entryId === entry.id}
 			<TreeInlineInput
 				icon={isFolder ? Folder : entry.kind === 'skill' ? Wrench : FileText}
@@ -275,7 +287,13 @@
 									     centre its own label while every sibling note row is flush left,
 									     and sit a weight heavier. Both are corrected here rather than on
 									     the Button so the sidebar's own class wins the merge. -->
-									<Sidebar.MenuSubButton class="w-full justify-start font-normal">
+									<Sidebar.MenuSubButton
+										class={cn(
+											'w-full justify-start font-normal',
+											intoItems(entry.id).length > 0 &&
+												'bg-sidebar-accent text-sidebar-accent-foreground ring-1 ring-sidebar-ring'
+										)}
+									>
 										{#snippet child({ props })}
 											<Button
 												variant="ghost"
@@ -349,6 +367,35 @@
 					</ContextMenu.Content>
 				</ContextMenu.Root>
 				{#if isFolder}
+					<!-- "Into this folder": a zone laid over the row. svelte-dnd-action
+					     hit-tests geometry and prefers the deepest zone, so resting the pointer
+					     here targets the folder. A 6px band on one edge falls through to the
+					     parent list for reordering; `folderDrop` says which edge. The zone
+					     holds only the invisible drag shadow, so it takes no pointer events and
+					     is hidden from assistive technology. -->
+					<ul
+						aria-hidden="true"
+						data-folder-drop={entry.id}
+						class={cn(
+							'pointer-events-none absolute inset-x-0 overflow-hidden opacity-0',
+							folderDrop(entry).band === 'top' ? 'top-1.5 bottom-0' : 'top-0 bottom-1.5'
+						)}
+						use:dndzone={{
+							items: intoItems(entry.id),
+							type: `tree-${entry.projectId}`,
+							dragDisabled: true,
+							dropFromOthersDisabled: isDropBlocked(entry.id),
+							useCursorForDetection: true,
+							flipDurationMs: 0,
+							dropTargetStyle: {}
+						}}
+						onconsider={(event) => handleIntoConsider(entry, event)}
+						onfinalize={(event) => handleIntoFinalize(entry, event)}
+					>
+						{#each intoItems(entry.id) as item (item.id)}
+							<li class="h-7"></li>
+						{/each}
+					</ul>
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger>
 							{#snippet child({ props: menuProps })}
@@ -398,17 +445,31 @@
 			</div>
 		{/if}
 		{#if isFolder}
+			{@const showsEmptyState =
+				inventoryReady &&
+				!isCreatingIn(entry.projectId, entry.id) &&
+				zoneItems(entry.projectId, entry.id).length === 0}
 			<div class="tree-collapse" data-open={isOpen} data-transitions-ready={transitionsReady}>
-				<div class="min-h-0 overflow-hidden">
+				<!-- `relative` anchors the empty zone below, which spans the empty-state box. -->
+				<div class="relative min-h-0 overflow-hidden">
+					<!-- A collapsed folder's list is clipped, not removed, so its box still
+					     overlaps the rows beneath it; the library hit-tests boxes, so it would
+					     swallow drops aimed at those rows. Another zone type takes it out of
+					     the drag entirely. An empty list spans the "Create your first note"
+					     box instead, so the whole box accepts a drop; hit-testing is
+					     geometric, so `pointer-events-none` keeps the button clickable. -->
 					<ul
 						class={cn(
 							'flex min-h-1.5 min-w-0 flex-col gap-0 py-1',
-							depth < MAX_INDENT_DEPTH && 'ml-2 border-l border-sidebar-border pl-2'
+							depth < MAX_INDENT_DEPTH && 'ml-2 border-l border-sidebar-border pl-2',
+							showsEmptyState && 'pointer-events-none absolute inset-0'
 						)}
 						use:dragHandleZone={{
 							dragDisabled: !inventoryReady,
 							items: zoneItems(entry.projectId, entry.id),
-							type: `tree-${entry.projectId}`,
+							type: isOpen ? `tree-${entry.projectId}` : `tree-${entry.projectId}-collapsed`,
+							dropFromOthersDisabled: isDropBlocked(entry.id),
+							useCursorForDetection: true,
 							flipDurationMs: 125,
 							dropTargetStyle: {}
 						}}
@@ -426,8 +487,9 @@
 					{/if}
 					<!-- Creation lives on the row's hover `+`; the dashed button survives only
 					     as an empty state, where there is nothing else to aim at. -->
-					{#if inventoryReady && !isCreatingIn(entry.projectId, entry.id) && zoneItems(entry.projectId, entry.id).length === 0}
-						<div class="ml-2 pl-2">
+					{#if showsEmptyState}
+						<!-- `pt-2` keeps the gap the list's own padding used to leave. -->
+						<div class="ml-2 pt-2 pl-2">
 							<Button
 								variant="ghost"
 								type="button"
@@ -476,6 +538,8 @@
 		{@const isOpen = isProjectOpen(project.id)}
 		{@const entries = zoneItems(project.id)}
 		{@const projectHref = `/projects/${project.id}`}
+		{@const showsEmptyState =
+			inventoryReady && !isCreatingIn(project.id, undefined) && entries.length === 0}
 		<Sidebar.MenuItem class="group/project">
 			<ContextMenu.Root>
 				<ContextMenu.Trigger>
@@ -574,37 +638,45 @@
 								</Sidebar.MenuSubButton>
 							</Sidebar.MenuSubItem>
 						</ul>
-						<ul
-							class="flex min-h-1.5 min-w-0 flex-col gap-0"
-							use:dragHandleZone={{
-								dragDisabled: !inventoryReady,
-								items: entries,
-								type: `tree-${project.id}`,
-								flipDurationMs: 125,
-								dropTargetStyle: {}
-							}}
-							onconsider={(event) => handleDndConsider(project.id, undefined, event)}
-							onfinalize={(event) => handleDndFinalize(project.id, undefined, event)}
-						>
-							{#each entries as entry (entry.id)}
-								{@render entryRow(entry, 0)}
-							{/each}
-						</ul>
-						{#if inlineEdit?.mode === 'create' && isCreatingIn(project.id, undefined)}
-							{@render inlineCreateRow(inlineEdit, 'inline')}
-						{/if}
-						{#if inventoryReady && !isCreatingIn(project.id, undefined) && entries.length === 0}
-							<Button
-								variant="ghost"
-								type="button"
-								class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-								disabled={!inventoryReady}
-								onclick={() => startCreate('note', project.id)}
+						<!-- As in a folder: an empty root list spans the empty-state box so the
+						     whole box accepts a drop. `pt-2.5` keeps the list's height plus gap. -->
+						<div class={cn('relative flex min-w-0 flex-col gap-1', showsEmptyState && 'pt-2.5')}>
+							<ul
+								class={cn(
+									'flex min-h-1.5 min-w-0 flex-col gap-0',
+									showsEmptyState && 'pointer-events-none absolute inset-0'
+								)}
+								use:dragHandleZone={{
+									dragDisabled: !inventoryReady,
+									items: entries,
+									type: `tree-${project.id}`,
+									useCursorForDetection: true,
+									flipDurationMs: 125,
+									dropTargetStyle: {}
+								}}
+								onconsider={(event) => handleDndConsider(project.id, undefined, event)}
+								onfinalize={(event) => handleDndFinalize(project.id, undefined, event)}
 							>
-								<Plus class="size-3.5 shrink-0" />
-								Create your first note
-							</Button>
-						{/if}
+								{#each entries as entry (entry.id)}
+									{@render entryRow(entry, 0)}
+								{/each}
+							</ul>
+							{#if inlineEdit?.mode === 'create' && isCreatingIn(project.id, undefined)}
+								{@render inlineCreateRow(inlineEdit, 'inline')}
+							{/if}
+							{#if showsEmptyState}
+								<Button
+									variant="ghost"
+									type="button"
+									class="tactile flex w-full items-center gap-2 rounded-md border border-dashed border-sidebar-border px-2 py-1 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+									disabled={!inventoryReady}
+									onclick={() => startCreate('note', project.id)}
+								>
+									<Plus class="size-3.5 shrink-0" />
+									Create your first note
+								</Button>
+							{/if}
+						</div>
 					</div>
 				</div>
 			</div>

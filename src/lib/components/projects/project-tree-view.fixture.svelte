@@ -29,6 +29,11 @@
 	const submitInline = async () => undefined;
 	const handleDndConsider = () => undefined;
 	const handleDndFinalize = () => undefined;
+	const intoItems = (): NoteSummary[] => [];
+	const handleIntoConsider = () => undefined;
+	const handleIntoFinalize = () => undefined;
+	const isDropBlocked = () => false;
+	const folderDrop = () => ({ band: 'top' as const, holdsSlot: false });
 	const moveEntry = async () => undefined;
 	const archiveEntry = async () => undefined;
 	const archiveProject = async () => undefined;
@@ -58,6 +63,11 @@
 		{submitInline}
 		{handleDndConsider}
 		{handleDndFinalize}
+		{intoItems}
+		{handleIntoConsider}
+		{handleIntoFinalize}
+		{isDropBlocked}
+		{folderDrop}
 		{moveEntry}
 		{archiveEntry}
 		{archiveProject}

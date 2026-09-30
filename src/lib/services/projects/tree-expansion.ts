@@ -17,3 +17,12 @@ export function ancestorFolderIds(
 	}
 	return ancestors;
 }
+
+/** Whether `note` is `rootId` itself or sits anywhere below it. */
+export function isWithinSubtree(
+	note: Pick<NoteSummary, 'id' | 'parentId'>,
+	rootId: NoteId,
+	entries: ReadonlyMap<NoteId, Pick<NoteSummary, 'parentId'>>
+): boolean {
+	return note.id === rootId || ancestorFolderIds(note, entries).includes(rootId);
+}

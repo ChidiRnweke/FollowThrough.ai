@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { fileURLToPath } from 'node:url';
@@ -93,7 +94,10 @@ export default defineConfig({
 				}
 			},
 			{
-				plugins: [componentSvelteKit()],
+				// Tailwind turns utility classes into real layout, which specs that
+				// import `layout.css` rely on (the drop targets of the project tree are
+				// positioned entirely by utilities).
+				plugins: [tailwindcss(), componentSvelteKit()],
 				optimizeDeps: { include: browserPrebundled },
 				test: {
 					...common,
@@ -113,6 +117,9 @@ export default defineConfig({
 						// was broken twice over.
 						'src/lib/components/notes/open-note.svelte.spec.ts',
 						'src/lib/components/projects/project-tree-startup.svelte.spec.ts',
+						// Drives real svelte-dnd-action drags against the zone geometry of the tree;
+						// dropping into folders broke silently when that geometry drifted.
+						'src/lib/components/projects/project-tree-drop.svelte.spec.ts',
 						'src/lib/client/notes/selection-submissions.svelte.spec.ts',
 						'src/lib/client/notes/diagram-submissions.svelte.spec.ts',
 						'src/lib/client/notes/action-run-storage.svelte.spec.ts',
@@ -157,7 +164,8 @@ export default defineConfig({
 				}
 			},
 			{
-				plugins: [componentSvelteKit()],
+				// Same real layout as `browser-focused`, which runs a subset of these specs.
+				plugins: [tailwindcss(), componentSvelteKit()],
 				optimizeDeps: { include: browserPrebundled },
 				test: {
 					...common,
