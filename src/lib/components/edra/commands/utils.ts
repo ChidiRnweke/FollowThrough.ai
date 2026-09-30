@@ -291,6 +291,28 @@ export const selectTable = (tr: Transaction) => {
 	return tr;
 };
 
+/**
+ * Whether the selection covers the whole table for a menu that acts along `axis`. A grip
+ * on a table with a single row (or column) selects every cell, and that is still the row
+ * the author picked — only a table with more than one of them hands the selection to the
+ * whole table and hides the menu.
+ */
+const isWholeTableSelected = (axis: 'row' | 'column') => (selection: Selection) => {
+	if (!isCellSelection(selection) || !isTableSelected(selection)) return false;
+	const map = TableMap.get(selection.$anchorCell.node(-1));
+	return (axis === 'row' ? map.height : map.width) > 1;
+};
+
+/**
+ * prosemirror-tables refuses to delete the last row or column, because a table without
+ * one is not a table. Removing the last one is removing the table.
+ */
+export const deleteRowOrTable = (editor: Editor): boolean =>
+	editor.chain().focus().deleteRow().run() || editor.chain().focus().deleteTable().run();
+
+export const deleteColumnOrTable = (editor: Editor): boolean =>
+	editor.chain().focus().deleteColumn().run() || editor.chain().focus().deleteTable().run();
+
 export const isColumnGripSelected = ({
 	editor,
 	view,
@@ -311,7 +333,7 @@ export const isColumnGripSelected = ({
 	const nodeDOM = view.nodeDOM(from) as HTMLElement;
 	const node = nodeDOM || domAtPos;
 
-	if (!editor.isActive(Table.name) || !node || isTableSelected(state.selection)) {
+	if (!editor.isActive(Table.name) || !node || isWholeTableSelected('column')(state.selection)) {
 		return false;
 	}
 
@@ -347,7 +369,7 @@ export const isRowGripSelected = ({
 	const nodeDOM = view.nodeDOM(from) as HTMLElement;
 	const node = nodeDOM || domAtPos;
 
-	if (!editor.isActive(Table.name) || !node || isTableSelected(state.selection)) {
+	if (!editor.isActive(Table.name) || !node || isWholeTableSelected('row')(state.selection)) {
 		return false;
 	}
 
@@ -485,130 +507,55 @@ const hasSpans = (cellsA: CellInfo[] | null, cellsB: CellInfo[] | null) => {
 	return false;
 };
 
-export const moveColumnLeft = (tr: Transaction) => {
-	const ctx = getCurrentCellRect(tr);
-	if (!ctx) return tr;
-	const { cell } = ctx;
-	const source = cell.left;
-	const target = source - 1;
-	if (target < 0) return tr;
-
-	const sel = tr.selection as CellSelection;
-	const sourceCells = getCellsInColumn(source)(sel);
-	const targetCells = getCellsInColumn(target)(sel);
-	if (hasSpans(sourceCells, targetCells)) return tr;
-
-	for (let i = 0; i < sourceCells!.length; i++) {
-		const a = sourceCells![i];
-		const b = targetCells![i];
+/**
+ * Swaps the cells of two rows or columns. Each position keeps its own cell type, so a
+ * header row stays a header row and only the content (with its attributes) travels.
+ */
+const swapCells = (tr: Transaction, source: CellInfo[], target: CellInfo[]): Transaction => {
+	source.forEach((a, index) => {
+		const b = target[index];
 		const posA = tr.mapping.map(a.pos);
 		const posB = tr.mapping.map(b.pos);
 		const nodeA = tr.doc.nodeAt(posA);
 		const nodeB = tr.doc.nodeAt(posB);
-		if (!nodeA || !nodeB) continue;
-		tr = tr.replaceWith(posA, posA + nodeA.nodeSize, (nodeB as Node).copy((nodeB as Node).content));
-		const mappedB = tr.mapping.map(posB);
-		const newNodeA = nodeA as Node;
-		tr = tr.replaceWith(
-			mappedB,
-			mappedB + (nodeB as Node).nodeSize,
-			newNodeA.copy(newNodeA.content)
+		if (!nodeA || !nodeB) return;
+		const steps = tr.steps.length;
+		tr.replaceWith(
+			posA,
+			posA + nodeA.nodeSize,
+			nodeA.type.create(nodeB.attrs, nodeB.content, nodeB.marks)
 		);
-	}
+		// Only through the replacement just made: `posB` is already mapped past the earlier ones.
+		const mappedB = tr.mapping.slice(steps).map(posB);
+		tr.replaceWith(
+			mappedB,
+			mappedB + nodeB.nodeSize,
+			nodeB.type.create(nodeA.attrs, nodeA.content, nodeA.marks)
+		);
+	});
 	return tr;
 };
 
-export const moveColumnRight = (tr: Transaction) => {
+/** Moves the selected row or column one step, and keeps it selected where it lands. */
+const move = (axis: 'row' | 'column', delta: -1 | 1) => (tr: Transaction) => {
 	const ctx = getCurrentCellRect(tr);
 	if (!ctx) return tr;
 	const { map, cell } = ctx;
-	const source = cell.left;
-	const target = source + 1;
-	if (target >= map.width) return tr;
-
-	const sel = tr.selection as CellSelection;
-	const sourceCells = getCellsInColumn(source)(sel);
-	const targetCells = getCellsInColumn(target)(sel);
-	if (hasSpans(sourceCells, targetCells)) return tr;
-
-	for (let i = 0; i < sourceCells!.length; i++) {
-		const a = sourceCells![i];
-		const b = targetCells![i];
-		const posA = tr.mapping.map(a.pos);
-		const posB = tr.mapping.map(b.pos);
-		const nodeA = tr.doc.nodeAt(posA);
-		const nodeB = tr.doc.nodeAt(posB);
-		if (!nodeA || !nodeB) continue;
-		tr = tr.replaceWith(posA, posA + nodeA.nodeSize, (nodeB as Node).copy((nodeB as Node).content));
-		const mappedB = tr.mapping.map(posB);
-		const newNodeA = nodeA as Node;
-		tr = tr.replaceWith(
-			mappedB,
-			mappedB + (nodeB as Node).nodeSize,
-			newNodeA.copy(newNodeA.content)
-		);
-	}
-	return tr;
+	const source = axis === 'row' ? cell.top : cell.left;
+	const target = source + delta;
+	if (target < 0 || target >= (axis === 'row' ? map.height : map.width)) return tr;
+	const cellsAt = axis === 'row' ? getCellsInRow : getCellsInColumn;
+	const sourceCells = cellsAt(source)(tr.selection);
+	const targetCells = cellsAt(target)(tr.selection);
+	if (!sourceCells || !targetCells || hasSpans(sourceCells, targetCells)) return tr;
+	swapCells(tr, sourceCells, targetCells);
+	return (axis === 'row' ? selectRow : selectColumn)(target)(tr);
 };
 
-export const moveRowUp = (tr: Transaction) => {
-	const ctx = getCurrentCellRect(tr);
-	if (!ctx) return tr;
-	const { cell } = ctx;
-	const source = cell.top;
-	const target = source - 1;
-	if (target < 0) return tr;
-	const sel = tr.selection as CellSelection;
-	const sourceRow = getCellsInRow(source)(sel);
-	const targetRow = getCellsInRow(target)(sel);
-	if (hasSpans(sourceRow, targetRow)) return tr;
-	for (let i = 0; i < sourceRow!.length; i++) {
-		const a = sourceRow![i];
-		const b = targetRow![i];
-		const posA = tr.mapping.map(a.pos);
-		const posB = tr.mapping.map(b.pos);
-		const nodeA = tr.doc.nodeAt(posA);
-		const nodeB = tr.doc.nodeAt(posB);
-		if (!nodeA || !nodeB) continue;
-		tr = tr.replaceWith(posA, posA + nodeA.nodeSize, (nodeB as Node).copy((nodeB as Node).content));
-		const mappedB = tr.mapping.map(posB);
-		const newNodeA = nodeA as Node;
-		tr = tr.replaceWith(
-			mappedB,
-			mappedB + (nodeB as Node).nodeSize,
-			newNodeA.copy(newNodeA.content)
-		);
-	}
-	return tr;
-};
+export const moveColumnLeft = move('column', -1);
 
-export const moveRowDown = (tr: Transaction) => {
-	const ctx = getCurrentCellRect(tr);
-	if (!ctx) return tr;
-	const { map, cell } = ctx;
-	const source = cell.top;
-	const target = source + 1;
-	if (target >= map.height) return tr;
-	const sel = tr.selection as CellSelection;
-	const sourceRow = getCellsInRow(source)(sel);
-	const targetRow = getCellsInRow(target)(sel);
-	if (hasSpans(sourceRow, targetRow)) return tr;
-	for (let i = 0; i < sourceRow!.length; i++) {
-		const a = sourceRow![i];
-		const b = targetRow![i];
-		const posA = tr.mapping.map(a.pos);
-		const posB = tr.mapping.map(b.pos);
-		const nodeA = tr.doc.nodeAt(posA);
-		const nodeB = tr.doc.nodeAt(posB);
-		if (!nodeA || !nodeB) continue;
-		tr = tr.replaceWith(posA, posA + nodeA.nodeSize, (nodeB as Node).copy((nodeB as Node).content));
-		const mappedB = tr.mapping.map(posB);
-		const newNodeA = nodeA as Node;
-		tr = tr.replaceWith(
-			mappedB,
-			mappedB + (nodeB as Node).nodeSize,
-			newNodeA.copy(newNodeA.content)
-		);
-	}
-	return tr;
-};
+export const moveColumnRight = move('column', 1);
+
+export const moveRowUp = move('row', -1);
+
+export const moveRowDown = move('row', 1);

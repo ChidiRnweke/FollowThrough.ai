@@ -809,7 +809,9 @@
 			holdingSelection = true;
 			editor.view.dispatch(
 				editor.view.state.tr
-					.setSelection(PmTextSelection.create(doc, from))
+					// `near`, not `create`: a table's cell selection starts at a cell boundary,
+					// where a text selection is not valid.
+					.setSelection(PmTextSelection.near(doc.resolve(from)))
 					.setMeta(selectionActionKey, { from, to, variant: 'held' })
 			);
 			holdingSelection = false;
