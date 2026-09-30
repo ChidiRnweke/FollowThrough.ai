@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.2...v2.0.3) (2026-09-30)
+
+
+### Styles
+
+* **ui:** remove left-edge highlight bars ([#287](https://github.com/ChidiRnweke/FollowThrough.ai/issues/287)) ([0ad9449](https://github.com/ChidiRnweke/FollowThrough.ai/commit/0ad9449463fbc4f288399dae9d5073aaff040c09))
+
 ## [2.0.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.1...v2.0.2) (2026-09-30)
 
 
