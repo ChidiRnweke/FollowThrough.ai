@@ -1,3 +1,4 @@
+import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
@@ -32,7 +33,7 @@ const applied = (operationId: string, value: string) => ({
 });
 const setup = (transport: OutboxTransport<string, string>) => {
 	const cache = new InMemorySyncCache<string>();
-	const repository = new InMemoryOutbox<string, string>(cache);
+	const repository = new InMemoryOutbox<string, string>(wholeValueRebase<string>(), cache);
 	const writerLock = new InMemoryAccountWriterLock();
 	const dependencies = {
 		repository,

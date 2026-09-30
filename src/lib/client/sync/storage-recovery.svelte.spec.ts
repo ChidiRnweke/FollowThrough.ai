@@ -1,3 +1,4 @@
+import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { ResourceCache } from './resource-cache';
 import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import { afterEach, expect, it } from 'vitest';
@@ -11,7 +12,13 @@ import { receiveResource } from '$lib/services/sync/state';
 
 const databases: WorkspaceDatabase[] = [];
 const setup = (account = 'alice', prefix = `recovery-${crypto.randomUUID()}`) => {
-	const repository = new DexieWorkspaceRepository(account, z.string(), z.string(), prefix);
+	const repository = new DexieWorkspaceRepository(
+		account,
+		z.string(),
+		z.string(),
+		wholeValueRebase<string>(),
+		prefix
+	);
 	databases.push(repository.database);
 	return { repository, recovery: new IndexedDbStorageRecovery(prefix), prefix };
 };

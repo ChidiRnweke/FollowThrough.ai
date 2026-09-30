@@ -1,3 +1,4 @@
+import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { z } from 'zod';
@@ -10,7 +11,13 @@ import WorkspaceRecoveryDownload from './workspace-recovery-download.svelte';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {
 	const prefix = `reset-review-${crypto.randomUUID()}`;
-	const store = new DexieWorkspaceRepository('alice', z.string(), z.string(), prefix);
+	const store = new DexieWorkspaceRepository(
+		'alice',
+		z.string(),
+		z.string(),
+		wholeValueRebase<string>(),
+		prefix
+	);
 	const recovery = new IndexedDbStorageRecovery(prefix);
 	await store.cache.commit('alice', {
 		put: [

@@ -7,7 +7,8 @@ import {
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteReceipt,
-	type WriteOutcome
+	type WriteOutcome,
+	type WriteRebase
 } from '$lib/models/outbox';
 import {
 	authoritativeWriteResource,
@@ -21,7 +22,9 @@ import {
 	settleWrite,
 	resolveWriteBase,
 	receiveResource,
-	cachedSnapshot
+	cachedSnapshot,
+	rebaseConflictedWrite,
+	rebaseDraft
 } from '$lib/services/sync/state';
 import {
 	WorkspaceDatabase,
@@ -36,6 +39,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 	constructor(
 		private readonly commandSchema: z.ZodType<C>,
 		private readonly valueSchema: z.ZodType<T>,
+		private readonly rebase: WriteRebase<T>,
 		readonly database: WorkspaceDatabase
 	) {}
 	private async readEntries(tx: Transaction): Promise<readonly OutboxEntry<C, T>[]> {
@@ -87,6 +91,7 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		});
 		return this.change(accountId, ['outbox', 'records', 'receipts'], async (entries, tx) => {
 			const receipt = await this.readReceipt(draft.key, tx);
+			const rebased = rebaseDraft(entries, draft, receipt, this.rebase);
 			const raw = await storedTable(tx, 'records').get(draft.key);
 			const current =
 				raw === undefined ? undefined : storedResourceSchema(this.valueSchema).parse(raw).entry;
@@ -105,11 +110,11 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 				.safe()
 				.parse(
 					await storedTable(tx, 'outbox').add({
-						intent: { ...draft, dependencies: [] },
+						intent: { ...rebased, dependencies: [] },
 						delivery: { kind: 'queued' }
 					})
 				);
-			const next = appendWrite(entries, draft, sequence, receipt, observed);
+			const next = appendWrite(entries, rebased, sequence, receipt, observed);
 			const appended = next.find((entry) => entry.intent.operationId === draft.operationId);
 			if (!appended) throw new Error('The queued resource was not appended');
 			if (appended.sequence !== sequence) await storedTable(tx, 'outbox').delete(sequence);
@@ -173,7 +178,11 @@ export class IndexedDbOutbox<C, T> implements OutboxRepository<C, T> {
 		outcome: WriteOutcome<T>
 	): Promise<void> {
 		return this.change(accountId, ['outbox', 'records', 'receipts'], async (entries, tx) => {
-			const next = settleWrite(entries, sent.intent.operationId, outcome);
+			const settled = settleWrite(entries, sent.intent.operationId, outcome);
+			const next =
+				outcome.kind === 'conflict'
+					? rebaseConflictedWrite(settled, sent.intent.operationId, this.rebase)
+					: settled;
 			if (outcome.kind === 'applied') {
 				const previous = await this.readReceipt(sent.intent.key, tx);
 				const receipt = retainWriteReceipt(

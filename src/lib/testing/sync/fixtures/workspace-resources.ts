@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
@@ -10,7 +11,10 @@ import { InMemorySyncScheduler } from '../fakes/in-memory-scheduler';
 export const workspaceResourcesFixture = (accountId: string) => {
 	const transport = new InMemorySyncTransport<WorkspaceRecord>();
 	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(repository);
+	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(
+		rebaseWorkspaceRecord,
+		repository
+	);
 	const cache = new ResourceCache(accountId, { repository: outbox.projectedCache, transport });
 	const writes = new MutationQueue<WorkspaceCommand, WorkspaceRecord>(accountId, {
 		repository: outbox,

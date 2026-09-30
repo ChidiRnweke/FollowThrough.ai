@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,
@@ -20,7 +21,10 @@ import {
 export async function replacementWorkspace() {
 	const account = 'replacement-fixture';
 	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(repository);
+	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(
+		rebaseWorkspaceRecord,
+		repository
+	);
 	const cache = new ResourceCache(account, {
 		repository: outbox.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()

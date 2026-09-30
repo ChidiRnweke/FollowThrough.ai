@@ -1,3 +1,5 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { WorkspaceDatabase } from './database';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
@@ -17,6 +19,7 @@ const setup = (name = `outbox-test-${crypto.randomUUID()}`, accountId = 'alice')
 	const outbox = new IndexedDbOutbox(
 		z.string(),
 		z.string(),
+		wholeValueRebase<string>(),
 		new WorkspaceDatabase(accountId, name)
 	);
 	const cache = new IndexedDbSyncCache(z.string(), new WorkspaceDatabase(accountId, name));
@@ -168,6 +171,28 @@ describe('durable local writes', () => {
 });
 
 describe('durable conflict resolution', () => {
+	it('queues a non-overlapping conflict again together with the server copy it rebased onto', async () => {
+		const { outbox, cache } = setup();
+		const input = { ...draft('note:1', 'Edited'), base: { etag: syncEtag(1n), value: 'Original' } };
+		await outbox.append('alice', input);
+		const sent = await outbox.take('alice');
+		if (!sent) throw new Error('Expected submitted edit');
+		const newer = { etag: syncEtag(2n), value: 'Original' };
+		await outbox.settle('alice', sent, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot: newer }
+		});
+		const [entry] = await outbox.list('alice');
+		expect({
+			base: entry.intent.base,
+			delivery: entry.delivery,
+			records: (await cache.load('alice')).records
+		}).toEqual({
+			base: newer,
+			delivery: { kind: 'queued' },
+			records: [{ key: input.key, entry: { kind: 'present', snapshot: newer } }]
+		});
+	});
 	it('keeps the authoritative server copy after discarding a rejected local edit', async () => {
 		const { outbox, cache } = setup();
 		const input = draft();
@@ -363,6 +388,7 @@ it('retains identical normalized input for submission and uncertain cancellation
 	const outbox = new IndexedDbOutbox(
 		workspaceCommandSchema,
 		workspaceRecordSchema,
+		rebaseWorkspaceRecord,
 		new WorkspaceDatabase(project.userId, name)
 	);
 	databases.add(outbox.database.name);
@@ -384,6 +410,7 @@ it('retains identical normalized input for submission and uncertain cancellation
 	const reopened = new IndexedDbOutbox(
 		workspaceCommandSchema,
 		workspaceRecordSchema,
+		rebaseWorkspaceRecord,
 		new WorkspaceDatabase(project.userId, name)
 	);
 	repositories.push(reopened);

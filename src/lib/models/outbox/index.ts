@@ -61,6 +61,17 @@ export interface WriteDraft<C, T> {
 	readonly references: readonly string[];
 }
 
+/**
+ * Replays the fields a local edit changed (from `observed` to `local`) onto a newer version.
+ * `overlaps` reports a field both sides changed to different values. `null` means the values
+ * cannot be combined at all, such as two different resource types.
+ */
+export type WriteRebase<T> = (
+	observed: T,
+	local: T,
+	onto: T
+) => { readonly value: T; readonly overlaps: boolean } | null;
+
 export type WriteIntent<C, T> = Omit<WriteDraft<C, T>, 'references'> & {
 	readonly dependencies: readonly string[];
 };

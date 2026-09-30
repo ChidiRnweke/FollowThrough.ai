@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -83,7 +84,7 @@ const setup = async (
 	} = {}
 ) => {
 	const transport = new InMemorySyncTransport<WorkspaceRecord>();
-	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>();
+	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(rebaseWorkspaceRecord);
 	const cache = new ResourceCache(conversation.userId, {
 		repository: repository.projectedCache,
 		transport
