@@ -1,6 +1,15 @@
+<script lang="ts" module>
+	import type { NoteId } from '$lib/models/notes';
+
+	// The last active note whose ancestors were revealed. Module scope, because
+	// the mobile sidebar is a sheet that unmounts the tree on every close; a
+	// reopen must not undo a collapse the reader made after that reveal.
+	let revealedNoteId: NoteId | undefined;
+</script>
+
 <script lang="ts">
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-	import type { NoteId, NoteSummary } from '$lib/models/notes';
+	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { goto } from '$app/navigation';
 	import type { DndEvent } from 'svelte-dnd-action';
@@ -125,13 +134,21 @@
 		if (parentId && !isFolderOpen(parentId)) toggled.add(parentId);
 	}
 
-	// Keep the active note reachable: expand its project and folder ancestors.
+	// Keep the active note reachable: expand its project and folder ancestors
+	// once per change of active note. Tree refreshes and remounts leave the
+	// reader's later collapses alone.
 	$effect(() => {
-		if (!activeNoteId) return;
+		if (!togglesRestored) return;
+		if (!activeNoteId) {
+			revealedNoteId = undefined;
+			return;
+		}
+		if (activeNoteId === revealedNoteId) return;
 		const node = byId.get(activeNoteId);
 		if (!node) return;
 		toggled.delete(`project:${node.projectId}`);
 		for (const parentId of ancestorFolderIds(node, byId)) toggled.add(parentId);
+		revealedNoteId = activeNoteId;
 	});
 
 	// --- Drag and drop (within a project only; the zone type enforces it) ---
