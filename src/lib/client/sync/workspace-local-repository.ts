@@ -1,5 +1,6 @@
 import { liveQuery } from 'dexie';
 import type { z } from 'zod';
+import type { WriteRebase } from '$lib/models/outbox';
 import type { StoredCache } from './contracts';
 import type { OutboxProjection, OutboxRepository } from './outbox-contracts';
 import { WorkspaceDatabase } from './database';
@@ -29,10 +30,11 @@ export class DexieWorkspaceRepository<C, T>
 		accountId: string,
 		command: z.ZodType<C>,
 		value: z.ZodType<T>,
+		rebase: WriteRebase<T>,
 		name = 'followthrough-workspace-sync'
 	) {
 		const database = new WorkspaceDatabase(accountId, name);
-		super(command, value, database);
+		super(command, value, rebase, database);
 		this.cache = new IndexedDbSyncCache(value, database);
 	}
 	async read(accountId: string): Promise<WorkspaceLocalProjection<C, T>> {

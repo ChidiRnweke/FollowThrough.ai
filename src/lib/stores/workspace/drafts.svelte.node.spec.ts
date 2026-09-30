@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
@@ -23,7 +24,10 @@ const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
 	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(repository);
+	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(
+		rebaseWorkspaceRecord,
+		repository
+	);
 	const transport = new InMemoryNoteWrites();
 	const snapshot = { etag: syncEtag(1n), value: { type: 'notes' as const, value: note } };
 	transport.records.set(key, snapshot);
@@ -265,7 +269,7 @@ describe('a mounted editor after acknowledgement', () => {
 			server: { type: 'notes', value: note }
 		});
 	});
-	it('conflicts with a later server revision even when that revision has identical editor content', async () => {
+	it('rebases onto a later server revision that changed no field the edit changed', async () => {
 		const { note, key, store, transport, resources, cache } = await setup();
 		await store.read();
 		await store.stage(noteCommand({ ...note, plainText: 'My edit' }));
@@ -282,7 +286,10 @@ describe('a mounted editor after acknowledgement', () => {
 		await cache.accept(key, changed);
 		await store.stage(noteCommand({ ...note, plainText: 'Later typing' }));
 		await resources.synchronize();
-		expect(store.status).toBe('conflict');
+		expect({ status: store.status, server: transport.records.get(key)?.etag }).toEqual({
+			status: 'synced',
+			server: syncEtag(4n)
+		});
 	});
 	it('can save again after explicitly keeping its conflicting write', async () => {
 		const { note, key, store, transport, resources } = await setup();

@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
@@ -22,6 +23,7 @@ const setup = async () => {
 		note.userId,
 		workspaceCommandSchema,
 		workspaceRecordSchema,
+		rebaseWorkspaceRecord,
 		newName
 	);
 	const repository = outbox.cache;

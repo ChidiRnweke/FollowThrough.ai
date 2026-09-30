@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
@@ -24,7 +25,7 @@ const setup = async (
 	const record: WorkspaceRecord = { type: 'projects', value: project };
 	const identity: WorkspaceResourceIdentity = { type: 'projects', id: [project.id] };
 	const key = workspaceResourceKey(identity);
-	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>();
+	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(rebaseWorkspaceRecord);
 	const cache = new ResourceCache(project.userId, {
 		repository: repository.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()

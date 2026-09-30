@@ -8,6 +8,9 @@ description: Make navigation and offline editing use one local copy of workspace
 Accepted. The unreleased implementation was simplified before deployment. The current decision
 below replaces intermediate compatibility, body-download and granular recovery protocols.
 
+ADR 0042 amends write ancestry and conflict handling. The queue stacks stale drafts on the latest
+local edit, and it resends conflicts that do not overlap on a field.
+
 ## Context
 
 Users need to read and edit downloaded workspace records without a connection. Reopening an

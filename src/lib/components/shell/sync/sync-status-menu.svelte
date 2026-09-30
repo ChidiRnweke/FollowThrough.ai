@@ -28,11 +28,9 @@
 			online: resources.online,
 			pending: resources.pending.length,
 			sending: resources.pending.some((entry) => entry.delivery.kind === 'sending'),
+			// A retry resends on its own; only conflicts and rejections wait for a person.
 			review: resources.pending.filter(
-				(entry) =>
-					entry.delivery.kind === 'conflict' ||
-					entry.delivery.kind === 'rejected' ||
-					entry.delivery.kind === 'retry'
+				(entry) => entry.delivery.kind === 'conflict' || entry.delivery.kind === 'rejected'
 			).length,
 			failedDownloads: resources.failedDownloads,
 			downloading:

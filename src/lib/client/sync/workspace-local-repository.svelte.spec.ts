@@ -1,3 +1,4 @@
+import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { afterEach, expect, it } from 'vitest';
 import { z } from 'zod';
 import { syncEtag } from '$lib/models/sync';
@@ -14,8 +15,20 @@ const subscriptions: (() => void)[] = [];
 const setup = () => {
 	const name = `workspace-observation-${crypto.randomUUID()}`;
 
-	const writer = new DexieWorkspaceRepository('alice', z.string(), z.string(), name);
-	const follower = new DexieWorkspaceRepository('alice', z.string(), z.string(), name);
+	const writer = new DexieWorkspaceRepository(
+		'alice',
+		z.string(),
+		z.string(),
+		wholeValueRebase<string>(),
+		name
+	);
+	const follower = new DexieWorkspaceRepository(
+		'alice',
+		z.string(),
+		z.string(),
+		wholeValueRebase<string>(),
+		name
+	);
 	names.add(writer.database.name);
 	repositories.push(writer, follower);
 	return { writer, follower, name };
@@ -157,7 +170,13 @@ it('leaves a healthy observed projection idle until durable data changes', async
 
 it('never publishes another account’s projection to an existing account observer', async () => {
 	const { writer, follower, name } = setup();
-	const bob = new DexieWorkspaceRepository('bob', z.string(), z.string(), name);
+	const bob = new DexieWorkspaceRepository(
+		'bob',
+		z.string(),
+		z.string(),
+		wholeValueRebase<string>(),
+		name
+	);
 	repositories.push(bob);
 	names.add(bob.database.name);
 	await saveBody(writer, 1n, 'Alice private note');

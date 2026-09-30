@@ -47,6 +47,7 @@ import {
 	type WorkspaceResourceIdentity
 } from '$lib/models/workspace-sync';
 import { WorkspaceViews } from '$lib/controllers/workspace/views';
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';
 import { ResourceCache } from '$lib/client/sync/resource-cache';
 import { MutationQueue } from '$lib/client/sync/mutation-queue';
@@ -57,6 +58,12 @@ import {
 } from '$lib/client/sync/workspace-transport';
 
 const plain = <T>(value: T): T => $state.snapshot(value) as T;
+
+export interface StagedWrite {
+	readonly base: WriteBase<WorkspaceRecord> | null;
+	readonly basedOn: string;
+	readonly local: WorkspaceRecord | null;
+}
 
 export interface WorkspaceResourcesDependencies {
 	dispose?(): void;
@@ -374,13 +381,40 @@ export class WorkspaceResources {
 	}
 
 	async append(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<string> {
+		return (await this.stage(draft)).basedOn;
+	}
+	/**
+	 * Queue a write and return what the next edit is based on, as the queue stored it. The queue
+	 * may have stacked the write on a newer local edit and replayed its fields, so the caller's
+	 * own copy is not the version it now edits.
+	 */
+	async stage(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<StagedWrite> {
 		assertWorkspaceWriteIdentity(draft);
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
 		await this.initialize();
 		const operationId = await this.dependencies.writes.append(plain(draft));
 		await this.readLocal();
+		const staged = this.staged(draft, operationId);
 		void this.synchronize();
-		return operationId;
+		return staged;
+	}
+	private staged(
+		draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>,
+		operationId: string
+	): StagedWrite {
+		const entry = this.pending.find((pending) => pending.intent.operationId === operationId);
+		if (entry) return { base: entry.intent.base, basedOn: operationId, local: entry.intent.local };
+		const receipt = this.local?.writes.receipts.get(draft.key);
+		if (receipt?.operationId === operationId)
+			return receipt.resource.kind === 'found'
+				? {
+						base: receipt.resource.snapshot,
+						basedOn: operationId,
+						local: receipt.resource.snapshot.value
+					}
+				: { base: null, basedOn: operationId, local: null };
+		// Settled without a stored receipt: `uncertainWrite` reports it, and the caller keeps its copy.
+		return { base: draft.base, basedOn: operationId, local: draft.local };
 	}
 	setOnline(online: boolean): void {
 		this.dependencies.cache.setOnline(online);
@@ -406,7 +440,8 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 	const repository = new DexieWorkspaceRepository(
 		accountId,
 		workspaceCommandSchema,
-		workspaceRecordSchema
+		workspaceRecordSchema,
+		rebaseWorkspaceRecord
 	);
 	const cache = new ResourceCache(accountId, {
 		repository: {
@@ -683,14 +718,14 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
 				throw new Error('The edit belongs to a different resource');
 			if (content.local) this.valueOf(content.local);
-			const operationId = await this.resources.append({
+			const staged = await this.resources.stage({
 				...content,
 				operationId: crypto.randomUUID(),
 				key: this.key,
 				base: context.base,
 				basedOn: context.basedOn
 			});
-			this.current = { ...context, basedOn: operationId, local: content.local ?? context.local };
+			this.current = { ...staged, local: staged.local ?? context.local };
 			return { kind: 'saved', value: this.value };
 		} catch (error) {
 			this.error = error instanceof Error ? error.message : 'The local edit could not be saved';

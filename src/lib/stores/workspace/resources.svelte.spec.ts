@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
 import { flushSync } from 'svelte';
@@ -52,7 +53,10 @@ const setup = (
 	transport = new InMemorySyncTransport<typeof project>()
 ) => {
 	const repository = new InMemorySyncCache<typeof project>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, typeof project>(repository);
+	const outbox = new InMemoryOutbox<WorkspaceCommand, typeof project>(
+		rebaseWorkspaceRecord,
+		repository
+	);
 	const cache = new ResourceCache('alice', { repository: outbox.projectedCache, transport });
 	const writes = new MutationQueue<WorkspaceCommand, typeof project>('alice', {
 		repository: outbox,

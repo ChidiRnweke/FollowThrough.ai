@@ -1,3 +1,4 @@
+import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { afterEach, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -31,7 +32,10 @@ it('retains the observed note when offline restoration needs unavailable parent 
 	const record: WorkspaceRecord = { type: 'notes', value: note };
 	const identity = { type: 'notes', id: [note.id] } satisfies WorkspaceResourceIdentity;
 	const repository = new InMemorySyncCache<WorkspaceRecord>();
-	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(repository);
+	const outbox = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(
+		rebaseWorkspaceRecord,
+		repository
+	);
 	const cache = new ResourceCache(accountId, {
 		repository: outbox.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()
