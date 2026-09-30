@@ -101,3 +101,55 @@ it('renders the active note beyond the old eight-level rendering cutoff', async 
 	});
 	await expect.element(screen.getByText('Deep active note', { exact: true })).toBeVisible();
 });
+
+function folderWithNote(folderIndex: number, title: string) {
+	const folder = noteBuilder({
+		id: testNoteId(folderIndex),
+		kind: 'folder',
+		title,
+		document: { type: 'doc', content: [] },
+		plainText: ''
+	});
+	const note = noteBuilder({ id: testNoteId(folderIndex + 1), parentId: folder.id });
+	return { folder, note };
+}
+
+it('keeps a collapsed ancestor closed after the tree refreshes', async () => {
+	const { folder, note } = folderWithNote(40, 'Refreshed folder');
+	const screen = await render(ProjectTreeExpansionFixture, {
+		projects: [projectBuilder()],
+		notes: [folder, note],
+		activeNoteId: note.id
+	});
+	const toggle = screen.getByRole('button', { name: 'Refreshed folder', exact: true });
+	await toggle.click();
+	await screen.rerender({ notes: [folder, note] });
+	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('keeps a collapsed ancestor closed after the sidebar remounts', async () => {
+	const { folder, note } = folderWithNote(50, 'Remounted folder');
+	const props = { projects: [projectBuilder()], notes: [folder, note], activeNoteId: note.id };
+	const first = await render(ProjectTreeExpansionFixture, props);
+	await first.getByRole('button', { name: 'Remounted folder', exact: true }).click();
+	first.unmount();
+	const screen = await render(ProjectTreeExpansionFixture, props);
+	await expect
+		.element(screen.getByRole('button', { name: 'Remounted folder', exact: true }))
+		.toHaveAttribute('aria-expanded', 'false');
+});
+
+it('reveals the ancestors again when the active note changes', async () => {
+	const first = folderWithNote(60, 'First folder');
+	const second = folderWithNote(70, 'Second folder');
+	const notes = [first.folder, first.note, second.folder, second.note];
+	const screen = await render(ProjectTreeExpansionFixture, {
+		projects: [projectBuilder()],
+		notes,
+		activeNoteId: first.note.id
+	});
+	await screen.rerender({ activeNoteId: second.note.id });
+	await expect
+		.element(screen.getByRole('button', { name: 'Second folder', exact: true }))
+		.toHaveAttribute('aria-expanded', 'true');
+});
