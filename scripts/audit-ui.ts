@@ -359,6 +359,14 @@ const parseTags = (markup: string): Tag[] => {
 const COLORED_SIDE_BORDER = /(?<![-\w])border-(?:left|top|right|bottom)\s*:\s*([^;}]+)/g;
 const SIDE_BORDER_COLOR =
 	/var\(--color-(?:brand|primary|destructive|accent|success|warning)[\s),]|#[0-9a-fA-F]|\brgba?\(|\boklch\(/;
+// The same bar drawn without a border: a thin, colored `::before`/`::after`
+// pinned to the leading edge. The selected sidebar row once carried one past the
+// border-only check above. A 1px pseudo-element is a hairline divider (the
+// workspace tab separator), not a bar.
+const PSEUDO_RULE = /([^{};]*::(?:before|after)[^{};]*)\{([^{}]*)\}/g;
+const PSEUDO_EDGE_ANCHOR = /(?<![-\w])(?:inset-inline-start|left)\s*:\s*0\b/;
+const PSEUDO_THIN_WIDTH = /(?<![-\w])width\s*:\s*([\d.]+)px/;
+const PSEUDO_BACKGROUND = /(?<![-\w])background(?:-color)?\s*:\s*([^;}]+)/;
 
 /** CSS-level rules over a comment-stripped stylesheet; `at` maps offsets into the source file. */
 const cssRules = (
@@ -450,6 +458,20 @@ const cssRules = (
 	for (const match of css.matchAll(COLORED_SIDE_BORDER))
 		if (SIDE_BORDER_COLOR.test(match[1]!))
 			report('no-accent-bars', at(match.index), `colored edge border: ${match[0].trim()}`);
+	for (const match of css.matchAll(PSEUDO_RULE)) {
+		const body = match[2]!;
+		const width = PSEUDO_THIN_WIDTH.exec(body);
+		const background = PSEUDO_BACKGROUND.exec(body);
+		if (
+			PSEUDO_EDGE_ANCHOR.test(body) &&
+			width &&
+			Number(width[1]) >= 2 &&
+			Number(width[1]) <= 4 &&
+			background &&
+			SIDE_BORDER_COLOR.test(background[1]!)
+		)
+			report('no-accent-bars', at(match.index), 'colored edge bar drawn by a pseudo-element');
+	}
 	if (options.boxShadow)
 		for (const match of css.matchAll(/(?<![-\w])box-shadow\s*:\s*([^;}]+)/g))
 			if (!/^\s*none\b/.test(match[1]!))

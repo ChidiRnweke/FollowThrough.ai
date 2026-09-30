@@ -280,6 +280,34 @@ describe('no-accent-bars', () => {
 	it('rejects a hand-written colored side border in CSS', () => {
 		expect(css('.a { border-left: 3px solid var(--color-success) }')).toHaveLength(1);
 	});
+	it('rejects a colored edge bar drawn by a pseudo-element', () => {
+		expect(
+			css(
+				".a[data-active='true']::before { content: ''; position: absolute; inset-inline-start: 0; width: 2px; background-color: var(--color-brand); }"
+			)
+		).toHaveLength(1);
+	});
+	it('allows a neutral pseudo-element edge', () => {
+		expect(
+			css(
+				".a::before { content: ''; position: absolute; left: 0; width: 2px; background-color: var(--color-border); }"
+			)
+		).toHaveLength(0);
+	});
+	it('allows a 1px colored pseudo-element divider', () => {
+		expect(
+			css(
+				".a::after { content: ''; position: absolute; left: 0; width: 1px; background-color: var(--color-brand); }"
+			)
+		).toHaveLength(0);
+	});
+	it('allows a wide colored pseudo-element', () => {
+		expect(
+			css(
+				".a::after { content: ''; position: absolute; left: 0; width: 16px; background-color: var(--color-brand); }"
+			)
+		).toHaveLength(0);
+	});
 });
 
 describe('no-ad-hoc-shadow', () => {

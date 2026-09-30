@@ -151,6 +151,10 @@
 - Use the installed shadcn-svelte controls for interactive elements. Domain wrappers may encode
   stable variants, but a wrapper that fights a shadcn base class is the wrong tool — where a
   control needs to escape its base scale, write the bare element.
+- **No edge accent bars.** Selection and emphasis are a wash plus brand text, never a colored
+  stripe on the edge of a row, card or block — whether drawn as a border or as a thin
+  `::before`/`::after`. Neutral quote and indent rules (`border-l-2 border-border`) are typography,
+  not highlights, and stay.
 - **Hairlines are inset rings; scroll content keeps a gutter.** A structural hairline is a
   `ring-inset ring-1` box-shadow (Card.Root, kanban columns), never an outward `ring-1` or
   `border` unless the element deliberately reads as in-flow. Content that can touch a
