@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.5...v2.0.6) (2026-09-30)
+
+
+### Bug Fixes
+
+* **sync:** rebase local writes instead of reporting false conflicts ([#291](https://github.com/ChidiRnweke/FollowThrough.ai/issues/291)) ([2e18a19](https://github.com/ChidiRnweke/FollowThrough.ai/commit/2e18a19b515990c0ea4bb6dc514fe2311f662546))
+
 ## [2.0.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.4...v2.0.5) (2026-09-30)
 
 
