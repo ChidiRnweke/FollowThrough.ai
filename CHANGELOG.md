@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.1...v2.0.2) (2026-09-30)
+
+
+### Bug Fixes
+
+* **projects:** keep collapsed tree folders closed across sidebar reopen ([#285](https://github.com/ChidiRnweke/FollowThrough.ai/issues/285)) ([400c172](https://github.com/ChidiRnweke/FollowThrough.ai/commit/400c172578fb0192c60c05b28eb92bb4fcfa1e85))
+
 ## [2.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.0...v2.0.1) (2026-09-28)
 
 
