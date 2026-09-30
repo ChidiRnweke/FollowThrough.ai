@@ -504,12 +504,13 @@ export const commands: Record<string, EdraCommand[]> = {
 			name: 'table',
 			tooltip: strings.command.table,
 			onClick: (editor) => {
+				// Inside a table the button removes it; cancelling must not fall through and
+				// nest a new table in the one the author just chose to keep.
 				if (editor.isActive('table')) {
-					const del = confirm('Do you really want to delete this table??');
-					if (del) {
+					if (confirm('Do you really want to delete this table?')) {
 						editor.chain().focus().deleteTable().run();
-						return;
 					}
+					return;
 				}
 				editor.chain().focus().insertTable({ cols: 3, rows: 3, withHeaderRow: false }).run();
 			},

@@ -5,6 +5,7 @@ import { Editor, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { GapCursor } from '@tiptap/pm/gapcursor';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { CellSelection } from '@tiptap/pm/tables';
 import NoteEditor from './note-editor.svelte';
 import '../../../routes/layout.css';
 import {
@@ -548,6 +549,42 @@ describe('Deselect on editor blur', () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(screen.component.getEditor()?.state.selection.empty).toBe(true);
+	});
+
+	// A row grip selects cells, and a cell selection starts at a cell boundary: a text
+	// selection built there is invalid, and ProseMirror is left with no caret to type at.
+	it('collapses a table row selection onto text when the editor loses focus', async () => {
+		const cell = (text: string) => ({
+			type: 'tableCell',
+			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+		});
+		const screen = renderEditor({
+			document: documentWith({
+				type: 'table',
+				content: [
+					{ type: 'tableRow', content: [cell('a'), cell('b')] },
+					{ type: 'tableRow', content: [cell('c'), cell('d')] }
+				]
+			}) as ProseMirrorDocument
+		});
+		await untilMounted();
+		const editor = screen.component.getEditor();
+		if (!editor) throw new Error('The editor never mounted.');
+		// Into a cell rather than the editable's centre, which lands on no focusable text.
+		const firstCell = screen.container.querySelector<HTMLElement>('td p');
+		if (!firstCell) throw new Error('The table never rendered.');
+		await userEvent.click(firstCell);
+		const cells: number[] = [];
+		editor.state.doc.descendants((node, pos) => {
+			if (node.type.name === 'tableCell') cells.push(pos);
+		});
+		editor.view.dispatch(
+			editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0], cells[1]))
+		);
+		blurEditor(screen);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(editor.state.selection.$from.parent.inlineContent).toBe(true);
 	});
 
 	it('keeps the selection while an action is running', async () => {
