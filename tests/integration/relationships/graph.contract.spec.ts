@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';

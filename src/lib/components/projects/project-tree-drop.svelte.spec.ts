@@ -28,9 +28,8 @@ type Point = { x: number; y: number };
 // way to the shadow row); the drag then keeps aiming where it last was.
 type Aim = () => Point | undefined;
 
-// svelte-dnd-action listens for mousedown on the grip and mouse moves on the
-// window, and samples the pointer every 200ms, so the drag moves in small steps
-// and rests before release.
+// svelte-dnd-action samples the pointer on an interval, so move gradually, stop
+// when the target is reached, and let the zone settle before releasing.
 async function dragTo(grip: Element, aim: Aim): Promise<void> {
 	const start = centre(grip);
 	let goal = start;
@@ -42,14 +41,15 @@ async function dragTo(grip: Element, aim: Aim): Promise<void> {
 	let at = start;
 	for (let step = 0; step < 80; step++) {
 		goal = aim() ?? goal;
+		const dx = goal.x - at.x;
 		const dy = goal.y - at.y;
+		if (Math.abs(dx) < 2 && Math.abs(dy) < 3) break;
 		at = { x: at.x + (goal.x - at.x) / 4, y: at.y + Math.sign(dy) * Math.min(Math.abs(dy), 3) };
 		mouse('mousemove', at);
 		await pause(30);
 	}
-	await pause(450);
-	mouse('mouseup', at);
 	await pause(300);
+	mouse('mouseup', at);
 }
 
 async function drop(
@@ -59,13 +59,18 @@ async function drop(
 	target: (container: HTMLElement) => Aim
 ): Promise<TreeDrop[]> {
 	const drops: TreeDrop[] = [];
+	const finalized = Promise.withResolvers<void>();
 	const screen = await render(ProjectTreeDropFixture, {
 		projects: [projectBuilder()],
 		notes,
 		openFolders,
-		ondrop: (received: TreeDrop) => drops.push(received)
+		ondrop: (received: TreeDrop) => {
+			drops.push(received);
+			finalized.resolve();
+		}
 	});
 	await dragTo(screen.getByLabelText(`Reorder ${dragged}`).element(), target(screen.container));
+	await finalized.promise;
 	return drops;
 }
 

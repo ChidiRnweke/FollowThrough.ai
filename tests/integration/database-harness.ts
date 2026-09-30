@@ -1,7 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import * as schema from '$lib/server/db/schema/registry';
 import { toNote } from '$lib/server/db/mappers';
-import { afterAll, beforeAll, inject } from 'vitest';
 import type { AgentRunId } from '$lib/models/agent';
 import type { Artifact, ArtifactId } from '$lib/models/deliverables';
 import type { Note, NoteId } from '$lib/models/notes';
@@ -10,14 +9,13 @@ import type { Provenance, ProvenanceId } from '$lib/models/provenance';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import type { PostgresDatabaseContext } from '$lib/server/db/testcontainer';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { context } from './database-context';
 
-export let context: PostgresDatabaseContext;
+export { context } from './database-context';
 
 export const actor = (suffix: string) => ({
 	userId: `10000000-0000-4000-8000-${suffix.padStart(12, '0')}` as UserId
@@ -120,11 +118,3 @@ export const seedArtifact = async (
 	await new ArtifactRecords(context.db).insert(owner, artifact);
 	return artifact;
 };
-
-beforeAll(() => {
-	context = connectPostgresTestDatabase(inject('postgresUrl'));
-});
-
-afterAll(async () => {
-	await context?.close();
-});

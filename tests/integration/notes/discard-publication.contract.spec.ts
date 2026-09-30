@@ -4,7 +4,7 @@ import type { AtomicOperation } from '$lib/models/workspace';
 import type { Note } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';

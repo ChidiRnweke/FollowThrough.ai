@@ -694,6 +694,8 @@ describe('Postgres tool-embedding repository invariants', () => {
 		embedding,
 		embeddingModel: 'contract-model'
 	});
+	const seedRankableTools = (repository: ToolEmbeddingRecords) =>
+		repository.upsert([row('contract_alpha', basis(0)), row('contract_beta', basis(1))]);
 
 	it('round-trips seeded rows', async () => {
 		const repository = new ToolEmbeddingRecords(context.db);
@@ -704,6 +706,7 @@ describe('Postgres tool-embedding repository invariants', () => {
 
 	it('ranks by cosine distance to the query', async () => {
 		const repository = new ToolEmbeddingRecords(context.db);
+		await seedRankableTools(repository);
 		const ranked = await repository.rankByVector(
 			basis(0),
 			['contract_beta', 'contract_alpha'],
@@ -715,6 +718,7 @@ describe('Postgres tool-embedding repository invariants', () => {
 
 	it('ranks only the requested names and caps the result', async () => {
 		const repository = new ToolEmbeddingRecords(context.db);
+		await seedRankableTools(repository);
 		const ranked = await repository.rankByVector(
 			basis(0),
 			['contract_beta', 'contract_alpha', 'contract_not_seeded'],

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { initialSyncCursor } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { context, seedNote } from '../database-harness';
 
 describe('compact account synchronization journal', () => {

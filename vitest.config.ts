@@ -189,7 +189,11 @@ export default defineConfig({
 					name: 'contracts',
 					environment: 'node',
 					include: ['tests/integration/**/*.contract.spec.ts'],
+					setupFiles: ['./tests/integration/database-setup.ts'],
 					globalSetup: ['./src/lib/server/db/contract-global-setup.ts'],
+					// These contracts share a large repository and schema graph. Keep files
+					// serial, but reuse that graph; an isolated verification lane runs on pushes.
+					isolate: false,
 					fileParallelism: false,
 					maxWorkers: 1
 				}
