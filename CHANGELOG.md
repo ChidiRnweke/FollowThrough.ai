@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.5](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.4...v2.0.5) (2026-09-30)
+
+
+### Bug Fixes
+
+* **notes:** make table row and column menus act on the selected row ([#290](https://github.com/ChidiRnweke/FollowThrough.ai/issues/290)) ([91d86ef](https://github.com/ChidiRnweke/FollowThrough.ai/commit/91d86ef90e1d57819369630553ec8a0a5d1487e9))
+
 ## [2.0.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.3...v2.0.4) (2026-09-30)
 
 
