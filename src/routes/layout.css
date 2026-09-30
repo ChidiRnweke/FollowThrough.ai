@@ -630,7 +630,6 @@
 	   answer the same question ("which one am I on?"), so they must answer it the
 	   same way. */
 	&[aria-current='page'] {
-		position: relative;
 		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
 		color: var(--color-brand);
 		font-weight: 500;
@@ -640,15 +639,6 @@
 	   silently dropped and dark mode would keep the light strength. */
 	.dark &[aria-current='page'] {
 		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
-	}
-	&[aria-current='page']::before {
-		content: '';
-		position: absolute;
-		inset-block: 0.25rem;
-		inset-inline-start: 0;
-		width: 2px;
-		border-radius: 1px;
-		background-color: var(--color-brand);
 	}
 }
 
@@ -1338,9 +1328,7 @@
 	}
 	.suggestion-inline-widget {
 		margin: 0.25rem 0 0.5rem;
-		/* audit-allow: no-accent-bars — The accept/dismiss widget is styled as a diff insertion; the success edge is the diff marker, not decoration. */
-		border-left: 3px solid var(--color-success);
-		border-radius: 0 0.375rem 0.375rem 0;
+		border-radius: 0.375rem;
 		background-color: color-mix(in oklab, var(--color-success) 8%, transparent);
 		padding: 0.375rem 0.625rem;
 		font-size: 0.875rem;
@@ -1463,20 +1451,6 @@
 	[data-sidebar='menu-button'][data-active='true'] > svg,
 	[data-sidebar='menu-sub-button'][data-active='true'] > svg {
 		color: var(--color-brand);
-	}
-	/* A hard left edge, because the wash alone cannot carry it in light mode: 10%
-	   teal on paper is deliberately gentle, and gentle is what made the old light
-	   state unreadable. Only ever one row at a time, so this marks a position
-	   rather than striping the rail. */
-	[data-sidebar='menu-button'][data-active='true']::before,
-	[data-sidebar='menu-sub-button'][data-active='true']::before {
-		content: '';
-		position: absolute;
-		inset-block: 0.25rem;
-		inset-inline-start: 0;
-		width: 2px;
-		border-radius: 1px;
-		background-color: var(--color-brand);
 	}
 
 	/* Breadcrumb links are the way back — they are live, so they carry the brand
