@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.4](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.3...v2.0.4) (2026-09-30)
+
+
+### Bug Fixes
+
+* **projects:** drop notes onto folders and into empty folders ([#284](https://github.com/ChidiRnweke/FollowThrough.ai/issues/284)) ([7cb5d53](https://github.com/ChidiRnweke/FollowThrough.ai/commit/7cb5d5396c0515bc9185c3993576f4b474c36761))
+
 ## [2.0.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.2...v2.0.3) (2026-09-30)
 
 
