@@ -36,11 +36,14 @@ test.
 
 Every test owns and releases the resources it creates. Destroy editors, remove appended DOM, close
 and delete IndexedDB databases, restore environment variables and fake timers, and stop external
-processes. Tests must pass in random order and in the fully isolated verification lane.
+processes. Tests must pass in random order and in the fully isolated verification lane. The serial
+PostgreSQL contract lane reuses modules for speed; `pnpm test:verify` and master pushes run its
+isolated counterpart.
 
 ## Commands
 
 - `pnpm test` — default Node and focused Chromium feedback.
+- `pnpm test:node` — Node-only test project, used in CI alongside the full browser suite.
 - `pnpm test:topology` — runs `scripts/audit-topology.ts`, the repository-specific structural audit.
   It resolves imports, enforces capability entry points and Edra/server boundaries, and rejects stale
   Vitest includes and maintained documentation paths.
@@ -51,7 +54,8 @@ processes. Tests must pass in random order and in the fully isolated verificatio
   Chisel; they do not replace it or provide a reason to suppress a Chisel violation.
 - `pnpm test:architecture` — runs topology, test-quality, and Chisel checks together.
 - `pnpm test:browser:full` — every Chromium component and browser-storage regression.
-- `pnpm test:contracts` — PostgreSQL schema and repository contracts.
+- `pnpm test:contracts` — serial PostgreSQL contracts with a shared module graph for fast feedback.
+- `pnpm test:contracts:isolated` — the same PostgreSQL contracts with per-file module isolation.
 - `pnpm test:e2e` — application journeys against the Vite dev server. Reuses a dev server already
   running on 5173 (`pnpm dev`, Infisical config), or auto-starts one. Auth stays enabled: a global
   setup mints/caches a session for the local user in `tests/.auth/state.json` (delete it to force a

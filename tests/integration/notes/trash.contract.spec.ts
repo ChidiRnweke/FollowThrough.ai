@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { NoteId } from '$lib/models/notes';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';

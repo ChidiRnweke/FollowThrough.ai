@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { context, replaceNoteFixture, seedNote } from '../database-harness';

@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { AgentRunId, ConversationId, WorkflowRunContext } from '$lib/models/agent';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';

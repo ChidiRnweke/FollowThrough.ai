@@ -8,7 +8,7 @@ import {
 	type SuggestionsDependencies
 } from '$lib/server/controllers/suggestions/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';

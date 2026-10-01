@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import type { NoteId } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';

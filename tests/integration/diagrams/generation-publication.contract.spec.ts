@@ -4,7 +4,7 @@ import postgres from 'postgres';
 import {
 	connectPostgresTestDatabase,
 	type PostgresDatabaseContext
-} from '$lib/server/db/testcontainer';
+} from '$lib/server/db/postgres-test-context';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import {

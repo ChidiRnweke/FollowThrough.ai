@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { context, seedNote } from '../database-harness';
 

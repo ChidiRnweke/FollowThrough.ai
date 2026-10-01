@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { connectPostgresTestDatabase } from '$lib/server/db/testcontainer';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
