@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.8](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.7...v2.0.8) (2026-10-03)
+
+
+### Continuous Integration
+
+* **testing:** use pinned Playwright image for browser checks ([#296](https://github.com/ChidiRnweke/FollowThrough.ai/issues/296)) ([b29d597](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b29d5975b33e529d8f8294acdbb2460409903f02))
+
 ## [2.0.7](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.6...v2.0.7) (2026-10-01)
 
 
