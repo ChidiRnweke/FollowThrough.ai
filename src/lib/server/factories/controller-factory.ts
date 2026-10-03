@@ -12,6 +12,7 @@ import type { FeedbackController } from '../controllers/feedback/controller';
 import type { InlineSuggestionsController } from '../controllers/inline-suggestions/controller';
 import type { RetrievalController } from '../controllers/knowledge-search/controller';
 import type { MemoryController } from '../controllers/memory/controller';
+import type { WidgetsController } from '../controllers/widgets/controller';
 import type { NotesController } from '../controllers/notes/controller';
 import type { ProjectsController } from '../controllers/projects/controller';
 import type { ReferencesController } from '../controllers/references/controller';
@@ -43,6 +44,7 @@ export interface ControllerFactory {
 	deliverables(): DeliverablesController;
 	trustPolicies(): TrustPoliciesController;
 	memory(): MemoryController;
+	widgets(): WidgetsController;
 	retrieval(): RetrievalController;
 	inlineSuggestions(): InlineSuggestionsController;
 	feedback(): FeedbackController;

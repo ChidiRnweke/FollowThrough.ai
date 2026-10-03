@@ -662,6 +662,13 @@ export interface ProseMirrorTodoNode {
 	readonly content?: readonly ProseMirrorNode[];
 }
 
+/** A widget embedded by reference (ADR 0043). */
+export interface ProseMirrorWidgetNode {
+	readonly type: 'widgetNode';
+	readonly attrs?: { readonly widgetId?: string | null };
+	readonly content?: readonly ProseMirrorNode[];
+}
+
 export interface ProseMirrorCalloutNode {
 	readonly type: 'callout';
 	readonly attrs?: { readonly emoji?: string };
@@ -703,6 +710,7 @@ export type ProseMirrorNode =
 	| ProseMirrorMermaidNode
 	| ProseMirrorDrawioNode
 	| ProseMirrorTodoNode
+	| ProseMirrorWidgetNode
 	| ProseMirrorCalloutNode
 	| ProseMirrorBlockMathNode
 	| ProseMirrorInlineMathNode
@@ -941,6 +949,13 @@ const knownNodeSchema = z.lazy(() =>
 			.strict(),
 		z
 			.object({
+				type: z.literal('widgetNode'),
+				attrs: attrs({ widgetId: z.string().nullish() }).optional(),
+				content: nodeContent()
+			})
+			.strict(),
+		z
+			.object({
 				type: z.literal('callout'),
 				attrs: attrs({ emoji: z.string().optional() }).optional(),
 				content: nodeContent()
@@ -992,6 +1007,7 @@ const KNOWN_NODE_TYPES: ReadonlySet<string> = new Set([
 	'mermaid',
 	'drawio',
 	'todoNode',
+	'widgetNode',
 	'callout',
 	'blockMath',
 	'inlineMath'

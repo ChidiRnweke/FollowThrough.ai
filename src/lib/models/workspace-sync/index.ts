@@ -28,7 +28,8 @@ export const workspaceResourceTypeSchema = z.enum([
 	'memory_entries',
 	'project_templates',
 	'export_settings',
-	'artifacts'
+	'artifacts',
+	'widgets'
 ]);
 export type WorkspaceResourceType = z.infer<typeof workspaceResourceTypeSchema>;
 
@@ -56,7 +57,8 @@ export const workspaceResourceIdentitySchema = z.discriminatedUnion('type', [
 			'user_preferences',
 			'memory_entries',
 			'project_templates',
-			'artifacts'
+			'artifacts',
+			'widgets'
 		]),
 		id: z.tuple([z.string().uuid()])
 	}),

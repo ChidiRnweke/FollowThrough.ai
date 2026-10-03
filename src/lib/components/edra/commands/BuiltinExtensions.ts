@@ -4,7 +4,14 @@ import { PluginKey } from '@tiptap/pm/state';
 import type { EdraCommand } from './commands.js';
 import type { Component } from 'svelte';
 import { SvelteNodeViewRenderer } from './SvelteNodeViewRenderer.js';
-import { CalloutNode, DrawioNode, IFrameNode, MermaidNode, TodoNodeBase } from './nodes.js';
+import {
+	CalloutNode,
+	DrawioNode,
+	IFrameNode,
+	MermaidNode,
+	TodoNodeBase,
+	WidgetNodeBase
+} from './nodes.js';
 
 /**
  * Editor-side wiring for the nodes declared in `nodes.ts`.
@@ -47,6 +54,37 @@ export const Callout = (component: Component<NodeViewProps>) =>
 
 export const TodoNode = (component: Component<NodeViewProps>) =>
 	withNodeView(TodoNodeBase, component);
+
+export const WidgetNode = (component: Component<NodeViewProps>) =>
+	withNodeView(WidgetNodeBase, component);
+
+/**
+ * The hook the "Widget" command calls. Creating a widget is a workspace write the editor
+ * knows nothing about, so the note editor supplies the handler, which creates the widget and
+ * inserts its reference.
+ */
+export interface WidgetInserterStorage {
+	insert?: (editor: Editor) => void;
+}
+
+declare module '@tiptap/core' {
+	interface Storage {
+		widgetInserter: WidgetInserterStorage;
+	}
+}
+
+export const WidgetInserter = Extension.create<{ insert?: (editor: Editor) => void }>({
+	name: 'widgetInserter',
+	addOptions() {
+		return { insert: undefined };
+	},
+	addStorage(): WidgetInserterStorage {
+		return { insert: undefined };
+	},
+	onBeforeCreate() {
+		this.storage.insert = this.options.insert;
+	}
+});
 
 /**
  * The hook the "Project diagram" command calls.

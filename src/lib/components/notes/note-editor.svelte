@@ -37,7 +37,11 @@
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
+	import { WidgetInserter, WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
+	import { WidgetNodeView } from '$lib/components/widgets';
+	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import type { Editor } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { Editor as TiptapEditor } from '@tiptap/core';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
@@ -346,6 +350,25 @@
 	/** Jump to a heading. Exported so the outline rail can drive the editor. */
 	let pickingProjectDiagram = $state(false);
 
+	/** Creates a checklist widget in this note's project and embeds it at the caret. */
+	async function insertWidget(
+		target: TiptapEditor
+	): Promise<{ kind: 'inserted' } | { kind: 'failure'; message: string }> {
+		try {
+			const widgetId = await widgetEdits.createFromTemplate({
+				template: 'checklist',
+				projectId,
+				sourceNoteId: noteId
+			});
+			target.chain().focus().setWidget(widgetId).run();
+			return { kind: 'inserted' };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'The widget could not be created';
+			toast.error(message);
+			return { kind: 'failure', message };
+		}
+	}
+
 	/** Inserts the chosen diagram at the caret as a live reference. */
 	function insertProjectDiagram(diagramId: DiagramId): void {
 		editor?.chain().focus().setDrawio(diagramId).run();
@@ -435,7 +458,11 @@
 				if (initialized) onchange?.();
 			}
 		},
-		[TodoNode(TodoNodeView)]
+		[
+			TodoNode(TodoNodeView),
+			WidgetNode(WidgetNodeView),
+			WidgetInserter.configure({ insert: (target) => void insertWidget(target) })
+		]
 	);
 	$effect(() => {
 		editor?.commands.setInlineSuggestionsEnabled(inlineSuggestionsEnabled);

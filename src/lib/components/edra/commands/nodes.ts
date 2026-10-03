@@ -44,6 +44,7 @@ declare module '@tiptap/core' {
 		mermaid: { setMermaid: (source: string) => ReturnType };
 		drawio: { setDrawio: (diagramReference: string) => ReturnType };
 		callout: { setCallout: () => ReturnType };
+		widgetNode: { setWidget: (widgetId: string) => ReturnType };
 	}
 }
 
@@ -354,6 +355,38 @@ export const TodoNodeBase = Node.create({
 		return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'todo-node' })];
 	},
 	...createAtomBlockMarkdownSpec({ nodeName: 'todoNode', allowedAttributes: ['todoId'] })
+});
+
+/**
+ * A widget embedded in a note (ADR 0043). The widget lives in its own table and opens in its
+ * own tab; the note holds only the reference, so many notes can show one widget.
+ */
+export const WidgetNodeBase = Node.create({
+	name: 'widgetNode',
+	group: 'block',
+	atom: true,
+	draggable: true,
+	selectable: true,
+	addAttributes() {
+		return { widgetId: { default: null } };
+	},
+	parseHTML() {
+		return [{ tag: 'div[data-type="widget-node"]' }];
+	},
+	renderHTML({ HTMLAttributes }) {
+		return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'widget-node' })];
+	},
+	...createAtomBlockMarkdownSpec({ nodeName: 'widgetNode', allowedAttributes: ['widgetId'] }),
+	addCommands() {
+		return {
+			setWidget:
+				(widgetId) =>
+				({ commands }) =>
+					// The paragraph after it takes the caret, so typing continues below the widget
+					// instead of selecting the widget and raising the text toolbar over it.
+					commands.insertContent([{ type: this.name, attrs: { widgetId } }, { type: 'paragraph' }])
+		};
+	}
 });
 
 export const CalloutNode = Node.create({

@@ -470,6 +470,27 @@ export const TOOL_DESCRIPTIONS = [
 		retrievalText: 'read the current diagram source on the canvas before revising it'
 	},
 	{
+		name: 'read_widget',
+		classification: 'read',
+		description:
+			'Read a widget: its title, its layout (a json-render element map under `root` and `elements`), its data (the state the layout binds to), and the revision of each. Read it before editing, and send the revision you read with the edit.',
+		retrievalText: 'read a widget checklist tracker layout and data embedded in a note'
+	},
+	{
+		name: 'edit_widget_data',
+		classification: 'mutation',
+		description:
+			'Change the data of a widget without changing how it looks, such as ticking a checklist item or updating a number. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the data read by read_widget, for example [{"op":"replace","path":"/items/0/done","value":true}]. Send expectedDataRevision from that read. A stale revision fails: read the widget again and retry.',
+		retrievalText: 'update widget data tick checklist item change tracker value'
+	},
+	{
+		name: 'edit_widget_layout',
+		classification: 'mutation',
+		description:
+			'Change the structure of a widget: add, remove or reconfigure elements. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the layout read by read_widget. Every element needs `type`, `props` and `children` (an empty array for a leaf). Only these components exist: Stack, Card, Heading, Text, Checkbox, Progress, Metric. Send expectedLayoutRevision from that read. A rejected layout returns the problems to fix.',
+		retrievalText: 'change widget layout add remove element restructure widget'
+	},
+	{
 		name: 'search_icons',
 		classification: 'read',
 		description:

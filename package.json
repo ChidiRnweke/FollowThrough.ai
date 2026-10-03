@@ -123,6 +123,8 @@
 		"@aws-sdk/s3-request-presigner": "^3.1087.0",
 		"@floating-ui/dom": "^1.8.0",
 		"@infisical/sdk": "^5.0.2",
+		"@json-render/core": "0.21.0",
+		"@json-render/svelte": "0.21.0",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@openai/agents": "^0.13.2",
 		"@openrouter/sdk": "^0.9.11",

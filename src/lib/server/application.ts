@@ -29,6 +29,7 @@ import { createSuggestionsCapability } from './factories/capabilities/suggestion
 import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
 import { createSkillsCapability } from './factories/capabilities/skills-capability-factory';
 import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
+import { createWidgetsCapability } from './factories/capabilities/widgets-capability-factory';
 import { createAttachmentsCapability } from './factories/capabilities/attachments-capability-factory';
 import { createDeliverablesCapability } from './factories/capabilities/deliverables-capability-factory';
 import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
@@ -194,6 +195,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		projects: projectRepository,
 		notes: noteRepository
 	});
+	const widgets = createWidgetsCapability({ db, projects: projectRepository }).library;
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
@@ -593,6 +595,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionAccepter: suggestions,
 			suggestionEffects: suggestionCapability.effects,
 			trustPolicyEvaluator: trust,
+			transactionRunner
+		},
+		widgets: {
+			syncMutations: synchronization.mutations,
+			syncRetry: synchronization.mutationRetry,
+			widgetReader: widgets,
+			widgetLister: widgets,
+			widgetWriter: widgets,
 			transactionRunner
 		},
 		projects: {

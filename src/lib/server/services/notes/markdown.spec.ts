@@ -184,6 +184,7 @@ describe('Note Markdown round trip', () => {
 		['a callout', { type: 'callout', attrs: { emoji: '💡' }, content: [paragraph('mind this')] }],
 		['a draw.io reference', { type: 'drawio', attrs: { diagramId: 'diagram-7' } }],
 		['a todo reference', { type: 'todoNode', attrs: { todoId: 'todo-3' } }],
+		['a widget reference', { type: 'widgetNode', attrs: { widgetId: 'widget-4' } }],
 		[
 			'a code block',
 			{ type: 'codeBlock', attrs: { language: 'ts' }, content: [{ type: 'text', text: 'a' }] }
@@ -313,6 +314,7 @@ const NODE_FIXTURES: Readonly<Record<ModelledNodeType, ProseMirrorNode>> = {
 	mermaid: { type: 'mermaid', attrs: { width: '100%' }, content: [text('graph TD')] },
 	drawio: { type: 'drawio', attrs: { diagramId: 'diagram-7' } },
 	todoNode: { type: 'todoNode', attrs: { todoId: 'todo-3' } },
+	widgetNode: { type: 'widgetNode', attrs: { widgetId: 'widget-4' } },
 	callout: { type: 'callout', attrs: { emoji: '💡' }, content: [para('mind this')] },
 	blockMath: { type: 'blockMath', attrs: { latex: 'x^2' } },
 	inlineMath: {

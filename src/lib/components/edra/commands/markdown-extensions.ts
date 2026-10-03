@@ -9,7 +9,8 @@ import {
 	IFrameNode,
 	MermaidNode,
 	NoteLinkMark,
-	TodoNodeBase
+	TodoNodeBase,
+	WidgetNodeBase
 } from './nodes.js';
 // Imported from the schema-only modules, not the `*Extended` ones: those attach
 // Svelte node views, and this module is loaded by the server and the worker.
@@ -45,6 +46,7 @@ export const noteMarkdownExtensions: Extensions = [
 	DrawioNode,
 	CalloutNode,
 	TodoNodeBase,
+	WidgetNodeBase,
 	AIHighlightNode,
 	NoteLinkMark
 ];

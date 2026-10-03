@@ -51,6 +51,9 @@ export const pushWorkspaceMutation = command(
 			case 'restoreDiagram':
 			case 'deleteDiagram':
 				return controllers.diagramStudio().synchronize(actor, { ...mutation, command });
+			case 'createWidget':
+			case 'editWidget':
+				return controllers.widgets().synchronize(actor, { ...mutation, command });
 			case 'createProject':
 			case 'renameProject':
 			case 'archiveProject':

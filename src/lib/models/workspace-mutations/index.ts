@@ -5,6 +5,7 @@ import { type DiagramId } from '$lib/models/diagrams';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import { syncEtagSchema } from '$lib/models/sync';
+import { widgetDraftSchema, widgetEditSchema } from '$lib/models/widgets';
 import {
 	resourceDataSchemas,
 	noteRecordSchema,
@@ -26,6 +27,8 @@ const diagramId = z
 	.transform((value) => value as DiagramId);
 
 const memoryEntryId = resourceDataSchemas.memory_entries.shape.id;
+
+const widgetId = resourceDataSchemas.widgets.shape.id;
 
 const agentPreferencePatchSchema = resourceDataSchemas.agent_preferences
 	.pick({
@@ -193,7 +196,15 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 	}),
 	z.object({ kind: z.literal('archiveDiagram'), diagramId }),
 	z.object({ kind: z.literal('restoreDiagram'), diagramId }),
-	z.object({ kind: z.literal('deleteDiagram'), diagramId })
+	z.object({ kind: z.literal('deleteDiagram'), diagramId }),
+	z.object({
+		kind: z.literal('createWidget'),
+		id: widgetId,
+		projectId,
+		sourceNoteId: noteId.optional(),
+		draft: widgetDraftSchema
+	}),
+	z.object({ kind: z.literal('editWidget'), widgetId, edit: widgetEditSchema })
 ]);
 
 export type WorkspaceCommand = z.infer<typeof workspaceCommandSchema>;
@@ -253,6 +264,8 @@ export type DiagramMutationRequest = MutationFor<
 	| 'restoreDiagram'
 	| 'deleteDiagram'
 >;
+
+export type WidgetMutationRequest = MutationFor<'createWidget' | 'editWidget'>;
 
 export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('proven'), proof: appliedWriteProofSchema }),
