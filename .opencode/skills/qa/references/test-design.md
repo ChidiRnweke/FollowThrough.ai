@@ -1,133 +1,123 @@
 # Test design
 
-Use this reference for structure, fixtures, naming, parameterization, and independent expected
-results. Citations refer to the [book](sources.md).
+Use arrange, act, assert. Keep one behavior and all its relevant outcomes in one scenario.
+The examples below use TypeScript and a Jest-style assertion API; adapt syntax to the project's
+runner. These are independent examples, not repository requirements.
 
-## One behavior, all meaningful outcomes
+## A complete output test
 
-Use arrange, act, assert (AAA), or the equivalent given, when, then:
+Production contract: an invitation expires at its deadline, including equality.
 
-1. Arrange the scenario and the system under test (SUT).
-2. Act on the behavior through its production-facing entry point.
-3. Assert the meaningful outcomes against independently established expectations.
+```typescript
+function canAcceptInvitation(expiresAt: number, now: number): boolean {
+	return now < expiresAt;
+}
 
-One behavior can produce several outcomes. The book explicitly rejects counting assertions
-as a proxy for focus. Keep related outputs, state changes, and external effects together when
-they describe the same action. Split tests that perform unrelated actions or tell separate
-stories. (Ch. 3, §§3.1.1–3.1.5, pp. 42–47.)
+it('an invitation cannot be accepted at its expiry instant', () => {
+	const expiresAt = 100;
+	const now = 100;
 
-Original language-neutral example:
+	const accepted = canAcceptInvitation(expiresAt, now);
 
-```text
-scenario: confirming a reservation uses its capacity
-arrange: capacity = 5, requested places = 2
-act: confirmation = reserve(requested places)
-assert: confirmation is accepted
-assert: remaining capacity is 3
+	expect(accepted).toBe(false);
+});
 ```
 
-Those assertions describe one successful reservation. Adding a cancellation and more
-assertions would describe another action. An object comparison can make a cohesive result
-easier to read, but do not pack unrelated claims together or hide assertions to evade a checker.
+The independent expected value detects an accidental `<=`. Add a just-before case if acceptance
+before expiry is also the risk being covered. Do not compute the expectation with the same
+comparison as production.
 
-## Keep execution straightforward
+## One action with related outcomes
 
-- Avoid conditional branches in the test body. Separate alternative scenarios or use explicit
-  parameter rows. A test should not choose which behavior it checks based on runtime output.
-- Prefer one act for a unit test. A multi-call business operation may reveal that clients are
-  responsible for maintaining an invariant the API should own. Examine the boundary; utility
-  and infrastructure operations can legitimately need several steps.
-- Several arrange/act/assert cycles usually indicate several behaviors. A narrow exception is
-  an integration or end-to-end workflow where an unusually slow or rate-limited dependency
-  makes splitting materially costly. Record that reason; convenience is insufficient.
-- Distinguish the SUT from collaborators. `sut` is a useful name when the scenario has many
-  participants; a clear domain name can also communicate its role.
-- Separate sections with blank lines. Use AAA comments when larger sections make boundaries
-  unclear; omit comments that merely repeat an obvious structure.
+Contract: accepting a reservation consumes exactly the requested capacity; insufficient
+capacity rejects the request without changing available capacity.
 
-(Ch. 3, §§3.1.2–3.1.8, pp. 43–49; ch. 8, §8.5.4, pp. 204–205.)
+```typescript
+class Capacity {
+	constructor(public available: number) {}
 
-In TDD, writing the expected assertion first can clarify intent. Otherwise, arranging the
-scenario first is natural. The shape of the finished test matters more than authoring order.
-(Ch. 3, §3.1.1, pp. 42–43.)
+	reserve(places: number): 'accepted' | 'insufficient' {
+		if (places > this.available) return 'insufficient';
+		this.available -= places;
+		return 'accepted';
+	}
+}
 
-## Keep the expected result independent
+it('a confirmed reservation consumes the requested capacity', () => {
+	const capacity = new Capacity(5);
 
-Do not calculate the expectation by calling the SUT, using its formatter, or repeating the
-algorithm being tested. A test and implementation with the same mistake can agree perfectly.
-Use specific known examples, independently confirmed requirements, domain expertise, or a
-separate trusted source. During a legacy refactor, captured legacy results can define a
-characterization baseline; label that evidence rather than claiming a validated domain rule.
-(Ch. 11, §11.3, pp. 264–266.)
+	const result = capacity.reserve(2);
 
-For an external compatibility contract, independent literals are useful even when they
-duplicate production constants. Sharing a serializer with the assertion would remove the
-checkpoint that detects an unintended wire-format change. Share technical fixture mechanics,
-not the computation that the test must verify. (Ch. 9, §9.1.2, pp. 222–224.)
+	expect(result).toBe('accepted');
+	expect(capacity.available).toBe(3);
+});
 
-Check complete relevant outcomes. Mere execution proves little. Avoid weak assertions such as
-“every returned record belongs to the user” when an empty result would pass despite a required
-record being missing. The assertion must reject the defect described by the scenario. This
-empty-result example applies the book's warning about unverified outcomes. (Ch. 1, §1.3.3,
-pp. 12–14.)
+it('insufficient capacity leaves the available places unchanged', () => {
+	const capacity = new Capacity(1);
 
-## Fixtures should reveal the scenario
+	const result = capacity.reserve(2);
 
-Prefer small factory functions with explicit scenario-defining arguments. Reuse setup without
-coupling tests through hidden mutable fields or shared defaults that affect unrelated cases.
-Do not require readers to trace a constructor or a distant setup hook to discover important
-facts. A compact direct setup needs no factory. (Ch. 3, §3.3, pp. 50–54.)
-
-Extract technical details when arrange grows disproportionately large. Object Mother and Test
-Data Builder are options, not requirements. A builder earns its cost only when its variation
-and readability beat a simple factory. Start scenario helpers locally and share them when
-there is meaningful reuse; do not insist that every helper live in a global fixtures directory.
-(Ch. 3, §3.1.4, p. 45; ch. 10, §10.4.1, pp. 246–249.)
-
-Fixture defaults may fill irrelevant valid details. Keep relevant facts visible and allow the
-caller to specify them. A default must not conceal missing setup, invent a successful lookup,
-or create state production cannot produce. That last constraint applies the book's
-production-fidelity and scenario-readability principles. (Ch. 10, §§10.2.2, 10.4.1,
-pp. 242–243, 246–249.)
-
-Common resource lifecycle can live in a hook or shared fixture when every test needs it.
-Database setup and cleanup are examples. Keep it distinct from scenario data. Unit tests
-usually need no teardown because they leave no external resources; integration tests need an
-explicit isolation strategy. (Ch. 3, §§3.1.6, 3.3, pp. 47, 50–54;
-[Database testing](database-testing.md), ch. 10.)
-
-## Names describe facts
-
-Describe the behavior and condition in ordinary domain language:
-
-```text
-an expired invitation cannot be accepted
-a confirmed reservation reduces available capacity
-changing the contact address publishes the new address
+	expect(result).toBe('insufficient');
+	expect(capacity.available).toBe(1);
+});
 ```
 
-Avoid rigid method/scenario/result templates when they expose implementation names or impair
-reading. Utility code may reasonably use algorithm or method names because those names are
-the client's vocabulary. Assert a fact rather than adding “should” everywhere. Adapt word
-separators to the language and project; the book's underscore convention is not a universal
-syntax requirement. (Ch. 3, §3.4, pp. 54–58.)
+These fixtures use valid positive counts. Other input validation belongs to the declared public
+contract; the example is not a complete reservation API. `available` represents state a
+production client uses, not a field exposed solely for assertions.
 
-Group cases by the behavior they explain. A class-named group does not restrict the tested
-behavior to that class. Multiple tests together describe a behavior's different scenarios.
+## Replace weak assertions
 
-## Parameterize when the cases remain clear
+Suppose the contract requires a query to return exactly the current user's two active records.
+These fragments follow the same arrange and act:
 
-Use a case table for genuinely similar scenarios whose differing inputs and expected results
-are self-explanatory. Each row remains a separate case. Do not hide different business stories
-behind many flags or a generic test name. Give meaningful case labels where supported.
-(Ch. 3, §3.5, pp. 58–62.)
+```typescript
+// Bad: [] passes; so does an incomplete list containing only one matching record.
+expect(records.every((record) => record.ownerId === 'user-7')).toBe(true);
 
-Separate positive and negative cases when their meaning or assertion shape differs materially.
-They can share a parameterized test when a reader can understand each row without deciphering
-the implementation. Use a runtime data provider for values the framework cannot express as
-inline data; that limitation is framework-dependent. Supply controlled time values rather than
-introducing ambient current time through a data provider.
+// Good: independently specified values reject missing, extra, and wrong records.
+expect(records).toEqual([
+	{ id: 'item-2', ownerId: 'user-7', status: 'active' },
+	{ id: 'item-4', ownerId: 'user-7', status: 'active' }
+]);
+```
 
-Fluent assertion libraries can improve readability, but an additional library is optional.
-Prefer clear failure diagnostics and domain intent over a particular assertion syntax.
-(Ch. 3, §3.6, pp. 62–63.)
+Here order is contractual. When it is not, normalize copies by a stable key before comparison;
+do not add an order requirement merely because an array assertion is convenient.
+
+| Weak pattern                                 | Why it passes for a defect     | Write instead                                                         |
+| -------------------------------------------- | ------------------------------ | --------------------------------------------------------------------- |
+| Every returned item belongs to the user      | An empty result passes         | Compare the complete expected relevant IDs or values                  |
+| Result is truthy                             | The wrong object can be truthy | Check the required decision and payload                               |
+| At least one expected message exists         | Duplicates and extras pass     | Compare the complete relevant effects when cardinality is contractual |
+| A helper was called                          | The result can still be wrong  | Assert the resulting value or observable state                        |
+| Expected value uses production serialization | Both sides share the error     | Use an independently specified wire payload                           |
+
+Exact output text is useful for a stable external contract. Exact developer diagnostic text is
+usually an implementation detail. Choose precision from what the consumer depends on.
+
+## Keep setup and execution readable
+
+- Put decisive values in the test body. A factory may default irrelevant valid details, but must
+  not conceal missing setup, successful lookups, or impossible production states.
+- Extract connection mechanics and repeated construction before introducing elaborate builders.
+  Start helpers locally; share them when actual reuse pays for the indirection.
+- Use common hooks for resource lifecycle, not hidden scenario-defining mutable fields. Each
+  test needs fresh state. Unit tests usually require no external teardown.
+- Separate AAA with blank lines. Add comments only when the sections are otherwise unclear.
+- Do not branch on runtime output to decide what to assert. Separate cases or use explicit rows.
+- Prefer one act in unit tests. Infrastructure protocols can need several operations. Multiple
+  AAA cycles usually belong in separate tests; a naturally sequential integration workflow can
+  justify them when splitting incurs exceptional real dependency cost. Document that reason.
+
+## Parameterize only the same story
+
+Use a case table when only the decisive inputs and independently known outputs vary. Give rows
+meaningful names, such as `before expiry` and `at expiry`. Separate cases with different setup,
+assertion shape, or business meaning instead of adding mode flags to one generic test.
+
+Name tests as facts in the client's vocabulary. Utility algorithm names can be that vocabulary.
+Avoid naming private methods or enforcing a rigid method/scenario/result template.
+
+If no independent specification exists during a legacy refactor, captured behavior can serve
+as a characterization baseline. Label it as such; it is not proof the behavior is correct.

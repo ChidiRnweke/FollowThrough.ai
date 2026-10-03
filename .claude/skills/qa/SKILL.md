@@ -1,79 +1,119 @@
 ---
 name: qa
-description: Design, write, and review automated tests; choose unit, integration, or end-to-end coverage; assess test doubles, testability, requirement coverage, and test quality. Use for testing requests and architecture compliance reviews. Applies across languages and projects. Uses typed, hand-written test doubles rather than mocking libraries.
+description: Write, improve, and review automated tests. Use when adding tests, fixing a regression, choosing unit/integration/end-to-end coverage, reviewing test quality, or checking requirement and architecture compliance. Guides agents from a behavioral contract to independently asserted outcomes. Applies across languages and repositories; uses typed, hand-written doubles rather than mocking libraries.
 ---
 
 # QA
 
-Build a test suite that supports sustainable changes. Prefer tests that detect important
-regressions, survive behavior-preserving refactors, give timely feedback, and remain easy to
-understand and operate. Test count and coverage percentages do not establish quality.
+Write tests that catch important wrong behavior and survive changes to internal implementation.
+Use the steps below to produce tests, not just a testing recommendation. Keep project-specific
+commands, paths, architecture, and enforcement rules in the active project's instructions.
 
-The references synthesize Vladimir Khorikov's _Unit Testing: Principles, Practices, and
-Patterns_ (2020). [Sources](references/sources.md) records the chapter coverage and limits of
-the synthesis. The preference for typed, hand-written doubles is this skill's tooling policy;
-the book also discusses mocking frameworks.
+## What counts as a good test
 
-## Shared decisions
+A good test must satisfy all of these:
 
-- A unit is a meaningful behavior, not a class. Isolate tests from each other; keep useful
-  private, in-memory collaborators real.
-- Verify the behavior's meaningful outputs, state changes, and external effects. One behavior
-  can require several assertions. Do not split its outcomes just to count assertions.
-- Prefer output-based tests when behavior can be expressed as explicit inputs and results.
-  State-based tests remain appropriate for observable state transitions.
-- Do not verify input-stub calls or internal collaboration. Verify externally observable
-  effects at an appropriate owned boundary, including duplicates or unexpected effects when
-  those would violate the contract.
-- Use typed fakes, stubs, or recorders when a double is needed. Do not use mocking libraries,
-  monkeypatch internal methods, or disguise partial objects with casts.
-- Integration evidence requires exercising the relevant real integration. A fake cannot prove
-  database behavior or compatibility with a real external service.
-- Establish expected results independently of the implementation. Avoid copying its algorithm
-  into assertions or exposing internals solely for tests.
-- Prioritize important behavior and meaningful complexity. Investigate uncovered paths and
-  expensive setup; do not mandate a universal coverage percentage or architecture refactor.
+- **Detect a meaningful defect:** name the required behavior and a wrong outcome that makes
+  the test fail. Execution without a discriminating assertion is insufficient.
+- **Permit equivalent implementations:** assert the production client's result, usable state,
+  or external contract. Internal wiring can change without changing expectations.
+- **Use independent expectations:** derive expected values from the contract or confirmed
+  examples, not the implementation's algorithm, serializer, or ambient inputs.
+- **Run reliably:** use valid fixtures, isolated mutable state, controlled volatile inputs,
+  and a faithful real dependency where integration semantics matter.
+- **Earn its cost:** protect an important fact, make the scenario and failure understandable,
+  and use the least expensive boundary that can establish that fact.
 
-## Read only the relevant references
+| Bad test                                             | Why it is bad                                                | Good replacement                                         |
+| ---------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- |
+| Calls the operation and checks that nothing threw    | Wrong or missing results can pass                            | Assert the specified result and relevant consequences    |
+| Checks an input repository was called once           | Constrains internal coordination without proving correctness | Check the returned decision or resulting state           |
+| Uses the production formatter to build expected text | Repeats the same possible mistake                            | Compare with independently specified contract text       |
+| Checks all returned rows match a predicate           | Empty/missing results can pass                               | Assert the complete expected relevant records            |
+| Uses a fake to claim transaction coverage            | Never exercises the actual commit/rollback semantics         | Run against the real test store and read committed state |
+| Passes only after another test seeds data            | Depends on execution order                                   | Arrange fresh owned state in this scenario               |
 
-| Task or decision                                            | Reference                                                |
-| ----------------------------------------------------------- | -------------------------------------------------------- |
-| Unit boundaries, isolation, outputs and state               | [Unit testing](references/unit-testing.md)               |
-| Workflow coverage and real dependency integration           | [Integration testing](references/integration-testing.md) |
-| User-facing workflows and deployed-system checks            | [End-to-end testing](references/end-to-end-testing.md)   |
-| Persistence, transactions, migrations, cleanup              | [Database testing](references/database-testing.md)       |
-| Stubs, fakes, recorders, external contracts                 | [Test doubles](references/test-doubles.md)               |
-| AAA, assertions, fixtures, names, parameterization, oracles | [Test design](references/test-design.md)                 |
-| Difficult setup, hidden inputs, mixed responsibilities      | [Testability](references/testability.md)                 |
-| Test review, requirement coverage, architecture compliance  | [Validation](references/validation.md)                   |
-| Provenance, chapter coverage, contextual recommendations    | [Sources](references/sources.md)                         |
+See [Test design](references/test-design.md) for good and bad code examples.
 
-## Write or improve tests
+## 1. Define what must be true
 
-1. Establish the behavior and the source of its expected result. Use requirements, acceptance
-   criteria, domain rules, accepted decisions, or an independently confirmed regression. No
-   particular invariants filename is required. Ask about missing intent only when it matters;
-   label characterization of existing behavior when no independent specification exists.
-2. Read the applicable project instructions and identify the behavior's boundary, important
-   failure risks, and dependency ownership. Directory names do not determine test type.
-3. Choose the lowest-cost test that can detect the relevant defect. Cover pure decisions with
-   unit tests, real integration assumptions with integration tests, and critical user workflows
-   with end-to-end tests where the wider boundary adds value.
-4. Arrange production-producible state. Reuse real collaborators and existing typed doubles;
-   create only the substitutes needed. Keep scenario-defining facts visible.
-5. Act on one behavior and verify its meaningful outcomes with independent expectations.
-   Treat one-act guidance as a unit-test default; use the narrow integration exceptions in the
-   references rather than combining unrelated operations for convenience.
-6. Run the relevant project checks. Report what passed, what failed, and any boundary that was
-   replaced or unavailable. Do not claim integration evidence from a simulated dependency.
+Read the requested change, applicable project instructions, and the affected production code.
+Inspect relevant existing tests when the task permits it. Find the expected behavior in a
+requirement, accepted decision, acceptance criterion, or independently confirmed regression.
 
-## Review or validate
+Before writing a test, state:
 
-Use [Validation](references/validation.md) to assess behavior coverage, independent assertions,
-refactoring resistance, isolation, and marginal value. Report specific findings and justified
-coverage gaps. Distinguish a defect in the application from a defect in its tests.
+```text
+Given: the smallest valid starting state, including the decisive boundary value
+When: one action through an entry point used by production
+Then: the required result, observable state, and external effects
+Defect caught: a specific wrong outcome these assertions must reject
+```
 
-For architecture compliance, read the project's accepted architecture and inspect its actual
-dependency rules. Use its available audits. Do not impose a universal layer diagram, place
-business logic in a particular directory, or weaken a checker to satisfy this skill. If a
-local check conflicts with the testing guidance, report the conflict and its effect explicitly.
+For several scenarios, use a small case table. Select success, meaningful boundary values,
+rejection, unchanged/no-op behavior, and dependency failure where they pose distinct risks.
+Do not mechanically generate every category or one test per method. Label characterization
+of existing behavior when an independent specification is unavailable. Clarify ambiguous intent
+only when it changes the expected result.
+
+## 2. Choose the boundary that can catch the defect
+
+| Defect to detect                                                   | Write                                                 | Keep real                                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| Wrong calculation, eligibility rule, or in-memory state transition | [Unit test](references/unit-testing.md)               | The decision and useful private in-memory collaborators            |
+| Incorrect wiring, mapping, query, constraint, or transaction       | [Integration test](references/integration-testing.md) | The participating application code and relevant managed dependency |
+| Persistence or rollback differs from production                    | [Database test](references/database-testing.md)       | The production-compatible store, schema, and commit boundary       |
+| A rendered interaction, async state, or layout breaks              | [Frontend test](references/frontend-testing.md)       | The component or public UI needed to observe that behavior         |
+| A critical goal fails through the public application               | [End-to-end test](references/end-to-end-testing.md)   | The public entry point and dependencies needed for that evidence   |
+
+Choose the narrowest boundary that provides the missing evidence. Several real classes can
+form one unit. A workflow backed only by fakes does not establish real database or provider
+compatibility. Add a wider test only for protection the narrower tests cannot supply.
+
+## 3. Arrange valid state and explicit inputs
+
+- Use fresh mutable state per test. Supply fixed time, randomness, and identifiers when relevant.
+- Keep scenario-defining values visible. Extract repetitive mechanics into small factories;
+  leave expected results independent of production calculations.
+- Keep cheap private collaborators real. Replace only dependencies that need control or
+  isolation. Use existing typed doubles or write a small one against the consumed contract.
+- For incoming data, use a stub or fake and assert the resulting behavior. For outgoing external
+  effects, use a typed recorder at the last owned boundary. See [Test doubles](references/test-doubles.md).
+- Do not use mocking libraries, cast partial objects into dependencies, or arrange states that
+  production cannot produce. Do not supply success defaults for missing setup.
+
+## 4. Write the test and, when required, the production change
+
+1. Name the test as a domain fact: `an expired invitation cannot be accepted`.
+2. Arrange the scenario, act on one behavior, then assert all its meaningful outcomes.
+   Related assertions belong together; assertion count does not define focus.
+3. Use explicit known expectations. Do not call the production formatter or copy its algorithm
+   to derive them. Assert the complete relevant result so missing records, duplicates, or extra
+   effects cannot pass unnoticed. See [Test design](references/test-design.md) for examples.
+4. For a regression, run the new test against the defect when feasible and confirm it fails for
+   the intended reason. If a code fix is requested, make the smallest change that restores the
+   contract, then rerun. If it passes before the fix, investigate before changing expectations.
+5. If setup requires overriding internals, make the smallest in-scope boundary improvement:
+   explicit inputs, a returned decision, or an owned I/O seam. Keep decisions together and
+   effects at the edge. Do not expose private state or add production test switches.
+   Use [Testability](references/testability.md) for concrete remedies.
+
+Follow active project enforcement. If an assertion-count rule conflicts with a cohesive test,
+report the conflict; do not hide assertions in helpers or weaken audits to evade it.
+
+## 5. Check the test before calling it done
+
+- **Wrong behavior:** would it fail for the concrete defect stated in step 1? Check missing,
+  wrong, duplicated, and prohibited outcomes that matter to this scenario.
+- **Equivalent implementation:** would it still pass after inlining a helper, changing an
+  internal call sequence, or replacing an ORM while preserving the contract?
+- **Independence:** does it pass without another test's data, order, or ambient clock? For
+  persistence, does a fresh read establish the result rather than an input object or cache?
+- **Added value:** does it protect an important fact at reasonable setup and execution cost?
+  Coverage highlights omissions; it does not prove assertions are useful.
+
+Run the targeted test and relevant project checks. Report observed results and any unavailable
+or substituted boundary. Use [Validation](references/validation.md) for a review or coverage
+audit. Distinguish application defects, test defects, and missing evidence.
+
+[Source and scope](references/sources.md) records attribution and the skill's tooling policy.

@@ -1,70 +1,37 @@
 # Test doubles
 
-Use this reference to decide whether a substitute is needed and what its observations mean.
-The skill uses typed, hand-written doubles. The book also uses mocking frameworks; the tooling
-choice is separate from the behavioral role. Citations refer to the [book](sources.md).
+Use typed, hand-written substitutes only where the test needs control or isolation. Keep
+useful private in-memory collaborators real. Do not use mocking libraries or patch internals.
 
-## Classify the role, not the name
+## Choose the substitute
 
-| Double          | Role                                                        | What to assert                                                                    |
-| --------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Dummy           | Supplies an irrelevant required argument                    | Nothing about its use                                                             |
-| Stub            | Supplies controlled input to the SUT                        | The SUT's resulting behavior, not query calls                                     |
-| Fake            | Implements a simplified working substitute, often in memory | Meaningful results or state; disclose its fidelity limits                         |
-| Recorder or spy | Records outgoing effects for examination                    | Effects that are observable at a valid system boundary                            |
-| Mock            | Emulates and verifies outgoing interactions                 | The same justified boundary effects; this skill uses hand-written implementations |
+| Need                            | Use                                     | Assert                                                       |
+| ------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| Fixed incoming value or failure | Stub implementing the consumed contract | The application's resulting behavior, not query calls        |
+| Simplified working state        | Fresh fake, often in memory             | Meaningful outputs/state; disclose unmodeled semantics       |
+| Required unused argument        | Dummy                                   | Nothing about its use                                        |
+| Observable outgoing effect      | Recorder/spy at an owned boundary       | Independently specified effects, including prohibited extras |
 
-The book groups these into input-supplying stubs and outgoing-effect mocks. A handwritten spy
-is a mock in purpose. A class produced by a library named `Mock` can function only as a stub.
-Names and tools do not establish the role. One double may supply an input and record a distinct
-outgoing effect. (Ch. 5, §§5.1.1–5.1.4, pp. 93–97.)
+A recorder is a mock in behavioral purpose. The distinction is incoming data versus outgoing
+effect, not a library or class name. A dependency can play both roles; assess each separately.
+Commands and queries provide clues, but an API can legitimately return a value while changing
+state.
 
-Command/query separation is a useful clue: queries supply input without changing state;
-commands produce effects. Real APIs sometimes combine the two, such as removing and returning
-an item. Classify each observed interaction by its purpose rather than imposing a return-type
-rule on all APIs. (Ch. 5, §5.1.5, pp. 97–98.)
+## Put the recorder at the external edge
 
-## Decide whether the effect is behavior
+1. Identify the consumer that depends on the effect: recipient, message consumer, or support
+   operator. Internal coordination is not enough.
+2. Keep application translation and serialization real.
+3. Replace the last owned seam before the external effect with a typed recorder.
+4. Compare the complete relevant effects to independent expected values. Assert counts, order,
+   and exact text only when those properties are contractual.
 
-1. Identify the client and the goal the assertion protects.
-2. Decide whether the interaction crosses a meaningful application boundary and is observable
-   to an independent consumer.
-3. If it only gathers input or coordinates internal components, assert the resulting output
-   or state instead.
-4. If it establishes an external contract, record the effect at an owned boundary with enough
-   real application code in front of it to exercise translation and serialization.
+Do not assert input-stub query counts, internal service sequences, private database write
+counts, or dispatcher calls. A private database is managed state: verify it through a real
+[database test](database-testing.md). A recorder proves an attempted effect, not provider
+acceptance or delivery.
 
-(Ch. 5, §§5.2–5.4, pp. 99–116; ch. 9, §9.1.1, pp. 219–222.)
-
-Do not assert how often a stub was queried. That call is a means to a result. Do not assert an
-internal service sequence, a dispatcher call, or private database write count when equivalent
-implementations preserve the client's behavior. A private database is managed state, even
-though it is out of process. Use real database integration tests to verify persistence.
-(Ch. 5, §5.1.3, p. 96, §5.4, pp. 114–116; ch. 8, §8.2, pp. 190–193.)
-
-## Verify the externally observable contract
-
-An outbound recorder should let the test check:
-
-- Required effects occurred with the independently specified payload.
-- Prohibited effects did not occur.
-- Duplicate or additional effects were absent when the contract prohibits them.
-- Order or timing met the contract only when the consumer depends on those properties.
-
-Exact counts are valuable when omissions or duplicates change behavior. “Exactly once” is not
-the correct expectation for every effect; use the scenario's actual cardinality. Several
-recorders can be necessary for one behavior if it has several external consequences.
-(Ch. 9, §§9.2.2–9.2.3, pp. 225–227.)
-
-Prefer examining the complete relevant recorded effects over asserting that at least one
-matching effect exists when that would miss duplicates or extras. Keep expected serialized
-values independent of the production serializer. A domain-specific assertion helper can make
-the comparison clearer if it does not reuse the implementation being tested.
-(Ch. 9, §9.1.2, pp. 222–224.)
-
-## A typed recorder
-
-Original TypeScript example, independent of any repository:
+## A recorder and its assertion
 
 ```typescript
 interface OutboundMessages {
@@ -80,64 +47,34 @@ class MessageRecorder implements OutboundMessages {
 }
 ```
 
-Pass a fresh recorder through the owned outbound seam. After the workflow, compare `sent` to
-an independently specified list. Equality with that complete list checks payload, duplicates,
-and extras together. An ordered list also checks order, so use an order-insensitive comparison
-when order is not part of the contract. Do not pass the recorder in place of an internal
-translator whose behavior the test should exercise.
+Pass a fresh recorder to the workflow's owned outbound seam. After the action:
 
-A function-typed dependency can use a typed recording closure instead of a class. Type the
-closure against the dependency's signature and observe domain effects. There is no need for a
-generic call-history framework. In languages with protocols, implement the consumed protocol;
-in dynamically typed languages, preserve and verify the dependency contract explicitly.
+```typescript
+expect(recorder.sent).toEqual(['contact-changed:account-7:new@example.test']);
+```
 
-Use normal typed construction. Do not cast a partial object into a complete dependency or add
-silent success defaults for unsupported operations. These construction rules apply the
-skill's explicit-double policy and production-fidelity principle; they are not claims about a
-specific library from the book.
+The literal payload is independently specified. This comparison rejects missing, wrong,
+duplicated, and extra messages when the contract requires that single message. For multiple
+unordered effects, compare a multiset or sorted copies so duplicates still count. Do not assert
+list order unless the consumer relies on it.
 
-## Use owned adapters at the external edge
+A function dependency can use a recording closure typed against the consumed signature. Do not
+build a generic call-history framework. Implement the complete required contract; do not cast a
+partial object into it or silently succeed for unsupported operations. Configure failures with
+normal typed constructor inputs rather than overwriting methods.
 
-Keep the adapter to an unmanaged third-party dependency in the application's vocabulary.
-Expose the needed capability rather than the entire SDK. Replace the last owned seam before
-the external effect, allowing the higher-level wrapper and its serializer to execute normally.
-Mocking a third-party interface directly can encode incorrect assumptions about its behavior
-and spread library changes through the tests. (Ch. 9, §§9.1.1, 9.2.4, pp. 219–222, 227.)
+## Keep substitutes honest
 
-This does not require wrapping every library. The book exempts private managed dependencies
-and in-process utilities from adapters introduced solely for mocking. A project can still
-justify an interface for a separate architectural reason. (Ch. 8, §8.4, pp. 197–200;
-ch. 9, §9.2.4, p. 227.)
+- A fake models only the stated contract. It cannot establish query, constraint, transaction,
+  or provider compatibility. Use real integration evidence for those risks.
+- Reuse small doubles when needed; do not create a double for every real collaborator.
+- Wrap third-party I/O in owned vocabulary where a stable capability boundary is useful. Do
+  not introduce interfaces for every library or dismantle project-accepted contracts merely
+  because they have one production implementation.
+- For required human support logs, record the necessary domain facts and occurrence. Verify
+  exact machine-consumed payloads when contractual. Leave developer diagnostics unasserted.
+- Avoid concrete partial overrides and production `isTest` branches. If valuable decisions
+  require those tricks, use the remedies in [Testability](testability.md).
 
-Support logging has a qualified edge exception. If people need the occurrence and domain facts
-rather than an exact text layout, recording the domain logger can provide enough protection.
-Machine-consumed messages often require exact serialized contract checks. Do not assert
-developer diagnostics as if they were required external effects.
-(Ch. 8, §8.6, pp. 205–213; ch. 9, §9.1.3, pp. 224–225.)
-
-## Keep the substitute honest
-
-Use a working fake when its simplified state is useful for a fast test, not to prove the
-database's real semantics. Give each test fresh state. Make failures configurable through
-normal typed inputs; do not mutate private methods or add a test switch to production logic.
-Keep the states and outcomes valid for the contract being substituted. Report important
-unmodeled behaviors instead of implying equivalent integration protection.
-(Ch. 2, pp. 27–34; ch. 10, pp. 242–246; ch. 11, §11.4, pp. 266–268.)
-
-Reuse small, clear doubles when they genuinely recur. A fake is not inherently tiny, correct,
-or easy to maintain. A large graph of doubles can hide mixed responsibilities. Do not create
-them before deciding whether real private collaborators would be simpler.
-(Ch. 2, §2.3.2, p. 35; ch. 6, §6.2.3, pp. 125–127.)
-
-## Avoid partial mocks and misleading labels
-
-Overriding one method of a concrete class while preserving its remaining production behavior
-often compensates for a class that mixes decisions with external I/O. Prefer separating the
-calculation from the gateway when that design change is in scope. Do not add runtime
-`isTest` switches or expose private methods for substitution.
-(Ch. 11, §§11.4–11.5, pp. 266–271.)
-
-The book's “mocks belong in integration tests” recommendation follows its separation of pure
-business decisions from external orchestration. Use that reasoning to choose the boundary;
-do not relabel an all-double workflow as real integration evidence to satisfy a naming rule.
-(Ch. 9, §9.2.1, p. 225.)
+Business decisions separated from effects often need no recorders in unit tests. Do not relabel
+an all-double workflow as real integration coverage to satisfy a naming convention.
