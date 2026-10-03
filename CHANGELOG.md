@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.7](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.6...v2.0.7) (2026-10-01)
+
+
+### Performance Improvements
+
+* **testing:** speed up contract and browser test runs ([#294](https://github.com/ChidiRnweke/FollowThrough.ai/issues/294)) ([46c2ae4](https://github.com/ChidiRnweke/FollowThrough.ai/commit/46c2ae45528edd71fe0be7afb2441616e77a73d3))
+
 ## [2.0.6](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.5...v2.0.6) (2026-09-30)
 
 
