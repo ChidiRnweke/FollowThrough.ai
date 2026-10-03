@@ -69,7 +69,8 @@ const fields: Record<WorkspaceResourceType, readonly string[]> = {
 	memory_entries: Object.keys(resourceDataSchemas.memory_entries.shape),
 	project_templates: Object.keys(resourceDataSchemas.project_templates.shape),
 	export_settings: Object.keys(resourceDataSchemas.export_settings.shape),
-	artifacts: Object.keys(resourceDataSchemas.artifacts.shape)
+	artifacts: Object.keys(resourceDataSchemas.artifacts.shape),
+	widgets: Object.keys(resourceDataSchemas.widgets.shape)
 };
 
 const columnValue = (field: string): SQL => {

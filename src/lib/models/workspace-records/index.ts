@@ -9,6 +9,7 @@ import { agentPayloadObjectSchema } from '$lib/models/agent/payload';
 import { pendingAgentDecisionSchema, webSearchEngines } from '$lib/models/agent';
 import { projectTemplateStylesSchema } from '$lib/models/projects';
 import { exportSettingsOverlaySchema } from '$lib/models/deliverables';
+import { widgetDataSchema, widgetLayoutSchema, type Widget } from '$lib/models/widgets';
 
 const id = <Name extends string>() =>
 	z
@@ -115,6 +116,20 @@ export const diagramRecordSchema = z.discriminatedUnion('kind', [
 		promotedFromId: id<'DiagramId'>().optional()
 	})
 ]);
+
+export const widgetRecordSchema = z.object({
+	id: id<'WidgetId'>(),
+	...projectOwned,
+	sourceNoteId: id<'NoteId'>().optional(),
+	title: z.string(),
+	catalogVersion: z.number().int().positive(),
+	layout: widgetLayoutSchema,
+	layoutRevision: z.number().int().positive(),
+	data: widgetDataSchema,
+	dataRevision: z.number().int().positive(),
+	archivedAt: instant.optional(),
+	...timestamps
+}) satisfies z.ZodType<Widget>;
 
 const messageFields = {
 	id: id<'MessageId'>(),
@@ -341,7 +356,8 @@ export const resourceDataSchemas = {
 		provenanceId: id<'ProvenanceId'>().optional(),
 		runId: id<'AgentRunId'>().optional(),
 		createdAt: instant
-	})
+	}),
+	widgets: widgetRecordSchema
 };
 
 export const workspaceRecordSchema = z.discriminatedUnion('type', [
@@ -384,7 +400,8 @@ export const workspaceRecordSchema = z.discriminatedUnion('type', [
 	z.object({ type: z.literal('memory_entries'), value: resourceDataSchemas.memory_entries }),
 	z.object({ type: z.literal('project_templates'), value: resourceDataSchemas.project_templates }),
 	z.object({ type: z.literal('export_settings'), value: resourceDataSchemas.export_settings }),
-	z.object({ type: z.literal('artifacts'), value: resourceDataSchemas.artifacts })
+	z.object({ type: z.literal('artifacts'), value: resourceDataSchemas.artifacts }),
+	z.object({ type: z.literal('widgets'), value: resourceDataSchemas.widgets })
 ]);
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
 

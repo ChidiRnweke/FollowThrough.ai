@@ -40,7 +40,8 @@ const componentCapabilities = new Set([
 	'skills',
 	'suggestions',
 	'today',
-	'todos'
+	'todos',
+	'widgets'
 ]);
 const collect = (directory: string): void => {
 	if (!existsSync(directory)) return;
@@ -92,7 +93,7 @@ for (const absolute of sourceFiles) {
 		if (/from\s+['"]\$lib\/models\//.test(source))
 			failures.push(`${file} imports a product model from the Edra boundary`);
 		if (
-			/from\s+['"]\$lib\/components\/(?:agent|artifacts|attachments|chat|diagrams|feedback|memory|notes|projects|settings|shell|skills|suggestions|today|todos)(?:\/|['"])/.test(
+			/from\s+['"]\$lib\/components\/(?:agent|artifacts|attachments|chat|diagrams|feedback|memory|notes|projects|settings|shell|skills|suggestions|today|todos|widgets)(?:\/|['"])/.test(
 				source
 			)
 		)

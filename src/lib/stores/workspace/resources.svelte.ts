@@ -362,7 +362,15 @@ export class WorkspaceResources {
 	async create(
 		command: Extract<
 			PreparedWorkspaceCommand,
-			{ kind: 'createProject' | 'createNote' | 'createFolder' | 'createTodo' | 'createMemory' }
+			{
+				kind:
+					| 'createProject'
+					| 'createNote'
+					| 'createFolder'
+					| 'createTodo'
+					| 'createMemory'
+					| 'createWidget';
+			}
 		>
 	): Promise<WorkspaceRecord> {
 		const input = plain(command);

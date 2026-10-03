@@ -40,6 +40,12 @@ importers:
       '@infisical/sdk':
         specifier: ^5.0.2
         version: 5.0.2
+      '@json-render/core':
+        specifier: 0.21.0
+        version: 0.21.0(zod@4.4.3)
+      '@json-render/svelte':
+        specifier: 0.21.0
+        version: 0.21.0(svelte@5.56.4(@typescript-eslint/types@8.63.0))(zod@4.4.3)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
@@ -1843,6 +1849,17 @@ packages:
     engines: {node: '>= 10.16.0'}
     peerDependencies:
       jsep: ^0.4.0||^1.0.0
+
+  '@json-render/core@0.21.0':
+    resolution: {integrity: sha512-vysEbTjO1y8mEgAsp0tztRyaWCkNsBrG8MhAqbndGK3qmMXjMRdCNtk21+AQRNKdRelFGVAwBgtUNW8tfjQlsw==}
+    peerDependencies:
+      zod: ^4.0.0
+
+  '@json-render/svelte@0.21.0':
+    resolution: {integrity: sha512-oW9s0V9rq+Fy5CluXFBCZxpElGxwIXSaH5ds1d6A40jTzEG0V66pOEqg7pHMuTk2zEuAmDjzpwW5dU1ci8HBHA==}
+    peerDependencies:
+      svelte: ^5.0.0
+      zod: ^4.0.0
 
   '@kwsites/file-exists@1.1.1':
     resolution: {integrity: sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw==}
@@ -9020,6 +9037,16 @@ snapshots:
   '@jsep-plugin/regex@1.0.4(jsep@1.4.0)':
     dependencies:
       jsep: 1.4.0
+
+  '@json-render/core@0.21.0(zod@4.4.3)':
+    dependencies:
+      zod: 4.4.3
+
+  '@json-render/svelte@0.21.0(svelte@5.56.4(@typescript-eslint/types@8.63.0))(zod@4.4.3)':
+    dependencies:
+      '@json-render/core': 0.21.0(zod@4.4.3)
+      svelte: 5.56.4(@typescript-eslint/types@8.63.0)
+      zod: 4.4.3
 
   '@kwsites/file-exists@1.1.1':
     dependencies:

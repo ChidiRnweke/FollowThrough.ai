@@ -8,6 +8,8 @@
 	import { MermaidNodeView } from '$lib/components/diagrams';
 	import { toEditorContent } from './editor-document';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
+	import { WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
+	import { WidgetNodeView } from '$lib/components/widgets';
 	import TodoNodeView from '../todos/todo-node.svelte';
 	import { Plugin, PluginKey } from '@tiptap/pm/state';
 	import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -76,7 +78,7 @@
 					noteId ? `/notes/${noteId}/diagrams/${reference}` : undefined,
 				drawioPreview: SafeSvgPreview
 			},
-			[TodoNode(TodoNodeView)]
+			[TodoNode(TodoNodeView), WidgetNode(WidgetNodeView)]
 		)
 	);
 

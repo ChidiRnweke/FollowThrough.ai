@@ -29,7 +29,8 @@ export const syncRegistrations: readonly SyncRegistration[] = [
 			'agent_runs',
 			'memory_entries',
 			'project_templates',
-			'artifacts'
+			'artifacts',
+			'widgets'
 		] as const
 	).map((type) => ({ type, keys: ['id'] })),
 	{ type: 'skills', keys: ['note_id'] },

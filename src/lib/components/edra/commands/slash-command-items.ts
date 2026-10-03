@@ -18,6 +18,7 @@ const GROUP_TITLES: Readonly<Record<string, string>> = {
 	blocks: 'Blocks',
 	media: 'Media',
 	diagram: 'Diagrams',
+	widget: 'Widgets',
 	table: 'Table'
 };
 

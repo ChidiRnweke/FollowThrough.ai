@@ -414,6 +414,20 @@
       "when": 1790187733549,
       "tag": "0058_active_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791050255988,
+      "tag": "0059_widgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791050256988,
+      "tag": "0060_widgets_workspace_sync",
+      "breakpoints": true
     }
   ]
 }

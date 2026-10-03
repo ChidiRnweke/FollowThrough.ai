@@ -23,6 +23,8 @@ import type { DeliverablesController } from '$lib/server/controllers/deliverable
 import type { DiagramsController } from '$lib/server/controllers/diagrams/controller';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
 import type { RetrievalController } from '$lib/server/controllers/knowledge-search/controller';
+import type { WidgetsController } from '$lib/server/controllers/widgets/controller';
+import { jsonPatchSchema, type JsonPatch, type WidgetId } from '$lib/models/widgets';
 import type { MemoryController } from '$lib/server/controllers/memory/controller';
 import type { NotesController } from '$lib/server/controllers/notes/controller';
 import type { ProjectsController } from '$lib/server/controllers/projects/controller';
@@ -150,6 +152,7 @@ interface CoveredAgentControllers {
 	readonly attachments: AttachmentsController;
 	readonly deliverables: DeliverablesController;
 	readonly memory: MemoryController;
+	readonly widgets: WidgetsController;
 	readonly retrieval: RetrievalController;
 }
 
@@ -623,6 +626,21 @@ export const agentToolCoverage = {
 			reason: 'Memory changes must flow through propose_memory_change review.'
 		}
 	},
+	widgets: {
+		synchronize: { kind: 'excluded', reason: 'Device mutations use the shared versioned outbox.' },
+		get: { kind: 'read', tools: ['read_widget'] },
+		list: {
+			kind: 'excluded',
+			reason: 'Widgets are reached from the note that embeds them; the agent reads one by id.'
+		},
+		create: {
+			kind: 'excluded',
+			reason: 'Agent widget creation lands with its catalog prompt tool in a later change.'
+		},
+		// Both edit tools write through one controller method and one rule, so the
+		// browser, the server and an approval decide an edit the same way (ADR 0043).
+		edit: { kind: 'mutation', tools: ['edit_widget_data', 'edit_widget_layout'] }
+	},
 	agentSettings: {
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		bootstrap: {
@@ -783,6 +801,15 @@ const diagramId = z
 	.string()
 	.uuid()
 	.transform((value) => value as DiagramId);
+const widgetId = z
+	.string()
+	.uuid()
+	.describe('Exact widget UUID, as the widget node in a note records it.')
+	.transform((value) => value as WidgetId);
+const widgetPatchText = z
+	.string()
+	.min(2)
+	.describe('An RFC 6902 JSON Patch array, encoded as a JSON string.');
 const suggestionId = z
 	.string()
 	.uuid()
@@ -984,6 +1011,9 @@ interface AgentToolOutputMap {
 	readonly create_diagram: ControllerResult<DiagramStudioController['createDiagram']>;
 	readonly edit_diagram: ControllerResult<DiagramStudioController['editDiagram']>;
 	readonly read_canvas_diagram: ControllerResult<DiagramStudioController['readCanvasDiagram']>;
+	readonly read_widget: ControllerResult<WidgetsController['get']>;
+	readonly edit_widget_data: ControllerResult<WidgetsController['edit']>;
+	readonly edit_widget_layout: ControllerResult<WidgetsController['edit']>;
 }
 
 export type AgentToolOutput<Name extends ToolName> = AgentToolOutputMap[Name];
@@ -1051,6 +1081,23 @@ const requireProject = async (
 	throw new ValidationError(
 		`projectId is required to ${action}. Retry naming one of these projects: ${candidates}.`
 	);
+};
+
+/**
+ * Read a JSON Patch sent as a string. Strict tool schemas cannot describe an arbitrary JSON
+ * value, so the patch crosses the tool boundary as text and is parsed here (ADR 0043).
+ */
+const jsonPatchArgument = (text: string): JsonPatch => {
+	try {
+		const parsed: unknown = JSON.parse(text);
+		const result = jsonPatchSchema.safeParse(parsed);
+		if (result.success) return result.data;
+		throw new ValidationError(`patch is not an RFC 6902 patch: ${z.prettifyError(result.error)}`);
+	} catch (error) {
+		if (error instanceof SyntaxError)
+			throw new ValidationError(`patch is not valid JSON: ${error.message}`);
+		throw error;
+	}
 };
 
 const isReviewedNoteTool = (name: string): boolean =>
@@ -2255,6 +2302,53 @@ const sharedToolDefinitions = (
 			(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId)
 		)
 	});
+	const widgets = () => ({
+		read_widget: define(
+			'read_widget',
+			toolDescription('read_widget'),
+			'read',
+			z.object({ widgetId }),
+			(input) => factory.widgets().get(actor, input)
+		),
+		edit_widget_data: define(
+			'edit_widget_data',
+			toolDescription('edit_widget_data'),
+			'mutation',
+			z.object({
+				widgetId,
+				expectedDataRevision: z.number().int().positive(),
+				patch: widgetPatchText
+			}),
+			(input) =>
+				factory.widgets().edit(actor, {
+					widgetId: input.widgetId,
+					edit: {
+						kind: 'data',
+						expectedDataRevision: input.expectedDataRevision,
+						patch: jsonPatchArgument(input.patch)
+					}
+				})
+		),
+		edit_widget_layout: define(
+			'edit_widget_layout',
+			toolDescription('edit_widget_layout'),
+			'mutation',
+			z.object({
+				widgetId,
+				expectedLayoutRevision: z.number().int().positive(),
+				patch: widgetPatchText
+			}),
+			(input) =>
+				factory.widgets().edit(actor, {
+					widgetId: input.widgetId,
+					edit: {
+						kind: 'layout',
+						expectedLayoutRevision: input.expectedLayoutRevision,
+						patch: jsonPatchArgument(input.patch)
+					}
+				})
+		)
+	});
 	return {
 		...retrieval(),
 		...projects(),
@@ -2265,7 +2359,8 @@ const sharedToolDefinitions = (
 		...skills(),
 		...account(),
 		...memoryAndPreferences(),
-		...deliverables()
+		...deliverables(),
+		...widgets()
 	};
 };
 

@@ -220,6 +220,13 @@ export const controllerSurfaces = {
 		remove: true,
 		propose: true
 	},
+	widgets: {
+		synchronize: true,
+		get: true,
+		list: true,
+		create: true,
+		edit: true
+	},
 	retrieval: {
 		search: true
 	},
