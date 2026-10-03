@@ -68,6 +68,11 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # Match the lockfile's Playwright version; this image has Chromium and its
+    # Linux dependencies ready, so the job does not need apt installs.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --ipc=host --init
     steps:
       - uses: actions/checkout@v4
       - if: github.event_name == 'pull_request'
@@ -94,14 +99,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-${{ runner.os }}
-      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
         run: pnpm install --frozen-lockfile
-      - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
-        run: pnpm exec playwright install --with-deps chromium
       - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
         run: pnpm test:node
       - if: github.event_name == 'push' || steps.release-only.outputs.behavioral == 'true'
