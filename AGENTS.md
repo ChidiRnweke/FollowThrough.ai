@@ -128,7 +128,7 @@ the same header to exercise persisted UI preferences (`sidebar_state`,
 | `hooks/`                       | Reactive environment wrappers (`IsMobile`, `IsDockedPanel`).            |
 | `components/ui/`               | Vendored shadcn-svelte primitives. **Ours to edit** — not a dependency. |
 | `components/<feature>/`        | App components. `components/shell/` is the app chrome.                  |
-| `testing/`                     | `InMemory*` fakes; never reach for a mocking library instead.           |
+| `testing/`                     | Typed fakes, stubs, and recorders for externally observable effects.    |
 
 Two locations are easy to miss:
 
@@ -268,11 +268,52 @@ Judgement rules, not audited. They exist because each has already cost this code
 - **A fake or fixture must not represent a state production cannot produce.** A fixture encoding an
   impossible state teaches the bug to everyone who copies it.
 
-## Test conventions (audit-enforced)
+## Testing guidance
 
-- Exactly one `expect` per `it()`; the legacy multi-assertion baseline must not grow.
-- No `vi.fn`, `toHaveBeenCalled*`, or hand-rolled mocks. Use the `InMemory*` fakes under
-  `src/lib/testing/` with `capabilityDependencies<Deps>({ ... })`; for function-typed
-  dependencies use a typed recording closure.
-- One spec file per concern, colocated with the unit under test (see
-  `src/lib/server/controllers/todos/extract-promises.spec.ts`).
+Use the [QA skill](.agents/skills/qa/SKILL.md) for test design, review, and coverage decisions.
+Its references are portable. Apply this repository's architecture and enforcement separately.
+
+- Test one meaningful behavior and its relevant outcomes. Several assertions can describe one
+  behavior; splitting its outcomes merely to count assertions loses the scenario's context.
+  Read the current enforcement note below before changing assertion structure.
+- Establish expected results independently of the implementation. Use requirements, accepted
+  decisions, and confirmed regressions. Do not recompute expectations with the code under test.
+- Keep useful private in-memory collaborators real. Use typed doubles only when needed. Reuse
+  `InMemory*` fakes under `src/lib/testing/` and construct capability dependencies with
+  `capabilityDependencies<Deps>({ ... })`. Function dependencies can use typed recording closures.
+  Do not use mocking libraries or cast partial objects into complete dependency shapes.
+- Do not assert input-stub queries or internal service call sequences. A typed recorder may
+  verify externally observable effects, including required payloads and prohibited duplicates.
+  Observe the owned external boundary rather than replacing an internal translator.
+- Verify persistence with real database integration evidence and independent resulting-state
+  reads. A fake-backed workflow does not establish PostgreSQL behavior or transaction fidelity.
+- Prioritize significant behavior and useful regression protection. Coverage helps locate gaps;
+  it does not justify trivial tests, a universal percentage, or duplicate coverage at every layer.
+- Follow ADR 0041: models hold data and schemas; shared business decisions belong in services.
+  The book's domain-object examples do not authorize moving behavior into this repo's models.
+  Test orchestration at the boundary that protects its actual risk; its directory name alone
+  does not determine whether a test is unit or integration.
+- Keep one spec file per concern. Colocate unit specs with the unit under test. PostgreSQL
+  contracts live under `tests/integration/<capability>`; end-to-end scenarios live under
+  `tests/e2e`. Do not create a second test tree to match a generic skill example.
+
+### Current enforcement and follow-up
+
+`scripts/audit-tests.ts` still enforces exactly one counted `expect`, `expect.element`, or
+`expect.poll` in each non-E2E test declaration it audits. Its assertion baseline is zero.
+This is a current checker constraint, not a test-quality principle. The checker also bans
+`vi`/`jest` mocking APIs, checks typed fake declarations and dependency casts, restricts
+`toHaveBeenCalled*` assertions in server controller/service specs, and rejects unexplained skips.
+
+The testing guidance permits several related assertions, but multi-assertion tests remain
+blocked until the checker is updated in a separate task. Keep the checks passing. Do not hide
+assertions in helpers, pack unrelated claims together, or weaken a checker to evade this conflict.
+A natural comparison of one cohesive result is valid; it is not a requirement to compress every
+scenario into one expression. Typed recorders can express external effects through recorded
+values without mocking APIs.
+
+The follow-up must align the assertion audit with behavior-focused review and distinguish
+external contracts from internal interaction checks. Preserve typed dependencies, independent
+state, and explained skips. Confirm Chisel's active test rules as part of that work; an update
+to one checker must not silently contradict another. Checker alignment and test migration are
+separate work.
