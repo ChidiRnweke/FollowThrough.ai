@@ -1,187 +1,150 @@
 # Validation
 
-How to verify that code matches its spec. Three checks: invariant coverage, architecture compliance, and test quality.
+Use this reference to review test quality, assess requirement coverage, or check architecture
+compliance. Load the test-type references needed for the task. Citations refer to the
+[book](sources.md).
 
----
+## Evaluate four attributes
 
-## Invariant validation
+| Attribute                      | Review question                                                               | Typical weakness                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Protection against regressions | Which important defect would this test detect?                                | Trivial code, omitted outcomes, or assertions that also pass for a wrong result |
+| Resistance to refactoring      | Would an equivalent implementation still pass?                                | Internal calls, private structure, generated SQL, or a copied algorithm         |
+| Fast feedback                  | Is the feedback timely enough for the intended development cycle?             | Unnecessary broad scope or uncontrolled external dependencies                   |
+| Maintainability                | Can readers understand the scenario, and can the environment be kept running? | Hidden fixtures, large double graphs, operational burden, or duplicate tests    |
 
-The invariants file is the source of truth. Validation means checking that every invariant is both implemented in code and verified by a test.
+The book presents these as a qualitative frame, not measurable scores. Its multiplicative
+analogy warns that a near-zero attribute can erase the usefulness of a test. Do not generate a
+numeric quality rating or claim that speed, coverage, and resilience can all be maximized.
+Prefer strong refactoring resistance, then balance protection and feedback cost.
+(Ch. 4, §§4.1–4.4, pp. 68–86.)
 
-### Reading the invariants file
+## Separate missed bugs from false alarms
 
-Invariants are documented in domain language. Each invariant describes a rule that must always hold:
+A false negative is a defect the test misses. A false positive is a failure even though behavior
+still meets the contract. Both reduce confidence. Repeated false alarms make developers ignore
+real failures and avoid refactoring; this grows costly as the application matures. A green but
+trivial test provides little signal merely because it rarely fails.
+(Ch. 4, §§4.1.2, 4.2, pp. 69–71, 76–79.)
 
-```
-- An order cannot be placed if inventory is zero
-- Users can only delete their own recipes
-- A recipe title must be non-empty
-- Pantry items belong to exactly one user
-- Deleted recipes are soft-deleted, not hard-deleted
-```
+An intended contract change should change the test; that failure is useful. A harmless internal
+rewrite should not require updating behavioral expectations. Signature changes may cause
+straightforward compile errors rather than ambiguous assertion failures. Do not conflate
+those with repeated runtime false alarms. (Ch. 4, §4.1.4, p. 76.)
 
-### Producing a coverage report
+For a questionable test, identify a concrete defect it catches and an equivalent implementation
+it should permit. If it catches no meaningful defect or rejects the equivalent implementation,
+rewrite or remove it when that work is authorized. Do not disable it merely to quiet a failure.
 
-For each invariant, determine its status:
+## Review the actual assertions
 
-```markdown
-## Invariant Coverage Report
+- Can the reader identify the client, scenario, action, and expected fact?
+- Is the oracle independent of the production algorithm, serializer, or current ambient time?
+- Would the assertion reject missing, empty, duplicated, or incorrectly mapped results relevant
+  to the scenario?
+- Are assertions about related outcomes of one behavior, rather than unrelated actions?
+- Are interaction assertions limited to meaningful external effects? Are input-stub calls and
+  internal collaboration left unasserted?
+- Does a fresh independent read prove managed persistence, or does the test inspect its input
+  object or cache?
+- Is the test independent of execution order, previous runs, and hidden shared mutable state?
+- Does the fixture represent a valid production scenario and expose the facts that matter?
 
-| Invariant                         | Implemented                                | Tested                                                           | Status                |
-| --------------------------------- | ------------------------------------------ | ---------------------------------------------------------------- | --------------------- |
-| Recipe title must be non-empty    | `RecipeService.create` raises `InputError` | `test_rejects_empty_title`, `test_rejects_whitespace_only_title` | ✅ Covered            |
-| Users can only delete own recipes | `RecipeService.delete` checks `user_id`    | `test_non_owner_cannot_delete`                                   | ✅ Covered            |
-| Soft-delete for recipes           | Not found in `RecipeRepository.delete`     | No test                                                          | ❌ Missing            |
-| Pantry items belong to one user   | Enforced by DB FK constraint               | `test_find_by_user_id_returns_only_user_recipes`                 | ⚠️ Implicit (DB only) |
-```
+(Ch. 1, §1.3.3, pp. 12–15; ch. 3, pp. 42–54; ch. 5, pp. 93–116;
+ch. 9, pp. 222–227; ch. 10, pp. 242–249; ch. 11, pp. 264–273.)
 
-Status categories:
+Several assertions or several recorders do not automatically make a test unfocused. Conversely,
+one compound assertion can hide unrelated claims. Review semantics, not just syntax.
+(Ch. 3, §3.1.5, p. 47; ch. 9, §9.2.2, pp. 225–226.)
 
-- **✅ Covered** — implemented in code AND verified by at least one test
-- **⚠️ Partial** — implemented but test coverage is incomplete (e.g., happy path tested but not error path)
-- **⚠️ Implicit** — enforced only by infrastructure (DB constraint, type system) with no domain-level test. Flag for discussion — sometimes this is fine, sometimes it needs an explicit test
-- **❌ Missing implementation** — invariant documented but code doesn't enforce it
-- **❌ Missing test** — code enforces it but no test verifies
-- **🚨 False confidence** — test exists but code doesn't actually enforce the invariant (test is passing for the wrong reason)
+## Coverage is a question-finding tool
 
-### Cross-agent validation
+Line coverage tracks executed code and can change with formatting. Branch coverage better
+describes executed alternatives, but neither measures whether outcomes were asserted or paths
+inside external libraries were protected. High coverage can coexist with meaningless tests;
+low coverage can expose real omissions. Do not impose the book's example percentage as a
+threshold or aim for a universal coverage number. (Ch. 1, §1.3, pp. 8–15.)
 
-Because invariants are documented, a separate agent can validate another agent's work:
+Use white-box analysis to find unexercised paths, then write black-box assertions from the
+meaningful behavior. Specifications and requirements are the primary oracle. Algorithmic
+utility code can require implementation-aware investigation, but should still have independently
+specified results. The book favors black-box test writing and names highly complex utility
+code as a contextual exception. (Ch. 4, §4.5.2, pp. 89–90.)
 
-1. **Implementation agent** writes code
-2. **QA agent** reads the invariants file and the code, produces the coverage report
-3. Neither agent needs to understand the other's internal reasoning — the invariants file is the shared contract
+Assess suite balance by the application's risks. Do not mandate pyramid ratios, test counts,
+or one test per method. More covered code can improve protection only when the assertions
+detect meaningful wrong outcomes. Dependencies, domain importance, and complexity matter too.
+(Ch. 1, pp. 16–17; ch. 4, §§4.1.1, 4.5.1, pp. 68–69, 87–89.)
 
-This is the same decoupling principle as the architecture itself: agents are coupled to the spec, not to each other.
+## Trace requirements without inventing a specification
 
----
+Use available requirements, invariants, acceptance criteria, accepted decisions, and confirmed
+regressions. No particular document is mandatory. Identify the source before interpreting code
+as intended behavior. Where intent is missing, label an inferred or characterized contract and
+ask for confirmation only if that ambiguity affects the task.
 
-## Architecture compliance
+The following report structure is this skill's workflow, derived from the book's
+specification-based testing and outcome-verification principles:
 
-The chisel dependency graph is strict and mechanically verifiable. Check these rules:
+| Status                          | Evidence needed                                                                           |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| Implemented and protected       | An implementation mechanism plus a test that independently checks the required fact       |
+| Implemented, protection missing | Implementation evidence; no adequate test found within the inspected scope                |
+| Tested, assertion inadequate    | A purported test whose oracle, fixture, or assertion cannot detect the relevant violation |
+| Missing implementation          | Confirmed requirement with no enforcing mechanism found                                   |
+| Other guarantee                 | A type, schema, constraint, or other mechanism; state what it proves and its limits       |
+| Unresolved                      | Missing intent or evidence; do not label it covered or absent without grounds             |
 
-### Backend (Python)
+A runtime test is not automatically valuable for a fact already enforced by construction.
+Database constraints may still need real integration evidence; compile-time properties may be
+better protected by type checks. Distinguish the guarantee from its tested scope. Conversely,
+a passing fake-based test does not establish a real database guarantee.
 
-```
-models/        → imports nothing from other layers
-services/      → imports models, repository Protocols only
-repositories/  → imports models, ORM models (internal), errors
-controllers/   → imports service Protocols, models
-factory.py     → imports concrete implementations of everything
-routes/        → imports factory, models (for response types)
-errors.py      → imports nothing from other layers
-config.py      → imports nothing from other layers
-```
+Do not require every test to name a formal invariant. A valid regression or external
+compatibility scenario can protect an independently specified requirement without an invariants
+file. For a review, record what was inspected and avoid claiming whole-suite completeness from
+a sample. (Ch. 4, §4.5.2, pp. 89–90; ch. 8, pp. 190–197.)
 
-**Violations to flag:**
+## Check architecture against the project
 
-| Violation                                       | Why it's wrong                              | Fix                                              |
-| ----------------------------------------------- | ------------------------------------------- | ------------------------------------------------ |
-| Service imports another service                 | Creates hidden coupling, breaks testability | Push composition to controller, or inject via DI |
-| Service imports `AsyncSession` or ORM types     | Service leaks into infrastructure           | Repository owns all DB access                    |
-| Controller contains `if` logic over domain data | Business logic in orchestration layer       | Move to service                                  |
-| Route handler contains business logic           | HTTP layer doing domain work                | Delegate to controller/service                   |
-| Factory contains conditional logic              | Factory should only wire, never decide      | Move logic to service                            |
-| Model imports from service/repository           | Data layer depends on behaviour layer       | Models are leaf nodes, no upward imports         |
-| Route handler assembles services directly       | Bypasses factory, loses consistency         | Use `factory.get_X_controller()`                 |
-| ORM type appears outside repository             | Infrastructure leaking into domain          | Map to domain model in repository                |
+Read accepted architecture decisions, project instructions, and the actual dependency rules.
+Use the available deterministic audits for mechanical constraints. Trace ownership and runtime
+collaboration when assessing behavior that import checks cannot establish. An interface does
+not erase a runtime cycle. (Ch. 8, §§8.4–8.5, pp. 197–204.)
 
-### Frontend (SvelteKit)
+Do not invent a universal model/service/controller diagram, ban all controller branches, or
+move logic solely to match the book's examples. Report a testability concern with a concrete
+cost and a possible boundary change; keep production refactors within the authorized task.
+If local enforcement conflicts with testing guidance, name the rule and its practical effect.
+Do not add suppressions or weaken the checker to make the conflict disappear.
 
-```
-models/        → imports nothing
-services/      → imports models, API client types only
-controllers/   → imports service interfaces, models
-factories/     → imports concrete services, controllers
-stores/        → imports models only
-+page.svelte   → imports stores, components, $props only
-+page.server   → imports factory, models, SvelteKit utilities
-```
+## Report findings that can be acted on
 
-**Violations to flag:**
+For each finding, provide the affected test or behavior, the problem, the defect or false alarm
+it permits, and a concrete remedy. Give file locations when reviewing actual code. Distinguish
+an application defect, a test defect, an evidence gap, and a policy constraint.
 
-| Violation                                         | Why it's wrong                     | Fix                             |
-| ------------------------------------------------- | ---------------------------------- | ------------------------------- |
-| `+page.svelte` imports a service                  | UI directly calling business logic | Use loader data or store        |
-| Store calls `fetch()`                             | Store doing server work            | Populate store from loader data |
-| Loader contains business logic                    | HTTP layer doing domain work       | Delegate to controller/service  |
-| Controller imports `createApiClient`              | Controller touching infrastructure | Service wraps the client        |
-| `components['schemas']['X']` used outside service | API types leaking into domain      | Map at service boundary         |
+Prioritize by consequence and confidence, not by how many style rules the test breaks. Identify
+redundancy by overlap in protected behavior and marginal value; different boundaries can
+legitimately protect different risks. Report observed validation results and any unavailable or
+substituted integration. Do not call static inspection a passing test run.
+(Ch. 1, §§1.2.1, 1.4, pp. 7–8, 15–17; ch. 4, pp. 68–86;
+ch. 10, §10.5.2, pp. 253–254.)
 
-### How to check
+## Calibrate review decisions
 
-For Python, scan imports:
+These synthetic cases check whether the guidance leads to the intended decisions. They are
+examples, not a requirement to add an identical test suite to every project.
 
-```python
-# Pseudocode for automated check
-for file in services/:
-    imports = extract_imports(file)
-    for imp in imports:
-        if imp.startswith("myapp.services.") and imp != current_file:
-            flag("Service imports another service", file, imp)
-        if "AsyncSession" in imp or "sqlalchemy" in imp:
-            flag("Service imports ORM/session", file, imp)
-```
-
-For TypeScript, same approach with import scanning. The rules are mechanical — they can be checked without understanding the code's purpose.
-
----
-
-## Test quality audit
-
-Beyond invariant coverage, audit the tests themselves:
-
-### Checklist
-
-- [ ] **No mocking libraries** — search for `mock`, `Mock`, `patch`, `vi.mock`, `jest.mock`, `spyOn`
-- [ ] **One assertion per test** — each test function has exactly one `assert` / `expect`
-- [ ] **Behaviour-focused** — no assertions on call counts, argument matchers, or internal method invocations
-- [ ] **Fakes in shared directory** — `tests/fakes/` not duplicated per file
-- [ ] **Fakes implement full Protocol** — not partial mocks that only stub what one test needs
-- [ ] **Test names describe invariants** — `test_cannot_X`, `test_returns_Y_when_Z`, not `test_method_name`
-- [ ] **Test classes reference invariants** — class docstring links to the invariant being verified
-- [ ] **No test interdependence** — tests can run in any order, each sets up its own state
-- [ ] **No shared mutable state** — fixtures return fresh instances, no module-level state
-- [ ] **Integration tests use real DB** — testcontainers for repository tests, not SQLite
-
-### Producing the audit report
-
-```markdown
-## Test Quality Audit
-
-### Summary
-
-- Total test files: 12
-- Total test functions: 47
-- Mocking library usage: 0 (clean)
-- Multi-assertion tests: 3 (flag)
-- Implementation-focused tests: 1 (flag)
-- Invariant coverage: 14/16 (2 gaps)
-
-### Issues
-
-| File                   | Test                  | Issue                                              | Severity |
-| ---------------------- | --------------------- | -------------------------------------------------- | -------- |
-| test_recipe_service.py | test_create_recipe    | 3 assertions — split into separate tests           | High     |
-| test_recipe_service.py | test_calls_repository | Asserts method was called — test behaviour instead | High     |
-| test_pantry_service.py | test_add_item         | Uses `unittest.mock.patch`                         | Critical |
-
-### Gaps
-
-| Invariant                     | Status        |
-| ----------------------------- | ------------- |
-| Soft-delete for recipes       | No test found |
-| Max 100 pantry items per user | No test found |
-```
-
----
-
-## Running validation
-
-Validation can be triggered in three modes:
-
-1. **After test generation** — automatically cross-reference new tests against invariants file
-2. **On review request** — user asks "are my tests good?" or "check test quality"
-3. **On code review** — user asks "does this code match the spec?" — check both architecture compliance and invariant enforcement
-
-In all modes, produce a concrete report with file paths, line numbers, and specific fixes. Never say "consider adding tests" — say exactly which invariant needs a test and in which file.
+| Case                                                              | Expected review decision                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| One reservation action checks confirmation and remaining capacity | Keep both meaningful outcomes together                                   |
+| A test verifies how often an input repository was queried         | Replace the internal interaction assertion with an outcome               |
+| An outbound message list contains the right payload twice         | Detect the duplicate if the contract requires one effect                 |
+| A database fake passes a persistence workflow                     | Describe simulated behavior; real persistence remains unverified         |
+| Assert reads the tracked object from arrange                      | Require independent persisted-state observation                          |
+| Act and assert read the current clock separately                  | Supply a fixed instant or explicit clock input                           |
+| A getter test raises coverage but protects no important fact      | Question its marginal value                                              |
+| A short pricing rule has substantial business consequences        | Retain focused protection despite low code complexity                    |
+| A test checks a private ORM construction invariant                | Recognize the real production contract; apply the narrow exception       |
+| A test asserts exact developer diagnostic text                    | Remove implementation coupling; support obligations are a different case |
