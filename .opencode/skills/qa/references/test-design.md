@@ -9,6 +9,8 @@ runner. These are independent examples, not repository requirements.
 Production contract: an invitation expires at its deadline, including equality.
 
 ```typescript
+import { expect, it } from 'vitest';
+
 function canAcceptInvitation(expiresAt: number, now: number): boolean {
 	return now < expiresAt;
 }
@@ -33,6 +35,8 @@ Contract: accepting a reservation consumes exactly the requested capacity; insuf
 capacity rejects the request without changing available capacity.
 
 ```typescript
+import { expect, it } from 'vitest';
+
 class Capacity {
 	constructor(public available: number) {}
 

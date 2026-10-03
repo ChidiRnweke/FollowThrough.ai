@@ -15,19 +15,77 @@ required for an API workflow.
 5. Make cleanup and failure diagnostics reliable across interrupted runs. Run the workflow in
    the project's intended environment and report its actual scope.
 
-## Example: accepting an invitation
+## TypeScript: exercise a public HTTP write and read
 
-```text
-arrange: an isolated, unexpired invitation for a valid recipient
-act: accept the invitation through the public application
-assert: the application shows membership in the invited workspace
-assert: reopening that workspace through the normal read path retains access
+Save as `notes.e2e.test.ts` and run with Vitest in a Node environment. This standalone example
+includes a real loopback HTTP application and a fresh state/lifecycle fixture. It proves the
+public HTTP workflow; its in-memory application storage does not prove database integration.
+
+```typescript
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import { expect, test as base } from 'vitest';
+
+const test = base.extend<{ baseUrl: string }>({
+	baseUrl: async ({}, use) => {
+		let savedTitle = '';
+		const server = createServer(async (request, response) => {
+			if (request.url !== '/notes/note-1') {
+				response.writeHead(404).end();
+				return;
+			}
+			if (request.method === 'POST') {
+				let title = '';
+				for await (const chunk of request) title += chunk.toString();
+				savedTitle = title;
+				response.writeHead(201, { 'Content-Type': 'application/json' });
+				response.end(JSON.stringify({ id: 'note-1', title: savedTitle }));
+			} else if (request.method === 'GET') {
+				response.setHeader('Content-Type', 'application/json');
+				response.end(JSON.stringify({ id: 'note-1', title: savedTitle }));
+			} else {
+				response.writeHead(405).end();
+			}
+		});
+		server.listen(0, '127.0.0.1');
+		await once(server, 'listening');
+		try {
+			const address = server.address();
+			if (!address || typeof address === 'string') throw new Error('TCP address required');
+			await use(`http://127.0.0.1:${address.port}`);
+		} finally {
+			await new Promise<void>((resolve, reject) => {
+				server.close((error) => (error ? reject(error) : resolve()));
+			});
+		}
+	}
+});
+
+test('a saved title is returned through the public read path', async ({ baseUrl }) => {
+	const saved = await fetch(`${baseUrl}/notes/note-1`, {
+		method: 'POST',
+		body: 'Quarterly review'
+	});
+	await saved.text(); // Consume the response body before releasing the connection.
+
+	const read = await fetch(`${baseUrl}/notes/note-1`);
+
+	expect(saved.status).toBe(201);
+	expect(read.status).toBe(200);
+	expect(await read.json()).toEqual({ id: 'note-1', title: 'Quarterly review' });
+});
 ```
 
-The reopening step observes the same acceptance's result. Database inspection can help diagnose
-failure, but asserting private tables changes the evidence boundary. Most expiry-rule variants
-belong in [unit tests](unit-testing.md); real persistence and wiring risks belong in
-[integration tests](integration-testing.md).
+**Catches:** a broken write route, wrong status, or a read path that does not return the saved
+value. **Bad replacement:** asserting an internal map contains the title bypasses routing,
+HTTP, and the public read path.
+
+**Adapt:** replace the toy server fixture with the real application launcher or test deployment.
+Keep the same public write/read assertions, use the actual auth/data fixtures, and disclose
+substituted providers. Invoke the application's existing entry points rather than adding test
+routes. For browser goals, perform the same write/read through visible controls as shown in
+[Frontend testing](frontend-testing.md). Diagnose with private storage inspection if needed,
+but retain public observations as the workflow's assertions.
 
 Keep the set focused on distinct critical goals. One or two broad workflows can be a useful
 starting point, not a maximum. Do not repeat every business-rule variation at the slowest layer

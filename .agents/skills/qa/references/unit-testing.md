@@ -18,6 +18,41 @@ A unit is one meaningful behavior, even when several real functions or objects i
 
 Use [Test design](test-design.md) for executable examples and fixture rules.
 
+## Python: test a deadline with pytest
+
+Save as `test_invitation.py`. Run `python -m pytest test_invitation.py` in an environment with
+pytest. In a project, import `can_accept` from production rather than redefining it in the spec.
+
+```python
+import pytest
+
+
+def can_accept(expires_at: int, now: int) -> bool:
+    return now < expires_at
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [(99, True), (100, False), (101, False)],
+    ids=["before-expiry", "at-expiry", "after-expiry"],
+)
+def test_invitation_acceptance_respects_expiry(now: int, expected: bool) -> None:
+    expires_at = 100
+
+    accepted = can_accept(expires_at, now)
+
+    assert accepted is expected
+```
+
+**Catches:** changing `<` to `<=` fails `at-expiry`. Always returning `False` fails
+`before-expiry`. **Bad replacement:** `assert accepted == (now < expires_at)` copies the rule;
+it can repeat the same mistaken boundary. Keep the explicit case values.
+
+**Adapt:** substitute the actual production input type and deadline contract. Use parametrization
+only for cases sharing setup/action/assertion shape. For a rejection that preserves state,
+assert both the failure and unchanged state, as in the TypeScript reservation example in
+[Test design](test-design.md). The syntax above follows [pytest parametrization](https://docs.pytest.org/en/stable/how-to/parametrize.html).
+
 ## Choose the observation
 
 | Behavior                 | Assert                                             | Avoid                                          |

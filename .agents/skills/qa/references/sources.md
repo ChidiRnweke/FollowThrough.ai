@@ -1,8 +1,8 @@
 # Source and scope
 
 The guidance draws on Vladimir Khorikov, _Unit Testing: Principles, Practices, and Patterns_,
-Manning, 2020. It organizes the ideas as writing and review recipes. The examples are original
-and independent of any repository. The skill is self-contained; the source PDF is not required.
+Manning, 2020. It organizes the ideas as writing and review recipes. The Python, TypeScript, and frontend examples apply these principles with library-specific
+APIs. They are original and independent of any repository. The skill is self-contained; the source PDF is not required.
 
 Typed, hand-written doubles rather than mocking libraries are this skill's tooling policy.
 The source also permits library mocks. The recipes and review templates apply the testing

@@ -35,6 +35,24 @@ A good test must satisfy all of these:
 
 See [Test design](references/test-design.md) for good and bad code examples.
 
+## Start from a concrete example
+
+Open the scenario reference before implementing the test. Each example includes code, setup,
+action, assertions, the defect caught, and adaptation instructions. Import the actual production
+unit in your test; the small implementations in the examples only make them self-contained.
+
+| Write this test                                                             | Start here                                               |
+| --------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Python decision/boundary cases with pytest                                  | [Unit testing](references/unit-testing.md)               |
+| TypeScript returned values or state with Vitest                             | [Test design](references/test-design.md)                 |
+| Python/TypeScript real file adapter and outbound contract                   | [Integration testing](references/integration-testing.md) |
+| Python/TypeScript PostgreSQL commits and rollback                           | [Database testing](references/database-testing.md)       |
+| TypeScript Svelte pending/failure states; Python browser interaction/layout | [Frontend testing](references/frontend-testing.md)       |
+| TypeScript public HTTP write/read workflow                                  | [End-to-end testing](references/end-to-end-testing.md)   |
+
+Use existing project dependencies where possible. The examples name optional library setups;
+they do not require replacing a project's runner or installing every demonstrated framework.
+
 ## 1. Define what must be true
 
 Read the requested change, applicable project instructions, and the affected production code.
@@ -69,6 +87,18 @@ only when it changes the expected result.
 Choose the narrowest boundary that provides the missing evidence. Several real classes can
 form one unit. A workflow backed only by fakes does not establish real database or provider
 compatibility. Add a wider test only for protection the narrower tests cannot supply.
+
+## Language-specific implementation rules
+
+- **Python:** use ordinary `assert` with explicit values; `pytest.raises` must match the expected
+  failure type/message, not any exception. Use function-scoped fixtures and `tmp_path` for owned
+  resources. Parametrize explicit inputs/outputs only when the scenario is the same. Implement
+  consumed `Protocol` contracts with ordinary classes; avoid `unittest.mock` and monkeypatching
+  internal functions. For async APIs, await the action in the project's configured async runner.
+- **TypeScript:** await actions, `.rejects`, and retrying DOM assertions. Missing `await` can end
+  the test before the failure occurs. Implement interfaces with typed classes/closures; do not
+  use `vi.fn`, `vi.mock`, or casts to disguise incomplete dependencies. Register resource cleanup
+  immediately after acquisition, and type fixtures so setup cannot silently omit collaborators.
 
 ## 3. Arrange valid state and explicit inputs
 

@@ -35,22 +35,125 @@ A private application database is normally managed; outbound mail is normally un
 shared database can expose both kinds of surface. Out-of-process alone does not determine the
 assertion style.
 
-## Example: changing a contact address
+## Python: real file adapter plus outbound contract
 
-```text
-arrange:
-  persist account-7 with old@example.test in the real test database
-  create a fresh recorder at the owned outbound transport seam
-act:
-  change account-7's address to new@example.test through the application workflow
-assert:
-  a fresh database read returns new@example.test
-  the recorder contains exactly the independently specified change message
+Save as `test_export.py`; run `python -m pytest test_export.py`. The example's contract is a
+UTF-8 file with one address per line and a final newline, followed by one compact JSON
+notification. Only the outgoing transport is substituted. pytest supplies a per-test
+[temporary directory](https://docs.pytest.org/en/stable/how-to/tmp_path.html).
+
+```python
+import json
+from pathlib import Path
+from typing import Protocol
+
+import pytest
+
+
+class Transport(Protocol):
+    def send(self, payload: bytes) -> None: ...
+
+
+class Recorder:
+    def __init__(self) -> None:
+        self.sent: list[bytes] = []
+
+    def send(self, payload: bytes) -> None:
+        self.sent.append(payload)
+
+
+def export_addresses(addresses: list[str], destination: Path, transport: Transport) -> None:
+    destination.write_text("\n".join(addresses) + "\n", encoding="utf-8")
+    payload = json.dumps(
+        {"kind": "addresses-exported", "count": len(addresses)},
+        separators=(",", ":"),
+    ).encode("utf-8")
+    transport.send(payload)
+
+
+def test_export_writes_the_addresses_and_announces_completion(tmp_path: Path) -> None:
+    destination = tmp_path / "addresses.txt"
+    recorder = Recorder()
+
+    export_addresses(["a@example.test", "b@example.test"], destination, recorder)
+
+    assert destination.read_bytes() == b"a@example.test\nb@example.test\n"
+    assert recorder.sent == [b'{"kind":"addresses-exported","count":2}']
+
+
+def test_failed_write_does_not_announce_completion(tmp_path: Path) -> None:
+    destination = tmp_path / "missing-directory" / "addresses.txt"
+    recorder = Recorder()
+
+    with pytest.raises(FileNotFoundError):
+        export_addresses(["a@example.test"], destination, recorder)
+
+    assert recorder.sent == []
 ```
 
-This protects persistence and outbound translation. Replacing the serializer or checking only
-an internal dispatcher call would omit part of that protection. Connecting to a real provider
-is a separate compatibility test when provider acceptance is the missing evidence.
+## TypeScript: the same boundary with Vitest
+
+Save as `export.test.ts`; run the project's Vitest command for that file. This is the complete
+standalone example, including cleanup. Import your existing workflow in an application test.
+
+```typescript
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { expect, onTestFinished, test } from 'vitest';
+
+interface Transport {
+	send(payload: string): Promise<void>;
+}
+
+class Recorder implements Transport {
+	readonly sent: string[] = [];
+	async send(payload: string): Promise<void> {
+		this.sent.push(payload);
+	}
+}
+
+async function exportAddresses(addresses: string[], destination: string, transport: Transport) {
+	await writeFile(destination, addresses.join('\n') + '\n', 'utf8');
+	await transport.send(JSON.stringify({ kind: 'addresses-exported', count: addresses.length }));
+}
+
+async function scenarioDirectory(): Promise<string> {
+	const directory = await mkdtemp(join(tmpdir(), 'address-export-'));
+	onTestFinished(() => rm(directory, { recursive: true, force: true }));
+	return directory;
+}
+
+test('export writes the addresses and announces completion', async () => {
+	const destination = join(await scenarioDirectory(), 'addresses.txt');
+	const recorder = new Recorder();
+
+	await exportAddresses(['a@example.test', 'b@example.test'], destination, recorder);
+
+	expect(await readFile(destination, 'utf8')).toBe('a@example.test\nb@example.test\n');
+	expect(recorder.sent).toEqual(['{"kind":"addresses-exported","count":2}']);
+});
+
+test('failed write does not announce completion', async () => {
+	const destination = join(await scenarioDirectory(), 'missing-directory', 'addresses.txt');
+	const recorder = new Recorder();
+
+	await expect(exportAddresses(['a@example.test'], destination, recorder)).rejects.toMatchObject({
+		code: 'ENOENT'
+	});
+
+	expect(recorder.sent).toEqual([]);
+});
+```
+
+**Catches:** dropped addresses, missing newline, incorrect count/payload, duplicate notifications,
+and notifying before a failed write. **Bad replacement:** asserting an internal `writeFile`
+call or using `JSON.stringify` on the expected side loses independent file/contract evidence.
+
+**Adapt:** choose a real managed adapter for your integration risk, supply valid discriminating
+inputs, and record only the outgoing external seam. These examples establish real filesystem
+behavior and attempted notification contents; they do not establish transport delivery.
+The cleanup hook follows [Vitest test context](https://vitest.dev/guide/test-context.html).
 
 ## Select more cases by the boundary risk
 
