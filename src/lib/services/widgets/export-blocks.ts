@@ -94,13 +94,19 @@ const visible = (condition: WidgetVisibility | undefined, scope: Scope): boolean
 	return compare(actual, condition, scope);
 };
 
-/** A short value a row can hold inline, or undefined for a block that needs a line of its own. */
-const inlineText = (block: WidgetExportBlock): string | undefined => {
+/**
+ * A short value a row can hold inline, or undefined for a block that needs a line of its own.
+ * A field keeps its label, unless the text just before it in the row already says it: a status
+ * row reads "Design · On track", not "Design · Design: On track".
+ */
+const inlineText = (block: WidgetExportBlock, before: WidgetExportBlock | undefined) => {
 	switch (block.kind) {
 		case 'paragraph':
 			return block.text;
 		case 'field':
-			return block.value;
+			return !block.label || (before?.kind === 'paragraph' && before.text === block.label)
+				? block.value
+				: block.value && `${block.label}: ${block.value}`;
 		case 'badge':
 			return `[${block.text}]`;
 		case 'metric':
@@ -110,12 +116,9 @@ const inlineText = (block: WidgetExportBlock): string | undefined => {
 	}
 };
 
-/**
- * A horizontal row reads as one line on paper, as it does on screen. A field's label usually
- * repeats the row's own name, so inside a row only its value is written.
- */
+/** A horizontal row reads as one line on paper, as it does on screen. */
 const oneLine = (blocks: readonly WidgetExportBlock[]): readonly WidgetExportBlock[] => {
-	const parts = blocks.map(inlineText);
+	const parts = blocks.map((block, index) => inlineText(block, blocks[index - 1]));
 	if (parts.some((part) => part === undefined)) return blocks;
 	const line = parts.filter(Boolean).join(' · ');
 	// A row of empty inputs, such as the field a new list item is typed into, prints nothing.
@@ -166,9 +169,16 @@ const blocksOf = (
 			return [{ kind: 'paragraph', text: text(prop('text')), muted: prop('tone') === 'muted' }];
 		case 'Checkbox':
 			return [{ kind: 'check', label: text(prop('label')), checked: prop('checked') === true }];
+		case 'Slider':
+			return [
+				{
+					kind: 'field',
+					label: text(prop('label')),
+					value: `${text(prop('value'))}${text(prop('suffix'))}`
+				}
+			];
 		case 'TextInput':
 		case 'NumberInput':
-		case 'Slider':
 			return [{ kind: 'field', label: text(prop('label')), value: text(prop('value')) }];
 		case 'Select': {
 			const value = text(prop('value'));

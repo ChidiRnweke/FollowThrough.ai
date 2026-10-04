@@ -128,4 +128,13 @@ describe('widget export', () => {
 			]
 		});
 	});
+	it('prints a row of inputs with their labels, and a slider with its suffix', () => {
+		const { layout, data } = widgetTemplates.savings;
+		const blocks = widgetExport(widgetBuilder({ layout, data }), data).blocks;
+		expect(blocks.slice(1, 4)).toEqual([
+			{ kind: 'paragraph', text: 'Starting amount: 10000 · Monthly deposit: 250', muted: false },
+			{ kind: 'field', label: 'Yearly interest', value: '5%' },
+			{ kind: 'field', label: 'Years', value: '20' }
+		]);
+	});
 });
