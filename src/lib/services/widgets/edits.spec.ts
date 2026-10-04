@@ -251,3 +251,48 @@ describe('applying a change without a revision', () => {
 		expect(result.kind === 'applied' && result.widget.dataRevision).toBe(8);
 	});
 });
+
+describe('templates and catalog version 2', () => {
+	it.each(Object.keys(widgetTemplates))('accepts the %s template', (name) => {
+		expect(
+			createWidget(
+				widgetTemplates[name as keyof typeof widgetTemplates],
+				{
+					id: testWidgetId(),
+					userId: testActor().userId,
+					projectId: testProjectId(),
+					now: testNow
+				},
+				widgetCatalog
+			).kind
+		).toBe('applied');
+	});
+	it('rejects a badge tone outside the catalog', () => {
+		expect(
+			applyWidgetEdit(
+				widgetBuilder({ layout: widgetTemplates.status.layout, data: widgetTemplates.status.data }),
+				{
+					kind: 'layout',
+					expectedLayoutRevision: 1,
+					patch: [{ op: 'replace', path: '/elements/flag/props/tone', value: 'neon' }]
+				},
+				widgetCatalog,
+				later
+			).kind
+		).toBe('invalid');
+	});
+	it('rejects a visibility rule json-render does not understand', () => {
+		expect(
+			applyWidgetEdit(
+				widgetBuilder(),
+				{
+					kind: 'layout',
+					expectedLayoutRevision: 1,
+					patch: [{ op: 'add', path: '/elements/item/visible', value: { $script: 'alert(1)' } }]
+				},
+				widgetCatalog,
+				later
+			).kind
+		).toBe('invalid');
+	});
+});

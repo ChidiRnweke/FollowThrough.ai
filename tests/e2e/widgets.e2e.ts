@@ -12,6 +12,13 @@ const saved = (page: Page) =>
 		timeout: 20_000
 	});
 
+/** Run the Widget command and choose a template in the picker. */
+async function insertTemplate(page: Page, name: string): Promise<void> {
+	await page.keyboard.type('/widget');
+	await page.keyboard.press('Enter');
+	await page.getByRole('button', { name: `New ${name}` }).click();
+}
+
 async function createNoteInInbox(page: Page, title: string): Promise<void> {
 	await page.goto('/today');
 	await page.getByRole('button', { name: 'Create in Inbox' }).click();
@@ -26,8 +33,7 @@ test('a widget created in a note keeps what was ticked, in the note and on its o
 	page
 }) => {
 	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
-	await page.keyboard.type('/widget');
-	await page.keyboard.press('Enter');
+	await insertTemplate(page, 'Checklist');
 	await expect(checkboxes(page)).toHaveCount(3);
 	// The note autosaves after a pause; the widget reference must be in the saved body.
 	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
@@ -58,8 +64,7 @@ test('a widget moved to the trash from the gallery shows as trashed in its note 
 	const title = `Widget e2e ${Date.now()}`;
 	await createNoteInInbox(page, title);
 	const noteUrl = page.url();
-	await page.keyboard.type('/widget');
-	await page.keyboard.press('Enter');
+	await insertTemplate(page, 'Checklist');
 	await expect(checkboxes(page)).toHaveCount(3);
 	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
 	await saved(page);
@@ -96,4 +101,22 @@ test('a widget moved to the trash from the gallery shows as trashed in its note 
 	await saved(page);
 	await page.goto(noteUrl);
 	await expect(checkboxes(page)).toHaveCount(3);
+});
+
+test('a status board from the picker saves a chosen status and shows its flag', async ({
+	page
+}) => {
+	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
+	await insertTemplate(page, 'Status board');
+	await expect(page.getByText('Needs attention')).toHaveCount(1);
+	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
+	await saved(page);
+
+	const choice = delivered(page);
+	await page.getByRole('button', { name: 'Build', exact: true }).click();
+	await page.getByRole('option', { name: 'Blocked' }).click();
+	await choice;
+	await saved(page);
+	await page.reload();
+	await expect(page.getByText('Needs attention')).toHaveCount(2);
 });

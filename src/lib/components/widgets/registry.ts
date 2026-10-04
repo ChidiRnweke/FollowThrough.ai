@@ -9,6 +9,12 @@ import WidgetMetric from './elements/widget-metric.svelte';
 import WidgetProgress from './elements/widget-progress.svelte';
 import WidgetStack from './elements/widget-stack.svelte';
 import WidgetText from './elements/widget-text.svelte';
+import WidgetTextInput from './elements/widget-text-input.svelte';
+import WidgetNumberInput from './elements/widget-number-input.svelte';
+import WidgetSelect from './elements/widget-select.svelte';
+import WidgetTable from './elements/widget-table.svelte';
+import WidgetBadge from './elements/widget-badge.svelte';
+import WidgetDivider from './elements/widget-divider.svelte';
 
 /**
  * The renderer side of the catalog: one Svelte component per catalog entry, built on our own
@@ -22,6 +28,12 @@ const components = {
 	Text: WidgetText,
 	Checkbox: WidgetCheckbox,
 	Progress: WidgetProgress,
+	TextInput: WidgetTextInput,
+	NumberInput: WidgetNumberInput,
+	Select: WidgetSelect,
+	Table: WidgetTable,
+	Badge: WidgetBadge,
+	Divider: WidgetDivider,
 	Metric: WidgetMetric
 } satisfies Record<WidgetComponentName, Component<never>>;
 

@@ -15,5 +15,5 @@
 			{#if props.description}<Card.Description>{props.description}</Card.Description>{/if}
 		</Card.Header>
 	{/if}
-	<Card.Content>{@render children?.()}</Card.Content>
+	<Card.Content class="flex flex-col gap-3">{@render children?.()}</Card.Content>
 </Card.Root>

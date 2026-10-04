@@ -49,14 +49,54 @@ const actionBindingSchema = z.strictObject({
 	params: z.record(z.string(), jsonValueSchema).optional()
 });
 
+const stateReferenceSchema = z.strictObject({ $state: pointerSchema });
+
+/** json-render's comparison operators, exactly: equality on any value, order on numbers. */
+const comparisonOperators = {
+	eq: jsonValueSchema.optional(),
+	neq: jsonValueSchema.optional(),
+	gt: z.union([z.number(), stateReferenceSchema]).optional(),
+	gte: z.union([z.number(), stateReferenceSchema]).optional(),
+	lt: z.union([z.number(), stateReferenceSchema]).optional(),
+	lte: z.union([z.number(), stateReferenceSchema]).optional(),
+	not: z.literal(true).optional()
+};
+
+const singleConditionSchema = z.union([
+	z.strictObject({ $state: pointerSchema, ...comparisonOperators }),
+	z.strictObject({ $item: z.string(), ...comparisonOperators }),
+	z.strictObject({ $index: z.literal(true), ...comparisonOperators })
+]);
+
+type SingleCondition = z.infer<typeof singleConditionSchema>;
+
+/** When an element shows: a constant, one condition, all of a list, or `$and`/`$or` groups. */
+export type WidgetVisibility =
+	| boolean
+	| SingleCondition
+	| SingleCondition[]
+	| { $and: WidgetVisibility[] }
+	| { $or: WidgetVisibility[] };
+
+export const widgetVisibilitySchema: z.ZodType<WidgetVisibility> = z.lazy(() =>
+	z.union([
+		z.boolean(),
+		singleConditionSchema,
+		z.array(singleConditionSchema),
+		z.strictObject({ $and: z.array(widgetVisibilitySchema) }),
+		z.strictObject({ $or: z.array(widgetVisibilitySchema) })
+	])
+);
+
 /**
- * One element of a layout. Version 1 leaves out json-render's `visible` and `watch`: neither is
- * needed yet, and anything absent here is rejected rather than stored unchecked.
+ * One element of a layout. `watch` is left out: nothing needs it yet, and anything absent here is
+ * rejected rather than stored unchecked.
  */
 export const widgetElementSchema = z.strictObject({
 	type: z.string().min(1),
 	props: z.record(z.string(), jsonValueSchema),
 	children: z.array(elementKeySchema),
+	visible: widgetVisibilitySchema.optional(),
 	repeat: z
 		.strictObject({ statePath: pointerSchema, key: z.string().min(1).optional() })
 		.optional(),
@@ -194,7 +234,7 @@ const tone = z.enum(['default', 'muted']).nullish();
 
 /** The allow-list of components a layout may use. A layout naming anything else is invalid. */
 export const widgetCatalog = {
-	version: 1,
+	version: 2,
 	components: {
 		Stack: {
 			description: 'Lays out its children vertically or horizontally.',
@@ -239,6 +279,59 @@ export const widgetCatalog = {
 			}),
 			slots: []
 		},
+		TextInput: {
+			description: 'A labelled text field. Bind `value` to state to save what is typed.',
+			props: z.strictObject({
+				label: dynamic(z.string()),
+				value: dynamic(z.string()),
+				placeholder: dynamic(z.string()).nullish()
+			}),
+			slots: []
+		},
+		NumberInput: {
+			description: 'A labelled number field. Bind `value` to state to save the number.',
+			props: z.strictObject({
+				label: dynamic(z.string()),
+				value: dynamic(z.number()),
+				min: z.number().nullish(),
+				max: z.number().nullish(),
+				step: z.number().positive().nullish()
+			}),
+			slots: []
+		},
+		Select: {
+			description: 'A choice from fixed options. Bind `value` to state to save the choice.',
+			props: z.strictObject({
+				label: dynamic(z.string()).nullish(),
+				value: dynamic(z.string()),
+				options: z
+					.array(z.strictObject({ value: z.string().min(1), label: z.string().min(1) }))
+					.min(1)
+			}),
+			slots: []
+		},
+		Table: {
+			description: 'Rows of a state array under named columns. Each column reads one row field.',
+			props: z.strictObject({
+				columns: z.array(z.strictObject({ key: z.string().min(1), label: z.string() })).min(1),
+				rows: dynamic(z.array(z.record(z.string(), jsonValueSchema))),
+				empty: z.string().nullish()
+			}),
+			slots: []
+		},
+		Badge: {
+			description: 'A short status label. The tone colours it; the text always says the status.',
+			props: z.strictObject({
+				text: dynamic(z.string()),
+				tone: z.enum(['neutral', 'brand', 'success', 'warning', 'danger']).nullish()
+			}),
+			slots: []
+		},
+		Divider: {
+			description: 'A horizontal rule between groups.',
+			props: z.strictObject({}),
+			slots: []
+		},
 		Metric: {
 			description: 'A labelled number or short value, with an optional detail line.',
 			props: z.strictObject({
@@ -281,6 +374,124 @@ export const widgetTemplates = {
 				{ id: 'first', label: 'First step', done: false },
 				{ id: 'second', label: 'Second step', done: false },
 				{ id: 'third', label: 'Third step', done: false }
+			]
+		}
+	},
+	progress: {
+		title: 'Progress tracker',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: { title: { $state: '/title' } },
+					children: ['progress', 'numbers', 'note']
+				},
+				progress: {
+					type: 'Progress',
+					props: { label: 'Done', value: { $state: '/done' }, max: { $state: '/total' } },
+					children: []
+				},
+				numbers: {
+					type: 'Stack',
+					props: { direction: 'horizontal', gap: 'lg' },
+					children: ['done', 'total']
+				},
+				done: {
+					type: 'NumberInput',
+					props: { label: 'Done', value: { $bindState: '/done' }, min: 0 },
+					children: []
+				},
+				total: {
+					type: 'NumberInput',
+					props: { label: 'Target', value: { $bindState: '/total' }, min: 1 },
+					children: []
+				},
+				note: {
+					type: 'TextInput',
+					props: {
+						label: 'Note',
+						value: { $bindState: '/note' },
+						placeholder: 'What is in the way?'
+					},
+					children: []
+				}
+			}
+		},
+		data: { title: 'Progress tracker', done: 3, total: 10, note: '' }
+	},
+	decisions: {
+		title: 'Decision log',
+		layout: {
+			root: 'card',
+			elements: {
+				card: { type: 'Card', props: { title: { $state: '/title' } }, children: ['table'] },
+				table: {
+					type: 'Table',
+					props: {
+						columns: [
+							{ key: 'decision', label: 'Decision' },
+							{ key: 'owner', label: 'Owner' },
+							{ key: 'date', label: 'Date' }
+						],
+						rows: { $state: '/decisions' },
+						empty: 'No decisions yet.'
+					},
+					children: []
+				}
+			}
+		},
+		data: {
+			title: 'Decision log',
+			decisions: [{ decision: 'First decision', owner: 'Owner', date: '2026-10-01' }]
+		}
+	},
+	status: {
+		title: 'Status board',
+		layout: {
+			root: 'card',
+			elements: {
+				card: { type: 'Card', props: { title: { $state: '/title' } }, children: ['rows'] },
+				rows: {
+					type: 'Stack',
+					props: { direction: 'vertical', gap: 'sm' },
+					repeat: { statePath: '/workstreams', key: 'id' },
+					children: ['row']
+				},
+				row: {
+					type: 'Stack',
+					props: { direction: 'horizontal', gap: 'md' },
+					children: ['name', 'status', 'flag']
+				},
+				name: { type: 'Text', props: { text: { $item: 'name' } }, children: [] },
+				status: {
+					type: 'Select',
+					props: {
+						label: { $item: 'name' },
+						value: { $bindItem: 'status' },
+						options: [
+							{ value: 'on_track', label: 'On track' },
+							{ value: 'at_risk', label: 'At risk' },
+							{ value: 'blocked', label: 'Blocked' },
+							{ value: 'done', label: 'Done' }
+						]
+					},
+					children: []
+				},
+				flag: {
+					type: 'Badge',
+					props: { text: 'Needs attention', tone: 'warning' },
+					visible: { $item: 'status', eq: 'blocked' },
+					children: []
+				}
+			}
+		},
+		data: {
+			title: 'Status board',
+			workstreams: [
+				{ id: 'design', name: 'Design', status: 'on_track' },
+				{ id: 'build', name: 'Build', status: 'at_risk' },
+				{ id: 'launch', name: 'Launch', status: 'blocked' }
 			]
 		}
 	}

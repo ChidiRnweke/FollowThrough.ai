@@ -134,12 +134,13 @@ revision, so a caller can read the widget again and retry.
 ### The catalog is the allow-list
 
 `widgetCatalog` is a versioned value in `src/lib/models/widgets/`: component names, Zod prop
-schemas, slots and descriptions. Version 1 has Stack, Card, Heading, Text, Checkbox, Progress and
-Metric. A layout can use only these components. A prop is either a literal that matches the
+schemas, slots and descriptions. Version 2 has Stack, Card, Heading, Text, Checkbox, Progress,
+Metric, TextInput, NumberInput, Select, Table, Badge and Divider. A version only adds components,
+so every older layout stays valid. A layout can use only these components. A prop is either a literal that matches the
 component's schema or one of a fixed set of state expressions (`$state`, `$bindState`, `$item`,
 `$bindItem`, `$index`, `$template`). Element bindings may use only the json-render built-in state
-actions (`setState`, `pushState`, `removeState`, `validateForm`). Version 1 leaves out `visible`
-and `watch`. There are no custom actions that do I/O, and no component that takes free-form URLs,
+actions (`setState`, `pushState`, `removeState`, `validateForm`). `visible` takes exactly
+json-render's visibility conditions, modelled as a recursive schema; `watch` is left out. There are no custom actions that do I/O, and no component that takes free-form URLs,
 HTML or frames. Agents write layouts, so a layout is untrusted input.
 
 json-render's own `catalog.validate` does not check props when a catalog has more than one
@@ -163,15 +164,24 @@ json-render is imported in two places only:
 Models define the stored layout and data schemas with Zod and do not import the library. The
 versions are pinned exactly. A library upgrade changes two directories.
 
+### Templates are drafts, and the picker previews them as saved
+
+A template is a `WidgetDraft` in `widgetTemplates`: a checklist, a progress tracker, a decision
+log and a status board. The "Widget" command opens a picker that previews each template as
+`createWidget` would save it, and also offers the project's existing widgets, because many notes
+can show one widget.
+
 ### The view turns control changes into data changes
 
 `WidgetView` gives json-render a controlled `createStateStore` seeded with the widget data, and
 subscribes to it. In controlled mode the library ignores `onStateChange`, so the subscription is
 the only reliable signal. On each change the view reads the store snapshot with
 `widgetDataSchema`, computes the smallest patch with `diffWidgetData`, and hands one `data` change
-to its owner. Ticking one checkbox produces one `replace` of that
-item's flag. A record revision that the view did not produce, from sync or an agent, replaces the
-store. Without an edit handler the view is read-only.
+to its owner. Controls write the store on every keystroke, so the view hands over one change per
+pause of about 350 ms, and flushes on `pagehide`, when the page is hidden and when it unmounts. Ticking one checkbox produces one `replace` of that
+item's flag. A record whose data differs from what the view last agreed with changed elsewhere,
+by sync or an agent. The view writes the new values into the store key by key, so a control
+keeps its focus. Without an edit handler the view is read-only.
 
 ### Widgets are a synchronized workspace resource
 
@@ -255,7 +265,9 @@ their source as a string for the same reason.
   path merge, and `src/lib/client/sync/indexeddb-outbox.svelte.spec.ts` checks that a replayed
   widget change is queued again with its change unchanged.
 - `src/lib/components/widgets/widget-view.svelte.spec.ts` checks that a ticked checkbox becomes
-  one `data` edit, the read-only view, and the unsupported-element placeholder.
+  one `data` change, that a burst of typing becomes one change, a `visible` rule, the read-only
+  view, and the unsupported-element placeholder. `edits.spec.ts` checks that every template is a
+  valid draft.
 - `src/lib/server/factories/agent/widget-tools.spec.ts` checks that `edit_widget_data` saves
   through the shared rule, that rejected edits name the problem, and that the tool parameters
   convert to strict JSON Schema.
@@ -268,4 +280,4 @@ their source as a string for the same reason.
   the agent surface.
 - `tests/e2e/widgets.e2e.ts` creates a widget from a note, ticks it, reloads, and edits it in its
   tab. A second case moves it to the trash from the gallery, sees the note show it as trashed, and
-  restores it.
+  restores it. A third inserts a status board from the picker and saves a chosen status.

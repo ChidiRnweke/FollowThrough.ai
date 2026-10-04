@@ -68,12 +68,9 @@ Each item is one PR. Each revises ADR 0043 and adds its specs to the ADR's Evide
    case that creates a widget and then changes only its data (ADR 0023).
 2. **Approval preview.** Render the widget as `applyWidgetEdit` would leave it in
    `src/lib/components/chat/actions/tool-approval-preview.ts`, instead of the generic arguments.
-3. **Templates and the JSON editor.** More templates, and an editor that shows the issues of
-   `widgetIssues` while the user types.
-4. **Catalog growth.** Text input and select need a debounced bridge, because they change on every
-   keystroke. `visible` needs a model schema before it is allowed back.
-5. **Search and export.** A searchable text for the knowledge index (ADRs 0019 and 0020), and a
+3. **The JSON editor.** An editor that shows the issues of `widgetIssues` while the user types.
+4. **Search and export.** A searchable text for the knowledge index (ADRs 0019 and 0020), and a
    static form for note export (`src/lib/components/notes/export/render-diagrams.ts` is the
    precedent).
-6. **Housekeeping.** `TOOL_DESCRIPTIONS` classifies `create_diagram` as `read`, but
+5. **Housekeeping.** `TOOL_DESCRIPTIONS` classifies `create_diagram` as `read`, but
    `agentToolCoverage` classifies it as `mutation`. Resolve it before more tools copy the pattern.

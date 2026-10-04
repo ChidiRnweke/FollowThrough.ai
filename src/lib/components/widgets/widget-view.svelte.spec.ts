@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { WidgetChange } from '$lib/models/widgets';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
+import { widgetTemplates } from '$lib/models/widgets';
 import WidgetView from './widget-view.svelte';
 
 describe('Widget view', () => {
@@ -35,5 +36,36 @@ describe('Widget view', () => {
 			})
 		});
 		await expect.element(screen.getByText(/uses a Gauge element/)).toBeVisible();
+	});
+});
+
+describe('Widget view typing', () => {
+	it('hands a burst of typing over as one data change after a pause', async () => {
+		const changes: WidgetChange[] = [];
+		const screen = await render(WidgetView, {
+			widget: widgetBuilder({
+				layout: widgetTemplates.progress.layout,
+				data: widgetTemplates.progress.data
+			}),
+			onChange: async (change) => {
+				changes.push(change);
+				return { kind: 'staged' };
+			}
+		});
+		await screen.getByLabelText('Note').fill('Waiting on legal');
+		await expect
+			.poll(() => changes)
+			.toEqual([
+				{ kind: 'data', patch: [{ op: 'replace', path: '/note', value: 'Waiting on legal' }] }
+			]);
+	});
+	it('shows a badge only while its rule holds', async () => {
+		const screen = await render(WidgetView, {
+			widget: widgetBuilder({
+				layout: widgetTemplates.status.layout,
+				data: widgetTemplates.status.data
+			})
+		});
+		await expect.poll(() => screen.getByText('Needs attention').elements().length).toBe(1);
 	});
 });
