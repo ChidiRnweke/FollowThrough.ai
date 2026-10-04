@@ -98,6 +98,7 @@ src/routes/
 ## Code Examples
 
 For full code examples of the architecture layers in practice, please read:
+
 - **`references/patterns-examples.md`** — Examples for Models, Services, Controllers, Factory, and Stores.
 
 ---
@@ -111,6 +112,7 @@ For full code examples of the architecture layers in practice, please read:
 ## Validation Checklist
 
 Before concluding any implementation task, copy this checklist into your response scratchpad to track your progress:
+
 - [ ] Run the type-checker (`pnpm svelte-check`).
 - [ ] Run the linter (`pnpm lint`).
 - [ ] Run tests if applicable.
@@ -121,6 +123,7 @@ Before concluding any implementation task, copy this checklist into your respons
 `chisel-js` is the deterministic counterpart of this skill. Each rule below is owned by this skill — `chisel-js explain <rule-id>` prints fix guidance, and `chisel-js check .` flags violations. The paired UI skill (`designing-svelte-ui`) owns the colour/component/responsiveness rules listed in its own SKILL.md.
 
 ### Structural (SvelteKit runtime invariants)
+
 - `structural:console-log-banned` — `console.*` banned in `.svelte`/`.ts` outside `scripts/`.
 - `structural:timers-banned` — `setTimeout`/`setInterval` banned in `.svelte` and `$lib/`.
 - `structural:inline-style-banned` — inline `style=` outside `components/ui/`.
@@ -140,33 +143,41 @@ Before concluding any implementation task, copy this checklist into your respons
 - `structural:hooks-locals-limited` — `hooks.server.ts` may set only `locals.user`.
 
 ### Import boundaries
+
 - `import-boundary:*` — services/controllers/routes/stores only import what their row of the Constraints table permits. See `references/layers.md`.
 
 ### Complexity
+
 - `complexity:page-loc-limit` — `+page.svelte` > 100 LoC (hard error).
 - `complexity:page-loc-warning` — `+page.svelte` > 80 LoC (warning, suppressible).
 - `complexity:controller-loc-limit` — Controller method > 40 LoC.
 - `complexity:loader-loc-limit` — `load`/form action > 20 LoC.
 
 ### API endpoints
+
 - `api:request-handler-outside-api` — `RequestHandler` export outside `src/routes/api/`.
 - `api:route-count-ratio` — API routes exceed 20% of page routes (warning).
 
 ### Concurrency
+
 - `concurrency:promise-all-warning` — `Promise.all` across services in a loader (use a controller).
 
 ### Error flow
+
 - `error-flow:raw-http-status` — Raw HTTP status outside `error_handlers` / API `+server.ts` JSON return. API routes under `src/routes/api/**/+server.ts` may `return json(payload, { status })`.
 
 ### Project structure
+
 - `project-structure:*` — `pnpm`-only, `frontend/.env` / `backend/.env` separation, etc. (see `constraints.md` §5).
 
 ### Tests (paired with `qa` skill)
-- `test-structure:test-file-location` — Tests must live under `tests/unit/`, `tests/integration/`, or `tests/e2e/`.
-- `test-structure:test-naming` — Names must describe the invariant (`test_cannot_X`, `test_returns_Y_when_Z`).
-- `test-structure:one-assert-per-test` — Exactly one `expect` per test.
-- `test-structure:mocking-banned` — `jest.mock`, `vi.mock`, `spyOn` banned — write a fake.
-- `test-structure:skip-without-reason` — `test.skip` requires a `reason`.
+
+Use the [QA skill](../qa/SKILL.md) for test boundaries, assertions, doubles, and review.
+Read the active project's instructions for test placement, commands, and current audit rules.
+Do not treat assertion counts or a generic directory layout as test-quality principles.
+If a checker conflicts with the QA guidance, report the constraint and keep the checks passing;
+do not suppress it or change the checker without an explicit task to align enforcement.
 
 ### Suppression
+
 Inline `// noqa: rule-id — <reason>` (TypeScript) or `<!-- noqa: rule-id — <reason> -->` (Svelte). A suppression without a reason string fails the check.
