@@ -20,12 +20,8 @@ describe('Action progress row', () => {
 			ActionProgress,
 			props({ cancelling: true, oncancel: () => undefined }) as never
 		);
-		const status = await screen.getByRole('status').element();
-		const button = await screen.getByRole('button', { name: 'Stopping' }).element();
-		expect({ text: status?.textContent?.trim(), disabled: button?.disabled }).toEqual({
-			text: 'Stopping…',
-			disabled: true
-		});
+		await expect.element(screen.getByRole('status')).toHaveTextContent('Stopping…');
+		await expect.element(screen.getByRole('button', { name: 'Stopping' })).toBeDisabled();
 	});
 
 	it('runs the cancel handler when the cross is clicked', async () => {

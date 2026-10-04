@@ -80,6 +80,7 @@ it('keeps a collapsed ancestor closed after the tree refreshes', async () => {
 	});
 	const toggle = screen.getByRole('button', { name: 'Refreshed folder', exact: true });
 	await toggle.click();
+	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
 	await screen.rerender({ notes: [folder, note] });
 	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
 });
