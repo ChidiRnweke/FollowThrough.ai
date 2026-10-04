@@ -44,6 +44,8 @@
 	let observed: WidgetData = untrack(() => widget.data);
 	let failure = $state<string | null>(null);
 	let pending: (() => void) | undefined;
+	/** Changes handed over whose write to the local queue has not finished yet. */
+	let staging = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	// One store for the life of the view, holding the data and the values computed from it. The
@@ -118,10 +120,13 @@
 				if (patch.length === 0) return;
 				observed = next.data;
 				const change: WidgetChange = { kind: 'data', patch };
-				void handler(change).then((outcome) => {
-					failure = outcome.kind === 'failure' ? outcome.message : null;
-					if (outcome.kind === 'failure') adopt(widget.data);
-				});
+				staging += 1;
+				void handler(change)
+					.then((outcome) => {
+						failure = outcome.kind === 'failure' ? outcome.message : null;
+						if (outcome.kind === 'failure') adopt(widget.data);
+					})
+					.finally(() => (staging -= 1));
 			};
 			clearTimeout(timer);
 			timer = setTimeout(flush, PAUSE_MS);
@@ -139,7 +144,19 @@
 			flush();
 		};
 	});
+
+	/**
+	 * A reload inside the pause, or before the queue write lands, would drop the last edit: the
+	 * write is asynchronous and `pagehide` does not wait for it. Hand the edit over now, and ask
+	 * the browser to hold the page while it is still being written, as the note editor does.
+	 */
+	function onbeforeunload(event: BeforeUnloadEvent): void {
+		flush();
+		if (staging > 0) event.preventDefault();
+	}
 </script>
+
+<svelte:window {onbeforeunload} />
 
 <div data-slot="widget-view" data-widget-id={widget.id} class="@container flex flex-col gap-2">
 	<Field.Set disabled={!onChange} class="min-w-0 gap-0">
