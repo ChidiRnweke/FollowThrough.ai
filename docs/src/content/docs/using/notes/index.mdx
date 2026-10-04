@@ -85,7 +85,7 @@ Choose **Publish** from the note menu to record the current state as the note's 
 
 Open a project page's menu and choose **Import an existing project...** to upload a `.zip` of Markdown files. FollowThrough recreates it as notes, keeping the folder structure: each note takes its title from its file name, `[[wiki links]]` between imported notes become real note links, and YAML frontmatter is stripped (the closing report names any keys that weren't imported).
 
-The archive can hold up to 25 MB and 2,000 files, each file up to 1 MB and at most 8 folders deep; `.obsidian/`, `.git/`, `.trash/`, `__MACOSX/`, and other dotfile paths are ignored. An import isn't all-or-nothing: readable notes import even when sibling files fail, and the report lists every failed and skipped file with its reason. Two notes with the same name in one folder never merge; the later one gets a ` (2)` suffix.
+Archive admission defaults to 25 MiB of expanded content and 2,000 files, configurable by the operator. Individual notes have no separate size or folder-depth ceiling; `.obsidian/`, `.git/`, `.trash/`, `__MACOSX/`, and other dotfile paths are ignored. An import isn't all-or-nothing: readable notes import even when sibling files fail, and the report lists every failed and skipped file with its reason. Two notes with the same name in one folder never merge; the later one gets a ` (2)` suffix.
 
 ## See also
 

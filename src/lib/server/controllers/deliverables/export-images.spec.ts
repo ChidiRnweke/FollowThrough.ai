@@ -15,8 +15,11 @@ const id = '00000000-0000-4000-8000-000000000001';
 const source = `/api/attachments/${id}/content`;
 const input = { projectId: testProjectId(), noteIds: [testNoteId()], title: 'Image export' };
 describe('export image authorization', () => {
-	it('fetches an actor-authorized attachment before rendering', async () => {
-		const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+	it('embeds an actor-authorized image beyond the former eight MiB ceiling', async () => {
+		const bytes = Buffer.concat([
+			Buffer.from('89504e470d0a1a0a', 'hex'),
+			Buffer.alloc(8 * 1024 * 1024)
+		]);
 		const server = createServer((_req, response) => {
 			response.writeHead(200, { 'content-type': 'image/png' });
 			response.end(bytes);

@@ -32,6 +32,14 @@ export const variables = defineEnvVars({
 			'can never be hydrated from the secrets backend.',
 		schema: optionalString
 	},
+	ARCHIVE_MAX_EXPANDED_BYTES: {
+		description: 'Archive decompression admission in bytes (defaults to 26214400).',
+		schema: optionalString
+	},
+	ARCHIVE_MAX_ENTRIES: {
+		description: 'Archive entry admission (defaults to 2000).',
+		schema: optionalString
+	},
 	OPENROUTER_API_KEY: {
 		description: 'OpenRouter API key used by workbench chat.',
 		schema: optionalString
@@ -74,14 +82,6 @@ export const variables = defineEnvVars({
 		description: 'Retrieval chunk overlap token count.',
 		schema: optionalString
 	},
-	ATTACHMENT_MAX_BYTES: {
-		description: 'Maximum uploaded attachment size.',
-		schema: optionalString
-	},
-	ATTACHMENT_PARSE_MAX_BYTES: {
-		description: 'Maximum attachment parser input size.',
-		schema: optionalString
-	},
 	S3_ENDPOINT: { description: 'S3-compatible object storage endpoint.', schema: optionalString },
 	S3_REGION: { description: 'S3 region.', schema: optionalString },
 	S3_ACCESS_KEY_ID: { description: 'S3 access key.', schema: optionalString },
@@ -101,10 +101,6 @@ export const variables = defineEnvVars({
 	},
 	MISTRAL_OCR_MODEL: {
 		description: 'Mistral Document AI OCR model (defaults to mistral-ocr-latest).',
-		schema: optionalString
-	},
-	ATTACHMENT_OCR_MAX_PAGES: {
-		description: 'Maximum page count requested per OCR call (defaults to 100).',
 		schema: optionalString
 	},
 	S3_FORCE_PATH_STYLE: { description: 'Use path-style S3 URLs.', schema: optionalString },

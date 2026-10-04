@@ -12,19 +12,14 @@ const imagesForRun = (request: ImageRequest): readonly ConversationImageInput[] 
 	...(request.contextImages ?? [])
 ];
 
-/** Both image channels share the existing count, format and byte budget. */
+/** Both image channels use the same format validation. */
 export function validateRunImages(request: ImageRequest): void {
-	const images = imagesForRun(request);
-	if (images.length > 4) throw new ValidationError('Attach at most four images.');
-	const imageBytes = images.reduce((sum, image) => {
+	for (const image of imagesForRun(request)) {
 		if (!['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType))
 			throw new ValidationError('Chat images must be PNG, JPEG, or WebP.');
 		if (!image.dataUrl.startsWith(`data:${image.mediaType};base64,`))
 			throw new ValidationError('Chat image content does not match its media type.');
-		return sum + Buffer.byteLength(image.dataUrl.split(',')[1] ?? '', 'base64');
-	}, 0);
-	if (imageBytes > 10 * 1024 * 1024)
-		throw new ValidationError('Chat images must be 10 MiB combined or less.');
+	}
 }
 
 /** Freeze native vision or the resolved fallback reader onto the durable request. */

@@ -27,15 +27,6 @@ describe('attachment processing OCR routing', () => {
 		});
 	});
 
-	it('passes the configured page cap to the engine', async () => {
-		vi.stubEnv('ATTACHMENT_OCR_MAX_PAGES', '25');
-		const { process, ocr } = setup();
-
-		await process(view('application/pdf'));
-
-		expect(ocr.calls[0].maxPages).toBe(25);
-	});
-
 	it('sends office documents to OCR instead of reporting them unsupported (1/2)', async () => {
 		const { process, repository, ocr: _ocr } = setup();
 

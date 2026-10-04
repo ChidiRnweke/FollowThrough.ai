@@ -5,8 +5,6 @@ import { JSDOM } from 'jsdom';
 import { ValidationError } from '$lib/errors';
 import { drawioLabelValues } from '$lib/models/diagrams/drawio-labels';
 
-const MAX_DRAWIO_SOURCE_LENGTH = 2_000_000;
-const MAX_SVG_LENGTH = 2_000_000;
 const URL_ATTRIBUTES = new Set(['href', 'src', 'xlink:href']);
 const REFERENCE_ATTRIBUTES = ['parent', 'source', 'target'] as const;
 const GEOMETRY_ATTRIBUTES = ['x', 'y', 'width', 'height'] as const;
@@ -244,8 +242,6 @@ export class DrawioXmlValidator {
 	validate(source: string): string {
 		const normalized = source.trim();
 		if (!normalized) throw new ValidationError('draw.io XML is required.');
-		if (normalized.length > MAX_DRAWIO_SOURCE_LENGTH)
-			throw new ValidationError('draw.io XML is too large.');
 		// Checked before parsing so the answer names the mistake. Deliberately not
 		// unescaped and retried: that would repair a document nobody verified, and
 		// `assertSafeAttributes` below relies on escaped values staying escaped.
@@ -300,8 +296,6 @@ export class DrawioSvgSanitizer {
 	sanitize(source: string): string {
 		const normalized = source.trim();
 		if (!normalized) throw new ValidationError('A draw.io SVG preview is required.');
-		if (normalized.length > MAX_SVG_LENGTH)
-			throw new ValidationError('The draw.io SVG preview is too large.');
 
 		const window = new JSDOM('').window;
 		try {

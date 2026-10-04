@@ -25,15 +25,11 @@ export interface ArchiveEntry {
 export interface ArchiveLimits {
 	readonly maxTotalBytes: number;
 	readonly maxEntries: number;
-	readonly maxFileBytes: number;
-	readonly maxDepth: number;
 }
 
 export const DEFAULT_ARCHIVE_LIMITS: ArchiveLimits = {
 	maxTotalBytes: 25 * 1024 * 1024,
-	maxEntries: 2000,
-	maxFileBytes: 1024 * 1024,
-	maxDepth: 8
+	maxEntries: 2000
 };
 
 export type ArchiveRejection =
@@ -133,14 +129,6 @@ export const readMarkdownArchive = (
 			continue;
 		}
 		const segments = path.split('/');
-		if (segments.length - 1 > limits.maxDepth) {
-			skipped.push({ path, reason: `Nested deeper than ${limits.maxDepth} folders` });
-			continue;
-		}
-		if ((entry.header?.size ?? 0) > limits.maxFileBytes) {
-			skipped.push({ path, reason: 'Larger than the per-file limit' });
-			continue;
-		}
 		let text: string;
 		try {
 			text = zip.readAsText(entry);
@@ -227,9 +215,9 @@ export const describeArchiveRejection = (rejection: ArchiveRejection): string =>
 		case 'not_a_zip':
 			return 'That file is not a readable zip archive.';
 		case 'too_large':
-			return `The archive expands to ${Math.round(rejection.bytes / 1024 / 1024)} MB, over the ${Math.round(rejection.limit / 1024 / 1024)} MB limit.`;
+			return `The archive expands to ${Math.round(rejection.bytes / 1024 / 1024)} MB, over the ${Math.round(rejection.limit / 1024 / 1024)} MB ARCHIVE_MAX_EXPANDED_BYTES setting.`;
 		case 'too_many_entries':
-			return `The archive holds ${rejection.entries} files, over the ${rejection.limit} limit.`;
+			return `The archive holds ${rejection.entries} files, over the ${rejection.limit} ARCHIVE_MAX_ENTRIES setting.`;
 		case 'unsafe_path':
 			return `The archive contains an unsafe path (${rejection.path}) and was not imported.`;
 	}

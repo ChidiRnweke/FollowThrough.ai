@@ -79,17 +79,14 @@ describe('Refusing a hostile archive', () => {
 		expect(readMarkdownArchive(new Uint8Array([1, 2, 3, 4])).ok).toBe(false);
 	});
 
-	it('skips a single oversized file without failing the whole import', () => {
-		const outcome = read(
-			{ 'big.md': 'x'.repeat(4096), 'small.md': '# ok' },
-			{ ...DEFAULT_ARCHIVE_LIMITS, maxFileBytes: 1024 }
-		);
-		expect(outcome.ok && outcome.result.entries.map((e) => e.path)).toEqual(['small.md']);
+	it('imports individual notes larger than the former one MiB cap', () => {
+		const outcome = read({ 'big.md': 'x'.repeat(1024 * 1024 + 1), 'small.md': '# ok' });
+		expect(outcome.ok && outcome.result.entries.map((e) => e.path)).toEqual(['big.md', 'small.md']);
 	});
 
-	it('skips a file nested deeper than the depth limit', () => {
-		const outcome = read({ 'a/b/c/one.md': '# One' }, { ...DEFAULT_ARCHIVE_LIMITS, maxDepth: 2 });
-		expect(outcome.ok && outcome.result.entries).toHaveLength(0);
+	it('imports notes nested beyond eight folders', () => {
+		const outcome = read({ 'a/b/c/d/e/f/g/h/i/one.md': '# One' });
+		expect(outcome.ok && outcome.result.entries).toHaveLength(1);
 	});
 });
 

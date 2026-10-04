@@ -15,8 +15,7 @@ export function relatedNoteMatches(
 		if (!previous || match.score > previous.score)
 			unique.set(noteId, { noteId, content: match.document.content, score: match.score });
 	}
-	// Preserve the existing five-proposal presentation for Relate selection.
-	return [...unique.values()].slice(0, 5);
+	return [...unique.values()];
 }
 
 export function relatedNoteCandidate(

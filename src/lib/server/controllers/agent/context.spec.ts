@@ -284,7 +284,7 @@ describe('Agent grounding invariants', () => {
 		expect(catalog(context).items[0]?.name).toBe('Zzz pinned');
 	});
 
-	it('flags an overflowing catalogue as truncated', async () => {
+	it('includes every eligible skill beyond the former catalogue budget', async () => {
 		const { builder, skills } = await setup();
 		skills.skills = Array.from({ length: 200 }, (_, index) => ({
 			...skill(),
@@ -297,7 +297,7 @@ describe('Agent grounding invariants', () => {
 			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Anything at all' },
 			{ provenanceId: testProvenanceId() }
 		);
-		expect(catalog(context).truncated).toBe(true);
+		expect(catalog(context).items).toHaveLength(200);
 	});
 
 	it('includes explicitly attached context notes with their content', async () => {

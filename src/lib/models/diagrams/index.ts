@@ -227,15 +227,15 @@ export const startReviseInlineMermaidSchema = z
 		noteId: actionNoteIdSchema,
 		source: z.string(),
 		instruction: z.string(),
-		renderedPngDataUrl: z.string().max(14_000_000).optional()
+		renderedPngDataUrl: z.string().optional()
 	})
 	.strict() satisfies z.ZodType<StartReviseInlineMermaidInput>;
 export const startConvertInlineMermaidSchema = z
 	.object({
 		requestId: z.uuid(),
 		noteId: actionNoteIdSchema,
-		source: z.string().trim().min(1).max(50_000),
-		instruction: z.string().trim().max(2_000).optional()
+		source: z.string().trim().min(1),
+		instruction: z.string().trim().optional()
 	})
 	.strict() satisfies z.ZodType<StartConvertInlineMermaidInput>;
 

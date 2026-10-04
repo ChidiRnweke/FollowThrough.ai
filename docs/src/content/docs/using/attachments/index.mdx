@@ -5,11 +5,11 @@ description: Upload a file and FollowThrough reads it for you, OCR'd to markdown
 
 import Mermaid from '../../../../components/mermaid.astro';
 
-Use attachments when you want the agent to answer from a real document instead of what you can fit in a chat message: a spec, a contract, a slide deck, a screenshot. Attach a file (up to 50 MB) to a project or a note and it uploads straight to object storage, then gets read in the background: plain text is decoded directly, and PDFs, Office documents, ebooks, and images go through Mistral Document AI OCR. The extracted markdown is indexed into knowledge search, so the agent can answer from your files, and images are described by a vision model so it can "see" them too. Every attachment carries a status badge from `queued` to `ready`, and failures can be retried.
+Use attachments when you want the agent to answer from a real document instead of what you can fit in a chat message: a spec, a contract, a slide deck, a screenshot. Attach a file to a project or a note and it uploads straight to object storage, then gets read in the background: plain text is decoded directly, and PDFs, Office documents, ebooks, and images go through Mistral Document AI OCR. The extracted markdown is indexed into knowledge search, so the agent can answer from your files, and images are described by a vision model so it can "see" them too. Every attachment carries a status badge from `queued` to `ready`, and failures can be retried.
 
 ## Upload a file
 
-Open the Attachments page under a project (`Project > Attachments`) to see every file in the project, whichever note owns it. Choose **Add attachment** to pick a file and upload it, up to 50 MB per file. The list refreshes itself when the upload is queued; use **Refresh** to re-check processing states at any time.
+Open the Attachments page under a project (`Project > Attachments`) to see every file in the project, whichever note owns it. Choose **Add attachment** to pick a file and upload it. The list refreshes itself when the upload is queued; use **Refresh** to re-check processing states at any time.
 
 - Hover a row for its actions: **Download** the original file, **Retry** a failed processing run, or **Remove** the file. Removal asks for confirmation, then deletes the stored file and its search index entries. Notes that embedded the image keep the reference, but the image no longer loads.
 - Paste or drop an image directly into a note to upload it as an attachment of that note and insert it into the document, no separate trip to the Attachments page needed. An archived note can't receive new attachments.

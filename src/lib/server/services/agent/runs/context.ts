@@ -29,7 +29,7 @@ export interface AgentContextValues {
 /**
  * Token counting for attached context notes: at or under the limit the full
  * content rides inside the user message; larger notes carry no content and the
- * prompt assembly points the model at search_note for them instead.
+ * prompt assembly points the model at get_note and sed for them instead.
  */
 let sharedEncoding: Tiktoken | undefined;
 const encoding = (): Tiktoken => (sharedEncoding ??= getEncoding('cl100k_base'));
@@ -48,14 +48,6 @@ const contextNoteOf = (note: Note): ContextNote => {
 		tokenCount
 	};
 };
-
-/**
- * Every enabled skill's summary is advertised; the model is the classifier that
- * decides which instructions to load. This budget is a safety valve for
- * workspaces with hundreds of skills, not a relevance filter — anything cut is
- * still reachable through list_skills.
- */
-const SKILL_CATALOG_BUDGET = 16000;
 
 interface AdvertisedSkill {
 	readonly noteId: string;
@@ -168,14 +160,14 @@ export class AgentContext {
 	}
 
 	/**
-	 * Explicitly requested and pinned skills lead and are never dropped by the
-	 * budget; the rest follow alphabetically so the catalogue is stable between
+	 * Explicitly requested and pinned skills lead; all other eligible skills
+	 * follow alphabetically so the catalogue is stable between
 	 * runs.
 	 */
 	private buildCatalog(
 		available: readonly SkillSummary[],
 		isRequested: (skill: SkillSummary) => boolean
-	): { items: readonly AdvertisedSkill[]; truncated?: true } {
+	): { items: readonly AdvertisedSkill[] } {
 		const eligible = available.filter(
 			(skill) => skill.isEnabled && (skill.allowImplicitInvocation || isRequested(skill))
 		);
@@ -185,22 +177,14 @@ export class AgentContext {
 			(left, right) => priority(left) - priority(right) || left.name.localeCompare(right.name)
 		);
 		const items: AdvertisedSkill[] = [];
-		let budget = 0;
-		let truncated = false;
 		for (const skill of ordered) {
 			const advertised: AdvertisedSkill = {
 				noteId: skill.noteId,
 				name: skill.name,
 				description: skill.description
 			};
-			const size = JSON.stringify(advertised).length;
-			if (priority(skill) === 2 && budget + size > SKILL_CATALOG_BUDGET) {
-				truncated = true;
-				continue;
-			}
-			budget += size;
 			items.push(advertised);
 		}
-		return truncated ? { items, truncated: true } : { items };
+		return { items };
 	}
 }

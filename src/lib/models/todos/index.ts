@@ -121,7 +121,6 @@ export const createTodoBatchSchema = z
 					.strict()
 			)
 			.min(1)
-			.max(20)
 	})
 	.strict();
 export type CreateTodoBatchInput = z.infer<typeof createTodoBatchSchema>;

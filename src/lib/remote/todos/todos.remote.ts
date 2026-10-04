@@ -14,7 +14,7 @@ export const exportBoardPdf = command(
 	z.object({
 		projectId: projectId.optional(),
 		responsibility: z.enum(['mine', 'waiting_on']).optional(),
-		category: z.string().trim().max(100).optional()
+		category: z.string().trim().optional()
 	}),
 	async (input) => {
 		return AppFactory.controllers().todos().exportBoardPdf(requestActor(), input);

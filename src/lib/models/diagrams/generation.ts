@@ -2,15 +2,15 @@ import { z } from 'zod';
 
 export const mermaidSubmissionSchema = z
 	.object({
-		title: z.string().trim().min(1).max(120).optional(),
-		source: z.string().trim().min(1).max(50_000)
+		title: z.string().trim().min(1).optional(),
+		source: z.string().trim().min(1)
 	})
 	.strict();
 
 export const drawioSubmissionSchema = z
 	.object({
-		title: z.string().trim().min(1).max(120),
-		source: z.string().trim().min(1).max(2_000_000)
+		title: z.string().trim().min(1),
+		source: z.string().trim().min(1)
 	})
 	.strict();
 

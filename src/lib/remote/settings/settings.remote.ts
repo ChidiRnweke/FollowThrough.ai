@@ -13,7 +13,7 @@ export const listApiTokens = query(async () =>
  * client's config. The caller must show it immediately; it is not recoverable.
  */
 export const createApiToken = command(
-	z.object({ name: z.string().min(1).max(80), scope: z.enum(['read', 'full']) }),
+	z.object({ name: z.string().min(1), scope: z.enum(['read', 'full']) }),
 	async (input) => {
 		const minted = await AppFactory.accessTokens().mint(requestActor().userId, input);
 		await listApiTokens().refresh();

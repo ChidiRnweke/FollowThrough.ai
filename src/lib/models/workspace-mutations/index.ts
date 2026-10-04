@@ -56,7 +56,7 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 	z.object({
 		kind: z.literal('renameConversation'),
 		conversationId: resourceDataSchemas.conversations.shape.id,
-		title: z.string().trim().min(1).max(80)
+		title: z.string().trim().min(1)
 	}),
 	z.object({
 		kind: z.literal('setToolPreference'),
@@ -179,17 +179,17 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		linkedNoteId: noteId.nullable().optional()
 	}),
 	z.object({ kind: z.literal('deleteTodo'), todoId }),
-	z.object({ kind: z.literal('saveDiagram'), diagramId, source: z.string().min(1).max(2_000_000) }),
+	z.object({ kind: z.literal('saveDiagram'), diagramId, source: z.string().min(1) }),
 	z.object({
 		kind: z.literal('renameDiagram'),
 		diagramId,
-		title: z.string().trim().min(1).max(200)
+		title: z.string().trim().min(1)
 	}),
 	z.object({
 		kind: z.literal('publishDiagram'),
 		diagramId,
-		source: z.string().min(1).max(2_000_000),
-		renderedSvg: z.string().min(1).max(3_000_000)
+		source: z.string().min(1),
+		renderedSvg: z.string().min(1)
 	}),
 	z.object({ kind: z.literal('archiveDiagram'), diagramId }),
 	z.object({ kind: z.literal('restoreDiagram'), diagramId }),

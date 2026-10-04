@@ -10,12 +10,7 @@
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
 	import { uploadTodoScreenshot } from '../screenshot-upload';
-	import {
-		SCREENSHOT_MAX_BYTES,
-		insertAtCaret,
-		screenshotMarkdown,
-		screenshotsFrom
-	} from '../screenshot-markdown';
+	import { insertAtCaret, screenshotMarkdown, screenshotsFrom } from '../screenshot-markdown';
 
 	let {
 		todoId,
@@ -107,11 +102,6 @@
 	 * leave a link to bytes that were never stored.
 	 */
 	async function attach(files: readonly File[]): Promise<void> {
-		const oversized = files.find((file) => file.size > SCREENSHOT_MAX_BYTES);
-		if (oversized) {
-			toast.error(`${oversized.name || 'That screenshot'} is larger than 10 MB.`);
-			return;
-		}
 		uploading = true;
 		try {
 			for (const file of files) {

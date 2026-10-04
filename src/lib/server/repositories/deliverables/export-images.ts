@@ -10,12 +10,11 @@ export const mermaidSourceHash = (source: string): string =>
 	createHash('sha256').update(source, 'utf8').digest('hex');
 
 const IMAGE_FETCH_TIMEOUT_MS = 8000;
-const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const EMBEDDABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg']);
 
 /**
  * Fetch a single image URL and inline it as a data URL. Returns `undefined` for
- * non-embeddable responses or oversized payloads. Network and HTTP failures propagate.
+ * non-embeddable media types. Network and HTTP failures propagate.
  */
 export async function fetchRemoteDataUrl(url: string): Promise<string | undefined> {
 	const response = await fetch(url, {
@@ -26,6 +25,5 @@ export async function fetchRemoteDataUrl(url: string): Promise<string | undefine
 	const mediaType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
 	if (!EMBEDDABLE_IMAGE_TYPES.has(mediaType)) return undefined;
 	const bytes = Buffer.from(await response.arrayBuffer());
-	if (bytes.byteLength > IMAGE_MAX_BYTES) return undefined;
 	return `data:${mediaType};base64,${bytes.toString('base64')}`;
 }

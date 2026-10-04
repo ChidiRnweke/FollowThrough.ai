@@ -60,7 +60,7 @@ Telemetry is optional but wired in from the start: both processes boot with `scr
 Configuration is layered, and the two example files map exactly onto the layers:
 
 - **Bootstrap** (`.env.example`): five values telling the app where its secrets live: `CONFIG_SOURCE` plus the `INFISICAL_CLIENT_ID` / `CLIENT_SECRET` / `PROJECT_ID` / `ENVIRONMENT` / `URL`. This file stays on the host; nothing application-specific goes in it.
-- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Three keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY` (`REQUIRED_APPLICATION_KEYS`, `src/lib/server/config.ts:89`). The rest (model choices, S3 credentials, retrieval chunking, OCR limits) have defaults in `APPLICATION_DEFAULTS` (`config.ts:95`) and can be omitted.
+- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Three keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY` (`REQUIRED_APPLICATION_KEYS`, `src/lib/server/config.ts:89`). The rest (model choices, S3 credentials, retrieval chunking, archive admission) have defaults in `APPLICATION_DEFAULTS` (`config.ts:95`) and can be omitted.
 
 `CONFIG_SOURCE=env` collapses the two layers: application keys are read straight from the process environment and no Infisical client is created. That is the simple path for a single-user box; Infisical earns its keep when you want secrets rotated outside the deployment or shared between the app and the provisioning script.
 
@@ -119,3 +119,9 @@ The shipped `docker-compose.prod.yml` is the author's own deployment: it pulls t
 - **Upgrades** are pull-and-restart plus a re-run of the `setup`-profile migrate step; migrations are ordinary Drizzle SQL under `drizzle/`.
 - **Provisioning is idempotent**: `provision-db.js` fails closed: a listing failure against Infisical is never read as "no secret", so re-running it cannot rotate the password of a database it cannot see.
 - **Single-user mode** needs no auth provider at all; adding Authentik later only requires the four `AUTHENTIK_*` keys and a restart.
+
+## Request and archive admission
+
+`BODY_SIZE_LIMIT` remains the adapter-node HTTP request limit (52,428,800 bytes in the reference deployment). Direct object-storage uploads do not pass through that HTTP body. Application-level attachment, chat-image, screenshot, diagram, and export-image size ceilings are removed; upstream failures are reported explicitly.
+
+Archive import checks the expanded total before decompression. `ARCHIVE_MAX_EXPANDED_BYTES` defaults to 26,214,400 and `ARCHIVE_MAX_ENTRIES` to 2,000. Both must be positive safe integers. An archive exceeding either setting is rejected with the setting named. There is no separate per-note size, folder-depth, or compressed-file ceiling below the HTTP transport limit.

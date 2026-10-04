@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { command } from '$app/server';
 import { AppFactory } from '$lib/server/factories/app-factory';
 import { requestActor } from '$lib/server/factories/request-actor-factory';
-import { MAX_BUNDLE_ENTRIES, exportSettingsSchema } from '$lib/models/deliverables';
+import { exportSettingsSchema } from '$lib/models/deliverables';
 import type { ArtifactId, PreviewDocumentInput, TemplateId } from '$lib/models/deliverables';
 import type { ProjectId } from '$lib/models/projects';
 import type { NoteId } from '$lib/models/notes';
@@ -60,10 +60,7 @@ export const generateDocument = command(
 export const generateBundle = command(
 	z.object({
 		projectId: projectIdSchema,
-		entries: z
-			.array(z.object({ noteId: noteIdSchema, path: z.string().min(1).max(400) }))
-			.min(1)
-			.max(MAX_BUNDLE_ENTRIES),
+		entries: z.array(z.object({ noteId: noteIdSchema, path: z.string().min(1) })).min(1),
 		title: z.string().min(1),
 		format: z.enum(['docx', 'pdf']),
 		templateId: templateIdSchema.optional(),

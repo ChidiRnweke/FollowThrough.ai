@@ -103,3 +103,14 @@ describe('durable task batches', () => {
 		});
 	});
 });
+
+it('creates all tasks in a batch beyond twenty', async () => {
+	const { controller, input } = setup();
+	const titles = Array.from({ length: 21 }, (_, i) => `Task ${i}`);
+	const request = createTodoBatchSchema.parse({
+		...input,
+		todos: titles.map((title) => ({ title, responsibility: 'mine' }))
+	});
+	const result = await controller.createBatch(testActor(), request);
+	expect(result.todos.map((todo) => todo.title)).toEqual(titles);
+});

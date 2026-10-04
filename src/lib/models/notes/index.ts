@@ -217,9 +217,6 @@ export interface ListNoteDocumentsInput {
 	readonly noteIds: readonly NoteId[];
 }
 
-/** Upper bound on one batch, matching the export bundle's own cap. */
-export const MAX_NOTE_DOCUMENTS = 50;
-
 export interface CreateNoteInput {
 	/** Offline creation supplies the final identity before this note reaches the server. */
 	readonly id?: NoteId;

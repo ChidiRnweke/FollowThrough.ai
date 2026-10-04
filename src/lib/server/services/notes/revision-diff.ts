@@ -2,19 +2,15 @@
  * Compact unified diffs between two note-revision texts, for the agent's
  * version-history tools. The ProseMirror-based `note-diff.ts` serves the UI's
  * two-pane review; this module answers a different question — "what changed,
- * in as few tokens as possible" — so it diffs plain text line by line and
- * caps the patch rather than rendering whole documents.
+ * in as few tokens as possible" — so it diffs plain text line by line without
+ * dropping any changed lines.
  *
  * Pure and isomorphic: string in, string out, so it runs identically on the
  * server (agent tools) and anywhere else a text diff is wanted.
  */
 
 import { formatPatch, structuredPatch } from 'diff';
-import {
-	REVISION_DIFF_LINE_LIMIT,
-	type RevisionText,
-	type NoteRevisionDiff
-} from '$lib/models/notes/revision-diff';
+import { type RevisionText, type NoteRevisionDiff } from '$lib/models/notes/revision-diff';
 
 function revisionLabel(side: RevisionText): string {
 	return `revision ${side.revision} (${side.createdAt.slice(0, 10)})`;
@@ -28,7 +24,7 @@ function revisionLabel(side: RevisionText): string {
 export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText): NoteRevisionDiff {
 	const titleLine = before.title === after.title ? '' : `title: ${before.title} → ${after.title}\n`;
 	if (before.plainText === after.plainText) {
-		return { patch: titleLine.trimEnd(), addedLines: 0, removedLines: 0, truncated: false };
+		return { patch: titleLine.trimEnd(), addedLines: 0, removedLines: 0 };
 	}
 	const changes = structuredPatch(
 		revisionLabel(before),
@@ -43,13 +39,5 @@ export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText)
 	const addedLines = changedLines.filter((line) => line.startsWith('+')).length;
 	const removedLines = changedLines.filter((line) => line.startsWith('-')).length;
 	const patch = formatPatch(changes);
-	const lines = patch.split('\n');
-	if (lines.length <= REVISION_DIFF_LINE_LIMIT) {
-		return { patch: titleLine + patch, addedLines, removedLines, truncated: false };
-	}
-	const truncatedPatch = [
-		...lines.slice(0, REVISION_DIFF_LINE_LIMIT),
-		'... diff truncated; use ls on the note versions directory, then sed the required version file'
-	].join('\n');
-	return { patch: titleLine + truncatedPatch, addedLines, removedLines, truncated: true };
+	return { patch: titleLine + patch, addedLines, removedLines };
 }

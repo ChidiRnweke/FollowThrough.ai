@@ -94,7 +94,6 @@ import type {
 	ReplaceNoteTextInput,
 	ReplaceNoteTextOutput
 } from '$lib/models/notes';
-import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/services/notes/references';
 import { sectionNumberingView } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
@@ -625,9 +624,6 @@ export class Notes implements NotesController {
 		actor: ActorContext,
 		input: ListNoteDocumentsInput
 	): Promise<readonly NoteDocument[]> {
-		if (input.noteIds.length > MAX_NOTE_DOCUMENTS) {
-			throw new ValidationError(`Read up to ${MAX_NOTE_DOCUMENTS} notes at a time.`);
-		}
 		return Promise.all(
 			input.noteIds.map(async (noteId) => {
 				const note = await this.dependencies.noteReader.get(actor, noteId);

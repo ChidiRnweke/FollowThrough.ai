@@ -630,10 +630,10 @@ describe('Agent tool coverage invariants', () => {
 		]).toEqual([false, true, false, true]);
 	});
 
-	it('limits one atomic note edit batch to five replacements', () => {
+	it.each(['edit_note', 'edit_skill'])('accepts more than five replacements for %s', (name) => {
 		const editNote = registry('auto_accept')
 			.definitions()
-			.find((definition) => definition.name === 'edit_note');
+			.find((definition) => definition.name === name);
 		const input = {
 			noteId: crypto.randomUUID(),
 			edits: Array.from({ length: 6 }, (_, index) => ({
@@ -641,14 +641,14 @@ describe('Agent tool coverage invariants', () => {
 				newText: `new ${index}`
 			}))
 		};
-		expect(editNote?.parameters.safeParse(input).success).toBe(false);
+		expect(editNote?.parameters.safeParse(input).success).toBe(true);
 	});
 
-	it('advertises sequential batches for extensive note edits', () => {
+	it('advertises atomic batches for extensive note edits', () => {
 		const editNote = registry('auto_accept')
 			.definitions()
 			.find((definition) => definition.name === 'edit_note');
-		expect(editNote?.description).toContain('no more than five complete replacements');
+		expect(editNote?.description).toContain('one atomic call');
 	});
 
 	it('returns the note body as a virtual Markdown file descriptor', () => {
@@ -1801,4 +1801,22 @@ describe('Deselected tools', () => {
 		const surface = without('archive_project').agentTools(['archive_project']);
 		expect(surface.map((candidate) => candidate.name)).not.toContain('archive_project');
 	});
+});
+
+it('retains the fifteen-tool discovery ceiling for the agent', async () => {
+	const tool = indirectToolFor('auto_accept', 'search_tools', {
+		retriever: new InMemoryToolRetriever()
+	});
+	if (!tool || tool.type !== 'function') throw new Error('Missing search_tools');
+	const input = { query: 'notes', limit: 16 };
+	await tool.needsApproval({} as never, input as never, 'search-over-limit');
+	const result = await tool.invoke({} as never, JSON.stringify(input), {
+		toolCall: {
+			type: 'function_call',
+			callId: 'search-over-limit',
+			name: 'search_tools',
+			arguments: JSON.stringify(input)
+		}
+	});
+	expect(result).toMatchObject({ code: 'VALIDATION' });
 });

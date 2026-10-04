@@ -823,11 +823,7 @@ const noteEdit = z.object({
 /** Shared by edit_note and edit_skill, so their preflight gates validate the same shape. */
 const noteEdits = z.object({
 	noteId: noteId,
-	// Two Luna runs independently dropped `newText` from the sixth substantive
-	// replacement in one generated call. Keep each atomic patch small enough for
-	// every replacement to remain structurally complete; callers can continue in
-	// a later call after the first batch succeeds.
-	edits: z.array(noteEdit).min(1).max(5)
+	edits: z.array(noteEdit).min(1)
 });
 const localDate = z.iso.date().transform((value) => value as LocalDate);
 export interface AgentToolContext {

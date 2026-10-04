@@ -101,25 +101,18 @@ it('does not fetch image capabilities for a turn without images', async () => {
 	expect(fixture.runs.runs[0]?.status).toBe('queued');
 });
 
-it('rejects the combined image count before saving a conversation', async () => {
+it('queues a turn with more than four images across both channels', async () => {
 	const fixture = setup();
-	const outcome = await fixture.controller
-		.submit(testActor(), {
-			requestId: crypto.randomUUID(),
-			input: 'Read these',
-			images: Array.from({ length: 3 }, () => ({ ...image, id: crypto.randomUUID() })),
-			contextImages: Array.from({ length: 2 }, () => ({ ...image, id: crypto.randomUUID() }))
-		})
-		.then(
-			() => 'unexpected success',
-			(error) => {
-				if (!(error instanceof Error)) throw error;
-				return error.message;
-			}
-		);
-	expect({
-		outcome,
-		runs: fixture.runs.runs.length,
-		conversations: fixture.conversations.conversations.length
-	}).toEqual({ outcome: 'Attach at most four images.', runs: 0, conversations: 0 });
+	const images = Array.from({ length: 3 }, () => ({ ...image, id: crypto.randomUUID() }));
+	const contextImages = Array.from({ length: 2 }, () => ({ ...image, id: crypto.randomUUID() }));
+	await fixture.controller.submit(testActor(), {
+		requestId: crypto.randomUUID(),
+		input: 'Read these',
+		images,
+		contextImages
+	});
+	expect(fixture.runs.runs[0]).toMatchObject({
+		status: 'queued',
+		inputSnapshot: { images, contextImages }
+	});
 });

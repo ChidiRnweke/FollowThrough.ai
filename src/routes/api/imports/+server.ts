@@ -1,4 +1,5 @@
-// chisel-ignore-file route-style:prefer-remote-function -- Multipart archive uploads require File handling and request-size checks before decoding.
+// chisel-ignore-file route-style:prefer-remote-function -- Multipart archive uploads require File handling before archive admission and decoding.
+import { archiveAdmissionLimits } from '$lib/server/config';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { NoteId } from '$lib/models/notes';
@@ -11,8 +12,6 @@ import {
 	parseMarkdownNote,
 	describeArchiveRejection
 } from '$lib/remote/notes/archive-reader.server';
-
-const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 
 /**
  * Bulk note import.
@@ -29,16 +28,6 @@ const id = z.string().uuid();
 const fieldsSchema = z.object({ projectId: id, parentId: id.optional() });
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	// Checked before buffering: the point of a limit is not to read the body first.
-	const declaredLength = Number(request.headers.get('content-length'));
-	if (Number.isFinite(declaredLength) && declaredLength > MAX_ARCHIVE_BYTES)
-		return json(
-			{
-				message: `That archive is larger than the ${Math.round(MAX_ARCHIVE_BYTES / 1024 / 1024)} MB limit.`
-			},
-			{ status: 413 }
-		);
-
 	const form = await request.formData();
 	const file = form.get('archive');
 	if (!(file instanceof File)) return json({ message: 'Attach a .zip archive.' }, { status: 400 });
@@ -51,7 +40,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json({ message: 'Choose a project to import into.' }, { status: 400 });
 
 	try {
-		const archive = readMarkdownArchive(new Uint8Array(await file.arrayBuffer()));
+		const archive = readMarkdownArchive(
+			new Uint8Array(await file.arrayBuffer()),
+			archiveAdmissionLimits()
+		);
 		if (!archive.ok) throw new ValidationError(describeArchiveRejection(archive.rejection));
 		const report = await AppFactory.controllers()
 			.notes()

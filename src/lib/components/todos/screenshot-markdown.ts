@@ -6,13 +6,6 @@ export const SCREENSHOT_MEDIA_TYPES = new Set([
 	'image/gif'
 ]);
 
-/**
- * Per-image ceiling for a pasted screenshot. Well under the server's
- * `ATTACHMENT_MAX_BYTES`, because this one is about keeping a paste feeling
- * instant rather than about what storage can hold.
- */
-export const SCREENSHOT_MAX_BYTES = 10 * 1024 * 1024;
-
 /** The image files in a paste or drop that a description can actually take. */
 export const screenshotsFrom = (files: FileList | null | undefined): readonly File[] =>
 	Array.from(files ?? []).filter((file) => SCREENSHOT_MEDIA_TYPES.has(file.type));

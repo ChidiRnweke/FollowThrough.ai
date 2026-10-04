@@ -143,9 +143,9 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
-	it('splits extensive edits into complete sequential batches', () => {
+	it('keeps verified replacements together in one atomic batch', () => {
 		expect(buildAgentInstructions({})).toContain(
-			'up to five complete replacements together in one edit_note call'
+			'the verified replacements together in one atomic edit_note call'
 		);
 	});
 

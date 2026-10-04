@@ -14,10 +14,10 @@ import { ExternalServiceError, ValidationError } from '$lib/errors';
 const SEARCH_URL = 'https://api.iconify.design/search';
 const ICON_ORIGIN = 'https://api.iconify.design';
 const REQUEST_TIMEOUT_MS = 8000;
-const MAX_RESPONSE_BYTES = 512 * 1024;
-// Deliberately small. A run that searched eight terms came back with two
-// hundred names, which is a lot of prompt for a choice between a handful.
-const MAX_LIMIT = 12;
+// Provider request bounds: https://iconify.design/docs/api/search.html
+const PROVIDER_MIN_LIMIT = 32;
+// Product contract: icon search returns a small candidate set for diagram selection.
+const MAX_ICON_RESULTS = 12;
 
 export interface DiagramIcon {
 	/** Iconify's own name, `prefix:icon`, which is what a follow-up query uses. */
@@ -30,17 +30,13 @@ export interface IconSearch {
 	search(query: string, limit?: number): Promise<readonly DiagramIcon[]>;
 }
 
-/**
- * Iconify's search response, as this adapter reads it.
- *
- * Only `icons` is named because it is the only field this code acts on; the
- * endpoint also returns `total`, `limit`, `start` and `collections`, and a
- * closed object would break on the next field Iconify adds. A response without
- * a readable `icons` array is a failure, not an empty result: returning `[]`
- * would tell the agent the library holds no mark for the term it asked about,
- * which is the answer it gets when the search really did find nothing.
- */
-const iconSearchResponseSchema = z.object({ icons: z.array(z.string()) });
+/** Pagination metadata is required so a short page cannot hide further matches. */
+const iconSearchResponseSchema = z.object({
+	icons: z.array(z.string()),
+	total: z.number().int().nonnegative(),
+	limit: z.number().int().positive(),
+	start: z.number().int().nonnegative()
+});
 
 /** `logos:aws-s3` → `https://api.iconify.design/logos/aws-s3.svg`. */
 const iconUrl = (name: string): string | undefined => {
@@ -56,10 +52,32 @@ export class IconifyIconSearch implements IconSearch {
 	async search(query: string, limit = 8): Promise<readonly DiagramIcon[]> {
 		const term = query.trim();
 		if (!term) throw new ValidationError('An icon search needs something to search for.');
+		if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ICON_RESULTS)
+			throw new ValidationError(
+				`The icon count must be an integer between 1 and ${MAX_ICON_RESULTS}.`
+			);
+		const icons: DiagramIcon[] = [];
+		let start = 0;
+		while (icons.length < limit) {
+			const page = await this.page(term, start);
+			if (page.start !== start || page.total !== page.icons.length)
+				throw new ExternalServiceError('The icon library returned inconsistent pagination.');
+			for (const name of page.icons) {
+				const url = iconUrl(name);
+				if (url) icons.push({ name, url });
+				if (icons.length === limit) break;
+			}
+			if (page.total < page.limit) break;
+			start += page.total;
+		}
+		return icons;
+	}
+
+	private async page(term: string, start: number) {
 		const url = new URL(SEARCH_URL);
 		url.searchParams.set('query', term);
-		url.searchParams.set('limit', String(Math.min(Math.max(limit, 1), MAX_LIMIT)));
-
+		url.searchParams.set('start', String(start));
+		url.searchParams.set('limit', String(PROVIDER_MIN_LIMIT));
 		const response = await this.fetchImpl(url, {
 			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 		}).catch((cause) => {
@@ -69,16 +87,9 @@ export class IconifyIconSearch implements IconSearch {
 		});
 		if (!response.ok)
 			throw new ExternalServiceError(`The icon library answered ${response.status}.`);
-
-		const body = await response.text();
-		// Capped rather than streamed: a search result is a short list of names, and
-		// anything larger is a sign the endpoint is not answering what we asked.
-		if (body.length > MAX_RESPONSE_BYTES)
-			throw new ExternalServiceError('The icon library returned more than expected.');
-
 		let parsed: unknown;
 		try {
-			parsed = JSON.parse(body);
+			parsed = await response.json();
 		} catch (cause) {
 			throw new ExternalServiceError('The icon library returned something unreadable.', {
 				cause: cause instanceof Error ? cause.message : String(cause)
@@ -89,9 +100,6 @@ export class IconifyIconSearch implements IconSearch {
 			throw new ExternalServiceError('The icon library returned an unexpected search result.', {
 				cause: z.prettifyError(result.error)
 			});
-		return result.data.icons.flatMap((name) => {
-			const url = iconUrl(name);
-			return url === undefined ? [] : [{ name, url }];
-		});
+		return result.data;
 	}
 }

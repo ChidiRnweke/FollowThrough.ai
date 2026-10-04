@@ -340,3 +340,12 @@ it('accepts omitted MCP arguments when every application field is optional', asy
 		content: [{ type: 'text', text: JSON.stringify({ kind: 'listed', path: '/', entries: [] }) }]
 	});
 });
+
+it('retains the fifteen-tool discovery ceiling for MCP', async () => {
+	const client = await connect('full');
+	expect(
+		readFailure(
+			await client.callTool({ name: 'search_tools', arguments: { query: 'notes', limit: 16 } })
+		).code
+	).toBe('VALIDATION');
+});

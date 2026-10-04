@@ -96,21 +96,10 @@ describe('MistralOcr response parsing', () => {
 		]);
 	});
 
-	it('drops pages past the page cap', async () => {
-		const transport = new FakeFetch({
-			pages: [
-				{ index: 0, markdown: 'first' },
-				{ index: 1, markdown: 'second' },
-				{ index: 2, markdown: 'third' }
-			]
-		});
-
-		const content = await clientUsing(transport).ocr({ ...input, maxPages: 2 });
-
-		expect(content.parts).toEqual([
-			{ kind: 'markdown', text: 'first' },
-			{ kind: 'markdown', text: 'second' }
-		]);
+	it('preserves every returned page beyond one hundred in order', async () => {
+		const pages = Array.from({ length: 101 }, (_, index) => ({ index, markdown: `Page ${index}` }));
+		const content = await clientUsing(new FakeFetch({ pages: [...pages].reverse() })).ocr(input);
+		expect(content.parts).toEqual(pages.map((page) => ({ kind: 'markdown', text: page.markdown })));
 	});
 
 	it('reports the pages the engine processed', async () => {

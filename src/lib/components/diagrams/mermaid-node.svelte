@@ -310,13 +310,12 @@
 			const blob = await mermaidPngBlob(editCode, {
 				base: colorMode.current === 'dark' ? 'dark' : 'light'
 			});
-			if (blob.size <= 10 * 1024 * 1024)
-				renderedPngDataUrl = await new Promise<string>((resolve, reject) => {
-					const reader = new FileReader();
-					reader.onload = () => resolve(String(reader.result));
-					reader.onerror = () => reject(reader.error);
-					reader.readAsDataURL(blob);
-				});
+			renderedPngDataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(String(reader.result));
+				reader.onerror = () => reject(reader.error);
+				reader.readAsDataURL(blob);
+			});
 			const revised = await onRevise(editCode, instruction, renderedPngDataUrl);
 			if (code !== committedSource)
 				throw new Error('The diagram changed while the revision was running. Try again.');

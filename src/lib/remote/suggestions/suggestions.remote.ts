@@ -20,8 +20,8 @@ export const acceptSuggestion = command(
 		drawioReview: z
 			.object({
 				noteId,
-				source: z.string().trim().min(1).max(2_000_000),
-				renderedSvg: z.string().trim().min(1).max(2_000_000)
+				source: z.string().trim().min(1),
+				renderedSvg: z.string().trim().min(1)
 			})
 			.optional()
 	}),

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
 import type { NoteId } from '$lib/models/notes';
-import { MAX_BUNDLE_ENTRIES } from '$lib/models/deliverables';
 import type { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import type { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
@@ -131,19 +130,19 @@ describe('Document bundle invariants', () => {
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
-	it('rejects a selection past the batch cap', async () => {
+	it('exports every document beyond fifty', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		await expect(
 			service.generateBundle(testActor(), {
 				projectId: testProjectId(),
-				entries: Array.from({ length: MAX_BUNDLE_ENTRIES + 1 }, (_, index) => ({
+				entries: Array.from({ length: 51 }, (_, index) => ({
 					noteId: testNoteId() as NoteId,
 					path: `Note ${index}`
 				})),
 				title: 'Research',
 				format: 'pdf'
 			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		).resolves.toMatchObject({ fileCount: 51 });
 	});
 });

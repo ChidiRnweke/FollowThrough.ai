@@ -40,10 +40,6 @@ const validateAttachmentPath = (value: string): string => {
 	return path;
 };
 
-// Read lazily: secrets are hydrated into the environment per request, so a
-// module-load-time read would freeze whatever was set before the first hydration.
-const maxAttachmentBytes = (): number =>
-	Number(process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024);
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -72,9 +68,8 @@ export class AttachmentLibrary {
 		if (note?.archivedAt) throw new ValidationError('Archived notes cannot receive attachments');
 		const projectId = note?.projectId ?? input.projectId!;
 		const path = validateAttachmentPath(input.path);
-		const maxBytes = maxAttachmentBytes();
-		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1 || input.byteSize > maxBytes)
-			throw new ValidationError(`Attachment must be between 1 and ${maxBytes} bytes`);
+		if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 1)
+			throw new ValidationError('Attachment size must be a positive safe integer');
 		if (!/^[a-f0-9]{64}$/i.test(input.checksumSha256))
 			throw new ValidationError('Attachment checksum must be a SHA-256 hex digest');
 		const timestamp = now();

@@ -55,9 +55,12 @@ const scenario = (
 	const edit = { oldText: 'Monday', newText: 'Tuesday' };
 	const model = new InMemoryToolCallingModel(
 		'edit_note',
-		JSON.stringify({ noteId: note.id, edits: Array.from({ length: count }, () => edit) }),
+		JSON.stringify({
+			noteId: note.id,
+			edits: Array.from({ length: count }, () => (count === 6 ? { oldText: edit.oldText } : edit))
+		}),
 		JSON.stringify({ noteId: note.id, edits: [edit] }),
-		count === 0 ? 'Too small' : 'Too big'
+		count === 0 ? 'Too small' : 'newText'
 	);
 	const agent = new Agent({ name: 'Tool lifecycle', model, tools: registry.tools() });
 	return { ...fixture, note, registry, createRegistry, model, agent };
@@ -80,12 +83,12 @@ const run = async (agent: Agent, state?: RunState<unknown, Agent>, events: Agent
 
 describe('Tool argument recovery through the SDK runner', () => {
 	for (const count of [0, 6]) {
-		it(`corrects a batch of ${count} edits after receiving its failure`, async () => {
+		it(`corrects ${count} incomplete edits after receiving the validation failure`, async () => {
 			const fixture = scenario(count, 'auto_accept');
 			await run(fixture.agent);
 			expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
 		});
-		it(`does not request approval until the batch of ${count} edits is corrected`, async () => {
+		it(`does not request approval until ${count} incomplete edits are corrected`, async () => {
 			const fixture = scenario(count, 'approval_required');
 			const result = await run(fixture.agent);
 			expect({
