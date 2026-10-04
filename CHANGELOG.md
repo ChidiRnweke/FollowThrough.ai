@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.10](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.9...v2.0.10) (2026-10-04)
+
+
+### Bug Fixes
+
+* **chat:** keep the composer anchored to its surface ([#303](https://github.com/ChidiRnweke/FollowThrough.ai/issues/303)) ([8b72667](https://github.com/ChidiRnweke/FollowThrough.ai/commit/8b726673a693b522a7aaedd82cb044ba8353b5b1))
+
 ## [2.0.9](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.8...v2.0.9) (2026-10-04)
 
 
