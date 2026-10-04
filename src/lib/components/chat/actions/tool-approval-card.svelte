@@ -18,6 +18,7 @@
 	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
 	import { WidgetView } from '$lib/components/widgets';
+	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 
 	let {
 		tool,
@@ -208,7 +209,7 @@
 				This widget is not on this device yet, so the change cannot be shown.
 			</p>
 		{:else if preview.change.kind === 'created'}
-			<WidgetView widget={preview.change.after} />
+			<WidgetView widget={preview.change.after} sources={widgetSources(preview.change.after)} />
 		{:else}
 			<div
 				class={compact ? 'flex flex-col gap-3' : 'grid grid-cols-2 gap-4'}
@@ -216,11 +217,14 @@
 			>
 				<div class="flex min-w-0 flex-col gap-1.5">
 					<p class="eyebrow">Now</p>
-					<WidgetView widget={preview.change.before} />
+					<WidgetView
+						widget={preview.change.before}
+						sources={widgetSources(preview.change.before)}
+					/>
 				</div>
 				<div class="flex min-w-0 flex-col gap-1.5">
 					<p class="eyebrow">After approval</p>
-					<WidgetView widget={preview.change.after} />
+					<WidgetView widget={preview.change.after} sources={widgetSources(preview.change.after)} />
 				</div>
 			</div>
 		{/if}

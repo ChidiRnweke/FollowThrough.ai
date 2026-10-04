@@ -11,16 +11,30 @@
 	import { JsonUIProvider, Renderer } from '@json-render/svelte';
 	import { diffWidgetData } from '$lib/services/widgets/edits';
 	import { resolveWidgetState, widgetDataOf } from '$lib/services/widgets/formulas';
-	import { widgetDataSchema, type Widget, type WidgetData } from '$lib/models/widgets';
+	import {
+		widgetDataSchema,
+		type Widget,
+		type WidgetData,
+		type WidgetSourceRows,
+		type WidgetSources
+	} from '$lib/models/widgets';
 	import { widgetRegistry } from './registry';
 	import UnsupportedElement from './elements/unsupported-element.svelte';
 	import * as Field from '$lib/components/ui/field';
 
 	/**
 	 * Renders a widget with json-render and turns what its controls change into `data` changes.
-	 * Without `onChange` the widget is shown read-only.
+	 * Without `onChange` the widget is shown read-only. `sources` are the rows its workspace
+	 * sources show, which the caller reads (`widgetSources`) because it knows where it runs.
 	 */
-	let { widget, onChange }: { widget: Widget; onChange?: WidgetChangeHandler } = $props();
+	let {
+		widget,
+		sources,
+		onChange
+	}: { widget: Widget; sources: WidgetSources; onChange?: WidgetChangeHandler } = $props();
+
+	const rowsOf = (value: WidgetSources): WidgetSourceRows =>
+		value.kind === 'rows' ? value.rows : {};
 
 	/** Controls write the store on every keystroke; one change is handed over per pause. */
 	const PAUSE_MS = 350;
@@ -34,7 +48,7 @@
 
 	// One store for the life of the view, holding the data and the values computed from it. The
 	// store copies along the changed path and never writes into its input.
-	const initial = untrack(() => resolveWidgetState(widget.layout, widget.data));
+	const initial = untrack(() => resolveWidgetState(widget.layout, widget.data, rowsOf(sources)));
 	const store = createStateStore(initial.state);
 	let formulaIssues = $state(initial.issues);
 
@@ -45,7 +59,7 @@
 
 	/** Bring the store to `data` key by key, so mounted controls keep their focus. */
 	const adopt = (data: WidgetData) => {
-		const { state, issues } = resolveWidgetState(widget.layout, data);
+		const { state, issues } = resolveWidgetState(widget.layout, data, rowsOf(sources));
 		const keys = new Set([...Object.keys(store.getSnapshot()), ...Object.keys(state)]);
 		store.update(Object.fromEntries([...keys].map((key) => [`/${key}`, state[key]])));
 		formulaIssues = issues;
@@ -56,17 +70,20 @@
 	const recompute = () => {
 		const data = currentData();
 		if (!data.success) return;
-		const { state, issues } = resolveWidgetState(widget.layout, data.data);
+		const { state, issues } = resolveWidgetState(widget.layout, data.data, rowsOf(sources));
 		formulaIssues = issues;
-		if (JSON.stringify(store.get('/derived')) !== JSON.stringify(state.derived))
-			store.set('/derived', state.derived);
+		for (const root of ['sources', 'derived'] as const)
+			if (JSON.stringify(store.get(`/${root}`)) !== JSON.stringify(state[root]))
+				store.set(`/${root}`, state[root]);
 	};
 
 	// Formulas follow every keystroke, before the change is handed over, so a result is live.
 	$effect(() => store.subscribe(recompute));
 
+	// A layout edit, or a todo or note changing under a dashboard, works the values out again.
 	$effect(() => {
 		void widget.layout;
+		void sources;
 		untrack(recompute);
 	});
 
@@ -132,6 +149,11 @@
 	</Field.Set>
 	{#if failure}
 		<p role="alert" class="text-label text-destructive">{failure}</p>
+	{/if}
+	{#if widget.layout.sources && sources.kind === 'unavailable'}
+		<p role="status" class="text-label text-muted-foreground">
+			This widget shows workspace data, which is not loaded here.
+		</p>
 	{/if}
 	{#if formulaIssues.length > 0}
 		<ul

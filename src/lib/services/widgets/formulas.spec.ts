@@ -9,7 +9,7 @@ const layoutWith = (derived: Record<string, string>): WidgetLayout => ({
 });
 
 const derivedOf = (derived: Record<string, string>, data: WidgetData) =>
-	resolveWidgetState(layoutWith(derived), data).state.derived;
+	resolveWidgetState(layoutWith(derived), data, {}).state.derived;
 
 describe('resolveWidgetState', () => {
 	it('compounds a balance from the data', () => {
@@ -83,6 +83,18 @@ describe('resolveWidgetState', () => {
 			]
 		});
 	});
+	it('counts the rows of a source', () => {
+		expect(
+			resolveWidgetState(
+				{
+					...layoutWith({ overdue: 'count(filter(@/sources/todos, item.overdue))' }),
+					sources: { todos: { kind: 'todos' } }
+				},
+				{},
+				{ todos: [{ overdue: true }, { overdue: false }, { overdue: true }] }
+			).state.derived
+		).toEqual({ overdue: 2 });
+	});
 	it('writes a number as grouped text', () => {
 		expect(derivedOf({ shown: '"€" + format(@/n, 2)' }, { n: 1234567.891 })).toEqual({
 			shown: '€1,234,567.89'
@@ -92,18 +104,18 @@ describe('resolveWidgetState', () => {
 		expect(derivedOf({ ratio: '@/a / @/b' }, { a: 1, b: 0 })).toEqual({ ratio: null });
 	});
 	it('says why a formula failed and which one', () => {
-		expect(resolveWidgetState(layoutWith({ ratio: '@/a / @/b' }), { a: 1, b: 0 }).issues).toEqual([
-			{ path: '/layout/derived/ratio', message: 'Division by zero' }
-		]);
+		expect(
+			resolveWidgetState(layoutWith({ ratio: '@/a / @/b' }), { a: 1, b: 0 }, {}).issues
+		).toEqual([{ path: '/layout/derived/ratio', message: 'Division by zero' }]);
 	});
 	it('names the value a formula expected when the data holds something else', () => {
-		expect(resolveWidgetState(layoutWith({ next: '@/n * 2' }), { n: 'three' }).issues).toEqual([
+		expect(resolveWidgetState(layoutWith({ next: '@/n * 2' }), { n: 'three' }, {}).issues).toEqual([
 			{ path: '/layout/derived/next', message: '* needs a number, not a string' }
 		]);
 	});
 	it('stops a formula that would take too many steps', () => {
 		expect(
-			resolveWidgetState(layoutWith({ huge: 'count(series(1, 1000000, i))' }), {}).issues
+			resolveWidgetState(layoutWith({ huge: 'count(series(1, 1000000, i))' }), {}, {}).issues
 		).toEqual([
 			{ path: '/layout/derived/huge', message: 'The formulas take too many steps to work out' }
 		]);
@@ -111,10 +123,10 @@ describe('resolveWidgetState', () => {
 	it('does not evaluate the branch an if leaves out', () => {
 		expect(derivedOf({ safe: 'if(@/b == 0, 0, @/a / @/b)' }, { a: 1, b: 0 })).toEqual({ safe: 0 });
 	});
-	it('gives a layout without formulas an empty computed root', () => {
+	it('gives a layout without formulas or sources empty computed roots', () => {
 		expect(
-			resolveWidgetState({ root: 'text', elements: layoutWith({}).elements }, { n: 1 }).state
-		).toEqual({ n: 1, derived: {} });
+			resolveWidgetState({ root: 'text', elements: layoutWith({}).elements }, { n: 1 }, {}).state
+		).toEqual({ n: 1, sources: {}, derived: {} });
 	});
 });
 
@@ -128,7 +140,7 @@ describe('the savings template', () => {
 	// 10,000 · (1 + 0.05/12)^240 + 250 · ((1 + 0.05/12)^240 − 1) / (0.05/12) = 129,884.82
 	it('grows 10,000 with 250 a month at 5% to 129,885 after 20 years', () => {
 		const { layout, data } = widgetTemplates.savings;
-		expect(resolveWidgetState(layout, data).state.derived).toMatchObject({
+		expect(resolveWidgetState(layout, data, {}).state.derived).toMatchObject({
 			balanceText: '129,885',
 			depositedText: '70,000'
 		});

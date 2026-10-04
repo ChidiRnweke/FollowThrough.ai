@@ -10,6 +10,7 @@
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import WidgetView from './widget-view.svelte';
+	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 
 	let { node, editor }: NodeViewProps = $props();
 
@@ -74,6 +75,7 @@
 			</div>
 			<WidgetView
 				{widget}
+				sources={widgetSources(widget)}
 				onChange={draft ? (change) => widgetEdits.stage(draft, widgetId, change) : undefined}
 			/>
 			{#if draft?.status === 'error'}

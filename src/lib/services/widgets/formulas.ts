@@ -4,7 +4,8 @@ import {
 	type JsonValue,
 	type WidgetData,
 	type WidgetIssue,
-	type WidgetLayout
+	type WidgetLayout,
+	type WidgetSourceRows
 } from '$lib/models/widgets';
 
 type JsonObject = { readonly [key: string]: JsonValue };
@@ -114,7 +115,8 @@ class Evaluation {
 	readonly issues: WidgetIssue[] = [];
 
 	constructor(
-		private readonly data: WidgetData,
+		/** The data with the source rows beside it: everything a reference can read but `derived`. */
+		private readonly document: JsonValue,
 		private readonly formulas: ReadonlyMap<string, Formula | { readonly failure: string }>
 	) {}
 
@@ -157,7 +159,7 @@ class Evaluation {
 	private read(pointer: string): JsonValue {
 		const [root, name, ...rest] = tokens(pointer);
 		if (root === 'derived' && name !== undefined) return readPath(this.derived(name), rest);
-		return readPath(this.data, tokens(pointer));
+		return readPath(this.document, tokens(pointer));
 	}
 
 	private evaluate(formula: Formula, scope: ReadonlyMap<string, JsonValue>): JsonValue {
@@ -334,21 +336,26 @@ class Evaluation {
 }
 
 /**
- * The state a widget renders from its layout and saved data (ADR 0043). The same rule runs in the
- * view, in export and on the server, so a value never depends on where the widget is shown.
+ * The state a widget renders from its layout, saved data and source rows (ADR 0043). The same
+ * rule runs in the view, in export and on the server, so a value never depends on where the
+ * widget is shown.
  */
-export const resolveWidgetState = (layout: WidgetLayout, data: WidgetData): WidgetState => {
+export const resolveWidgetState = (
+	layout: WidgetLayout,
+	data: WidgetData,
+	sources: WidgetSourceRows
+): WidgetState => {
 	const formulas = new Map(
 		Object.entries(layout.derived ?? {}).map(([name, source]) => {
 			const parsed = parseFormula(source);
 			return [name, parsed.kind === 'parsed' ? parsed.formula : { failure: parsed.message }];
 		})
 	);
-	const evaluation = new Evaluation(data, formulas);
+	const evaluation = new Evaluation({ ...data, sources }, formulas);
 	const derived = Object.fromEntries(
 		[...formulas.keys()].map((name) => [name, evaluation.derived(name)])
 	);
-	return { state: { ...data, derived }, issues: evaluation.issues };
+	return { state: { ...data, sources, derived }, issues: evaluation.issues };
 };
 
 /** The saved part of a rendered state: everything except the computed roots. */

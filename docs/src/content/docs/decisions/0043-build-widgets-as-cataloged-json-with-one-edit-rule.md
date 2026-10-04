@@ -235,6 +235,28 @@ client bundle inside the export browser. The table carries the same numbers, whi
 reader of a printed page needs. If LayerChart's server render is fixed, the existing
 `DiagramRasterizer` can turn its SVG into an image without other changes.
 
+### Dashboards read the user's own work
+
+A layout's optional `sources` map names read-only lists of the user's work in the widget's
+project: `"sources": { "todos": { "kind": "todos" } }`. The rows are in the rendered state at
+`/sources/<name>`, and formulas count, filter and group them. The kinds are a closed list,
+`widgetSourceKinds`: `todos` (status, open, done, overdue, waiting, due date, priority, category)
+and `notes` (title, pinned, updated date). A widget has no network access and no query language,
+so it cannot reach outside the workspace or join across projects.
+
+- **One rule, two feeds.** `widgetSourceRows(sources, records)`
+  (`src/lib/services/widgets/sources.ts`) turns one project's todos and notes into rows. In the
+  browser the records come from the synced workspace views (`widgetSources` in
+  `src/lib/stores/widgets/widget-sources.svelte.ts`), so a dashboard works offline and follows
+  every todo change as it syncs. Export reads the same records through the todo and note services
+  and calls the same rule.
+- **Sources are never saved.** `sources` is a reserved data key like `derived`. A change in the
+  workspace re-renders the widget and is never a widget edit, so it cannot conflict or replay.
+- **A view is told where its rows come from.** `WidgetView` takes a required `sources` value:
+  rows, or `unavailable` when no workspace is loaded. An unavailable source shows a notice, and
+  formulas over it fail loudly instead of counting zero.
+- **Export shows the work as of the export**, with today as the server's UTC date.
+
 ### The library stays behind two seams
 
 json-render is imported in two places only:

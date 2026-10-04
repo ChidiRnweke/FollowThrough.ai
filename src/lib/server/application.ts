@@ -489,6 +489,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			exportDiagramReferences: deliverables.exportDiagramReferences,
 			exportWidgetReferences: deliverables.exportWidgetReferences,
 			widgetReader: widgets,
+			todoLister: todos,
+			noteLister: notes,
 			diagramReader: diagrams,
 			diagramRenderer: deliverables.diagramRenderer,
 			docxGenerator: deliverables.docxGenerator,

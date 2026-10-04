@@ -10,7 +10,9 @@ import {
 	testActor,
 	testNoteId,
 	testNow,
-	testProjectId
+	testProjectId,
+	testTodoId,
+	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const input = {
@@ -71,5 +73,35 @@ describe('widgets in document exports', () => {
 		await expect(service.generateDocument(testActor(), input)).rejects.toThrow(
 			'An exported widget is unavailable'
 		);
+	});
+});
+
+describe('widgets that show workspace data in exports', () => {
+	it('counts the project todos as of the export', async () => {
+		const prepared: PreparedExport[] = [];
+		const dashboard = widgetBuilder({
+			layout: widgetTemplates.dashboard.layout,
+			data: widgetTemplates.dashboard.data
+		});
+		const fixture = setup(dashboard, {
+			pdfGenerator: async (value) => {
+				prepared.push(value);
+				return Buffer.from('pdf');
+			}
+		});
+		fixture.todos.todos = [
+			todoBuilder({ id: testTodoId(1), title: 'Write brief' }),
+			todoBuilder({ id: testTodoId(2), title: 'Book venue' }),
+			todoBuilder({
+				id: testTodoId(3),
+				title: 'Send invites',
+				status: 'done',
+				completedAt: testNow
+			})
+		];
+		await fixture.service.generateDocument(testActor(), { ...input, format: 'pdf' });
+		expect(
+			prepared[0]?.widgets.get(dashboard.id)?.blocks.find((block) => block.kind === 'metric')
+		).toEqual({ kind: 'metric', label: 'Open todos', value: '2' });
 	});
 });

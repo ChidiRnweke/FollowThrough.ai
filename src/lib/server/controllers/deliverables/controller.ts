@@ -1,6 +1,8 @@
 import { widgetExport } from '$lib/services/widgets/export-blocks';
 import { resolveWidgetState } from '$lib/services/widgets/formulas';
-import type { Widget, WidgetExport, WidgetId } from '$lib/models/widgets';
+import { widgetSourceRows } from '$lib/services/widgets/sources';
+import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
+import type { Todo, TodoListFilter } from '$lib/models/todos';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { randomUUID, createHash } from 'node:crypto';
@@ -10,8 +12,8 @@ import {
 	type PreparedExport
 } from '$lib/models/deliverables';
 import type { AttachmentId } from '$lib/models/attachments';
-import type { Note, NoteId } from '$lib/models/notes';
-import type { DateTime } from '$lib/models/workspace';
+import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
+import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
 import {
 	mediaTypeFor,
@@ -174,6 +176,11 @@ export interface DeliverablesDependencies {
 	exportDiagramReferences: typeof exportDiagramReferences;
 	exportWidgetReferences: typeof exportWidgetReferences;
 	widgetReader: { get(actor: ActorContext, id: WidgetId): Promise<Widget> };
+	/** The project's todos and notes, read only for a widget that shows them. */
+	todoLister: { list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> };
+	noteLister: {
+		list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
+	};
 	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
 	diagramRenderer: Pick<DiagramRasterizer, 'render'>;
 	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
@@ -439,9 +446,10 @@ export class Deliverables implements DeliverablesController {
 					throw new ValidationError(
 						'An exported widget is unavailable in the source note’s project. Restore it or remove it from the note.'
 					);
+				const sources = await this.widgetSources(actor, widget);
 				widgets.set(
 					widgetId,
-					widgetExport(widget, resolveWidgetState(widget.layout, widget.data).state)
+					widgetExport(widget, resolveWidgetState(widget.layout, widget.data, sources).state)
 				);
 			}
 		const exportInput: ExportInput = {
@@ -568,6 +576,24 @@ export class Deliverables implements DeliverablesController {
 			title: existing.title,
 			format: existing.format,
 			templateId: existing.templateId
+		});
+	}
+
+	/**
+	 * The rows a widget's sources show, as of the export. Today is the server's UTC date, so a
+	 * todo due today reads as overdue only once that day has passed everywhere.
+	 */
+	private async widgetSources(actor: ActorContext, widget: Widget): Promise<WidgetSourceRows> {
+		if (!widget.layout.sources) return {};
+		const [todos, notes] = await Promise.all([
+			this.dependencies.todoLister.list(actor, { projectId: widget.projectId }),
+			this.dependencies.noteLister.list(actor, widget.projectId)
+		]);
+		return widgetSourceRows(widget.layout.sources, {
+			projectId: widget.projectId,
+			today: new Date().toISOString().slice(0, 10) as LocalDate,
+			todos,
+			notes
 		});
 	}
 }

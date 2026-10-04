@@ -25,6 +25,7 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 
 export const exportControllerFixture = (overrides: Partial<DeliverablesDependencies> = {}) => {
 	const artifacts = new InMemoryArtifactRepository();
@@ -35,6 +36,7 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 	const provenance = new InMemoryProvenanceRecorder();
 	const library = new ArtifactLibrary(artifacts, exportSettings);
 	const widgets = new InMemoryWidgetRepository();
+	const todos = new InMemoryTodoRepository();
 	const service = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
 			templates: new DocumentTemplates(templates),
@@ -52,6 +54,8 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			exportDiagramReferences,
 			exportWidgetReferences,
 			widgetReader: new WidgetLibrary(widgets, new InMemoryProjectRepository()),
+			todoLister: todos,
+			noteLister: notes,
 			fetchImage: fetchRemoteDataUrl,
 			docxGenerator: async () => Buffer.from('docx'),
 			pdfGenerator: async () => Buffer.from('pdf'),
@@ -69,6 +73,7 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 		templates,
 		exportSettings,
 		provenance,
-		widgets
+		widgets,
+		todos
 	};
 };

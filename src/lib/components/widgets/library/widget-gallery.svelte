@@ -27,6 +27,7 @@
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import WidgetView from '../widget-view.svelte';
+	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 
 	export interface WidgetGalleryData {
 		readonly widgets: readonly Widget[];
@@ -188,7 +189,7 @@
 							onclick={() => open(widget)}
 						>
 							<div class="pointer-events-none">
-								<WidgetView {widget} />
+								<WidgetView {widget} sources={widgetSources(widget)} />
 							</div>
 						</Button>
 						<div class="flex min-w-0 items-start gap-2">

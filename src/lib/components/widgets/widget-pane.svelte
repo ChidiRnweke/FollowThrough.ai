@@ -7,6 +7,7 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtClose as X } from '$lib/components/icons';
 	import WidgetView from './widget-view.svelte';
+	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 	import WidgetJsonEditor from './widget-json-editor.svelte';
 	import type { WidgetChange } from '$lib/models/widgets';
 
@@ -64,7 +65,11 @@
 		{#if widget && editing}
 			<WidgetJsonEditor {widget} onapply={apply} oncancel={() => (editing = false)} />
 		{:else if widget}
-			<WidgetView {widget} onChange={(change) => widgetEdits.stage(editor, widgetId, change)} />
+			<WidgetView
+				{widget}
+				sources={widgetSources(widget)}
+				onChange={(change) => widgetEdits.stage(editor, widgetId, change)}
+			/>
 		{:else if editor.state.kind === 'failure'}
 			<p role="alert" class="text-sm text-destructive">{editor.state.message}</p>
 		{:else}

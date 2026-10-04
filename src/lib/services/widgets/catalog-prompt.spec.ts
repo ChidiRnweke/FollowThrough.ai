@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formulaFunctions } from '$lib/models/widget-formulas';
-import { widgetCatalog } from '$lib/models/widgets';
+import { widgetCatalog, widgetSourceKinds } from '$lib/models/widgets';
 import { widgetCatalogPrompt } from './catalog-prompt';
 
 describe('widget catalog prompt', () => {
@@ -18,5 +18,11 @@ describe('widget catalog prompt', () => {
 		expect(Object.keys(formulaFunctions).filter((name) => !prompt.includes(`\`${name}(`))).toEqual(
 			[]
 		);
+	});
+	it('documents every workspace source kind', () => {
+		const prompt = widgetCatalogPrompt(widgetCatalog);
+		expect(
+			Object.keys(widgetSourceKinds).filter((kind) => !prompt.includes(`- \`${kind}\``))
+		).toEqual([]);
 	});
 });

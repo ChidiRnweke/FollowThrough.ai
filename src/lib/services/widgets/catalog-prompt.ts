@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { formulaFunctions } from '$lib/models/widget-formulas';
-import { widgetActions, widgetTemplates, type WidgetCatalog } from '$lib/models/widgets';
+import {
+	widgetActions,
+	widgetSourceKinds,
+	widgetTemplates,
+	type WidgetCatalog
+} from '$lib/models/widgets';
 
 /** A component's props as compact JSON Schema, which is the form a model reads most reliably. */
 const propsSchema = (props: z.ZodObject): string =>
@@ -39,6 +44,15 @@ export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
 			.map((definition) => definition.usage)
 			.join('; ')}.`,
 		'- A failed formula (division by zero, a missing number) reads as `null` and the widget says why.',
+		'',
+		'## Workspace sources',
+		'',
+		'A dashboard reads the user\'s own work in the widget\'s project through the layout\'s optional `sources` map: `"sources": { "<name>": { "kind": "<kind>" } }`. The rows are at `/sources/<name>`, are never saved, and stay current as the work changes. Count, filter and group them with formulas. Nothing outside the workspace can be read.',
+		'',
+		...Object.entries(widgetSourceKinds).map(
+			([kind, definition]) =>
+				`- \`${kind}\`: ${definition.description} Each row has ${definition.fields}.`
+		),
 		'',
 		'## Components',
 		'',

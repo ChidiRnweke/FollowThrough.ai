@@ -16,6 +16,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import WidgetView from './widget-view.svelte';
+	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 
 	/**
 	 * Edit a widget as JSON. What is typed becomes changes through `widgetChangesBetween`, the
@@ -126,7 +127,7 @@
 	{#if outcome.kind === 'ready'}
 		<div class="flex flex-col gap-1.5">
 			<p class="eyebrow">Preview</p>
-			<WidgetView widget={outcome.preview} />
+			<WidgetView widget={outcome.preview} sources={widgetSources(outcome.preview)} />
 		</div>
 	{/if}
 </div>

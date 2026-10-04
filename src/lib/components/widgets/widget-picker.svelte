@@ -21,6 +21,7 @@
 	import { FtWidget as WidgetIcon } from '$lib/components/icons';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import WidgetView from './widget-view.svelte';
+	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';
 
 	let {
 		open = $bindable(false),
@@ -65,7 +66,7 @@
 			onclick={choose}
 		>
 			<span class="pointer-events-none block h-44 w-full overflow-hidden">
-				<WidgetView {widget} />
+				<WidgetView {widget} sources={widgetSources(widget)} />
 			</span>
 			<span class="block truncate text-sm">{widget.title}</span>
 		</Button>

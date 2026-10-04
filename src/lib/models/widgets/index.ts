@@ -110,18 +110,47 @@ export type WidgetElement = z.infer<typeof widgetElementSchema>;
  * Top-level state keys the widget computes rather than stores. A renderer reads them like data,
  * through `$state`, but no control writes them and they are never saved.
  */
-export const widgetComputedRoots = ['derived'] as const;
+export const widgetComputedRoots = ['derived', 'sources'] as const;
+
+/**
+ * Read-only lists of the user's own work in the widget's project, by kind. Each row is plain
+ * JSON with the fields listed here; formulas count, filter and group them. The list is closed:
+ * a widget cannot reach outside the workspace, and the rows are worked out from synced records,
+ * so a dashboard works offline (ADR 0043).
+ */
+export const widgetSourceKinds = {
+	todos: {
+		description: "The project's todos, soonest due first.",
+		fields:
+			'`id`, `title`, `status` (`backlog`, `open`, `in_progress`, `done`, `cancelled`), `statusLabel`, `open` (not done or cancelled), `done`, `overdue` (open and due before today), `waiting` (waiting on someone else), `dueDate` (`YYYY-MM-DD` or null), `priority` (`low`, `medium`, `high` or null), `category` (or null)'
+	},
+	notes: {
+		description: "The project's notes, most recently updated first.",
+		fields: '`id`, `title`, `pinned`, `updatedDate` (`YYYY-MM-DD`)'
+	}
+} as const;
+
+export type WidgetSourceKind = keyof typeof widgetSourceKinds;
+
+/** Each source's rows, by the name the layout gives it. */
+export type WidgetSourceRows = { readonly [name: string]: JsonValue[] };
+
+/** What a view knows of a widget's sources: their rows, or that the workspace is not loaded. */
+export type WidgetSources =
+	{ readonly kind: 'rows'; readonly rows: WidgetSourceRows } | { readonly kind: 'unavailable' };
+
+const widgetSourceSchema = z.strictObject({
+	kind: z.enum(Object.keys(widgetSourceKinds) as [WidgetSourceKind, ...WidgetSourceKind[]])
+});
 
 const derivedNameSchema = z
 	.string()
 	.regex(/^[A-Za-z][A-Za-z0-9_]{0,59}$/, 'Derived names start with a letter: letters, digits, _');
 
-const DERIVED_PREFIX = '/derived/';
-
-/** The derived values a formula reads, by name. `@/derived/total/0` reads `total`. */
-const derivedReads = (references: readonly string[]): readonly string[] =>
+/** The names a formula reads under one computed root. `@/derived/total/0` reads `total`. */
+const rootReads = (root: string, references: readonly string[]): readonly string[] =>
 	references.flatMap((pointer) =>
-		pointer.startsWith(DERIVED_PREFIX) ? [pointer.slice(DERIVED_PREFIX.length).split('/')[0]!] : []
+		pointer.startsWith(`/${root}/`) ? [pointer.slice(root.length + 2).split('/')[0]!] : []
 	);
 
 /** The first chain of derived values that reads itself, if any. */
@@ -153,23 +182,35 @@ export const widgetLayoutSchema = z
 		root: elementKeySchema,
 		elements: z.record(elementKeySchema, widgetElementSchema),
 		/** Named formulas. Each result is read at `/derived/<name>`. */
-		derived: z.record(derivedNameSchema, formulaSourceSchema).optional()
+		derived: z.record(derivedNameSchema, formulaSourceSchema).optional(),
+		/** Named lists of the user's own work. Each is read at `/sources/<name>`. */
+		sources: z.record(derivedNameSchema, widgetSourceSchema).optional()
 	})
 	.superRefine((layout, context) => {
 		const derived = layout.derived ?? {};
-		const reads = new Map(
+		const sources = layout.sources ?? {};
+		const references = new Map(
 			Object.entries(derived).map(([name, source]) => {
 				const parsed = parseFormula(source);
-				return [name, parsed.kind === 'parsed' ? derivedReads(parsed.references) : []];
+				return [name, parsed.kind === 'parsed' ? parsed.references : []];
 			})
 		);
-		for (const [name, names] of reads)
-			for (const missing of names.filter((read) => !Object.hasOwn(derived, read)))
-				context.addIssue({
-					code: 'custom',
-					path: ['derived', name],
-					message: `@/derived/${missing} is not defined`
-				});
+		const reads = new Map(
+			[...references].map(([name, pointers]) => [name, rootReads('derived', pointers)])
+		);
+		for (const [name, pointers] of references)
+			for (const [root, defined] of [
+				['derived', derived],
+				['sources', sources]
+			] as const)
+				for (const missing of rootReads(root, pointers).filter(
+					(read) => !Object.hasOwn(defined, read)
+				))
+					context.addIssue({
+						code: 'custom',
+						path: ['derived', name],
+						message: `@/${root}/${missing} is not defined`
+					});
 		const cycle = derivedCycle(reads);
 		if (cycle)
 			context.addIssue({
@@ -951,6 +992,119 @@ export const widgetTemplates = {
 				{ item: 'Train pass', category: 'Transport', amount: 64, paid: false }
 			]
 		}
+	},
+	dashboard: {
+		title: 'Project dashboard',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: {
+						title: { $state: '/title' },
+						description: 'Counts and lists from this project, kept up to date as work changes.'
+					},
+					children: ['metrics', 'columns']
+				},
+				metrics: {
+					type: 'Grid',
+					props: { columns: 4, gap: 'md' },
+					children: ['open', 'overdue', 'waiting', 'done']
+				},
+				open: {
+					type: 'Metric',
+					props: { label: 'Open todos', value: { $state: '/derived/openCount' } },
+					children: []
+				},
+				overdue: {
+					type: 'Metric',
+					props: {
+						label: 'Overdue',
+						value: { $state: '/derived/overdueCount' },
+						detail: { $template: 'of ${/derived/datedCount} with a due date' }
+					},
+					children: []
+				},
+				waiting: {
+					type: 'Metric',
+					props: { label: 'Waiting on others', value: { $state: '/derived/waitingCount' } },
+					children: []
+				},
+				done: {
+					type: 'Metric',
+					props: { label: 'Done', value: { $state: '/derived/doneCount' } },
+					children: []
+				},
+				columns: {
+					type: 'Grid',
+					props: { columns: 2, gap: 'lg' },
+					children: ['byStatus', 'lists']
+				},
+				byStatus: {
+					type: 'BarChart',
+					props: {
+						title: 'Todos by status',
+						rows: { $state: '/derived/byStatus' },
+						x: 'status',
+						series: [{ key: 'todos', label: 'Todos' }],
+						height: 'sm'
+					},
+					children: []
+				},
+				lists: {
+					type: 'Stack',
+					props: { direction: 'vertical', gap: 'md' },
+					children: ['overdueHeading', 'overdueTable', 'notesHeading', 'notesTable']
+				},
+				overdueHeading: {
+					type: 'Heading',
+					props: { text: 'Overdue', level: 4 },
+					children: []
+				},
+				overdueTable: {
+					type: 'Table',
+					props: {
+						columns: [
+							{ key: 'title', label: 'Todo' },
+							{ key: 'dueDate', label: 'Due' }
+						],
+						rows: { $state: '/derived/overdue' },
+						empty: 'Nothing is overdue.'
+					},
+					children: []
+				},
+				notesHeading: {
+					type: 'Heading',
+					props: { text: 'Recently updated notes', level: 4 },
+					children: []
+				},
+				notesTable: {
+					type: 'Table',
+					props: {
+						columns: [
+							{ key: 'title', label: 'Note' },
+							{ key: 'updatedDate', label: 'Updated' }
+						],
+						rows: { $state: '/derived/recentNotes' },
+						empty: 'No notes yet.'
+					},
+					children: []
+				}
+			},
+			sources: { todos: { kind: 'todos' }, notes: { kind: 'notes' } },
+			derived: {
+				openCount: 'count(filter(@/sources/todos, item.open))',
+				overdue: 'filter(@/sources/todos, item.overdue)',
+				overdueCount: 'count(@/derived/overdue)',
+				datedCount: 'count(filter(@/sources/todos, item.open and item.dueDate != null))',
+				waitingCount: 'count(filter(@/sources/todos, item.open and item.waiting))',
+				doneCount: 'count(filter(@/sources/todos, item.done))',
+				byStatus:
+					'map(group(@/sources/todos, "statusLabel"), { status: item.key, todos: count(item.items) })',
+				recentNotes: 'filter(@/sources/notes, i < 5)'
+			}
+		},
+		data: { title: 'Project dashboard' }
 	},
 	blank: {
 		title: 'New widget',
