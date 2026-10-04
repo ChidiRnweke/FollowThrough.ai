@@ -12,6 +12,7 @@ import {
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { retrievalEncoding } from './indexing';
+import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
 describe('Content chunking invariants', () => {
 	it('retains repeated final paragraphs instead of treating equal text as an overlap', () => {
@@ -76,11 +77,32 @@ describe('Search indexing invariants', () => {
 		expect(repository.documents).toHaveLength(2);
 	});
 
-	it('uses a SHA-256 content hash', async () => {
+	it('replaces the persisted vector when indexed content changes', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).notes;
-		await indexer.index(testActor(), noteBuilder({ plainText: 'architecture' }));
-		expect(repository.documents[0]?.document.contentHash).toHaveLength(64);
+		const index = new ContentIndex(repository, 'test-embedding');
+		const note = noteBuilder(noteContentFromMarkdown('architecture'));
+		const initial = await index.indexNote(testActor(), note);
+		if (initial.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
+		await index.complete(testActor(), initial, { model: 'test-embedding', vectors: [[1, 2, 3]] });
+
+		const changed = await index.indexNote(testActor(), {
+			...note,
+			...noteContentFromMarkdown('blueprint'),
+			currentRevision: 2
+		});
+		if (changed.kind === 'needs_embeddings')
+			await index.complete(testActor(), changed, { model: 'test-embedding', vectors: [[4, 5, 6]] });
+
+		expect({
+			result: changed.kind,
+			documents: repository.documents.map(({ document }) => ({
+				content: document.content,
+				embedding: document.embedding
+			}))
+		}).toEqual({
+			result: 'needs_embeddings',
+			documents: [{ content: 'blueprint', embedding: [4, 5, 6] }]
+		});
 	});
 
 	it('reuses an existing embedding for unchanged content', async () => {

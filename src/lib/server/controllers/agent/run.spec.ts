@@ -541,10 +541,11 @@ describe('durable agent lifecycle commands', () => {
 		).rejects.toThrow('The pending tool call was not found');
 	});
 
-	it('records nothing when one call in a batch is not pending (2/2)', async () => {
-		const { controller, runs, receipt } = await awaitingApproval([
+	it('leaves the awaiting run and pending call unchanged when a batch includes an unknown call', async () => {
+		const pending = [
 			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
-		]);
+		] satisfies PendingAgentDecision[];
+		const { controller, runs, receipt } = await awaitingApproval(pending);
 		await controller
 			.decideMany(testActor(), {
 				runId: receipt.runId,
@@ -556,7 +557,19 @@ describe('durable agent lifecycle commands', () => {
 					throw error;
 				return { kind: 'failure' };
 			});
-		expect(await runs.loadUnconsumed(receipt.runId)).toHaveLength(0);
+		expect({
+			status: runs.runs.find((run) => run.id === receipt.runId)?.status,
+			pending: runs.runs.find((run) => run.id === receipt.runId)?.pendingDecisions,
+			decisions: await runs.loadUnconsumed(receipt.runId),
+			resumedEvents: runs.events.filter(
+				(record) => record.event.type === 'run_queued' && record.event.reason === 'resumed'
+			)
+		}).toEqual({
+			status: 'awaiting_approval',
+			pending,
+			decisions: [],
+			resumedEvents: []
+		});
 	});
 
 	it('rejects a contradictory duplicate decision', async () => {

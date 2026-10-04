@@ -37,6 +37,7 @@ import {
 } from './agent-tool-factory';
 import type { AgentToolContractBinding } from '$lib/models/agent';
 import type { ToolClassification } from '$lib/models/agent';
+import { toolFailureSchema } from '$lib/models/agent/tool-failure';
 import {
 	TOOL_DESCRIPTIONS,
 	LOCKED_TOOL_NAMES,
@@ -563,12 +564,21 @@ describe('Agent tool coverage invariants', () => {
 		retriever.names = ['create_note'];
 		const selected = indirectToolFor('auto_accept', 'search_tools', { retriever });
 		const result = await selected.invoke({} as never, JSON.stringify({ query: 'create a note' }));
-		expect(Object.keys((result as Record<string, unknown>[])[0]).sort()).toEqual([
-			'callable_directly',
-			'classification',
-			'description',
-			'input_schema',
-			'name'
+		expect(result).toMatchObject([
+			{
+				name: 'create_note',
+				classification: 'mutation',
+				callable_directly: true,
+				input_schema: {
+					type: 'object',
+					required: ['title'],
+					properties: {
+						title: { type: 'string' },
+						projectId: { type: 'string' },
+						parentId: { type: 'string' }
+					}
+				}
+			}
 		]);
 	});
 
@@ -868,48 +878,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(await selected.needsApproval({} as never, {} as never, 'call-1')).toBe(false);
 	});
 
-	it('threads the run provenanceId into load_skill even when the context omits it (1/2)', async () => {
-		let _receivedProvenanceId: unknown;
-		const skill = {
-			note: noteBuilder({ id: crypto.randomUUID() as never, kind: 'skill' }),
-			name: 'Compliance format',
-			description: 'Formats responses for compliance review',
-			triggerHints: ['compliance']
-		};
-		const factory = {
-			toolPreferences: () => ({ list: async () => [] }),
-			skills: () => ({
-				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
-					_receivedProvenanceId = input.provenanceId;
-					return { skill, usages: [] };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const run = {
-			userId: testActor().userId,
-			executionMode: 'auto_accept',
-			model: 'openai/gpt-5.6',
-			provenanceId: testProvenanceId()
-		};
-		const registry = await agentToolRegistry(
-			() => factory,
-			new InMemoryToolRetriever()
-		)({
-			actor: testActor(),
-			request: { prompt: 'Help' } as never,
-			run: run as never,
-			executor: { execute: async (_input, action) => action() },
-			signal: new AbortController().signal
-		});
-		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
-		expect(loadSkill).toBeDefined();
-		await (loadSkill as FunctionTool).invoke(
-			{} as never,
-			JSON.stringify({ noteId: '11111111-1111-4111-8111-111111111111' })
-		);
-	});
-
-	it('threads the run provenanceId into load_skill even when the context omits it (2/2)', async () => {
+	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
 		let receivedProvenanceId: unknown;
 		const skill = {
 			note: noteBuilder({ id: crypto.randomUUID() as never, kind: 'skill' }),
@@ -1119,16 +1088,32 @@ describe('Agent tool coverage invariants', () => {
 		const selected = directToolFor('auto_accept', 'create_todos');
 		const projectId = crypto.randomUUID();
 		const requestId = crypto.randomUUID();
-		const results: string[] = [];
-		for (const payload of [
-			{ requestId, projectId, todos: [] },
-			{ requestId, projectId, todos: [{ responsibility: 'mine' }] },
-			{ requestId, projectId },
-			{ projectId, todos: [{ title: 'Valid task', responsibility: 'mine' }] }
-		]) {
-			results.push(JSON.stringify(await selected.invoke({} as never, JSON.stringify(payload))));
+		const cases = [
+			{ payload: { requestId, projectId, todos: [] }, field: 'todos' },
+			{ payload: { requestId, projectId, todos: [{ responsibility: 'mine' }] }, field: 'title' },
+			{ payload: { requestId, projectId }, field: 'todos' },
+			{
+				payload: { projectId, todos: [{ title: 'Valid task', responsibility: 'mine' }] },
+				field: 'requestId'
+			}
+		];
+		const failures = [];
+		for (const { payload, field } of cases) {
+			const result = await selected.invoke({} as never, JSON.stringify(payload));
+			const failure = toolFailureSchema.parse(result);
+			failures.push({
+				code: failure.code,
+				messageNamesField: failure.message.includes(field),
+				recovery: failure.recovery
+			});
 		}
-		expect(results.every((result) => result.includes('failure'))).toBe(true);
+		expect(failures).toEqual(
+			cases.map(() => ({
+				code: 'VALIDATION',
+				messageNamesField: true,
+				recovery: 'Read the failure, correct the arguments it names, and call the tool again.'
+			}))
+		);
 	});
 
 	it('keeps create_todos in the long-tail catalog, not the first-class tools (1/2)', () => {
@@ -1144,7 +1129,18 @@ describe('Agent tool coverage invariants', () => {
 	it('returns model-readable validation errors for invalid long-tail payloads', async () => {
 		const selected = directToolFor('auto_accept', 'create_note');
 		const result = await selected.invoke({} as never, JSON.stringify({}));
-		expect(JSON.stringify(result)).toContain('failure');
+		const failure = toolFailureSchema.parse(result);
+		expect({
+			kind: failure.kind,
+			code: failure.code,
+			messageNamesTitle: failure.message.includes('title'),
+			recovery: failure.recovery
+		}).toEqual({
+			kind: 'failure',
+			code: 'VALIDATION',
+			messageNamesTitle: true,
+			recovery: 'Read the failure, correct the arguments it names, and call the tool again.'
+		});
 	});
 
 	it('keeps a searched tool callable in a later turn of the same conversation', async () => {
@@ -1353,17 +1349,6 @@ describe('Agent tool coverage invariants', () => {
 		expect(await approvalFor('approval_required', 'extract_promises')).toBe(false);
 	});
 
-	it('does not expose selection-bound tools without an authoritative selection', () => {
-		const names = createAgentTools({} as ControllerFactory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Help' },
-			model: 'openai/gpt-5.6'
-		})
-			.tools()
-			.map((candidate) => candidate.name);
-		expect(names.includes('generate_mermaid_diagram')).toBe(false);
-	});
-
 	it('executes mutation tools immediately in auto-accept mode', async () => {
 		expect(await approvalFor('auto_accept', 'create_note')).toBe(false);
 	});
@@ -1372,11 +1357,18 @@ describe('Agent tool coverage invariants', () => {
 		expect(await approvalFor('approval_required', 'load_skill')).toBe(false);
 	});
 
-	it('limits diagram workflows to read-only controller tools', () => {
+	it('retains diagram reads and excludes mutations from the read-only tool set', () => {
 		const names = registry('auto_accept')
 			.tools({ classifications: ['read'] })
 			.map((candidate) => candidate.name);
-		expect(names.includes('generate_mermaid_diagram')).toBe(false);
+		expect({
+			includesDiagramReads: ['read_canvas_diagram', 'read_project_diagram'].every((name) =>
+				names.includes(name)
+			),
+			excludesDiagramMutations: ['create_diagram', 'edit_diagram'].every(
+				(name) => !names.includes(name)
+			)
+		}).toEqual({ includesDiagramReads: true, excludesDiagramMutations: true });
 	});
 
 	it('allows diagram workflows to read shared project memory', () => {

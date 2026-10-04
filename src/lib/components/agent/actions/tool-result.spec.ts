@@ -17,7 +17,11 @@ describe('A result the reader can use', () => {
 	});
 
 	it('treats a long string as prose rather than a line', () => {
-		expect(summariseToolResult('word '.repeat(40)).prose).toContain('word');
+		expect(summariseToolResult('word '.repeat(40))).toEqual({
+			lines: [],
+			prose: 'word '.repeat(40).trim(),
+			empty: false
+		});
 	});
 });
 

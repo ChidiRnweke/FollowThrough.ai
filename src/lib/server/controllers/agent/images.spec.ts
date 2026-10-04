@@ -103,12 +103,23 @@ it('does not fetch image capabilities for a turn without images', async () => {
 
 it('rejects the combined image count before saving a conversation', async () => {
 	const fixture = setup();
-	await expect(
-		fixture.controller.submit(testActor(), {
+	const outcome = await fixture.controller
+		.submit(testActor(), {
 			requestId: crypto.randomUUID(),
 			input: 'Read these',
 			images: Array.from({ length: 3 }, () => ({ ...image, id: crypto.randomUUID() })),
 			contextImages: Array.from({ length: 2 }, () => ({ ...image, id: crypto.randomUUID() }))
 		})
-	).rejects.toThrow('at most four');
+		.then(
+			() => 'unexpected success',
+			(error) => {
+				if (!(error instanceof Error)) throw error;
+				return error.message;
+			}
+		);
+	expect({
+		outcome,
+		runs: fixture.runs.runs.length,
+		conversations: fixture.conversations.conversations.length
+	}).toEqual({ outcome: 'Attach at most four images.', runs: 0, conversations: 0 });
 });
