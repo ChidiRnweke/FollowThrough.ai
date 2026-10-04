@@ -196,6 +196,19 @@ cannot freeze the tab. A thirty-year monthly schedule costs about 4,000.
 - **json-render's `$computed` is not used.** It calls registered JavaScript functions with untyped
   arguments in the browser only, so export and the server could not share it.
 
+### Lists grow and tables edit in place
+
+A `Button` runs only the built-in state actions: `pushState` adds a list item (`"$id"` makes its
+id, and `clearStatePath` empties the field it came from), `removeState` removes one, and
+`setState` sets a value. An action may not write a computed root. A `DataTable` binds a whole
+array with `$bindState`; each column has a kind (`text`, `number`, `checkbox` or `select`) that
+chooses the shadcn control in its cells. An edit writes the array back with one cell changed, so
+the view's diff is a `replace` of that cell alone, and two people editing different rows merge
+as two ticks do. Adding or removing a row changes the array's length and replaces it whole,
+which the replay treats as an overlap. A `footer` reads a record of values per column, usually a
+derived total. Export prints the table with ticks for checkboxes and option labels for choices.
+The read-only `Table` stays for computed rows.
+
 ### Charts are shadcn-svelte charts
 
 LineChart, AreaChart and BarChart plot rows of numbers: `rows` is usually a derived `series`, `x`

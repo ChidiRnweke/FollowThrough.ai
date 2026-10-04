@@ -178,3 +178,52 @@ describe('Widget view charts', () => {
 		await expect.element(screen.getByText('Nothing to plot yet.')).toBeVisible();
 	});
 });
+
+describe('Widget view data table', () => {
+	const expenses = () =>
+		widgetBuilder({ layout: widgetTemplates.expenses.layout, data: widgetTemplates.expenses.data });
+	const recorded = () => {
+		const changes: WidgetChange[] = [];
+		return {
+			changes,
+			onChange: async (change: WidgetChange) => {
+				changes.push(change);
+				return { kind: 'staged' as const };
+			}
+		};
+	};
+	it('hands an edited cell over as a change of that cell alone', async () => {
+		const { changes, onChange } = recorded();
+		const screen = await render(WidgetView, { widget: expenses(), onChange });
+		await screen.getByLabelText('Amount, row 3').fill('70');
+		await expect
+			.poll(() => changes)
+			.toEqual([
+				{ kind: 'data', patch: [{ op: 'replace', path: '/expenses/2/amount', value: 70 }] }
+			]);
+	});
+	it('totals the rows in the footer as a cell changes', async () => {
+		const screen = await render(WidgetView, {
+			widget: expenses(),
+			onChange: async () => ({ kind: 'staged' })
+		});
+		await screen.getByLabelText('Amount, row 1').fill('1000');
+		await expect.element(screen.getByRole('cell', { name: '1,246.50' })).toBeVisible();
+	});
+	it('adds an empty row', async () => {
+		const screen = await render(WidgetView, {
+			widget: expenses(),
+			onChange: async () => ({ kind: 'staged' })
+		});
+		await screen.getByRole('button', { name: 'Add expense' }).click();
+		await expect.element(screen.getByLabelText('Item, row 4')).toHaveValue('');
+	});
+	it('removes a row', async () => {
+		const { changes, onChange } = recorded();
+		const screen = await render(WidgetView, { widget: expenses(), onChange });
+		await screen.getByRole('button', { name: 'Remove row 1' }).click();
+		await expect
+			.poll(() => changes.map((change) => change.kind === 'data' && change.patch[0]?.path))
+			.toEqual(['/expenses']);
+	});
+});

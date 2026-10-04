@@ -312,6 +312,19 @@ class Evaluation {
 			}
 			case 'map':
 				return each(listOf(value(0), 'map'), args[1]!).map(({ result }) => result);
+			case 'group': {
+				const field = value(1);
+				if (typeof field !== 'string') throw new FormulaFailure('group needs a field name');
+				const groups = new Map<string, { key: JsonValue; items: JsonValue[] }>();
+				for (const item of listOf(value(0), 'group')) {
+					const key = isObject(item) ? (item[field] ?? null) : null;
+					const id = canonical(key);
+					const group = groups.get(id) ?? { key, items: [] };
+					group.items.push(item);
+					groups.set(id, group);
+				}
+				return [...groups.values()];
+			}
 			case 'filter':
 				return each(listOf(value(0), 'filter'), args[1]!)
 					.filter(({ result }) => booleanOf(result, 'filter'))

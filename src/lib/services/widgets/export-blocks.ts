@@ -218,6 +218,33 @@ const blocksOf = (
 			return [{ kind: 'badge', text: text(prop('text')) }];
 		case 'Divider':
 			return [{ kind: 'divider' }];
+		case 'DataTable': {
+			const columns = prop('columns');
+			const rows = prop('rows');
+			const footer = prop('footer');
+			const keyed = Array.isArray(columns) ? columns.filter(isObject) : [];
+			// A cell prints what it shows: a tick for a checkbox, the option label for a choice.
+			const cellText = (column: JsonObject, value: JsonValue | undefined): string => {
+				if (column.kind === 'checkbox') return value === true ? '☑' : '☐';
+				const options = column.options;
+				const chosen = Array.isArray(options)
+					? options.find((option) => isObject(option) && option.value === value)
+					: undefined;
+				return isObject(chosen) ? text(chosen.label) : text(value);
+			};
+			const body = (Array.isArray(rows) ? rows.filter(isObject) : []).map((row) =>
+				keyed.map((column) => cellText(column, row[text(column.key)]))
+			);
+			return [
+				{
+					kind: 'table',
+					columns: keyed.map((column) => text(column.label)),
+					rows: isObject(footer)
+						? [...body, keyed.map((column) => text(footer[text(column.key)]))]
+						: body
+				}
+			];
+		}
 		// A chart prints as the table of what it plots, under its title. LayerChart cannot render on
 		// the server (ADR 0043), and the numbers are what a reader of the page needs.
 		case 'LineChart':

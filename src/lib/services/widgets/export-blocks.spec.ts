@@ -111,4 +111,21 @@ describe('widget export', () => {
 			}
 		]);
 	});
+	it('prints an editable table with ticks, option labels and its footer', () => {
+		const { layout, data } = widgetTemplates.expenses;
+		const table = widgetExport(widgetBuilder({ layout, data }), {
+			...data,
+			derived: { totals: { item: 'Total', amount: '1,446.50' } }
+		}).blocks.find((block) => block.kind === 'table');
+		expect(table).toEqual({
+			kind: 'table',
+			columns: ['Item', 'Category', 'Amount', 'Paid'],
+			rows: [
+				['Rent', 'Housing', '1200', '☑'],
+				['Groceries', 'Food', '182.5', '☑'],
+				['Train pass', 'Transport', '64', '☐'],
+				['Total', '', '1,446.50', '']
+			]
+		});
+	});
 });

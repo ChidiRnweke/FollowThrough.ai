@@ -19,6 +19,7 @@ import WidgetButton from './elements/widget-button.svelte';
 import WidgetLineChart from './elements/widget-line-chart.svelte';
 import WidgetAreaChart from './elements/widget-area-chart.svelte';
 import WidgetBarChart from './elements/widget-bar-chart.svelte';
+import WidgetDataTable from './elements/widget-data-table.svelte';
 
 /**
  * The renderer side of the catalog: one Svelte component per catalog entry, built on our own
@@ -36,6 +37,7 @@ const components = {
 	NumberInput: WidgetNumberInput,
 	Select: WidgetSelect,
 	Table: WidgetTable,
+	DataTable: WidgetDataTable,
 	Badge: WidgetBadge,
 	Button: WidgetButton,
 	LineChart: WidgetLineChart,

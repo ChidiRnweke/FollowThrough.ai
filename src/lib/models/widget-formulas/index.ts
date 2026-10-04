@@ -69,6 +69,12 @@ export const formulaFunctions = {
 		body: { index: 1, names: ['item', 'i'] },
 		usage: '`map(list, body)`: `body` for each `item`, at position `i`'
 	},
+	group: {
+		min: 2,
+		max: 2,
+		usage:
+			'`group(list, "field")`: one `{ key, items }` per distinct value of `field`, in the order first seen'
+	},
 	filter: {
 		min: 2,
 		max: 2,

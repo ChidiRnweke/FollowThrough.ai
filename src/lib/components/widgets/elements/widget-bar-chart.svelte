@@ -21,7 +21,7 @@
 		seriesLayout={props.stacked ? 'stack' : 'group'}
 		legend={props.series.length > 1}
 		padding={chartPadding(props.series)}
-		props={{ bars: { radius: 4 }, yAxis: { format: valueTick } }}
+		props={{ bars: { radius: 4, strokeWidth: 0 }, yAxis: { format: valueTick } }}
 	>
 		{#snippet tooltip()}
 			<Chart.Tooltip />

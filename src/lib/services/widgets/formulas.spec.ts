@@ -61,6 +61,28 @@ describe('resolveWidgetState', () => {
 			)
 		).toEqual({ open: 2 });
 	});
+	it('groups rows by a field and totals each group', () => {
+		expect(
+			derivedOf(
+				{
+					byCategory:
+						'map(group(@/rows, "category"), { category: item.key, amount: sum(map(item.items, item.amount)) })'
+				},
+				{
+					rows: [
+						{ category: 'Food', amount: 10 },
+						{ category: 'Rent', amount: 900 },
+						{ category: 'Food', amount: 5 }
+					]
+				}
+			)
+		).toEqual({
+			byCategory: [
+				{ category: 'Food', amount: 15 },
+				{ category: 'Rent', amount: 900 }
+			]
+		});
+	});
 	it('writes a number as grouped text', () => {
 		expect(derivedOf({ shown: '"€" + format(@/n, 2)' }, { n: 1234567.891 })).toEqual({
 			shown: '€1,234,567.89'

@@ -370,6 +370,25 @@ const chartProps = {
 
 export type WidgetChartSeries = z.infer<typeof chartProps.series>[number];
 
+const optionsSchema = z
+	.array(z.strictObject({ value: z.string().min(1), label: z.string().min(1) }))
+	.min(1);
+
+/** A column a person edits in place. What it holds decides the control in each cell. */
+const dataTableColumnSchema = z.discriminatedUnion('kind', [
+	z.strictObject({ key: z.string().min(1), label: z.string(), kind: z.literal('text') }),
+	z.strictObject({ key: z.string().min(1), label: z.string(), kind: z.literal('number') }),
+	z.strictObject({ key: z.string().min(1), label: z.string(), kind: z.literal('checkbox') }),
+	z.strictObject({
+		key: z.string().min(1),
+		label: z.string(),
+		kind: z.literal('select'),
+		options: optionsSchema
+	})
+]);
+
+export type WidgetDataTableColumn = z.infer<typeof dataTableColumnSchema>;
+
 /** The allow-list of components a layout may use. A layout naming anything else is invalid. */
 export const widgetCatalog = {
 	version: 3,
@@ -453,6 +472,21 @@ export const widgetCatalog = {
 			props: z.strictObject({
 				columns: z.array(z.strictObject({ key: z.string().min(1), label: z.string() })).min(1),
 				rows: dynamic(z.array(z.record(z.string(), jsonValueSchema))),
+				empty: z.string().nullish()
+			}),
+			slots: []
+		},
+		DataTable: {
+			description:
+				'Rows a person edits in place. Bind `rows` with `$bindState` to an array of records. Each column has a `kind`: `text`, `number`, `checkbox`, or `select` with `options`. `addLabel` shows a button that adds an empty row; `removable` lets a row be removed. `footer` reads a record of values per column key, usually a derived `{ amount: sum(map(@/rows, item.amount)) }`.',
+			props: z.strictObject({
+				rows: dynamic(z.array(z.record(z.string(), jsonValueSchema))),
+				columns: z.array(dataTableColumnSchema).min(1),
+				addLabel: z.string().min(1).nullish(),
+				removable: z.boolean().nullish(),
+				footer: dynamic(
+					z.record(z.string(), z.union([z.string(), z.number(), z.null()]))
+				).nullish(),
 				empty: z.string().nullish()
 			}),
 			slots: []
@@ -790,6 +824,99 @@ export const widgetTemplates = {
 			}
 		},
 		data: { title: 'Savings simulator', start: 10000, monthly: 250, rate: 5, years: 20 }
+	},
+	expenses: {
+		title: 'Expense tracker',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: { title: { $state: '/title' } },
+					children: ['summary', 'used', 'table', 'chart']
+				},
+				summary: {
+					type: 'Stack',
+					props: { direction: 'horizontal', gap: 'lg' },
+					children: ['budget', 'spent', 'left']
+				},
+				budget: {
+					type: 'NumberInput',
+					props: { label: 'Monthly budget', value: { $bindState: '/budget' }, min: 0, step: 50 },
+					children: []
+				},
+				spent: {
+					type: 'Metric',
+					props: { label: 'Spent', value: { $state: '/derived/spentText' } },
+					children: []
+				},
+				left: {
+					type: 'Metric',
+					props: { label: 'Left', value: { $state: '/derived/leftText' } },
+					children: []
+				},
+				used: {
+					type: 'Progress',
+					props: { value: { $state: '/derived/total' }, max: { $state: '/budget' } },
+					children: []
+				},
+				table: {
+					type: 'DataTable',
+					props: {
+						rows: { $bindState: '/expenses' },
+						columns: [
+							{ key: 'item', label: 'Item', kind: 'text' },
+							{
+								key: 'category',
+								label: 'Category',
+								kind: 'select',
+								options: [
+									{ value: 'Housing', label: 'Housing' },
+									{ value: 'Food', label: 'Food' },
+									{ value: 'Transport', label: 'Transport' },
+									{ value: 'Other', label: 'Other' }
+								]
+							},
+							{ key: 'amount', label: 'Amount', kind: 'number' },
+							{ key: 'paid', label: 'Paid', kind: 'checkbox' }
+						],
+						addLabel: 'Add expense',
+						removable: true,
+						footer: { $state: '/derived/totals' },
+						empty: 'No expenses yet.'
+					},
+					children: []
+				},
+				chart: {
+					type: 'BarChart',
+					props: {
+						title: 'By category',
+						rows: { $state: '/derived/byCategory' },
+						x: 'category',
+						series: [{ key: 'amount', label: 'Spent' }],
+						height: 'sm'
+					},
+					children: []
+				}
+			},
+			derived: {
+				total: 'sum(map(@/expenses, item.amount))',
+				totals: '{ item: "Total", amount: format(@/derived/total, 2) }',
+				spentText: 'format(@/derived/total, 2)',
+				leftText: 'format(@/budget - @/derived/total, 2)',
+				byCategory:
+					'map(group(@/expenses, "category"), { category: item.key, amount: sum(map(item.items, item.amount)) })'
+			}
+		},
+		data: {
+			title: 'Expense tracker',
+			budget: 2000,
+			expenses: [
+				{ item: 'Rent', category: 'Housing', amount: 1200, paid: true },
+				{ item: 'Groceries', category: 'Food', amount: 182.5, paid: true },
+				{ item: 'Train pass', category: 'Transport', amount: 64, paid: false }
+			]
+		}
 	},
 	blank: {
 		title: 'New widget',
