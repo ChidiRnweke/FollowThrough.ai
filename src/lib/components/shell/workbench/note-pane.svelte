@@ -59,7 +59,7 @@
 				revision: current.currentRevision,
 				syncStatus: draft.status,
 				dirty,
-				...(dirty ? { dirtyExcerpt: current.plainText.slice(0, 4000) } : {})
+				...(dirty ? { dirtyExcerpt: current.plainText } : {})
 			};
 		});
 	});

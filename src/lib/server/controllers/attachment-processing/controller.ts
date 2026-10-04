@@ -32,8 +32,6 @@ interface AttachmentProcessingDependencies {
 	ocr: ITextRecognition;
 	imageDescriber: IImageDescription;
 	content: Pick<AttachmentContent, 'plan' | 'render'>;
-	parseLimit: number;
-	maxPages: number;
 	preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	indexer: {
 		index(
@@ -136,11 +134,11 @@ export class AttachmentProcessing {
 	): Promise<ExtractedAttachmentContent | undefined> {
 		const { mediaType, byteSize, objectKey } = view.version;
 		const path = view.attachment.path;
-		const { parseLimit, storage, parsers } = this.dependencies;
+		const { storage, parsers } = this.dependencies;
 		const parser = parsers.select(mediaType, path);
-		if (parser && byteSize <= parseLimit) {
-			const bytes = await storage.read(objectKey, parseLimit);
-			return { text: (await parser.parse(bytes)).slice(0, parseLimit), parserKind: parser.kind };
+		if (parser) {
+			const bytes = await storage.read(objectKey, byteSize);
+			return { text: await parser.parse(bytes), parserKind: parser.kind };
 		}
 		if (!isOcrSupported(mediaType, path)) return undefined;
 		const image = isOcrImage(mediaType, path);
@@ -148,8 +146,7 @@ export class AttachmentProcessing {
 		const content = await this.dependencies.ocr.ocr({
 			documentUrl,
 			kind: image ? 'image' : 'document',
-			fileName: path,
-			maxPages: this.dependencies.maxPages
+			fileName: path
 		});
 		const text = await this.describeDocument(content.parts, model);
 		if (!image) return { text, parserKind: 'ocr' };

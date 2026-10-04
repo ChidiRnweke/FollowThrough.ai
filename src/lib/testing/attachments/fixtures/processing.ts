@@ -37,10 +37,6 @@ export const setupAttachments = (chunker = new TokenAwareChunker()) => {
 		ocr,
 		imageDescriber: describer,
 		content: new AttachmentContent(),
-		parseLimit: Number(
-			process.env.ATTACHMENT_PARSE_MAX_BYTES ?? process.env.ATTACHMENT_MAX_BYTES ?? 50 * 1024 * 1024
-		),
-		maxPages: Number(process.env.ATTACHMENT_OCR_MAX_PAGES ?? 100),
 		preferences: {
 			get: async (actor) => ({
 				userId: actor.userId,

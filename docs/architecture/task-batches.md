@@ -19,4 +19,4 @@ retrying creation does not restore or recreate them. Reading an invalid saved re
 instead of creating a replacement batch.
 
 Migration `0055_todo_batch_receipts` adds the receipt table. Account deletion removes its
-receipts. The existing tool limit of 20 tasks per batch remains unchanged.
+receipts. The batch contains every submitted task; there is no application item-count ceiling.

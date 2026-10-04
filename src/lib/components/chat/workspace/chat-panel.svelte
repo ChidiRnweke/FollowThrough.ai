@@ -198,18 +198,7 @@
 
 	async function addImages(files: readonly File[]): Promise<void> {
 		const accepted = files.filter((file) => IMAGE_TYPES.has(file.type));
-		if (selectedImages.length + accepted.length > 4) {
-			toast.error('Attach at most four images.');
-			return;
-		}
-		if (
-			[...selectedImages].reduce((sum, image) => sum + image.dataUrl.length, 0) +
-				accepted.reduce((sum, file) => sum + file.size, 0) >
-			10 * 1024 * 1024
-		) {
-			toast.error('Images must be 10 MiB combined or less.');
-			return;
-		}
+
 		for (const file of accepted) {
 			const dataUrl = await new Promise<string>((resolve, reject) => {
 				const reader = new FileReader();
@@ -536,10 +525,7 @@
 		// can see its own output instead of reasoning about XML it cannot look at.
 		// It goes in its own channel rather than among the attachments: it is not
 		// something the user sent, and it must not appear in their message.
-		const render = takeCanvasRender(chat.sessionKey, selectedImages, {
-			maxImages: 4,
-			maxBytes: 10 * 1024 * 1024
-		});
+		const render = takeCanvasRender(chat.sessionKey);
 		const sentImages = selectedImages;
 		prompt = '';
 		selectedImages = [];

@@ -1780,8 +1780,8 @@ export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
 
 export const emptyAgentRunContextSchema = z.object({}).strict();
 
-const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string().max(12_000) });
-const submittedImagesSchema = z.array(conversationImageSchema).max(4).optional();
+const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string() });
+const submittedImagesSchema = z.array(conversationImageSchema).optional();
 
 export const agentRunIdInputSchema = z.object({
 	runId: z
@@ -1803,7 +1803,7 @@ export const submitAgentRunInputSchema = z
 		projectId: projectIdSchema.optional(),
 		noteId: noteIdSchema.optional(),
 		selection: submittedSelectionSchema.optional(),
-		selections: z.array(submittedSelectionSchema).max(8).optional(),
+		selections: z.array(submittedSelectionSchema).optional(),
 		contextNoteIds: z.array(noteIdSchema).optional(),
 		requestedSkillNames: z.array(z.string()).optional(),
 		requestedSkillNoteIds: z.array(noteIdSchema).optional(),

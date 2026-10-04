@@ -12,7 +12,6 @@
 	import FileDropzone from '../attachments/file-dropzone.svelte';
 
 	/** Mirrors DEFAULT_ARCHIVE_LIMITS server-side, so the reject happens before the upload. */
-	const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 	const linkIssueMessages: Record<ArchiveLinkIssue['reason'], string> = {
 		ambiguous: 'More than one note matches. Choose the intended note.',
 		missing: 'No matching note exists in this archive.',
@@ -159,10 +158,9 @@
 					bind:file={archive}
 					accept=".zip,application/zip"
 					extensions={['.zip']}
-					maxBytes={MAX_ARCHIVE_BYTES}
 					disabled={busy}
 					label="Drop a .zip here, or choose one"
-					hint="Up to 25 MB. Each note takes its name from its file name."
+					hint="Each note takes its name from its file name."
 				/>
 				{#if error}<p class="text-xs text-destructive">{error}</p>{/if}
 			</div>

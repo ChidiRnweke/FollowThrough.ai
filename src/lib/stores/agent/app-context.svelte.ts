@@ -113,11 +113,11 @@ class AppContextStore {
 		const visiblePanes = visibleIds
 			.map((id) => this.panes.get(id)?.())
 			.filter((pane): pane is PaneContext => Boolean(pane));
-		const openTabs = workbench.openTabs.slice(0, 20).flatMap((tabId) => {
+		const openTabs = workbench.openTabs.flatMap((tabId) => {
 			const note = this.shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId));
 			return note ? [{ id: note.id, title: note.title, projectId: note.projectId }] : [];
 		});
-		const openChatTabs = workbench.openTabs.slice(0, 20).flatMap((tabId) => {
+		const openChatTabs = workbench.openTabs.flatMap((tabId) => {
 			const sessionKey = chatKeyOf(tabId);
 			if (sessionKey === undefined) return [];
 			const reported = this.chatPanes.get(sessionKey)?.();

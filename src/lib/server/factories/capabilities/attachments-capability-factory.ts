@@ -97,11 +97,6 @@ export const createAttachmentsCapability = (
 			ocr: ocrEngine,
 			imageDescriber,
 			content: new AttachmentContent(),
-			parseLimit:
-				positiveNumberFromEnvironment('ATTACHMENT_PARSE_MAX_BYTES') ??
-				positiveNumberFromEnvironment('ATTACHMENT_MAX_BYTES') ??
-				50 * 1024 * 1024,
-			maxPages: positiveNumberFromEnvironment('ATTACHMENT_OCR_MAX_PAGES') ?? 100,
 			preferences: input.preferences,
 			indexer: input.indexer,
 			transactionRunner: input.transactionRunner,

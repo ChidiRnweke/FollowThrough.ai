@@ -24,9 +24,9 @@ const contextFor = (skills: readonly SkillSummary[]) =>
 		{ conversationId: testConversationId(), prompt: 'Help' },
 		{ base: {}, skills, contextNotes: [], profileMemory: [] }
 	);
-it('keeps fallback discovery available when every summary exceeds the prompt budget', () => {
+it('advertises complete summaries beyond the former prompt budget', () => {
 	const context = contextFor([skill('Review'.repeat(4000))]);
-	expect(buildAgentInstructions({}, context.skills)).toContain('call list_skills');
+	expect(buildAgentInstructions({}, context.skills)).toContain('Review'.repeat(4000));
 });
 it('describes a partially advertised catalog without claiming it is complete', () => {
 	const context = contextFor([

@@ -98,6 +98,8 @@ export const REQUIRED_APPLICATION_KEYS = [
 ] as const;
 
 export const APPLICATION_DEFAULTS = Object.freeze({
+	ARCHIVE_MAX_EXPANDED_BYTES: '26214400',
+	ARCHIVE_MAX_ENTRIES: '2000',
 	DB_NAME: 'followthrough',
 	DB_USER: 'followthrough',
 	LOCAL_USER_ID: '00000000-0000-4000-8000-000000000001',
@@ -115,7 +117,6 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	OPENROUTER_ATTACHMENT_VISION_MODEL: 'google/gemini-2.5-flash-lite',
 	MISTRAL_BASE_URL: 'https://api.mistral.ai/v1',
 	MISTRAL_OCR_MODEL: 'mistral-ocr-latest',
-	ATTACHMENT_OCR_MAX_PAGES: '100',
 	/* Exa rather than 'auto': auto resolves to the model's own native search, which
 	   returns snippets from a handful of results. Exa retrieves page content, which is
 	   what makes the difference between citing a headline and answering from the page.
@@ -128,8 +129,6 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	/* Attached context notes at or under this many tokens ride inside the user
 	   message; larger ones are replaced by a pointer to the search_note tool. */
 	CONTEXT_NOTE_TOKEN_LIMIT: '4000',
-	ATTACHMENT_MAX_BYTES: '52428800',
-	ATTACHMENT_PARSE_MAX_BYTES: '52428800',
 	S3_ENDPOINT: 'http://localhost:9000',
 	S3_REGION: 'us-east-1',
 	S3_ACCESS_KEY_ID: 'followthrough',
@@ -562,3 +561,17 @@ export const setPkceCookie = (
 
 export const deletePkceCookie = (cookies: Pick<CookieJar, 'delete'>, state: string): void =>
 	cookies.delete(`oauth_${state}`, { path: '/' });
+
+/** Deployment admission for decompression, not a per-document product limit. */
+export const archiveAdmissionLimits = () => {
+	const positiveInteger = (name: string, fallback: number): number => {
+		const value = process.env[name] === undefined ? fallback : Number(process.env[name]);
+		if (!Number.isSafeInteger(value) || value < 1)
+			throw new Error(`${name} must be a positive safe integer`);
+		return value;
+	};
+	return {
+		maxTotalBytes: positiveInteger('ARCHIVE_MAX_EXPANDED_BYTES', 25 * 1024 * 1024),
+		maxEntries: positiveInteger('ARCHIVE_MAX_ENTRIES', 2000)
+	};
+};

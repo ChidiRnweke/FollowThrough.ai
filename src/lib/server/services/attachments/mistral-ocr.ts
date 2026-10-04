@@ -13,8 +13,8 @@ const DEFAULT_MISTRAL_BASE_URL = 'https://api.mistral.ai/v1';
 const DEFAULT_OCR_MODEL = 'mistral-ocr-latest';
 
 /**
- * A whole document now goes out in one request, so the ceiling is the document
- * (Mistral allows up to 1000 pages) rather than a 10-page slice.
+ * A whole document goes out in one request. Provider failures propagate and
+ * every returned page is retained.
  */
 const OCR_TIMEOUT_MS = 300_000;
 
@@ -23,13 +23,6 @@ export interface OcrRequest {
 	readonly documentUrl: string;
 	readonly kind: 'document' | 'image';
 	readonly fileName: string;
-	/**
-	 * Caps how many pages are kept from the response. Applied to the result
-	 * rather than sent as the request's `pages` selector: the selector's
-	 * behaviour for indices past the end of a document is unspecified, and a
-	 * fixed request range would risk rejecting every short document.
-	 */
-	readonly maxPages?: number;
 	readonly signal?: AbortSignal;
 }
 
@@ -136,11 +129,11 @@ export const pageParts = (page: OcrPage): RecognizedContent[] => {
 	return parts;
 };
 
-export const responseParts = (payload: OcrResponse, maxPages?: number): RecognizedContent[] => {
+export const responseParts = (payload: OcrResponse): RecognizedContent[] => {
 	const pages = [...(payload.pages ?? [])].sort(
 		(left, right) => (left.index ?? 0) - (right.index ?? 0)
 	);
-	return (maxPages && maxPages > 0 ? pages.slice(0, maxPages) : pages).flatMap(pageParts);
+	return pages.flatMap(pageParts);
 };
 
 const failureMessage = (payload: OcrResponse, status: number): string => {
@@ -198,7 +191,7 @@ export class MistralOcr implements ITextRecognition {
 					throw new ExternalServiceError('Document OCR failed', {
 						cause: failureMessage(payload, response.status)
 					});
-				const parts = responseParts(payload, input.maxPages);
+				const parts = responseParts(payload);
 				if (parts.length === 0) throw new ExternalServiceError('Document OCR returned no content');
 				return { parts, pagesProcessed: payload.usage_info?.pages_processed };
 			},

@@ -8,7 +8,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 
 const id = z.string().uuid();
-const path = z.string().min(1).max(512);
+const path = z.string().min(1);
 
 /** Every attachment is scoped to exactly one owner, so the query key stays unambiguous. */
 const exactlyOneOwner = (value: { noteId?: string; projectId?: string }): boolean =>

@@ -36,12 +36,12 @@ it('rejects a data URL that disagrees with the declared media type', () => {
 	).toThrow('does not match');
 });
 
-it('applies the byte budget to both image channels together', () => {
+it('accepts complete images beyond the former combined byte budget', () => {
 	const dataUrl = `data:image/png;base64,${Buffer.alloc(6 * 1024 * 1024).toString('base64')}`;
 	expect(() =>
 		validateRunImages({
 			images: [{ ...image, dataUrl }],
 			contextImages: [{ ...image, id: '40000000-0000-4000-8000-000000018002', dataUrl }]
 		})
-	).toThrow('10 MiB combined');
+	).not.toThrow();
 });

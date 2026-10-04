@@ -102,8 +102,6 @@ export const assertRenderedPng = (dataUrl: string | undefined): void => {
 	const encoded = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/)?.[1];
 	if (!encoded) throw new ValidationError('Rendered diagram must be a base64 PNG.');
 	const bytes = Buffer.from(encoded, 'base64');
-	if (bytes.byteLength > 10 * 1024 * 1024)
-		throw new ValidationError('Rendered diagram exceeds the 10 MiB limit.');
 	if (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a')
 		throw new ValidationError('Rendered diagram is not a valid PNG.');
 };

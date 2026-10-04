@@ -196,3 +196,11 @@ describe('Draw.io preview and retrieval invariants', () => {
 		expect(new DrawioLabelReader().read(VALID_DRAWIO_XML)).toEqual(['API & worker']);
 	});
 });
+
+it('validates complete diagram XML beyond two million characters', () => {
+	const source = VALID_DRAWIO_XML.replace(
+		'</root>',
+		`<mxCell id="long-label" parent="1" value="${'a'.repeat(2_000_001)}"/></root>`
+	);
+	expect(new DrawioXmlValidator().validate(source)).toBe(source);
+});

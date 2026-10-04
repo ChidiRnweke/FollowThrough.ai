@@ -83,8 +83,6 @@ const setup = async (suffix: string, chunker = new TokenAwareChunker()) => {
 		ocr: new InMemoryOcrEngine(),
 		imageDescriber: new InMemoryImageDescriber(),
 		content: new AttachmentContent(),
-		parseLimit: 1024,
-		maxPages: 100,
 		preferences: {
 			get: async () => ({
 				userId: owner.userId,

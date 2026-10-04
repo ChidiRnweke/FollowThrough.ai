@@ -1,11 +1,7 @@
 import { mutationResource } from '$lib/services/workspace/commands';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { randomUUID, createHash } from 'node:crypto';
-import {
-	MAX_BUNDLE_ENTRIES,
-	type ExportInput,
-	type PreparedExport
-} from '$lib/models/deliverables';
+import { type ExportInput, type PreparedExport } from '$lib/models/deliverables';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
@@ -445,8 +441,6 @@ export class Deliverables implements DeliverablesController {
 		input: GenerateBundleInput
 	): Promise<GenerateBundleOutput> {
 		if (!input.entries.length) throw new ValidationError('Select at least one document.');
-		if (input.entries.length > MAX_BUNDLE_ENTRIES)
-			throw new ValidationError(`Export up to ${MAX_BUNDLE_ENTRIES} documents at a time.`);
 		const files: { path: string; bytes: Uint8Array }[] = [];
 		for (const entry of input.entries) {
 			const prepared = await this.prepareDocument(actor, { ...input, noteIds: [entry.noteId] });

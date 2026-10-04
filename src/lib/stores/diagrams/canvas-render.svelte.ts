@@ -35,29 +35,11 @@ export const forgetCanvasRender = (sessionKey: ChatSessionKey): void => {
 	renders.delete(sessionKey);
 };
 
-/**
- * Take the pending render, if one fits.
- *
- * The user's own attachments come first: the composer allows four images and
- * 10 MiB combined, and a diagram the agent can re-render on request must never be
- * what pushes out something the user chose to send.
- */
+/** Take the complete pending render for the next turn. */
 export const takeCanvasRender = (
-	sessionKey: ChatSessionKey,
-	attached: readonly ConversationImageInput[],
-	limits: { readonly maxImages: number; readonly maxBytes: number }
+	sessionKey: ChatSessionKey
 ): ConversationImageInput | undefined => {
 	const render = renders.get(sessionKey);
-	if (!render || attached.length >= limits.maxImages) return undefined;
-	const used = attached.reduce((total, image) => total + base64Bytes(image.dataUrl), 0);
-	if (used + base64Bytes(render.dataUrl) > limits.maxBytes) return undefined;
 	renders.delete(sessionKey);
 	return render;
-};
-
-/** Decoded size of a base64 data URL, without decoding it. */
-const base64Bytes = (dataUrl: string): number => {
-	const encoded = dataUrl.slice(dataUrl.indexOf(',') + 1);
-	const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
-	return Math.floor((encoded.length * 3) / 4) - padding;
 };

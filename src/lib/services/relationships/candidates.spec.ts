@@ -40,3 +40,12 @@ it('combines bounded classification and retrieval confidence', () => {
 		confidence: 70
 	});
 });
+
+it('preserves all distinct ranked notes beyond five', () => {
+	const ids = Array.from({ length: 6 }, (_, i) => testNoteId(i + 2));
+	const matches = relatedNoteMatches(
+		testNoteId(),
+		ids.map((noteId) => ({ document: searchDocumentBuilder({ noteId }), score: 0.9 }))
+	);
+	expect(matches.map((match) => match.noteId)).toEqual(ids);
+});

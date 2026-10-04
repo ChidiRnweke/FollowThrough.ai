@@ -187,3 +187,16 @@ describe('Literal text and source preservation', () => {
 		).toMatchObject({ ok: true, markdown: 'A\r\n$$\r\nZ' });
 	});
 });
+
+it('applies all six verified replacements in one patch', () => {
+	const edits = Array.from({ length: 6 }, (_, i) => ({
+		oldText: `Original ${i}.`,
+		newText: `Revised ${i}.`
+	}));
+	const result = patch(edits.map((edit) => edit.oldText).join('\n'), ...edits);
+	expect(result).toMatchObject({
+		ok: true,
+		markdown: edits.map((edit) => edit.newText).join('\n'),
+		appliedEdits: 6
+	});
+});

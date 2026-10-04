@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_NOTE_DOCUMENTS } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -49,13 +48,11 @@ describe('Note document batch invariants', () => {
 		expect(await controller.listDocuments(testActor(), { noteIds: [] })).toEqual([]);
 	});
 
-	it('rejects a batch past the cap rather than fanning out unboundedly', async () => {
+	it('returns every requested document beyond fifty in order', async () => {
 		const { content, controller } = setup();
-		twoNotes(content);
-		await expect(
-			controller.listDocuments(testActor(), {
-				noteIds: Array.from({ length: MAX_NOTE_DOCUMENTS + 1 }, () => testNoteId(1))
-			})
-		).rejects.toMatchObject({ code: 'VALIDATION' });
+		content.notes = Array.from({ length: 51 }, (_, i) => noteBuilder({ id: testNoteId(i + 1) }));
+		const ids = content.notes.map((note) => note.id).reverse();
+		const documents = await controller.listDocuments(testActor(), { noteIds: ids });
+		expect(documents.map((note) => note.id)).toEqual(ids);
 	});
 });

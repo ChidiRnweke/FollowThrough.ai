@@ -85,21 +85,21 @@ const ErrorEvent = z.object({ event: z.string(), error: z.string().min(1) }).pas
 const SaveEvent = z
 	.object({
 		event: z.literal('save'),
-		xml: z.string().min(1).max(2_000_000),
+		xml: z.string().min(1),
 		exit: z.boolean().optional()
 	})
 	.passthrough();
 const AutosaveEvent = z
 	.object({
 		event: z.literal('autosave'),
-		xml: z.string().min(1).max(2_000_000)
+		xml: z.string().min(1)
 	})
 	.passthrough();
 const ExportEvent = z
 	.object({
 		event: z.literal('export'),
-		data: z.string().min(1).max(3_000_000),
-		xml: z.string().min(1).max(2_000_000).optional()
+		data: z.string().min(1),
+		xml: z.string().min(1).optional()
 	})
 	.passthrough();
 const ExitEvent = z

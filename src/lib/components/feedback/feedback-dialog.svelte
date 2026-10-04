@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { FEEDBACK_BODY_LIMIT } from '$lib/models/feedback';
 	import { Form } from '$lib/components/ui/form';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
@@ -52,13 +51,12 @@
 				bind:value={body}
 				placeholder="What's on your mind?"
 				rows={4}
-				maxlength={FEEDBACK_BODY_LIMIT}
 				aria-describedby="feedback-length"
 				disabled={busy}
 				autofocus
 			/>
 			<p id="feedback-length" class="text-xs text-muted-foreground">
-				{body.length.toLocaleString('en-GB')} / {FEEDBACK_BODY_LIMIT.toLocaleString('en-GB')} characters
+				{body.length.toLocaleString('en-GB')} characters
 			</p>
 			<Dialog.Footer>
 				<Button type="button" variant="ghost" onclick={() => (open = false)}>Cancel</Button>

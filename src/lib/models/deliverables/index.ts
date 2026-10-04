@@ -323,9 +323,6 @@ export interface GenerateBundleOutput {
 	readonly byteSize: number;
 }
 
-/** Upper bound on one bundle, enforced server-side and mirrored by the export dialog. */
-export const MAX_BUNDLE_ENTRIES = 50;
-
 export interface PreviewDocumentInput extends DiagramRenders {
 	readonly projectId: ProjectId;
 	readonly noteIds: NoteId[];

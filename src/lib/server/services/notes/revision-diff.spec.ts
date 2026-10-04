@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { diffNoteRevisionTexts } from './revision-diff';
-import { REVISION_DIFF_LINE_LIMIT, type RevisionText } from '$lib/models/notes/revision-diff';
+import { type RevisionText } from '$lib/models/notes/revision-diff';
 
 const revisionText = (overrides: Partial<RevisionText> = {}): RevisionText => ({
 	revision: 1,
@@ -11,7 +11,7 @@ const revisionText = (overrides: Partial<RevisionText> = {}): RevisionText => ({
 });
 
 const longText = (prefix: string): string =>
-	Array.from({ length: REVISION_DIFF_LINE_LIMIT * 2 }, (_, line) => `${prefix} ${line}`).join('\n');
+	Array.from({ length: 400 }, (_, line) => `${prefix} ${line}`).join('\n');
 
 describe('Diffing note revision texts', () => {
 	it('produces an empty patch when nothing changed', () => {
@@ -38,10 +38,10 @@ describe('Diffing note revision texts', () => {
 		expect(diffNoteRevisionTexts(before, after).removedLines).toBe(1);
 	});
 
-	it('truncates a patch that runs past the line limit', () => {
+	it('includes the final changed line of a large patch', () => {
 		const before = revisionText({ plainText: longText('old') });
 		const after = revisionText({ revision: 2, plainText: longText('new') });
-		expect(diffNoteRevisionTexts(before, after).truncated).toBe(true);
+		expect(diffNoteRevisionTexts(before, after).patch).toContain('+new 399');
 	});
 });
 
@@ -62,16 +62,14 @@ it('reports a title-only change without inventing changed body lines', () => {
 	expect(diffNoteRevisionTexts(before, after)).toEqual({
 		patch: 'title: Architecture note → Renamed note',
 		addedLines: 0,
-		removedLines: 0,
-		truncated: false
+		removedLines: 0
 	});
 });
-it('keeps full change totals when the displayed patch is truncated', () => {
+it('keeps full change totals for a large patch', () => {
 	const before = revisionText({ plainText: longText('--old') });
 	const after = revisionText({ revision: 2, plainText: longText('++new') });
 	expect(diffNoteRevisionTexts(before, after)).toMatchObject({
-		addedLines: REVISION_DIFF_LINE_LIMIT * 2,
-		removedLines: REVISION_DIFF_LINE_LIMIT * 2,
-		truncated: true
+		addedLines: 400,
+		removedLines: 400
 	});
 });

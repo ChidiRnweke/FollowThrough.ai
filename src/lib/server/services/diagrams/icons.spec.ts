@@ -11,7 +11,8 @@ const respondWith = (body: string, status = 200) => {
 	return { calls, search: new IconifyIconSearch(fetchImpl) };
 };
 
-const icons = (...names: string[]) => JSON.stringify({ icons: names });
+const icons = (...names: string[]) =>
+	JSON.stringify({ icons: names, total: names.length, limit: 32, start: 0 });
 
 describe('Finding a logo for a diagram', () => {
 	it('returns the icon names the library matched', async () => {
@@ -34,10 +35,10 @@ describe('Finding a logo for a diagram', () => {
 		expect(calls[0]).toContain('query=kubernetes');
 	});
 
-	it('caps how many icons it will ask for', async () => {
+	it('honors the requested icon count above twelve', async () => {
 		const { calls, search } = respondWith(icons());
 		await search.search('azure', 500);
-		expect(calls[0]).toContain('limit=12');
+		expect(calls[0]).toContain('limit=500');
 	});
 
 	it('refuses a search with nothing to search for', async () => {
@@ -78,7 +79,9 @@ describe('Finding a logo for a diagram', () => {
 	});
 
 	it('accepts a response carrying fields it does not read', async () => {
-		const { search } = respondWith(JSON.stringify({ icons: ['logos:aws-s3'], total: 1 }));
+		const { search } = respondWith(
+			JSON.stringify({ icons: ['logos:aws-s3'], total: 1, limit: 32, start: 0, other: 'ignored' })
+		);
 		expect((await search.search('aws'))[0]?.name).toBe('logos:aws-s3');
 	});
 
@@ -87,10 +90,39 @@ describe('Finding a logo for a diagram', () => {
 		expect(await search.search('aws')).toEqual([]);
 	});
 
-	it('refuses a response larger than an icon list should ever be', async () => {
+	it('accepts complete responses beyond the former response ceiling', async () => {
 		const { search } = respondWith(
-			JSON.stringify({ icons: ['a:b'], padding: 'x'.repeat(600_000) })
+			JSON.stringify({
+				icons: ['a:b'],
+				total: 1,
+				limit: 32,
+				start: 0,
+				padding: 'x'.repeat(600_000)
+			})
 		);
-		await expect(search.search('aws')).rejects.toThrow('more than expected');
+		expect(await search.search('aws')).toEqual([
+			{ name: 'a:b', url: 'https://api.iconify.design/a/b.svg' }
+		]);
 	});
+});
+
+it('collects requested icons across provider pages', async () => {
+	const fetchImpl: typeof fetch = async (input) => {
+		const url = new URL(String(input));
+		const start = Number(url.searchParams.get('start'));
+		const limit = Number(url.searchParams.get('limit'));
+		const icons = Array.from(
+			{ length: Math.min(limit, 1001 - start) },
+			(_, i) => `test:icon-${start + i}`
+		);
+		return Response.json({ icons, total: icons.length, start, limit });
+	};
+	const results = await new IconifyIconSearch(fetchImpl).search('test', 1001);
+	expect(results.map((icon) => icon.name)).toEqual(
+		Array.from({ length: 1001 }, (_, i) => `test:icon-${i}`)
+	);
+});
+it.each([0, -1, 1.5])('rejects an invalid requested icon count %s', async (limit) => {
+	const { search } = respondWith(icons());
+	await expect(search.search('test', limit)).rejects.toThrow('positive safe integer');
 });
