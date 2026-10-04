@@ -3,6 +3,7 @@ import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { drawioProtocolFixtureCommands } from './src/lib/testing/diagrams/drawio-protocol-fixture';
 
 const lib = fileURLToPath(new URL('./src/lib', import.meta.url));
 /**
@@ -105,6 +106,7 @@ export default defineConfig({
 					browser: {
 						enabled: true,
 						provider: playwright(),
+						commands: drawioProtocolFixtureCommands,
 						instances: [{ browser: 'chromium', headless: true }]
 					},
 					include: [
@@ -174,6 +176,7 @@ export default defineConfig({
 					browser: {
 						enabled: true,
 						provider: playwright(),
+						commands: drawioProtocolFixtureCommands,
 						instances: [{ browser: 'chromium', headless: true }]
 					},
 					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],

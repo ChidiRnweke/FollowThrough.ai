@@ -107,7 +107,12 @@ it('leaves another account intact when resetting this account', async () => {
 		remove: []
 	});
 	await recovery.resetAccount('alice');
-	expect((await other.read('bob')).cache.records).toHaveLength(1);
+	expect((await other.read('bob')).cache.records).toEqual([
+		{
+			key: 'note',
+			entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Keep me' } }
+		}
+	]);
 });
 
 it('cannot restore a reset account from an earlier network response', async () => {

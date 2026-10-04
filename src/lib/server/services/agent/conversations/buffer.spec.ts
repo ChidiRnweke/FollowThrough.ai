@@ -44,10 +44,6 @@ const imageItem = (image: string) => userItemWithImage('What does this diagram s
 const diagramSource = JSON.stringify({ kind: 'drawio', source: '<mxfile>huge</mxfile>' });
 
 describe('ConversationBuffer', () => {
-	it('is available as a domain service', () => {
-		expect(ConversationBuffer).toBeTypeOf('function');
-	});
-
 	it('drops an inline image from the persisted snapshot', async () => {
 		const buffer = await bufferWith([imageItem(pngDataUrl)]);
 		expect(JSON.stringify(await buffer.snapshot())).not.toContain(';base64,');

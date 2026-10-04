@@ -26,9 +26,14 @@ describe('NoteRevealStore', () => {
 		expect(store.consume(noteId)).toBeUndefined();
 	});
 
-	it('leaves a request for a different note pending', () => {
+	it('preserves the complete request after a different note attempts to consume it', () => {
 		const store = new NoteRevealStore();
 		store.request(request);
-		expect(store.consume('note-2' as NoteId)?.noteId).toBeUndefined();
+		const otherNote = store.consume('note-2' as NoteId);
+		const matchingNote = store.consume(noteId);
+		expect({ otherNote, matchingNote }).toEqual({
+			otherNote: undefined,
+			matchingNote: { ...request, requestedAt: expect.any(Number) }
+		});
 	});
 });

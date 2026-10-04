@@ -35,7 +35,10 @@ const storedReasoning = {
 
 describe('reading a stored session item', () => {
 	it('reads a user message', () => {
-		expect(parseSessionItem(storedUser).type).toBe('user_message');
+		expect(parseSessionItem(storedUser)).toMatchObject({
+			type: 'user_message',
+			content: 'Summarise this'
+		});
 	});
 
 	it('reads a user message that carries an image part', () => {

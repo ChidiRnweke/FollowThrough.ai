@@ -60,11 +60,25 @@ it('keeps offline unknown records unavailable without a network request', async 
 it('follows page checkpoints until every body has been stored', async () => {
 	const { transport, cache } = setup();
 	transport.pageSize = 2;
-	for (let i = 0; i < 7; i++)
-		transport.records.set(`note:${i}`, { etag: syncEtag(BigInt(i + 1)), value: `Note ${i}` });
+	const expected = Array.from({ length: 7 }, (_, index) => ({
+		key: `note:${index}`,
+		etag: syncEtag(BigInt(index + 1)),
+		value: `Note ${index}`
+	}));
+	for (const record of expected)
+		transport.records.set(record.key, { etag: record.etag, value: record.value });
 	await cache.refresh();
-	expect({ records: cache.records.size, availability: cache.availability }).toEqual({
-		records: 7,
+	expect({
+		records: [...cache.records]
+			.map(([key, entry]) => ({
+				key,
+				etag: entry.kind === 'present' ? entry.snapshot.etag : undefined,
+				value: entry.kind === 'present' ? entry.snapshot.value : undefined
+			}))
+			.sort((a, b) => a.key.localeCompare(b.key)),
+		availability: cache.availability
+	}).toEqual({
+		records: expected.sort((a, b) => a.key.localeCompare(b.key)),
 		availability: 'complete'
 	});
 });

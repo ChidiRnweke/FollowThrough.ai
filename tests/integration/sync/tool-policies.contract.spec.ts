@@ -175,5 +175,9 @@ it('rejects a project override for a project owned by another account', async ()
 			enabled: false
 		}
 	});
-	expect(result.kind).toBe('rejected');
+	const stored = await context.client`
+		select user_id, project_id, tool_name, enabled
+		from project_tool_overrides where project_id = ${project.id}
+	`;
+	expect({ kind: result.kind, stored }).toEqual({ kind: 'rejected', stored: [] });
 });

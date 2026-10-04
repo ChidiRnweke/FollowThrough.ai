@@ -6,7 +6,8 @@ import {
 	findProseMirrorDocumentIssue,
 	parseProseMirrorDocument,
 	type NoteId,
-	type ProseMirrorDocument
+	type ProseMirrorDocument,
+	type ProseMirrorNode
 } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import corpusDocuments from '../../../../tests/corpus/note-documents.json' with { type: 'json' };
@@ -93,7 +94,46 @@ describe('opening a stored note', () => {
 		const screen = openNote(state.document);
 		await settle();
 
-		expect(screen.component.getEditor()?.state.doc.childCount).toBe(document.content?.length);
+		const textIn = (node: ProseMirrorNode): string[] => {
+			if (node.type === 'text') return node.text ? [node.text] : [];
+			return 'content' in node ? (node.content?.flatMap(textIn) ?? []) : [];
+		};
+		const firstHeading = document.content?.find(
+			(block): block is Extract<ProseMirrorNode, { type: 'heading' }> => block.type === 'heading'
+		);
+		const firstTable = document.content?.find(
+			(block): block is Extract<ProseMirrorNode, { type: 'table' }> => block.type === 'table'
+		);
+		if (!firstHeading || !firstTable)
+			throw new Error('The stored corpus note needs a heading and table');
+		const expectedHeading = textIn(firstHeading).join('');
+		const expectedTableCells =
+			firstTable.content?.flatMap((row) =>
+				row.type === 'tableRow'
+					? (row.content?.flatMap((cell) =>
+							cell.type === 'tableCell' || cell.type === 'tableHeader'
+								? [textIn(cell).join('')]
+								: []
+						) ?? [])
+					: []
+			) ?? [];
+		await expect
+			.poll(() => {
+				const editor = screen.container.querySelector('[contenteditable="true"]');
+				const table = editor?.querySelector('table');
+				return {
+					renderedBlockCount: editor?.children.length ?? 0,
+					heading: editor?.querySelector('h1')?.textContent,
+					tableCells: table
+						? Array.from(table.querySelectorAll('th, td')).map((cell) => cell.textContent)
+						: []
+				};
+			})
+			.toEqual({
+				renderedBlockCount: document.content?.length,
+				heading: expectedHeading,
+				tableCells: expectedTableCells
+			});
 	});
 
 	// `getDocument` is what a save posts, and `remote/notes` parses it with the

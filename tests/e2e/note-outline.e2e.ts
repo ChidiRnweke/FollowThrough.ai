@@ -71,28 +71,39 @@ test('each pane in a split keeps its own outline', async ({ page }) => {
 	// Compare each rail against the headings in its *own* pane rather than against
 	// the other rail: that holds whatever the dev database happens to seed, and it
 	// is precisely what a shared outline would get wrong.
-	const railsMatchTheirOwnPane = async () =>
-		page.evaluate(() =>
-			[...document.querySelectorAll('.workspace-pane-layer')]
+	const eligibleRailsMatchTheirOwnPane = async () =>
+		page.evaluate(() => {
+			const panes = [...document.querySelectorAll('.workspace-pane-layer')]
 				.filter((pane) => getComputedStyle(pane).display !== 'none')
 				.map((pane) => ({
-					headings: [...pane.querySelectorAll('.tiptap [data-toc-id]')].map((heading) =>
-						(heading.textContent ?? '').trim()
-					),
-					rail: [...pane.querySelectorAll('.note-outline-list button')].map((button) =>
-						(button.textContent ?? '').trim()
+					headings: [...pane.querySelectorAll('.tiptap [data-toc-id]')]
+						.map((heading) => (heading.textContent ?? '').trim())
+						.filter(Boolean),
+					rail: [...pane.querySelectorAll('.note-outline-list button')].map(
+						(button) => button.querySelector('.truncate')?.textContent?.trim() ?? ''
 					)
-				}))
-				// A rail is only drawn for a note with more than one heading, and it
-				// leaves out headings the author has not written text into yet — so
-				// the property is containment, not equality.
-				.filter((pane) => pane.rail.length > 0)
-				.map((pane) => pane.rail.every((label) => pane.headings.includes(label)))
-		);
+				}));
+			// Each pane with at least two written headings is eligible for a rail.
+			// Keep empty and incomplete rails in the result so either regression fails.
+			const eligible = panes.filter((pane) => pane.headings.length > 1);
+			return {
+				eligibleCount: eligible.length,
+				matches: eligible.map(
+					(pane) =>
+						pane.rail.length > 0 && JSON.stringify(pane.rail) === JSON.stringify(pane.headings)
+				)
+			};
+		});
 
-	await expect
-		.poll(railsMatchTheirOwnPane)
-		.toEqual(expect.arrayContaining([true]) as unknown as boolean[]);
+	const observed = await eligibleRailsMatchTheirOwnPane();
+	test.skip(
+		observed.eligibleCount !== 2,
+		'the dev database must seed two split notes with at least two nonempty headings each'
+	);
+	await expect.poll(eligibleRailsMatchTheirOwnPane).toEqual({
+		eligibleCount: 2,
+		matches: [true, true]
+	});
 });
 
 test('the lit tick follows the reader down the note', async ({ page }) => {

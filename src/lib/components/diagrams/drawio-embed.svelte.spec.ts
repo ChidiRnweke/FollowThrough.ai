@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { commands } from 'vitest/browser';
 import { tick } from 'svelte';
+import { mode, setMode, userPrefersMode } from 'mode-watcher';
 import DrawioEmbed, { type DrawioControl, type DrawioStatus } from './drawio-embed.svelte';
 import { DRAWIO_EMBED_ORIGIN } from '$lib/client/diagrams/drawio/embed-adapter';
 
@@ -55,6 +57,40 @@ const frameOf = (screen: ReturnType<typeof renderEditor>['screen']): HTMLIFrameE
 	if (!iframe) throw new Error('draw.io iframe was not rendered');
 	return iframe;
 };
+
+const sendToFixture = (
+	iframe: HTMLIFrameElement,
+	message: Readonly<Record<string, unknown>>
+): void => {
+	iframe.contentWindow?.postMessage(JSON.stringify(message), DRAWIO_EMBED_ORIGIN);
+};
+
+const inspectFixture = (iframe: HTMLIFrameElement): Promise<string> =>
+	new Promise((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			clearInterval(ping);
+			window.removeEventListener('message', onMessage);
+			reject(new Error('Draw.io protocol fixture did not return its loaded XML'));
+		}, 3000);
+		const onMessage = (event: MessageEvent): void => {
+			if (event.source !== iframe.contentWindow || event.origin !== DRAWIO_EMBED_ORIGIN) return;
+			const message = JSON.parse(String(event.data)) as { event?: string; xml?: string };
+			if (message.event !== 'fixture-state') return;
+			clearTimeout(timeout);
+			clearInterval(ping);
+			window.removeEventListener('message', onMessage);
+			if (!message.xml) {
+				clearTimeout(timeout);
+				window.removeEventListener('message', onMessage);
+				reject(new Error('Draw.io protocol fixture returned empty XML'));
+				return;
+			}
+			resolve(message.xml);
+		};
+		window.addEventListener('message', onMessage);
+		const ping = setInterval(() => sendToFixture(iframe, { fixtureCommand: 'inspect' }), 100);
+		sendToFixture(iframe, { fixtureCommand: 'inspect' });
+	});
 
 describe('Hosted draw.io editor states', () => {
 	it('clears a persistence failure after the host resolves and saves the conflict', async () => {
@@ -142,14 +178,42 @@ describe('Hosted draw.io editor states', () => {
 	// re-mounting — and a remount that did not carry the live document forward
 	// would throw away whatever had been typed since the last save.
 	it('carries the live document through a theme change', async () => {
-		const { screen } = renderEditor();
-		const iframe = frameOf(screen);
-		emit(iframe, { event: 'load' });
-		await settle();
-		document.documentElement.classList.add('dark');
-		await settle();
-		document.documentElement.classList.remove('dark');
-		await expect.element(screen.getByTitle('draw.io editor for Architecture')).toBeInTheDocument();
+		await commands.installDrawioProtocolFixture();
+		const initialMode = mode.current;
+		const initialPreference = userPrefersMode.current;
+		try {
+			const { screen, statuses } = renderEditor();
+			const iframe = frameOf(screen);
+			if (!iframe) throw new Error('Draw.io iframe was not rendered');
+			const editedXml =
+				'<mxfile><diagram id="live-edit"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0" value="Unsaved work"/></root></mxGraphModel></diagram></mxfile>';
+			await inspectFixture(iframe);
+			sendToFixture(iframe, { fixtureCommand: 'edit', xml: editedXml });
+			const fixtureXml = await vi.waitUntil(async () => {
+				const actual = await inspectFixture(iframe);
+				return actual === editedXml ? actual : false;
+			});
+			sendToFixture(iframe, {
+				fixtureCommand: 'emit',
+				data: { event: 'modified', modified: true }
+			});
+			const modified = await vi.waitUntil(() => statuses.at(-1)?.modified);
+			setMode(initialMode === 'dark' ? 'light' : 'dark');
+			const replacement = await vi.waitUntil(() => {
+				const candidate = frameOf(screen);
+				return candidate !== iframe ? candidate : false;
+			});
+			const reloadedXml = await inspectFixture(replacement);
+			expect({ fixtureXml, modified, replaced: replacement !== iframe, reloadedXml }).toEqual({
+				fixtureXml: editedXml,
+				modified: true,
+				replaced: true,
+				reloadedXml: editedXml
+			});
+		} finally {
+			setMode(initialPreference);
+			await commands.removeDrawioProtocolFixture();
+		}
 	});
 
 	it('reports a failed save to the host', async () => {

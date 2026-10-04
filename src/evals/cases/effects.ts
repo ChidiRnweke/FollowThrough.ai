@@ -287,6 +287,8 @@ export const effectCases: readonly EvalCase[] = [
 			const workspace = await seedWorkspace(lab, personaWorkspace);
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
+			const before = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const beforeBody = before.note.plainText.toLowerCase();
 
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
@@ -297,14 +299,25 @@ export const effectCases: readonly EvalCase[] = [
 			// Read back the note and check the body changed to include the new content.
 			const noteView = await lab.controllers.notes().get(workspace.actor, { noteId });
 			const body = noteView.note.plainText.toLowerCase();
-			const saved =
-				body.includes('cka') || body.includes('certification') || body.includes('kubernetes');
+			const existingParagraphs = beforeBody
+				.split('\n')
+				.map((paragraph) => paragraph.trim())
+				.filter(Boolean);
+			const existingContentPreserved = existingParagraphs.every((paragraph) =>
+				body.includes(paragraph)
+			);
+			const savedNewCertification =
+				!beforeBody.includes('cka') &&
+				!beforeBody.includes('certification') &&
+				body.includes('cka') &&
+				body.includes('certification') &&
+				existingContentPreserved;
 
 			const verdict = {
-				passed: saved,
-				explanation: saved
-					? 'note body now mentions the certification'
-					: `note body does not contain expected content after save`
+				passed: savedNewCertification,
+				explanation: savedNewCertification
+					? 'note body contains the newly requested CKA certification and preserves its existing paragraphs'
+					: 'note body does not contain the newly requested CKA certification or did not preserve the existing paragraphs'
 			};
 			px.logOutput({
 				model: result.model,

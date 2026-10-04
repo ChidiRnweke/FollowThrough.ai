@@ -20,7 +20,7 @@ const upload: AttachmentUpload = {
 	objectKey: 'attachments/draft.png',
 	mediaType: 'image/png',
 	byteSize: file.size,
-	checksumSha256: 'a'.repeat(64),
+	checksumSha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
 	expiresAt: '2026-07-12T08:00:00.000Z' as AttachmentUpload['expiresAt'],
 	createdAt: '2026-07-12T08:00:00.000Z' as AttachmentUpload['createdAt']
 };
@@ -42,7 +42,7 @@ const completed: AttachmentView = {
 		objectKey: 'attachments/draft.png',
 		mediaType: 'image/png',
 		byteSize: file.size,
-		checksumSha256: 'a'.repeat(64),
+		checksumSha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
 		processingStatus: 'ready',
 		createdAt: '2026-07-12T08:00:00.000Z' as AttachmentView['version']['createdAt']
 	}
@@ -63,8 +63,48 @@ const transport = (
 
 describe('uploadNoteAttachment', () => {
 	it('returns the stable content URL after a successful upload', async () => {
-		const result = await uploadNoteAttachment(noteId, file, transport());
-		expect(result).toBe(`/api/attachments/${attachment.id}/content`);
+		let initiation: Parameters<AttachmentUploadTransport['initiate']>[0] | undefined;
+		let put: { readonly target: string; readonly bytes: Uint8Array } | undefined;
+		let completedUploadId: string | undefined;
+		const recording = transport({
+			initiate: async (input) => {
+				initiation = input;
+				return { upload, uploadUrl: 'http://127.0.0.1:9/put', requiredHeaders: {} };
+			},
+			put: async (intent, body) => {
+				put = {
+					target: intent.uploadUrl,
+					bytes: new Uint8Array(await new Response(body).arrayBuffer())
+				};
+				return new Response('', { status: 200 });
+			},
+			complete: async (uploadId) => {
+				completedUploadId = uploadId;
+				return completed;
+			}
+		});
+
+		const result = await uploadNoteAttachment(noteId, file, recording);
+		expect({
+			initiation,
+			put: put && { target: put.target, bytes: [...put.bytes] },
+			completedUploadId,
+			result
+		}).toEqual({
+			initiation: {
+				noteId,
+				path: expect.stringMatching(/^inline\/.+\/draft\.png$/),
+				mediaType: 'image/png',
+				byteSize: file.size,
+				checksumSha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+			},
+			put: {
+				target: 'http://127.0.0.1:9/put',
+				bytes: [104, 101, 108, 108, 111]
+			},
+			completedUploadId: upload.id,
+			result: `/api/attachments/${attachment.id}/content`
+		});
 	});
 
 	it('gives repeated clipboard filenames independent attachment paths', async () => {

@@ -37,23 +37,15 @@ describe('Note management invariants', () => {
 	});
 
 	// Publishing is the only thing that writes history, so the cap is enforced there.
-	it('keeps only the newest snapshots once the retention limit is passed', async () => {
-		const { service, notes } = setup();
-		notes.notes = [noteBuilder()];
-		for (let revision = 1; revision <= NOTE_REVISION_HISTORY_LIMIT + 3; revision += 1)
-			await service.record(testActor(), noteBuilder({ currentRevision: revision }));
-		expect(await notes.listRevisions(testActor(), testNoteId())).toHaveLength(
-			NOTE_REVISION_HISTORY_LIMIT
-		);
-	});
-
-	it('evicts the oldest snapshot rather than the newest', async () => {
+	it('retains the newest snapshots and evicts older history first', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		for (let revision = 1; revision <= NOTE_REVISION_HISTORY_LIMIT + 3; revision += 1)
 			await service.record(testActor(), noteBuilder({ currentRevision: revision }));
 		const kept = await notes.listRevisions(testActor(), testNoteId());
-		expect(kept.map((entry) => entry.revision)).toContain(NOTE_REVISION_HISTORY_LIMIT + 3);
+		expect(kept.map((entry) => entry.revision).sort((left, right) => left - right)).toEqual(
+			Array.from({ length: NOTE_REVISION_HISTORY_LIMIT }, (_, index) => index + 4)
+		);
 	});
 
 	it('lists a trashed note in the trash', async () => {

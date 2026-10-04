@@ -34,7 +34,16 @@ describe('compact account synchronization journal', () => {
 		expect(batch.records).toEqual([
 			{
 				key: workspaceResourceKey({ type: 'notes', id: [note.id] }),
-				resource: expect.objectContaining({ kind: 'found' })
+				resource: {
+					kind: 'found',
+					snapshot: {
+						etag: expect.stringMatching(/^sync-v1-/),
+						value: {
+							type: 'notes',
+							value: expect.objectContaining({ id: note.id, title: 'Second rename' })
+						}
+					}
+				}
 			}
 		]);
 	});
