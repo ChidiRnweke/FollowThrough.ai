@@ -35,10 +35,10 @@ describe('Finding a logo for a diagram', () => {
 		expect(calls[0]).toContain('query=kubernetes');
 	});
 
-	it('honors the requested icon count above twelve', async () => {
+	it('uses the provider minimum page size', async () => {
 		const { calls, search } = respondWith(icons());
-		await search.search('azure', 500);
-		expect(calls[0]).toContain('limit=500');
+		await search.search('azure', 12);
+		expect(calls[0]).toContain('limit=32');
 	});
 
 	it('refuses a search with nothing to search for', async () => {
@@ -106,23 +106,12 @@ describe('Finding a logo for a diagram', () => {
 	});
 });
 
-it('collects requested icons across provider pages', async () => {
-	const fetchImpl: typeof fetch = async (input) => {
-		const url = new URL(String(input));
-		const start = Number(url.searchParams.get('start'));
-		const limit = Number(url.searchParams.get('limit'));
-		const icons = Array.from(
-			{ length: Math.min(limit, 1001 - start) },
-			(_, i) => `test:icon-${start + i}`
-		);
-		return Response.json({ icons, total: icons.length, start, limit });
-	};
-	const results = await new IconifyIconSearch(fetchImpl).search('test', 1001);
-	expect(results.map((icon) => icon.name)).toEqual(
-		Array.from({ length: 1001 }, (_, i) => `test:icon-${i}`)
-	);
+it('returns at most twelve candidates from a larger provider page', async () => {
+	const names = Array.from({ length: 32 }, (_, i) => `test:icon-${i}`);
+	const { search } = respondWith(icons(...names));
+	expect((await search.search('test', 12)).map((icon) => icon.name)).toEqual(names.slice(0, 12));
 });
-it.each([0, -1, 1.5])('rejects an invalid requested icon count %s', async (limit) => {
+it.each([0, -1, 1.5, 13, 500])('rejects an invalid requested icon count %s', async (limit) => {
 	const { search } = respondWith(icons());
-	await expect(search.search('test', limit)).rejects.toThrow('positive safe integer');
+	await expect(search.search('test', limit)).rejects.toThrow('between 1 and 12');
 });

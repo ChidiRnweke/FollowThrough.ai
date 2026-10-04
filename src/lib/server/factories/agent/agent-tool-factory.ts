@@ -1812,7 +1812,7 @@ const sharedToolDefinitions = (
 			'search_icons',
 			toolDescription('search_icons'),
 			'read',
-			z.object({ query: z.string().min(1), limit: z.number().int().min(1).optional() }),
+			z.object({ query: z.string().min(1), limit: z.number().int().min(1).max(12).optional() }),
 			(input) => factory.diagramStudio().searchDiagramIcons(actor, input)
 		),
 		read_project_diagram: define(

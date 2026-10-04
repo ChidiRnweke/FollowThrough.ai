@@ -13,8 +13,8 @@ Tool discovery remains capped at **15** in agent and MCP interfaces. Maximum tur
 Requested result counts, paging, numeric domain ranges, portable skill-format requirements,
 concurrency, timeouts, and presentation previews retain their existing contracts.
 
-Icon search honors its requested count, using the provider's documented 32–999 request range and
-`start` pagination. A provider or pagination failure is reported, not returned as a shorter success.
+Icon search returns up to **12** candidates (eight by default). Counts outside 1–12 fail
+validation. Provider requests use its documented minimum page size of 32 and `start` pagination. A provider or pagination failure is reported, not returned as a shorter success.
 See [Iconify's search contract](https://iconify.design/docs/api/search.html).
 
 The deployed HTTP body limit remains operator-controlled. Archive expanded-byte and entry-count

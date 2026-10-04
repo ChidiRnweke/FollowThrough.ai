@@ -16,7 +16,8 @@ const ICON_ORIGIN = 'https://api.iconify.design';
 const REQUEST_TIMEOUT_MS = 8000;
 // Provider request bounds: https://iconify.design/docs/api/search.html
 const PROVIDER_MIN_LIMIT = 32;
-const PROVIDER_MAX_LIMIT = 999;
+// Product contract: icon search returns a small candidate set for diagram selection.
+const MAX_ICON_RESULTS = 12;
 
 export interface DiagramIcon {
 	/** Iconify's own name, `prefix:icon`, which is what a follow-up query uses. */
@@ -51,12 +52,14 @@ export class IconifyIconSearch implements IconSearch {
 	async search(query: string, limit = 8): Promise<readonly DiagramIcon[]> {
 		const term = query.trim();
 		if (!term) throw new ValidationError('An icon search needs something to search for.');
-		if (!Number.isSafeInteger(limit) || limit < 1)
-			throw new ValidationError('The icon count must be a positive safe integer.');
+		if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_ICON_RESULTS)
+			throw new ValidationError(
+				`The icon count must be an integer between 1 and ${MAX_ICON_RESULTS}.`
+			);
 		const icons: DiagramIcon[] = [];
 		let start = 0;
 		while (icons.length < limit) {
-			const page = await this.page(term, start, limit - icons.length);
+			const page = await this.page(term, start);
 			if (page.start !== start || page.total !== page.icons.length)
 				throw new ExternalServiceError('The icon library returned inconsistent pagination.');
 			for (const name of page.icons) {
@@ -70,14 +73,11 @@ export class IconifyIconSearch implements IconSearch {
 		return icons;
 	}
 
-	private async page(term: string, start: number, remaining: number) {
+	private async page(term: string, start: number) {
 		const url = new URL(SEARCH_URL);
 		url.searchParams.set('query', term);
 		url.searchParams.set('start', String(start));
-		url.searchParams.set(
-			'limit',
-			String(Math.min(PROVIDER_MAX_LIMIT, Math.max(PROVIDER_MIN_LIMIT, remaining)))
-		);
+		url.searchParams.set('limit', String(PROVIDER_MIN_LIMIT));
 		const response = await this.fetchImpl(url, {
 			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 		}).catch((cause) => {
