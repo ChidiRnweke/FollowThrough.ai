@@ -480,7 +480,7 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'create_widget',
 		classification: 'mutation',
 		description:
-			'Create a widget in a project: a small interface such as a checklist, tracker or table, saved on its own so several notes can show it. Read read_widget_catalog first. `layout` and `data` are JSON objects sent as JSON strings. Creating does not put the widget in a note: the result carries an `embed` line such as :::widgetNode {widgetId="…"} :::, and when the user asked for the widget in a note you must insert that line on its own line with edit_note before you finish.',
+			'Create a widget in a project: a small interface such as a checklist, tracker or table, saved on its own so several notes can show it. Read read_widget_catalog first. `layout` and `data` are JSON objects sent as JSON strings. Creating does not put the widget in a note. When the user wants it in a note, pass that `noteId`; the result then carries an `embed` line such as :::widgetNode {widgetId="…"} ::: and the edit_note call to make, and you must make it before you finish.',
 		retrievalText: 'create a checklist tracker table widget in a note'
 	},
 	{

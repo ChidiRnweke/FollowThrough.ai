@@ -525,3 +525,38 @@ export interface EditWidgetInput {
 	readonly widgetId: WidgetId;
 	readonly edit: WidgetEdit;
 }
+
+/**
+ * A widget as a static document shows it: what export writes instead of the live controls.
+ * Each catalog component has one arm, so a format renderer is total over what a widget shows.
+ */
+export type WidgetExportBlock =
+	| { readonly kind: 'heading'; readonly text: string; readonly level: 2 | 3 | 4 }
+	| { readonly kind: 'paragraph'; readonly text: string; readonly muted: boolean }
+	| { readonly kind: 'check'; readonly label: string; readonly checked: boolean }
+	| { readonly kind: 'field'; readonly label: string; readonly value: string }
+	| {
+			readonly kind: 'metric';
+			readonly label: string;
+			readonly value: string;
+			readonly detail?: string;
+	  }
+	| {
+			readonly kind: 'progress';
+			readonly label: string;
+			readonly value: number;
+			readonly max: number;
+	  }
+	| {
+			readonly kind: 'table';
+			readonly columns: readonly string[];
+			readonly rows: readonly (readonly string[])[];
+	  }
+	| { readonly kind: 'badge'; readonly text: string }
+	| { readonly kind: 'divider' }
+	| { readonly kind: 'unsupported'; readonly type: string };
+
+export interface WidgetExport {
+	readonly title: string;
+	readonly blocks: readonly WidgetExportBlock[];
+}

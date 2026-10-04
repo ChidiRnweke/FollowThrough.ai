@@ -5,6 +5,11 @@ import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widge
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import {
+	InMemoryEmbeddingClient,
+	InMemorySearchRepository
+} from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -25,11 +30,16 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const library = new WidgetLibrary(repository, projects);
+	const embeddings = new InMemoryEmbeddingClient();
+	const index = new ContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
 			widgetReader: library,
 			widgetLister: library,
 			widgetWriter: library,
+			widgetIndexer: index.widgets,
+			indexEmbeddings: embeddings,
+			indexWriter: index,
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
 	);

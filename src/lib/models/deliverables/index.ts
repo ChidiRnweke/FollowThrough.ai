@@ -1,3 +1,4 @@
+import type { WidgetExport } from '$lib/models/widgets';
 import { z } from 'zod';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 
@@ -7,6 +8,8 @@ export interface ExportInput extends DiagramRenders {
 	readonly styles?: ExtractedTemplateStyles;
 	readonly settings?: ExportSettings;
 	readonly images?: ReadonlyMap<string, string>;
+	/** Each embedded widget as a document shows it, keyed by widget id. */
+	readonly widgets?: ReadonlyMap<string, WidgetExport>;
 }
 
 export type ExportDiagramSource =
@@ -31,10 +34,11 @@ export interface ExportHeadingSpacing {
 
 export interface PreparedExport extends Omit<
 	ExportInput,
-	'settings' | 'images' | keyof DiagramRenders
+	'settings' | 'images' | 'widgets' | keyof DiagramRenders
 > {
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
+	readonly widgets: ReadonlyMap<string, WidgetExport>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
 	/** Explicit common overrides; other heading levels keep each format's native spacing. */
 	readonly headingSpacing: ReadonlyMap<number, ExportHeadingSpacing>;

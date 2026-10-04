@@ -46,6 +46,7 @@ export function knowledgeSearchSource(document: SearchDocument): KnowledgeSearch
 	};
 	if (document.attachmentId) return { ...context, kind: 'attachment', id: document.attachmentId };
 	if (document.diagramId) return { ...context, kind: 'diagram', id: document.diagramId };
+	if (document.widgetId) return { ...context, kind: 'widget', id: document.widgetId };
 	if (document.memoryEntryId)
 		return { ...context, kind: 'memory', id: document.memoryEntryId, title: document.content };
 	if (document.noteId) return { ...context, kind: 'note', id: document.noteId };

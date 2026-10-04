@@ -16,6 +16,7 @@ import type { ActorContext, UserId } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { DateTime } from '$lib/models/workspace';
 import type { DiagramId } from '$lib/models/diagrams';
+import type { WidgetId } from '$lib/models/widgets';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -52,6 +53,8 @@ const scopeOf = (actor: ActorContext, source: IndexSource) => {
 			);
 		case 'diagram':
 			return and(owned, eq(schema.searchChunks.diagramId, source.diagramId));
+		case 'widget':
+			return and(owned, eq(schema.searchChunks.widgetId, source.widgetId));
 		case 'memory':
 			return and(owned, eq(schema.searchChunks.memoryEntryId, source.memoryEntryId));
 		case 'attachment':
@@ -66,6 +69,8 @@ const ownershipOf = (source: IndexSource) => {
 			return { noteId: source.noteId };
 		case 'diagram':
 			return { diagramId: source.diagramId };
+		case 'widget':
+			return { widgetId: source.widgetId };
 		case 'memory':
 			return { memoryEntryId: source.memoryEntryId };
 		case 'attachment':
@@ -88,6 +93,7 @@ const toDocument = (row: typeof schema.searchChunks.$inferSelect): SearchDocumen
 	sourceCreatedAt: row.sourceCreatedAt.toISOString() as DateTime,
 	chunkIndex: row.chunkIndex,
 	...(row.diagramId ? { diagramId: row.diagramId as SearchDocument['diagramId'] } : {}),
+	...(row.widgetId ? { widgetId: row.widgetId as WidgetId } : {}),
 	...(row.sourceAnchorId
 		? { sourceAnchorId: row.sourceAnchorId as SearchDocument['sourceAnchorId'] }
 		: {}),
@@ -174,6 +180,16 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		).map(toDocument);
 	}
 
+	async listForWidget(actor: ActorContext, widgetId: WidgetId): Promise<readonly SearchDocument[]> {
+		return (
+			await this.database
+				.select()
+				.from(schema.searchChunks)
+				.where(scopeOf(actor, { kind: 'widget', widgetId }))
+				.orderBy(asc(schema.searchChunks.chunkIndex))
+		).map(toDocument);
+	}
+
 	async listForMemoryEntry(
 		actor: ActorContext,
 		memoryEntryId: MemoryEntryId
@@ -246,6 +262,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			sourceTitle: document.sourceTitle,
 			sectionPath: document.sectionPath,
 			diagramId: document.diagramId,
+			widgetId: document.widgetId,
 			sourceAnchorId: document.sourceAnchorId,
 			content: document.content,
 			contentHash: document.contentHash,
@@ -346,6 +363,12 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			);
 	}
 
+	async deleteForWidget(actor: ActorContext, widgetId: WidgetId): Promise<void> {
+		await this.database
+			.delete(schema.searchChunks)
+			.where(scopeOf(actor, { kind: 'widget', widgetId }));
+	}
+
 	async deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void> {
 		await this.database
 			.delete(schema.searchChunks)
@@ -412,6 +435,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 		const cursor = sql<string>`(concat(${schema.searchChunks.userId}::text, '/',
 			case
 				when ${schema.searchChunks.diagramId} is not null then concat('diagram:', ${schema.searchChunks.diagramId}::text)
+				when ${schema.searchChunks.widgetId} is not null then concat('widget:', ${schema.searchChunks.widgetId}::text)
 				when ${schema.searchChunks.noteId} is not null then concat('note:', ${schema.searchChunks.noteId}::text)
 				when ${schema.searchChunks.memoryEntryId} is not null then concat('memory:', ${schema.searchChunks.memoryEntryId}::text)
 				else concat('attachment:', ${schema.searchChunks.attachmentId}::text)
@@ -422,6 +446,7 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 				userId: schema.searchChunks.userId,
 				noteId: schema.searchChunks.noteId,
 				diagramId: schema.searchChunks.diagramId,
+				widgetId: schema.searchChunks.widgetId,
 				memoryEntryId: schema.searchChunks.memoryEntryId,
 				attachmentId: schema.searchChunks.attachmentId
 			})
@@ -440,14 +465,16 @@ export class KnowledgeIndexRecords implements RetrievalIndexRepository {
 			cursor: row.cursor,
 			source: (row.diagramId
 				? { kind: 'diagram', diagramId: row.diagramId as DiagramId }
-				: row.noteId
-					? { kind: 'note', noteId: row.noteId as NoteId }
-					: row.memoryEntryId
-						? { kind: 'memory', memoryEntryId: row.memoryEntryId as MemoryEntryId }
-						: {
-								kind: 'attachment',
-								attachmentId: row.attachmentId as AttachmentId
-							}) satisfies IndexSource
+				: row.widgetId
+					? { kind: 'widget', widgetId: row.widgetId as WidgetId }
+					: row.noteId
+						? { kind: 'note', noteId: row.noteId as NoteId }
+						: row.memoryEntryId
+							? { kind: 'memory', memoryEntryId: row.memoryEntryId as MemoryEntryId }
+							: {
+									kind: 'attachment',
+									attachmentId: row.attachmentId as AttachmentId
+								}) satisfies IndexSource
 		}));
 	}
 

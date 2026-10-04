@@ -742,7 +742,7 @@ export interface InlineSuggestionRequest {
 
 export interface InlineCompletionPassage {
 	readonly sourceTitle: string;
-	readonly sourceType: 'note' | 'attachment' | 'diagram' | 'project-memory';
+	readonly sourceType: 'note' | 'attachment' | 'diagram' | 'widget' | 'project-memory';
 	readonly sectionPath?: string;
 	readonly content: string;
 }

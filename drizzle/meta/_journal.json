@@ -428,6 +428,13 @@
       "when": 1791050256988,
       "tag": "0060_widgets_workspace_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791111053148,
+      "tag": "0061_widget_search_chunks",
+      "breakpoints": true
     }
   ]
 }

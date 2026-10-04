@@ -7,7 +7,8 @@ import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import {
 	prepareExport,
 	exportImageSources,
-	exportDiagramReferences
+	exportDiagramReferences,
+	exportWidgetReferences
 } from '$lib/server/services/deliverables/export-preparation';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import { packZip } from '$lib/server/services/deliverables/bundle';
@@ -21,6 +22,9 @@ import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content'
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { WidgetLibrary } from '$lib/server/services/widgets/library';
+import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 
 export const exportControllerFixture = (overrides: Partial<DeliverablesDependencies> = {}) => {
 	const artifacts = new InMemoryArtifactRepository();
@@ -30,6 +34,7 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 	const exportSettings = new InMemoryExportSettingsRepository();
 	const provenance = new InMemoryProvenanceRecorder();
 	const library = new ArtifactLibrary(artifacts, exportSettings);
+	const widgets = new InMemoryWidgetRepository();
 	const service = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
 			templates: new DocumentTemplates(templates),
@@ -45,6 +50,8 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			prepareExport,
 			exportImageSources,
 			exportDiagramReferences,
+			exportWidgetReferences,
+			widgetReader: new WidgetLibrary(widgets, new InMemoryProjectRepository()),
 			fetchImage: fetchRemoteDataUrl,
 			docxGenerator: async () => Buffer.from('docx'),
 			pdfGenerator: async () => Buffer.from('pdf'),
@@ -53,5 +60,15 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			...overrides
 		})
 	);
-	return { service, library, artifacts, storage, notes, templates, exportSettings, provenance };
+	return {
+		service,
+		library,
+		artifacts,
+		storage,
+		notes,
+		templates,
+		exportSettings,
+		provenance,
+		widgets
+	};
 };

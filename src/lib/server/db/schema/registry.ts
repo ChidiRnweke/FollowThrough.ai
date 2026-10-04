@@ -1169,6 +1169,7 @@ export const searchChunks = pgTable(
 		sourceTitle: text('source_title'),
 		sectionPath: text('section_path'),
 		diagramId: uuid('diagram_id').references(() => diagrams.id, { onDelete: 'cascade' }),
+		widgetId: uuid('widget_id').references((): AnyPgColumn => widgets.id, { onDelete: 'cascade' }),
 		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
 			onDelete: 'set null'
 		}),
@@ -1190,6 +1191,7 @@ export const searchChunks = pgTable(
 		index('search_chunks_note_idx').on(table.noteId),
 		index('search_chunks_memory_idx').on(table.memoryEntryId),
 		index('search_chunks_attachment_idx').on(table.attachmentId),
+		index('search_chunks_widget_idx').on(table.widgetId),
 		index('search_chunks_user_idx').on(table.userId),
 		index('search_chunks_project_idx').on(table.projectId),
 		// The backfill worker's queue is the data itself: every tick scans for chunks
@@ -1199,7 +1201,7 @@ export const searchChunks = pgTable(
 			.where(sql`embedding is null`),
 		check(
 			'search_chunks_single_source',
-			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}, ${table.diagramId}) = 1`
+			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}, ${table.diagramId}, ${table.widgetId}) = 1`
 		)
 	]
 );

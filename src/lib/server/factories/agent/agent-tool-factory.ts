@@ -1023,7 +1023,9 @@ interface AgentToolOutputMap {
 		readonly widgetId: WidgetId;
 		readonly title: string;
 		readonly embed: string;
-		readonly nextActions: readonly [{ readonly tool: 'edit_note'; readonly reason: string }];
+		readonly nextActions: readonly [
+			{ readonly tool: 'edit_note'; readonly noteId?: NoteId; readonly reason: string }
+		];
 	};
 	readonly list_widgets: {
 		readonly widgets: readonly {
@@ -2340,7 +2342,10 @@ const sharedToolDefinitions = (
 				title: z.string().min(1),
 				layout: z.string().min(2).describe('The layout object, encoded as a JSON string.'),
 				data: z.string().min(2).describe('The data object, encoded as a JSON string.'),
-				projectId: projectId.optional()
+				projectId: projectId.optional(),
+				noteId: noteId
+					.optional()
+					.describe('The note the user wants the widget in. Creating does not embed it.')
 			}),
 			async (input) => {
 				const chosenProjectId = await requireProject(
@@ -2358,17 +2363,25 @@ const sharedToolDefinitions = (
 						data: jsonArgument(input.data, widgetDataSchema, 'data')
 					}
 				});
+				const embed = `:::widgetNode {widgetId="${widget.id}"} :::`;
+				// Creating saves the widget in the project; only a reviewed note edit shows it in a
+				// note (ADR 0003), so the result names that edit rather than performing it.
 				return {
 					widgetId: widget.id,
 					title: widget.title,
-					embed: `:::widgetNode {widgetId="${widget.id}"} :::`,
-					// Creating saves the widget in the project; only a note edit shows it in a note.
+					embed,
 					nextActions: [
-						{
-							tool: 'edit_note' as const,
-							reason:
-								'If the user asked for the widget in a note, insert the embed line on its own line in that note before you finish.'
-						}
+						input.noteId
+							? {
+									tool: 'edit_note' as const,
+									noteId: input.noteId,
+									reason: `The widget is not in the note yet. Call edit_note on note ${input.noteId} now and insert ${embed} on its own line where the user asked for it.`
+								}
+							: {
+									tool: 'edit_note' as const,
+									reason:
+										'If the user asked for the widget in a note, insert the embed line on its own line in that note before you finish.'
+								}
 					]
 				};
 			}

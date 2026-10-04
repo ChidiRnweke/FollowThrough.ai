@@ -1,3 +1,4 @@
+import type { WidgetExportBlock } from '$lib/models/widgets';
 import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import {
 	documentNodeContent as nodeContent,
@@ -78,6 +79,7 @@ interface DocxContext {
 	readonly settings: ExportSettings;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	readonly widgets: PreparedExport['widgets'];
 	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Printable width in CSS pixels, for image and diagram sizing. */
 	readonly contentWidthPx: number;
@@ -419,6 +421,75 @@ function mermaidBlock(
 	return image ? [image] : [codeParagraph(source)];
 }
 
+const MUTED = '6B7280';
+
+/** One widget block as Word content; the block kinds are the whole set a widget shows. */
+function widgetBlock(block: WidgetExportBlock, ctx: DocxContext): Paragraph | Table {
+	const plain = (text: string, options: { bold?: boolean; color?: string; size?: number } = {}) =>
+		new TextRun({ text, ...options });
+	const line = (children: TextRun[]) =>
+		new Paragraph({ spacing: lineSpacing(ctx.settings), children });
+	switch (block.kind) {
+		case 'heading':
+			return line([plain(block.text, { bold: true, size: [26, 24, 22][block.level - 2] })]);
+		case 'paragraph':
+			return line([plain(block.text, block.muted ? { color: MUTED } : {})]);
+		case 'check':
+			return line([plain(`${block.checked ? '☑' : '☐'} ${block.label}`)]);
+		case 'field':
+			return line([plain(`${block.label}: `, { color: MUTED }), plain(block.value)]);
+		case 'metric':
+			return line([
+				plain(`${block.label}: `, { color: MUTED }),
+				plain(block.value, { bold: true }),
+				...(block.detail ? [plain(` (${block.detail})`, { color: MUTED })] : [])
+			]);
+		case 'progress':
+			return line([
+				plain(`${block.label ? `${block.label}: ` : ''}${block.value} of ${block.max}`)
+			]);
+		case 'table': {
+			const border = { style: BorderStyle.SINGLE, size: 4, color: TABLE_LINE_COLOR };
+			const cell = (text: string, header: boolean) =>
+				new TableCell({
+					...(header ? { shading: { type: ShadingType.CLEAR, fill: TABLE_HEADER_FILL } } : {}),
+					children: [new Paragraph({ children: [plain(text, header ? { bold: true } : {})] })]
+				});
+			return new Table({
+				width: { size: 100, type: WidthType.PERCENTAGE },
+				borders: {
+					top: border,
+					bottom: border,
+					left: border,
+					right: border,
+					insideHorizontal: border,
+					insideVertical: border
+				},
+				rows: [
+					new TableRow({
+						tableHeader: true,
+						children: block.columns.map((column) => cell(column, true))
+					}),
+					...block.rows.map(
+						(row) => new TableRow({ children: row.map((value) => cell(value, false)) })
+					)
+				]
+			});
+		}
+		case 'badge':
+			return line([plain(`[${block.text}]`, { color: MUTED })]);
+		case 'divider':
+			return new Paragraph({
+				border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'D1D5DB', space: 1 } },
+				spacing: { before: 60, after: 60 }
+			});
+		case 'unsupported':
+			return line([
+				new TextRun({ text: `[${block.type} element not shown]`, italics: true, color: MUTED })
+			]);
+	}
+}
+
 function convertNode(
 	node: ProseMirrorNode,
 	ctx: DocxContext,
@@ -520,6 +591,22 @@ function convertNode(
 			results.push(...drawioBlock(node, ctx));
 			break;
 		}
+		case 'widgetNode': {
+			// A widget prints as what it showed when exported: its title and its blocks.
+			const exported = node.attrs?.widgetId ? ctx.widgets.get(node.attrs.widgetId) : undefined;
+			if (!exported) {
+				results.push(
+					new Paragraph({
+						children: [
+							new TextRun({ text: '[widget unavailable]', italics: true, color: '9CA3AF' })
+						]
+					})
+				);
+				break;
+			}
+			results.push(...exported.blocks.map((block) => widgetBlock(block, ctx)));
+			break;
+		}
 		case 'horizontalRule': {
 			// docx has no horizontal-rule element; an empty paragraph with a bottom border renders one.
 			results.push(
@@ -569,6 +656,7 @@ export async function generateDocx(input: PreparedExport): Promise<Buffer> {
 		settings,
 		images,
 		diagrams,
+		widgets: input.widgets,
 		headingSpacing: input.headingSpacing,
 		contentWidthPx:
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *

@@ -487,6 +487,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			prepareExport: deliverables.prepareExport,
 			exportImageSources: deliverables.exportImageSources,
 			exportDiagramReferences: deliverables.exportDiagramReferences,
+			exportWidgetReferences: deliverables.exportWidgetReferences,
+			widgetReader: widgets,
 			diagramReader: diagrams,
 			diagramRenderer: deliverables.diagramRenderer,
 			docxGenerator: deliverables.docxGenerator,
@@ -603,6 +605,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			widgetReader: widgets,
 			widgetLister: widgets,
 			widgetWriter: widgets,
+			widgetIndexer: knowledgeSearch.widgetIndexer,
+			indexEmbeddings: knowledgeSearch.embeddingClient,
+			indexWriter: knowledgeSearch.indexWriter,
 			transactionRunner
 		},
 		projects: {

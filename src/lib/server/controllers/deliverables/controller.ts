@@ -1,3 +1,5 @@
+import { widgetExport } from '$lib/services/widgets/export-blocks';
+import type { Widget, WidgetExport, WidgetId } from '$lib/models/widgets';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { randomUUID, createHash } from 'node:crypto';
@@ -18,7 +20,8 @@ import {
 import type {
 	prepareExport,
 	exportImageSources,
-	exportDiagramReferences
+	exportDiagramReferences,
+	exportWidgetReferences
 } from '$lib/server/services/deliverables/export-preparation';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
@@ -168,6 +171,8 @@ export interface DeliverablesDependencies {
 	prepareExport: typeof prepareExport;
 	exportImageSources: typeof exportImageSources;
 	exportDiagramReferences: typeof exportDiagramReferences;
+	exportWidgetReferences: typeof exportWidgetReferences;
+	widgetReader: { get(actor: ActorContext, id: WidgetId): Promise<Widget> };
 	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
 	diagramRenderer: Pick<DiagramRasterizer, 'render'>;
 	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
@@ -422,11 +427,25 @@ export class Deliverables implements DeliverablesController {
 			const image = await this.dependencies.fetchImage(url);
 			if (image) images.set(source, image);
 		}
+		// A widget the note embeds must be a live widget of the same project, as a diagram must;
+		// an export that silently left one out would misrepresent the note.
+		const widgets = new Map<string, WidgetExport>();
+		for (const note of sourceNotes)
+			for (const widgetId of this.dependencies.exportWidgetReferences(note.document)) {
+				if (widgets.has(widgetId)) continue;
+				const widget = await this.dependencies.widgetReader.get(actor, widgetId as WidgetId);
+				if (widget.projectId !== note.projectId || widget.archivedAt)
+					throw new ValidationError(
+						'An exported widget is unavailable in the source note’s project. Restore it or remove it from the note.'
+					);
+				widgets.set(widgetId, widgetExport(widget));
+			}
 		const exportInput: ExportInput = {
 			...input,
 			notes,
 			settings,
 			images,
+			widgets,
 			diagramPngs,
 			diagramSizes,
 			...(styles ? { styles } : {})

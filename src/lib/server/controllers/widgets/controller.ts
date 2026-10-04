@@ -3,6 +3,10 @@ import { mutationResource } from '$lib/services/workspace/commands';
 import { applyWidgetChange, applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
 import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
 import { widgetCatalogPrompt } from '$lib/services/widgets/catalog-prompt';
+import { widgetSearchText } from '$lib/services/widgets/search-text';
+import type { IndexingResult } from '$lib/models/knowledge-search';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -61,6 +65,10 @@ export interface WidgetsDependencies {
 	widgetReader: WidgetReader;
 	widgetLister: WidgetLister;
 	widgetWriter: WidgetWriter;
+	/** Keeps the knowledge index in step with what each widget shows (ADR 0019). */
+	widgetIndexer: ContentIndex['widgets'];
+	indexEmbeddings: IEmbeddings;
+	indexWriter: Pick<ContentIndex, 'complete'>;
 	transactionRunner: TransactionRunner;
 }
 
@@ -159,7 +167,9 @@ export class Widgets implements WidgetsController {
 					widgetCatalog
 				)
 			);
-			return { widget: await this.dependencies.widgetWriter.create(actor, widget) };
+			const created = await this.dependencies.widgetWriter.create(actor, widget);
+			await this.index(actor, created);
+			return { widget: created };
 		});
 	}
 
@@ -215,10 +225,26 @@ export class Widgets implements WidgetsController {
 	): Promise<Widget> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.widgetWriter.getForEdit(actor, widgetId);
-			return this.dependencies.widgetWriter.update(actor, decided(decide(current)), {
+			const saved = await this.dependencies.widgetWriter.update(actor, decided(decide(current)), {
 				layoutRevision: current.layoutRevision,
 				dataRevision: current.dataRevision
 			});
+			await this.index(actor, saved);
+			return saved;
 		});
+	}
+
+	/** Index what the widget now shows; embed inline unless the index defers to the worker. */
+	private async index(actor: ActorContext, widget: Widget): Promise<void> {
+		const result: IndexingResult = await this.dependencies.widgetIndexer.index(
+			actor,
+			widget,
+			widgetSearchText(widget)
+		);
+		if (result.kind === 'stored') return;
+		const batch = await this.dependencies.indexEmbeddings.embed(
+			result.missing.map((chunk) => chunk.input)
+		);
+		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}
 }

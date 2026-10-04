@@ -50,6 +50,7 @@ export interface KnowledgeSearchCapability {
 	readonly noteIndexer: ContentIndex['notes'];
 	readonly diagramIndexer: ContentIndex['diagrams'];
 	readonly memoryIndexer: ContentIndex['memories'];
+	readonly widgetIndexer: ContentIndex['widgets'];
 	readonly lookup: KnowledgeLookup;
 	readonly maintenance: EmbeddingMaintenance;
 	readonly toolRetriever: ToolRetriever;
@@ -120,6 +121,7 @@ export const createKnowledgeSearchCapability = (
 		noteIndexer: index.notes,
 		diagramIndexer: index.diagrams,
 		memoryIndexer: index.memories,
+		widgetIndexer: index.widgets,
 		lookup: new KnowledgeLookup(repository),
 		maintenance: new EmbeddingMaintenance(
 			new IndexBacklog(repository),

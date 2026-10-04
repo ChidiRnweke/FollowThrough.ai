@@ -5,10 +5,9 @@ description: Every widget change, from a person, a template or an agent, is one 
 
 ## Status
 
-Accepted. The widget table, its synchronization, its rendering, the note embed, the standalone
-page and the agent edit tools are in place. The section "What still needs a decision" lists the
-parts that are not decided yet. The research and the remaining work are in
-`docs/plans/widget-system-json-render-spike.md`.
+Accepted. Widgets are stored, synchronized, rendered in notes and in their own tab, edited by
+people and agents, kept in a recoverable trash, found by search and printed in exports. The
+section "What still needs a decision" lists what is not decided.
 
 ## Context
 
@@ -169,6 +168,10 @@ json-render is imported in two places only:
 Models define the stored layout and data schemas with Zod and do not import the library. The
 versions are pinned exactly. A library upgrade changes two directories.
 
+json-render wraps each rendered element in a `svelte:boundary` that only logs, so a component
+that throws disappears instead of failing. The registry components must not throw; the
+unsupported-element placeholder covers the one expected gap.
+
 ### Templates are drafts, and the picker previews them as saved
 
 A template is a `WidgetDraft` in `widgetTemplates`: a checklist, a progress tracker, a decision
@@ -261,7 +264,38 @@ The approval card renders a widget proposal with the same rule: a created widget
 would save it, and an edited one before and after `applyWidgetEdit`. A proposal the rule would
 refuse, including one made against an older revision, shows why before anyone approves it.
 
+### Search indexes what a widget shows
+
+A widget is a knowledge-index source of its own (`search_chunks.widget_id`, ADR 0019). Its text is
+`widgetSearchText`: the title, text-like literal props, column and option labels, and the strings
+in the data. Booleans and numbers are left out, so ticking a box changes no chunk and costs no
+embedding. Production defers embedding to the worker (ADR 0021). A widget in the trash answers no
+searches. The agent's `search` finds a widget by what it shows and gets its id; the notes search
+panel is unchanged. A live eval showed why this matters: before it, an agent asked to tick an item
+could not find the widget at all.
+
+### Export prints what the widget showed
+
+A note export writes each embedded widget as static blocks (`widgetExport`): a heading, checklist
+items as ☑ and ☐, fields, metrics, progress, tables, badges and dividers, one arm per catalog
+component. Expressions, repeats and `visible` are resolved against the saved data by a small
+resolver over JSON values that covers exactly the allow-listed expressions, so export does not
+depend on the library's untyped resolver. A horizontal row prints as one line. PDF and DOCX each
+render the same blocks. A widget that is missing, in the trash or in another project stops the
+export with a validation error, as a draw.io diagram does: an export that silently left it out
+would misrepresent the note.
+
 ### What still needs a decision
+
+- **Agent reliability for create-and-embed.** The effect eval
+  `effect-widget-created-then-ticked` passed in 4 of 9 live runs on 2026-10-04, all made after widgets
+  became searchable. Finding
+  and ticking an embedded widget now succeeds in every run that created one. The failures are
+  earlier: the agent sometimes stops after `create_widget` without the `edit_note` that embeds it,
+  and once it never searched for the widget tools and wrote a Markdown checklist. Two directions
+  are open: make the widget tools first-class (ADR 0022 weighs every first-class schema), or add a
+  create-and-embed tool that goes through the reviewed note change (ADR 0003). Embedding from the
+  widgets controller was rejected because it would bypass that review.
 
 - **Layout history.** Whether layout revisions are kept for restore (ADR 0011). Data history is
   not kept.
@@ -303,6 +337,12 @@ refuse, including one made against an older revision, shows why before anyone ap
   before and after, a stale edit, a created widget, and a widget not yet on the device.
 - `src/evals/cases/effects.ts` `effect-widget-created-then-ticked` asks the agent to create and
   embed a checklist, then tick one item, and checks the saved widget and note.
+- `src/lib/services/widgets/search-text.spec.ts`, the indexing case in
+  `widget-mutations.contract.spec.ts` and `src/lib/server/services/knowledge-search/semantic.spec.ts`
+  check the search text, the stored chunks and the widget source.
+- `src/lib/services/widgets/export-blocks.spec.ts` and
+  `src/lib/server/controllers/deliverables/export-widgets.spec.ts` check the export blocks, the
+  DOCX text, and the refusal for a widget in the trash.
 - `src/lib/services/widgets/trash.spec.ts` checks the trash rules, the lifecycle cases in
   `widget-mutations.contract.spec.ts` check them on Postgres, and
   `src/lib/controllers/workspace/archived-collections.spec.ts` checks that an archived project

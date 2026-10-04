@@ -108,6 +108,8 @@ const sourceId = (source: IndexSource): string => {
 			return source.noteId;
 		case 'diagram':
 			return source.diagramId;
+		case 'widget':
+			return source.widgetId;
 		case 'memory':
 			return source.memoryEntryId;
 		case 'attachment':
