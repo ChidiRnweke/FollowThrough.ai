@@ -12,6 +12,7 @@ import {
 	type WidgetCreation,
 	type WidgetData,
 	type WidgetDraft,
+	type WidgetChange,
 	type WidgetEdit,
 	type WidgetEditResult,
 	type WidgetIssue,
@@ -270,22 +271,16 @@ export const createWidget = (
 		catalog
 	);
 
-/**
- * The one rule for changing a widget (ADR 0043). It checks the revision of the part the edit
- * touches, applies the change to a copy, and validates the result against the catalog. The
- * browser, the server, the agent tools and the approval preview all call it.
- */
-export const applyWidgetEdit = (
+/** Apply what a change does, to the widget as it is now. The result is validated in full. */
+export const applyWidgetChange = (
 	widget: Widget,
-	edit: WidgetEdit,
+	change: WidgetChange,
 	catalog: WidgetCatalog,
 	now: DateTime
 ): WidgetEditResult => {
-	switch (edit.kind) {
+	switch (change.kind) {
 		case 'data': {
-			if (edit.expectedDataRevision !== widget.dataRevision)
-				return { kind: 'stale', part: 'data', currentRevision: widget.dataRevision };
-			const data = patchPart(widget.data, edit.patch, 'data', widgetDataSchema);
+			const data = patchPart(widget.data, change.patch, 'data', widgetDataSchema);
 			if (data.kind === 'invalid') return data;
 			return checked(
 				{ ...widget, data: data.value, dataRevision: widget.dataRevision + 1, updatedAt: now },
@@ -293,9 +288,7 @@ export const applyWidgetEdit = (
 			);
 		}
 		case 'layout': {
-			if (edit.expectedLayoutRevision !== widget.layoutRevision)
-				return { kind: 'stale', part: 'layout', currentRevision: widget.layoutRevision };
-			const layout = patchPart(widget.layout, edit.patch, 'layout', widgetLayoutSchema);
+			const layout = patchPart(widget.layout, change.patch, 'layout', widgetLayoutSchema);
 			if (layout.kind === 'invalid') return layout;
 			return checked(
 				{
@@ -309,14 +302,54 @@ export const applyWidgetEdit = (
 			);
 		}
 		case 'rename':
-			return { kind: 'applied', widget: { ...widget, title: edit.title.trim(), updatedAt: now } };
+			return { kind: 'applied', widget: { ...widget, title: change.title.trim(), updatedAt: now } };
 	}
+};
+
+const changeOf = (edit: WidgetEdit): WidgetChange => {
+	switch (edit.kind) {
+		case 'data':
+			return { kind: 'data', patch: edit.patch };
+		case 'layout':
+			return { kind: 'layout', patch: edit.patch };
+		case 'rename':
+			return edit;
+	}
+};
+
+/**
+ * The one rule for a revision-guarded change (ADR 0043): the part the edit touches must still be
+ * at the revision the edit was made against, and then the change applies as `applyWidgetChange`.
+ */
+export const applyWidgetEdit = (
+	widget: Widget,
+	edit: WidgetEdit,
+	catalog: WidgetCatalog,
+	now: DateTime
+): WidgetEditResult => {
+	if (edit.kind === 'data' && edit.expectedDataRevision !== widget.dataRevision)
+		return { kind: 'stale', part: 'data', currentRevision: widget.dataRevision };
+	if (edit.kind === 'layout' && edit.expectedLayoutRevision !== widget.layoutRevision)
+		return { kind: 'stale', part: 'layout', currentRevision: widget.layoutRevision };
+	return applyWidgetChange(widget, changeOf(edit), catalog, now);
 };
 
 const pointerSegment = (key: string) => key.replaceAll('~', '~0').replaceAll('/', '~1');
 
+/** Key order does not distinguish two JSON objects. */
+const canonical = (value: JsonValue): JsonValue =>
+	Array.isArray(value)
+		? value.map(canonical)
+		: isObject(value)
+			? Object.fromEntries(
+					Object.keys(value)
+						.sort()
+						.map((key) => [key, canonical(value[key]!)])
+				)
+			: value;
+
 const sameJson = (left: JsonValue, right: JsonValue): boolean =>
-	JSON.stringify(left) === JSON.stringify(right);
+	JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 
 const diffValue = (path: string, before: JsonValue, after: JsonValue): JsonPatch => {
 	if (sameJson(before, after)) return [];
@@ -338,8 +371,52 @@ const diffObject = (path: string, before: JsonObject, after: JsonObject): JsonPa
 ];
 
 /**
- * The smallest data patch from one value to the next, at the deepest changed field. Ticking one
- * checkbox produces one `replace` of that item's flag, not a new data object.
+ * The smallest patch from one JSON object to the next, at the deepest changed field. Ticking one
+ * checkbox produces one `replace` of that item's flag, not a new data object. An array whose
+ * length changed is replaced whole, so an index shift is never mistaken for an item edit.
  */
-export const diffWidgetData = (before: WidgetData, after: WidgetData): JsonPatch =>
+export const diffJsonObject = (before: JsonObject, after: JsonObject): JsonPatch =>
 	diffObject('', before, after);
+
+export const diffWidgetData = (before: WidgetData, after: WidgetData): JsonPatch =>
+	diffJsonObject(before, after);
+
+/** What a replayed local edit keeps of the widget parts the generic field replay cannot merge. */
+export interface WidgetPartsRebase {
+	readonly data: WidgetData;
+	readonly dataRevision: number;
+	readonly layoutRevision: number;
+	readonly overlaps: boolean;
+}
+
+/**
+ * Replay a local widget onto a newer one (ADR 0042), merging `data` path by path. The local data
+ * change and the remote one merge when they commute: the local patch applied to the remote data
+ * equals the remote patch applied to the local data. Edits to different items always commute;
+ * two edits to one value, or a list one side reordered, do not, and go to review. Each revision
+ * is the newer one, advanced once if the local edit changed that part, as the server will.
+ */
+export const rebaseWidgetParts = (
+	observed: Widget,
+	local: Widget,
+	onto: Widget
+): WidgetPartsRebase => {
+	const layoutRevision = onto.layoutRevision + (sameJson(observed.layout, local.layout) ? 0 : 1);
+	const localPatch = diffWidgetData(observed.data, local.data);
+	if (localPatch.length === 0)
+		return { data: onto.data, dataRevision: onto.dataRevision, layoutRevision, overlaps: false };
+	const remotePatch = diffWidgetData(observed.data, onto.data);
+	const dataRevision = onto.dataRevision + 1;
+	if (remotePatch.length === 0)
+		return { data: local.data, dataRevision, layoutRevision, overlaps: false };
+	const merged = applyJsonPatch(onto.data, localPatch);
+	const alternate = applyJsonPatch(local.data, remotePatch);
+	if (
+		merged.kind === 'patched' &&
+		alternate.kind === 'patched' &&
+		isObject(merged.value) &&
+		sameJson(merged.value, alternate.value)
+	)
+		return { data: merged.value, dataRevision, layoutRevision, overlaps: false };
+	return { data: local.data, dataRevision, layoutRevision, overlaps: true };
+};

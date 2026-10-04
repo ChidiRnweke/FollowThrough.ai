@@ -72,14 +72,12 @@ Each item is one PR. Each revises ADR 0043 and adds its specs to the ADR's Evide
    `src/lib/stores/workbench/tab-ref.ts`, the `workbenchTabIdSchema` pattern, `workbench-url.ts`,
    the `workspace-pane.svelte` branch, tab grouping, and `projectOfTab` in
    `src/routes/(app)/+layout.svelte`.
-4. **Data merge granularity.** Decide whether the widget replay merges `data` by JSON Pointer path,
-   so that two offline edits to different items do not need review.
-5. **Templates and the JSON editor.** More templates, and an editor that shows the issues of
+4. **Templates and the JSON editor.** More templates, and an editor that shows the issues of
    `widgetIssues` while the user types.
-6. **Catalog growth.** Text input and select need a debounced bridge, because they change on every
+5. **Catalog growth.** Text input and select need a debounced bridge, because they change on every
    keystroke. `visible` needs a model schema before it is allowed back.
-7. **Search and export.** A searchable text for the knowledge index (ADRs 0019 and 0020), and a
+6. **Search and export.** A searchable text for the knowledge index (ADRs 0019 and 0020), and a
    static form for note export (`src/lib/components/notes/export/render-diagrams.ts` is the
    precedent).
-8. **Housekeeping.** `TOOL_DESCRIPTIONS` classifies `create_diagram` as `read`, but
+7. **Housekeeping.** `TOOL_DESCRIPTIONS` classifies `create_diagram` as `read`, but
    `agentToolCoverage` classifies it as `mutation`. Resolve it before more tools copy the pattern.

@@ -1,8 +1,8 @@
 <script lang="ts" module>
-	import type { WidgetEdit } from '$lib/models/widgets';
+	import type { WidgetChange } from '$lib/models/widgets';
 	import type { WidgetEditOutcome } from '$lib/stores/widgets/widget-edits.svelte';
 
-	export type WidgetEditHandler = (edit: WidgetEdit) => Promise<WidgetEditOutcome>;
+	export type WidgetChangeHandler = (change: WidgetChange) => Promise<WidgetEditOutcome>;
 </script>
 
 <script lang="ts">
@@ -16,10 +16,10 @@
 	import * as Field from '$lib/components/ui/field';
 
 	/**
-	 * Renders a widget with json-render and turns what its controls change into `data` edits.
-	 * Without `onEdit` the widget is shown read-only.
+	 * Renders a widget with json-render and turns what its controls change into `data` changes.
+	 * Without `onChange` the widget is shown read-only.
 	 */
-	let { widget, onEdit }: { widget: Widget; onEdit?: WidgetEditHandler } = $props();
+	let { widget, onChange }: { widget: Widget; onChange?: WidgetChangeHandler } = $props();
 
 	// The data and revision this view last agreed with the record. A control change is diffed
 	// against them; a record revision this view did not produce resets the store to the record.
@@ -49,7 +49,7 @@
 
 	$effect(() => {
 		const current = store;
-		const handler = onEdit;
+		const handler = onChange;
 		if (!handler) return;
 		return current.subscribe(() => {
 			// The store is the library's untyped state model, so it is read here, at the edge.
@@ -61,10 +61,10 @@
 			}
 			const patch = diffWidgetData(observed, next.data);
 			if (patch.length === 0) return;
-			const edit: WidgetEdit = { kind: 'data', patch, expectedDataRevision: observedRevision };
+			const change: WidgetChange = { kind: 'data', patch };
 			observed = next.data;
 			observedRevision += 1;
-			void handler(edit).then((outcome) => {
+			void handler(change).then((outcome) => {
 				failure = outcome.kind === 'failure' ? outcome.message : null;
 				if (outcome.kind === 'failure') resetToRecord();
 			});
@@ -73,7 +73,7 @@
 </script>
 
 <div data-slot="widget-view" data-widget-id={widget.id} class="flex flex-col gap-2">
-	<Field.Set disabled={!onEdit} class="min-w-0 gap-0">
+	<Field.Set disabled={!onChange} class="min-w-0 gap-0">
 		{#key store}
 			<JsonUIProvider {store}>
 				<Renderer {spec} registry={widgetRegistry} fallback={UnsupportedElement} />

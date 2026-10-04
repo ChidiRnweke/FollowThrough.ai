@@ -46,11 +46,10 @@ const setup = async (suffix: string) => {
 	return { ...seeded, controller, sync, create };
 };
 
-const tickFirst = {
+const tick = (index: number) => ({
 	kind: 'data' as const,
-	expectedDataRevision: 1,
-	patch: [{ op: 'replace' as const, path: '/items/0/done', value: true }]
-};
+	patch: [{ op: 'replace' as const, path: `/items/${index}/done`, value: true }]
+});
 
 describe('guarded widget mutations', () => {
 	it('publish a created widget as a workspace record', async () => {
@@ -65,7 +64,7 @@ describe('guarded widget mutations', () => {
 		const result = await controller.synchronize(owner, {
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
-			command: { kind: 'editWidget', widgetId: id, edit: tickFirst }
+			command: { kind: 'editWidget', widgetId: id, change: tick(0) }
 		});
 		expect({
 			kind: result.kind,
@@ -79,12 +78,34 @@ describe('guarded widget mutations', () => {
 		const result = await controller.synchronize(owner, {
 			operationId: crypto.randomUUID(),
 			baseEtag: etag,
-			command: { kind: 'editWidget', widgetId: id, edit: tickFirst }
+			command: { kind: 'editWidget', widgetId: id, change: tick(0) }
 		});
 		expect({
 			kind: result.kind,
 			rows: await context.client`select title, data_revision from widgets where id = ${id}`
 		}).toEqual({ kind: 'conflict', rows: [{ title: 'Other client', data_revision: 1 }] });
+	});
+	it('apply a change replayed onto a remote edit of another item', async () => {
+		const { owner, controller, sync, create } = await setup('7715');
+		const { id, etag } = await create();
+		await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: etag,
+			command: { kind: 'editWidget', widgetId: id, change: tick(1) }
+		});
+		// The device's queue replays its edit onto the remote version and resends the same change
+		// with the remote version as its base (ADR 0042).
+		const remote = await sync.objects.read(owner, { type: 'widgets', id: [id] }, null);
+		if (remote.kind !== 'found') throw new Error('The edited widget must be readable');
+		const result = await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: remote.snapshot.etag,
+			command: { kind: 'editWidget', widgetId: id, change: tick(0) }
+		});
+		expect({
+			kind: result.kind,
+			rows: await context.client`select (select string_agg(i->>'done', ',') from jsonb_array_elements(data->'items') i) as done, data_revision from widgets where id = ${id}`
+		}).toEqual({ kind: 'applied', rows: [{ done: 'true,true,false', data_revision: 3 }] });
 	});
 	it('reject a layout the catalog does not allow, leaving the widget unchanged', async () => {
 		const { owner, controller, create } = await setup('7714');
@@ -95,9 +116,8 @@ describe('guarded widget mutations', () => {
 			command: {
 				kind: 'editWidget',
 				widgetId: id,
-				edit: {
+				change: {
 					kind: 'layout',
-					expectedLayoutRevision: 1,
 					patch: [{ op: 'replace', path: '/elements/item/type', value: 'Iframe' }]
 				}
 			}

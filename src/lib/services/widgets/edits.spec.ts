@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { widgetCatalog, widgetTemplates, type WidgetEdit } from '$lib/models/widgets';
-import { applyWidgetEdit, createWidget, diffWidgetData } from './edits';
+import {
+	applyWidgetChange,
+	applyWidgetEdit,
+	createWidget,
+	diffWidgetData,
+	rebaseWidgetParts
+} from './edits';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -180,5 +186,68 @@ describe('diffing widget data', () => {
 	});
 	it('escapes keys that contain a slash', () => {
 		expect(diffWidgetData({}, { 'a/b': 1 })).toEqual([{ op: 'add', path: '/a~1b', value: 1 }]);
+	});
+});
+
+describe('replaying a widget onto a newer one', () => {
+	const items = widgetTemplates.checklist.data.items;
+	const ticked = (...indexes: number[]) =>
+		widgetBuilder({
+			data: {
+				...widgetTemplates.checklist.data,
+				items: items.map((item, index) => ({ ...item, done: indexes.includes(index) }))
+			}
+		});
+	it('merges ticks of different items', () => {
+		expect(rebaseWidgetParts(widgetBuilder(), ticked(0), ticked(1))).toEqual({
+			data: ticked(0, 1).data,
+			dataRevision: 2,
+			layoutRevision: 1,
+			overlaps: false
+		});
+	});
+	it('does not count the same tick on both sides as a collision', () => {
+		expect(rebaseWidgetParts(widgetBuilder(), ticked(0), ticked(0)).overlaps).toBe(false);
+	});
+	it('collides when both sides change one value differently', () => {
+		const renamed = (label: string) =>
+			widgetBuilder({
+				data: {
+					...widgetTemplates.checklist.data,
+					items: [{ ...items[0], label }, ...items.slice(1)]
+				}
+			});
+		expect(rebaseWidgetParts(widgetBuilder(), renamed('Mine'), renamed('Theirs')).overlaps).toBe(
+			true
+		);
+	});
+	it('collides when the other side changed the length of the list it edits', () => {
+		const shorter = widgetBuilder({
+			data: { ...widgetTemplates.checklist.data, items: items.slice(1) }
+		});
+		expect(rebaseWidgetParts(widgetBuilder(), ticked(0), shorter).overlaps).toBe(true);
+	});
+	it('takes the newer data when only the layout changed locally', () => {
+		const relaid = widgetBuilder({
+			layout: { ...widgetTemplates.checklist.layout, root: 'items' }
+		});
+		expect(rebaseWidgetParts(widgetBuilder(), relaid, ticked(2))).toEqual({
+			data: ticked(2).data,
+			dataRevision: 1,
+			layoutRevision: 2,
+			overlaps: false
+		});
+	});
+});
+
+describe('applying a change without a revision', () => {
+	it('applies to the widget as it is now, whatever its revision', () => {
+		const result = applyWidgetChange(
+			widgetBuilder({ dataRevision: 7 }),
+			{ kind: 'data', patch: tickFirst.patch },
+			widgetCatalog,
+			later
+		);
+		expect(result.kind === 'applied' && result.widget.dataRevision).toBe(8);
 	});
 });

@@ -105,7 +105,23 @@ export const widgetDraftSchema = z.strictObject({
 
 export type WidgetDraft = z.infer<typeof widgetDraftSchema>;
 
-/** Every change to an existing widget, whoever makes it (ADR 0043). */
+/**
+ * What a change does to a widget, without the revision it was made against. The workspace queue
+ * sends this: its base version and the ADR 0042 replay guard it, so a change replayed onto a newer
+ * widget still applies.
+ */
+export const widgetChangeSchema = z.discriminatedUnion('kind', [
+	z.strictObject({ kind: z.literal('data'), patch: jsonPatchSchema }),
+	z.strictObject({ kind: z.literal('layout'), patch: jsonPatchSchema }),
+	z.strictObject({ kind: z.literal('rename'), title: widgetTitleSchema })
+]);
+
+export type WidgetChange = z.infer<typeof widgetChangeSchema>;
+
+/**
+ * A change guarded by the revision of the part it touches. Agent tools send this: they write on
+ * the server, where no queue base exists, so the revision is their only guard (ADR 0043).
+ */
 export const widgetEditSchema = z.discriminatedUnion('kind', [
 	z.strictObject({
 		kind: z.literal('data'),

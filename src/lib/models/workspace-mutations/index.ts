@@ -5,7 +5,7 @@ import { type DiagramId } from '$lib/models/diagrams';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import { syncEtagSchema } from '$lib/models/sync';
-import { widgetDraftSchema, widgetEditSchema } from '$lib/models/widgets';
+import { widgetChangeSchema, widgetDraftSchema } from '$lib/models/widgets';
 import {
 	resourceDataSchemas,
 	noteRecordSchema,
@@ -204,7 +204,7 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		sourceNoteId: noteId.optional(),
 		draft: widgetDraftSchema
 	}),
-	z.object({ kind: z.literal('editWidget'), widgetId, edit: widgetEditSchema })
+	z.object({ kind: z.literal('editWidget'), widgetId, change: widgetChangeSchema })
 ]);
 
 export type WorkspaceCommand = z.infer<typeof workspaceCommandSchema>;

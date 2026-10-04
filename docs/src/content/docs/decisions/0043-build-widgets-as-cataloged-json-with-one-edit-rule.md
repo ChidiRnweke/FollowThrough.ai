@@ -61,26 +61,37 @@ A request to create a widget is a separate type, `WidgetDraft`, with no id and n
 template is a `WidgetDraft` value. Creation by hand, by template and by an agent produce the same
 draft.
 
-### Every change is one `WidgetEdit` value
+### Every change is a `WidgetChange`, guarded where it is sent
 
-All changes to an existing widget are expressed as one discriminated union:
+What a change does is one discriminated union. `JsonPatch` is an RFC 6902 operation list:
 
 ```ts
-type WidgetEdit =
-	| { readonly kind: 'data'; readonly patch: JsonPatch; readonly expectedDataRevision: number }
-	| { readonly kind: 'layout'; readonly patch: JsonPatch; readonly expectedLayoutRevision: number }
+type WidgetChange =
+	| { readonly kind: 'data'; readonly patch: JsonPatch }
+	| { readonly kind: 'layout'; readonly patch: JsonPatch }
 	| { readonly kind: 'rename'; readonly title: string };
 ```
 
-`JsonPatch` is an RFC 6902 operation list. Each source does one job, which is to translate its
-input into a `WidgetEdit` or a `WidgetDraft`:
+A change needs a guard against writing over something the sender did not see, and each path has
+exactly one:
+
+- **The workspace queue sends a bare `WidgetChange`.** The queue's base version is the guard
+  (ADR 0040), and a conflict is replayed and sent again (ADR 0042). A change is an intent, so the
+  same patch still applies to the newer widget. A revision in the command would make every
+  replayed change stale.
+- **Agent tools send a `WidgetEdit`**, the same change plus the revision of the part it touches
+  (`expectedDataRevision` or `expectedLayoutRevision`). They write on the server, where there is no
+  queue base, so the revision is their only guard.
+
+Each source does one job, which is to translate its input into a `WidgetChange`, a `WidgetEdit`
+or a `WidgetDraft`:
 
 | Source                 | Produces                                                        |
 | ---------------------- | --------------------------------------------------------------- |
-| A bound widget control | `data`, from the state store bridge                             |
+| A bound widget control | a `data` change, from the state store bridge                    |
 | The "Widget" command   | a `WidgetDraft`, from a template                                |
-| `edit_widget_data`     | `data`, from the tool arguments                                 |
-| `edit_widget_layout`   | `layout`, from the tool arguments                               |
+| `edit_widget_data`     | a `data` edit, from the tool arguments                          |
+| `edit_widget_layout`   | a `layout` edit, from the tool arguments                        |
 | Offline replay         | the queued `createWidget` or `editWidget` command, unchanged    |
 | The manual JSON editor | `data` or `layout`, from a diff of the edited value (not built) |
 
@@ -96,14 +107,16 @@ type WidgetEditResult =
 	| { readonly kind: 'invalid'; readonly issues: readonly WidgetIssue[] }
 	| { readonly kind: 'stale'; readonly part: 'data' | 'layout'; readonly currentRevision: number };
 
-applyWidgetEdit(widget, edit, catalog, now): WidgetEditResult;
+applyWidgetChange(widget, change, catalog, now): WidgetEditResult;
+applyWidgetEdit(widget, edit, catalog, now): WidgetEditResult; // revision check + applyWidgetChange
 createWidget(draft, creation, catalog): WidgetEditResult;
 ```
 
-The functions are total and do no I/O. `applyWidgetEdit` checks the revision of the part that the
-edit touches, applies the patch to a copy, and validates the result. The browser calls it to show
-the optimistic result before it queues a command. The server calls it again against the locked,
-current widget before it writes. The agent tools reach it through the same controller method.
+The functions are total and do no I/O. `applyWidgetChange` applies the patch to a copy and
+validates the result. The browser calls it to show the optimistic result before it queues a
+command, and the server calls it again against the locked, current widget before it writes.
+`applyWidgetEdit` first checks the revision of the part the edit touches; the agent tools reach it
+through the controller's `edit`.
 
 The patch is applied by an immutable RFC 6902 applier in the same service, not by json-render's
 `applySpecStreamPatch`. That function mutates its input in place, throws on a failed operation, and
@@ -148,22 +161,29 @@ json-render is imported in two places only:
 Models define the stored layout and data schemas with Zod and do not import the library. The
 versions are pinned exactly. A library upgrade changes two directories.
 
-### The view turns control changes into data edits
+### The view turns control changes into data changes
 
 `WidgetView` gives json-render a controlled `createStateStore` seeded with the widget data, and
 subscribes to it. In controlled mode the library ignores `onStateChange`, so the subscription is
 the only reliable signal. On each change the view reads the store snapshot with
-`widgetDataSchema`, computes the smallest patch with `diffWidgetData`, and hands one `data` edit at
-the revision it last agreed with to its owner. Ticking one checkbox produces one `replace` of that
+`widgetDataSchema`, computes the smallest patch with `diffWidgetData`, and hands one `data` change
+to its owner. Ticking one checkbox produces one `replace` of that
 item's flag. A record revision that the view did not produce, from sync or an agent, replaces the
 store. Without an edit handler the view is read-only.
 
 ### Widgets are a synchronized workspace resource
 
 Widgets use the shared queue, receipts and version guard of ADR 0040, with `createWidget` and
-`editWidget` commands. The field replay of ADR 0042 treats `layout` and `data` as separate fields,
-so a data edit on one device and a layout edit on another merge without review. Two edits to
-`data` overlap and go to review.
+`editWidget` commands. The replay of ADR 0042 has a widget arm. Title and layout replay field by
+field. `data` merges path by path in `rebaseWidgetParts`: a local and a remote data change merge
+when they commute, which means the local patch applied to the remote data equals the remote patch
+applied to the local data. Ticks of different items commute. Two changes to one value do not, and
+neither does a change inside a list whose length the other side changed, because the diff replaces
+such a list whole. Those go to review. Each revision in the replayed value is the newer one,
+advanced once for each part the local edit changed, as the server will advance it.
+
+Widget changes never coalesce in the queue. A patch is relative to the version before it, so
+replacing a queued change with a later one would drop the earlier patch.
 
 ### Boundaries parse, the inside is total
 
@@ -188,8 +208,6 @@ their source as a string for the same reason.
 
 ### What still needs a decision
 
-- **Data merge granularity.** Two offline edits to different keys of one widget's data go to
-  review. A widget replay function could merge `data` by JSON Pointer path instead.
 - **Agent creation and the catalog prompt.** `create_widget` and a read tool for
   `catalog.prompt()` (ADR 0022) are not built.
 - **Approval preview.** The approval card shows the generic tool arguments. It does not yet render
@@ -219,8 +237,11 @@ their source as a string for the same reason.
 - `tests/integration/widgets/repositories.contract.spec.ts` checks the Postgres round trip, owner
   isolation and the revision guard.
 - `tests/integration/sync/widget-mutations.contract.spec.ts` checks `createWidget` and
-  `editWidget` through `synchronize`: applied, conflict on a stale base, and rejection of an
-  uncataloged layout.
+  `editWidget` through `synchronize`: applied, conflict on a stale base, a change replayed onto a
+  remote edit of another item, and rejection of an uncataloged layout.
+- `src/lib/controllers/workspace/rebase.spec.ts` and the replay cases in `edits.spec.ts` check the
+  path merge, and `src/lib/client/sync/indexeddb-outbox.svelte.spec.ts` checks that a replayed
+  widget change is queued again with its change unchanged.
 - `src/lib/components/widgets/widget-view.svelte.spec.ts` checks that a ticked checkbox becomes
   one `data` edit, the read-only view, and the unsupported-element placeholder.
 - `src/lib/server/factories/agent/widget-tools.spec.ts` checks that `edit_widget_data` saves

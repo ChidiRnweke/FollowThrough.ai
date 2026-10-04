@@ -1,6 +1,6 @@
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
-import { applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
+import { applyWidgetChange, applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -92,7 +92,9 @@ export class Widgets implements WidgetsController {
 							await this.create(actor, command);
 							break;
 						case 'editWidget':
-							await this.edit(actor, command);
+							await this.write(actor, command.widgetId, (current) =>
+								applyWidgetChange(current, command.change, widgetCatalog, now())
+							);
 							break;
 					}
 					return this.dependencies.syncMutations.complete(actor, input, target);
@@ -139,15 +141,25 @@ export class Widgets implements WidgetsController {
 	}
 
 	async edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }> {
+		return {
+			widget: await this.write(actor, input.widgetId, (current) =>
+				applyWidgetEdit(current, input.edit, widgetCatalog, now())
+			)
+		};
+	}
+
+	/** Decide a change against the locked current widget and save it from that revision. */
+	private async write(
+		actor: ActorContext,
+		widgetId: WidgetId,
+		decide: (current: Widget) => WidgetEditResult
+	): Promise<Widget> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const current = await this.dependencies.widgetWriter.getForEdit(actor, input.widgetId);
-			const widget = decided(applyWidgetEdit(current, input.edit, widgetCatalog, now()));
-			return {
-				widget: await this.dependencies.widgetWriter.update(actor, widget, {
-					layoutRevision: current.layoutRevision,
-					dataRevision: current.dataRevision
-				})
-			};
+			const current = await this.dependencies.widgetWriter.getForEdit(actor, widgetId);
+			return this.dependencies.widgetWriter.update(actor, decided(decide(current)), {
+				layoutRevision: current.layoutRevision,
+				dataRevision: current.dataRevision
+			});
 		});
 	}
 }

@@ -6,7 +6,7 @@ import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
-import { applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
+import { applyWidgetChange, createWidget } from '$lib/services/widgets/edits';
 import { widgetCatalog, type Widget, type WidgetEditResult } from '$lib/models/widgets';
 import type {
 	MemoryEntry,
@@ -489,7 +489,9 @@ export const prepareWorkspaceCommand = (
 		case 'editWidget':
 			return content({
 				type: 'widgets',
-				value: appliedWidget(applyWidgetEdit(value('widgets'), command.edit, widgetCatalog, now))
+				value: appliedWidget(
+					applyWidgetChange(value('widgets'), command.change, widgetCatalog, now)
+				)
 			});
 		default:
 			throw new Error(`Unhandled command: ${command satisfies never}`);

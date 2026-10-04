@@ -55,7 +55,7 @@
 			</div>
 			<WidgetView
 				{widget}
-				onEdit={draft ? (edit) => widgetEdits.stage(draft, widgetId, edit) : undefined}
+				onChange={draft ? (change) => widgetEdits.stage(draft, widgetId, change) : undefined}
 			/>
 			{#if draft?.status === 'error'}
 				<p role="alert" class="text-label text-destructive">

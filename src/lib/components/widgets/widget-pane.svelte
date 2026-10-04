@@ -25,7 +25,7 @@
 			{/if}
 		</header>
 		{#if widget}
-			<WidgetView {widget} onEdit={(edit) => widgetEdits.stage(editor, widgetId, edit)} />
+			<WidgetView {widget} onChange={(change) => widgetEdits.stage(editor, widgetId, change)} />
 		{:else if editor.state.kind === 'failure'}
 			<p role="alert" class="text-sm text-destructive">{editor.state.message}</p>
 		{:else}

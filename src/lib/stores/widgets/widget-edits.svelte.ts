@@ -2,7 +2,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import {
 	widgetTemplates,
-	type WidgetEdit,
+	type WidgetChange,
 	type WidgetId,
 	type WidgetTemplateName
 } from '$lib/models/widgets';
@@ -28,9 +28,9 @@ class WidgetEdits {
 	async stage(
 		editor: WorkspaceDraft<'widgets'>,
 		widgetId: WidgetId,
-		edit: WidgetEdit
+		change: WidgetChange
 	): Promise<WidgetEditOutcome> {
-		const result = await editor.stage({ kind: 'editWidget', widgetId, edit });
+		const result = await editor.stage({ kind: 'editWidget', widgetId, change });
 		return result.kind === 'saved' ? { kind: 'staged' } : result;
 	}
 
