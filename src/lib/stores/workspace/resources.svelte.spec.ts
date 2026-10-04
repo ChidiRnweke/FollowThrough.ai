@@ -537,19 +537,24 @@ it('prepares a complete collection within the batch transport capacity', async (
 	const transport = new InMemoryBatchSyncTransport<typeof project>();
 	transport.maxConcurrentReads = 32;
 	const { resources } = setup(undefined, transport);
+	const expected: [string, typeof project][] = [];
 	for (let index = 0; index < 70; index++) {
 		const id = crypto.randomUUID();
 		const record = workspaceRecordSchema.parse({
 			type: 'projects',
-			value: { ...project.value, id }
+			value: { ...project.value, id, name: `Project ${index}` }
 		});
-		transport.records.set(workspaceResourceKey({ type: 'projects', id: [id] }), {
+		const key = workspaceResourceKey({ type: 'projects', id: [id] });
+		expected.push([key, structuredClone(record)]);
+		transport.records.set(key, {
 			etag: syncEtag(BigInt(index + 1)),
 			value: record
 		});
 	}
 	await resources.requireCollections();
-	expect(resources.records.size).toBe(70);
+	const byKey = (records: readonly [string, typeof project][]) =>
+		[...records].sort(([left], [right]) => left.localeCompare(right));
+	expect(byKey([...resources.records])).toEqual(byKey(expected));
 });
 
 // SYNC-READINESS: unrelated missing bodies cannot disable an available collection.

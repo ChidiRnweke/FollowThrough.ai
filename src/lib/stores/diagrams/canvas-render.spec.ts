@@ -22,8 +22,12 @@ afterEach(() => {
 
 describe('The picture of what the agent drew', () => {
 	it('rides along with the next message', () => {
-		rememberCanvasRender(session('a'), png(4));
-		expect(takeCanvasRender(session('a'), [], LIMITS)).toMatchObject({ mediaType: 'image/png' });
+		const expected = png(4);
+		rememberCanvasRender(session('a'), expected);
+		expect(takeCanvasRender(session('a'), [], LIMITS)).toMatchObject({
+			mediaType: 'image/png',
+			dataUrl: expected
+		});
 	});
 
 	// A hand-off, not durable state: the render belongs to one turn, and history
@@ -58,8 +62,16 @@ describe('The picture of what the agent drew', () => {
 	});
 
 	it('still rides along when there is room beside an attachment', () => {
-		rememberCanvasRender(session('h'), png(16));
-		expect(takeCanvasRender(session('h'), [attachment(16)], LIMITS)).toBeDefined();
+		const render = png(16);
+		const userImage = { ...attachment(8), dataUrl: png(8) };
+		rememberCanvasRender(session('h'), render);
+		expect({
+			render: takeCanvasRender(session('h'), [userImage], LIMITS),
+			userImage
+		}).toMatchObject({
+			render: { mediaType: 'image/png', dataUrl: render, name: 'diagram-render.png' },
+			userImage: { dataUrl: png(8), name: 'user.png' }
+		});
 	});
 
 	// Only PNG reaches the model: it is what the composer and `assertRenderedPng` accept.

@@ -158,7 +158,7 @@ describe('Safe draw.io iframe messaging invariants', () => {
 	});
 
 	it('exports review XML and SVG without persisting through the adapter', async () => {
-		const { adapter, port, exports } = setup();
+		const { adapter, port, exports, autosaves, exits } = setup();
 		adapter.requestExport('review');
 		port.emit({
 			event: 'export',
@@ -166,7 +166,18 @@ describe('Safe draw.io iframe messaging invariants', () => {
 			data: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E'
 		});
 		await exported();
-		expect(exports[0]?.reason).toBe('review');
+		expect({ exports, autosaves, exits }).toEqual({
+			exports: [
+				{
+					xml: '<mxfile><diagram/></mxfile>',
+					svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+					reason: 'review',
+					exit: false
+				}
+			],
+			autosaves: [],
+			exits: []
+		});
 	});
 
 	it('exports the XML from an explicit editor save event', async () => {

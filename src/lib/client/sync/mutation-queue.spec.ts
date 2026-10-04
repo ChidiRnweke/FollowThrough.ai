@@ -62,7 +62,7 @@ describe('shared mutation submission', () => {
 		expect(queue.pending).toEqual([]);
 	});
 	it('sends independent work after a transport failure while preserving its descendants', async () => {
-		const { queue } = setup({
+		const { queue, repository } = setup({
 			send: async (input) => {
 				if (input.operationId === firstId) throw new Error('Connection lost');
 				return applied(input.operationId, input.command);
@@ -73,10 +73,17 @@ describe('shared mutation submission', () => {
 		await queue.append({ ...draft(thirdId), key: 'note:2' });
 		await queue.flush();
 		await queue.flush();
-		expect(queue.pending.map((entry) => [entry.intent.operationId, entry.delivery.kind])).toEqual([
-			[firstId, 'retry'],
-			[secondId, 'queued']
-		]);
+		const state = await repository.read('alice');
+		expect({
+			pending: queue.pending.map((entry) => [entry.intent.operationId, entry.delivery.kind]),
+			independent: state.cache.records.find((record) => record.key === 'note:2')?.entry
+		}).toEqual({
+			pending: [
+				[firstId, 'retry'],
+				[secondId, 'queued']
+			],
+			independent: { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+		});
 	});
 	it('keeps offline writes durable without starting submission', async () => {
 		const { queue, repository } = setup({
@@ -132,7 +139,7 @@ describe('shared mutation submission', () => {
 		});
 	});
 	it('continues unrelated writes after a conflict without discarding the conflicting edit', async () => {
-		const { queue } = setup({
+		const { queue, repository } = setup({
 			send: async (input) =>
 				input.operationId === firstId
 					? { kind: 'conflict', remote: { kind: 'deleted', etag: syncEtag(2n) } }
@@ -142,15 +149,20 @@ describe('shared mutation submission', () => {
 		await queue.append(draft(secondId, 'Further typing'));
 		await queue.append({ ...draft(thirdId), key: 'note:2' });
 		await queue.flush();
-		expect(
-			queue.pending.map((entry) => ({
+		const state = await repository.read('alice');
+		expect({
+			pending: queue.pending.map((entry) => ({
 				operationId: entry.intent.operationId,
 				status: entry.delivery.kind
-			}))
-		).toEqual([
-			{ operationId: firstId, status: 'conflict' },
-			{ operationId: secondId, status: 'queued' }
-		]);
+			})),
+			independent: state.cache.records.find((record) => record.key === 'note:2')?.entry
+		}).toEqual({
+			pending: [
+				{ operationId: firstId, status: 'conflict' },
+				{ operationId: secondId, status: 'queued' }
+			],
+			independent: { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+		});
 	});
 	it('does not recover another tab’s active submission', async () => {
 		const started = Promise.withResolvers<void>();
@@ -317,7 +329,20 @@ it('settles a failed edit at its retry deadline without another user action', as
 	reachable = true;
 	await scheduler.advance(1000);
 	queue.stop();
-	expect(await dependencies.repository.list('alice')).toEqual([]);
+	expect(await dependencies.repository.read('alice')).toMatchObject({
+		cache: {
+			records: [
+				{
+					key: 'note:1',
+					entry: { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
+				}
+			]
+		},
+		writes: {
+			entries: [],
+			receipts: new Map([['note:1', applied(firstId, 'Edited').receipt]])
+		}
+	});
 });
 
 it('leaves a stopped account unchanged when a retry deadline arrives', async () => {

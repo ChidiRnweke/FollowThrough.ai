@@ -31,9 +31,7 @@ it('expands every ancestor of an active note deeper than 32 folders', async () =
 		notes: [...folders, active],
 		activeNoteId: active.id
 	});
-	await expect
-		.element(screen.getByRole('button', { name: 'Folder 1', exact: true }))
-		.toHaveAttribute('aria-expanded', 'true');
+	await expect.element(screen.getByText('Deep active note', { exact: true })).toBeVisible();
 });
 
 it('allows the reader to collapse an ancestor after opening the active note', async () => {
