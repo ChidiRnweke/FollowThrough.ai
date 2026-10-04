@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { widgetTab } from '$lib/stores/workbench/tab-ref';
 	import type { WidgetId } from '$lib/models/widgets';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -36,17 +37,21 @@
 	<div contenteditable="false" class="flex flex-col gap-1.5">
 		{#if widget && widgetId}
 			<div class="flex items-center justify-end">
-				<!-- The editor cancels link clicks inside node views, so the link navigates itself; the
-				     href stays for opening in a new tab. -->
+				<!-- The editor cancels link clicks inside node views, so the link opens the widget's
+				     workbench tab itself, behind the note on ctrl/⌘ as note links do. The href stays for a
+				     new browser tab. -->
 				<Button
 					variant="ghost"
 					size="xs"
 					href={`/widgets/${widgetId}`}
 					class="text-muted-foreground"
 					onclick={(event: MouseEvent) => {
-						if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+						if (event.shiftKey) return;
 						event.preventDefault();
-						void goto(`/widgets/${widgetId}`);
+						const tab = widgetTab(widgetId);
+						void (event.metaKey || event.ctrlKey
+							? workbench.openTabInBackground(tab)
+							: workbench.openTab(tab));
 					}}
 				>
 					<OpenIcon />

@@ -4,7 +4,9 @@ export const workbenchTabIdSchema = z.union([
 	z.uuid(),
 	z
 		.string()
-		.regex(/^(?:chat:|diagram:)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+		.regex(
+			/^(?:chat:|diagram:|widget:)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+		),
 	z.literal('search')
 ]);
 

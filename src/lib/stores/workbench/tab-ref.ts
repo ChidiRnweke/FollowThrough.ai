@@ -1,5 +1,6 @@
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
+import type { WidgetId } from '$lib/models/widgets';
 import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
 
 /**
@@ -22,11 +23,14 @@ export type TabRef =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
 	| { readonly kind: 'chat'; readonly sessionKey: ChatSessionKey }
 	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
+	| { readonly kind: 'widget'; readonly widgetId: WidgetId }
 	| { readonly kind: 'search' };
 
 const CHAT_PREFIX = 'chat:';
 
 const DIAGRAM_PREFIX = 'diagram:';
+
+const WIDGET_PREFIX = 'widget:';
 
 /**
  * The canvas beside a studio conversation, before anything has been kept.
@@ -53,6 +57,8 @@ export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${s
 
 export const diagramTab = (diagramId: DiagramId): TabId => `${DIAGRAM_PREFIX}${diagramId}`;
 
+export const widgetTab = (widgetId: WidgetId): TabId => `${WIDGET_PREFIX}${widgetId}`;
+
 export const searchTab = (): TabId => SEARCH_TAB_ID;
 
 /**
@@ -71,6 +77,10 @@ export function parseTabId(raw: string): TabRef | undefined {
 		const diagramId = trimmed.slice(DIAGRAM_PREFIX.length);
 		return isUuid(diagramId) ? { kind: 'diagram', diagramId: diagramId as DiagramId } : undefined;
 	}
+	if (trimmed.startsWith(WIDGET_PREFIX)) {
+		const widgetId = trimmed.slice(WIDGET_PREFIX.length);
+		return isUuid(widgetId) ? { kind: 'widget', widgetId: widgetId as WidgetId } : undefined;
+	}
 	return isUuid(trimmed) ? { kind: 'note', noteId: trimmed as NoteId } : undefined;
 }
 
@@ -81,6 +91,8 @@ export const isSearchTab = (id: TabId): boolean => parseTabId(id)?.kind === 'sea
 export const isNoteTab = (id: TabId): boolean => parseTabId(id)?.kind === 'note';
 
 export const isDiagramTab = (id: TabId): boolean => parseTabId(id)?.kind === 'diagram';
+
+export const isWidgetTab = (id: TabId): boolean => parseTabId(id)?.kind === 'widget';
 
 /** The note behind a tab, or `undefined` for a chat tab. */
 export function noteIdOf(id: TabId | undefined): NoteId | undefined {
@@ -101,4 +113,11 @@ export function diagramIdOf(id: TabId | undefined): DiagramId | undefined {
 	if (id === undefined) return undefined;
 	const ref = parseTabId(id);
 	return ref?.kind === 'diagram' ? ref.diagramId : undefined;
+}
+
+/** The widget behind a tab, or `undefined` for any other kind. */
+export function widgetIdOf(id: TabId | undefined): WidgetId | undefined {
+	if (id === undefined) return undefined;
+	const ref = parseTabId(id);
+	return ref?.kind === 'widget' ? ref.widgetId : undefined;
 }

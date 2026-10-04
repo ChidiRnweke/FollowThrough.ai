@@ -6,6 +6,8 @@
 	import {
 		chatKeyOf,
 		diagramIdOf,
+		widgetIdOf,
+		isWidgetTab,
 		isChatTab,
 		isDiagramTab,
 		isSearchTab,
@@ -74,6 +76,9 @@
 			return (
 				workspaceSession.current?.resources.views.diagram(diagramId)?.title ?? 'Untitled diagram'
 			);
+		const widgetId = widgetIdOf(tabId);
+		if (widgetId !== undefined)
+			return workspaceSession.current?.resources.views.widget(widgetId)?.title ?? 'Widget';
 		const sessionKey = chatKeyOf(tabId);
 		if (sessionKey !== undefined) {
 			const conversationId = chatRegistry.peek(sessionKey)?.conversationId;
@@ -228,7 +233,7 @@
 						onCloseSplit={isSplit ? closeSplit : undefined}
 					/>
 				{/snippet}
-				{#if isChatTab(noteId) || isDiagramTab(noteId)}
+				{#if isChatTab(noteId) || isDiagramTab(noteId) || isWidgetTab(noteId)}
 					<div class="workspace-pane-scroll-content flex h-full min-h-0 flex-col">
 						{@render pane()}
 					</div>

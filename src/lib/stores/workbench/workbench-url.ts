@@ -1,4 +1,4 @@
-import { chatKeyOf, diagramIdOf, isSearchTab, parseTabId, type TabId } from './tab-ref';
+import { chatKeyOf, diagramIdOf, isSearchTab, parseTabId, widgetIdOf, type TabId } from './tab-ref';
 
 /**
  * Workbench URL model.
@@ -15,6 +15,7 @@ import { chatKeyOf, diagramIdOf, isSearchTab, parseTabId, type TabId } from './t
  *   /chats/<conversation>?tabs=<id>,<id>&focus=chat:<key>&split=<id>
  *   /chats/new?tabs=chat:<key>&focus=chat:<key>
  *   /diagrams/<diagram>?tabs=<id>,<id>&focus=diagram:<diagram>&split=<id>
+ *   /widgets/<widget>?tabs=<id>,<id>&focus=widget:<widget>&split=<id>
  *   /search?tabs=<id>,<id>&focus=search
  *
  * The focused tab is always also present in `?tabs=` (so the parameter
@@ -67,6 +68,13 @@ function focusedFromPath(pathOnly: string, searchParams: URLSearchParams): TabId
 		// page when the workbench is not involved.
 		const focusRaw = searchParams.get(FOCUS_PARAM);
 		if (!focusRaw || diagramIdOf(focusRaw) === undefined) return undefined;
+		return focusRaw;
+	}
+	const widgetMatch = /^\/widgets\/([0-9a-f-]{36})\/?$/i.exec(pathOnly);
+	if (widgetMatch) {
+		// As a diagram: without `?focus=` the widget renders as a plain page.
+		const focusRaw = searchParams.get(FOCUS_PARAM);
+		if (!focusRaw || widgetIdOf(focusRaw) === undefined) return undefined;
 		return focusRaw;
 	}
 	if (/^\/search\/?$/.test(pathOnly)) {
@@ -163,6 +171,12 @@ export function serializeWorkbenchUrl(
 		params.push(`${FOCUS_PARAM}=${encodeURIComponent(state.focusedNoteId)}`);
 		const query = params.length > 0 ? `?${params.join('&')}` : '';
 		return `/diagrams/${diagramId}${query}`;
+	}
+	const widgetId = widgetIdOf(state.focusedNoteId);
+	if (widgetId !== undefined) {
+		params.push(`${FOCUS_PARAM}=${encodeURIComponent(state.focusedNoteId)}`);
+		const query = params.length > 0 ? `?${params.join('&')}` : '';
+		return `/widgets/${widgetId}${query}`;
 	}
 	if (isSearchTab(state.focusedNoteId)) {
 		// Same trick as a chat: the `/search` pathname names the host, `?focus=` the tab.

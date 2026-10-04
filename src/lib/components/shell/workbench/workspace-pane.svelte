@@ -8,6 +8,7 @@
 	import ChatPane from './chat-pane.svelte';
 	import GlobalSearchPanel from '$lib/components/search/global-search-panel.svelte';
 	import { DiagramPane } from '$lib/components/diagrams';
+	import { WidgetPane } from '$lib/components/widgets';
 
 	let {
 		tabId,
@@ -52,6 +53,8 @@
 	/>
 {:else if ref?.kind === 'diagram'}
 	<DiagramPane diagramId={ref.diagramId} {onCloseSplit} />
+{:else if ref?.kind === 'widget'}
+	<WidgetPane widgetId={ref.widgetId} {onCloseSplit} />
 {:else if ref?.kind === 'search'}
 	<div class="h-full overflow-hidden p-4">
 		<GlobalSearchPanel projects={shell.projects} />

@@ -1,3 +1,4 @@
+import type { WidgetId } from '$lib/models/widgets';
 import { describe, expect, it } from 'vitest';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
@@ -6,6 +7,9 @@ import {
 	chatTab,
 	diagramIdOf,
 	diagramTab,
+	widgetTab,
+	widgetIdOf,
+	isWidgetTab,
 	isChatTab,
 	isDiagramTab,
 	isNoteTab,
@@ -123,5 +127,24 @@ describe('diagram tab identity', () => {
 
 	it('drops a diagram tab whose id is not a uuid', () => {
 		expect(parseTabId('diagram:nonsense')).toBeUndefined();
+	});
+});
+
+describe('widget tab identity', () => {
+	const WIDGET = '77777777-7777-4777-8777-777777777777' as WidgetId;
+	it('reads a prefixed id as a widget tab', () => {
+		expect(parseTabId(widgetTab(WIDGET))).toEqual({ kind: 'widget', widgetId: WIDGET });
+	});
+	it('recognises a widget tab', () => {
+		expect(isWidgetTab(widgetTab(WIDGET))).toBe(true);
+	});
+	it('reads the widget behind a widget tab', () => {
+		expect(widgetIdOf(widgetTab(WIDGET))).toBe(WIDGET);
+	});
+	it('reports no note behind a widget tab', () => {
+		expect(noteIdOf(widgetTab(WIDGET))).toBeUndefined();
+	});
+	it('drops a widget tab whose id is not a uuid', () => {
+		expect(parseTabId('widget:nonsense')).toBeUndefined();
 	});
 });

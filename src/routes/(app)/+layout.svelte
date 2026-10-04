@@ -40,7 +40,9 @@
 	const prerequisitesReady = $derived(data.session.resources.startupReadiness.kind === 'ready');
 	// Workbench detail panes already have record-level loading states. Collection
 	// screens must not turn a partial inventory into empty results or exact counts.
-	const recordRoute = $derived(/^\/(notes|diagrams|skills|todos)\/[^/]+$/.test(page.url.pathname));
+	const recordRoute = $derived(
+		/^\/(notes|diagrams|skills|todos|widgets)\/[^/]+$/.test(page.url.pathname)
+	);
 	const contentReady = $derived(
 		shell !== null && prerequisitesReady && (!inventoryLoading || recordRoute)
 	);
@@ -94,6 +96,7 @@
 		const ref = parseTabId(tabId);
 		if (ref?.kind === 'diagram')
 			return data.session.resources.views.diagram(ref.diagramId)?.projectId;
+		if (ref?.kind === 'widget') return data.session.resources.views.widget(ref.widgetId)?.projectId;
 		return shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId))?.projectId;
 	});
 

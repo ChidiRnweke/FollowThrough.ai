@@ -33,7 +33,9 @@ spec) separate from data (the state), and it has an official Svelte 5 renderer. 
 
 A widget is its own project-scoped entity (ADR 0008). It is not part of a note document. A note
 embeds a widget through a `widgetNode` atom block that holds only `widgetId`, as the `drawio` node
-holds only `diagramId`. Many notes can embed one widget, and the widget opens at `/widgets/<id>`.
+holds only `diagramId`. Many notes can embed one widget. The widget opens as a `widget:<id>` workbench tab beside other
+tabs, or as a page at `/widgets/<id>`. The agent's app context names the widget that is open, so
+`read_widget` can find it.
 
 The saved widget has two independent parts. Each part has its own revision:
 
@@ -214,8 +216,6 @@ their source as a string for the same reason.
   the widget as `applyWidgetEdit` would leave it.
 - **Layout history.** Whether layout revisions are kept for restore (ADR 0011). Data history is
   not kept.
-- **Workbench tab.** The widget opens as a page at `/widgets/<id>`, not yet as a `widget:<id>`
-  workbench tab.
 
 ## Consequences
 
@@ -247,5 +247,8 @@ their source as a string for the same reason.
 - `src/lib/server/factories/agent/widget-tools.spec.ts` checks that `edit_widget_data` saves
   through the shared rule, that rejected edits name the problem, and that the tool parameters
   convert to strict JSON Schema.
+- `src/lib/stores/workbench/tab-ref.spec.ts`, `workbench-url.spec.ts` and
+  `src/lib/stores/agent/app-context.svelte.node.spec.ts` check the `widget:` tab, its URL and
+  the agent surface.
 - `tests/e2e/widgets.e2e.ts` creates a widget from a note, ticks it, reloads, and edits it on its
   own page.

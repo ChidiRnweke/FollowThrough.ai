@@ -38,6 +38,21 @@ describe('application surface mapping', () => {
 		).toBe('diagram_studio');
 	});
 
+	it('recognises a focused widget tab', () => {
+		expect(
+			surfaceFor(
+				'/widgets/77777777-7777-4777-8777-777777777777',
+				new URLSearchParams(
+					'tabs=n1,widget:77777777-7777-4777-8777-777777777777&focus=widget:77777777-7777-4777-8777-777777777777'
+				)
+			).kind
+		).toBe('widget');
+	});
+
+	it('recognises the standalone widget page', () => {
+		expect(surfaceFor('/widgets/w1', new URLSearchParams()).kind).toBe('widget');
+	});
+
 	it('leaves an ordinary note workbench alone', () => {
 		expect(surfaceFor('/notes/n1', new URLSearchParams('tabs=n1,n2&focus=n1')).kind).toBe(
 			'note_workbench'

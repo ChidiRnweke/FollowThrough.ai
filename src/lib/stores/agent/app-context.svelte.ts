@@ -3,7 +3,8 @@ import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$li
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { workbench } from '../workbench/workbench.svelte';
-import { chatKeyOf, noteIdOf } from '../workbench/tab-ref';
+import { chatKeyOf, noteIdOf, widgetIdOf } from '../workbench/tab-ref';
+import { workspaceSession } from '../workspace/session.svelte';
 
 export function surfaceFor(
 	pathname: string,
@@ -27,7 +28,9 @@ export function surfaceFor(
 	// Decided first, and it wins outright: a canvas tab is open, whatever route
 	// the user reached it by. Asking last meant the ladder below assigned a kind
 	// that was then thrown away.
+	const focusedWidget = widgetIdOf(params.get('focus') ?? undefined) !== undefined;
 	if (hasCanvasTab) kind = 'diagram_studio';
+	else if (focusedWidget || parts[0] === 'widgets') kind = 'widget';
 	else if (parts[0] === 'today') kind = 'today';
 	else if (parts[0] === 'todos') kind = 'todos';
 	else if (parts[0] === 'notes' && parts[2] === 'diagrams') kind = 'diagram_editor';
@@ -130,10 +133,17 @@ class AppContextStore {
 			];
 		});
 		const focusedNote = this.shell?.noteTree.find((entry) => entry.id === focusedNoteId);
+		// A widget tab, or the widget page, tells the agent which widget `read_widget` should open.
+		const widgetId =
+			widgetIdOf(focusedNoteId) ??
+			(this.pathname.startsWith('/widgets/') ? this.pathname.split('/')[2] : undefined);
+		const focusedWidget = widgetId
+			? workspaceSession.current?.resources.views.widget(widgetId)
+			: undefined;
 		const pathProjectId = this.pathname.startsWith('/projects/')
 			? (this.pathname.split('/')[2] as ProjectId | undefined)
 			: undefined;
-		const projectId = focusedNote?.projectId ?? pathProjectId;
+		const projectId = focusedNote?.projectId ?? focusedWidget?.projectId ?? pathProjectId;
 		const project = this.shell?.projects.find((entry) => entry.id === projectId);
 		return {
 			version: 1,
@@ -155,9 +165,18 @@ class AppContextStore {
 							projectId: focusedNote.projectId
 						}
 					}
-				: project
-					? { activeResource: { kind: 'project' as const, id: project.id, title: project.name } }
-					: {}),
+				: focusedWidget
+					? {
+							activeResource: {
+								kind: 'widget' as const,
+								id: focusedWidget.id,
+								title: focusedWidget.title,
+								projectId: focusedWidget.projectId
+							}
+						}
+					: project
+						? { activeResource: { kind: 'project' as const, id: project.id, title: project.name } }
+						: {}),
 			...(inWorkbench && (openTabs.length || openChatTabs.length)
 				? {
 						workbench: {

@@ -3,10 +3,13 @@
 	import type { WidgetId } from '$lib/models/widgets';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Button } from '$lib/components/ui/button';
+	import { Tip } from '$lib/components/ui/tooltip';
+	import { FtClose as X } from '$lib/components/icons';
 	import WidgetView from './widget-view.svelte';
 
 	/** A widget opened on its own, in a workbench tab or at `/widgets/<id>`. */
-	let { widgetId }: { widgetId: WidgetId } = $props();
+	let { widgetId, onCloseSplit }: { widgetId: WidgetId; onCloseSplit?: () => void } = $props();
 	const editor = untrack(() => widgetEdits.editor(widgetId));
 	void editor.open();
 	const widget = $derived(editor.state.kind === 'ready' ? editor.value : null);
@@ -22,6 +25,23 @@
 				<p class="text-xs text-destructive" role="alert">
 					{editor.lastError ?? 'The widget could not be saved'}
 				</p>
+			{/if}
+			{#if onCloseSplit}
+				<div class="ms-4 flex shrink-0 items-center self-center">
+					<Tip text="Close split view">
+						{#snippet children({ props })}
+							<Button
+								{...props}
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Close split view"
+								onclick={onCloseSplit}
+							>
+								<X />
+							</Button>
+						{/snippet}
+					</Tip>
+				</div>
 			{/if}
 		</header>
 		{#if widget}

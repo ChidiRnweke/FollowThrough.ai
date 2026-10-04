@@ -35,7 +35,8 @@ test('a widget created in a note keeps what was ticked, in the note and on its o
 	await expect(checkboxes(page).nth(1)).not.toBeChecked();
 
 	await page.getByRole('link', { name: 'Open widget' }).click();
-	await expect(page).toHaveURL(/\/widgets\/[0-9a-f-]{36}$/);
+	await expect(page).toHaveURL(/\/widgets\/[0-9a-f-]{36}\?.*focus=widget%3A/);
+	await expect(page.locator('[data-widget-pane]')).toBeVisible();
 	await expect(checkboxes(page).nth(0)).toBeChecked();
 	await checkboxes(page).nth(1).click();
 	await saved(page);

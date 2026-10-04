@@ -1405,6 +1405,7 @@ type AppSurfaceKind =
 	| 'diagram_editor'
 	| 'diagram_studio'
 	| 'diagrams'
+	| 'widget'
 	| 'chats'
 	| 'chat'
 	| 'skills'
@@ -1449,7 +1450,8 @@ export interface AppContextSnapshotV1 {
 	};
 	readonly currentProject?: { readonly id: ProjectId; readonly name: string };
 	readonly activeResource?: {
-		readonly kind: 'project' | 'note' | 'todo' | 'artifact' | 'diagram' | 'skill' | 'chat';
+		readonly kind:
+			'project' | 'note' | 'todo' | 'artifact' | 'diagram' | 'widget' | 'skill' | 'chat';
 		readonly id: string;
 		readonly title: string;
 		readonly projectId?: ProjectId;
@@ -1555,6 +1557,7 @@ const appContextSnapshotSchema = z
 					'diagram_editor',
 					'diagram_studio',
 					'diagrams',
+					'widget',
 					'chats',
 					'chat',
 					'skills',
@@ -1570,7 +1573,7 @@ const appContextSnapshotSchema = z
 		currentProject: z.object({ id: projectIdSchema, name: z.string() }).strict().optional(),
 		activeResource: z
 			.object({
-				kind: z.enum(['project', 'note', 'todo', 'artifact', 'diagram', 'skill', 'chat']),
+				kind: z.enum(['project', 'note', 'todo', 'artifact', 'diagram', 'widget', 'skill', 'chat']),
 				id: z.string(),
 				title: z.string(),
 				projectId: projectIdSchema.optional()

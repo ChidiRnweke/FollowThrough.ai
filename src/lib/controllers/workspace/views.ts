@@ -15,6 +15,7 @@ import type {
 } from '$lib/models/agent';
 import type { ArtifactView } from '$lib/models/deliverables';
 import type { Diagram } from '$lib/models/diagrams';
+import type { Widget } from '$lib/models/widgets';
 import type { TrashedNote } from '$lib/models/notes';
 import type { AttachmentView } from '$lib/models/attachments';
 import type { MemoryEntry } from '$lib/models/memory';
@@ -231,6 +232,12 @@ export class WorkspaceViews {
 					(!projectId || diagram.projectId === projectId)
 			)
 			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
+	}
+	/** A widget in an active project (ADR 0009), or null. */
+	widget(widgetId: string): Widget | null {
+		const widget = this.get('widgets', widgetId);
+		if (!widget || !this.isActiveProject(widget.projectId)) return null;
+		return widget;
 	}
 	diagram(diagramId: string): Diagram | null {
 		const diagram = this.all('diagrams').find((diagram) => diagram.id === diagramId);
