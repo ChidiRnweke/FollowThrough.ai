@@ -1,59 +1,42 @@
 # Integration tests
 
 **What:** Workflows that read/write files, use a database, or send messages.
-**When:** Testing the pieces separately would miss broken file contents, wiring, or translation.
-**Type:** Integration. Run the real workflow and its file/database code. Record outgoing messages.
+**When:** Separate tests would miss broken contents, wiring, or translation.
+**Type:** Integration. Run the real workflow and file/database code. Record outgoing messages.
 
 ## Export addresses, then announce success
 
-### Good — Python
+The export must write both addresses, each followed by a newline, and announce the number
+exported. If writing fails, it must send no success message. Check the file's contents and
+recorded messages after running the workflow; file existence and an exception are insufficient.
 
-```python
-# file: test_integration_good.py
-from pathlib import Path
-import pytest
-from export_subject import Recorder, export_addresses
+### Bad — checks only file existence and the error
 
-def test_export(tmp_path: Path) -> None:
-    path = tmp_path / "addresses.txt"
-    recorder = Recorder()
+```typescript
+// file: integration.bad.test.ts
+import { stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { expect, test } from 'vitest';
+import { Recorder, exportAddresses, scenarioDirectory } from './export_subject';
 
-    export_addresses(["a@example.test", "b@example.test"], path, recorder)
+test('export creates a file', async () => {
+	const path = join(await scenarioDirectory(), 'addresses.txt');
+	await exportAddresses(['a@example.test', 'b@example.test'], path, new Recorder());
+	expect((await stat(path)).isFile()).toBe(true);
+});
 
-    assert path.read_bytes() == b"a@example.test\nb@example.test\n"
-    assert recorder.sent == [b'{"kind":"addresses-exported","count":2}']
-
-def test_failed_write_sends_no_success_message(tmp_path: Path) -> None:
-    recorder = Recorder()
-
-    with pytest.raises(FileNotFoundError):
-        export_addresses(["a@example.test"], tmp_path / "missing" / "addresses.txt", recorder)
-
-    assert recorder.sent == []
+test('failed write rejects', async () => {
+	const path = join(await scenarioDirectory(), 'missing', 'addresses.txt');
+	await expect(exportAddresses(['a@example.test'], path, new Recorder())).rejects.toMatchObject({
+		code: 'ENOENT'
+	});
+});
 ```
 
-### Bad — Python
+An empty or incorrectly formatted file still exists. Sending success before attempting a
+failed write still produces the expected exception. These assertions miss both bugs.
 
-```python
-# file: test_integration_bad.py
-from pathlib import Path
-import pytest
-from export_subject import Recorder, export_addresses
-
-def test_export(tmp_path: Path) -> None:
-    path = tmp_path / "addresses.txt"
-    recorder = Recorder()
-    export_addresses(["a@example.test", "b@example.test"], path, recorder)
-    assert path.exists()
-
-def test_failed_write(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError):
-        export_addresses(["a@example.test"], tmp_path / "missing" / "addresses.txt", Recorder())
-```
-
-The bad tests miss incorrect file contents and success messages sent before a failed write.
-
-### Good — TypeScript
+### Solution — check contents and success/failure messages
 
 ```typescript
 // file: integration.good.test.ts
@@ -84,62 +67,15 @@ test('failed write sends no success message', async () => {
 });
 ```
 
-### Bad — TypeScript
-
-```typescript
-// file: integration.bad.test.ts
-import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
-import { expect, test } from 'vitest';
-import { Recorder, exportAddresses, scenarioDirectory } from './export_subject';
-
-test('export creates a file', async () => {
-	const path = join(await scenarioDirectory(), 'addresses.txt');
-	await exportAddresses(['a@example.test', 'b@example.test'], path, new Recorder());
-	expect((await stat(path)).isFile()).toBe(true);
-});
-
-test('failed write rejects', async () => {
-	const path = join(await scenarioDirectory(), 'missing', 'addresses.txt');
-	await expect(exportAddresses(['a@example.test'], path, new Recorder())).rejects.toMatchObject({
-		code: 'ENOENT'
-	});
-});
-```
-
-Test most rule variations with unit tests. Add integration failure cases for consequences unit
-tests cannot establish. A recorder proves attempted messages, not provider acceptance or delivery.
+The exact text catches a missing newline. The empty message list catches premature success.
+Test most rule variations with unit tests; add integration failures for consequences those tests
+cannot establish. A recorder proves attempted messages, not provider acceptance or delivery.
 
 ## Runnable setup
 
-Use pytest/Vitest. The fixture writes real temporary files. In the application, import its
-workflow and substitute only the outgoing transport. Check provider compatibility separately
-against its real test environment when needed.
-
-```python
-# file: export_subject.py
-import json
-from pathlib import Path
-from typing import Protocol
-
-class Transport(Protocol):
-    def send(self, payload: bytes) -> None: ...
-
-class Recorder:
-    def __init__(self) -> None:
-        self.sent: list[bytes] = []
-
-    def send(self, payload: bytes) -> None:
-        self.sent.append(payload)
-
-def export_addresses(addresses: list[str], destination: Path, transport: Transport) -> None:
-    destination.write_text("\n".join(addresses) + "\n", encoding="utf-8")
-    payload = json.dumps(
-        {"kind": "addresses-exported", "count": len(addresses)},
-        separators=(",", ":"),
-    ).encode("utf-8")
-    transport.send(payload)
-```
+Use Vitest. This fixture writes real temporary files and removes only its own directory.
+In an application, import its workflow and substitute only the outgoing transport. Check provider
+compatibility separately against its real test environment when needed.
 
 ```typescript
 // file: export_subject.ts

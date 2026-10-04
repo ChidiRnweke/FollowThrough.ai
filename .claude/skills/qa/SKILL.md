@@ -43,5 +43,3 @@ the same bug. Do not chase coverage percentages or create a test for every metho
 
 Follow project instructions and run its relevant checks. Report conflicts and unavailable
 infrastructure; do not weaken checks or claim untested results passed.
-
-[Source](references/sources.md).

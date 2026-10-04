@@ -4,9 +4,44 @@
 **When:** A screen interaction or displayed result changes.
 **Type:** Component for individual screens/controls; end-to-end for routing, auth, or saved data.
 
-## Saving shows progress, accepts the edited title, and reports failure
+## Saving must use the edited title and report its progress
 
-### Good — TypeScript / Svelte
+While a save is pending, show “Saving…” and disable Save. After acceptance, show “Saved”
+and submit the edited title. After failure, show “Could not save” and allow another attempt.
+Click the real control and check those results, not just whether an element exists.
+
+### Bad — checks presence after clicking
+
+```typescript
+// file: TitleEditor.bad.test.ts
+import { expect, test } from 'vitest';
+import { page } from 'vitest/browser';
+import { render } from 'vitest-browser-svelte';
+import TitleEditor from './TitleEditor.svelte';
+
+test('saving the edited title works', async () => {
+	const save = async (_title: string): Promise<void> => {};
+	render(TitleEditor, { save });
+	await page.getByRole('textbox', { name: 'Title' }).fill('Quarterly review');
+	await page.getByRole('button', { name: 'Save' }).click();
+	await expect.element(page.getByRole('status')).toBeInTheDocument();
+});
+
+test('failed save works', async () => {
+	const save = async (_title: string): Promise<void> => {
+		throw new Error('Offline');
+	};
+	render(TitleEditor, { save });
+	await page.getByRole('textbox', { name: 'Title' }).fill('Quarterly review');
+	await page.getByRole('button', { name: 'Save' }).click();
+	await expect.element(page.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+});
+```
+
+The status element still exists if the component submits the wrong title or shows no progress.
+The button still exists if a failed save is incorrectly shown as successful or stays disabled.
+
+### Solution — check submitted data, visible status, and button availability
 
 ```typescript
 // file: TitleEditor.good.test.ts
@@ -51,50 +86,33 @@ test('a failed save displays an error and allows another attempt', async () => {
 });
 ```
 
-### Bad — TypeScript / Svelte
+The pending promise keeps saving unfinished until the test accepts it. The assertions catch
+wrong titles, missing progress, and hidden failures. A fake save does not prove server persistence.
 
-```typescript
-// file: TitleEditor.bad.test.ts
-import { expect, test } from 'vitest';
-import { page } from 'vitest/browser';
-import { render } from 'vitest-browser-svelte';
-import TitleEditor from './TitleEditor.svelte';
+## A Save control must be reachable at a narrow viewport
 
-test('saving the edited title works', async () => {
-	const save = async (_title: string): Promise<void> => {};
-	render(TitleEditor, { save });
-	await page.getByRole('textbox', { name: 'Title' }).fill('Quarterly review');
-	await page.getByRole('button', { name: 'Save' }).click();
-	await expect.element(page.getByRole('status')).toBeInTheDocument();
-});
+At 320 pixels wide, this page's Save button must fit fully inside the viewport and work when
+clicked. Check its geometry and the result of clicking. Presence alone cannot detect an offscreen button.
 
-test('failed save works', async () => {
-	const save = async (_title: string): Promise<void> => {
-		throw new Error('Offline');
-	};
-	render(TitleEditor, { save });
-	await page.getByRole('textbox', { name: 'Title' }).fill('Quarterly review');
-	await page.getByRole('button', { name: 'Save' }).click();
-	await expect.element(page.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-});
+### Bad — checks attachment to the page
+
+```python
+# file: test_frontend_bad.py
+from playwright.sync_api import Page, expect
+from editor_fixture import editor
+
+def test_save_is_reachable(editor: Page) -> None:
+    expect(editor.get_by_role("button", name="Save")).to_be_attached()
 ```
 
-The bad tests pass with the wrong title, no progress indicator, or a hidden failure: the elements
-still exist. The good tests click the real control and check its text, availability, and submitted data.
+Moving the button to a fixed position 500 pixels from the left leaves it attached, so this passes.
 
-## A Save control works at a narrow viewport
-
-### Good — Python / Playwright
+### Solution — check viewport reachability and click the control
 
 ```python
 # file: test_frontend_good.py
 from playwright.sync_api import Page, expect
 from editor_fixture import editor
-
-def test_save_uses_the_edited_title(editor: Page) -> None:
-    editor.get_by_role("textbox", name="Title").fill("Quarterly review")
-    editor.get_by_role("button", name="Save").click()
-    expect(editor.get_by_role("status")).to_have_text("Saved: Quarterly review")
 
 def test_save_is_reachable(editor: Page) -> None:
     save = editor.get_by_role("button", name="Save")
@@ -103,24 +121,8 @@ def test_save_is_reachable(editor: Page) -> None:
     expect(editor.get_by_role("status")).to_have_text("Saved: ")
 ```
 
-### Bad — Python / Playwright
-
-```python
-# file: test_frontend_bad.py
-from playwright.sync_api import Page, expect
-from editor_fixture import editor
-
-def test_save_uses_the_edited_title(editor: Page) -> None:
-    editor.get_by_role("textbox", name="Title").fill("Quarterly review")
-    editor.get_by_role("button", name="Save").click()
-    expect(editor.get_by_role("button", name="Save")).to_be_attached()
-
-def test_save_is_reachable(editor: Page) -> None:
-    expect(editor.get_by_role("button", name="Save")).to_be_attached()
-```
-
-Presence does not prove correct text or reachability. Test layout in a real browser. Require full
-viewport visibility only when the design requires it; scrollable controls have a different expectation.
+The viewport assertion fails for that misplaced button. Require full viewport visibility only
+when the design requires it; scrollable controls have a different expectation.
 
 ## Runnable setup
 
@@ -169,6 +171,7 @@ export default defineConfig({
 	plugins: [svelte()],
 	test: {
 		include: ['TitleEditor.*.test.ts'],
+		expect: { poll: { timeout: 1000 } },
 		browser: {
 			enabled: true,
 			headless: true,
@@ -205,6 +208,6 @@ def editor(page: Page) -> Page:
 ```
 
 Use retrying assertions, not sleeps. Keep requests pending to test loading; return explicit empty
-results or errors to test those screens. A fake save cannot prove server persistence.
+results or errors to test those screens. Test layout in a real browser.
 [Vitest browser setup](https://vitest.dev/guide/browser/),
 [Playwright pytest](https://playwright.dev/python/docs/test-runners).

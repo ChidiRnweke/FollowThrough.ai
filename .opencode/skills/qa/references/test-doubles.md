@@ -4,79 +4,74 @@
 **When:** A dependency needs substitution for a fast, repeatable test.
 **Type:** Fixtures for unit/integration tests. Use typed handwritten classes or functions.
 
-## The export sends exactly one completion message
+## Send one confirmation to the buyer
 
-### Good — Python
+When confirming order “order-42”, send one confirmation to its buyer, alice@example.test.
+The recipient, payload, and absence of duplicate sends are requirements. Record the outgoing
+transport requests and compare the whole list.
 
-```python
-# file: test_recorder_good.py
-from pathlib import Path
-from export_subject import Recorder, export_addresses
-
-def test_export_sends_one_message(tmp_path: Path) -> None:
-    recorder = Recorder()
-    export_addresses(["a@example.test", "b@example.test"], tmp_path / "addresses.txt", recorder)
-    assert recorder.sent == [b'{"kind":"addresses-exported","count":2}']
-```
-
-### Bad — Python
+### Bad — checks only that the expected message is somewhere in the list
 
 ```python
 # file: test_recorder_bad.py
-from pathlib import Path
-from export_subject import Recorder, export_addresses
+from confirmation_subject import Recorder, confirm_order
 
-def test_export_sends_one_message(tmp_path: Path) -> None:
+def test_order_sends_one_confirmation() -> None:
     recorder = Recorder()
-    export_addresses(["a@example.test", "b@example.test"], tmp_path / "addresses.txt", recorder)
-    assert b'{"kind":"addresses-exported","count":2}' in recorder.sent
+    confirm_order("order-42", "alice@example.test", recorder)
+    assert (
+        "alice@example.test", b'{"kind":"order-confirmed","orderId":"order-42"}'
+    ) in recorder.sent
 ```
 
-### Good — TypeScript
+Sending the same confirmation twice still satisfies membership. An extra send to the wrong
+recipient also goes unnoticed.
 
-```typescript
-// file: recorder.good.test.ts
-import { join } from 'node:path';
-import { expect, test } from 'vitest';
-import { Recorder, exportAddresses, scenarioDirectory } from './export_subject';
+### Solution — compare every outgoing request
 
-test('export sends one completion message', async () => {
-	const recorder = new Recorder();
-	await exportAddresses(
-		['a@example.test', 'b@example.test'],
-		join(await scenarioDirectory(), 'addresses.txt'),
-		recorder
-	);
-	expect(recorder.sent).toEqual(['{"kind":"addresses-exported","count":2}']);
-});
+```python
+# file: test_recorder_good.py
+from confirmation_subject import Recorder, confirm_order
+
+def test_order_sends_one_confirmation() -> None:
+    recorder = Recorder()
+    confirm_order("order-42", "alice@example.test", recorder)
+    assert recorder.sent == [
+        ("alice@example.test", b'{"kind":"order-confirmed","orderId":"order-42"}')
+    ]
 ```
 
-### Bad — TypeScript
+This fails for duplicates, extra recipients, and incorrect payloads. Exact counts/order are
+appropriate only when required. For several unordered messages, compare sorted copies while
+preserving duplicates. This establishes send attempts, not provider acceptance or delivery.
 
-```typescript
-// file: recorder.bad.test.ts
-import { join } from 'node:path';
-import { expect, test } from 'vitest';
-import { Recorder, exportAddresses, scenarioDirectory } from './export_subject';
+## Runnable setup
 
-test('export sends one completion message', async () => {
-	const recorder = new Recorder();
-	await exportAddresses(
-		['a@example.test', 'b@example.test'],
-		join(await scenarioDirectory(), 'addresses.txt'),
-		recorder
-	);
-	expect(recorder.sent).toContain('{"kind":"addresses-exported","count":2}');
-});
+Use pytest. Keep serialization real and substitute only the outgoing transport.
+
+```python
+# file: confirmation_subject.py
+import json
+from typing import Protocol
+
+class Transport(Protocol):
+    def send(self, recipient: str, payload: bytes) -> None: ...
+
+class Recorder:
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, bytes]] = []
+
+    def send(self, recipient: str, payload: bytes) -> None:
+        self.sent.append((recipient, payload))
+
+def confirm_order(order_id: str, buyer: str, transport: Transport) -> None:
+    payload = json.dumps(
+        {"kind": "order-confirmed", "orderId": order_id}, separators=(",", ":")
+    ).encode("utf-8")
+    transport.send(buyer, payload)
 ```
 
-The bad tests pass with duplicate messages. Exact counts/order are appropriate only when required.
-For several unordered messages, compare sorted copies while preserving duplicates.
-
-## Setup and limits
-
-Use the exporter/recorder files in [integration setup](integration-testing.md). Keep translation
-and serialization real; record the send rather than an internal dispatcher call. Supplying input
-with a fake does not justify checking how often it was queried. Fakes cannot prove SQL or provider
-compatibility. Required support logs can be checked; developer debug text usually should not be.
+Supplying input with a fake does not justify checking how often it was queried. Record external
+sends, not internal dispatcher calls. Fakes cannot prove SQL or provider compatibility.
+Required support logs can be checked; developer debug text usually should not be.
 Do not cast partial objects, patch private methods, or use mocking libraries.

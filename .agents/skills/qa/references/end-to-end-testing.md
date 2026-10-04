@@ -6,7 +6,30 @@
 
 ## Save a note, then retrieve it through the public API
 
-### Good — TypeScript
+Saving “Quarterly review” must make that title available when the note is reopened.
+Save through the public API, then read through its normal read path. A 201 response alone
+cannot establish that the application saved the requested title.
+
+### Bad — claims retrieval works but never retrieves
+
+```typescript
+// file: http.bad.test.ts
+import { expect } from 'vitest';
+import { test } from './http_fixture';
+
+test('saved title can be retrieved', async ({ baseUrl }) => {
+	const saved = await fetch(`${baseUrl}/notes/note-1`, {
+		method: 'POST',
+		body: 'Quarterly review'
+	});
+	await saved.text();
+	expect(saved.status).toBe(201);
+});
+```
+
+This passes if the endpoint returns 201 but stores “old title”, or saves nothing.
+
+### Solution — reopen and check the saved title
 
 ```typescript
 // file: http.good.test.ts
@@ -28,31 +51,14 @@ test('saved title can be retrieved', async ({ baseUrl }) => {
 });
 ```
 
-### Bad — TypeScript
-
-```typescript
-// file: http.bad.test.ts
-import { expect } from 'vitest';
-import { test } from './http_fixture';
-
-test('saved title can be retrieved', async ({ baseUrl }) => {
-	const saved = await fetch(`${baseUrl}/notes/note-1`, {
-		method: 'POST',
-		body: 'Quarterly review'
-	});
-	await saved.text();
-	expect(saved.status).toBe(201);
-});
-```
-
-The bad test passes if the write returns success but stores the wrong title. For browser journeys,
-create/save through the UI and reopen through the application's normal read path.
+The read catches incorrect or missing data. For browser journeys, create/save through the UI
+and reopen through the application's normal read path.
 
 ## Runnable setup
 
 Use Vitest in Node. This fixture starts a real HTTP server with fresh data per test. Its storage
-is just the example application's data: it does not prove database behavior. In a project,
-replace the fixture with the actual application launcher or deployment and its auth/data setup.
+is just the example application's data; it does not prove database behavior. In a project,
+replace it with the actual application launcher or deployment and its auth/data setup.
 
 ```typescript
 // file: http_fixture.ts
@@ -99,4 +105,4 @@ export const test = base.extend<{ baseUrl: string }>({
 Keep a small set of distinct important journeys, not every unit-test case repeated through a
 browser. CRUD applications can need more integration tests than unit tests; no fixed suite ratio
 is required. Several steps can check one journey. Disclose substituted providers and missing
-infrastructure. A passing example server is not verification of a real application's deployment.
+infrastructure. A passing example server does not verify a real application's deployment.

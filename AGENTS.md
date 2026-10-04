@@ -290,7 +290,7 @@ Its references are portable. Apply this repository's architecture and enforcemen
 - Prioritize significant behavior and useful regression protection. Coverage helps locate gaps;
   it does not justify trivial tests, a universal percentage, or duplicate coverage at every layer.
 - Follow ADR 0041: models hold data and schemas; shared business decisions belong in services.
-  The book's domain-object examples do not authorize moving behavior into this repo's models.
+  Generic testing examples do not authorize moving behavior into this repo's models.
   Test orchestration at the boundary that protects its actual risk; its directory name alone
   does not determine whether a test is unit or integration.
 - Keep one spec file per concern. Colocate unit specs with the unit under test. PostgreSQL

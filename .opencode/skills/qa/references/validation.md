@@ -4,21 +4,13 @@
 **When:** Reviewing tests, investigating coverage gaps, or removing duplicate checks.
 **Type:** Review the existing test's unit/integration/component/end-to-end claims.
 
-## The query must return Alice's two records
+## The lookup must return Alice's two records
 
-### Good — Python
+Alice owns “one” and “two”; Bob owns “three”. Alice's lookup must return exactly her two IDs.
+Compare those known IDs. Checking only the owner of returned records never checks whether
+any required record was returned.
 
-```python
-# file: test_review_good.py
-from lookup_subject import Item, owned_items
-
-def test_alice_receives_her_records() -> None:
-    items = [Item("one", "alice"), Item("two", "alice"), Item("three", "bob")]
-    result = owned_items(items, "alice")
-    assert sorted(item.id for item in result) == ["one", "two"]
-```
-
-### Bad — Python
+### Bad — checks only that returned records have the right owner
 
 ```python
 # file: test_review_bad.py
@@ -30,49 +22,28 @@ def test_alice_receives_her_records() -> None:
     assert all(item.owner == "alice" for item in result)
 ```
 
-### Good — TypeScript
+`all(...)` is true for an empty list. A lookup returning nothing passes despite omitting both
+of Alice's records. Returning just one of her records also passes.
 
-```typescript
-// file: review.good.test.ts
-import { expect, test } from 'vitest';
-import { ownedItems } from './lookup_subject';
+### Solution — check the complete expected IDs
 
-test('Alice receives her records', () => {
-	const items = [
-		{ id: 'one', owner: 'alice' },
-		{ id: 'two', owner: 'alice' },
-		{ id: 'three', owner: 'bob' }
-	];
-	const result = ownedItems(items, 'alice');
-	expect(result.map((item) => item.id).sort()).toEqual(['one', 'two']);
-});
+```python
+# file: test_review_good.py
+from lookup_subject import Item, owned_items
+
+def test_alice_receives_her_records() -> None:
+    items = [Item("one", "alice"), Item("two", "alice"), Item("three", "bob")]
+    result = owned_items(items, "alice")
+    assert sorted(item.id for item in result) == ["one", "two"]
 ```
 
-### Bad — TypeScript
-
-```typescript
-// file: review.bad.test.ts
-import { expect, test } from 'vitest';
-import { ownedItems } from './lookup_subject';
-
-test('Alice receives her records', () => {
-	const items = [
-		{ id: 'one', owner: 'alice' },
-		{ id: 'two', owner: 'alice' },
-		{ id: 'three', owner: 'bob' }
-	];
-	const result = ownedItems(items, 'alice');
-	expect(result.every((item) => item.owner === 'alice')).toBe(true);
-});
-```
-
-The bad tests pass for no records. The good tests reject missing, extra, and wrong IDs while
-allowing order to change. If order is required, compare the original sequence instead.
+This rejects missing, extra, and wrong IDs while allowing order to change. If order is required,
+compare the original sequence instead.
 
 ## Runnable setup
 
-Use pytest/Vitest. This example tests a collection rule, not SQL. Use real database integration
-tests when filtering is implemented in a query.
+Use pytest. This example tests a collection rule, not SQL. Use real database integration tests
+when filtering is implemented in a query.
 
 ```python
 # file: lookup_subject.py
@@ -85,14 +56,6 @@ class Item:
 
 def owned_items(items: list[Item], owner: str) -> list[Item]:
     return [item for item in items if item.owner == owner]
-```
-
-```typescript
-// file: lookup_subject.ts
-type Item = { id: string; owner: string };
-export function ownedItems(items: Item[], owner: string): Item[] {
-	return items.filter((item) => item.owner === owner);
-}
 ```
 
 For each finding, name the missed bug or harmless rewrite the test rejects, then show a correction.
