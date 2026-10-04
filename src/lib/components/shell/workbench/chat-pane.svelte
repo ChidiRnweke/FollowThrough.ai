@@ -89,7 +89,7 @@
 	});
 </script>
 
-<div class="flex h-full w-full min-w-0 flex-1 flex-col" data-chat-pane={sessionKey}>
+<div class="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col" data-chat-pane={sessionKey}>
 	<!--
 		The header shares the transcript's measure rather than spanning the pane, so
 		the title sits over the conversation it names instead of drifting out to the
@@ -116,7 +116,7 @@
 			{/if}
 		</div>
 	</header>
-	<div class="min-h-0 flex-1">
+	<div class="flex min-h-0 flex-1 flex-col overflow-clip">
 		<ChatPanel
 			{chat}
 			{shell}

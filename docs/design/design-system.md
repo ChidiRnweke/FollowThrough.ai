@@ -406,6 +406,9 @@ while the region is empty; the empty state and its one action are the whole surf
   change preview carries no frame and no pane label, and renders a step down in scale from the
   review dialog it links to. Never label content that sits directly beneath it ("Proposed
   change" over the only thing on screen; `Sent`/`Result` eyebrows over a call's own arguments).
+- **The composer stays at the bottom of its chat surface:** the transcript fills the remaining
+  height and owns scrolling. Drafts grow upward. Docked panels, sheets, and workbench chats use
+  the same rule, including while tools run or the viewport changes.
 - **A question stays where it was asked:** on send, the newest question is scrolled to the top of
   the port and its answer is written into space the thread reserves beneath it (collapsing as
   the answer fills). Auto-scroll otherwise only runs while the reader is at the latest turn;
