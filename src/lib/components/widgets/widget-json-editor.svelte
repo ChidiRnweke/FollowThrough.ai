@@ -89,6 +89,7 @@
 	<div class="grid gap-4 @[48rem]:grid-cols-2">
 		<div class="flex flex-col gap-1.5">
 			<Label for="widget-layout">Layout</Label>
+			<!-- audit-allow: no-raw-font-family — the field holds JSON source, which is code. -->
 			<Textarea
 				id="widget-layout"
 				bind:value={layoutText}
@@ -98,6 +99,7 @@
 		</div>
 		<div class="flex flex-col gap-1.5">
 			<Label for="widget-data">Data</Label>
+			<!-- audit-allow: no-raw-font-family — the field holds JSON source, which is code. -->
 			<Textarea
 				id="widget-data"
 				bind:value={dataText}
@@ -109,7 +111,7 @@
 	{#if outcome.kind === 'invalid'}
 		<ul role="alert" aria-label="Problems" class="flex flex-col gap-1 text-label text-destructive">
 			{#each outcome.issues as issue, index (index)}
-				<li><code class="font-mono">{issue.path}</code> {issue.message}</li>
+				<li><code>{issue.path}</code> {issue.message}</li>
 			{/each}
 		</ul>
 	{/if}
