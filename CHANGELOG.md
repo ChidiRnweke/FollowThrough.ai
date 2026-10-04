@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.9](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.8...v2.0.9) (2026-10-04)
+
+
+### Bug Fixes
+
+* **editor:** allow deleting blank lines beside tables ([#300](https://github.com/ChidiRnweke/FollowThrough.ai/issues/300)) ([005f671](https://github.com/ChidiRnweke/FollowThrough.ai/commit/005f671a2b474072c5c94e86c03472651ce1ded9))
+
 ## [2.0.8](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.7...v2.0.8) (2026-10-03)
 
 
