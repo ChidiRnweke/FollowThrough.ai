@@ -192,6 +192,21 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 
 	// Widgets
 	{
+		id: 'widget-catalog',
+		goal: 'see which components a widget layout can use before building one',
+		expected: 'read_widget_catalog'
+	},
+	{
+		id: 'widget-create',
+		goal: 'make a progress tracker widget for this project',
+		expected: 'create_widget'
+	},
+	{
+		id: 'widget-list',
+		goal: 'find the relocation checklist widget in this project',
+		expected: 'list_widgets'
+	},
+	{
 		id: 'widget-read',
 		goal: 'look at the checklist widget embedded in this note before changing it',
 		expected: 'read_widget'

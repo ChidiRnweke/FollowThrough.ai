@@ -17,6 +17,7 @@
 	import { approvalConsequence, friendlyToolLabel } from '../../agent/actions/tool-presentation';
 	import { approvalPreview, isNoteBodyTool, type ApprovalBaseline } from './tool-approval-preview';
 	import { approvalFields, argumentLabel } from './tool-approval-fields';
+	import { WidgetView } from '$lib/components/widgets';
 
 	let {
 		tool,
@@ -49,6 +50,14 @@
 	);
 	let expanded = $state(false);
 
+	/** A widget edit names its widget; the copy on this device is what the edit is compared to. */
+	const editedWidgetId = $derived(
+		(tool.name === 'edit_widget_data' || tool.name === 'edit_widget_layout') &&
+			typeof tool.arguments.widgetId === 'string'
+			? tool.arguments.widgetId
+			: undefined
+	);
+
 	/** An update_todo call names its subject by id alone; resolve it to a title. */
 	const todoSubjectId = $derived(
 		tool.name === 'update_todo' && typeof tool.arguments.todoId === 'string'
@@ -70,6 +79,9 @@
 	const diagram = $derived(
 		editedDiagramId ? resources?.view({ type: 'diagrams', id: [editedDiagramId] }) : undefined
 	);
+	const editedWidget = $derived(
+		editedWidgetId ? resources?.view({ type: 'widgets', id: [editedWidgetId] }) : undefined
+	);
 	const diagramBaseline = $derived.by((): ApprovalBaseline => {
 		if (diagram?.state.kind !== 'ready') return { kind: 'none' };
 		const { source, title } = diagram.state.value;
@@ -90,6 +102,10 @@
 		if (tool.name === 'update_agent_preferences')
 			return preferences ? { kind: 'preferences', preferences } : { kind: 'none' };
 		if (editedDiagramId) return diagramBaseline;
+		if (editedWidgetId)
+			return editedWidget?.state.kind === 'ready'
+				? { kind: 'widget', widget: editedWidget.state.value }
+				: { kind: 'none' };
 		if (isNoteBodyTool(tool.name))
 			return {
 				kind: 'note_review',
@@ -105,7 +121,9 @@
 	const approvalUnavailable = $derived(
 		preview.kind === 'note' && preview.change.kind === 'failure'
 	);
-	const loadingDiagram = $derived(diagram?.state.kind === 'wait');
+	const loadingDiagram = $derived(
+		diagram?.state.kind === 'wait' || editedWidget?.state.kind === 'wait'
+	);
 	const fields = $derived(approvalFields(tool.arguments, shell));
 	const subject = $derived(
 		preview.kind === 'note'
@@ -114,10 +132,13 @@
 				: 'Note'
 			: preview.kind === 'diagram'
 				? preview.change.title
-				: preview.kind === 'settings'
-					? // The tool's own name is the whole subject; the fields below are the change.
-						undefined
-					: (fields.headline ?? todoTitle)
+				: preview.kind === 'widget' &&
+					  (preview.change.kind === 'created' || preview.change.kind === 'edited')
+					? preview.change.after.title
+					: preview.kind === 'settings'
+						? // The tool's own name is the whole subject; the fields below are the change.
+							undefined
+						: (fields.headline ?? todoTitle)
 	);
 
 	/** How many items the compact card shows before it starts counting the rest. */
@@ -176,7 +197,34 @@
 {/snippet}
 
 {#snippet changeBody(compact: boolean)}
-	{#if preview.kind === 'diagram'}
+	{#if preview.kind === 'widget'}
+		<!-- The widget as the shared rule would leave it, beside what it is now (ADR 0043). -->
+		{#if preview.change.kind === 'refused'}
+			{#each preview.change.problems as problem (problem)}
+				<p class="text-sm text-destructive">{problem}</p>
+			{/each}
+		{:else if preview.change.kind === 'unavailable'}
+			<p class="text-sm text-muted-foreground">
+				This widget is not on this device yet, so the change cannot be shown.
+			</p>
+		{:else if preview.change.kind === 'created'}
+			<WidgetView widget={preview.change.after} />
+		{:else}
+			<div
+				class={compact ? 'flex flex-col gap-3' : 'grid grid-cols-2 gap-4'}
+				data-widget-approval-diff
+			>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<p class="eyebrow">Now</p>
+					<WidgetView widget={preview.change.before} />
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<p class="eyebrow">After approval</p>
+					<WidgetView widget={preview.change.after} />
+				</div>
+			</div>
+		{/if}
+	{:else if preview.kind === 'diagram'}
 		<!--
 			Labels, not a picture. The server cannot render draw.io, so a card that waited
 			for one would show nothing at the moment the user is deciding — and the labels
@@ -321,7 +369,9 @@
 		<p class="-mt-1 text-sm text-muted-foreground">{caption}</p>
 	{/if}
 	{#if loadingDiagram}
-		<p class="text-sm text-muted-foreground">Loading the current diagram…</p>
+		<p class="text-sm text-muted-foreground">
+			{editedWidgetId ? 'Loading the current widget…' : 'Loading the current diagram…'}
+		</p>
 	{:else}
 		<!-- Unreadable saved reviews remain rejectable and cannot be approved. -->
 		<ErrorBoundary label="this change preview" {fallback}>

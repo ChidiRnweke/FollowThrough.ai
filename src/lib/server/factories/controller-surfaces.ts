@@ -223,6 +223,7 @@ export const controllerSurfaces = {
 	widgets: {
 		synchronize: true,
 		get: true,
+		catalog: true,
 		list: true,
 		create: true,
 		edit: true,

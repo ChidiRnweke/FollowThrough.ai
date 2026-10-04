@@ -1,6 +1,9 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { SuggestionKind } from '$lib/models/suggestions';
+import type { NoteId } from '$lib/models/notes';
+import type { JsonValue } from '$lib/models/widgets';
+import { widgetReferencesIn } from '$lib/services/notes/references';
 import type { Lab } from '../lab/application';
 
 /**
@@ -200,3 +203,56 @@ export const projectIdFor = (
 	if (!id) throw new Error(`The "${name}" project was not seeded`);
 	return id;
 };
+
+/**
+ * A checklist-like widget exists, the named note embeds it, and the item matching `ticked` is the
+ * only one ticked. Read back through the controllers, so a pass means the user would see it.
+ */
+export async function expectWidgetTicked(
+	lab: Lab,
+	actor: ActorContext,
+	input: {
+		readonly titleFragment: string;
+		readonly noteId: NoteId;
+		readonly ticked: string;
+	}
+): Promise<EffectVerdict> {
+	const { projects } = await lab.controllers.projects().list(actor);
+	const widgets = (
+		await Promise.all(
+			projects.map((project) => lab.controllers.widgets().list(actor, { projectId: project.id }))
+		)
+	).flatMap((result) => result.widgets);
+	const widget = widgets.find((candidate) => matches(candidate.title, input.titleFragment));
+	if (!widget)
+		return {
+			passed: false,
+			explanation: `no widget matching "${input.titleFragment}"; found ${widgets.map((w) => `"${w.title}"`).join(', ') || 'none'}`
+		};
+	const { note } = await lab.controllers.notes().get(actor, { noteId: input.noteId });
+	if (!widgetReferencesIn([note]).includes(widget.id))
+		return {
+			passed: false,
+			explanation: `note "${note.title}" does not embed widget "${widget.title}"`
+		};
+	// The item list is whichever array in the data holds objects with a boolean flag.
+	const items = Object.values(widget.data).flatMap((value) =>
+		Array.isArray(value) ? value.filter((item) => typeof item === 'object' && item !== null) : []
+	);
+	const ticks = items.map((item) => {
+		const text = JSON.stringify(item);
+		const flag = Object.values(item as Record<string, JsonValue>).find(
+			(field) => typeof field === 'boolean'
+		);
+		return { matches: matches(text, input.ticked), done: flag === true };
+	});
+	const target = ticks.filter((tick) => tick.matches);
+	const passed =
+		target.length === 1 && target[0]!.done && ticks.filter((tick) => tick.done).length === 1;
+	return {
+		passed,
+		explanation: passed
+			? `widget "${widget.title}" is embedded and only "${input.ticked}" is ticked`
+			: `widget "${widget.title}" data does not show exactly "${input.ticked}" ticked: ${JSON.stringify(widget.data)}`
+	};
+}

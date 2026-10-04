@@ -11,15 +11,20 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import {
+	projectBuilder,
 	testActor,
 	testConversationId,
+	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { widgetTemplates } from '$lib/models/widgets';
 
 const setup = () => {
 	const repository = new InMemoryWidgetRepository();
 	repository.widgets = [widgetBuilder()];
-	const library = new WidgetLibrary(repository, new InMemoryProjectRepository());
+	const projects = new InMemoryProjectRepository();
+	projects.projects = [projectBuilder()];
+	const library = new WidgetLibrary(repository, projects);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
 			widgetReader: library,
@@ -94,5 +99,43 @@ describe('agent widget tools', () => {
 	it('publish strict JSON Schema parameters, which a string patch makes possible', () => {
 		const { tool } = setup();
 		expect(() => jsonObjectSchema(tool('edit_widget_layout').parameters)).not.toThrow();
+	});
+	it('create a widget from JSON strings and return the line that embeds it', async () => {
+		const { repository, tool } = setup();
+		const output = await tool('create_widget')
+			.prepare({
+				title: 'Launch',
+				projectId: testProjectId(),
+				layout: JSON.stringify(widgetTemplates.checklist.layout),
+				data: JSON.stringify(widgetTemplates.checklist.data)
+			})
+			.execute();
+		const created = repository.widgets.find((widget) => widget.title === 'Launch');
+		expect(JSON.stringify(output)).toContain(`:::widgetNode {widgetId=\\"${created?.id}\\"} :::`);
+	});
+	it('refuse to create a widget whose layout names an uncataloged component', async () => {
+		const { tool } = setup();
+		await expect(
+			tool('create_widget')
+				.prepare({
+					title: 'Frame',
+					projectId: testProjectId(),
+					layout: JSON.stringify({
+						root: 'x',
+						elements: { x: { type: 'Iframe', props: {}, children: [] } }
+					}),
+					data: '{}'
+				})
+				.execute()
+		).rejects.toThrow('Iframe is not in the widget catalog');
+	});
+	it('give the agent the catalog it must write to', async () => {
+		const { tool } = setup();
+		const output = await tool('read_widget_catalog').prepare({}).execute();
+		expect(JSON.stringify(output)).toContain('### Checkbox');
+	});
+	it('publish strict JSON Schema parameters for creation', () => {
+		const { tool } = setup();
+		expect(() => jsonObjectSchema(tool('create_widget').parameters)).not.toThrow();
 	});
 });

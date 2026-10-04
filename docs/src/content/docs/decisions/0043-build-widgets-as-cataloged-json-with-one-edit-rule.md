@@ -96,6 +96,7 @@ or a `WidgetDraft`:
 | ---------------------- | --------------------------------------------------------------- |
 | A bound widget control | a `data` change, from the state store bridge                    |
 | The "Widget" command   | a `WidgetDraft`, from a template                                |
+| `create_widget`        | a `WidgetDraft`, from the tool arguments                        |
 | `edit_widget_data`     | a `data` edit, from the tool arguments                          |
 | `edit_widget_layout`   | a `layout` edit, from the tool arguments                        |
 | Offline replay         | the queued `createWidget` or `editWidget` command, unchanged    |
@@ -231,8 +232,8 @@ values.
 
 ### The controller has one edit operation
 
-`WidgetsController` exposes `synchronize`, `get`, `list`, `create`, `edit(actor, input)`,
-`archive`, `restore` and `delete`. It
+`WidgetsController` exposes `synchronize`, `get`, `catalog`, `list`, `create`,
+`edit(actor, input)`, `archive`, `restore` and `delete`. It
 does not have one method for each kind of change. Workspace commands and agent tools map onto
 these operations.
 
@@ -240,15 +241,28 @@ Agent tools stay separate for data and layout, so approval and evaluation can te
 0003 and 0023). Both are mutations and wait for approval when the run requires it. Strict tool
 schemas cannot describe an arbitrary JSON value: Zod emits `oneOf` and an open
 `additionalProperties`, and the tool boundary keeps only top-level properties. So the patch crosses
-the tool boundary as a JSON string and is parsed there into a `JsonPatch`. The diagram tools take
-their source as a string for the same reason.
+the tool boundary as a JSON string and is parsed there into a `JsonPatch`. `create_widget` takes
+its layout and data the same way. The diagram tools take their source as a string for the same
+reason.
+
+The agent reads the catalog on demand with `read_widget_catalog` (ADR 0022). Its text comes from
+`widgetCatalogPrompt`, generated from `widgetCatalog`, so it cannot describe a component, prop,
+expression or action the rule would refuse. json-render's own `catalog.prompt()` is not used,
+because it describes custom actions, `watch` and other features this catalog leaves out.
+
+`create_widget` saves the widget in a project and returns the line that embeds it,
+`:::widgetNode {widgetId="…"} :::`, with a typed next action to insert it with `edit_note`
+(ADR 0035). `edit_note` keeps the note's own review. Creating and embedding stay two tools, so
+each keeps one guard. A live run of the effect eval showed why the next action is needed: without
+it, the agent created the widget and stopped. `list_widgets` finds a widget by title in a project
+when no note names its id.
+
+The approval card renders a widget proposal with the same rule: a created widget as `createWidget`
+would save it, and an edited one before and after `applyWidgetEdit`. A proposal the rule would
+refuse, including one made against an older revision, shows why before anyone approves it.
 
 ### What still needs a decision
 
-- **Agent creation and the catalog prompt.** `create_widget` and a read tool for
-  `catalog.prompt()` (ADR 0022) are not built.
-- **Approval preview.** The approval card shows the generic tool arguments. It does not yet render
-  the widget as `applyWidgetEdit` would leave it.
 - **Layout history.** Whether layout revisions are kept for restore (ADR 0011). Data history is
   not kept.
 
@@ -282,8 +296,13 @@ their source as a string for the same reason.
   view, and the unsupported-element placeholder. `edits.spec.ts` checks that every template is a
   valid draft.
 - `src/lib/server/factories/agent/widget-tools.spec.ts` checks that `edit_widget_data` saves
-  through the shared rule, that rejected edits name the problem, and that the tool parameters
-  convert to strict JSON Schema.
+  through the shared rule, that `create_widget` returns its embed line, that rejected edits and
+  layouts name the problem, that `read_widget_catalog` returns the catalog, and that the tool
+  parameters convert to strict JSON Schema.
+- `src/lib/components/chat/actions/widget-approval-preview.spec.ts` checks the approval preview:
+  before and after, a stale edit, a created widget, and a widget not yet on the device.
+- `src/evals/cases/effects.ts` `effect-widget-created-then-ticked` asks the agent to create and
+  embed a checklist, then tick one item, and checks the saved widget and note.
 - `src/lib/services/widgets/trash.spec.ts` checks the trash rules, the lifecycle cases in
   `widget-mutations.contract.spec.ts` check them on Postgres, and
   `src/lib/controllers/workspace/archived-collections.spec.ts` checks that an archived project

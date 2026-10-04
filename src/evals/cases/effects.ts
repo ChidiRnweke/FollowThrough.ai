@@ -14,6 +14,7 @@ import {
 	expectSuggestionPending,
 	expectTodoCreated,
 	expectTodoStatus,
+	expectWidgetTicked,
 	type EffectVerdict
 } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
@@ -365,6 +366,48 @@ export const effectCases: readonly EvalCase[] = [
 			});
 			annotate(verdict);
 			expect(result.status).toBe('completed');
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
+	},
+	{
+		id: 'effect-widget-created-then-ticked',
+		name: 'a widget made in a note keeps the tick the agent sets',
+		splits: [ARCHETYPES.effect],
+		input: {
+			setup:
+				'In my Background note, add a checklist widget titled "Relocation" with three items: book movers, update address, cancel lease.',
+			prompt: 'Tick "update address" on the Relocation checklist.'
+		},
+		expected: { widget: 'Relocation', ticked: 'update address' },
+		metadata: {
+			layer: 'end-state',
+			note: 'Two turns: create and embed the widget, then change only its data (ADR 0043).'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const noteId = workspace.noteIds.get('Background');
+			if (!noteId) throw new Error('The persona fixture must seed a Background note');
+			await runCase(lab, workspace.actor, {
+				prompt: this.input.setup as string,
+				mode: 'auto_accept'
+			});
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+
+			const verdict = await expectWidgetTicked(lab, workspace.actor, {
+				titleFragment: 'Relocation',
+				noteId,
+				ticked: 'update address'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				arguments: findCall(result, 'edit_widget_data')?.arguments,
+				effect: verdict.explanation
+			});
+			annotate(verdict);
 			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
 	}

@@ -2,6 +2,7 @@ import { StaleRevisionError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { applyWidgetChange, applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
 import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
+import { widgetCatalogPrompt } from '$lib/services/widgets/catalog-prompt';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -32,6 +33,8 @@ import type {
 export interface WidgetsController {
 	synchronize(actor: ActorContext, input: WidgetMutationRequest): Promise<WorkspaceMutationResult>;
 	get(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	/** The catalog a layout must fit, written for an agent that is about to write one. */
+	catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }>;
 	list(
 		actor: ActorContext,
 		input: { readonly projectId: ProjectId }
@@ -127,6 +130,11 @@ export class Widgets implements WidgetsController {
 		input: { readonly widgetId: WidgetId }
 	): Promise<{ widget: Widget }> {
 		return { widget: await this.dependencies.widgetReader.get(actor, input.widgetId) };
+	}
+
+	async catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }> {
+		void actor;
+		return { catalogVersion: widgetCatalog.version, reference: widgetCatalogPrompt(widgetCatalog) };
 	}
 
 	async list(

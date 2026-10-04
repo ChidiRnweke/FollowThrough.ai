@@ -63,13 +63,6 @@ it after `0051`.
 
 Each item is one PR. Each revises ADR 0043 and adds its specs to the ADR's Evidence section.
 
-1. **Agent creation.** Add `create_widget` (a `WidgetDraft` sent as a JSON string, the same as the
-   patch) and `read_widget_catalog`, which returns `catalog.prompt()` (ADR 0022). Add an evaluation
-   case that creates a widget and then changes only its data (ADR 0023).
-2. **Approval preview.** Render the widget as `applyWidgetEdit` would leave it in
-   `src/lib/components/chat/actions/tool-approval-preview.ts`, instead of the generic arguments.
 3. **Search and export.** A searchable text for the knowledge index (ADRs 0019 and 0020), and a
    static form for note export (`src/lib/components/notes/export/render-diagrams.ts` is the
    precedent).
-4. **Housekeeping.** `TOOL_DESCRIPTIONS` classifies `create_diagram` as `read`, but
-   `agentToolCoverage` classifies it as `mutation`. Resolve it before more tools copy the pattern.
