@@ -1,56 +1,65 @@
 # Unit tests
 
-**What:** Calculations, permissions, deadlines, and algorithms.
-**When:** A rule changes, a boundary changes the answer, or a bug needs a regression test.
-**Type:** Unit. Call the real functions/classes; keep their helper code real.
+Use unit tests for rules you can check by calling your code directly: prices, permissions,
+and eligibility. Keep real helper code. Test the different answers a rule can produce,
+including values just below, at, and above a cutoff.
 
-## An invitation expires at its deadline
+## Example: delivery is free for orders of €50 or more
 
-An invitation expiring at 100 is valid at 99, but invalid at 100 and 101.
-Use those known answers as expected values. Asking the same function for both the actual
-and expected answer cannot detect an incorrect deadline rule.
+Delivery costs €5 for an order below €50. At €50 and above, it costs €0.
+Check the exact fee for €49.99, €50.00, and €50.01. No database, browser, or server is needed
+to check this calculation.
 
-### Bad — derives the expected answer from the implementation
+### Bad: checks that the price is valid, but not that it is correct
 
 ```python
 # file: test_unit_bad.py
-import pytest
-from invitation_subject import can_accept
+from decimal import Decimal
+from delivery import delivery_fee
 
-@pytest.mark.parametrize("now", [99, 100, 101])
-def test_invitation_acceptance(now: int) -> None:
-    actual = can_accept(100, now)
-    expected = can_accept(100, now)
-    assert actual == expected
+def test_delivery_fee() -> None:
+    fee = delivery_fee(order_total=Decimal("50.00"))
+    assert fee >= Decimal("0.00")
 ```
 
-Changing `<` to `<=` makes acceptance at 100 wrong, but both sides still return `True`.
+This passes if the customer is incorrectly charged €5: €5 is also non-negative.
+As the only test for free delivery, it misses the requirement.
 
-### Solution — explicit boundary cases
+### Fix: check the price the customer should pay
 
 ```python
 # file: test_unit_good.py
-import pytest
-from invitation_subject import can_accept
+from decimal import Decimal
+from delivery import delivery_fee
 
-@pytest.mark.parametrize(
-    ("now", "expected"), [(99, True), (100, False), (101, False)],
-    ids=["before-expiry", "at-expiry", "after-expiry"],
-)
-def test_invitation_acceptance(now: int, expected: bool) -> None:
-    assert can_accept(expires_at=100, now=now) is expected
+def test_order_below_fifty_euros_pays_five_euros_delivery() -> None:
+    fee = delivery_fee(order_total=Decimal("49.99"))
+    assert fee == Decimal("5.00")
+
+def test_order_of_exactly_fifty_euros_gets_free_delivery() -> None:
+    fee = delivery_fee(order_total=Decimal("50.00"))
+    assert fee == Decimal("0.00")
+
+def test_order_above_fifty_euros_gets_free_delivery() -> None:
+    fee = delivery_fee(order_total=Decimal("50.01"))
+    assert fee == Decimal("0.00")
 ```
 
-The deadline row expects `False`, so that change fails. Use explicit rows when setup and
-assertions are the same; give different stories separate tests. Simple getters need no
-separate test unless they implement a rule people depend on.
+The €50 test catches accidentally requiring an order to be _more than_ €50.
+The other tests check both sides of the cutoff. The expected prices come from the delivery
+policy above; calculating them with `delivery_fee` would repeat any bug in that function.
 
 ## Runnable setup
 
-Use pytest. Copy the labelled files into one folder. In an application, import its actual rule.
+Run these files with pytest. Amounts are euros; `Decimal` avoids floating-point rounding.
+In a project, import its actual delivery calculation instead of this example implementation.
 
 ```python
-# file: invitation_subject.py
-def can_accept(expires_at: int, now: int) -> bool:
-    return now < expires_at
+# file: delivery.py
+from decimal import Decimal
+
+def delivery_fee(order_total: Decimal) -> Decimal:
+    if order_total >= Decimal("50.00"):
+        return Decimal("0.00")
+    return Decimal("5.00")
 ```
