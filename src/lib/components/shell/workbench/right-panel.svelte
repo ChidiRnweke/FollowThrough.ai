@@ -123,7 +123,7 @@
 		aria-hidden={!open}
 		inert={!open}
 	>
-		<div class="flex h-full w-96 shrink-0 flex-col">
+		<div class="flex min-h-0 w-96 shrink-0 flex-col">
 			<header class="flex h-12 shrink-0 items-center justify-between px-4">
 				<h2 class="truncate text-sm font-medium">{headings[renderedMode]}</h2>
 				<div class="flex items-center gap-1">
@@ -148,7 +148,11 @@
 			<Separator />
 			<!-- `safe-panel-bottom` matches the mobile sheet and the full-page route, which
 			     both already have it; without it the composer sat flush on the panel edge. -->
-			<div class="safe-panel-bottom min-h-0 flex-1 overflow-hidden px-4 pt-4">
+			<div
+				class="safe-panel-bottom min-h-0 flex-1 px-4 pt-4 {renderedMode === 'chat'
+					? 'flex flex-col overflow-clip'
+					: 'overflow-hidden'}"
+			>
 				<!--
 					The boundary starts here, below the header: a panel that fails must
 					still be closable, so the close button above stays outside it.
@@ -246,7 +250,7 @@
 			</Sheet.Header>
 			<div
 				class="min-h-0 flex-1 p-4 {renderedMode === 'chat'
-					? 'safe-panel-bottom overflow-hidden'
+					? 'safe-panel-bottom flex flex-col overflow-clip'
 					: 'overflow-y-auto'}"
 			>
 				<ErrorBoundary label="the {landmarkTitles[renderedMode].toLowerCase()} panel">

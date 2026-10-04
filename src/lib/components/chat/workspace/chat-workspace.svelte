@@ -81,7 +81,9 @@
 			</Breadcrumb.List>
 		</Breadcrumb.Root>
 	</header>
-	<div class="safe-panel-bottom mx-auto min-h-0 w-full max-w-4xl flex-1 px-4 pt-4 md:px-8">
+	<div
+		class="safe-panel-bottom mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col overflow-clip px-4 pt-4 md:px-8"
+	>
 		<ChatPanel
 			{chat}
 			{shell}

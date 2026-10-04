@@ -697,7 +697,9 @@
 	}
 </script>
 
-<div class="flex h-full min-h-0 flex-col">
+<!-- The host supplies the remaining height through flex layout. This surface must
+     not become a second scroll container when the transcript or draft changes. -->
+<div class="flex min-h-0 flex-1 flex-col overflow-clip">
 	{#if !agentAvailable}
 		<div class="mb-4 rounded-md border border-border bg-muted/50 p-3 text-sm" role="status">
 			Agent chat is disabled. Configure <code class="text-xs">OPENROUTER_API_KEY</code> to enable it.
