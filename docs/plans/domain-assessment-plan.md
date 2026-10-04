@@ -77,7 +77,7 @@ missing save consequences and duplicated origin/placement implementations.
 8. Update the workflow and concept ledgers incrementally so another session can continue without this chat.
 
 Prepend `/home/chidi/.nvm/versions/node/v22.22.0/bin` to PATH for pnpm. Link/copy the local environment
-into a fresh worktree without committing secrets. Follow project fakes/one-expect conventions and use
+into a fresh worktree without committing secrets. Follow project fake and behavior-focused test conventions and use
 the drafting-prs skill. Visible changes need actual matched before/after evidence.
 
 ## Prioritized implementation slices

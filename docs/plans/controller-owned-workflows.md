@@ -738,5 +738,5 @@ for entry paths, preserved guarantees and test decisions.
 
 Tests describe observable behavior and transactional consequences. Do not preserve tests that
 only assert a moved class exists. Use shared in-memory fakes and real PostgreSQL contracts.
-Exactly one assertion per test. Required model schemas must still be exercised with real
+Test one behavior and all its relevant outcomes together. Required model schemas must still be exercised with real
 producer output; moving a wrapper must not weaken boundary validation.

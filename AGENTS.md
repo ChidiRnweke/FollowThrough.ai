@@ -275,7 +275,6 @@ Its references are portable. Apply this repository's architecture and enforcemen
 
 - Test one meaningful behavior and its relevant outcomes. Several assertions can describe one
   behavior; splitting its outcomes merely to count assertions loses the scenario's context.
-  Read the current enforcement note below before changing assertion structure.
 - Establish expected results independently of the implementation. Use requirements, accepted
   decisions, and confirmed regressions. Do not recompute expectations with the code under test.
 - Keep useful private in-memory collaborators real. Use typed doubles only when needed. Reuse
@@ -297,23 +296,14 @@ Its references are portable. Apply this repository's architecture and enforcemen
   contracts live under `tests/integration/<capability>`; end-to-end scenarios live under
   `tests/e2e`. Do not create a second test tree to match a generic skill example.
 
-### Current enforcement and follow-up
+### Test enforcement
 
-`scripts/audit-tests.ts` still enforces exactly one counted `expect`, `expect.element`, or
-`expect.poll` in each non-E2E test declaration it audits. Its assertion baseline is zero.
-This is a current checker constraint, not a test-quality principle. The checker also bans
-`vi`/`jest` mocking APIs, checks typed fake declarations and dependency casts, restricts
-`toHaveBeenCalled*` assertions in server controller/service specs, and rejects unexplained skips.
+`scripts/audit-tests.ts` rejects assertion-free non-E2E tests. Related assertions belong in
+one behavior test; there is no assertion-count ceiling in this audit or the pinned Chisel
+checker. Vitest also requires assertions at runtime. Do not split outcomes just to count
+assertions, hide assertions in helpers, or combine unrelated scenarios.
 
-The testing guidance permits several related assertions, but multi-assertion tests remain
-blocked until the checker is updated in a separate task. Keep the checks passing. Do not hide
-assertions in helpers, pack unrelated claims together, or weaken a checker to evade this conflict.
-A natural comparison of one cohesive result is valid; it is not a requirement to compress every
-scenario into one expression. Typed recorders can express external effects through recorded
-values without mocking APIs.
-
-The follow-up must align the assertion audit with behavior-focused review and distinguish
-external contracts from internal interaction checks. Preserve typed dependencies, independent
-state, and explained skips. Confirm Chisel's active test rules as part of that work; an update
-to one checker must not silently contradict another. Checker alignment and test migration are
-separate work.
+The checker bans `vi`/`jest` mocking APIs, checks typed fake declarations and dependency casts,
+restricts `toHaveBeenCalled*` assertions in server controller/service specs, and rejects
+unexplained skips. Typed recorders can verify external effects through recorded values.
+Keep architectural checks, independent expected results, and valid fixtures intact.
