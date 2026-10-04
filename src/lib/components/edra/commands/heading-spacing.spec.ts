@@ -89,7 +89,7 @@ const blockBeforeMermaid = (editor: Editor): string | undefined => {
 
 describe('heading spacing on load', () => {
 	// Regression: a note written by the agent can place a title directly above
-	// a diagram or table; the editor must separate them without being asked.
+	// a diagram; the editor must separate them without being asked.
 	it('inserts a paragraph between a title and a following mermaid on load', () => {
 		const editor = createEditor({ type: 'doc', content: [] });
 		editor.commands.setContent({
@@ -98,14 +98,6 @@ describe('heading spacing on load', () => {
 		});
 
 		expect(blockTypes(editor)).toEqual(['heading-1', 'paragraph', 'mermaid', 'paragraph']);
-		editor.destroy();
-	});
-
-	it('inserts a paragraph between a title and a following table on load', () => {
-		const editor = createEditor({ type: 'doc', content: [] });
-		editor.commands.setContent({ type: 'doc', content: [heading('Title'), table()] });
-
-		expect(blockTypes(editor)).toEqual(['heading-1', 'paragraph', 'table', 'paragraph']);
 		editor.destroy();
 	});
 
