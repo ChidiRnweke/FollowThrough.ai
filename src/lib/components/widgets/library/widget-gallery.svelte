@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { Widget } from '$lib/models/widgets';
 	import type { Project, ProjectId } from '$lib/models/projects';
@@ -73,6 +74,21 @@
 
 	const open = (widget: Widget) => void workbench.openTab(widgetTab(widget.id));
 
+	/** A widget needs no note: start a blank one here and open it to be edited. */
+	async function startWidget(): Promise<{ kind: 'opened' } | { kind: 'failure'; message: string }> {
+		const projectId = data.selectedProjectId;
+		if (!projectId) return { kind: 'failure', message: 'Select a project first' };
+		try {
+			const widgetId = await widgetEdits.createFromTemplate({ template: 'blank', projectId });
+			await workbench.openTab(widgetTab(widgetId));
+			return { kind: 'opened' };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'The widget could not be created';
+			toast.error(message);
+			return { kind: 'failure', message };
+		}
+	}
+
 	async function confirmRemove(): Promise<void> {
 		const target = removeTarget;
 		if (!target || removing) return;
@@ -100,6 +116,12 @@
 					</Breadcrumb.Item>
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
+		{/if}
+	{/snippet}
+
+	{#snippet actions()}
+		{#if data.selectedProjectId}
+			<Button onclick={() => void startWidget()}>New widget</Button>
 		{/if}
 	{/snippet}
 

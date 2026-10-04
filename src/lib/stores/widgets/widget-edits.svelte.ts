@@ -58,7 +58,8 @@ class WidgetEdits {
 	async createFromTemplate(input: {
 		readonly template: WidgetTemplateName;
 		readonly projectId: ProjectId;
-		readonly sourceNoteId: NoteId;
+		/** Absent for a widget started in the gallery rather than in a note. */
+		readonly sourceNoteId?: NoteId;
 	}): Promise<WidgetId> {
 		const session = await workspaceSession.start();
 		const id = crypto.randomUUID() as WidgetId;
@@ -66,7 +67,7 @@ class WidgetEdits {
 			kind: 'createWidget',
 			id,
 			projectId: input.projectId,
-			sourceNoteId: input.sourceNoteId,
+			...(input.sourceNoteId ? { sourceNoteId: input.sourceNoteId } : {}),
 			draft: widgetTemplates[input.template]
 		});
 		return id;

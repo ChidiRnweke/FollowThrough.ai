@@ -71,8 +71,12 @@ What a change does is one discriminated union. `JsonPatch` is an RFC 6902 operat
 type WidgetChange =
 	| { readonly kind: 'data'; readonly patch: JsonPatch }
 	| { readonly kind: 'layout'; readonly patch: JsonPatch }
+	| { readonly kind: 'parts'; readonly layout: JsonPatch; readonly data: JsonPatch }
 	| { readonly kind: 'rename'; readonly title: string };
 ```
+
+`parts` is a layout and a data change that only make sense together, such as a new list and the
+array it shows. It is checked once, after both patches, so neither half has to be valid alone.
 
 A change needs a guard against writing over something the sender did not see, and each path has
 exactly one:
@@ -95,7 +99,7 @@ or a `WidgetDraft`:
 | `edit_widget_data`     | a `data` edit, from the tool arguments                          |
 | `edit_widget_layout`   | a `layout` edit, from the tool arguments                        |
 | Offline replay         | the queued `createWidget` or `editWidget` command, unchanged    |
-| The manual JSON editor | `data` or `layout`, from a diff of the edited value (not built) |
+| The JSON editor        | changes from `widgetChangesBetween`, a diff of the edited value |
 
 No source validates, merges or saves a widget by itself.
 
@@ -170,6 +174,15 @@ A template is a `WidgetDraft` in `widgetTemplates`: a checklist, a progress trac
 log and a status board. The "Widget" command opens a picker that previews each template as
 `createWidget` would save it, and also offers the project's existing widgets, because many notes
 can show one widget.
+
+### People edit a widget as JSON
+
+The widget pane has an Edit mode with a title, the layout and the data as JSON. Typed text is
+parsed at the browser edge (`src/lib/client/widgets/json-text.ts`). `widgetChangesBetween` turns
+the edited content into the smallest changes, and the preview is those changes applied by
+`applyWidgetChanges`, the same rule the server applies. The problems are listed with their JSON
+Pointer paths, and Apply stays off while there are any. A widget needs no note: the gallery
+starts a blank one.
 
 ### The view turns control changes into data changes
 
@@ -280,4 +293,8 @@ their source as a string for the same reason.
   the agent surface.
 - `tests/e2e/widgets.e2e.ts` creates a widget from a note, ticks it, reloads, and edits it in its
   tab. A second case moves it to the trash from the gallery, sees the note show it as trashed, and
-  restores it. A third inserts a status board from the picker and saves a chosen status.
+  restores it. A third inserts a status board from the picker and saves a chosen status. A fourth
+  starts a blank widget in the gallery, reshapes it in the JSON editor, and keeps it.
+- `src/lib/components/widgets/widget-json-editor.svelte.spec.ts` and
+  `src/lib/client/widgets/json-text.spec.ts` check the editor's problems and the changes it
+  applies.

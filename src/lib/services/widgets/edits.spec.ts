@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { widgetCatalog, widgetTemplates, type WidgetEdit } from '$lib/models/widgets';
 import {
 	applyWidgetChange,
+	applyWidgetChanges,
 	applyWidgetEdit,
 	createWidget,
 	diffWidgetData,
-	rebaseWidgetParts
+	rebaseWidgetParts,
+	widgetChangesBetween
 } from './edits';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -294,5 +296,50 @@ describe('templates and catalog version 2', () => {
 				later
 			).kind
 		).toBe('invalid');
+	});
+});
+
+describe('changes from edited content', () => {
+	const withList = {
+		title: 'Checklist',
+		layout: {
+			...widgetTemplates.checklist.layout,
+			elements: {
+				...widgetTemplates.checklist.layout.elements,
+				card: { ...widgetTemplates.checklist.layout.elements.card, children: ['items', 'notes'] },
+				notes: {
+					type: 'Stack',
+					props: {},
+					repeat: { statePath: '/notes', key: 'id' },
+					children: ['note']
+				},
+				note: { type: 'Text', props: { text: { $item: 'text' } }, children: [] }
+			}
+		},
+		data: { ...widgetTemplates.checklist.data, notes: [{ id: 'n1', text: 'Remember' }] }
+	};
+	it('sends a new list and its array as one combined change', () => {
+		expect(widgetChangesBetween(widgetBuilder(), withList).map((change) => change.kind)).toEqual([
+			'parts'
+		]);
+	});
+	it('applies a combined change that is only valid as a pair', () => {
+		expect(
+			applyWidgetChanges(
+				widgetBuilder(),
+				widgetChangesBetween(widgetBuilder(), withList),
+				widgetCatalog,
+				later
+			).kind
+		).toBe('applied');
+	});
+	it('sends only a rename when only the title changed', () => {
+		expect(
+			widgetChangesBetween(widgetBuilder(), {
+				title: ' Launch ',
+				layout: widgetTemplates.checklist.layout,
+				data: widgetTemplates.checklist.data
+			})
+		).toEqual([{ kind: 'rename', title: 'Launch' }]);
 	});
 });

@@ -153,6 +153,9 @@ export type WidgetDraft = z.infer<typeof widgetDraftSchema>;
 export const widgetChangeSchema = z.discriminatedUnion('kind', [
 	z.strictObject({ kind: z.literal('data'), patch: jsonPatchSchema }),
 	z.strictObject({ kind: z.literal('layout'), patch: jsonPatchSchema }),
+	// Layout and data that only make sense together, such as a new list and the array it shows.
+	// Checked once, after both patches, so neither half has to be valid on its own.
+	z.strictObject({ kind: z.literal('parts'), layout: jsonPatchSchema, data: jsonPatchSchema }),
 	z.strictObject({ kind: z.literal('rename'), title: widgetTitleSchema })
 ]);
 
@@ -494,6 +497,17 @@ export const widgetTemplates = {
 				{ id: 'launch', name: 'Launch', status: 'blocked' }
 			]
 		}
+	},
+	blank: {
+		title: 'New widget',
+		layout: {
+			root: 'card',
+			elements: {
+				card: { type: 'Card', props: { title: { $state: '/title' } }, children: ['text'] },
+				text: { type: 'Text', props: { text: { $state: '/text' }, tone: 'muted' }, children: [] }
+			}
+		},
+		data: { title: 'New widget', text: 'Edit this widget to choose what it shows.' }
 	}
 } as const satisfies Record<string, WidgetDraft>;
 

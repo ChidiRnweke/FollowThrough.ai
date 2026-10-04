@@ -120,3 +120,45 @@ test('a status board from the picker saves a chosen status and shows its flag', 
 	await page.reload();
 	await expect(page.getByText('Needs attention')).toHaveCount(2);
 });
+
+test('a blank widget started in the gallery is reshaped in the JSON editor and kept', async ({
+	page
+}) => {
+	await page.goto('/today');
+	await page.getByRole('link', { name: 'Inbox', exact: true }).first().click();
+	await page.getByRole('link', { name: 'Widgets' }).click();
+	const created = delivered(page);
+	await page.getByRole('button', { name: 'New widget', exact: true }).click();
+	await created;
+	await expect(page.locator('[data-widget-pane]')).toBeVisible();
+
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
+	await page.getByLabel('Title', { exact: true }).fill('Release notes');
+	const layout = JSON.parse(await page.getByLabel('Layout', { exact: true }).inputValue());
+	layout.elements.card.children = ['text', 'items'];
+	layout.elements.items = {
+		type: 'Stack',
+		props: {},
+		repeat: { statePath: '/items', key: 'id' },
+		children: ['item']
+	};
+	layout.elements.item = {
+		type: 'Checkbox',
+		props: { label: { $item: 'label' }, checked: { $bindItem: 'done' } },
+		children: []
+	};
+	await page.getByLabel('Layout', { exact: true }).fill(JSON.stringify(layout));
+	const data = JSON.parse(await page.getByLabel('Data', { exact: true }).inputValue());
+	await page
+		.getByLabel('Data', { exact: true })
+		.fill(
+			JSON.stringify({ ...data, items: [{ id: 'a', label: 'Write the summary', done: false }] })
+		);
+	const applied = delivered(page);
+	await page.getByRole('button', { name: 'Apply' }).click();
+	await applied;
+	await saved(page);
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'Release notes' })).toBeVisible();
+	await expect(checkboxes(page)).toHaveCount(1);
+});

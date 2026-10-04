@@ -301,6 +301,24 @@ export const applyWidgetChange = (
 				catalog
 			);
 		}
+		case 'parts': {
+			const data = patchPart(widget.data, change.data, 'data', widgetDataSchema);
+			if (data.kind === 'invalid') return data;
+			const layout = patchPart(widget.layout, change.layout, 'layout', widgetLayoutSchema);
+			if (layout.kind === 'invalid') return layout;
+			return checked(
+				{
+					...widget,
+					data: data.value,
+					dataRevision: widget.dataRevision + 1,
+					layout: layout.value,
+					layoutRevision: widget.layoutRevision + 1,
+					catalogVersion: catalog.version,
+					updatedAt: now
+				},
+				catalog
+			);
+		}
 		case 'rename':
 			return { kind: 'applied', widget: { ...widget, title: change.title.trim(), updatedAt: now } };
 	}
@@ -420,3 +438,43 @@ export const rebaseWidgetParts = (
 		return { data: merged.value, dataRevision, layoutRevision, overlaps: false };
 	return { data: local.data, dataRevision, layoutRevision, overlaps: true };
 };
+
+/** A widget's title, layout and data as someone edited them, before they become changes. */
+export interface WidgetContent {
+	readonly title: string;
+	readonly layout: WidgetLayout;
+	readonly data: WidgetData;
+}
+
+/**
+ * The changes that turn `widget` into `next`, smallest first: a rename, and one layout, data or
+ * combined change. Layout and data that both changed go as one `parts` change, because a new
+ * layout can need the new data (a list and its array) and only the pair is valid.
+ */
+export const widgetChangesBetween = (
+	widget: Widget,
+	next: WidgetContent
+): readonly WidgetChange[] => {
+	const title = next.title.trim();
+	const layout = diffJsonObject(widget.layout, next.layout);
+	const data = diffWidgetData(widget.data, next.data);
+	const rename: readonly WidgetChange[] =
+		title && title !== widget.title ? [{ kind: 'rename', title }] : [];
+	if (layout.length > 0 && data.length > 0) return [...rename, { kind: 'parts', layout, data }];
+	if (layout.length > 0) return [...rename, { kind: 'layout', patch: layout }];
+	if (data.length > 0) return [...rename, { kind: 'data', patch: data }];
+	return rename;
+};
+
+/** The widget after a list of changes, or the first change that is refused. */
+export const applyWidgetChanges = (
+	widget: Widget,
+	changes: readonly WidgetChange[],
+	catalog: WidgetCatalog,
+	now: DateTime
+): WidgetEditResult =>
+	changes.reduce<WidgetEditResult>(
+		(result, change) =>
+			result.kind === 'applied' ? applyWidgetChange(result.widget, change, catalog, now) : result,
+		{ kind: 'applied', widget }
+	);
