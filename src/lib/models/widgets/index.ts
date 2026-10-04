@@ -993,6 +993,273 @@ export const widgetTemplates = {
 			]
 		}
 	},
+	loan: {
+		title: 'Loan calculator',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: {
+						title: { $state: '/title' },
+						description: 'A fixed-rate loan repaid in equal monthly payments.'
+					},
+					children: ['amount', 'terms', 'results', 'chart']
+				},
+				amount: {
+					type: 'NumberInput',
+					props: { label: 'Loan amount', value: { $bindState: '/principal' }, min: 0, step: 1000 },
+					children: []
+				},
+				terms: {
+					type: 'Grid',
+					props: { columns: 2, gap: 'lg' },
+					children: ['rate', 'years']
+				},
+				rate: {
+					type: 'Slider',
+					props: {
+						label: 'Yearly interest',
+						value: { $bindState: '/rate' },
+						min: 0,
+						max: 12,
+						step: 0.05,
+						suffix: '%'
+					},
+					children: []
+				},
+				years: {
+					type: 'Slider',
+					props: { label: 'Years', value: { $bindState: '/years' }, min: 1, max: 40, step: 1 },
+					children: []
+				},
+				results: {
+					type: 'Grid',
+					props: { columns: 3, gap: 'md' },
+					children: ['payment', 'interest', 'total']
+				},
+				payment: {
+					type: 'Metric',
+					props: { label: 'Monthly payment', value: { $state: '/derived/paymentText' } },
+					children: []
+				},
+				interest: {
+					type: 'Metric',
+					props: { label: 'Total interest', value: { $state: '/derived/interestText' } },
+					children: []
+				},
+				total: {
+					type: 'Metric',
+					props: { label: 'Total repaid', value: { $state: '/derived/totalText' } },
+					children: []
+				},
+				chart: {
+					type: 'LineChart',
+					props: {
+						title: 'Balance left by year',
+						rows: { $state: '/derived/schedule' },
+						x: 'year',
+						series: [{ key: 'balance', label: 'Balance left' }],
+						height: 'sm'
+					},
+					children: []
+				}
+			},
+			derived: {
+				monthlyRate: '@/rate / 1200',
+				months: '@/years * 12',
+				payment:
+					'if(@/derived/monthlyRate == 0, @/principal / @/derived/months, @/principal * @/derived/monthlyRate / (1 - (1 + @/derived/monthlyRate) ^ -@/derived/months))',
+				paymentText: 'format(@/derived/payment, 2)',
+				interestText: 'format(@/derived/payment * @/derived/months - @/principal, 0)',
+				totalText: 'format(@/derived/payment * @/derived/months, 0)',
+				schedule:
+					'series(0, @/years, { year: i, balance: round(max(0, if(@/derived/monthlyRate == 0, @/principal - @/derived/payment * 12 * i, @/principal * (1 + @/derived/monthlyRate) ^ (12 * i) - @/derived/payment * ((1 + @/derived/monthlyRate) ^ (12 * i) - 1) / @/derived/monthlyRate))) })'
+			}
+		},
+		data: { title: 'Loan calculator', principal: 250000, rate: 4, years: 25 }
+	},
+	habits: {
+		title: 'Habit tracker',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: { title: { $state: '/title' } },
+					children: ['week', 'progress', 'table', 'chart']
+				},
+				week: {
+					type: 'Metric',
+					props: {
+						label: 'This week',
+						value: { $template: '${/derived/done} of ${/derived/possible} check-ins' }
+					},
+					children: []
+				},
+				progress: {
+					type: 'Progress',
+					props: { value: { $state: '/derived/done' }, max: { $state: '/derived/possibleOrOne' } },
+					children: []
+				},
+				table: {
+					type: 'DataTable',
+					props: {
+						rows: { $bindState: '/habits' },
+						columns: [
+							{ key: 'name', label: 'Habit', kind: 'text' },
+							{ key: 'mon', label: 'Mon', kind: 'checkbox' },
+							{ key: 'tue', label: 'Tue', kind: 'checkbox' },
+							{ key: 'wed', label: 'Wed', kind: 'checkbox' },
+							{ key: 'thu', label: 'Thu', kind: 'checkbox' },
+							{ key: 'fri', label: 'Fri', kind: 'checkbox' },
+							{ key: 'sat', label: 'Sat', kind: 'checkbox' },
+							{ key: 'sun', label: 'Sun', kind: 'checkbox' }
+						],
+						addLabel: 'Add habit',
+						removable: true,
+						empty: 'No habits yet.'
+					},
+					children: []
+				},
+				chart: {
+					type: 'BarChart',
+					props: {
+						title: 'Days done',
+						rows: { $state: '/derived/perHabit' },
+						x: 'habit',
+						series: [{ key: 'days', label: 'Days' }],
+						height: 'sm'
+					},
+					children: []
+				}
+			},
+			derived: {
+				perHabit:
+					'map(@/habits, { habit: item.name, days: count(filter([item.mon, item.tue, item.wed, item.thu, item.fri, item.sat, item.sun], item)) })',
+				done: 'sum(map(@/derived/perHabit, item.days))',
+				possible: 'count(@/habits) * 7',
+				possibleOrOne: 'max(@/derived/possible, 1)'
+			}
+		},
+		data: {
+			title: 'Habit tracker',
+			habits: [
+				{
+					name: 'Write 30 minutes',
+					mon: true,
+					tue: true,
+					wed: false,
+					thu: true,
+					fri: false,
+					sat: false,
+					sun: false
+				},
+				{
+					name: 'No meetings before 10',
+					mon: true,
+					tue: false,
+					wed: true,
+					thu: true,
+					fri: true,
+					sat: false,
+					sun: false
+				}
+			]
+		}
+	},
+	decision: {
+		title: 'Decision matrix',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: {
+						title: { $state: '/title' },
+						description:
+							'Score each option from 1 to 5. Weights say how much each criterion counts.'
+					},
+					children: ['leader', 'weights', 'table', 'chart']
+				},
+				leader: {
+					type: 'Metric',
+					props: {
+						label: 'Leading option',
+						value: { $state: '/derived/leader' },
+						detail: { $template: 'Weighted score ${/derived/best}' }
+					},
+					children: []
+				},
+				weights: {
+					type: 'Grid',
+					props: { columns: 3, gap: 'lg' },
+					children: ['impactWeight', 'costWeight', 'riskWeight']
+				},
+				impactWeight: {
+					type: 'Slider',
+					props: {
+						label: 'Impact weight',
+						value: { $bindState: '/weights/impact' },
+						min: 0,
+						max: 5
+					},
+					children: []
+				},
+				costWeight: {
+					type: 'Slider',
+					props: { label: 'Cost weight', value: { $bindState: '/weights/cost' }, min: 0, max: 5 },
+					children: []
+				},
+				riskWeight: {
+					type: 'Slider',
+					props: { label: 'Risk weight', value: { $bindState: '/weights/risk' }, min: 0, max: 5 },
+					children: []
+				},
+				table: {
+					type: 'DataTable',
+					props: {
+						rows: { $bindState: '/options' },
+						columns: [
+							{ key: 'name', label: 'Option', kind: 'text' },
+							{ key: 'impact', label: 'Impact', kind: 'number' },
+							{ key: 'cost', label: 'Low cost', kind: 'number' },
+							{ key: 'risk', label: 'Low risk', kind: 'number' }
+						],
+						addLabel: 'Add option',
+						removable: true
+					},
+					children: []
+				},
+				chart: {
+					type: 'BarChart',
+					props: {
+						title: 'Weighted score',
+						rows: { $state: '/derived/scores' },
+						x: 'option',
+						series: [{ key: 'score', label: 'Score' }],
+						height: 'sm'
+					},
+					children: []
+				}
+			},
+			derived: {
+				scores:
+					'map(@/options, { option: item.name, score: item.impact * @/weights/impact + item.cost * @/weights/cost + item.risk * @/weights/risk })',
+				best: 'max(0, max(map(@/derived/scores, item.score)))',
+				leader: 'first(filter(@/derived/scores, item.score == @/derived/best)).option'
+			}
+		},
+		data: {
+			title: 'Decision matrix',
+			weights: { impact: 3, cost: 2, risk: 1 },
+			options: [
+				{ name: 'Build in house', impact: 5, cost: 2, risk: 2 },
+				{ name: 'Buy a vendor tool', impact: 3, cost: 3, risk: 4 },
+				{ name: 'Wait a quarter', impact: 1, cost: 5, risk: 5 }
+			]
+		}
+	},
 	dashboard: {
 		title: 'Project dashboard',
 		layout: {

@@ -138,9 +138,10 @@ revision, so a caller can read the widget again and retry.
 ### The catalog is the allow-list
 
 `widgetCatalog` is a versioned value in `src/lib/models/widgets/`: component names, Zod prop
-schemas, slots and descriptions. Version 2 has Stack, Card, Heading, Text, Checkbox, Progress,
-Metric, TextInput, NumberInput, Select, Table, Badge and Divider. A version only adds components,
-so every older layout stays valid. A layout can use only these components. A prop is either a literal that matches the
+schemas, slots and descriptions. Version 3 has Stack, Grid, Card, Heading, Text, Checkbox,
+Progress, Metric, TextInput, NumberInput, Slider, Select, Table, DataTable, Badge, Button,
+LineChart, AreaChart, BarChart and Divider, and adds the layout's `derived` formulas and
+`sources`. A version only adds, so every older layout stays valid. A layout can use only these components. A prop is either a literal that matches the
 component's schema or one of a fixed set of state expressions (`$state`, `$bindState`, `$item`,
 `$bindItem`, `$index`, `$template`). Element bindings may use only the json-render built-in state
 actions (`setState`, `pushState`, `removeState`, `validateForm`). `visible` takes exactly
@@ -276,7 +277,10 @@ unsupported-element placeholder covers the one expected gap.
 ### Templates are drafts, and the picker previews them as saved
 
 A template is a `WidgetDraft` in `widgetTemplates`: a checklist, a progress tracker, a decision
-log and a status board. The "Widget" command opens a picker that previews each template as
+log, a status board, a savings simulator, a loan calculator, an expense tracker, a habit
+tracker, a decision matrix and a project dashboard. The later six exist to show that the catalog
+builds small tools: each combines inputs or a table with formulas and a chart, and the
+dashboard reads workspace sources. The "Widget" command opens a picker that previews each template as
 `createWidget` would save it, and also offers the project's existing widgets, because many notes
 can show one widget.
 

@@ -146,3 +146,25 @@ describe('the savings template', () => {
 		});
 	});
 });
+
+describe('the templates', () => {
+	it('work out every formula without an issue', () => {
+		expect(
+			Object.entries(widgetTemplates).flatMap(([name, { layout, data }]) =>
+				resolveWidgetState(layout, data, { todos: [], notes: [] }).issues.map(
+					(issue) => `${name}${issue.path}: ${issue.message}`
+				)
+			)
+		).toEqual([]);
+	});
+});
+
+describe('the loan template', () => {
+	// 250,000 · r / (1 − (1 + r)^−300), r = 0.04/12
+	it('pays 250,000 at 4% over 25 years in monthly payments of 1,319.59', () => {
+		const { layout, data } = widgetTemplates.loan;
+		expect(resolveWidgetState(layout, data, {}).state.derived).toMatchObject({
+			paymentText: '1,319.59'
+		});
+	});
+});
