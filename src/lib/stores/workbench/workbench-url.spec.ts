@@ -637,16 +637,13 @@ describe('replacing one tab with another', () => {
 			DIAGRAM
 		);
 
-	it('keeps the replacement on the split side', () => {
-		expect(promoted().splitNoteId).toBe(DIAGRAM);
-	});
-
-	it('keeps the replacement in the tab position the original held', () => {
-		expect(promoted().openTabs).toEqual(['chat:x', DIAGRAM]);
-	});
-
-	it('leaves the focused tab where it was', () => {
-		expect(promoted().focusedNoteId).toBe('chat:x');
+	it('replaces the draft in place while preserving split and focus state', () => {
+		const state = promoted();
+		expect({ split: state.splitNoteId, tabs: state.openTabs, focus: state.focusedNoteId }).toEqual({
+			split: DIAGRAM,
+			tabs: ['chat:x', DIAGRAM],
+			focus: 'chat:x'
+		});
 	});
 
 	it('moves focus with the tab when the replaced one was focused', () => {

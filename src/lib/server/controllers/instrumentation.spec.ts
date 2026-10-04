@@ -232,17 +232,18 @@ describe('instrumentedController', () => {
 		expect(entries).toHaveLength(0);
 	});
 
-	test('passes synchronous methods through with their contract intact', () => {
+	test('passes synchronous methods through without logging or changing their contract', () => {
+		const entries: RecordedEntry[] = [];
 		const wrapped = instrumentedController(
 			'fake',
 			new FakeController('hello'),
 			fakeSurface,
-			recordingLogger([])
+			recordingLogger(entries)
 		);
 
 		const result = (wrapped as unknown as { freezeLike(input: string): string }).freezeLike('note');
 
-		expect(result).toBe('frozen:note');
+		expect({ result, entries }).toEqual({ result: 'frozen:note', entries: [] });
 	});
 
 	test('keeps a synchronous throw synchronous instead of becoming a rejection', () => {
@@ -254,20 +255,6 @@ describe('instrumentedController', () => {
 		);
 
 		expect(() => wrapped.syncThrower()).toThrow(ValidationError);
-	});
-
-	test('writes no log records for synchronous methods', () => {
-		const entries: RecordedEntry[] = [];
-		const wrapped = instrumentedController(
-			'fake',
-			new FakeController('hello'),
-			fakeSurface,
-			recordingLogger(entries)
-		);
-
-		(wrapped as unknown as { freezeLike(input: string): string }).freezeLike('note');
-
-		expect(entries).toHaveLength(0);
 	});
 
 	test('lets a public method use its synchronous helpers, as submit does freezeInput', async () => {

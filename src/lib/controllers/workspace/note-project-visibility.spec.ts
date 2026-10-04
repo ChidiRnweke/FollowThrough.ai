@@ -21,12 +21,12 @@ const records = (archived: boolean) =>
 			{ type: 'projects', value: archived ? { ...project, archivedAt: testNow } : project }
 		]
 	]);
-it('does not open a cached note in an archived project', () => {
-	expect(new WorkspaceViews(records(true)).note(note.id)).toBeNull();
-});
-it('preserves the stored child lifecycle when its project is archived', () => {
+it('hides an archived project note while preserving its stored child lifecycle', () => {
 	const views = new WorkspaceViews(records(true));
-	expect(views.get('notes', note.id)).toEqual(note);
+	expect({ visible: views.note(note.id), stored: views.get('notes', note.id) }).toEqual({
+		visible: null,
+		stored: note
+	});
 });
 it('opens the same cached note when its project is active again', () => {
 	expect(new WorkspaceViews(records(false)).note(note.id)?.view.note).toEqual(note);

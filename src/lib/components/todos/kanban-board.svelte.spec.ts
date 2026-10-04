@@ -59,6 +59,24 @@ describe('KanbanBoard status drops', () => {
 			onmove: (id, status) => moves.push({ id, status })
 		});
 
+		const shadow = {
+			id: SHADOW_PLACEHOLDER_ITEM_ID as TodoId,
+			view: moving,
+			[SHADOW_ITEM_MARKER_PROPERTY_NAME]: true
+		};
+		dispatchDnd('done', 'consider', {
+			items: [...done.slice(0, 5).map((item) => ({ id: item.todo.id, view: item })), shadow],
+			info: {
+				id: moving.todo.id,
+				trigger: TRIGGERS.DRAGGED_ENTERED,
+				source: SOURCES.POINTER
+			}
+		});
+		await vi.waitFor(
+			() => document.querySelector('[data-todo-status="done"]')?.children.length === 6
+		);
+		const placeholderCount = document.querySelector('[data-todo-status="done"]')?.children.length;
+
 		dispatchDnd('done', 'finalize', {
 			items: done.slice(0, 5).map((item) => ({ id: item.todo.id, view: item })),
 			info: {
@@ -68,7 +86,10 @@ describe('KanbanBoard status drops', () => {
 			}
 		});
 
-		expect(moves).toEqual([{ id: moving.todo.id, status: 'done' }]);
+		expect({ placeholderCount, moves }).toEqual({
+			placeholderCount: 6,
+			moves: [{ id: moving.todo.id, status: 'done' }]
+		});
 	});
 
 	it('commits a cross-column drop only from the target finalize event', async () => {

@@ -50,34 +50,19 @@ const countingTask = (name = 'counter'): ScheduledTask & { runs: number } => ({
 });
 
 describe('Worker scheduler', () => {
-	it('does not run a task before its first interval elapses', async () => {
-		const clock = new ManualClock();
-		const task = countingTask();
-
-		startScheduler([task], { clock, logger: silent });
-
-		expect(task.runs).toBe(0);
-	});
-
-	it('runs a task when its interval elapses', async () => {
-		const clock = new ManualClock();
-		const task = countingTask();
-		startScheduler([task], { clock, logger: silent });
-
-		await clock.advance();
-
-		expect(task.runs).toBe(1);
-	});
-
 	it('reschedules itself after each tick', async () => {
 		const clock = new ManualClock();
 		const task = countingTask();
 		startScheduler([task], { clock, logger: silent });
+		const beforeFirstTick = task.runs;
 
 		await clock.advance();
 		await clock.advance();
 
-		expect(task.runs).toBe(2);
+		expect({ beforeFirstTick, afterTwoTicks: task.runs }).toEqual({
+			beforeFirstTick: 0,
+			afterTwoTicks: 2
+		});
 	});
 
 	it('runs immediately when asked to start eagerly', async () => {

@@ -17,11 +17,12 @@ const setup = (archived: boolean) => {
 		new Map(records.map((r) => [workspaceResourceKey(workspaceRecordIdentity(r)), r]))
 	);
 };
-it('hides a cached diagram detail when its project is archived', () => {
-	expect(setup(true).diagram(diagram.id)).toBeNull();
-});
-it('keeps the archived project’s stored diagram unchanged', () => {
-	expect(setup(true).get('diagrams', diagram.id)).toEqual(diagram);
+it('hides the archived project diagram without discarding its stored record', () => {
+	const views = setup(true);
+	expect({ detail: views.diagram(diagram.id), stored: views.get('diagrams', diagram.id) }).toEqual({
+		detail: null,
+		stored: diagram
+	});
 });
 it('opens the stored diagram again when its project is active', () => {
 	expect(setup(false).diagram(diagram.id)).toEqual(diagram);

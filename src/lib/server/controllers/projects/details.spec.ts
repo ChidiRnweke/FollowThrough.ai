@@ -26,13 +26,6 @@ describe('Project detail preparation', () => {
 		const { project } = await controller.create(testActor(), { name: '  Migration  ' });
 		expect(project.name).toBe('Migration');
 	});
-
-	it('rejects a blank project name before persistence', async () => {
-		const { controller } = setup();
-		await expect(controller.create(testActor(), { name: '   ' })).rejects.toMatchObject({
-			code: 'VALIDATION'
-		});
-	});
 });
 
 it.each([

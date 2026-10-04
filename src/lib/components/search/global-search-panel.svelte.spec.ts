@@ -59,19 +59,13 @@ beforeEach(() => {
 });
 
 describe('The toolbar defines the search in two rows', () => {
-	it('has no replace toggle — the replace row is always there', async () => {
+	it('keeps the replace text field and project filter without a replace toggle', async () => {
 		const screen = await render(GlobalSearchPanel, {});
-		expect(await screen.getByRole('button', { name: 'Show replace' }).all()).toHaveLength(0);
-	});
-
-	it('reads the replace field as a text input, not a button', async () => {
-		const screen = await render(GlobalSearchPanel, {});
-		await expect.element(screen.getByPlaceholder('Replace with...')).toBeVisible();
-	});
-
-	it('keeps the project filter beside the search field', async () => {
-		const screen = await render(GlobalSearchPanel, {});
-		await expect.element(screen.getByText('All projects')).toBeVisible();
+		expect({
+			replaceField: (await screen.getByPlaceholder('Replace with...').all()).length,
+			projectFilter: (await screen.getByText('All projects').all()).length,
+			replaceToggle: (await screen.getByRole('button', { name: 'Show replace' }).all()).length
+		}).toEqual({ replaceField: 1, projectFilter: 1, replaceToggle: 0 });
 	});
 });
 
@@ -84,42 +78,29 @@ describe('Replace all asks before rewriting notes', () => {
 		const screen = await render(GlobalSearchPanel, {});
 		await expect.element(screen.getByRole('button', { name: 'Replace all' })).toBeDisabled();
 	});
-	it('counts only body matches in replacement confirmation', async () => {
+	it('opens a confirmation naming the blast radius', async () => {
 		seedResults();
 		globalSearch.hits = [{ ...hit, titleMatches: [{ start: 0, end: 4, text: 'ship' }] }];
 		const screen = await render(GlobalSearchPanel, {});
 		await screen.getByRole('button', { name: 'Replace all' }).click();
-		await expect.element(screen.getByText('Replace 2 matches across 1 note?')).toBeVisible();
-	});
-	it('opens a confirmation naming the blast radius', async () => {
-		seedResults();
-		const screen = await render(GlobalSearchPanel, {});
-		await screen.getByRole('button', { name: 'Replace all' }).click();
-		await expect.element(screen.getByText('Replace 2 matches across 1 note?')).toBeVisible();
-	});
-
-	it('does not replace on the first click', async () => {
-		seedResults();
-		const screen = await render(GlobalSearchPanel, {});
-		await screen.getByRole('button', { name: 'Replace all' }).click();
-		expect(globalSearch.lastReplace).toBeUndefined();
+		expect({
+			confirmation: (await screen.getByText('Replace 2 matches across 1 note?').all()).length,
+			replacement: globalSearch.lastReplace
+		}).toEqual({ confirmation: 1, replacement: undefined });
 	});
 });
 
 describe('Result rows', () => {
-	it('states the match count in words next to the title', async () => {
+	it('shows the match count and marks only truncated snippet windows', async () => {
 		seedResults();
 		const screen = await render(GlobalSearchPanel, {});
-		await expect.element(screen.getByText('2 matches')).toBeVisible();
+		expect({
+			count: (await screen.getByText('2 matches').all()).length,
+			truncatedButtons: (await screen.getByRole('button', { name: /…/ }).all()).length
+		}).toEqual({ count: 1, truncatedButtons: 1 });
 	});
 
-	it('marks an ellipsis only where the window was actually cut', async () => {
-		seedResults();
-		const screen = await render(GlobalSearchPanel, {});
-		expect(await screen.getByRole('button', { name: /…/ }).all()).toHaveLength(1);
-	});
-
-	it('requests a reveal for the clicked match', async () => {
+	it('reveals the selected match and preserves the complete hit for click-through', async () => {
 		seedResults();
 		const opened: [NoteSearchHit, NoteSearchContentMatch][] = [];
 		const screen = await render(GlobalSearchPanel, {
@@ -128,19 +109,13 @@ describe('Result rows', () => {
 			}
 		});
 		await screen.getByRole('button', { name: 'then ship' }).click();
-		expect(opened[0]?.[1].start).toBe(20);
-	});
-
-	it('hands the click-through the whole hit, so every match can be lit', async () => {
-		seedResults();
-		const opened: [NoteSearchHit, NoteSearchContentMatch][] = [];
-		const screen = await render(GlobalSearchPanel, {
-			onOpenMatch: (hit: NoteSearchHit, match: NoteSearchContentMatch) => {
-				opened.push([hit, match]);
-			}
+		expect({
+			selectedStart: opened[0]?.[1].start,
+			totalMatches: opened[0]?.[0].matches.length
+		}).toEqual({
+			selectedStart: 20,
+			totalMatches: 2
 		});
-		await screen.getByRole('button', { name: 'then ship' }).click();
-		expect(opened[0]?.[0].matches).toHaveLength(2);
 	});
 
 	it('jumps to the first match when the document title is clicked', async () => {

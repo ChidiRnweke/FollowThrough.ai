@@ -28,30 +28,24 @@ describe('Workbench store closing every tab', () => {
 	// `syncFromUrl` parsed that stale URL and put every tab straight back, so
 	// closing all tabs took two clicks.
 	it('leaves the strip empty when the layout syncs mid-navigation', async () => {
-		const { router, store } = setup(twoTabUrl, twoTabs, NOTE_A);
+		const { router, repository, store } = setup(twoTabUrl, twoTabs, NOTE_A);
 		router.onNavigationPending = () => store.syncFromUrl();
 		await store.closeTabs(twoTabs);
-		expect(store.openTabs).toEqual([]);
-	});
-
-	it('clears the focused note when the layout syncs mid-navigation', async () => {
-		const { router, store } = setup(twoTabUrl, twoTabs, NOTE_A);
-		router.onNavigationPending = () => store.syncFromUrl();
-		await store.closeTabs(twoTabs);
-		expect(store.focusedNoteId).toBeUndefined();
+		expect({
+			strip: store.openTabs,
+			focused: store.focusedNoteId,
+			persisted: repository.record?.openTabs
+		}).toEqual({
+			strip: [],
+			focused: undefined,
+			persisted: []
+		});
 	});
 
 	it('navigates to the overview once', async () => {
 		const { router, store } = setup(twoTabUrl, twoTabs, NOTE_A);
 		await store.closeTabs(twoTabs);
 		expect(router.currentUrl().pathname).toBe('/today');
-	});
-
-	it('persists the empty strip rather than the stale tab set', async () => {
-		const { router, repository, store } = setup(twoTabUrl, twoTabs, NOTE_A);
-		router.onNavigationPending = () => store.syncFromUrl();
-		await store.closeTabs(twoTabs);
-		expect(repository.record?.openTabs).toEqual([]);
 	});
 
 	// A closed tab must not stay pinned, or it reappears on the next hydrate.
@@ -98,35 +92,23 @@ describe('Workbench store pruning away from the workbench', () => {
 	const todaySetup = (openTabs: readonly NoteId[], focused: NoteId) =>
 		setup('/today', openTabs, focused);
 
-	it('drops the archived tab from the strip', async () => {
-		const { store } = todaySetup(twoTabs, NOTE_A);
-		await store.pruneClosedNotes(new Set([NOTE_B]));
-		expect(store.openTabs).toEqual([NOTE_B]);
-	});
-
-	it('refocuses a surviving tab when the focused note is archived', async () => {
-		const { store } = todaySetup(twoTabs, NOTE_A);
-		await store.pruneClosedNotes(new Set([NOTE_B]));
-		expect(store.focusedNoteId).toBe(NOTE_B);
-	});
-
-	it('unpins an archived tab', async () => {
-		const { store } = todaySetup(twoTabs, NOTE_A);
+	it('prunes an archived tab without navigating and persists the surviving focus', async () => {
+		const { router, repository, store } = todaySetup(twoTabs, NOTE_A);
 		store.pinnedTabs = [NOTE_A, NOTE_B];
 		await store.pruneClosedNotes(new Set([NOTE_B]));
-		expect(store.pinnedTabs).toEqual([NOTE_B]);
-	});
-
-	it('stays on the current route', async () => {
-		const { router, store } = todaySetup(twoTabs, NOTE_A);
-		await store.pruneClosedNotes(new Set([NOTE_B]));
-		expect(router.gotoCount).toBe(0);
-	});
-
-	it('persists the pruned strip', async () => {
-		const { repository, store } = todaySetup(twoTabs, NOTE_A);
-		await store.pruneClosedNotes(new Set([NOTE_B]));
-		expect(repository.record?.openTabs).toEqual([NOTE_B]);
+		expect({
+			strip: store.openTabs,
+			focus: store.focusedNoteId,
+			pinned: store.pinnedTabs,
+			navigations: router.gotoCount,
+			persisted: repository.record?.openTabs
+		}).toEqual({
+			strip: [NOTE_B],
+			focus: NOTE_B,
+			pinned: [NOTE_B],
+			navigations: 0,
+			persisted: [NOTE_B]
+		});
 	});
 
 	it('empties the strip when every open note is archived', async () => {
@@ -153,16 +135,16 @@ describe('Workbench store clicking a tab away from the workbench', () => {
 	const settingsSetup = (openTabs: readonly NoteId[], focused: NoteId) =>
 		setup('/settings', openTabs, focused);
 
-	it('navigates back to the tab the user arrived from', async () => {
+	it('navigates to the arrived-from tab while preserving the whole strip', async () => {
 		const { router, store } = settingsSetup(twoTabs, NOTE_A);
 		await store.focusTab(NOTE_A);
-		expect(router.currentUrl().pathname).toBe(`/notes/${NOTE_A}`);
-	});
-
-	it('carries the rest of the strip back into the URL', async () => {
-		const { router, store } = settingsSetup(twoTabs, NOTE_A);
-		await store.focusTab(NOTE_A);
-		expect(router.currentUrl().searchParams.get('tabs')).toBe(`${NOTE_A},${NOTE_B}`);
+		expect({
+			path: router.currentUrl().pathname,
+			tabs: router.currentUrl().searchParams.get('tabs')
+		}).toEqual({
+			path: `/notes/${NOTE_A}`,
+			tabs: `${NOTE_A},${NOTE_B}`
+		});
 	});
 
 	it('still navigates when a different tab is clicked', async () => {
@@ -192,22 +174,15 @@ describe('Workbench store closing a tab away from the workbench', () => {
 		expect(store.openTabs).toEqual([NOTE_B]);
 	});
 
-	it('stays on the current route', async () => {
-		const { router, store } = settingsSetup(twoTabs, NOTE_A);
+	it('closes one tab off-workbench without changing route or losing the survivor', async () => {
+		const { router, repository, store } = settingsSetup(twoTabs, NOTE_A);
 		await store.closeTab(NOTE_A);
-		expect(router.gotoCount).toBe(0);
-	});
-
-	it('refocuses a surviving tab', async () => {
-		const { store } = settingsSetup(twoTabs, NOTE_A);
-		await store.closeTab(NOTE_A);
-		expect(store.focusedNoteId).toBe(NOTE_B);
-	});
-
-	it('persists the closed tab', async () => {
-		const { repository, store } = settingsSetup(twoTabs, NOTE_A);
-		await store.closeTab(NOTE_A);
-		expect(repository.record?.openTabs).toEqual([NOTE_B]);
+		expect({
+			strip: store.openTabs,
+			focus: store.focusedNoteId,
+			navigations: router.gotoCount,
+			persisted: repository.record?.openTabs
+		}).toEqual({ strip: [NOTE_B], focus: NOTE_B, navigations: 0, persisted: [NOTE_B] });
 	});
 
 	it('unpins a tab closed in bulk', async () => {
@@ -219,15 +194,12 @@ describe('Workbench store closing a tab away from the workbench', () => {
 
 	// Emptying the strip has no URL to move to either, so it must not reach for `/today`.
 	it('empties the strip in place when every tab is closed', async () => {
-		const { store } = settingsSetup(twoTabs, NOTE_A);
-		await store.closeTabs(twoTabs);
-		expect(store.openTabs).toEqual([]);
-	});
-
-	it('does not leave for the overview when every tab is closed', async () => {
 		const { router, store } = settingsSetup(twoTabs, NOTE_A);
 		await store.closeTabs(twoTabs);
-		expect(router.currentUrl().pathname).toBe('/settings');
+		expect({ strip: store.openTabs, path: router.currentUrl().pathname }).toEqual({
+			strip: [],
+			path: '/settings'
+		});
 	});
 });
 
@@ -245,27 +217,20 @@ describe('Workbench store opening a pair of tabs', () => {
 
 	// The studio is a pair, so it has to arrive as one navigation: two `goto`s
 	// leave a history entry showing a chat with no canvas beside it.
-	it('navigates once for both tabs', async () => {
+	it('opens a chat and draft as one split navigation', async () => {
 		const { router, store } = emptyWorkbench();
 		await store.openSplit(CHAT, DRAFT);
-		expect(router.gotoCount).toBe(1);
-	});
-
-	it('focuses the first tab', async () => {
-		const { router, store } = emptyWorkbench();
-		await store.openSplit(CHAT, DRAFT);
-		expect(router.currentUrl().searchParams.get('focus')).toBe(CHAT);
-	});
-
-	it('puts the second tab in the split', async () => {
-		const { router, store } = emptyWorkbench();
-		await store.openSplit(CHAT, DRAFT);
-		expect(router.currentUrl().searchParams.get('split')).toBe(DRAFT);
-	});
-
-	it('opens both tabs in the strip', async () => {
-		const { router, store } = emptyWorkbench();
-		await store.openSplit(CHAT, DRAFT);
-		expect(router.currentUrl().searchParams.get('tabs')).toBe(`${CHAT},${DRAFT}`);
+		const url = router.currentUrl();
+		expect({
+			navigations: router.gotoCount,
+			focus: url.searchParams.get('focus'),
+			split: url.searchParams.get('split'),
+			tabs: url.searchParams.get('tabs')
+		}).toEqual({
+			navigations: 1,
+			focus: CHAT,
+			split: DRAFT,
+			tabs: `${CHAT},${DRAFT}`
+		});
 	});
 });

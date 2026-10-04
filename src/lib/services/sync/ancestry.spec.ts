@@ -30,16 +30,12 @@ const queued = appendWrite([], completed, 1);
 
 describe('ancestry chosen by the durable queue', () => {
 	it('stacks an edit made from a superseded version on the latest local edit', () => {
-		expect(rebaseDraft(queued, renamedFromOriginal, null, rebase).basedOn).toBe(firstId);
-	});
-	it('keeps the earlier local edit in the stacked edit', () => {
-		expect(rebaseDraft(queued, renamedFromOriginal, null, rebase).local).toEqual({
-			title: 'Renamed',
-			status: 'done'
+		const result = rebaseDraft(queued, renamedFromOriginal, null, rebase);
+		expect({ basedOn: result.basedOn, local: result.local, base: result.base }).toEqual({
+			basedOn: firstId,
+			local: { title: 'Renamed', status: 'done' },
+			base: original
 		});
-	});
-	it('guards a stacked edit with the version its ancestor was based on', () => {
-		expect(rebaseDraft(queued, renamedFromOriginal, null, rebase).base).toEqual(original);
 	});
 	it('leaves an edit made from the latest local edit unchanged', () => {
 		const current = { ...renamedFromOriginal, basedOn: firstId };

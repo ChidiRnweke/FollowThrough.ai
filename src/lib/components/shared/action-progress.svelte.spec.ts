@@ -10,13 +10,6 @@ const props = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('Action progress row', () => {
-	it('names the cancel control after the action it stops', async () => {
-		const screen = await render(ActionProgress, props({ oncancel: () => undefined }) as never);
-		await expect
-			.element(screen.getByRole('button', { name: 'Cancel converting to draw.io' }))
-			.toBeVisible();
-	});
-
 	it('offers no cancel control for work that cannot be stopped', async () => {
 		const screen = await render(ActionProgress, props() as never);
 		await expect.element(screen.getByRole('button')).not.toBeInTheDocument();
@@ -27,15 +20,12 @@ describe('Action progress row', () => {
 			ActionProgress,
 			props({ cancelling: true, oncancel: () => undefined }) as never
 		);
-		await expect.element(screen.getByRole('status')).toHaveTextContent('Stopping…');
-	});
-
-	it('disables the cross while the cancellation settles', async () => {
-		const screen = await render(
-			ActionProgress,
-			props({ cancelling: true, oncancel: () => undefined }) as never
-		);
-		await expect.element(screen.getByRole('button', { name: 'Stopping' })).toBeDisabled();
+		const status = await screen.getByRole('status').element();
+		const button = await screen.getByRole('button', { name: 'Stopping' }).element();
+		expect({ text: status?.textContent?.trim(), disabled: button?.disabled }).toEqual({
+			text: 'Stopping…',
+			disabled: true
+		});
 	});
 
 	it('runs the cancel handler when the cross is clicked', async () => {

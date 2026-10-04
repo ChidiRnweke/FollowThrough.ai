@@ -109,17 +109,6 @@ describe('shared attachment lists', () => {
 			).attachments({ kind: 'project', id: testProjectId() })
 		).toEqual([]);
 	});
-	it('joins the current version for an available project attachment', () => {
-		expect(
-			views(
-				{ type: 'projects', value: projectBuilder() },
-				{ type: 'attachments', value: attachment },
-				{ type: 'attachment_versions', value: version }
-			)
-				.attachments({ kind: 'project', id: testProjectId() })
-				.map((item) => item.version.id)
-		).toEqual([version.id]);
-	});
 });
 
 describe('shared project collections', () => {

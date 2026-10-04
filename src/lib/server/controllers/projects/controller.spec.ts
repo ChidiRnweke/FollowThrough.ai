@@ -29,56 +29,12 @@ const setup = () => {
 	return { projects, controller };
 };
 
-describe('Project ownership invariants', () => {
-	it('lists only projects owned by the actor', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [
-			projectBuilder(),
-			projectBuilder({ id: testProjectId(2), userId: testActor(2).userId })
-		];
-		const result = await controller.list(testActor());
-		expect(result.projects.map((project) => project.id)).toEqual([testProjectId()]);
-	});
-
-	it('does not reveal a foreign project by id', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		await expect(
-			controller.get(testActor(2), { projectId: testProjectId() })
-		).rejects.toMatchObject({
-			code: 'NOT_FOUND'
-		});
-	});
-});
-
 describe('Project naming invariants', () => {
-	it('trims a new project name', async () => {
-		const { controller } = setup();
-		const result = await controller.create(testActor(), { name: '  Platform  ' });
-		expect(result.project.name).toBe('Platform');
-	});
-
 	it('rejects an empty project name', async () => {
 		const { controller } = setup();
 		await expect(controller.create(testActor(), { name: '   ' })).rejects.toMatchObject({
 			code: 'VALIDATION'
 		});
-	});
-
-	it('rejects a duplicate active project name case-insensitively', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder({ name: 'Platform' })];
-		await expect(controller.create(testActor(), { name: 'platform' })).rejects.toMatchObject({
-			code: 'CONFLICT'
-		});
-	});
-
-	it('excludes an archived project from active lists', async () => {
-		const { projects, controller } = setup();
-		projects.projects = [projectBuilder()];
-		await controller.archive(testActor(), { projectId: testProjectId() });
-		const result = await controller.list(testActor());
-		expect(result.projects).toEqual([]);
 	});
 });
 

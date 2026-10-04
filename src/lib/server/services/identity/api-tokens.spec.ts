@@ -43,16 +43,13 @@ describe('API token minting', () => {
 });
 
 describe('API token verification', () => {
-	it('accepts the minted credential as a bearer header', async () => {
-		const { subject, minted } = await mint();
-		const verified = await subject.verify(`Bearer ${minted.plaintext}`);
-		expect(verified?.user.id).toEqual(userId);
-	});
-
-	it('carries the scope the token was minted with', async () => {
+	it('accepts the minted full-scope credential as a bearer header', async () => {
 		const { subject, minted } = await mint('full');
 		const verified = await subject.verify(`Bearer ${minted.plaintext}`);
-		expect(verified?.scope).toEqual('full');
+		expect({ userId: verified?.user.id, scope: verified?.scope }).toEqual({
+			userId,
+			scope: 'full'
+		});
 	});
 
 	it('rejects a credential that was never minted', async () => {

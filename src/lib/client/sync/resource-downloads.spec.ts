@@ -44,18 +44,30 @@ it('an older targeted response does not replace a newer committed version', asyn
 });
 it('distinguishes a missing server record from a failed targeted read', async () => {
 	const { cache } = setup();
-	expect(await cache.open('absent')).toEqual({ kind: 'unavailable' });
+	const opened = await cache.open('absent');
+	expect({ opened, accessed: cache.access('absent') }).toEqual({
+		opened: { kind: 'unavailable' },
+		accessed: { kind: 'unavailable' }
+	});
 });
 it('reports a targeted transport failure', async () => {
 	const { transport, cache } = setup();
 	transport.readFailure = 'Disconnected';
-	expect(await cache.open('note')).toEqual({ kind: 'failure', message: 'Disconnected' });
+	const opened = await cache.open('note');
+	expect({ opened, accessed: cache.access('note') }).toEqual({
+		opened: { kind: 'failure', message: 'Disconnected' },
+		accessed: { kind: 'failure', message: 'Disconnected' }
+	});
 });
 it('keeps offline unknown records unavailable without a network request', async () => {
 	const { transport, cache } = setup();
 	transport.readFailure = 'Network must not be used';
 	cache.setOnline(false);
-	expect(await cache.open('note')).toEqual({ kind: 'unavailable' });
+	const opened = await cache.open('note');
+	expect({ opened, accessed: cache.access('note') }).toEqual({
+		opened: { kind: 'unavailable' },
+		accessed: { kind: 'unavailable' }
+	});
 });
 it('follows page checkpoints until every body has been stored', async () => {
 	const { transport, cache } = setup();

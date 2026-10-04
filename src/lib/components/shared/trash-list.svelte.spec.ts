@@ -66,19 +66,6 @@ describe('TrashList', () => {
 
 	// Permanent deletion is the one thing here that cannot be undone, so it never fires
 	// straight off the row's button.
-	it('asks before deleting a note for good', async () => {
-		const deleted: NoteId[] = [];
-		const screen = await render(TrashList, {
-			entries: [noteTrashEntry(trashed)],
-			onrestore: noop,
-			ondelete: async (entry: TrashEntry) => {
-				deleted.push(entry.id as NoteId);
-			}
-		});
-		await screen.getByRole('button', { name: 'Delete Deleted draft forever' }).click();
-		expect(deleted).toEqual([]);
-	});
-
 	it('deletes a note through ondelete once confirmed', async () => {
 		const deleted: NoteId[] = [];
 		const screen = await render(TrashList, {
@@ -89,8 +76,9 @@ describe('TrashList', () => {
 			}
 		});
 		await screen.getByRole('button', { name: 'Delete Deleted draft forever' }).click();
+		const beforeConfirmation = [...deleted];
 		await screen.getByRole('button', { name: 'Delete forever' }).click();
-		expect(deleted).toEqual([noteId]);
+		expect({ beforeConfirmation, deleted }).toEqual({ beforeConfirmation: [], deleted: [noteId] });
 	});
 
 	it('offers no permanent delete when the caller does not pass one', async () => {
@@ -124,20 +112,15 @@ describe('TrashList', () => {
 
 	// The trash is the only screen where a note and a diagram sit in one list, so a
 	// row has to say which it is. The kind label and the icon carry that together.
-	it('says which kind each row is', async () => {
+	it('identifies each mixed trash row by kind and name', async () => {
 		const screen = await render(TrashList, {
 			entries: [noteTrashEntry(trashed), diagramTrashEntry(trashedDiagram, 'FollowThrough')],
 			onrestore: noop
 		});
-		expect(await screen.getByText(/Diagram/).all()).not.toHaveLength(0);
-	});
-
-	it('names a trashed diagram beside a trashed note', async () => {
-		const screen = await render(TrashList, {
-			entries: [noteTrashEntry(trashed), diagramTrashEntry(trashedDiagram, 'FollowThrough')],
-			onrestore: noop
-		});
-		expect(await screen.getByText('Ingest pipeline').all()).not.toHaveLength(0);
+		expect({
+			kind: (await screen.getByText(/Diagram/).all()).length > 0,
+			title: (await screen.getByText('Ingest pipeline').all()).length > 0
+		}).toEqual({ kind: true, title: true });
 	});
 
 	// Restore hands back the entry rather than an id, so the caller narrows once and

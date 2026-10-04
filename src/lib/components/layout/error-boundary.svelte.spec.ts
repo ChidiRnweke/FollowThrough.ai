@@ -20,26 +20,9 @@ describe('ErrorBoundary', () => {
 
 	it('contains a throwing child instead of propagating', async () => {
 		const screen = await render(ErrorBoundary, { label: 'this diagram', children: throwing });
-		await expect.element(screen.getByRole('alert')).toBeVisible();
-	});
-
-	it('names what failed so the notice is not generic', async () => {
-		const screen = await render(ErrorBoundary, { label: 'this diagram', children: throwing });
-		await expect.element(screen.getByText(/Couldn't display this diagram/)).toBeVisible();
-	});
-
-	it('keeps the raw source readable when the rendering fails', async () => {
-		const screen = await render(ErrorBoundary, {
-			label: 'this diagram',
-			source: 'graph TD; A-->B',
-			children: throwing
-		});
-		await expect.element(screen.getByText('graph TD; A-->B')).toBeVisible();
-	});
-
-	it('offers a way back rather than a dead end', async () => {
-		const screen = await render(ErrorBoundary, { children: throwing });
-		await expect.element(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
+		await expect
+			.element(screen.getByRole('alert'))
+			.toHaveTextContent("Couldn't display this diagram");
 	});
 
 	it('renders the recovered child when the user retries', async () => {
@@ -58,10 +41,12 @@ describe('ErrorBoundary', () => {
 
 	it('keeps the fallback available when retry still fails', async () => {
 		const screen = await render(ErrorBoundary, {
-			source: 'Preserved document',
+			source: 'graph TD; A-->B',
 			children: throwing
 		});
 		await screen.getByRole('button', { name: 'Try again' }).click();
-		await expect.element(screen.getByText('Preserved document')).toBeVisible();
+		await expect
+			.element(screen.getByRole('alert'))
+			.toHaveTextContent(/Showing the raw content\. graph TD; A-->B Try again/);
 	});
 });

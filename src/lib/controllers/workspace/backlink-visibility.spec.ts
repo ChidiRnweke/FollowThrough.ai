@@ -50,7 +50,11 @@ const records = (archived: boolean) =>
 		[JSON.stringify(['note_relationships', edge.id]), { type: 'note_relationships', value: edge }]
 	]);
 it('hides a retained backlink into an archived project after built-in relocation', () => {
-	expect(new WorkspaceViews(records(true)).note(note.id)?.view.backlinks).toEqual([]);
+	const views = new WorkspaceViews(records(true));
+	expect({
+		backlinks: views.note(note.id)?.view.backlinks,
+		storedRelationship: views.get('note_relationships', edge.id)
+	}).toEqual({ backlinks: [], storedRelationship: edge });
 });
 it('keeps the backlink when both projects are active', () => {
 	expect(
@@ -58,7 +62,4 @@ it('keeps the backlink when both projects are active', () => {
 			.note(note.id)
 			?.view.backlinks.map((item) => item.targetNote.id)
 	).toEqual([target.id]);
-});
-it('retains the hidden relationship record for future project visibility', () => {
-	expect(new WorkspaceViews(records(true)).get('note_relationships', edge.id)).toEqual(edge);
 });
