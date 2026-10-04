@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { userEvent } from 'vitest/browser';
 import type { WidgetChange } from '$lib/models/widgets';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { widgetTemplates } from '$lib/models/widgets';
@@ -94,10 +95,10 @@ describe('Widget view formulas', () => {
 				return { kind: 'staged' };
 			}
 		});
-		await screen.getByLabelText('Years').fill('10');
+		await screen.getByLabelText('Starting amount').fill('5000');
 		await expect
 			.poll(() => changes)
-			.toEqual([{ kind: 'data', patch: [{ op: 'replace', path: '/years', value: 10 }] }]);
+			.toEqual([{ kind: 'data', patch: [{ op: 'replace', path: '/start', value: 5000 }] }]);
 	});
 	it('says which formula failed and why', async () => {
 		const screen = await render(WidgetView, {
@@ -225,5 +226,22 @@ describe('Widget view data table', () => {
 		await expect
 			.poll(() => changes.map((change) => change.kind === 'data' && change.patch[0]?.path))
 			.toEqual(['/expenses']);
+	});
+});
+
+describe('Widget view sliders', () => {
+	it('moves a bound value with the keyboard and works the formulas out again', async () => {
+		const screen = await render(WidgetView, {
+			widget: widgetBuilder({
+				layout: widgetTemplates.savings.layout,
+				data: { ...widgetTemplates.savings.data, years: 1 }
+			}),
+			onChange: async () => ({ kind: 'staged' })
+		});
+		// The thumb takes focus as a person tabs to it; the arrow key then moves it one step.
+		const years = screen.getByRole('slider', { name: 'Years' }).element();
+		if (years instanceof HTMLElement) years.focus();
+		await userEvent.keyboard('{ArrowRight}');
+		await expect.element(screen.getByText('Balance after 2 years')).toBeVisible();
 	});
 });

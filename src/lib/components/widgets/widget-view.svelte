@@ -124,7 +124,7 @@
 	});
 </script>
 
-<div data-slot="widget-view" data-widget-id={widget.id} class="flex flex-col gap-2">
+<div data-slot="widget-view" data-widget-id={widget.id} class="@container flex flex-col gap-2">
 	<Field.Set disabled={!onChange} class="min-w-0 gap-0">
 		<JsonUIProvider {store}>
 			<Renderer {spec} registry={widgetRegistry} fallback={UnsupportedElement} />

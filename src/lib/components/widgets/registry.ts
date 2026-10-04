@@ -20,6 +20,8 @@ import WidgetLineChart from './elements/widget-line-chart.svelte';
 import WidgetAreaChart from './elements/widget-area-chart.svelte';
 import WidgetBarChart from './elements/widget-bar-chart.svelte';
 import WidgetDataTable from './elements/widget-data-table.svelte';
+import WidgetGrid from './elements/widget-grid.svelte';
+import WidgetSlider from './elements/widget-slider.svelte';
 
 /**
  * The renderer side of the catalog: one Svelte component per catalog entry, built on our own
@@ -28,6 +30,7 @@ import WidgetDataTable from './elements/widget-data-table.svelte';
  */
 const components = {
 	Stack: WidgetStack,
+	Grid: WidgetGrid,
 	Card: WidgetCard,
 	Heading: WidgetHeading,
 	Text: WidgetText,
@@ -35,6 +38,7 @@ const components = {
 	Progress: WidgetProgress,
 	TextInput: WidgetTextInput,
 	NumberInput: WidgetNumberInput,
+	Slider: WidgetSlider,
 	Select: WidgetSelect,
 	Table: WidgetTable,
 	DataTable: WidgetDataTable,

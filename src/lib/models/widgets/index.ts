@@ -401,6 +401,15 @@ export const widgetCatalog = {
 			}),
 			slots: ['default']
 		},
+		Grid: {
+			description:
+				'Lays out its children in columns, such as a row of metric cards on a dashboard. Columns fall back to one as the widget narrows.',
+			props: z.strictObject({
+				columns: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+				gap: z.enum(['sm', 'md', 'lg']).nullish()
+			}),
+			slots: ['default']
+		},
 		Card: {
 			description: 'A bordered container with an optional title and description.',
 			props: z.strictObject({
@@ -453,6 +462,19 @@ export const widgetCatalog = {
 				min: z.number().nullish(),
 				max: z.number().nullish(),
 				step: z.number().positive().nullish()
+			}),
+			slots: []
+		},
+		Slider: {
+			description:
+				'A labelled slider between `min` and `max`. Bind `value` to state; the current value shows beside the label, followed by `suffix` (such as `%`).',
+			props: z.strictObject({
+				label: dynamic(z.string()),
+				value: dynamic(z.number()),
+				min: z.number(),
+				max: z.number(),
+				step: z.number().positive().nullish(),
+				suffix: z.string().max(12).nullish()
 			}),
 			slots: []
 		},
@@ -737,7 +759,7 @@ export const widgetTemplates = {
 						title: { $state: '/title' },
 						description: 'Interest compounds monthly; deposits are made at the end of each month.'
 					},
-					children: ['inputs', 'results', 'chart', 'table']
+					children: ['inputs', 'sliders', 'results', 'chart', 'table']
 				},
 				chart: {
 					type: 'AreaChart',
@@ -756,7 +778,12 @@ export const widgetTemplates = {
 				inputs: {
 					type: 'Stack',
 					props: { direction: 'horizontal', gap: 'md' },
-					children: ['start', 'monthly', 'rate', 'years']
+					children: ['start', 'monthly']
+				},
+				sliders: {
+					type: 'Grid',
+					props: { columns: 2, gap: 'lg' },
+					children: ['rate', 'years']
 				},
 				start: {
 					type: 'NumberInput',
@@ -769,13 +796,20 @@ export const widgetTemplates = {
 					children: []
 				},
 				rate: {
-					type: 'NumberInput',
-					props: { label: 'Yearly interest %', value: { $bindState: '/rate' }, step: 0.1 },
+					type: 'Slider',
+					props: {
+						label: 'Yearly interest',
+						value: { $bindState: '/rate' },
+						min: 0,
+						max: 15,
+						step: 0.1,
+						suffix: '%'
+					},
 					children: []
 				},
 				years: {
-					type: 'NumberInput',
-					props: { label: 'Years', value: { $bindState: '/years' }, min: 1, max: 80, step: 1 },
+					type: 'Slider',
+					props: { label: 'Years', value: { $bindState: '/years' }, min: 1, max: 50, step: 1 },
 					children: []
 				},
 				results: {

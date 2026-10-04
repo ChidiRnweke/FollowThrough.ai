@@ -146,6 +146,9 @@ const blocksOf = (
 	switch (element.type) {
 		case 'Stack':
 			return prop('direction') === 'horizontal' ? oneLine(body()) : body();
+		// Columns are a screen layout; on paper the cells follow one another.
+		case 'Grid':
+			return body();
 		case 'Card': {
 			const title = text(prop('title'));
 			return [
@@ -165,6 +168,7 @@ const blocksOf = (
 			return [{ kind: 'check', label: text(prop('label')), checked: prop('checked') === true }];
 		case 'TextInput':
 		case 'NumberInput':
+		case 'Slider':
 			return [{ kind: 'field', label: text(prop('label')), value: text(prop('value')) }];
 		case 'Select': {
 			const value = text(prop('value'));

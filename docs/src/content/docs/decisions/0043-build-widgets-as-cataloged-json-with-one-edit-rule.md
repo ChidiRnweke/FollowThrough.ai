@@ -209,6 +209,15 @@ which the replay treats as an overlap. A `footer` reads a record of values per c
 derived total. Export prints the table with ticks for checkboxes and option labels for choices.
 The read-only `Table` stays for computed rows.
 
+### Dashboards lay out by the widget's width
+
+A `Grid` places its children in up to four columns. The columns follow the widget's own width
+through a CSS container query on the view, not the window's: the same widget sits in a narrow
+note column and in a full-width tab, and drops to one column as it narrows. A `Slider` over the
+shadcn primitive binds a number between `min` and `max` and shows it beside its label, so a
+simulator responds as the thumb moves. Every widget element wraps a shadcn-svelte primitive;
+only layout and type (Stack, Grid, Heading, Text) are plain token classes.
+
 ### Charts are shadcn-svelte charts
 
 LineChart, AreaChart and BarChart plot rows of numbers: `rows` is usually a derived `series`, `x`
