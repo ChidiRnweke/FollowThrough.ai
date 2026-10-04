@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.11...v2.1.0) (2026-10-04)
+
+
+### Features
+
+* **widgets:** build note widgets, from checklists to simulators and dashboards ([#299](https://github.com/ChidiRnweke/FollowThrough.ai/issues/299)) ([b698af3](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b698af30bbf2306a092dfc6a1132b11a603716da))
+
 ## [2.0.11](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.10...v2.0.11) (2026-10-04)
 
 
