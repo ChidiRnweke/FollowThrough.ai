@@ -78,7 +78,7 @@ describe('NoteVersionHistory', () => {
 	});
 
 	it('diffs the selected version against the note as it stands', async () => {
-		const screen = await render(NoteVersionHistory, { ...base, selected: revision });
+		await render(NoteVersionHistory, { ...base, selected: revision });
 		await expect
 			.poll(async () => ({
 				previous: document.querySelector('[aria-label="Read-only preview of Previous"]')
