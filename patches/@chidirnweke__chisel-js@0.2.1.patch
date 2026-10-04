@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce38e34822 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce38e34822 100755
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8333,6 +8333,7 @@ var LAYER_MATCHERS = [
