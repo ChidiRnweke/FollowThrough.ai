@@ -15,6 +15,7 @@ import WidgetSelect from './elements/widget-select.svelte';
 import WidgetTable from './elements/widget-table.svelte';
 import WidgetBadge from './elements/widget-badge.svelte';
 import WidgetDivider from './elements/widget-divider.svelte';
+import WidgetButton from './elements/widget-button.svelte';
 
 /**
  * The renderer side of the catalog: one Svelte component per catalog entry, built on our own
@@ -33,6 +34,7 @@ const components = {
 	Select: WidgetSelect,
 	Table: WidgetTable,
 	Badge: WidgetBadge,
+	Button: WidgetButton,
 	Divider: WidgetDivider,
 	Metric: WidgetMetric
 } satisfies Record<WidgetComponentName, Component<never>>;

@@ -285,9 +285,9 @@ class FormulaParser {
 				}
 				if (token.value === '[') return { kind: 'list', items: this.list(']') };
 				if (token.value === '{') return this.object();
-				this.fail(`Unexpected ${describe(token)}`, token.at);
+				return this.fail(`Unexpected ${describe(token)}`, token.at);
 			case 'end':
-				this.fail('The formula ends too early', token.at);
+				return this.fail('The formula ends too early', token.at);
 		}
 	}
 

@@ -6,7 +6,7 @@ import { widgetSearchText } from './search-text';
 describe('widget search text', () => {
 	it('holds the title and the words the checklist shows', () => {
 		expect(widgetSearchText(widgetBuilder())).toBe(
-			['Checklist', 'First step', 'Second step', 'Third step'].join('\n')
+			['Checklist', 'New item', 'Add a step', 'First step', 'Second step', 'Third step'].join('\n')
 		);
 	});
 	it('does not change when an item is ticked', () => {

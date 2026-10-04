@@ -109,3 +109,22 @@ describe('Widget view formulas', () => {
 		await expect.element(screen.getByText('ratio: Division by zero')).toBeVisible();
 	});
 });
+
+describe('Widget view buttons', () => {
+	it('adds the typed item to the list when Add is pressed', async () => {
+		const screen = await render(WidgetView, {
+			widget: widgetBuilder(),
+			onChange: async () => ({ kind: 'staged' })
+		});
+		await screen.getByLabelText('New item').fill('Fourth step');
+		await screen.getByRole('button', { name: 'Add' }).click();
+		await expect.element(screen.getByText('Fourth step')).toBeVisible();
+	});
+	it('keeps Add off while nothing is typed', async () => {
+		const screen = await render(WidgetView, {
+			widget: widgetBuilder(),
+			onChange: async () => ({ kind: 'staged' })
+		});
+		await expect.element(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+	});
+});

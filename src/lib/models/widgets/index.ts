@@ -191,6 +191,27 @@ export const widgetLayoutSchema = z
 						path: ['elements', key, 'props', prop],
 						message: 'A computed value can be read with $state but not bound'
 					});
+		for (const [key, element] of Object.entries(layout.elements))
+			for (const [event, bound] of Object.entries(element.on ?? {}))
+				for (const [index, binding] of (Array.isArray(bound) ? bound : [bound]).entries())
+					for (const param of ['statePath', 'clearStatePath'])
+						if (
+							typeof binding.params?.[param] === 'string' &&
+							isComputedPointer(binding.params[param])
+						)
+							context.addIssue({
+								code: 'custom',
+								path: [
+									'elements',
+									key,
+									'on',
+									event,
+									...(Array.isArray(bound) ? [index] : []),
+									'params',
+									param
+								],
+								message: 'An action cannot write a computed value'
+							});
 	});
 
 export type WidgetLayout = z.infer<typeof widgetLayoutSchema>;
@@ -422,6 +443,16 @@ export const widgetCatalog = {
 			}),
 			slots: []
 		},
+		Button: {
+			description:
+				'A button. Bind `on.press` to `pushState` (add a list item; `"$id"` makes its id, `clearStatePath` empties the input it came from), `removeState` (remove the item at `{ "$index": true }`) or `setState`.',
+			props: z.strictObject({
+				label: dynamic(z.string()),
+				variant: z.enum(['default', 'outline', 'ghost', 'destructive']).nullish(),
+				disabled: dynamic(z.boolean()).nullish()
+			}),
+			slots: []
+		},
 		Divider: {
 			description: 'A horizontal rule between groups.',
 			props: z.strictObject({}),
@@ -449,7 +480,36 @@ export const widgetTemplates = {
 		layout: {
 			root: 'card',
 			elements: {
-				card: { type: 'Card', props: { title: { $state: '/title' } }, children: ['items'] },
+				card: {
+					type: 'Card',
+					props: { title: { $state: '/title' } },
+					children: ['items', 'add']
+				},
+				add: {
+					type: 'Stack',
+					props: { direction: 'horizontal', gap: 'sm' },
+					children: ['draft', 'addButton']
+				},
+				draft: {
+					type: 'TextInput',
+					props: { label: 'New item', value: { $bindState: '/draft' }, placeholder: 'Add a step' },
+					children: []
+				},
+				addButton: {
+					type: 'Button',
+					props: { label: 'Add', variant: 'outline', disabled: { $state: '/derived/draftEmpty' } },
+					on: {
+						press: {
+							action: 'pushState',
+							params: {
+								statePath: '/items',
+								value: { id: '$id', label: { $state: '/draft' }, done: false },
+								clearStatePath: '/draft'
+							}
+						}
+					},
+					children: []
+				},
 				items: {
 					type: 'Stack',
 					props: { direction: 'vertical', gap: 'sm' },
@@ -461,10 +521,12 @@ export const widgetTemplates = {
 					props: { label: { $item: 'label' }, checked: { $bindItem: 'done' } },
 					children: []
 				}
-			}
+			},
+			derived: { draftEmpty: '@/draft == ""' }
 		},
 		data: {
 			title: 'Checklist',
+			draft: '',
 			items: [
 				{ id: 'first', label: 'First step', done: false },
 				{ id: 'second', label: 'Second step', done: false },

@@ -37,15 +37,18 @@ const dataStrings = (value: JsonValue, key?: string): readonly string[] => {
  * out, so ticking a box or moving a counter changes no chunk and costs no new embedding.
  */
 export const widgetSearchText = (widget: Widget): string => {
-	const props = Object.values(widget.layout.elements).flatMap((element) =>
-		Object.entries(element.props).flatMap(([name, value]) =>
-			typeof value === 'string' && TEXT_PROPS.has(name)
-				? [value]
-				: name === 'columns' || name === 'options'
-					? labelsOf(value)
-					: []
-		)
-	);
+	// A button's label names an action, not something the widget holds.
+	const props = Object.values(widget.layout.elements)
+		.filter((element) => element.type !== 'Button')
+		.flatMap((element) =>
+			Object.entries(element.props).flatMap(([name, value]) =>
+				typeof value === 'string' && TEXT_PROPS.has(name)
+					? [value]
+					: name === 'columns' || name === 'options'
+						? labelsOf(value)
+						: []
+			)
+		);
 	return [
 		...new Set([widget.title, ...props, ...dataStrings(widget.data)].map((text) => text.trim()))
 	]

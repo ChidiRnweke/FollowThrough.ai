@@ -116,8 +116,11 @@ const inlineText = (block: WidgetExportBlock): string | undefined => {
  */
 const oneLine = (blocks: readonly WidgetExportBlock[]): readonly WidgetExportBlock[] => {
 	const parts = blocks.map(inlineText);
-	if (blocks.length < 2 || parts.some((part) => part === undefined)) return blocks;
-	return [{ kind: 'paragraph', text: parts.filter(Boolean).join(' · '), muted: false }];
+	if (parts.some((part) => part === undefined)) return blocks;
+	const line = parts.filter(Boolean).join(' · ');
+	// A row of empty inputs, such as the field a new list item is typed into, prints nothing.
+	if (!line) return [];
+	return blocks.length < 2 ? blocks : [{ kind: 'paragraph', text: line, muted: false }];
 };
 
 const blocksOf = (
@@ -215,6 +218,9 @@ const blocksOf = (
 			return [{ kind: 'badge', text: text(prop('text')) }];
 		case 'Divider':
 			return [{ kind: 'divider' }];
+		// A button changes the widget; a printed page has nothing to press.
+		case 'Button':
+			return [];
 		default:
 			return [{ kind: 'unsupported', type: element.type }];
 	}
