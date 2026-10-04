@@ -196,6 +196,23 @@ cannot freeze the tab. A thirty-year monthly schedule costs about 4,000.
 - **json-render's `$computed` is not used.** It calls registered JavaScript functions with untyped
   arguments in the browser only, so export and the server could not share it.
 
+### Charts are shadcn-svelte charts
+
+LineChart, AreaChart and BarChart plot rows of numbers: `rows` is usually a derived `series`, `x`
+names the field along the bottom, and each of up to five series names a numeric field. Each
+element is a thin adapter over the vendored shadcn-svelte Chart (`src/lib/components/ui/chart/`),
+which wraps [LayerChart](https://layerchart.com). The adapter maps catalog props to a
+`ChartConfig` and a LayerChart series list, and nothing else. Charts are not drawn by hand: the
+primitive is ours to edit like every other one in `components/ui/` (ADR 0005), and its tooltip,
+legend and axes follow the design tokens. LayerChart is pinned exactly, as json-render is.
+
+Export prints a chart as the table of the values it plots, under its title. LayerChart 2.5.1
+cannot render on the server: in `Layer.svelte` an inner snippet named `children` shadows the
+prop it renders, and the server render fails. Rasterizing the browser chart would need a
+client bundle inside the export browser. The table carries the same numbers, which is what a
+reader of a printed page needs. If LayerChart's server render is fixed, the existing
+`DiagramRasterizer` can turn its SVG into an image without other changes.
+
 ### The library stays behind two seams
 
 json-render is imported in two places only:

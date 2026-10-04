@@ -128,3 +128,53 @@ describe('Widget view buttons', () => {
 		await expect.element(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
 	});
 });
+
+describe('Widget view charts', () => {
+	const chart = (type: 'LineChart' | 'AreaChart' | 'BarChart', rows: object[]) =>
+		widgetBuilder({
+			layout: {
+				root: 'chart',
+				elements: {
+					chart: {
+						type,
+						props: {
+							title: 'Spend',
+							rows: { $state: '/rows' },
+							x: 'month',
+							series: [
+								{ key: 'food', label: 'Food' },
+								{ key: 'rent', label: 'Rent' }
+							]
+						},
+						children: []
+					}
+				}
+			},
+			data: { rows: JSON.parse(JSON.stringify(rows)) }
+		});
+	const months = [
+		{ month: 'Jan', food: 300, rent: 900 },
+		{ month: 'Feb', food: 280, rent: 900 },
+		{ month: 'Mar', food: 320, rent: 950 }
+	];
+	it('draws a line chart as an svg with one path per series', async () => {
+		const screen = await render(WidgetView, { widget: chart('LineChart', months) });
+		await expect
+			.poll(() => screen.container.querySelectorAll('[data-slot="chart"] svg path.lc-path').length)
+			.toBe(2);
+	});
+	it('draws a bar per row and series', async () => {
+		const screen = await render(WidgetView, { widget: chart('BarChart', months) });
+		await expect
+			.poll(() => screen.container.querySelectorAll('[data-slot="chart"] svg .lc-bar').length)
+			.toBe(6);
+	});
+	it('names each series in a legend, so colour is not the only key', async () => {
+		const screen = await render(WidgetView, { widget: chart('AreaChart', months) });
+		await expect.element(screen.getByText('Rent')).toBeVisible();
+	});
+	it('says there is nothing to plot when the rows are empty', async () => {
+		const screen = await render(WidgetView, { widget: chart('LineChart', []) });
+		await expect.element(screen.getByText('Nothing to plot yet.')).toBeVisible();
+	});
+});

@@ -218,6 +218,28 @@ const blocksOf = (
 			return [{ kind: 'badge', text: text(prop('text')) }];
 		case 'Divider':
 			return [{ kind: 'divider' }];
+		// A chart prints as the table of what it plots, under its title. LayerChart cannot render on
+		// the server (ADR 0043), and the numbers are what a reader of the page needs.
+		case 'LineChart':
+		case 'AreaChart':
+		case 'BarChart': {
+			const title = text(prop('title'));
+			const x = text(prop('x'));
+			const series = prop('series');
+			const rows = prop('rows');
+			const plotted = Array.isArray(series) ? series.filter(isObject) : [];
+			return [
+				...(title ? [{ kind: 'paragraph' as const, text: title, muted: true }] : []),
+				{
+					kind: 'table',
+					columns: [x, ...plotted.map((entry) => text(entry.label))],
+					rows: (Array.isArray(rows) ? rows.filter(isObject) : []).map((row) => [
+						text(row[x]),
+						...plotted.map((entry) => text(row[text(entry.key)]))
+					])
+				}
+			];
+		}
 		// A button changes the widget; a printed page has nothing to press.
 		case 'Button':
 			return [];

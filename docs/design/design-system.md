@@ -26,6 +26,11 @@
   `--brand`. Data values, metadata, and resting chrome use neutral ink on neutral surfaces.
   On colored surfaces, secondary ink follows the surface hue (see below). `--brand` equals `--primary`
   in light mode and lifts to the sidebar teal in dark mode for AA contrast on washes.
+- **Charts:** Widget charts are the shadcn-svelte Chart over LayerChart; nothing is drawn by
+  hand. The first series is `--brand`, the one value the chart is about. Further series take the
+  neutral `--chart-2` to `--chart-5` ramp, darkest last; `--chart-1` is too light for a line on
+  paper. A chart with more than one series always shows its legend, so colour is never the only
+  key. Value-axis ticks are compact (`120K`), and a chart with no rows says so in muted text.
 - **Project identity:** Projects are identified by the brand teal, never per-project hues: the
   sidebar project icon, `Badge variant="brand"`, breadcrumb links, chat origin lines, artifact
   format badges, and overview resource chips use `--brand` text on the shared `bg-brand/10` wash

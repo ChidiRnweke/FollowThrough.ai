@@ -16,6 +16,9 @@ import WidgetTable from './elements/widget-table.svelte';
 import WidgetBadge from './elements/widget-badge.svelte';
 import WidgetDivider from './elements/widget-divider.svelte';
 import WidgetButton from './elements/widget-button.svelte';
+import WidgetLineChart from './elements/widget-line-chart.svelte';
+import WidgetAreaChart from './elements/widget-area-chart.svelte';
+import WidgetBarChart from './elements/widget-bar-chart.svelte';
 
 /**
  * The renderer side of the catalog: one Svelte component per catalog entry, built on our own
@@ -35,6 +38,9 @@ const components = {
 	Table: WidgetTable,
 	Badge: WidgetBadge,
 	Button: WidgetButton,
+	LineChart: WidgetLineChart,
+	AreaChart: WidgetAreaChart,
+	BarChart: WidgetBarChart,
 	Divider: WidgetDivider,
 	Metric: WidgetMetric
 } satisfies Record<WidgetComponentName, Component<never>>;

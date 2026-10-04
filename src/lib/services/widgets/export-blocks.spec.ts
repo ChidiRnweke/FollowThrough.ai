@@ -75,4 +75,40 @@ describe('widget export', () => {
 			{ kind: 'metric', label: 'Total', value: '3' }
 		]);
 	});
+	it('prints a chart as the table of what it plots, under its title', () => {
+		const widget = widgetBuilder({
+			layout: {
+				root: 'chart',
+				elements: {
+					chart: {
+						type: 'LineChart',
+						props: {
+							title: 'Balance',
+							rows: { $state: '/rows' },
+							x: 'year',
+							series: [{ key: 'balance', label: 'Balance' }]
+						},
+						children: []
+					}
+				}
+			},
+			data: {
+				rows: [
+					{ year: 0, balance: 100 },
+					{ year: 1, balance: 105 }
+				]
+			}
+		});
+		expect(exported(widget).blocks).toEqual([
+			{ kind: 'paragraph', text: 'Balance', muted: true },
+			{
+				kind: 'table',
+				columns: ['year', 'Balance'],
+				rows: [
+					['0', '100'],
+					['1', '105']
+				]
+			}
+		]);
+	});
 });

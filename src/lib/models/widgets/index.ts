@@ -348,6 +348,28 @@ export interface WidgetCatalog {
 
 const tone = z.enum(['default', 'muted']).nullish();
 
+/**
+ * What a chart plots: one row per point, `x` naming the field along the bottom and each series
+ * naming a numeric field. Keys become CSS colour variables, so they stay plain identifiers.
+ */
+const chartProps = {
+	title: dynamic(z.string()).nullish(),
+	rows: dynamic(z.array(z.record(z.string(), jsonValueSchema))),
+	x: z.string().min(1),
+	series: z
+		.array(
+			z.strictObject({
+				key: z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/, 'Series keys are plain field names'),
+				label: z.string().min(1)
+			})
+		)
+		.min(1)
+		.max(5),
+	height: z.enum(['sm', 'md', 'lg']).nullish()
+};
+
+export type WidgetChartSeries = z.infer<typeof chartProps.series>[number];
+
 /** The allow-list of components a layout may use. A layout naming anything else is invalid. */
 export const widgetCatalog = {
 	version: 3,
@@ -451,6 +473,24 @@ export const widgetCatalog = {
 				variant: z.enum(['default', 'outline', 'ghost', 'destructive']).nullish(),
 				disabled: dynamic(z.boolean()).nullish()
 			}),
+			slots: []
+		},
+		LineChart: {
+			description:
+				'Lines through rows of numbers, such as a balance by year. Read `rows` from state, often a derived `series(...)`; `x` names the field along the bottom; each series names a numeric field. Up to five series.',
+			props: z.strictObject(chartProps),
+			slots: []
+		},
+		AreaChart: {
+			description:
+				'Like LineChart, with the area under each line filled. `stacked: true` stacks the series, such as deposits under interest.',
+			props: z.strictObject({ ...chartProps, stacked: z.boolean().nullish() }),
+			slots: []
+		},
+		BarChart: {
+			description:
+				'Bars per row, such as spending by category. `x` is usually a text field. `stacked: true` stacks the series in one bar.',
+			props: z.strictObject({ ...chartProps, stacked: z.boolean().nullish() }),
 			slots: []
 		},
 		Divider: {
@@ -663,7 +703,21 @@ export const widgetTemplates = {
 						title: { $state: '/title' },
 						description: 'Interest compounds monthly; deposits are made at the end of each month.'
 					},
-					children: ['inputs', 'results', 'table']
+					children: ['inputs', 'results', 'chart', 'table']
+				},
+				chart: {
+					type: 'AreaChart',
+					props: {
+						title: 'Balance by year',
+						rows: { $state: '/derived/schedule' },
+						x: 'year',
+						series: [
+							{ key: 'deposited', label: 'Deposited' },
+							{ key: 'interest', label: 'Interest' }
+						],
+						stacked: true
+					},
+					children: []
 				},
 				inputs: {
 					type: 'Stack',
@@ -718,7 +772,7 @@ export const widgetTemplates = {
 							{ key: 'interest', label: 'Interest' },
 							{ key: 'balance', label: 'Balance' }
 						],
-						rows: { $state: '/derived/schedule' }
+						rows: { $state: '/derived/milestones' }
 					},
 					children: []
 				}
@@ -728,6 +782,7 @@ export const widgetTemplates = {
 					'series(0, @/years, { year: i, deposited: round(@/start + @/monthly * 12 * i), balance: round(if(@/rate == 0, @/start + @/monthly * 12 * i, @/start * (1 + @/rate / 1200) ^ (12 * i) + @/monthly * ((1 + @/rate / 1200) ^ (12 * i) - 1) / (@/rate / 1200))) })',
 				schedule:
 					'map(@/derived/growth, { year: item.year, deposited: item.deposited, interest: item.balance - item.deposited, balance: item.balance })',
+				milestones: 'filter(@/derived/schedule, item.year % 5 == 0 or item.year == @/years)',
 				final: 'last(@/derived/schedule)',
 				balanceText: 'format(@/derived/final.balance)',
 				depositedText: 'format(@/derived/final.deposited)',
