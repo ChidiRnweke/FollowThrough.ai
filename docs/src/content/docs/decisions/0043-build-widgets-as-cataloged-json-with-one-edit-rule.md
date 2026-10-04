@@ -300,7 +300,10 @@ subscribes to it. In controlled mode the library ignores `onStateChange`, so the
 the only reliable signal. On each change the view reads the store snapshot with
 `widgetDataSchema`, computes the smallest patch with `diffWidgetData`, and hands one `data` change
 to its owner. Controls write the store on every keystroke, so the view hands over one change per
-pause of about 350 ms, and flushes on `pagehide`, when the page is hidden and when it unmounts. Ticking one checkbox produces one `replace` of that
+pause of about 350 ms, and flushes on `pagehide`, when the page is hidden and when it unmounts.
+The write to the queue is asynchronous and `pagehide` does not wait for it, so a reload inside
+the pause lost the last edit. On `beforeunload` the view hands the edit over and, while it is
+still being written, asks the browser to hold the page, as the note editor does. Ticking one checkbox produces one `replace` of that
 item's flag. A record whose data differs from what the view last agreed with changed elsewhere,
 by sync or an agent. The view writes the new values into the store key by key, so a control
 keeps its focus. Without an edit handler the view is read-only.
@@ -459,6 +462,14 @@ would misrepresent the note.
   tab. A second case moves it to the trash from the gallery, sees the note show it as trashed, and
   restores it. A third inserts a status board from the picker and saves a chosen status. A fourth
   starts a blank widget in the gallery, reshapes it in the JSON editor, and keeps it.
+- `src/lib/services/widgets/formulas.spec.ts` and `src/lib/models/widget-formulas/index.spec.ts`
+  check the formula language, its failures, the step budget, and that every template works its
+  formulas out; the savings and loan templates are checked against the closed-form results.
+  `sources.spec.ts` checks the source rows, `widget-view.svelte.spec.ts` the live formulas,
+  charts, sliders, the data table and sources, and the sync contract stores formulas and
+  rejects a circular pair.
+- `tests/e2e/widgets.e2e.ts` also moves a savings simulator's inputs and reloads, adds and
+  totals an expense row and reloads, and counts a todo added elsewhere on a project dashboard.
 - `src/lib/components/widgets/widget-json-editor.svelte.spec.ts` and
   `src/lib/client/widgets/json-text.spec.ts` check the editor's problems and the changes it
   applies.

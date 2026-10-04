@@ -132,6 +132,31 @@ describe('guarded widget mutations', () => {
 		});
 		expect(result.kind).toBe('rejected');
 	});
+	it('save formulas with the layout, and reject one that reads itself in a circle', async () => {
+		const { owner, controller, create } = await setup('7719');
+		const { id, etag } = await create();
+		const formulas = (derived: Record<string, string>) =>
+			controller.synchronize(owner, {
+				operationId: crypto.randomUUID(),
+				baseEtag: etag,
+				command: {
+					kind: 'editWidget',
+					widgetId: id,
+					change: { kind: 'layout', patch: [{ op: 'add', path: '/derived', value: derived }] }
+				}
+			});
+		const circular = await formulas({ a: '@/derived/b', b: '@/derived/a' });
+		const counted = await formulas({ open: 'count(filter(@/items, not item.done))' });
+		expect({
+			circular: circular.kind,
+			counted: counted.kind,
+			rows: await context.client`select layout->'derived'->>'open' as open from widgets where id = ${id}`
+		}).toEqual({
+			circular: 'rejected',
+			counted: 'applied',
+			rows: [{ open: 'count(filter(@/items, not item.done))' }]
+		});
+	});
 	it('move a widget to the trash and delete it only from there', async () => {
 		const { owner, controller, sync, create } = await setup('7716');
 		const { id, etag } = await create();

@@ -162,3 +162,68 @@ test('a blank widget started in the gallery is reshaped in the JSON editor and k
 	await expect(page.getByRole('heading', { name: 'Release notes' })).toBeVisible();
 	await expect(checkboxes(page)).toHaveCount(1);
 });
+
+test('a savings simulator works its balance out as the inputs move, and keeps them', async ({
+	page
+}) => {
+	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
+	await insertTemplate(page, 'Savings simulator');
+	const widget = page.locator('[data-widget-node] [data-slot="widget-view"]').first();
+	await expect(widget.getByText('129,885')).toBeVisible();
+	await expect(widget.locator('[data-slot="chart"] svg').first()).toBeVisible();
+	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
+
+	const write = delivered(page);
+	await widget.getByLabel('Monthly deposit').fill('500');
+	await widget.getByRole('slider', { name: 'Years' }).focus();
+	for (let step = 0; step < 10; step++) await page.keyboard.press('ArrowRight');
+	await expect(widget.getByText('Balance after 30 years')).toBeVisible();
+	await expect(widget.getByText('460,807')).toBeVisible();
+	await write;
+	await saved(page);
+	await page.reload();
+	await expect(page.getByText('460,807')).toBeVisible();
+});
+
+test('an expense tracker totals a row added in its table, and keeps it', async ({ page }) => {
+	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
+	await insertTemplate(page, 'Expense tracker');
+	const widget = page.locator('[data-widget-node] [data-slot="widget-view"]').first();
+	await expect(widget.getByRole('cell', { name: '1,446.50' })).toBeVisible();
+	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
+
+	await widget.getByRole('button', { name: 'Add expense' }).click();
+	await widget.getByLabel('Item, row 4').fill('Dinner out');
+	const write = delivered(page);
+	await widget.getByLabel('Amount, row 4').fill('53.5');
+	await expect(widget.getByRole('cell', { name: '1,500.00' })).toBeVisible();
+	await write;
+	await saved(page);
+	await page.reload();
+	await expect(page.getByLabel('Item, row 4')).toHaveValue('Dinner out');
+	await expect(page.getByRole('cell', { name: '1,500.00' })).toBeVisible();
+});
+
+test('a project dashboard counts a todo added elsewhere in its project', async ({ page }) => {
+	await createNoteInInbox(page, `Widget e2e ${Date.now()}`);
+	const noteUrl = page.url();
+	await insertTemplate(page, 'Project dashboard');
+	const openCount = page
+		.locator('[data-widget-node] [data-slot="widget-metric"]')
+		.filter({ hasText: 'Open todos' })
+		.locator('span')
+		.nth(1);
+	await expect(openCount).toHaveText(/^\d+$/);
+	const before = Number(await openCount.textContent());
+	await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 15_000 });
+	await saved(page);
+
+	await page.goto('/todos?view=board&quickTodo');
+	await page.locator('#quick-todo-input').fill(`Widget e2e todo ${Date.now()}`);
+	const created = delivered(page);
+	await page.locator('#quick-todo-input').press('Enter');
+	await created;
+	await saved(page);
+	await page.goto(noteUrl);
+	await expect(openCount).toHaveText(String(before + 1));
+});
