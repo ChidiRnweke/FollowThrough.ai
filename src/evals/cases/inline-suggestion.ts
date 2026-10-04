@@ -65,9 +65,12 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 
 			const text = suggestion.outcome === 'suggested' ? suggestion.text : '';
 			const lower = text.trim().toLowerCase();
+			const hasSuggestion = suggestion.outcome === 'suggested';
+			const hasText = lower.length > 0;
 			const noPreamble = !/^(sure|here|certainly|okay|i )/i.test(text.trim());
 			const noEcho = !prefix.toLowerCase().includes(lower) || lower.length === 0;
 			const sentences = (text.match(/[.!?](\s|$)/g) ?? []).length;
+			const shapeIsValid = hasSuggestion && hasText && noPreamble && noEcho && sentences <= 2;
 
 			px.logOutput({
 				prefix,
@@ -76,11 +79,16 @@ export const inlineSuggestionCases: readonly EvalCase[] = [
 			});
 			px.logAnnotation({
 				name: ARCHETYPES.inlineSuggestionShape,
-				score: noPreamble && noEcho && sentences <= 2 ? 1 : 0,
-				label: noPreamble && noEcho && sentences <= 2 ? 'clean' : 'malformed',
-				explanation: `preamble=${!noPreamble} echo=${!noEcho} sentences=${sentences}`
+				score: shapeIsValid ? 1 : 0,
+				label: shapeIsValid ? 'clean' : 'malformed',
+				explanation: `suggested=${hasSuggestion} nonempty=${hasText} preamble=${!noPreamble} echo=${!noEcho} sentences=${sentences}`
 			});
 
+			expect(suggestion.outcome, 'inline suggestion must be produced').toBe('suggested');
+			expect(
+				lower.length,
+				'inline suggestion must contain a nonempty continuation'
+			).toBeGreaterThan(0);
 			expect(noPreamble, `suggestion began with a preamble: "${text}"`).toBe(true);
 			expect(noEcho, `suggestion echoed the prefix: "${text}"`).toBe(true);
 			expect(sentences, `suggestion ran to ${sentences} sentences`).toBeLessThanOrEqual(2);

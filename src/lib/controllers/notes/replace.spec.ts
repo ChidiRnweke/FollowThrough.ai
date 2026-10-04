@@ -47,11 +47,23 @@ describe('durable local note replacements', () => {
 	it('captures all selected notes before writing any replacement', async () => {
 		const { notes, drafts } = setup();
 		notes.delete(testNoteId(2));
-		await replaceNoteDrafts(drafts, input).catch(() => undefined);
-		expect([...notes.values()].map((note) => note.plainText)).toEqual([
-			'ship release',
-			'ship release'
-		]);
+		const outcome = await replaceNoteDrafts(drafts, input).then(
+			() => ({ kind: 'complete' as const }),
+			(error: unknown) => ({
+				kind: 'failure' as const,
+				message: error instanceof Error ? error.message : String(error)
+			})
+		);
+		expect({
+			outcome,
+			remainingBodies: [...notes.values()].map((note) => note.plainText)
+		}).toEqual({
+			outcome: {
+				kind: 'failure',
+				message: 'A matching note is unavailable. Search again before replacing.'
+			},
+			remainingBodies: ['ship release', 'ship release']
+		});
 	});
 	it('reports every saved replacement on success', async () => {
 		const { drafts } = setup();

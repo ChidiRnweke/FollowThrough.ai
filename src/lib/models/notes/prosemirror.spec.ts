@@ -136,6 +136,12 @@ describe('reading a document out of storage', () => {
 	});
 
 	it('answers with a document even when the column is not one', () => {
-		expect(readProseMirrorDocument('not a document').type).toBe('doc');
+		const document = readProseMirrorDocument('not a document');
+		expect(unknownProseMirrorNodes(document)).toMatchObject([
+			{
+				type: 'unknown',
+				reason: expect.stringContaining('Stored document is not readable')
+			}
+		]);
 	});
 });

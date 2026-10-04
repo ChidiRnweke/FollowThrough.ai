@@ -49,7 +49,7 @@ describe('Reading a Markdown archive', () => {
 
 	it('ignores macOS metadata entries', () => {
 		const outcome = read({ '__MACOSX/one.md': '# One', 'one.md': '# One' });
-		expect(outcome.ok && outcome.result.entries).toHaveLength(1);
+		expect(outcome.ok && outcome.result.entries.map((entry) => entry.path)).toEqual(['one.md']);
 	});
 
 	it('ignores an editor’s dot-directory', () => {

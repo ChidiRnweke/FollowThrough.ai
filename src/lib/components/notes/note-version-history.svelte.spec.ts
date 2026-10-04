@@ -79,7 +79,17 @@ describe('NoteVersionHistory', () => {
 
 	it('diffs the selected version against the note as it stands', async () => {
 		const screen = await render(NoteVersionHistory, { ...base, selected: revision });
-		expect(await screen.getByText(/The rewritten body/).all()).not.toHaveLength(0);
+		await expect
+			.poll(async () => ({
+				previous: document.querySelector('[aria-label="Read-only preview of Previous"]')
+					?.textContent,
+				current: document.querySelector('[aria-label="Read-only preview of Current draft"]')
+					?.textContent
+			}))
+			.toEqual({
+				previous: expect.stringContaining('The original body'),
+				current: expect.stringContaining('The rewritten body')
+			});
 	});
 
 	// Nothing to compare against until a version is chosen, and an empty diff pane

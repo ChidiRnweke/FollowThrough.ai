@@ -115,8 +115,14 @@ it('compares the authoritative conflict value before keeping a change', async ()
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
 	await expect
-		.element(screen.getByRole('region', { name: 'Latest' }))
-		.toHaveTextContent('Server project');
+		.poll(async () => ({
+			yours: document.querySelector('section[aria-label="Yours"]')?.textContent,
+			latest: document.querySelector('section[aria-label="Latest"]')?.textContent
+		}))
+		.toMatchObject({
+			yours: expect.stringContaining('My project'),
+			latest: expect.stringContaining('Server project')
+		});
 });
 
 it('refuses to discard dependent input added after review started', async () => {

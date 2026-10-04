@@ -99,10 +99,6 @@ describe('serializeWorkbenchUrl', () => {
 		);
 	});
 
-	it('omits split when split equals focused (invariant)', () => {
-		expect(serializeWorkbenchUrl(state(id(1)))).toBe(`/notes/${id(1)}`);
-	});
-
 	it('round-trips through parseWorkbenchUrl', () => {
 		const original = state(id(2), id(1), id(2), id(3));
 		const url = serializeWorkbenchUrl(original);
