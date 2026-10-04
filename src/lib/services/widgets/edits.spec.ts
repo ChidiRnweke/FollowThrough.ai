@@ -343,3 +343,79 @@ describe('changes from edited content', () => {
 		).toEqual([{ kind: 'rename', title: 'Launch' }]);
 	});
 });
+
+describe('formulas in a layout', () => {
+	const addDerived = (derived: Record<string, string>) =>
+		applyWidgetChange(
+			widgetBuilder(),
+			{ kind: 'layout', patch: [{ op: 'add', path: '/derived', value: derived }] },
+			widgetCatalog,
+			later
+		);
+	it('accepts formulas that read the data and each other', () => {
+		expect(addDerived({ open: 'count(@/items)', half: '@/derived/open / 2' }).kind).toBe('applied');
+	});
+	it('refuses a formula that does not parse, naming it', () => {
+		expect(addDerived({ open: 'count(@/items' })).toEqual({
+			kind: 'invalid',
+			issues: [
+				{
+					path: '/layout/derived/open',
+					message: 'Expected ")" but found the end (at character 14)'
+				}
+			]
+		});
+	});
+	it('refuses formulas that read each other in a circle', () => {
+		expect(addDerived({ a: '@/derived/b', b: '@/derived/a + 1' })).toEqual({
+			kind: 'invalid',
+			issues: [{ path: '/layout/derived/a', message: 'These formulas read each other: a → b → a' }]
+		});
+	});
+	it('refuses a read of a derived value that is not defined', () => {
+		expect(addDerived({ a: '@/derived/missing' })).toEqual({
+			kind: 'invalid',
+			issues: [{ path: '/layout/derived/a', message: '@/derived/missing is not defined' }]
+		});
+	});
+	it('refuses a control bound to a computed value', () => {
+		expect(
+			applyWidgetChange(
+				widgetBuilder(),
+				{
+					kind: 'layout',
+					patch: [
+						{
+							op: 'replace',
+							path: '/elements/item/props/checked',
+							value: { $bindState: '/derived/x' }
+						}
+					]
+				},
+				widgetCatalog,
+				later
+			)
+		).toEqual({
+			kind: 'invalid',
+			issues: [
+				{
+					path: '/layout/elements/item/props/checked',
+					message: 'A computed value can be read with $state but not bound'
+				}
+			]
+		});
+	});
+	it('refuses data that claims the computed root', () => {
+		expect(
+			applyWidgetChange(
+				widgetBuilder(),
+				{ kind: 'data', patch: [{ op: 'add', path: '/derived', value: {} }] },
+				widgetCatalog,
+				later
+			)
+		).toEqual({
+			kind: 'invalid',
+			issues: [{ path: '/data/derived', message: '"derived" is reserved for computed values' }]
+		});
+	});
+});

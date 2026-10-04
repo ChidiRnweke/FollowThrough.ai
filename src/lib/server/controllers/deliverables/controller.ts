@@ -1,4 +1,5 @@
 import { widgetExport } from '$lib/services/widgets/export-blocks';
+import { resolveWidgetState } from '$lib/services/widgets/formulas';
 import type { Widget, WidgetExport, WidgetId } from '$lib/models/widgets';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { NotFoundError, ValidationError } from '$lib/errors';
@@ -438,7 +439,10 @@ export class Deliverables implements DeliverablesController {
 					throw new ValidationError(
 						'An exported widget is unavailable in the source note’s project. Restore it or remove it from the note.'
 					);
-				widgets.set(widgetId, widgetExport(widget));
+				widgets.set(
+					widgetId,
+					widgetExport(widget, resolveWidgetState(widget.layout, widget.data).state)
+				);
 			}
 		const exportInput: ExportInput = {
 			...input,

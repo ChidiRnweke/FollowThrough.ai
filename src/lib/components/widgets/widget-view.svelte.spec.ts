@@ -69,3 +69,43 @@ describe('Widget view typing', () => {
 		await expect.poll(() => screen.getByText('Needs attention').elements().length).toBe(1);
 	});
 });
+
+describe('Widget view formulas', () => {
+	const savings = () =>
+		widgetBuilder({ layout: widgetTemplates.savings.layout, data: widgetTemplates.savings.data });
+	it('shows a value worked out from the data', async () => {
+		const screen = await render(WidgetView, { widget: savings() });
+		await expect.element(screen.getByText('129,885')).toBeVisible();
+	});
+	it('works the value out again as a control changes the data', async () => {
+		const screen = await render(WidgetView, {
+			widget: savings(),
+			onChange: async () => ({ kind: 'staged' })
+		});
+		await screen.getByLabelText('Monthly deposit').fill('0');
+		await expect.element(screen.getByText('27,126')).toBeVisible();
+	});
+	it('hands over only the data, never the computed values', async () => {
+		const changes: WidgetChange[] = [];
+		const screen = await render(WidgetView, {
+			widget: savings(),
+			onChange: async (change) => {
+				changes.push(change);
+				return { kind: 'staged' };
+			}
+		});
+		await screen.getByLabelText('Years').fill('10');
+		await expect
+			.poll(() => changes)
+			.toEqual([{ kind: 'data', patch: [{ op: 'replace', path: '/years', value: 10 }] }]);
+	});
+	it('says which formula failed and why', async () => {
+		const screen = await render(WidgetView, {
+			widget: widgetBuilder({
+				layout: { ...widgetTemplates.blank.layout, derived: { ratio: '@/a / @/b' } },
+				data: { ...widgetTemplates.blank.data, a: 1, b: 0 }
+			})
+		});
+		await expect.element(screen.getByText('ratio: Division by zero')).toBeVisible();
+	});
+});

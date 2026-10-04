@@ -1,6 +1,7 @@
 import type {
 	JsonValue,
 	Widget,
+	WidgetData,
 	WidgetElement,
 	WidgetExport,
 	WidgetExportBlock,
@@ -221,9 +222,10 @@ const blocksOf = (
 
 /**
  * The widget as a document shows it, for note export. Expressions, repeats and `visible` are
- * resolved against the saved data, so the export shows what the widget showed when exported.
+ * resolved against `state`, the saved data with its formulas worked out, so the export shows what
+ * the widget showed when exported.
  */
-export const widgetExport = (widget: Widget): WidgetExport => ({
+export const widgetExport = (widget: Widget, state: WidgetData): WidgetExport => ({
 	title: widget.title,
-	blocks: blocksOf(widget.layout.root, widget.layout.elements, { data: widget.data })
+	blocks: blocksOf(widget.layout.root, widget.layout.elements, { data: state })
 });

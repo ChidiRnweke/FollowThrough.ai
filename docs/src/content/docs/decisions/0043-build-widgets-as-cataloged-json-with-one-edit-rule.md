@@ -156,6 +156,46 @@ A stored layout records its `catalogVersion`. When a layout names a component th
 catalog does not have, the renderer shows a visible unsupported-element placeholder. The stored
 element is kept (ADR 0015).
 
+### Formulas compute values from the data
+
+A widget that simulates, totals or scores needs values computed from its data, such as a savings
+balance from a deposit and a rate. The layout has an optional `derived` map of named formulas:
+
+```json
+"derived": {
+	"growth": "series(0, @/years, { year: i, balance: round(@/start * (1 + @/rate / 1200) ^ (12 * i)) })",
+	"final": "last(@/derived/growth)"
+}
+```
+
+Each result is in the rendered state at `/derived/<name>`, so components read it with the existing
+`$state` expression and no new prop expression is needed. A computed value is never saved:
+`derived` is a reserved top-level key that data may not have, a control may not `$bindState` into
+it, and the view removes it from the store snapshot before it diffs. A formula is part of the
+layout, so changing it is a layout change.
+
+The formula language is closed. It has numbers, text, booleans, lists and records; `@/path`
+references into the state; arithmetic, comparison and logical operators; and a fixed list of
+functions (`round`, `min`, `sum`, `if`, `format`, `series`, `map`, `filter` and others). It has no
+loops, no user functions and no I/O. `series`, `map` and `filter` bind `i` and `item` for their
+body only. Evaluation has a step budget of 200,000 steps per widget, so an agent-written formula
+cannot freeze the tab. A thirty-year monthly schedule costs about 4,000.
+
+- **Parsing is part of the layout schema.** `parseFormula` (`src/lib/models/widget-formulas/`)
+  turns source into a typed AST, and `widgetLayoutSchema` refuses a formula that does not parse, a
+  read of an undefined derived value, and formulas that read each other in a circle. The stored
+  value stays the source text, so the layout remains plain JSON for diff, sync and replay.
+- **Evaluation is one shared rule.** `resolveWidgetState(layout, data)`
+  (`src/lib/services/widgets/formulas.ts`) evaluates each formula lazily, so the order of keys in
+  `jsonb` does not matter. The view, export and the server call this one function, so a value
+  does not depend on where the widget is shown.
+- **A failure is a value.** Division by zero, or a reference to text where a number is needed,
+  makes that formula `null` and adds an issue naming it. The view lists the issues under the widget.
+  The data edit that caused the failure is still accepted, because a person typing `0` must not be
+  refused.
+- **json-render's `$computed` is not used.** It calls registered JavaScript functions with untyped
+  arguments in the browser only, so export and the server could not share it.
+
 ### The library stays behind two seams
 
 json-render is imported in two places only:

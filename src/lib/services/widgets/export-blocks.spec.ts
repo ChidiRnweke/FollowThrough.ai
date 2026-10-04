@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates } from '$lib/models/widgets';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
+import type { Widget } from '$lib/models/widgets';
 import { widgetExport } from './export-blocks';
+
+/** These widgets have no formulas, so their saved data is the state they render. */
+const exported = (widget: Widget) => widgetExport(widget, widget.data);
 
 describe('widget export', () => {
 	it('writes a checklist as a heading and one check per item', () => {
@@ -14,14 +18,14 @@ describe('widget export', () => {
 				]
 			}
 		});
-		expect(widgetExport(ticked).blocks).toEqual([
+		expect(exported(ticked).blocks).toEqual([
 			{ kind: 'heading', text: 'Checklist', level: 3 },
 			{ kind: 'check', label: 'Ship', checked: true },
 			{ kind: 'check', label: 'Tell support', checked: false }
 		]);
 	});
 	it('writes each status row on one line, with its flag only where the rule holds', () => {
-		const status = widgetExport(
+		const status = exported(
 			widgetBuilder({ layout: widgetTemplates.status.layout, data: widgetTemplates.status.data })
 		).blocks;
 		expect(status.slice(1)).toEqual([
@@ -31,7 +35,7 @@ describe('widget export', () => {
 		]);
 	});
 	it('writes a table from its rows under its column labels', () => {
-		const table = widgetExport(
+		const table = exported(
 			widgetBuilder({
 				layout: widgetTemplates.decisions.layout,
 				data: widgetTemplates.decisions.data
@@ -45,11 +49,30 @@ describe('widget export', () => {
 	});
 	it('names an element the catalog no longer has instead of dropping it', () => {
 		expect(
-			widgetExport(
+			exported(
 				widgetBuilder({
 					layout: { root: 'g', elements: { g: { type: 'Gauge', props: {}, children: [] } } }
 				})
 			).blocks
 		).toEqual([{ kind: 'unsupported', type: 'Gauge' }]);
+	});
+	it('writes a value a formula worked out, from the state it is given', () => {
+		const widget = widgetBuilder({
+			layout: {
+				root: 'total',
+				elements: {
+					total: {
+						type: 'Metric',
+						props: { label: 'Total', value: { $state: '/derived/total' } },
+						children: []
+					}
+				},
+				derived: { total: '@/a + @/b' }
+			},
+			data: { a: 1, b: 2 }
+		});
+		expect(widgetExport(widget, { ...widget.data, derived: { total: 3 } }).blocks).toEqual([
+			{ kind: 'metric', label: 'Total', value: '3' }
+		]);
 	});
 });

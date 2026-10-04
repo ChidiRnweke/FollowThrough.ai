@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { formulaFunctions } from '$lib/models/widget-formulas';
 import { widgetActions, widgetTemplates, type WidgetCatalog } from '$lib/models/widgets';
 
 /** A component's props as compact JSON Schema, which is the form a model reads most reliably. */
@@ -27,6 +28,18 @@ export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
 		'',
 		`Element \`on\` bindings may use only these actions: ${widgetActions.map((action) => `\`${action}\``).join(', ')}.`,
 		'',
+		'## Formulas',
+		'',
+		'Values worked out from the data go in the layout\'s optional `derived` map: `"derived": { "<name>": "<formula>" }`. Each result is read at `/derived/<name>` with `$state`, never bound. Formulas update as the data changes and are never saved in the data, which must not have a `derived` key.',
+		'',
+		'- `@/path` reads the data by JSON Pointer; `@/derived/<name>` reads another formula. Formulas must not read each other in a circle.',
+		'- Numbers, `"text"`, `true`, `false`, `null`, lists `[a, b]` and records `{ field: value }`. `x.field` reads a record field.',
+		'- `+ - * / % ^`, `== != < <= > >=`, `and`, `or`, `not`. `+` joins text when either side is text.',
+		`- Functions: ${Object.values(formulaFunctions)
+			.map((definition) => definition.usage)
+			.join('; ')}.`,
+		'- A failed formula (division by zero, a missing number) reads as `null` and the widget says why.',
+		'',
 		'## Components',
 		'',
 		...Object.entries(catalog.components).flatMap(([name, definition]) => [
@@ -48,5 +61,11 @@ export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
 			null,
 			1
 		),
+		'```',
+		'',
+		'## Example: formulas',
+		'',
+		'```json',
+		JSON.stringify({ derived: widgetTemplates.savings.layout.derived }, null, 1),
 		'```'
 	].join('\n');

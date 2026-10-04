@@ -10,6 +10,7 @@
 	import { createStateStore } from '@json-render/core';
 	import { JsonUIProvider, Renderer } from '@json-render/svelte';
 	import { diffWidgetData } from '$lib/services/widgets/edits';
+	import { resolveWidgetState, widgetDataOf } from '$lib/services/widgets/formulas';
 	import { widgetDataSchema, type Widget, type WidgetData } from '$lib/models/widgets';
 	import { widgetRegistry } from './registry';
 	import UnsupportedElement from './elements/unsupported-element.svelte';
@@ -31,18 +32,43 @@
 	let pending: (() => void) | undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
-	// One store for the life of the view. The store copies along the changed path and never writes
-	// into its input, so the record (a Svelte state proxy) is handed over as it is.
-	const store = createStateStore(untrack(() => widget.data));
+	// One store for the life of the view, holding the data and the values computed from it. The
+	// store copies along the changed path and never writes into its input.
+	const initial = untrack(() => resolveWidgetState(widget.layout, widget.data));
+	const store = createStateStore(initial.state);
+	let formulaIssues = $state(initial.issues);
 
 	const spec = $derived({ root: widget.layout.root, elements: widget.layout.elements });
 
+	/** The data the controls hold now. The store is the library's untyped model, read at the edge. */
+	const currentData = () => widgetDataSchema.safeParse(widgetDataOf(store.getSnapshot()));
+
 	/** Bring the store to `data` key by key, so mounted controls keep their focus. */
 	const adopt = (data: WidgetData) => {
-		const keys = new Set([...Object.keys(store.getSnapshot()), ...Object.keys(data)]);
-		store.update(Object.fromEntries([...keys].map((key) => [`/${key}`, data[key]])));
+		const { state, issues } = resolveWidgetState(widget.layout, data);
+		const keys = new Set([...Object.keys(store.getSnapshot()), ...Object.keys(state)]);
+		store.update(Object.fromEntries([...keys].map((key) => [`/${key}`, state[key]])));
+		formulaIssues = issues;
 		observed = data;
 	};
+
+	/** Work the formulas out again after a control changed the data or the layout changed. */
+	const recompute = () => {
+		const data = currentData();
+		if (!data.success) return;
+		const { state, issues } = resolveWidgetState(widget.layout, data.data);
+		formulaIssues = issues;
+		if (JSON.stringify(store.get('/derived')) !== JSON.stringify(state.derived))
+			store.set('/derived', state.derived);
+	};
+
+	// Formulas follow every keystroke, before the change is handed over, so a result is live.
+	$effect(() => store.subscribe(recompute));
+
+	$effect(() => {
+		void widget.layout;
+		untrack(recompute);
+	});
 
 	const flush = () => {
 		clearTimeout(timer);
@@ -65,8 +91,7 @@
 		if (!handler) return;
 		const unsubscribe = store.subscribe(() => {
 			pending = () => {
-				// The store is the library's untyped state model, so it is read here, at the edge.
-				const next = widgetDataSchema.safeParse(store.getSnapshot());
+				const next = currentData();
 				if (!next.success) {
 					failure = 'The widget produced data it cannot save.';
 					adopt(widget.data);
@@ -107,5 +132,15 @@
 	</Field.Set>
 	{#if failure}
 		<p role="alert" class="text-label text-destructive">{failure}</p>
+	{/if}
+	{#if formulaIssues.length > 0}
+		<ul
+			data-slot="widget-formula-issues"
+			class="flex flex-col gap-0.5 text-label text-muted-foreground"
+		>
+			{#each formulaIssues as issue (issue.path)}
+				<li>{issue.path.split('/').at(-1)}: {issue.message}</li>
+			{/each}
+		</ul>
 	{/if}
 </div>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { formulaFunctions } from '$lib/models/widget-formulas';
 import { widgetCatalog } from '$lib/models/widgets';
 import { widgetCatalogPrompt } from './catalog-prompt';
 
@@ -11,5 +12,11 @@ describe('widget catalog prompt', () => {
 	});
 	it('names the catalog version it describes', () => {
 		expect(widgetCatalogPrompt(widgetCatalog)).toContain(`version ${widgetCatalog.version}`);
+	});
+	it('documents every formula function', () => {
+		const prompt = widgetCatalogPrompt(widgetCatalog);
+		expect(Object.keys(formulaFunctions).filter((name) => !prompt.includes(`\`${name}(`))).toEqual(
+			[]
+		);
 	});
 });

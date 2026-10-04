@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { formulaSourceSchema, parseFormula } from '$lib/models/widget-formulas';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type UserId = Brand<string, 'UserId'>;
@@ -105,16 +106,107 @@ export const widgetElementSchema = z.strictObject({
 
 export type WidgetElement = z.infer<typeof widgetElementSchema>;
 
-/** The structure of a widget: the json-render spec without its `state`. */
-export const widgetLayoutSchema = z.strictObject({
-	root: elementKeySchema,
-	elements: z.record(elementKeySchema, widgetElementSchema)
-});
+/**
+ * Top-level state keys the widget computes rather than stores. A renderer reads them like data,
+ * through `$state`, but no control writes them and they are never saved.
+ */
+export const widgetComputedRoots = ['derived'] as const;
+
+const derivedNameSchema = z
+	.string()
+	.regex(/^[A-Za-z][A-Za-z0-9_]{0,59}$/, 'Derived names start with a letter: letters, digits, _');
+
+const DERIVED_PREFIX = '/derived/';
+
+/** The derived values a formula reads, by name. `@/derived/total/0` reads `total`. */
+const derivedReads = (references: readonly string[]): readonly string[] =>
+	references.flatMap((pointer) =>
+		pointer.startsWith(DERIVED_PREFIX) ? [pointer.slice(DERIVED_PREFIX.length).split('/')[0]!] : []
+	);
+
+/** The first chain of derived values that reads itself, if any. */
+const derivedCycle = (
+	reads: ReadonlyMap<string, readonly string[]>
+): readonly string[] | undefined => {
+	const visit = (name: string, path: readonly string[]): readonly string[] | undefined => {
+		if (path.includes(name)) return [...path.slice(path.indexOf(name)), name];
+		for (const next of reads.get(name) ?? []) {
+			const cycle = visit(next, [...path, name]);
+			if (cycle) return cycle;
+		}
+		return undefined;
+	};
+	for (const name of reads.keys()) {
+		const cycle = visit(name, []);
+		if (cycle) return cycle;
+	}
+	return undefined;
+};
+
+/** A pointer into a computed root, which a control must not write. */
+const isComputedPointer = (pointer: string) =>
+	widgetComputedRoots.some((root) => pointer === `/${root}` || pointer.startsWith(`/${root}/`));
+
+/** The structure of a widget: the json-render spec without its `state`, plus its formulas. */
+export const widgetLayoutSchema = z
+	.strictObject({
+		root: elementKeySchema,
+		elements: z.record(elementKeySchema, widgetElementSchema),
+		/** Named formulas. Each result is read at `/derived/<name>`. */
+		derived: z.record(derivedNameSchema, formulaSourceSchema).optional()
+	})
+	.superRefine((layout, context) => {
+		const derived = layout.derived ?? {};
+		const reads = new Map(
+			Object.entries(derived).map(([name, source]) => {
+				const parsed = parseFormula(source);
+				return [name, parsed.kind === 'parsed' ? derivedReads(parsed.references) : []];
+			})
+		);
+		for (const [name, names] of reads)
+			for (const missing of names.filter((read) => !Object.hasOwn(derived, read)))
+				context.addIssue({
+					code: 'custom',
+					path: ['derived', name],
+					message: `@/derived/${missing} is not defined`
+				});
+		const cycle = derivedCycle(reads);
+		if (cycle)
+			context.addIssue({
+				code: 'custom',
+				path: ['derived', cycle[0]!],
+				message: `These formulas read each other: ${cycle.join(' → ')}`
+			});
+		for (const [key, element] of Object.entries(layout.elements))
+			for (const [prop, value] of Object.entries(element.props))
+				if (
+					typeof value === 'object' &&
+					value !== null &&
+					!Array.isArray(value) &&
+					typeof value.$bindState === 'string' &&
+					isComputedPointer(value.$bindState)
+				)
+					context.addIssue({
+						code: 'custom',
+						path: ['elements', key, 'props', prop],
+						message: 'A computed value can be read with $state but not bound'
+					});
+	});
 
 export type WidgetLayout = z.infer<typeof widgetLayoutSchema>;
 
 /** The data of a widget: the json-render state, always an object at the top. */
-export const widgetDataSchema = z.record(z.string(), jsonValueSchema);
+export const widgetDataSchema = z
+	.record(z.string(), jsonValueSchema)
+	.superRefine((data, context) => {
+		for (const root of widgetComputedRoots)
+			if (Object.hasOwn(data, root))
+				context.addIssue({
+					code: 'custom',
+					path: [root],
+					message: `"${root}" is reserved for computed values`
+				});
+	});
 
 export type WidgetData = z.infer<typeof widgetDataSchema>;
 
@@ -237,7 +329,7 @@ const tone = z.enum(['default', 'muted']).nullish();
 
 /** The allow-list of components a layout may use. A layout naming anything else is invalid. */
 export const widgetCatalog = {
-	version: 2,
+	version: 3,
 	components: {
 		Stack: {
 			description: 'Lays out its children vertically or horizontally.',
@@ -497,6 +589,90 @@ export const widgetTemplates = {
 				{ id: 'launch', name: 'Launch', status: 'blocked' }
 			]
 		}
+	},
+	savings: {
+		title: 'Savings simulator',
+		layout: {
+			root: 'card',
+			elements: {
+				card: {
+					type: 'Card',
+					props: {
+						title: { $state: '/title' },
+						description: 'Interest compounds monthly; deposits are made at the end of each month.'
+					},
+					children: ['inputs', 'results', 'table']
+				},
+				inputs: {
+					type: 'Stack',
+					props: { direction: 'horizontal', gap: 'md' },
+					children: ['start', 'monthly', 'rate', 'years']
+				},
+				start: {
+					type: 'NumberInput',
+					props: { label: 'Starting amount', value: { $bindState: '/start' }, min: 0, step: 100 },
+					children: []
+				},
+				monthly: {
+					type: 'NumberInput',
+					props: { label: 'Monthly deposit', value: { $bindState: '/monthly' }, min: 0, step: 10 },
+					children: []
+				},
+				rate: {
+					type: 'NumberInput',
+					props: { label: 'Yearly interest %', value: { $bindState: '/rate' }, step: 0.1 },
+					children: []
+				},
+				years: {
+					type: 'NumberInput',
+					props: { label: 'Years', value: { $bindState: '/years' }, min: 1, max: 80, step: 1 },
+					children: []
+				},
+				results: {
+					type: 'Stack',
+					props: { direction: 'horizontal', gap: 'lg' },
+					children: ['balance', 'interest']
+				},
+				balance: {
+					type: 'Metric',
+					props: {
+						label: { $template: 'Balance after ${/years} years' },
+						value: { $state: '/derived/balanceText' },
+						detail: { $template: '${/derived/depositedText} deposited' }
+					},
+					children: []
+				},
+				interest: {
+					type: 'Metric',
+					props: { label: 'Interest earned', value: { $state: '/derived/interestText' } },
+					children: []
+				},
+				table: {
+					type: 'Table',
+					props: {
+						columns: [
+							{ key: 'year', label: 'Year' },
+							{ key: 'deposited', label: 'Deposited' },
+							{ key: 'interest', label: 'Interest' },
+							{ key: 'balance', label: 'Balance' }
+						],
+						rows: { $state: '/derived/schedule' }
+					},
+					children: []
+				}
+			},
+			derived: {
+				growth:
+					'series(0, @/years, { year: i, deposited: round(@/start + @/monthly * 12 * i), balance: round(if(@/rate == 0, @/start + @/monthly * 12 * i, @/start * (1 + @/rate / 1200) ^ (12 * i) + @/monthly * ((1 + @/rate / 1200) ^ (12 * i) - 1) / (@/rate / 1200))) })',
+				schedule:
+					'map(@/derived/growth, { year: item.year, deposited: item.deposited, interest: item.balance - item.deposited, balance: item.balance })',
+				final: 'last(@/derived/schedule)',
+				balanceText: 'format(@/derived/final.balance)',
+				depositedText: 'format(@/derived/final.deposited)',
+				interestText: 'format(@/derived/final.balance - @/derived/final.deposited)'
+			}
+		},
+		data: { title: 'Savings simulator', start: 10000, monthly: 250, rate: 5, years: 20 }
 	},
 	blank: {
 		title: 'New widget',
