@@ -404,6 +404,10 @@ would misrepresent the note.
   are open: make the widget tools first-class (ADR 0022 weighs every first-class schema), or add a
   create-and-embed tool that goes through the reviewed note change (ADR 0003). Embedding from the
   widgets controller was rejected because it would bypass that review.
+  The catalog version 3 eval `effect-widget-savings-simulator` sharpens this: in 3 of 3 live runs
+  on 2026-10-04 the agent built a working simulator from one prompt, with inputs, formulas and a
+  chart reaching the expected balance, and in 0 of 3 did it embed the widget in the note. Building
+  is no longer the limit; embedding is.
 
 - **Layout history.** Whether layout revisions are kept for restore (ADR 0011). Data history is
   not kept.
