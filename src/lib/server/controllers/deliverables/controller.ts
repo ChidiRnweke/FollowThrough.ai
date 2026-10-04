@@ -1,10 +1,15 @@
+import { widgetExport } from '$lib/services/widgets/export-blocks';
+import { resolveWidgetState } from '$lib/services/widgets/formulas';
+import { widgetSourceRows } from '$lib/services/widgets/sources';
+import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
+import type { Todo, TodoListFilter } from '$lib/models/todos';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { randomUUID, createHash } from 'node:crypto';
 import { type ExportInput, type PreparedExport } from '$lib/models/deliverables';
 import type { AttachmentId } from '$lib/models/attachments';
-import type { Note, NoteId } from '$lib/models/notes';
-import type { DateTime } from '$lib/models/workspace';
+import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
+import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
 import {
 	mediaTypeFor,
@@ -14,7 +19,8 @@ import {
 import type {
 	prepareExport,
 	exportImageSources,
-	exportDiagramReferences
+	exportDiagramReferences,
+	exportWidgetReferences
 } from '$lib/server/services/deliverables/export-preparation';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
@@ -164,6 +170,13 @@ export interface DeliverablesDependencies {
 	prepareExport: typeof prepareExport;
 	exportImageSources: typeof exportImageSources;
 	exportDiagramReferences: typeof exportDiagramReferences;
+	exportWidgetReferences: typeof exportWidgetReferences;
+	widgetReader: { get(actor: ActorContext, id: WidgetId): Promise<Widget> };
+	/** The project's todos and notes, read only for a widget that shows them. */
+	todoLister: { list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> };
+	noteLister: {
+		list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
+	};
 	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
 	diagramRenderer: Pick<DiagramRasterizer, 'render'>;
 	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
@@ -418,11 +431,29 @@ export class Deliverables implements DeliverablesController {
 			const image = await this.dependencies.fetchImage(url);
 			if (image) images.set(source, image);
 		}
+		// A widget the note embeds must be a live widget of the same project, as a diagram must;
+		// an export that silently left one out would misrepresent the note.
+		const widgets = new Map<string, WidgetExport>();
+		for (const note of sourceNotes)
+			for (const widgetId of this.dependencies.exportWidgetReferences(note.document)) {
+				if (widgets.has(widgetId)) continue;
+				const widget = await this.dependencies.widgetReader.get(actor, widgetId as WidgetId);
+				if (widget.projectId !== note.projectId || widget.archivedAt)
+					throw new ValidationError(
+						'An exported widget is unavailable in the source note’s project. Restore it or remove it from the note.'
+					);
+				const sources = await this.widgetSources(actor, widget);
+				widgets.set(
+					widgetId,
+					widgetExport(widget, resolveWidgetState(widget.layout, widget.data, sources).state)
+				);
+			}
 		const exportInput: ExportInput = {
 			...input,
 			notes,
 			settings,
 			images,
+			widgets,
 			diagramPngs,
 			diagramSizes,
 			...(styles ? { styles } : {})
@@ -539,6 +570,24 @@ export class Deliverables implements DeliverablesController {
 			title: existing.title,
 			format: existing.format,
 			templateId: existing.templateId
+		});
+	}
+
+	/**
+	 * The rows a widget's sources show, as of the export. Today is the server's UTC date, so a
+	 * todo due today reads as overdue only once that day has passed everywhere.
+	 */
+	private async widgetSources(actor: ActorContext, widget: Widget): Promise<WidgetSourceRows> {
+		if (!widget.layout.sources) return {};
+		const [todos, notes] = await Promise.all([
+			this.dependencies.todoLister.list(actor, { projectId: widget.projectId }),
+			this.dependencies.noteLister.list(actor, widget.projectId)
+		]);
+		return widgetSourceRows(widget.layout.sources, {
+			projectId: widget.projectId,
+			today: new Date().toISOString().slice(0, 10) as LocalDate,
+			todos,
+			notes
 		});
 	}
 }

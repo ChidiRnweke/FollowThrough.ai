@@ -37,7 +37,11 @@
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
+	import { WidgetInserter, WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
+	import { WidgetNodeView, WidgetPicker, type WidgetPick } from '$lib/components/widgets';
+	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import type { Editor } from '$lib/components/edra/commands/CoreEditor.js';
+	import type { Editor as TiptapEditor } from '@tiptap/core';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import Tiptap from '$lib/components/edra/Tiptap.svelte';
 	import EdraEditor from '$lib/components/edra/editor.svelte';
@@ -346,6 +350,32 @@
 	/** Jump to a heading. Exported so the outline rail can drive the editor. */
 	let pickingProjectDiagram = $state(false);
 
+	/** The editor that asked for a widget, while the picker is open. */
+	let widgetTarget = $state<TiptapEditor | null>(null);
+
+	/** Embeds the chosen widget at the caret, creating it first when it is a template. */
+	async function insertWidget(
+		target: TiptapEditor,
+		pick: WidgetPick
+	): Promise<{ kind: 'inserted' } | { kind: 'failure'; message: string }> {
+		try {
+			const widgetId =
+				pick.kind === 'existing'
+					? pick.widgetId
+					: await widgetEdits.createFromTemplate({
+							template: pick.template,
+							projectId,
+							sourceNoteId: noteId
+						});
+			target.chain().focus().setWidget(widgetId).run();
+			return { kind: 'inserted' };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : 'The widget could not be created';
+			toast.error(message);
+			return { kind: 'failure', message };
+		}
+	}
+
 	/** Inserts the chosen diagram at the caret as a live reference. */
 	function insertProjectDiagram(diagramId: DiagramId): void {
 		editor?.chain().focus().setDrawio(diagramId).run();
@@ -435,7 +465,11 @@
 				if (initialized) onchange?.();
 			}
 		},
-		[TodoNode(TodoNodeView)]
+		[
+			TodoNode(TodoNodeView),
+			WidgetNode(WidgetNodeView),
+			WidgetInserter.configure({ insert: (target) => (widgetTarget = target) })
+		]
 	);
 	$effect(() => {
 		editor?.commands.setInlineSuggestionsEnabled(inlineSuggestionsEnabled);
@@ -1389,6 +1423,23 @@
 		<Skeleton class="h-5 w-full" />
 		<Skeleton class="h-5 w-2/3" />
 	</div>
+{/if}
+
+{#if widgetTarget}
+	<WidgetPicker
+		bind:open={
+			() => widgetTarget !== null,
+			(next) => {
+				if (!next) widgetTarget = null;
+			}
+		}
+		{projectId}
+		onpick={(pick) => {
+			const target = widgetTarget;
+			widgetTarget = null;
+			if (target) void insertWidget(target, pick);
+		}}
+	/>
 {/if}
 
 {#if pickingProjectDiagram}

@@ -1,6 +1,10 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { SuggestionKind } from '$lib/models/suggestions';
+import type { NoteId } from '$lib/models/notes';
+import type { JsonValue, Widget } from '$lib/models/widgets';
+import { resolveWidgetState } from '$lib/services/widgets/formulas';
+import { widgetReferencesIn } from '$lib/services/notes/references';
 import type { Lab } from '../lab/application';
 
 /**
@@ -199,4 +203,141 @@ export const projectIdFor = (
 	const id = workspace.projectIds.get(name);
 	if (!id) throw new Error(`The "${name}" project was not seeded`);
 	return id;
+};
+
+/**
+ * A checklist-like widget exists, the named note embeds it, and the item matching `ticked` is the
+ * only one ticked. Read back through the controllers, so a pass means the user would see it.
+ */
+/** The saved widget whose title matches, in any of the actor's projects; otherwise why not. */
+async function widgetTitled(
+	lab: Lab,
+	actor: ActorContext,
+	titleFragment: string
+): Promise<
+	| { readonly kind: 'found'; readonly widget: Widget }
+	| { readonly kind: 'failure'; readonly explanation: string }
+> {
+	const { projects } = await lab.controllers.projects().list(actor);
+	const widgets = (
+		await Promise.all(
+			projects.map((project) => lab.controllers.widgets().list(actor, { projectId: project.id }))
+		)
+	).flatMap((result) => result.widgets);
+	const widget = widgets.find((candidate) => matches(candidate.title, titleFragment));
+	return widget
+		? { kind: 'found', widget }
+		: {
+				kind: 'failure',
+				explanation: `no widget matching "${titleFragment}"; found ${widgets.map((w) => `"${w.title}"`).join(', ') || 'none'}`
+			};
+}
+
+/** Whether the note embeds the widget, or why it does not. */
+async function embedFailure(
+	lab: Lab,
+	actor: ActorContext,
+	noteId: NoteId,
+	widget: Widget
+): Promise<string | undefined> {
+	const { note } = await lab.controllers.notes().get(actor, { noteId });
+	return widgetReferencesIn([note]).includes(widget.id)
+		? undefined
+		: `note "${note.title}" does not embed widget "${widget.title}"`;
+}
+
+export async function expectWidgetTicked(
+	lab: Lab,
+	actor: ActorContext,
+	input: {
+		readonly titleFragment: string;
+		readonly noteId: NoteId;
+		readonly ticked: string;
+	}
+): Promise<EffectVerdict> {
+	const found = await widgetTitled(lab, actor, input.titleFragment);
+	if (found.kind === 'failure') return { passed: false, explanation: found.explanation };
+	const { widget } = found;
+	const unembedded = await embedFailure(lab, actor, input.noteId, widget);
+	if (unembedded) return { passed: false, explanation: unembedded };
+	// The item list is whichever array in the data holds objects with a boolean flag.
+	const items = Object.values(widget.data).flatMap((value) =>
+		Array.isArray(value) ? value.filter((item) => typeof item === 'object' && item !== null) : []
+	);
+	const ticks = items.map((item) => {
+		const text = JSON.stringify(item);
+		const flag = Object.values(item as Record<string, JsonValue>).find(
+			(field) => typeof field === 'boolean'
+		);
+		return { matches: matches(text, input.ticked), done: flag === true };
+	});
+	const target = ticks.filter((tick) => tick.matches);
+	const passed =
+		target.length === 1 && target[0]!.done && ticks.filter((tick) => tick.done).length === 1;
+	return {
+		passed,
+		explanation: passed
+			? `widget "${widget.title}" is embedded and only "${input.ticked}" is ticked`
+			: `widget "${widget.title}" data does not show exactly "${input.ticked}" ticked: ${JSON.stringify(widget.data)}`
+	};
+}
+
+const CHARTS = new Set(['LineChart', 'AreaChart', 'BarChart']);
+
+/** Every number in a JSON value, at any depth. */
+const numbersIn = (value: JsonValue): readonly number[] =>
+	typeof value === 'number'
+		? [value]
+		: Array.isArray(value)
+			? value.flatMap(numbersIn)
+			: typeof value === 'object' && value !== null
+				? Object.values(value).flatMap(numbersIn)
+				: [];
+
+/**
+ * A simulator the agent built: embedded, plotting a chart, computing its values with formulas
+ * that all work out, and arriving within `tolerance` of the expected final value. Monthly and
+ * yearly compounding differ by about 2% over fifteen years, so either convention passes.
+ */
+export async function expectSimulatorWidget(
+	lab: Lab,
+	actor: ActorContext,
+	input: {
+		readonly titleFragment: string;
+		readonly noteId: NoteId;
+		readonly expected: number;
+		readonly tolerance: number;
+	}
+): Promise<EffectVerdict> {
+	const found = await widgetTitled(lab, actor, input.titleFragment);
+	if (found.kind === 'failure') return { passed: false, explanation: found.explanation };
+	const build = simulatorFailure(found.widget, input.expected, input.tolerance);
+	const unembedded = await embedFailure(lab, actor, input.noteId, found.widget);
+	// The build is judged before the embed, so a failure says whether the widget itself works.
+	const failures = [build ?? 'the widget computes and charts the expected balance', unembedded];
+	return build || unembedded
+		? { passed: false, explanation: failures.filter(Boolean).join('; ') }
+		: { passed: true, explanation: `${failures[0]}, embedded in the note` };
+}
+
+/** What is wrong with a simulator widget's build, or undefined when it works. */
+const simulatorFailure = (
+	widget: Widget,
+	expected: number,
+	tolerance: number
+): string | undefined => {
+	const charts = Object.values(widget.layout.elements).filter((element) =>
+		CHARTS.has(element.type)
+	);
+	if (charts.length === 0) return `widget "${widget.title}" has no chart`;
+	if (Object.keys(widget.layout.derived ?? {}).length === 0)
+		return `widget "${widget.title}" computes nothing with formulas`;
+	const { state, issues } = resolveWidgetState(widget.layout, widget.data, {});
+	if (issues.length > 0) return `formulas fail: ${JSON.stringify(issues)}`;
+	const close = numbersIn(state.derived ?? null).some(
+		(value) => Math.abs(value - expected) <= expected * tolerance
+	);
+	return close
+		? undefined
+		: `no computed value is within ${tolerance * 100}% of ${expected}: ${JSON.stringify(state.derived).slice(0, 400)}`;
 };

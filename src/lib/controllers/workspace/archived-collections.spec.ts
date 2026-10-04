@@ -1,3 +1,4 @@
+import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { expect, it } from 'vitest';
 import {
 	resourceDataSchemas,
@@ -68,6 +69,11 @@ const views = (archived: boolean) => {
 				archivedAt: testNow
 			}
 		},
+		{ type: 'widgets', value: widgetBuilder({ projectId: testProjectId() }) },
+		{
+			type: 'widgets',
+			value: widgetBuilder({ id: testWidgetId(2), projectId: testProjectId(), archivedAt: testNow })
+		},
 		{ type: 'suggestions', value: suggestion },
 		{
 			type: 'provenance',
@@ -100,7 +106,9 @@ const collections = [
 		read: (data: WorkspaceViews) => data.memorySuggestions(testProjectId())
 	},
 	{ name: 'diagram gallery', read: (data: WorkspaceViews) => data.diagrams(testProjectId()) },
+	{ name: 'widget gallery', read: (data: WorkspaceViews) => data.widgets(testProjectId()) },
 	{ name: 'diagram trash', read: (data: WorkspaceViews) => data.trashedDiagrams() },
+	{ name: 'widget trash', read: (data: WorkspaceViews) => data.trashedWidgets() },
 	{ name: 'artifact gallery', read: (data: WorkspaceViews) => data.artifacts(testProjectId()) },
 	{
 		name: 'project files',

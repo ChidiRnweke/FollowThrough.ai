@@ -9,6 +9,25 @@ function collectDrawioIds(node: ProseMirrorNode, ids: string[]): void {
 	for (const child of 'content' in node ? (node.content ?? []) : []) collectDrawioIds(child, ids);
 }
 
+function collectWidgetIds(node: ProseMirrorNode, ids: string[]): void {
+	if (node.type === 'widgetNode') {
+		const id = node.attrs?.widgetId;
+		if (id && !ids.includes(id)) ids.push(id);
+		return;
+	}
+	for (const child of 'content' in node ? (node.content ?? []) : []) collectWidgetIds(child, ids);
+}
+
+/** Every widget a set of documents embeds, in document order. */
+export function widgetReferencesIn(
+	documents: readonly { document: ProseMirrorDocument }[]
+): string[] {
+	const ids: string[] = [];
+	for (const entry of documents)
+		for (const node of entry.document.content ?? []) collectWidgetIds(node, ids);
+	return ids;
+}
+
 /** Every draw.io diagram referenced by a set of documents, in document order. */
 export function drawioReferencesIn(
 	documents: readonly { document: ProseMirrorDocument }[]

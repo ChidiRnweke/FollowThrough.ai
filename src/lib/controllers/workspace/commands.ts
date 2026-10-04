@@ -6,6 +6,9 @@ import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
+import { applyWidgetChange, createWidget } from '$lib/services/widgets/edits';
+import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
+import { widgetCatalog, type Widget, type WidgetEditResult } from '$lib/models/widgets';
 import type {
 	MemoryEntry,
 	MemoryEntryId,
@@ -205,6 +208,18 @@ export function workspaceCommandNeedsInventory(
 			return false;
 	}
 }
+
+/** The optimistic widget for a create or edit, or the reason the edit cannot be shown. */
+const appliedWidget = (result: WidgetEditResult): Widget => {
+	switch (result.kind) {
+		case 'applied':
+			return result.widget;
+		case 'stale':
+			throw new Error(`The widget ${result.part} changed since it was loaded`);
+		case 'invalid':
+			throw new Error(result.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; '));
+	}
+};
 
 /** Derive local effects from the command and the version this editor actually observed. */
 export const prepareWorkspaceCommand = (
@@ -451,6 +466,48 @@ export const prepareWorkspaceCommand = (
 				[],
 				command.kind === 'saveDiagram' ? 'document' : null
 			);
+		}
+		case 'createWidget':
+			return content(
+				{
+					type: 'widgets',
+					value: appliedWidget(
+						createWidget(
+							command.draft,
+							{
+								id: command.id,
+								userId,
+								projectId: command.projectId,
+								...(command.sourceNoteId ? { sourceNoteId: command.sourceNoteId } : {}),
+								now
+							},
+							widgetCatalog
+						)
+					)
+				},
+				[projectKey(command.projectId)]
+			);
+		case 'editWidget':
+			return content({
+				type: 'widgets',
+				value: appliedWidget(
+					applyWidgetChange(value('widgets'), command.change, widgetCatalog, now)
+				)
+			});
+		case 'archiveWidget':
+		case 'restoreWidget': {
+			const change = widgetTrashChange(
+				command.kind === 'archiveWidget' ? 'archive' : 'restore',
+				value('widgets'),
+				now
+			);
+			if (change.kind === 'invalid') throw new Error(change.message);
+			return content({ type: 'widgets', value: change.widget });
+		}
+		case 'deleteWidget': {
+			const decision = decideWidgetTrash('delete', value('widgets'));
+			if (decision.kind === 'invalid') throw new Error(decision.message);
+			return content(null);
 		}
 		default:
 			throw new Error(`Unhandled command: ${command satisfies never}`);

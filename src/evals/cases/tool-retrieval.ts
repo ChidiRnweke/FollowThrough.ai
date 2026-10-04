@@ -190,6 +190,38 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 		expected: 'read_project_diagram'
 	},
 
+	// Widgets
+	{
+		id: 'widget-catalog',
+		goal: 'see which components a widget layout can use before building one',
+		expected: 'read_widget_catalog'
+	},
+	{
+		id: 'widget-create',
+		goal: 'make a progress tracker widget for this project',
+		expected: 'create_widget'
+	},
+	{
+		id: 'widget-list',
+		goal: 'find the relocation checklist widget in this project',
+		expected: 'list_widgets'
+	},
+	{
+		id: 'widget-read',
+		goal: 'look at the checklist widget embedded in this note before changing it',
+		expected: 'read_widget'
+	},
+	{
+		id: 'widget-data-edit',
+		goal: 'tick off the second item in the launch checklist widget',
+		expected: 'edit_widget_data'
+	},
+	{
+		id: 'widget-layout-edit',
+		goal: 'add a progress bar element to the top of the tracker widget',
+		expected: 'edit_widget_layout'
+	},
+
 	// Suggestions
 	{
 		id: 'suggestions-list',

@@ -1,8 +1,9 @@
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteId, TrashedNote } from '$lib/models/notes';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { Widget, WidgetId } from '$lib/models/widgets';
 import type { Component } from 'svelte';
-import { FtDocument, FtFolder, FtSkills, FtWorkflow } from '$lib/components/icons';
+import { FtDocument, FtFolder, FtSkills, FtWidget, FtWorkflow } from '$lib/components/icons';
 
 /** The shape every `Ft*` icon has, matching `EmptyState` and `ActionProgress`. */
 type TrashEntryIcon = Component<{ class?: string }>;
@@ -30,6 +31,13 @@ export type TrashEntry =
 			readonly title: string;
 			readonly projectName: string;
 			readonly archivedAt: DateTime;
+	  }
+	| {
+			readonly kind: 'widget';
+			readonly id: WidgetId;
+			readonly title: string;
+			readonly projectName: string;
+			readonly archivedAt: DateTime;
 	  };
 
 /**
@@ -45,7 +53,8 @@ const TRASH_ENTRY_ICONS: Readonly<Record<TrashEntry['kind'], TrashEntryIcon>> = 
 	note: FtDocument,
 	folder: FtFolder,
 	skill: FtSkills,
-	diagram: FtWorkflow
+	diagram: FtWorkflow,
+	widget: FtWidget
 };
 
 export const trashEntryIcon = (entry: TrashEntry): TrashEntryIcon => TRASH_ENTRY_ICONS[entry.kind];
@@ -54,7 +63,8 @@ const TRASH_ENTRY_LABELS: Readonly<Record<TrashEntry['kind'], string>> = {
 	note: 'Note',
 	folder: 'Folder',
 	skill: 'Skill',
-	diagram: 'Diagram'
+	diagram: 'Diagram',
+	widget: 'Widget'
 };
 
 export const trashEntryLabel = (entry: TrashEntry): string => TRASH_ENTRY_LABELS[entry.kind];
@@ -78,4 +88,13 @@ export const diagramTrashEntry = (diagram: Diagram, projectName: string): TrashE
 	// Only an archived diagram reaches this list, so `archivedAt` is there. The
 	// row is built from what the trash query returned, not from any diagram.
 	archivedAt: diagram.archivedAt ?? diagram.updatedAt
+});
+
+export const widgetTrashEntry = (widget: Widget, projectName: string): TrashEntry => ({
+	kind: 'widget',
+	id: widget.id,
+	title: widget.title,
+	projectName,
+	// Only a widget in the trash reaches this list; see `diagramTrashEntry`.
+	archivedAt: widget.archivedAt ?? widget.updatedAt
 });

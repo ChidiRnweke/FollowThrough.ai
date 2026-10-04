@@ -1,3 +1,4 @@
+import type { WidgetId } from '$lib/models/widgets';
 import type { IndexSource, PendingIndexSource, EmbeddedChunk } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
 import type { DiagramId } from '$lib/models/diagrams';
@@ -40,6 +41,7 @@ export interface RetrievalIndexRepository {
 	deleteForAttachment(actor: ActorContext, attachmentId: AttachmentId): Promise<void>;
 	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly SearchDocument[]>;
 	listForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<readonly SearchDocument[]>;
+	listForWidget(actor: ActorContext, widgetId: WidgetId): Promise<readonly SearchDocument[]>;
 	listForMemoryEntry(
 		actor: ActorContext,
 		memoryEntryId: MemoryEntryId
@@ -75,6 +77,7 @@ export interface RetrievalIndexRepository {
 	): Promise<readonly SearchMatch[]>;
 	deleteForNote(actor: ActorContext, noteId: NoteId): Promise<void>;
 	deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void>;
+	deleteForWidget(actor: ActorContext, widgetId: WidgetId): Promise<void>;
 	deleteForMemoryEntry(actor: ActorContext, memoryEntryId: MemoryEntryId): Promise<void>;
 
 	/**

@@ -15,6 +15,7 @@ import type {
 } from '$lib/models/agent';
 import type { ArtifactView } from '$lib/models/deliverables';
 import type { Diagram } from '$lib/models/diagrams';
+import type { Widget } from '$lib/models/widgets';
 import type { TrashedNote } from '$lib/models/notes';
 import type { AttachmentView } from '$lib/models/attachments';
 import type { MemoryEntry } from '$lib/models/memory';
@@ -229,6 +230,35 @@ export class WorkspaceViews {
 					diagram.archivedAt &&
 					this.isActiveProject(diagram.projectId) &&
 					(!projectId || diagram.projectId === projectId)
+			)
+			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
+	}
+	/** A widget in an active project (ADR 0009), or null. */
+	widget(widgetId: string): Widget | null {
+		const widget = this.get('widgets', widgetId);
+		if (!widget || !this.isActiveProject(widget.projectId)) return null;
+		return widget;
+	}
+	/** Active widgets in a project, newest change first, matched by title. */
+	widgets(projectId: ProjectId, query = ''): readonly Widget[] {
+		if (!this.isActiveProject(projectId)) return [];
+		const search = query.trim().toLowerCase();
+		return this.all('widgets')
+			.filter(
+				(widget) =>
+					widget.projectId === projectId &&
+					!widget.archivedAt &&
+					(!search || widget.title.toLowerCase().includes(search))
+			)
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
+	}
+	trashedWidgets(projectId?: ProjectId): readonly Widget[] {
+		return this.all('widgets')
+			.filter(
+				(widget) =>
+					widget.archivedAt &&
+					this.isActiveProject(widget.projectId) &&
+					(!projectId || widget.projectId === projectId)
 			)
 			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
 	}

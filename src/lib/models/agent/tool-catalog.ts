@@ -445,7 +445,7 @@ export const TOOL_DESCRIPTIONS = [
 	},
 	{
 		name: 'create_diagram',
-		classification: 'read',
+		classification: 'mutation',
 		surface: 'app',
 		description:
 			'Create a diagram in a project. Takes a projectId and uncompressed mxfile XML, and saves it as an unpublished working revision — the user approves the call first and publishes when they are ready. Send raw XML, never HTML-escaped: the source must start with a literal "<". Use edit_diagram to change one that already exists.',
@@ -468,6 +468,48 @@ export const TOOL_DESCRIPTIONS = [
 		description:
 			'Read the diagram this conversation last wrote, including its id and full source as stored. Diagram source is left out of your history because it is large, so read it here before changing a diagram you wrote earlier.',
 		retrievalText: 'read the current diagram source on the canvas before revising it'
+	},
+	{
+		name: 'read_widget_catalog',
+		classification: 'read',
+		description:
+			'Read the widget catalog: the layout format, the state expressions, and every component with its props. Read it before create_widget or edit_widget_layout, and use only what it lists.',
+		retrievalText: 'widget components props format reference before building a widget'
+	},
+	{
+		name: 'create_widget',
+		classification: 'mutation',
+		description:
+			'Create a widget in a project: a small interface such as a checklist, tracker or table, saved on its own so several notes can show it. Read read_widget_catalog first. `layout` and `data` are JSON objects sent as JSON strings. Creating does not put the widget in a note. When the user wants it in a note, pass that `noteId`; the result then carries an `embed` line such as :::widgetNode {widgetId="…"} ::: and the edit_note call to make, and you must make it before you finish.',
+		retrievalText: 'create a checklist tracker table widget in a note'
+	},
+	{
+		name: 'list_widgets',
+		classification: 'read',
+		description:
+			'List the widgets in a project by title, newest change first, to find the id of a checklist, tracker or table the user names. Then read it with read_widget.',
+		retrievalText: 'find a widget checklist tracker by name in a project'
+	},
+	{
+		name: 'read_widget',
+		classification: 'read',
+		description:
+			'Read a widget: its title, its layout (a json-render element map under `root` and `elements`), its data (the state the layout binds to), and the revision of each. Read it before editing, and send the revision you read with the edit.',
+		retrievalText: 'read a widget checklist tracker layout and data embedded in a note'
+	},
+	{
+		name: 'edit_widget_data',
+		classification: 'mutation',
+		description:
+			'Change the data of a widget without changing how it looks, such as ticking a checklist item or updating a number. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the data read by read_widget, for example [{"op":"replace","path":"/items/0/done","value":true}]. Send expectedDataRevision from that read. A stale revision fails: read the widget again and retry.',
+		retrievalText: 'update widget data tick checklist item change tracker value'
+	},
+	{
+		name: 'edit_widget_layout',
+		classification: 'mutation',
+		description:
+			'Change the structure of a widget: add, remove or reconfigure elements. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the layout read by read_widget. Every element needs `type`, `props` and `children` (an empty array for a leaf). Only these components exist: Stack, Card, Heading, Text, Checkbox, Progress, Metric. Send expectedLayoutRevision from that read. A rejected layout returns the problems to fix.',
+		retrievalText: 'change widget layout add remove element restructure widget'
 	},
 	{
 		name: 'search_icons',

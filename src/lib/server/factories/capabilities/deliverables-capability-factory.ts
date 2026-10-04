@@ -11,7 +11,8 @@ import { generatePdf } from '$lib/server/services/deliverables/pdf';
 import {
 	prepareExport,
 	exportImageSources,
-	exportDiagramReferences
+	exportDiagramReferences,
+	exportWidgetReferences
 } from '$lib/server/services/deliverables/export-preparation';
 import { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
 import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
@@ -36,6 +37,7 @@ export const createDeliverablesCapability = (input: DeliverablesCapabilityInput)
 	prepareExport,
 	exportImageSources,
 	exportDiagramReferences,
+	exportWidgetReferences,
 	diagramRenderer: new DiagramRasterizer(),
 	docxGenerator: generateDocx,
 	pdfGenerator: generatePdf,

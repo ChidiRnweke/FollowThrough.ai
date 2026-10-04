@@ -14,6 +14,8 @@ import {
 	expectSuggestionPending,
 	expectTodoCreated,
 	expectTodoStatus,
+	expectWidgetTicked,
+	expectSimulatorWidget,
 	type EffectVerdict
 } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
@@ -378,6 +380,86 @@ export const effectCases: readonly EvalCase[] = [
 			});
 			annotate(verdict);
 			expect(result.status).toBe('completed');
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
+	},
+	{
+		id: 'effect-widget-created-then-ticked',
+		name: 'a widget made in a note keeps the tick the agent sets',
+		splits: [ARCHETYPES.effect],
+		input: {
+			setup:
+				'In my Background note, add a checklist widget titled "Relocation" with three items: book movers, update address, cancel lease.',
+			prompt: 'Tick "update address" on the Relocation checklist.'
+		},
+		expected: { widget: 'Relocation', ticked: 'update address' },
+		metadata: {
+			layer: 'end-state',
+			note: 'Two turns: create and embed the widget, then change only its data (ADR 0043).'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const noteId = workspace.noteIds.get('Background');
+			if (!noteId) throw new Error('The persona fixture must seed a Background note');
+			await runCase(lab, workspace.actor, {
+				prompt: this.input.setup as string,
+				mode: 'auto_accept'
+			});
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+
+			const verdict = await expectWidgetTicked(lab, workspace.actor, {
+				titleFragment: 'Relocation',
+				noteId,
+				ticked: 'update address'
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				arguments: findCall(result, 'edit_widget_data')?.arguments,
+				effect: verdict.explanation
+			});
+			annotate(verdict);
+			expect(verdict.passed, verdict.explanation).toBe(true);
+		}
+	},
+	{
+		id: 'effect-widget-savings-simulator',
+		name: 'a savings simulator the agent builds computes and charts its balance',
+		splits: [ARCHETYPES.effect],
+		input: {
+			prompt:
+				'In my Background note, add a widget titled "Savings simulator": I start with 5,000, add 200 a month, earn 4% a year, over 15 years. Let me change those numbers, and chart the balance by year.'
+		},
+		// 5,000 · (1 + 0.04/12)^180 + 200 · ((1 + 0.04/12)^180 − 1) / (0.04/12) ≈ 58,319
+		expected: { widget: 'Savings simulator', balance: 58_319 },
+		metadata: {
+			layer: 'end-state',
+			note: 'One turn: a simulator needs formulas, inputs and a chart from catalog version 3 (ADR 0043).'
+		},
+		async run(lab) {
+			const workspace = await seedWorkspace(lab, personaWorkspace);
+			const noteId = workspace.noteIds.get('Background');
+			if (!noteId) throw new Error('The persona fixture must seed a Background note');
+			const result = await runCase(lab, workspace.actor, {
+				prompt: this.input.prompt as string,
+				mode: 'auto_accept'
+			});
+			const verdict = await expectSimulatorWidget(lab, workspace.actor, {
+				titleFragment: 'Savings',
+				noteId,
+				expected: 58_319,
+				tolerance: 0.05
+			});
+			px.logOutput({
+				model: result.model,
+				toolCalls: result.calledToolNames,
+				layout: findCall(result, 'create_widget')?.arguments,
+				effect: verdict.explanation
+			});
+			annotate(verdict);
 			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
 	}

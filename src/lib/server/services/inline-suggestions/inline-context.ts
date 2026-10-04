@@ -31,6 +31,7 @@ export const retrievalQuery = (request: InlineSuggestionRequest): string =>
 const sourceType = (match: SearchMatch): InlineCompletionPassage['sourceType'] => {
 	if (match.document.memoryEntryId) return 'project-memory';
 	if (match.document.diagramId) return 'diagram';
+	if (match.document.widgetId) return 'widget';
 	if (match.document.attachmentId || match.document.attachmentPath) return 'attachment';
 	return 'note';
 };

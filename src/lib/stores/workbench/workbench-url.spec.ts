@@ -603,6 +603,30 @@ describe('diagram tabs in the workbench URL', () => {
 	});
 });
 
+describe('widget tabs in the workbench URL', () => {
+	const WIDGET = '77777777-7777-4777-8777-777777777777';
+	const widget = `widget:${WIDGET}`;
+
+	it('reads a widget-focused URL from ?focus=', () => {
+		expect(parse(`/widgets/${WIDGET}`, `tabs=${widget}&focus=${widget}`)?.focusedNoteId).toBe(
+			widget
+		);
+	});
+	it('serialises a focused widget onto its own host route', () => {
+		expect(serializeWorkbenchUrl({ focusedNoteId: widget, openTabs: [widget] })).toBe(
+			`/widgets/${WIDGET}?focus=${encodeURIComponent(widget)}`
+		);
+	});
+	it('round-trips a widget tab beside a note', () => {
+		const state = { focusedNoteId: widget, openTabs: [id(1), widget], splitNoteId: id(1) };
+		const [path, query] = serializeWorkbenchUrl(state).split('?');
+		expect(parse(path, query)).toEqual(state);
+	});
+	it('treats a /widgets URL without ?focus= as a plain page', () => {
+		expect(parse(`/widgets/${WIDGET}`)).toBeUndefined();
+	});
+});
+
 describe('replacing one tab with another', () => {
 	const DRAFT = 'draft:77777777-7777-4777-8777-777777777777';
 	const DIAGRAM = 'diagram:88888888-8888-4888-8888-888888888888';

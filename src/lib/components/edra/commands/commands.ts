@@ -14,6 +14,7 @@ import Image from '@lucide/svelte/icons/image';
 import Italic from '@lucide/svelte/icons/italic';
 import Link from '@lucide/svelte/icons/link-2';
 import List from '@lucide/svelte/icons/list';
+import Blocks from '@lucide/svelte/icons/blocks';
 import ListChecks from '@lucide/svelte/icons/list-checks';
 import ListOrdered from '@lucide/svelte/icons/list-ordered';
 import Pilcrow from '@lucide/svelte/icons/pilcrow';
@@ -566,6 +567,19 @@ export const commands: Record<string, EdraCommand[]> = {
 			// workspace answers it by inserting a reference.
 			onClick: (editor) => {
 				editor.extensionStorage.projectDiagramPicker?.open?.(editor);
+			}
+		}
+	],
+	widget: [
+		{
+			icon: Blocks,
+			name: 'widget',
+			tooltip: 'Widget',
+			aliases: ['checklist', 'tracker'],
+			// Like the project diagram: the editor raises the request and the note answers it,
+			// because creating the widget is a workspace write.
+			onClick: (editor) => {
+				editor.extensionStorage.widgetInserter?.insert?.(editor);
 			}
 		}
 	]

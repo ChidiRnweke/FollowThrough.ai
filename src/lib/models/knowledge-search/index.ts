@@ -8,6 +8,8 @@ type NoteId = Brand<string, 'NoteId'>;
 
 type DiagramId = Brand<string, 'DiagramId'>;
 
+type WidgetId = Brand<string, 'WidgetId'>;
+
 type SourceAnchorId = Brand<string, 'SourceAnchorId'>;
 
 export type SearchDocumentId = Brand<string, 'SearchDocumentId'>;
@@ -42,6 +44,7 @@ export interface SearchDocument {
 	readonly sourceTitle?: string;
 	readonly sectionPath?: string;
 	readonly diagramId?: DiagramId;
+	readonly widgetId?: WidgetId;
 	readonly sourceAnchorId?: SourceAnchorId;
 	readonly content: string;
 	readonly contentHash: string;
@@ -78,6 +81,12 @@ export type KnowledgeSearchSource =
 			readonly title?: string;
 	  }
 	| {
+			readonly kind: 'widget';
+			readonly id: WidgetId;
+			readonly projectId: ProjectId;
+			readonly title?: string;
+	  }
+	| {
 			readonly kind: 'attachment';
 			readonly id: AttachmentId;
 			readonly projectId: ProjectId;
@@ -93,6 +102,7 @@ export type KnowledgeSearchSource =
 export type IndexSource =
 	| { readonly kind: 'note'; readonly noteId: NoteId }
 	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
+	| { readonly kind: 'widget'; readonly widgetId: WidgetId }
 	| { readonly kind: 'memory'; readonly memoryEntryId: MemoryEntryId }
 	| { readonly kind: 'attachment'; readonly attachmentId: AttachmentId };
 export interface IndexContent {

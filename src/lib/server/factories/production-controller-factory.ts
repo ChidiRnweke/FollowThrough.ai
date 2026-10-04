@@ -31,6 +31,7 @@ import {
 } from '../controllers/inline-suggestions/controller';
 import { Retrieval, type RetrievalDependencies } from '../controllers/knowledge-search/controller';
 import { Memory, type MemoryDependencies } from '../controllers/memory/controller';
+import { Widgets, type WidgetsDependencies } from '../controllers/widgets/controller';
 import { Notes, type NotesDependencies } from '../controllers/notes/controller';
 import { Projects, type ProjectsDependencies } from '../controllers/projects/controller';
 import { References, type ReferencesDependencies } from '../controllers/references/controller';
@@ -70,6 +71,7 @@ export interface ProductionControllerDependencies {
 	deliverables: DeliverablesDependencies;
 	trustPolicies: TrustPoliciesDependencies;
 	memory: MemoryDependencies;
+	widgets: WidgetsDependencies;
 	retrieval: RetrievalDependencies;
 	inlineSuggestions: InlineSuggestionsDependencies;
 	feedback: FeedbackDependencies;
@@ -217,6 +219,13 @@ export class ProductionControllerFactory implements ControllerFactory {
 			'memory',
 			new Memory(this.dependencies.memory),
 			controllerSurfaces.memory
+		);
+	}
+	widgets() {
+		return instrumentedController(
+			'widgets',
+			new Widgets(this.dependencies.widgets),
+			controllerSurfaces.widgets
 		);
 	}
 	retrieval() {

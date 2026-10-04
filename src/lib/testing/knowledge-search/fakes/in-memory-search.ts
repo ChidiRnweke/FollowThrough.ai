@@ -5,6 +5,7 @@ import type {
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import type { AttachmentId } from '$lib/models/attachments';
 import type { DiagramId } from '$lib/models/diagrams';
+import type { WidgetId } from '$lib/models/widgets';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -34,6 +35,8 @@ const inScope = (actor: ActorContext, source: IndexSource) => (item: OwnedSearch
 			return item.document.noteId === source.noteId && item.document.diagramId === undefined;
 		case 'diagram':
 			return item.document.diagramId === source.diagramId;
+		case 'widget':
+			return item.document.widgetId === source.widgetId;
 		case 'memory':
 			return item.document.memoryEntryId === source.memoryEntryId;
 		case 'attachment':
@@ -44,11 +47,13 @@ const inScope = (actor: ActorContext, source: IndexSource) => (item: OwnedSearch
 const sourceOf = (document: SearchDocument): IndexSource =>
 	document.diagramId
 		? { kind: 'diagram', diagramId: document.diagramId }
-		: document.noteId
-			? { kind: 'note', noteId: document.noteId }
-			: document.memoryEntryId
-				? { kind: 'memory', memoryEntryId: document.memoryEntryId }
-				: { kind: 'attachment', attachmentId: document.attachmentId! };
+		: document.widgetId
+			? { kind: 'widget', widgetId: document.widgetId }
+			: document.noteId
+				? { kind: 'note', noteId: document.noteId }
+				: document.memoryEntryId
+					? { kind: 'memory', memoryEntryId: document.memoryEntryId }
+					: { kind: 'attachment', attachmentId: document.attachmentId! };
 
 /** Fixed so tests can assert on it without a clock. */
 const SUPERSEDED_AT = '2000-01-01T00:00:00.000Z' as SearchDocument['supersededAt'];
@@ -59,9 +64,11 @@ const sourceKey = (source: IndexSource): string =>
 			? source.noteId
 			: source.kind === 'diagram'
 				? source.diagramId
-				: source.kind === 'memory'
-					? source.memoryEntryId
-					: source.attachmentId
+				: source.kind === 'widget'
+					? source.widgetId
+					: source.kind === 'memory'
+						? source.memoryEntryId
+						: source.attachmentId
 	}`;
 
 export class InMemorySearchRepository implements RetrievalIndexRepository, SnapshotParticipant {
@@ -229,6 +236,18 @@ export class InMemorySearchRepository implements RetrievalIndexRepository, Snaps
 	async deleteForDiagram(actor: ActorContext, diagramId: DiagramId): Promise<void> {
 		this.documents = this.documents.filter(
 			(item) => item.userId !== actor.userId || item.document.diagramId !== diagramId
+		);
+	}
+
+	async listForWidget(actor: ActorContext, widgetId: WidgetId): Promise<readonly SearchDocument[]> {
+		return this.documents
+			.filter(inScope(actor, { kind: 'widget', widgetId }))
+			.map((item) => item.document);
+	}
+
+	async deleteForWidget(actor: ActorContext, widgetId: WidgetId): Promise<void> {
+		this.documents = this.documents.filter(
+			(item) => !inScope(actor, { kind: 'widget', widgetId })(item)
 		);
 	}
 

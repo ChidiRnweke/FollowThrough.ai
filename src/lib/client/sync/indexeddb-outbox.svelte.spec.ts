@@ -4,6 +4,8 @@ import { WorkspaceDatabase } from './database';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { widgetTemplates } from '$lib/models/widgets';
+import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { outboxRepositoryContract } from '$lib/testing/sync/contracts/outbox-contract';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -418,5 +420,62 @@ it('retains identical normalized input for submission and uncertain cancellation
 	expect({ submitted: sent?.intent.command, cancelled: retained.intent.command }).toEqual({
 		submitted: { kind: 'createProject', id: project.id, name: 'Plan' },
 		cancelled: { kind: 'createProject', id: project.id, name: 'Plan' }
+	});
+});
+
+it('requeues a widget tick replayed onto a tick of another item, with its change unchanged', async () => {
+	const { name } = setup();
+	const items = widgetTemplates.checklist.data.items;
+	const widget = (done: readonly boolean[]) =>
+		widgetBuilder({
+			data: {
+				...widgetTemplates.checklist.data,
+				items: items.map((item, index) => ({ ...item, done: done[index] ?? false }))
+			}
+		});
+	const original = widget([]);
+	const outbox = new IndexedDbOutbox(
+		workspaceCommandSchema,
+		workspaceRecordSchema,
+		rebaseWorkspaceRecord,
+		new WorkspaceDatabase(original.userId, name)
+	);
+	databases.add(outbox.database.name);
+	repositories.push(outbox);
+	const change = {
+		kind: 'data' as const,
+		patch: [{ op: 'replace' as const, path: '/items/0/done', value: true }]
+	};
+	await outbox.append(original.userId, {
+		operationId: crypto.randomUUID(),
+		key: JSON.stringify(['widgets', original.id]),
+		command: { kind: 'editWidget', widgetId: original.id, change },
+		local: { type: 'widgets', value: { ...widget([true]), dataRevision: 2 } },
+		base: { etag: syncEtag(1n), value: { type: 'widgets', value: original } },
+		basedOn: null,
+		coalesce: null,
+		references: []
+	});
+	const sent = await outbox.take(original.userId);
+	if (!sent) throw new Error('Expected the submitted widget edit');
+	await outbox.settle(original.userId, sent, {
+		kind: 'conflict',
+		remote: {
+			kind: 'found',
+			snapshot: {
+				etag: syncEtag(2n),
+				value: { type: 'widgets', value: { ...widget([false, true]), dataRevision: 2 } }
+			}
+		}
+	});
+	const [entry] = await outbox.list(original.userId);
+	expect({
+		delivery: entry.delivery,
+		command: entry.intent.command,
+		local: entry.intent.local?.type === 'widgets' && entry.intent.local.value.data
+	}).toEqual({
+		delivery: { kind: 'queued' },
+		command: { kind: 'editWidget', widgetId: original.id, change },
+		local: widget([true, true]).data
 	});
 });

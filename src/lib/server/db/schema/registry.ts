@@ -26,6 +26,7 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import type { Provenance } from '$lib/models/provenance';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
+import type { WidgetData, WidgetLayout } from '$lib/models/widgets';
 
 export const workspaceSyncVersionSequence = pgSequence('workspace_sync_version_sequence');
 
@@ -548,6 +549,35 @@ export const diagrams = pgTable(
 		// diagram outlives the chat that drew it. This was unique, which made asking
 		// one chat for a second diagram impossible rather than merely unusual.
 		index('diagrams_conversation_idx').on(table.conversationId)
+	]
+);
+
+// A widget is its own entity, embedded in notes by id (ADR 0043). Layout and data are
+// separate columns with separate revisions, so a data edit and a layout edit never conflict.
+export const widgets = pgTable(
+	'widgets',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		projectId: uuid('project_id')
+			.notNull()
+			.references(() => projects.id, { onDelete: 'cascade' }),
+		// Where the widget was created. Other notes may embed it, so deleting this note keeps it.
+		sourceNoteId: uuid('source_note_id').references(() => notes.id, { onDelete: 'set null' }),
+		title: text('title').notNull(),
+		catalogVersion: integer('catalog_version').notNull(),
+		layout: jsonb('layout').$type<WidgetLayout>().notNull(),
+		layoutRevision: integer('layout_revision').notNull().default(1),
+		data: jsonb('data').$type<WidgetData>().notNull(),
+		dataRevision: integer('data_revision').notNull().default(1),
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		...timestamps
+	},
+	(table) => [
+		index('widgets_project_idx').on(table.projectId),
+		index('widgets_source_note_idx').on(table.sourceNoteId)
 	]
 );
 
@@ -1139,6 +1169,7 @@ export const searchChunks = pgTable(
 		sourceTitle: text('source_title'),
 		sectionPath: text('section_path'),
 		diagramId: uuid('diagram_id').references(() => diagrams.id, { onDelete: 'cascade' }),
+		widgetId: uuid('widget_id').references((): AnyPgColumn => widgets.id, { onDelete: 'cascade' }),
 		sourceAnchorId: uuid('source_anchor_id').references(() => sourceAnchors.id, {
 			onDelete: 'set null'
 		}),
@@ -1160,6 +1191,7 @@ export const searchChunks = pgTable(
 		index('search_chunks_note_idx').on(table.noteId),
 		index('search_chunks_memory_idx').on(table.memoryEntryId),
 		index('search_chunks_attachment_idx').on(table.attachmentId),
+		index('search_chunks_widget_idx').on(table.widgetId),
 		index('search_chunks_user_idx').on(table.userId),
 		index('search_chunks_project_idx').on(table.projectId),
 		// The backfill worker's queue is the data itself: every tick scans for chunks
@@ -1169,7 +1201,7 @@ export const searchChunks = pgTable(
 			.where(sql`embedding is null`),
 		check(
 			'search_chunks_single_source',
-			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}, ${table.diagramId}) = 1`
+			sql`num_nonnulls(${table.noteId}, ${table.memoryEntryId}, ${table.attachmentId}, ${table.diagramId}, ${table.widgetId}) = 1`
 		)
 	]
 );

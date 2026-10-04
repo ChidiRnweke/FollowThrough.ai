@@ -8,6 +8,7 @@
 	import TrashList from '../../shared/trash-list.svelte';
 	import {
 		diagramTrashEntry,
+		widgetTrashEntry,
 		noteTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
@@ -15,6 +16,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import type { Diagram } from '$lib/models/diagrams';
+	import type { Widget } from '$lib/models/widgets';
+	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { toast } from 'svelte-sonner';
 	import {
 		FtMemory as Brain,
@@ -26,6 +29,7 @@
 		FtFolderOpen as FolderOpen,
 		FtArtifacts as PackageOpen,
 		FtWorkflow as Workflow,
+		FtWidget,
 		FtAttachments as Paperclip,
 		FtSkills as Wrench
 	} from '$lib/components/icons';
@@ -46,6 +50,7 @@
 		memory: number;
 		artifacts: number;
 		diagrams: number;
+		widgets: number;
 		attachments: number;
 	}
 
@@ -54,6 +59,7 @@
 		counts,
 		trashed = [],
 		trashedDiagrams = [],
+		trashedWidgets = [],
 		trashInventoryReady,
 		overdueTodoCount = 0,
 		tipSeed = 0,
@@ -67,6 +73,7 @@
 		/** This project's deleted notes, so they can be brought back from where they were lost. */
 		trashed?: readonly TrashedNote[];
 		trashedDiagrams?: readonly Diagram[];
+		trashedWidgets?: readonly Widget[];
 		trashInventoryReady: boolean;
 		overdueTodoCount?: number;
 		// Comes from the loader so SSR and hydration pick the same tips.
@@ -120,6 +127,10 @@
 		counts.diagrams === 0 ? undefined : `${counts.diagrams} you can link into notes`
 	);
 
+	const widgetState = $derived(
+		counts.widgets === 0 ? undefined : `${counts.widgets} you can embed in notes`
+	);
+
 	const attachmentState = $derived.by(() => {
 		if (counts.attachments === 0) return undefined;
 		return counts.attachments === 1
@@ -157,10 +168,16 @@
 	// once on the kind rather than being handed an id whose type it has to assume.
 	const trashEntries = $derived([
 		...trashed.map(noteTrashEntry),
-		...trashedDiagrams.map((diagram) => diagramTrashEntry(diagram, view.project.name))
+		...trashedDiagrams.map((diagram) => diagramTrashEntry(diagram, view.project.name)),
+		...trashedWidgets.map((widget) => widgetTrashEntry(widget, view.project.name))
 	]);
 
 	async function restoreEntry(entry: TrashEntry): Promise<void> {
+		if (entry.kind === 'widget') {
+			if ((await widgetEdits.changeTrash(entry.id, 'restore')).kind === 'staged')
+				toast.success('Restored');
+			return;
+		}
 		if (entry.kind === 'diagram') {
 			await changeDiagramTrash(entry.id, 'restore');
 			toast.success('Restored');
@@ -173,6 +190,11 @@
 	}
 
 	async function deleteEntryForever(entry: TrashEntry): Promise<void> {
+		if (entry.kind === 'widget') {
+			if ((await widgetEdits.changeTrash(entry.id, 'delete')).kind === 'staged')
+				toast.success('Deleted permanently');
+			return;
+		}
 		if (entry.kind === 'diagram') {
 			await changeDiagramTrash(entry.id, 'delete');
 			toast.success('Deleted permanently');
@@ -188,6 +210,7 @@
 		// Scoped to this project: the panel only ever showed this project's trash, so
 		// emptying from here must not reach into another one.
 		for (const diagram of trashedDiagrams) await changeDiagramTrash(diagram.id, 'delete');
+		for (const widget of trashedWidgets) await widgetEdits.changeTrash(widget.id, 'delete');
 		const output = await projectActions.emptyNoteTrash(project.id);
 		if (!output) toast.error(projectActions.lastError ?? 'Could not empty the trash. Try again.');
 		else toast.success('Trash emptied');
@@ -229,6 +252,13 @@
 				icon={Workflow}
 				state={diagramState}
 				tip={diagramState ? undefined : pickTip('diagrams', tipSeed)}
+			/>
+			<ResourceRow
+				href="/widgets?projectId={project.id}"
+				label="Widgets"
+				icon={FtWidget}
+				state={widgetState}
+				tip={widgetState ? undefined : pickTip('widgets', tipSeed)}
 			/>
 		</ul>
 	</section>

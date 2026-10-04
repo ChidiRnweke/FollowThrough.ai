@@ -8,6 +8,7 @@ import { InvalidGeneratedContentError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { Attachment, ContentHash } from '$lib/models/attachments';
 import type { Diagram } from '$lib/models/diagrams';
+import type { Widget } from '$lib/models/widgets';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
 import type { SearchDocument, SearchDocumentId } from '$lib/models/knowledge-search';
@@ -141,6 +142,8 @@ const listFor = (
 			return repository.listForNote(actor, source.noteId);
 		case 'diagram':
 			return repository.listForDiagram(actor, source.diagramId);
+		case 'widget':
+			return repository.listForWidget(actor, source.widgetId);
 		case 'memory':
 			return repository.listForMemoryEntry(actor, source.memoryEntryId);
 		case 'attachment':
@@ -158,6 +161,8 @@ const deleteFor = (
 			return repository.deleteForNote(actor, source.noteId);
 		case 'diagram':
 			return repository.deleteForDiagram(actor, source.diagramId);
+		case 'widget':
+			return repository.deleteForWidget(actor, source.widgetId);
 		case 'memory':
 			return repository.deleteForMemoryEntry(actor, source.memoryEntryId);
 		case 'attachment':
@@ -276,6 +281,7 @@ export class ContentIndex {
 	};
 	readonly memories = { index: this.indexMemory.bind(this) };
 	readonly diagrams = { index: this.indexDiagram.bind(this) };
+	readonly widgets = { index: this.indexWidget.bind(this) };
 	apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<IndexingResult> {
 		return applyIndex(this.repository, this.embeddingModel, defer, actor, plan);
 	}
@@ -387,6 +393,38 @@ export class ContentIndex {
 					sectionPath,
 					sourceRevision: 0,
 					sourceCreatedAt: diagram.createdAt
+				}
+			})
+		);
+	}
+
+	/**
+	 * A widget is indexed by the words it shows, which its controller derives. A widget in the
+	 * trash, or one that shows no words, answers no searches.
+	 */
+	async indexWidget(
+		actor: ActorContext,
+		widget: Widget,
+		searchableText: string
+	): Promise<IndexingResult> {
+		const contents = widget.archivedAt ? [] : this.chunker.chunk(searchableText);
+		if (!contents.length)
+			return this.apply(actor, { kind: 'remove', source: { kind: 'widget', widgetId: widget.id } });
+		// A widget chunk is a list of labels, so its title is the context the reranker gets.
+		const sourceTitle = `Widget: ${widget.title}`;
+		return this.apply(
+			actor,
+			decideIndexPlan({
+				source: { kind: 'widget', widgetId: widget.id },
+				contents,
+				embedPrefix: sourceTitle,
+				base: {
+					projectId: widget.projectId,
+					widgetId: widget.id,
+					sourceTitle,
+					sectionPath: widget.title,
+					sourceRevision: widget.layoutRevision + widget.dataRevision,
+					sourceCreatedAt: widget.createdAt
 				}
 			})
 		);

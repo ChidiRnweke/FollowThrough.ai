@@ -23,6 +23,13 @@ import type { DeliverablesController } from '$lib/server/controllers/deliverable
 import type { DiagramsController } from '$lib/server/controllers/diagrams/controller';
 import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
 import type { RetrievalController } from '$lib/server/controllers/knowledge-search/controller';
+import type { WidgetsController } from '$lib/server/controllers/widgets/controller';
+import {
+	jsonPatchSchema,
+	widgetDataSchema,
+	widgetLayoutSchema,
+	type WidgetId
+} from '$lib/models/widgets';
 import type { MemoryController } from '$lib/server/controllers/memory/controller';
 import type { NotesController } from '$lib/server/controllers/notes/controller';
 import type { ProjectsController } from '$lib/server/controllers/projects/controller';
@@ -150,6 +157,7 @@ interface CoveredAgentControllers {
 	readonly attachments: AttachmentsController;
 	readonly deliverables: DeliverablesController;
 	readonly memory: MemoryController;
+	readonly widgets: WidgetsController;
 	readonly retrieval: RetrievalController;
 }
 
@@ -161,6 +169,10 @@ export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
  */
 const STUDIO_GESTURE =
 	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
+
+/** Why a widget's trash is not an agent tool: removing one is the user saying what the project keeps. */
+const WIDGET_GESTURE =
+	'Moving a widget to or from the trash is a user gesture in the gallery and the trash.';
 
 export const agentToolCoverage = {
 	agent: {
@@ -623,6 +635,19 @@ export const agentToolCoverage = {
 			reason: 'Memory changes must flow through propose_memory_change review.'
 		}
 	},
+	widgets: {
+		synchronize: { kind: 'excluded', reason: 'Device mutations use the shared versioned outbox.' },
+		get: { kind: 'read', tools: ['read_widget'] },
+		catalog: { kind: 'read', tools: ['read_widget_catalog'] },
+		list: { kind: 'read', tools: ['list_widgets'] },
+		create: { kind: 'mutation', tools: ['create_widget'] },
+		// Both edit tools write through one controller method and one rule, so the
+		// browser, the server and an approval decide an edit the same way (ADR 0043).
+		edit: { kind: 'mutation', tools: ['edit_widget_data', 'edit_widget_layout'] },
+		archive: { kind: 'excluded', reason: WIDGET_GESTURE },
+		restore: { kind: 'excluded', reason: WIDGET_GESTURE },
+		delete: { kind: 'excluded', reason: WIDGET_GESTURE }
+	},
 	agentSettings: {
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		bootstrap: {
@@ -783,6 +808,15 @@ const diagramId = z
 	.string()
 	.uuid()
 	.transform((value) => value as DiagramId);
+const widgetId = z
+	.string()
+	.uuid()
+	.describe('Exact widget UUID, as the widget node in a note records it.')
+	.transform((value) => value as WidgetId);
+const widgetPatchText = z
+	.string()
+	.min(2)
+	.describe('An RFC 6902 JSON Patch array, encoded as a JSON string.');
 const suggestionId = z
 	.string()
 	.uuid()
@@ -980,6 +1014,25 @@ interface AgentToolOutputMap {
 	readonly create_diagram: ControllerResult<DiagramStudioController['createDiagram']>;
 	readonly edit_diagram: ControllerResult<DiagramStudioController['editDiagram']>;
 	readonly read_canvas_diagram: ControllerResult<DiagramStudioController['readCanvasDiagram']>;
+	readonly read_widget_catalog: ControllerResult<WidgetsController['catalog']>;
+	readonly create_widget: {
+		readonly widgetId: WidgetId;
+		readonly title: string;
+		readonly embed: string;
+		readonly nextActions: readonly [
+			{ readonly tool: 'edit_note'; readonly noteId?: NoteId; readonly reason: string }
+		];
+	};
+	readonly list_widgets: {
+		readonly widgets: readonly {
+			readonly widgetId: WidgetId;
+			readonly title: string;
+			readonly updatedAt: string;
+		}[];
+	};
+	readonly read_widget: ControllerResult<WidgetsController['get']>;
+	readonly edit_widget_data: ControllerResult<WidgetsController['edit']>;
+	readonly edit_widget_layout: ControllerResult<WidgetsController['edit']>;
 }
 
 export type AgentToolOutput<Name extends ToolName> = AgentToolOutputMap[Name];
@@ -1047,6 +1100,24 @@ const requireProject = async (
 	throw new ValidationError(
 		`projectId is required to ${action}. Retry naming one of these projects: ${candidates}.`
 	);
+};
+
+/**
+ * Read a JSON argument sent as a string. Strict tool schemas cannot describe an arbitrary JSON
+ * value, so a patch, a layout or data crosses the tool boundary as text and is parsed here
+ * (ADR 0043). A failure names the argument, so the model can correct that one.
+ */
+const jsonArgument = <T>(text: string, schema: z.ZodType<T>, name: string): T => {
+	try {
+		const parsed: unknown = JSON.parse(text);
+		const result = schema.safeParse(parsed);
+		if (result.success) return result.data;
+		throw new ValidationError(`${name} is not valid: ${z.prettifyError(result.error)}`);
+	} catch (error) {
+		if (error instanceof SyntaxError)
+			throw new ValidationError(`${name} is not valid JSON: ${error.message}`);
+		throw error;
+	}
 };
 
 const isReviewedNoteTool = (name: string): boolean =>
@@ -2251,6 +2322,134 @@ const sharedToolDefinitions = (
 			(input) => factory.deliverables().regenerateArtifact(actor, input.artifactId)
 		)
 	});
+	const widgets = () => ({
+		read_widget_catalog: define(
+			'read_widget_catalog',
+			toolDescription('read_widget_catalog'),
+			'read',
+			z.object({}),
+			() => factory.widgets().catalog(actor)
+		),
+		create_widget: define(
+			'create_widget',
+			toolDescription('create_widget'),
+			'mutation',
+			z.object({
+				title: z.string().min(1),
+				layout: z.string().min(2).describe('The layout object, encoded as a JSON string.'),
+				data: z.string().min(2).describe('The data object, encoded as a JSON string.'),
+				projectId: projectId.optional(),
+				noteId: noteId
+					.optional()
+					.describe('The note the user wants the widget in. Creating does not embed it.')
+			}),
+			async (input) => {
+				const chosenProjectId = await requireProject(
+					factory,
+					actor,
+					input.projectId,
+					'create a widget'
+				);
+				const { widget } = await factory.widgets().create(actor, {
+					id: crypto.randomUUID() as WidgetId,
+					projectId: chosenProjectId,
+					draft: {
+						title: input.title,
+						layout: jsonArgument(input.layout, widgetLayoutSchema, 'layout'),
+						data: jsonArgument(input.data, widgetDataSchema, 'data')
+					}
+				});
+				const embed = `:::widgetNode {widgetId="${widget.id}"} :::`;
+				// Creating saves the widget in the project; only a reviewed note edit shows it in a
+				// note (ADR 0003), so the result names that edit rather than performing it.
+				return {
+					widgetId: widget.id,
+					title: widget.title,
+					embed,
+					nextActions: [
+						input.noteId
+							? {
+									tool: 'edit_note' as const,
+									noteId: input.noteId,
+									reason: `The widget is not in the note yet. Call edit_note on note ${input.noteId} now and insert ${embed} on its own line where the user asked for it.`
+								}
+							: {
+									tool: 'edit_note' as const,
+									reason:
+										'If the user asked for the widget in a note, insert the embed line on its own line in that note before you finish.'
+								}
+					]
+				};
+			}
+		),
+		list_widgets: define(
+			'list_widgets',
+			toolDescription('list_widgets'),
+			'read',
+			z.object({ projectId: projectId.optional() }),
+			async (input) => {
+				const chosenProjectId = await requireProject(
+					factory,
+					actor,
+					input.projectId,
+					'list widgets'
+				);
+				const { widgets } = await factory.widgets().list(actor, { projectId: chosenProjectId });
+				return {
+					widgets: widgets.map((widget) => ({
+						widgetId: widget.id,
+						title: widget.title,
+						updatedAt: widget.updatedAt
+					}))
+				};
+			}
+		),
+		read_widget: define(
+			'read_widget',
+			toolDescription('read_widget'),
+			'read',
+			z.object({ widgetId }),
+			(input) => factory.widgets().get(actor, input)
+		),
+		edit_widget_data: define(
+			'edit_widget_data',
+			toolDescription('edit_widget_data'),
+			'mutation',
+			z.object({
+				widgetId,
+				expectedDataRevision: z.number().int().positive(),
+				patch: widgetPatchText
+			}),
+			(input) =>
+				factory.widgets().edit(actor, {
+					widgetId: input.widgetId,
+					edit: {
+						kind: 'data',
+						expectedDataRevision: input.expectedDataRevision,
+						patch: jsonArgument(input.patch, jsonPatchSchema, 'patch')
+					}
+				})
+		),
+		edit_widget_layout: define(
+			'edit_widget_layout',
+			toolDescription('edit_widget_layout'),
+			'mutation',
+			z.object({
+				widgetId,
+				expectedLayoutRevision: z.number().int().positive(),
+				patch: widgetPatchText
+			}),
+			(input) =>
+				factory.widgets().edit(actor, {
+					widgetId: input.widgetId,
+					edit: {
+						kind: 'layout',
+						expectedLayoutRevision: input.expectedLayoutRevision,
+						patch: jsonArgument(input.patch, jsonPatchSchema, 'patch')
+					}
+				})
+		)
+	});
 	return {
 		...retrieval(),
 		...projects(),
@@ -2261,7 +2460,8 @@ const sharedToolDefinitions = (
 		...skills(),
 		...account(),
 		...memoryAndPreferences(),
-		...deliverables()
+		...deliverables(),
+		...widgets()
 	};
 };
 

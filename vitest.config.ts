@@ -130,6 +130,8 @@ export default defineConfig({
 						// outage on the day it landed; it sat in `browser-full`, which the
 						// default gate does not run, so nobody saw it fail until users did.
 						'src/lib/components/notes/note-editor.svelte.spec.ts',
+						'src/lib/components/widgets/widget-view.svelte.spec.ts',
+						'src/lib/components/widgets/widget-json-editor.svelte.spec.ts',
 						'src/lib/components/ui/ref-contracts.svelte.spec.ts',
 						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
 						'src/lib/components/diagrams/drawio-embed.svelte.spec.ts',

@@ -5,6 +5,20 @@ import type { FieldChange } from '$lib/components/agent';
 import { argumentLabel } from './tool-approval-fields';
 import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
 import { drawioLabelDiff } from '$lib/services/diagrams/labels';
+import {
+	jsonPatchSchema,
+	widgetCatalog,
+	widgetDataSchema,
+	widgetLayoutSchema,
+	type Widget,
+	type WidgetEdit,
+	type WidgetId
+} from '$lib/models/widgets';
+import type { UserId } from '$lib/models/identity';
+import type { ProjectId } from '$lib/models/projects';
+import type { DateTime } from '$lib/models/workspace';
+import { applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
+import { readJsonText } from '$lib/client/widgets/json-text';
 
 /**
  * What an approval card should show for a pending tool call.
@@ -33,7 +47,9 @@ export type ApprovalBaseline =
 	| { readonly kind: 'none' }
 	| { readonly kind: 'note_review'; readonly review: NoteChangeReview }
 	| { readonly kind: 'diagram'; readonly labels: readonly string[]; readonly title: string }
-	| { readonly kind: 'preferences'; readonly preferences: AgentPreferenceValues };
+	| { readonly kind: 'preferences'; readonly preferences: AgentPreferenceValues }
+	/** The widget an edit names, as this device holds it now. */
+	| { readonly kind: 'widget'; readonly widget: Widget };
 
 /**
  * What a diagram approval shows.
@@ -60,8 +76,20 @@ export type DiagramChange =
 	/** The proposed source did not parse, so there is nothing truthful to show. */
 	| { readonly kind: 'unreadable'; readonly title: string };
 
+/**
+ * What a widget approval shows: the widget as the shared rule would leave it, beside what it is
+ * now for an edit. A proposal the rule would refuse says why, so approving it is not a surprise.
+ */
+export type WidgetApprovalChange =
+	| { readonly kind: 'created'; readonly after: Widget }
+	| { readonly kind: 'edited'; readonly before: Widget; readonly after: Widget }
+	| { readonly kind: 'refused'; readonly problems: readonly string[] }
+	/** The edited widget is not on this device yet, so there is nothing to compare. */
+	| { readonly kind: 'unavailable' };
+
 export type ApprovalPreview =
 	| { readonly kind: 'note'; readonly change: NoteChange }
+	| { readonly kind: 'widget'; readonly change: WidgetApprovalChange }
 	| { readonly kind: 'diagram'; readonly change: DiagramChange }
 	/**
 	 * A change to the agent's own settings. "Default model: openai/gpt-5.6" cannot be
@@ -167,6 +195,72 @@ const diagramChange = (
 	return { kind: 'edited', title, ...drawioLabelDiff(before.labels, read.labels) };
 };
 
+/** Tools whose arguments describe a widget the shared rule can apply here. */
+const WIDGET_TOOLS = new Set(['create_widget', 'edit_widget_data', 'edit_widget_layout']);
+
+const problemsOf = (issues: readonly { path: string; message: string }[]) =>
+	issues.map((issue) => `${issue.path}: ${issue.message}`);
+
+const text = (value: AgentPayloadObject[string]): string =>
+	typeof value === 'string' ? value : '';
+
+const widgetChange = (
+	name: string,
+	args: AgentPayloadObject,
+	baseline: ApprovalBaseline
+): WidgetApprovalChange => {
+	const now = new Date().toISOString() as DateTime;
+	if (name === 'create_widget') {
+		const layout = readJsonText(text(args.layout), widgetLayoutSchema, 'layout');
+		const data = readJsonText(text(args.data), widgetDataSchema, 'data');
+		if (layout.kind === 'failure' || data.kind === 'failure')
+			return {
+				kind: 'refused',
+				problems: problemsOf([
+					...(layout.kind === 'failure' ? layout.issues : []),
+					...(data.kind === 'failure' ? data.issues : [])
+				])
+			};
+		const created = createWidget(
+			{ title: text(args.title) || 'Widget', layout: layout.value, data: data.value },
+			{
+				id: '00000000-0000-4000-8000-000000000000' as WidgetId,
+				userId: '00000000-0000-4000-8000-000000000000' as UserId,
+				projectId: '00000000-0000-4000-8000-000000000000' as ProjectId,
+				now
+			},
+			widgetCatalog
+		);
+		return created.kind === 'applied'
+			? { kind: 'created', after: created.widget }
+			: { kind: 'refused', problems: created.kind === 'invalid' ? problemsOf(created.issues) : [] };
+	}
+	if (baseline.kind !== 'widget') return { kind: 'unavailable' };
+	const patch = readJsonText(text(args.patch), jsonPatchSchema, 'patch');
+	if (patch.kind === 'failure') return { kind: 'refused', problems: problemsOf(patch.issues) };
+	const revision = typeof args.expectedDataRevision === 'number' ? args.expectedDataRevision : 0;
+	const layoutRevision =
+		typeof args.expectedLayoutRevision === 'number' ? args.expectedLayoutRevision : 0;
+	const edit: WidgetEdit =
+		name === 'edit_widget_data'
+			? { kind: 'data', patch: patch.value, expectedDataRevision: revision }
+			: { kind: 'layout', patch: patch.value, expectedLayoutRevision: layoutRevision };
+	const result = applyWidgetEdit(baseline.widget, edit, widgetCatalog, now);
+	switch (result.kind) {
+		case 'applied':
+			return { kind: 'edited', before: baseline.widget, after: result.widget };
+		case 'invalid':
+			return { kind: 'refused', problems: problemsOf(result.issues) };
+		case 'stale':
+			return {
+				kind: 'refused',
+				problems: [
+					`The widget's ${result.part} changed since the agent read it, so this edit would be refused.`
+				]
+			};
+	}
+};
+
 export const approvalPreview = (
 	name: string,
 	args: AgentPayloadObject,
@@ -182,6 +276,7 @@ export const approvalPreview = (
 		};
 	if (DIAGRAM_TOOLS.has(name))
 		return { kind: 'diagram', change: diagramChange(name, args, baseline) };
+	if (WIDGET_TOOLS.has(name)) return { kind: 'widget', change: widgetChange(name, args, baseline) };
 	if (!NOTE_BODY_TOOLS.has(name)) return { kind: 'arguments' };
 	if (baseline.kind !== 'note_review')
 		return {

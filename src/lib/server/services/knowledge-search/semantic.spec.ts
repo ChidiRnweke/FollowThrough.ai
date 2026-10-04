@@ -3,6 +3,7 @@ import type { SearchDocument, SearchDocumentId } from '$lib/models/knowledge-sea
 import { KnowledgeLookup, queryVector, knowledgeSearchSource } from './semantic';
 import type { AttachmentId } from '$lib/models/attachments';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import {
 	testActor,
 	testNoteId,
@@ -29,6 +30,14 @@ describe('Embedded search invariants', () => {
 			kind: 'attachment',
 			id: attachmentId
 		});
+	});
+	it('identifies a widget chunk as the widget, so the agent can open it by id', () => {
+		const widgetId = testWidgetId();
+		expect(
+			knowledgeSearchSource(
+				document({ noteId: undefined, widgetId, sourceTitle: 'Widget: Launch' })
+			)
+		).toMatchObject({ kind: 'widget', id: widgetId, title: 'Widget: Launch' });
 	});
 	it('rejects a query batch containing more than one vector', () => {
 		expect(() => queryVector({ model: 'fake', vectors: [[1], [2]] })).toThrow('invalid result');

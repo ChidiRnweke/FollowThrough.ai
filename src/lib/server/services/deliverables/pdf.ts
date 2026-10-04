@@ -1,3 +1,4 @@
+import type { WidgetExportBlock } from '$lib/models/widgets';
 import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import {
 	documentNodeContent as nodeContent,
@@ -196,6 +197,7 @@ interface ConversionContext {
 	readonly usableHeight: number;
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+	readonly widgets: PreparedExport['widgets'];
 	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
 	readonly bodyFont: string;
@@ -382,6 +384,81 @@ function diagramContent(key: string, context: ConversionContext): PdfContent | u
 		: { svg: asset.data, fit, margin };
 }
 
+const MUTED = '#6b7280';
+
+/** One widget block as pdfmake content; the block kinds are the whole set a widget shows. */
+function widgetBlock(block: WidgetExportBlock, context: ConversionContext): PdfContent {
+	const text = (value: string) => withFontRuns({ text: value }, context.bodyFont);
+	switch (block.kind) {
+		case 'heading':
+			return {
+				text: text(block.text),
+				bold: true,
+				fontSize: [13, 12, 11][block.level - 2],
+				margin: [0, 2, 0, 4]
+			};
+		case 'paragraph':
+			return {
+				text: text(block.text),
+				...(block.muted ? { color: MUTED } : {}),
+				margin: [0, 0, 0, 4]
+			};
+		case 'check':
+			return { text: text(`${block.checked ? '☑' : '☐'} ${block.label}`), margin: [0, 0, 0, 3] };
+		case 'field':
+			return {
+				text: [{ text: `${block.label}: `, color: MUTED }, ...text(block.value)],
+				margin: [0, 0, 0, 3]
+			};
+		case 'metric':
+			return {
+				stack: [
+					{ text: text(block.label), color: MUTED, fontSize: 9 },
+					{ text: text(block.value), bold: true, fontSize: 14 },
+					...(block.detail ? [{ text: text(block.detail), color: MUTED, fontSize: 9 }] : [])
+				],
+				margin: [0, 0, 0, 4]
+			};
+		case 'progress':
+			return {
+				text: text(`${block.label ? `${block.label}: ` : ''}${block.value} of ${block.max}`),
+				margin: [0, 0, 0, 4]
+			};
+		case 'table':
+			return {
+				table: {
+					headerRows: 1,
+					widths: block.columns.map(() => '*' as const),
+					body: [
+						block.columns.map((column) => ({ text: text(column), bold: true })),
+						...block.rows.map((row) => row.map((cell) => ({ text: text(cell) })))
+					]
+				},
+				layout: { hLineColor: TABLE_LINE_COLOR, vLineColor: TABLE_LINE_COLOR },
+				margin: [0, 2, 0, 6]
+			};
+		case 'badge':
+			return { text: text(`[${block.text}]`), color: MUTED, margin: [0, 0, 0, 3] };
+		case 'divider':
+			return {
+				canvas: [
+					{
+						type: 'line',
+						x1: 0,
+						y1: 4,
+						x2: context.contentWidth,
+						y2: 4,
+						lineWidth: 0.5,
+						lineColor: '#d1d5db'
+					}
+				],
+				margin: [0, 4, 0, 4]
+			};
+		case 'unsupported':
+			return { text: `[${block.type} element not shown]`, italics: true, color: MUTED };
+	}
+}
+
 function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfContent | PdfContent[] {
 	const type = node.type;
 	const content = nodeContent(node);
@@ -460,6 +537,21 @@ function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfCont
 				}
 			);
 		}
+		case 'widgetNode': {
+			// A widget prints as what it showed when exported: its title and its blocks.
+			const exported = node.attrs?.widgetId ? context.widgets.get(node.attrs.widgetId) : undefined;
+			if (!exported)
+				return {
+					text: '[widget unavailable]',
+					italics: true,
+					color: '#9ca3af',
+					margin: [0, 4, 0, 4]
+				};
+			return {
+				stack: exported.blocks.map((block) => widgetBlock(block, context)),
+				margin: [0, 4, 0, 8]
+			};
+		}
 		case 'horizontalRule': {
 			return {
 				canvas: [
@@ -537,6 +629,7 @@ export async function generatePdf(input: PreparedExport): Promise<Buffer> {
 		usableHeight,
 		images,
 		diagrams,
+		widgets: input.widgets,
 		headingSpacing: input.headingSpacing,
 		bodyFont
 	};

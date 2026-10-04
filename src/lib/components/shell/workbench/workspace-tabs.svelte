@@ -59,6 +59,8 @@
 					workspaceSession.current?.resources.views.diagram(ref.diagramId)?.title ??
 					'Untitled diagram'
 				);
+			case 'widget':
+				return workspaceSession.current?.resources.views.widget(ref.widgetId)?.title ?? 'Widget';
 			case 'chat': {
 				const conversationId = chatRegistry.peek(ref.sessionKey)?.conversationId;
 				return sessions.find((entry) => entry.id === conversationId)?.title ?? 'New chat';
@@ -72,6 +74,7 @@
 	const CHATS_GROUP = 'chats';
 	const SEARCH_GROUP = 'search';
 	const DIAGRAMS_GROUP = 'diagrams';
+	const WIDGETS_GROUP = 'widgets';
 
 	// Plain Maps: reactivity comes from `shell` and `workbench.openTabs`, and a
 	// SvelteMap here would be read and written inside its own derivation.
@@ -85,6 +88,7 @@
 		const chatTabs: TabId[] = [];
 		const searchTabs: TabId[] = [];
 		const diagramTabs: TabId[] = [];
+		const widgetTabs: TabId[] = [];
 		for (const id of workbench.openTabs) {
 			const kind = parseTabId(id)?.kind;
 			if (kind === 'chat') {
@@ -97,6 +101,10 @@
 			}
 			if (kind === 'diagram') {
 				diagramTabs.push(id);
+				continue;
+			}
+			if (kind === 'widget') {
+				widgetTabs.push(id);
 				continue;
 			}
 			const projectId = projectOf(id);
@@ -124,6 +132,9 @@
 				: []),
 			...(diagramTabs.length > 0
 				? [{ projectId: DIAGRAMS_GROUP, projectName: 'Diagrams', tabs: diagramTabs }]
+				: []),
+			...(widgetTabs.length > 0
+				? [{ projectId: WIDGETS_GROUP, projectName: 'Widgets', tabs: widgetTabs }]
 				: []),
 			...projectGroups
 		];

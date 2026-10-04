@@ -64,3 +64,4 @@ export { default as FtTrash } from './ft-trash.svelte';
 export { default as FtUndo } from './ft-undo.svelte';
 export { default as FtWarning } from './ft-warning.svelte';
 export { default as FtWorkflow } from './ft-workflow.svelte';
+export { default as FtWidget } from './ft-widget.svelte';

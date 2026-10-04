@@ -29,6 +29,18 @@ export function exportDiagramReferences(
 	return references;
 }
 
+/** Every widget a document embeds, in order, so the controller can load and authorize each. */
+export function exportWidgetReferences(document: ProseMirrorDocument): readonly string[] {
+	const ids: string[] = [];
+	const walk = (node: ProseMirrorNode): void => {
+		if (node.type === 'widgetNode' && node.attrs?.widgetId) {
+			if (!ids.includes(node.attrs.widgetId)) ids.push(node.attrs.widgetId);
+		} else if ('content' in node) for (const child of node.content ?? []) walk(child);
+	};
+	for (const node of document.content ?? []) walk(node);
+	return ids;
+}
+
 /** Extract the app-owned attachment reference; authorization still belongs to its service. */
 export function attachmentIdFromSrc(source: string): string | undefined {
 	return /\/api\/attachments\/([^/]+)\/content$/.exec(source)?.[1];
@@ -68,6 +80,7 @@ export function prepareExport(input: ExportInput): PreparedExport {
 		...(input.styles ? { styles: input.styles } : {}),
 		settings: input.settings ?? defaultExportSettings,
 		images,
+		widgets: input.widgets ?? new Map(),
 		diagrams,
 		// Match the editor's blank line around h1/h2. Deeper headings retain the
 		// renderer's native spacing. Values are points; DOCX converts to twips.
