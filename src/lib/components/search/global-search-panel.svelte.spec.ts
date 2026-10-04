@@ -61,11 +61,9 @@ beforeEach(() => {
 describe('The toolbar defines the search in two rows', () => {
 	it('keeps the replace text field and project filter without a replace toggle', async () => {
 		const screen = await render(GlobalSearchPanel, {});
-		expect({
-			replaceField: (await screen.getByPlaceholder('Replace with...').all()).length,
-			projectFilter: (await screen.getByText('All projects').all()).length,
-			replaceToggle: (await screen.getByRole('button', { name: 'Show replace' }).all()).length
-		}).toEqual({ replaceField: 1, projectFilter: 1, replaceToggle: 0 });
+		await expect.element(screen.getByPlaceholder('Replace with...')).toBeVisible();
+		await expect.element(screen.getByText('All projects')).toBeVisible();
+		expect(await screen.getByRole('button', { name: 'Show replace' }).all()).toHaveLength(0);
 	});
 });
 
@@ -83,10 +81,8 @@ describe('Replace all asks before rewriting notes', () => {
 		globalSearch.hits = [{ ...hit, titleMatches: [{ start: 0, end: 4, text: 'ship' }] }];
 		const screen = await render(GlobalSearchPanel, {});
 		await screen.getByRole('button', { name: 'Replace all' }).click();
-		expect({
-			confirmation: (await screen.getByText('Replace 2 matches across 1 note?').all()).length,
-			replacement: globalSearch.lastReplace
-		}).toEqual({ confirmation: 1, replacement: undefined });
+		await expect.element(screen.getByText('Replace 2 matches across 1 note?')).toBeVisible();
+		expect(globalSearch.lastReplace).toBeUndefined();
 	});
 });
 
@@ -94,10 +90,8 @@ describe('Result rows', () => {
 	it('shows the match count and marks only truncated snippet windows', async () => {
 		seedResults();
 		const screen = await render(GlobalSearchPanel, {});
-		expect({
-			count: (await screen.getByText('2 matches').all()).length,
-			truncatedButtons: (await screen.getByRole('button', { name: /…/ }).all()).length
-		}).toEqual({ count: 1, truncatedButtons: 1 });
+		await expect.element(screen.getByText('2 matches')).toBeVisible();
+		expect(await screen.getByRole('button', { name: /…/ }).all()).toHaveLength(1);
 	});
 
 	it('reveals the selected match and preserves the complete hit for click-through', async () => {

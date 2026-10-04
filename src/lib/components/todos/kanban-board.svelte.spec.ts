@@ -72,10 +72,9 @@ describe('KanbanBoard status drops', () => {
 				source: SOURCES.POINTER
 			}
 		});
-		await vi.waitFor(
-			() => document.querySelector('[data-todo-status="done"]')?.children.length === 6
-		);
-		const placeholderCount = document.querySelector('[data-todo-status="done"]')?.children.length;
+		await expect
+			.poll(() => document.querySelector('[data-todo-status="done"]')?.children.length)
+			.toBe(6);
 
 		dispatchDnd('done', 'finalize', {
 			items: done.slice(0, 5).map((item) => ({ id: item.todo.id, view: item })),
@@ -86,10 +85,7 @@ describe('KanbanBoard status drops', () => {
 			}
 		});
 
-		expect({ placeholderCount, moves }).toEqual({
-			placeholderCount: 6,
-			moves: [{ id: moving.todo.id, status: 'done' }]
-		});
+		expect(moves).toEqual([{ id: moving.todo.id, status: 'done' }]);
 	});
 
 	it('commits a cross-column drop only from the target finalize event', async () => {

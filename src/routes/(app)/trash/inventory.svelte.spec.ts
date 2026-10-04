@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import TrashPage from './+page.svelte';
 import type { WorkspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -79,29 +79,20 @@ it('shows empty only after the incomplete inventory completes', async () => {
 	const screen = await render(TrashPage, {
 		data: { session: pageSession(session), sidebarWidth: 280, sidebarOpen: true }
 	});
-	const emptyCountBefore = (await screen.getByText('The trash is empty', { exact: true }).all())
-		.length;
+	await expect
+		.element(screen.getByText('The trash is empty', { exact: true }))
+		.not.toBeInTheDocument();
 	session.resources.setOnline(true);
 	await session.resources.requireCollections();
-	let emptyCountAfter = 0;
-	await vi.waitFor(async () => {
-		emptyCountAfter = (await screen.getByText('The trash is empty', { exact: true }).all()).length;
-		if (emptyCountAfter !== 1)
-			throw new Error('Completed inventory has not rendered the empty state');
-	});
-	expect({
-		emptyCountBefore,
-		emptyCountAfter
-	}).toEqual({ emptyCountBefore: 0, emptyCountAfter: 1 });
+	await expect.element(screen.getByText('The trash is empty', { exact: true })).toBeVisible();
 });
 it('keeps downloaded rows visible and protects incomplete inventory from emptying', async () => {
 	const session = await setup(true);
 	const screen = await render(TrashPage, {
 		data: { session: pageSession(session), sidebarWidth: 280, sidebarOpen: true }
 	});
-	expect({
-		visibleRows: (await screen.getByText('Known trashed note', { exact: true }).all()).length,
-		emptyButton: (await screen.getByRole('button', { name: 'Empty trash', exact: true }).all())
-			.length
-	}).toEqual({ visibleRows: 1, emptyButton: 0 });
+	await expect.element(screen.getByText('Known trashed note', { exact: true })).toBeVisible();
+	await expect
+		.element(screen.getByRole('button', { name: 'Empty trash', exact: true }))
+		.not.toBeInTheDocument();
 });
