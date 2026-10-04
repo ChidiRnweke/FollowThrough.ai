@@ -4,10 +4,12 @@
 	import {
 		diagramTrashEntry,
 		noteTrashEntry,
+		widgetTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
+	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -22,11 +24,20 @@
 			...data.session.resources.views.trashedDiagrams().flatMap((diagram) => {
 				const project = data.session.resources.views.get('projects', diagram.projectId);
 				return project ? [diagramTrashEntry(diagram, project.name)] : [];
+			}),
+			...data.session.resources.views.trashedWidgets().flatMap((widget) => {
+				const project = data.session.resources.views.get('projects', widget.projectId);
+				return project ? [widgetTrashEntry(widget, project.name)] : [];
 			})
 		].sort((left, right) => right.archivedAt.localeCompare(left.archivedAt))
 	);
 
 	async function restore(entry: TrashEntry): Promise<void> {
+		if (entry.kind === 'widget') {
+			if ((await widgetEdits.changeTrash(entry.id, 'restore')).kind === 'staged')
+				toast.success('Restored');
+			return;
+		}
 		if (entry.kind === 'diagram') {
 			await changeDiagramTrash(entry.id, 'restore');
 			toast.success('Restored');
@@ -38,6 +49,11 @@
 	}
 
 	async function remove(entry: TrashEntry): Promise<void> {
+		if (entry.kind === 'widget') {
+			if ((await widgetEdits.changeTrash(entry.id, 'delete')).kind === 'staged')
+				toast.success('Deleted permanently');
+			return;
+		}
 		if (entry.kind === 'diagram') {
 			await changeDiagramTrash(entry.id, 'delete');
 			toast.success('Deleted permanently');
@@ -58,6 +74,7 @@
 	async function empty(): Promise<void> {
 		for (const entry of entries) {
 			if (entry.kind === 'diagram') await changeDiagramTrash(entry.id, 'delete');
+			if (entry.kind === 'widget') await widgetEdits.changeTrash(entry.id, 'delete');
 		}
 		const output = await projectActions.emptyNoteTrash();
 		await workspaceSession.synchronize();
@@ -69,7 +86,7 @@
 <PageShell
 	width="wide"
 	title="Trash"
-	description="Notes and diagrams you have deleted, across every project. Nothing here is gone yet."
+	description="Notes, diagrams and widgets you have deleted, across every project. Nothing here is gone yet."
 >
 	{#if !inventoryReady}
 		<p role="status" class="py-6 text-sm text-muted-foreground">

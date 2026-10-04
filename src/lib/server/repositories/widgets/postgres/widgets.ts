@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { ActorContext, UserId } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
@@ -9,7 +9,7 @@ import {
 	type Widget,
 	type WidgetId
 } from '$lib/models/widgets';
-import { ConflictError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type { Database } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema/widgets';
 import type { WidgetRepository, WidgetRevisions } from '$lib/server/repositories/widgets';
@@ -114,5 +114,14 @@ export class WidgetRecords implements WidgetRepository {
 			.returning();
 		if (!row) throw new ConflictError('The widget changed while it was being saved');
 		return toWidget(row);
+	}
+
+	async deleteArchived(actor: ActorContext, id: WidgetId): Promise<void> {
+		const deleted = await this.database
+			.delete(schema.widgets)
+			.where(and(this.owned(actor, id), isNotNull(schema.widgets.archivedAt)))
+			.returning({ id: schema.widgets.id });
+		if (deleted.length === 0)
+			throw new NotFoundError('Widget was not found in the trash', { widgetId: id });
 	}
 }

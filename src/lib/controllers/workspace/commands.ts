@@ -7,6 +7,7 @@ import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
 import { applyWidgetChange, createWidget } from '$lib/services/widgets/edits';
+import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
 import { widgetCatalog, type Widget, type WidgetEditResult } from '$lib/models/widgets';
 import type {
 	MemoryEntry,
@@ -493,6 +494,21 @@ export const prepareWorkspaceCommand = (
 					applyWidgetChange(value('widgets'), command.change, widgetCatalog, now)
 				)
 			});
+		case 'archiveWidget':
+		case 'restoreWidget': {
+			const change = widgetTrashChange(
+				command.kind === 'archiveWidget' ? 'archive' : 'restore',
+				value('widgets'),
+				now
+			);
+			if (change.kind === 'invalid') throw new Error(change.message);
+			return content({ type: 'widgets', value: change.widget });
+		}
+		case 'deleteWidget': {
+			const decision = decideWidgetTrash('delete', value('widgets'));
+			if (decision.kind === 'invalid') throw new Error(decision.message);
+			return content(null);
+		}
 		default:
 			throw new Error(`Unhandled command: ${command satisfies never}`);
 	}

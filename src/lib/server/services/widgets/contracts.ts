@@ -14,4 +14,5 @@ export interface WidgetWriter {
 	getForEdit(actor: ActorContext, widgetId: WidgetId): Promise<Widget>;
 	create(actor: ActorContext, widget: Widget): Promise<Widget>;
 	update(actor: ActorContext, widget: Widget, from: WidgetRevisions): Promise<Widget>;
+	deleteArchived(actor: ActorContext, widgetId: WidgetId): Promise<void>;
 }

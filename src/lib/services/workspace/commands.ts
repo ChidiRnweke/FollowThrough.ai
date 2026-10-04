@@ -42,6 +42,9 @@ export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceId
 		case 'createWidget':
 			return { type: 'widgets', id: [command.id] };
 		case 'editWidget':
+		case 'archiveWidget':
+		case 'restoreWidget':
+		case 'deleteWidget':
 			return { type: 'widgets', id: [command.widgetId] };
 		case 'createProject':
 			return { type: 'projects', id: [command.id] };

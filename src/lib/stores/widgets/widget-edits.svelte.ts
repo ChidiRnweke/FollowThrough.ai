@@ -8,6 +8,7 @@ import {
 } from '$lib/models/widgets';
 import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { toast } from 'svelte-sonner';
 
 /** What became of an edit handed to the workspace: staged in the outbox, or refused. */
 export type WidgetEditOutcome =
@@ -32,6 +33,25 @@ class WidgetEdits {
 	): Promise<WidgetEditOutcome> {
 		const result = await editor.stage({ kind: 'editWidget', widgetId, change });
 		return result.kind === 'saved' ? { kind: 'staged' } : result;
+	}
+
+	/** Move a widget to or from the trash, or delete it from the trash, through the queue. */
+	async changeTrash(
+		widgetId: WidgetId,
+		action: 'archive' | 'restore' | 'delete'
+	): Promise<WidgetEditOutcome> {
+		const editor = this.editor(widgetId);
+		editor.capture();
+		const kind =
+			action === 'archive'
+				? 'archiveWidget'
+				: action === 'restore'
+					? 'restoreWidget'
+					: 'deleteWidget';
+		const result = await editor.stage({ kind, widgetId });
+		if (result.kind === 'saved') return { kind: 'staged' };
+		toast.error(result.message);
+		return result;
 	}
 
 	/** Create a widget from a template and return its id, for the caller to embed. */

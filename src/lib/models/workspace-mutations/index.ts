@@ -204,7 +204,10 @@ export const workspaceCommandSchema = z.discriminatedUnion('kind', [
 		sourceNoteId: noteId.optional(),
 		draft: widgetDraftSchema
 	}),
-	z.object({ kind: z.literal('editWidget'), widgetId, change: widgetChangeSchema })
+	z.object({ kind: z.literal('editWidget'), widgetId, change: widgetChangeSchema }),
+	z.object({ kind: z.literal('archiveWidget'), widgetId }),
+	z.object({ kind: z.literal('restoreWidget'), widgetId }),
+	z.object({ kind: z.literal('deleteWidget'), widgetId })
 ]);
 
 export type WorkspaceCommand = z.infer<typeof workspaceCommandSchema>;
@@ -265,7 +268,9 @@ export type DiagramMutationRequest = MutationFor<
 	| 'deleteDiagram'
 >;
 
-export type WidgetMutationRequest = MutationFor<'createWidget' | 'editWidget'>;
+export type WidgetMutationRequest = MutationFor<
+	'createWidget' | 'editWidget' | 'archiveWidget' | 'restoreWidget' | 'deleteWidget'
+>;
 
 export const workspaceMutationResultSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('proven'), proof: appliedWriteProofSchema }),

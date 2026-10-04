@@ -39,7 +39,10 @@ export const writeAction: Record<WorkspaceCommand['kind'], string> = {
 	restoreDiagram: 'Restored diagram',
 	deleteDiagram: 'Deleted diagram',
 	createWidget: 'Created widget',
-	editWidget: 'Edited widget'
+	editWidget: 'Edited widget',
+	archiveWidget: 'Moved widget to the trash',
+	restoreWidget: 'Restored widget',
+	deleteWidget: 'Deleted widget'
 };
 /** Only product fields are rendered; identities, storage roles and bookkeeping stay out of review. */
 export const reviewFieldLabels: Readonly<Record<string, string>> = {

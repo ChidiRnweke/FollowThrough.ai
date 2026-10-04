@@ -35,7 +35,21 @@
 
 <NodeViewWrapper class="my-2" data-widget-node={widgetId}>
 	<div contenteditable="false" class="flex flex-col gap-1.5">
-		{#if widget && widgetId}
+		{#if widget?.archivedAt && widgetId}
+			<!-- Shown, not dropped: the note still holds the reference and the widget can come back. -->
+			<div
+				class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-muted-foreground ring-1 ring-foreground/10 ring-inset"
+			>
+				<span class="min-w-0 flex-1">“{widget.title}” is in the trash.</span>
+				{#if editable}
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => void widgetEdits.changeTrash(widgetId, 'restore')}>Restore</Button
+					>
+				{/if}
+			</div>
+		{:else if widget && widgetId}
 			<div class="flex items-center justify-end">
 				<!-- The editor cancels link clicks inside node views, so the link opens the widget's
 				     workbench tab itself, behind the note on ctrl/⌘ as note links do. The href stays for a

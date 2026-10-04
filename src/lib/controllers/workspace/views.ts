@@ -239,6 +239,29 @@ export class WorkspaceViews {
 		if (!widget || !this.isActiveProject(widget.projectId)) return null;
 		return widget;
 	}
+	/** Active widgets in a project, newest change first, matched by title. */
+	widgets(projectId: ProjectId, query = ''): readonly Widget[] {
+		if (!this.isActiveProject(projectId)) return [];
+		const search = query.trim().toLowerCase();
+		return this.all('widgets')
+			.filter(
+				(widget) =>
+					widget.projectId === projectId &&
+					!widget.archivedAt &&
+					(!search || widget.title.toLowerCase().includes(search))
+			)
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
+	}
+	trashedWidgets(projectId?: ProjectId): readonly Widget[] {
+		return this.all('widgets')
+			.filter(
+				(widget) =>
+					widget.archivedAt &&
+					this.isActiveProject(widget.projectId) &&
+					(!projectId || widget.projectId === projectId)
+			)
+			.sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
+	}
 	diagram(diagramId: string): Diagram | null {
 		const diagram = this.all('diagrams').find((diagram) => diagram.id === diagramId);
 		if (!diagram || this.get('projects', diagram.projectId)?.archivedAt) return null;

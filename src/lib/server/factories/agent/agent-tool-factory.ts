@@ -165,6 +165,10 @@ export type AgentToolCoverage = AgentToolContractMap<CoveredAgentControllers>;
 const STUDIO_GESTURE =
 	'Keeping a diagram is the user saying it is worth keeping; the studio owns that gate.';
 
+/** Why a widget's trash is not an agent tool: removing one is the user saying what the project keeps. */
+const WIDGET_GESTURE =
+	'Moving a widget to or from the trash is a user gesture in the gallery and the trash.';
+
 export const agentToolCoverage = {
 	agent: {
 		execute: {
@@ -639,7 +643,10 @@ export const agentToolCoverage = {
 		},
 		// Both edit tools write through one controller method and one rule, so the
 		// browser, the server and an approval decide an edit the same way (ADR 0043).
-		edit: { kind: 'mutation', tools: ['edit_widget_data', 'edit_widget_layout'] }
+		edit: { kind: 'mutation', tools: ['edit_widget_data', 'edit_widget_layout'] },
+		archive: { kind: 'excluded', reason: WIDGET_GESTURE },
+		restore: { kind: 'excluded', reason: WIDGET_GESTURE },
+		delete: { kind: 'excluded', reason: WIDGET_GESTURE }
 	},
 	agentSettings: {
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },

@@ -225,7 +225,10 @@ export const controllerSurfaces = {
 		get: true,
 		list: true,
 		create: true,
-		edit: true
+		edit: true,
+		archive: true,
+		restore: true,
+		delete: true
 	},
 	retrieval: {
 		search: true

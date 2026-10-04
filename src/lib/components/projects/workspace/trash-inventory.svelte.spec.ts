@@ -9,7 +9,7 @@ import {
 
 const props = () => ({
 	view: { project: projectBuilder(), tree: [] },
-	counts: { todos: 0, memory: 0, artifacts: 0, diagrams: 0, attachments: 0 },
+	counts: { todos: 0, memory: 0, artifacts: 0, diagrams: 0, widgets: 0, attachments: 0 },
 	renderedAt: testNow,
 	trashed: [
 		{

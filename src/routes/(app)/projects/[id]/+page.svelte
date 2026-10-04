@@ -35,6 +35,7 @@
 		memory: views.memories(data.projectId).length,
 		artifacts: views.artifacts(data.projectId).length,
 		diagrams: views.diagrams(data.projectId).length,
+		widgets: views.widgets(data.projectId).length,
 		attachments: views.attachments({ kind: 'project', id: data.projectId }).length
 	});
 	const sectionNumberingAppDefault = $derived(
@@ -180,6 +181,7 @@
 				trashInventoryReady={data.session.resources.collectionReadiness() === 'ready'}
 				trashed={views.trashedNotes(data.projectId)}
 				trashedDiagrams={views.trashedDiagrams(data.projectId)}
+				trashedWidgets={views.trashedWidgets(data.projectId)}
 				{overdueTodoCount}
 				tipSeed={data.tipSeed}
 				renderedAt={data.renderedAt}

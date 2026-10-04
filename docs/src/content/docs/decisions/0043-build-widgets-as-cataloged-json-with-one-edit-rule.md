@@ -187,6 +187,17 @@ advanced once for each part the local edit changed, as the server will advance i
 Widget changes never coalesce in the queue. A patch is relative to the version before it, so
 replacing a queued change with a later one would drop the earlier patch.
 
+### A widget is recoverable
+
+A widget moves to the trash, comes back from it, and is deleted only from it
+(`archiveWidget`, `restoreWidget`, `deleteWidget`; the rules are in
+`src/lib/services/widgets/trash.ts`). An agent can create and change widgets, so an unwanted one
+must be recoverable, as a diagram is (ADR 0003). The trash is a user gesture in the project's
+widget gallery and the trash page; agents have no tool for it. A note that embeds a widget in the
+trash shows that it is in the trash and offers Restore, and keeps the reference. A widget in an
+archived project is hidden like everything else in the project (ADR 0009). Before a widget moves
+to the trash, the gallery says how many notes embed it.
+
 ### Boundaries parse, the inside is total
 
 The Postgres repository parses `layout` and `data` with the model schemas where rows leave the
@@ -197,7 +208,8 @@ values.
 
 ### The controller has one edit operation
 
-`WidgetsController` exposes `synchronize`, `get`, `list`, `create` and `edit(actor, input)`. It
+`WidgetsController` exposes `synchronize`, `get`, `list`, `create`, `edit(actor, input)`,
+`archive`, `restore` and `delete`. It
 does not have one method for each kind of change. Workspace commands and agent tools map onto
 these operations.
 
@@ -247,8 +259,13 @@ their source as a string for the same reason.
 - `src/lib/server/factories/agent/widget-tools.spec.ts` checks that `edit_widget_data` saves
   through the shared rule, that rejected edits name the problem, and that the tool parameters
   convert to strict JSON Schema.
+- `src/lib/services/widgets/trash.spec.ts` checks the trash rules, the lifecycle cases in
+  `widget-mutations.contract.spec.ts` check them on Postgres, and
+  `src/lib/controllers/workspace/archived-collections.spec.ts` checks that an archived project
+  hides its widgets.
 - `src/lib/stores/workbench/tab-ref.spec.ts`, `workbench-url.spec.ts` and
   `src/lib/stores/agent/app-context.svelte.node.spec.ts` check the `widget:` tab, its URL and
   the agent surface.
-- `tests/e2e/widgets.e2e.ts` creates a widget from a note, ticks it, reloads, and edits it on its
-  own page.
+- `tests/e2e/widgets.e2e.ts` creates a widget from a note, ticks it, reloads, and edits it in its
+  tab. A second case moves it to the trash from the gallery, sees the note show it as trashed, and
+  restores it.

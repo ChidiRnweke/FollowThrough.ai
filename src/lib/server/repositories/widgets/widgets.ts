@@ -15,4 +15,6 @@ export interface WidgetRepository {
 	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly Widget[]>;
 	insert(actor: ActorContext, widget: Widget): Promise<Widget>;
 	update(actor: ActorContext, widget: Widget, from: WidgetRevisions): Promise<Widget>;
+	/** Removes a widget that is in the trash. Notes that embed it then show it as unavailable. */
+	deleteArchived(actor: ActorContext, id: WidgetId): Promise<void>;
 }

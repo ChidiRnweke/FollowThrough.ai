@@ -1,6 +1,7 @@
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import { applyWidgetChange, applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
+import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
 import {
 	widgetCatalog,
 	type CreateWidgetInput,
@@ -44,6 +45,11 @@ export interface WidgetsController {
 	 * @throws ValidationError if the patch does not apply or its result is not a valid widget.
 	 */
 	edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }>;
+	/** Move a widget to the trash. Notes that embed it show it as in the trash. */
+	archive(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	restore(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<{ widget: Widget }>;
+	/** @throws ValidationError unless the widget is in the trash. */
+	delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void>;
 }
 
 export interface WidgetsDependencies {
@@ -96,6 +102,15 @@ export class Widgets implements WidgetsController {
 								applyWidgetChange(current, command.change, widgetCatalog, now())
 							);
 							break;
+						case 'archiveWidget':
+							await this.archive(actor, command);
+							break;
+						case 'restoreWidget':
+							await this.restore(actor, command);
+							break;
+						case 'deleteWidget':
+							await this.delete(actor, command);
+							break;
 					}
 					return this.dependencies.syncMutations.complete(actor, input, target);
 				},
@@ -146,6 +161,42 @@ export class Widgets implements WidgetsController {
 				applyWidgetEdit(current, input.edit, widgetCatalog, now())
 			)
 		};
+	}
+
+	async archive(
+		actor: ActorContext,
+		input: { readonly widgetId: WidgetId }
+	): Promise<{ widget: Widget }> {
+		return { widget: await this.moveTrash(actor, input.widgetId, 'archive') };
+	}
+
+	async restore(
+		actor: ActorContext,
+		input: { readonly widgetId: WidgetId }
+	): Promise<{ widget: Widget }> {
+		return { widget: await this.moveTrash(actor, input.widgetId, 'restore') };
+	}
+
+	async delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void> {
+		await this.dependencies.transactionRunner.run(async () => {
+			const current = await this.dependencies.widgetWriter.getForEdit(actor, input.widgetId);
+			const decision = decideWidgetTrash('delete', current);
+			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
+			await this.dependencies.widgetWriter.deleteArchived(actor, input.widgetId);
+		});
+	}
+
+	private async moveTrash(
+		actor: ActorContext,
+		widgetId: WidgetId,
+		action: 'archive' | 'restore'
+	): Promise<Widget> {
+		return this.write(actor, widgetId, (current) => {
+			const change = widgetTrashChange(action, current, now());
+			return change.kind === 'change'
+				? { kind: 'applied', widget: change.widget }
+				: { kind: 'invalid', issues: [{ path: '/archivedAt', message: change.message }] };
+		});
 	}
 
 	/** Decide a change against the locked current widget and save it from that revision. */

@@ -124,4 +124,39 @@ describe('guarded widget mutations', () => {
 		});
 		expect(result.kind).toBe('rejected');
 	});
+	it('move a widget to the trash and delete it only from there', async () => {
+		const { owner, controller, sync, create } = await setup('7716');
+		const { id, etag } = await create();
+		const early = await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: etag,
+			command: { kind: 'deleteWidget', widgetId: id }
+		});
+		await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: etag,
+			command: { kind: 'archiveWidget', widgetId: id }
+		});
+		const trashed = await sync.objects.read(owner, { type: 'widgets', id: [id] }, null);
+		if (trashed.kind !== 'found') throw new Error('The trashed widget must stay readable');
+		const deleted = await controller.synchronize(owner, {
+			operationId: crypto.randomUUID(),
+			baseEtag: trashed.snapshot.etag,
+			command: { kind: 'deleteWidget', widgetId: id }
+		});
+		expect({
+			early: early.kind,
+			deleted: deleted.kind,
+			rows: await context.client`select id from widgets where id = ${id}`
+		}).toEqual({ early: 'rejected', deleted: 'applied', rows: [] });
+	});
+	it('restore a widget from the trash with its data intact', async () => {
+		const { owner, controller, create } = await setup('7717');
+		const { id } = await create();
+		await controller.archive(owner, { widgetId: id });
+		await controller.restore(owner, { widgetId: id });
+		expect(
+			await context.client`select archived_at is null as active, jsonb_array_length(data->'items') as items from widgets where id = ${id}`
+		).toEqual([{ active: true, items: 3 }]);
+	});
 });

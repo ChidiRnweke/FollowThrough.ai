@@ -1,4 +1,4 @@
-import { ConflictError } from '$lib/errors';
+import { ConflictError, NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { Widget, WidgetId } from '$lib/models/widgets';
@@ -44,6 +44,13 @@ export class InMemoryWidgetRepository implements WidgetRepository, SnapshotParti
 			throw new ConflictError('The widget changed while it was being saved');
 		this.widgets = this.widgets.map((item) => (item.id === widget.id ? widget : item));
 		return widget;
+	}
+
+	async deleteArchived(actor: ActorContext, id: WidgetId): Promise<void> {
+		const current = await this.findById(actor, id);
+		if (!current?.archivedAt)
+			throw new NotFoundError('Widget was not found in the trash', { widgetId: id });
+		this.widgets = this.widgets.filter((widget) => widget.id !== id);
 	}
 
 	snapshot(): RestoreSnapshot {

@@ -42,6 +42,10 @@ export class WidgetLibrary {
 		return this.widgets.update(actor, widget, from);
 	}
 
+	async deleteArchived(actor: ActorContext, widgetId: WidgetId): Promise<void> {
+		await this.widgets.deleteArchived(actor, widgetId);
+	}
+
 	private async requireProject(actor: ActorContext, projectId: ProjectId): Promise<void> {
 		if (!(await this.projects.findById(actor, projectId)))
 			throw new NotFoundError('Widget project was not found', { projectId });
