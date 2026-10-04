@@ -12,7 +12,6 @@ calls. A test-only branch returning 90 can conceal a broken discount calculation
 ### Bad — takes a shortcut that bypasses the calculation
 
 ```typescript
-// file: shortcut.bad.test.ts
 import { expect, test } from 'vitest';
 import { price } from './shortcut_subject';
 
@@ -26,7 +25,6 @@ If the real calculation charges 80, this test still passes: `isTest` returns a c
 ### Solution — call the actual calculation
 
 ```typescript
-// file: shortcut.good.test.ts
 import { expect, test } from 'vitest';
 import { price } from './shortcut_subject';
 
@@ -38,16 +36,5 @@ test('discounted price', () => {
 This test fails when the real price becomes 80. Remove test-only branches from production.
 Pass facts such as the current time into a rule instead of changing its behavior for tests.
 
-## Demonstration setup — an intentionally bad production pattern
-
-The flag below exists only to demonstrate the mistake. Do not add one to an application.
 Keep related rules together and perform I/O outside the calculation when that fits the project.
 Do not force a new architecture or fetch unnecessary data for purity.
-
-```typescript
-// file: shortcut_subject.ts
-export function price(subtotal: number, isTest = false): number {
-	if (isTest) return 90;
-	return Math.floor(subtotal * 0.9);
-}
-```

@@ -13,7 +13,6 @@ recorded messages after running the workflow; file existence and an exception ar
 ### Bad — checks only file existence and the error
 
 ```typescript
-// file: integration.bad.test.ts
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -39,7 +38,6 @@ failed write still produces the expected exception. These assertions miss both b
 ### Solution — check contents and success/failure messages
 
 ```typescript
-// file: integration.good.test.ts
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -71,42 +69,6 @@ The exact text catches a missing newline. The empty message list catches prematu
 Test most rule variations with unit tests; add integration failures for consequences those tests
 cannot establish. A recorder proves attempted messages, not provider acceptance or delivery.
 
-## Runnable setup
-
-Use Vitest. This fixture writes real temporary files and removes only its own directory.
-In an application, import its workflow and substitute only the outgoing transport. Check provider
-compatibility separately against its real test environment when needed.
-
-```typescript
-// file: export_subject.ts
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { onTestFinished } from 'vitest';
-
-interface Transport {
-	send(payload: string): Promise<void>;
-}
-
-export class Recorder implements Transport {
-	readonly sent: string[] = [];
-	async send(payload: string): Promise<void> {
-		this.sent.push(payload);
-	}
-}
-
-export async function exportAddresses(
-	addresses: string[],
-	destination: string,
-	transport: Transport
-) {
-	await writeFile(destination, addresses.join('\n') + '\n', 'utf8');
-	await transport.send(JSON.stringify({ kind: 'addresses-exported', count: addresses.length }));
-}
-
-export async function scenarioDirectory(): Promise<string> {
-	const directory = await mkdtemp(join(tmpdir(), 'address-export-'));
-	onTestFinished(() => rm(directory, { recursive: true, force: true }));
-	return directory;
-}
-```
+Use real temporary files and remove only the test’s own directory. Keep serialization and
+translation real. Check provider compatibility separately against its real test environment
+when needed.

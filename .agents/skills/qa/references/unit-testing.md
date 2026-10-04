@@ -7,13 +7,13 @@ including values just below, at, and above a cutoff.
 ## Example: delivery is free for orders of €50 or more
 
 Delivery costs €5 for an order below €50. At €50 and above, it costs €0.
+Amounts are euros; `Decimal` avoids floating-point rounding.
 Check the exact fee for €49.99, €50.00, and €50.01. No database, browser, or server is needed
 to check this calculation.
 
 ### Bad: checks that the price is valid, but not that it is correct
 
 ```python
-# file: test_unit_bad.py
 from decimal import Decimal
 from delivery import delivery_fee
 
@@ -28,7 +28,6 @@ As the only test for free delivery, it misses the requirement.
 ### Fix: check the price the customer should pay
 
 ```python
-# file: test_unit_good.py
 from decimal import Decimal
 from delivery import delivery_fee
 
@@ -48,18 +47,3 @@ def test_order_above_fifty_euros_gets_free_delivery() -> None:
 The €50 test catches accidentally requiring an order to be _more than_ €50.
 The other tests check both sides of the cutoff. The expected prices come from the delivery
 policy above; calculating them with `delivery_fee` would repeat any bug in that function.
-
-## Runnable setup
-
-Run these files with pytest. Amounts are euros; `Decimal` avoids floating-point rounding.
-In a project, import its actual delivery calculation instead of this example implementation.
-
-```python
-# file: delivery.py
-from decimal import Decimal
-
-def delivery_fee(order_total: Decimal) -> Decimal:
-    if order_total >= Decimal("50.00"):
-        return Decimal("0.00")
-    return Decimal("5.00")
-```

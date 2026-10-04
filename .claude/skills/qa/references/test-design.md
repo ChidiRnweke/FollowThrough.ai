@@ -13,7 +13,6 @@ Check both the decision and remaining capacity after the same reservation.
 ### Bad — checks the decision but misses the capacity requirement
 
 ```typescript
-// file: capacity.bad.test.ts
 import { expect, test } from 'vitest';
 import { Capacity } from './capacity_subject';
 
@@ -35,7 +34,6 @@ As the sole checks for these scenarios, they do not establish what their names c
 ### Solution — check the decision and its required consequence
 
 ```typescript
-// file: capacity.good.test.ts
 import { expect, test } from 'vitest';
 import { Capacity } from './capacity_subject';
 
@@ -61,24 +59,6 @@ action. `available` is a value callers use; do not expose private fields solely 
 
 Checking that every returned row belongs to Alice passes for an empty result. Compare the
 expected records instead; see the complete [review example](validation.md).
-
-## Runnable setup
-
-Use Vitest. These examples accept valid positive requests. Import the production operation
-in an application rather than copying this demonstration class.
-
-```typescript
-// file: capacity_subject.ts
-export class Capacity {
-	constructor(public available: number) {}
-
-	reserve(places: number): 'accepted' | 'insufficient' {
-		if (places > this.available) return 'insufficient';
-		this.available -= places;
-		return 'accepted';
-	}
-}
-```
 
 Keep important fixture values visible. Factories may default irrelevant valid fields, not hide
 missing setup or create impossible data. Give tests fresh objects. Name the fact being checked.

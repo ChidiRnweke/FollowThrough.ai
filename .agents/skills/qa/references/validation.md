@@ -13,7 +13,6 @@ any required record was returned.
 ### Bad — checks only that returned records have the right owner
 
 ```python
-# file: test_review_bad.py
 from lookup_subject import Item, owned_items
 
 def test_alice_receives_her_records() -> None:
@@ -28,7 +27,6 @@ of Alice's records. Returning just one of her records also passes.
 ### Solution — check the complete expected IDs
 
 ```python
-# file: test_review_good.py
 from lookup_subject import Item, owned_items
 
 def test_alice_receives_her_records() -> None:
@@ -40,25 +38,9 @@ def test_alice_receives_her_records() -> None:
 This rejects missing, extra, and wrong IDs while allowing order to change. If order is required,
 compare the original sequence instead.
 
-## Runnable setup
-
-Use pytest. This example tests a collection rule, not SQL. Use real database integration tests
-when filtering is implemented in a query.
-
-```python
-# file: lookup_subject.py
-from dataclasses import dataclass
-
-@dataclass(frozen=True)
-class Item:
-    id: str
-    owner: str
-
-def owned_items(items: list[Item], owner: str) -> list[Item]:
-    return [item for item in items if item.owner == owner]
-```
-
 For each finding, name the missed bug or harmless rewrite the test rejects, then show a correction.
 Check fresh data, fixed time, and independent expected values. Coverage finds unexamined code;
 it does not prove assertions work. Report requirements with missing tests separately from missing
 implementation. Respect type/schema guarantees. Use project architecture audits and report conflicts.
+
+Use real database integration tests when the filtering is implemented in SQL.

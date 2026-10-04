@@ -1,6 +1,6 @@
 ---
 name: qa
-description: Choose what to test, when to add a test, and which test type to use. Write and review tests using concrete good and bad Python and TypeScript examples. Use for test requests, regressions, coverage reviews, and architecture checks. Uses typed handwritten fakes and recorders, not mocking libraries.
+description: Choose, write, and review unit, integration, database, frontend, and end-to-end tests. Gives mandatory reference-reading rules and concrete good/bad Python and TypeScript examples. Uses typed handwritten fakes and recorders, not mocking libraries.
 ---
 
 # QA
@@ -8,38 +8,43 @@ description: Choose what to test, when to add a test, and which test type to use
 A good test fails when the answer is wrong and keeps passing when helper methods change.
 A bad test can pass with wrong results, or fail because internal code was rearranged.
 
-## What to test, when, and which kind
+## Required reading
 
-- **Calculations, business rules, and algorithms — unit tests.** When adding or changing prices,
-  permissions, deadlines, or limits, test inputs that produce different answers. See
-  [good and bad unit tests](references/unit-testing.md).
-- **Saving and retrieving data — integration tests.** Test writes, rollback, and queries whose
-  filters, joins, or ordering change the returned records. See [database examples](references/database-testing.md).
-- **Files, messages, and external services — integration tests.** When connecting these to a
-  workflow, check its results, required messages, and failures. See [integration examples](references/integration-testing.md)
-  and [fakes and recorders](references/test-doubles.md).
-- **Screen interactions — component tests.** When changing what happens after typing, clicking,
-  loading, or an error, check what the user sees. See [frontend examples](references/frontend-testing.md).
-- **Critical user journeys — end-to-end tests.** When a failure would prevent an important task,
-  test that task through the application. See [end-to-end examples](references/end-to-end-testing.md).
+Before writing, changing, or reviewing tests, you **MUST read [Test design](references/test-design.md)**
+and every matching reference below. Read them before choosing assertions or changing code.
+Read each required reference once per task; read newly matching references if the task expands.
 
-Skip separate tests for simple getters, library behavior, and cases already protected against
-the same bug. Do not chase coverage percentages or create a test for every method.
+- **Prices, permissions, deadlines, calculations:** [Unit tests](references/unit-testing.md).
+  Test different answers and values at cutoffs.
+- **Saving, retrieving, SQL, migrations, transactions, ORM:** [Database tests](references/database-testing.md).
+  Test real persistence, returned records, and rollback.
+- **File exports, messages, external APIs:**
+  [Integration tests](references/integration-testing.md). Test contents, required effects, and failures.
+- **Typing, clicking, loading, errors, layout:** [Frontend tests](references/frontend-testing.md).
+  Test what the user sees and can do.
+- **Important tasks through the public UI/API, including routing or authentication:**
+  [End-to-end tests](references/end-to-end-testing.md). Check completion through the application.
+- **Using, writing, or changing fakes, stubs, recorders, or recording closures:**
+  [Test doubles](references/test-doubles.md).
+- **Considering test-only flags, private-method overrides, exposing private fields, or refactoring
+  production code to make it testable:** [Testability](references/testability.md).
+- **Reviewing existing tests, auditing coverage, or deciding which tests to remove:**
+  [Reviewing tests](references/validation.md).
 
-## Good tests
+Examples show test logic. Adapt their imports and fixtures to the project's existing test harness.
 
-- Get expected answers from requirements or confirmed examples. Do not calculate them with the
-  code being tested.
+## Write good tests
+
+- Get expected answers from requirements or confirmed examples, not the code being tested.
 - Test one action and all its required results together. Several assertions are allowed.
-- Use real helper functions and classes. Use typed handwritten fakes or recorders for dependencies
-  that need substitution. No mocking libraries or casts that hide incomplete objects.
-- Start with fresh, valid data. Use fixed time when testing deadlines.
+- Keep real helper code. Use typed handwritten substitutes where needed; no mocking libraries
+  or casts that hide incomplete objects.
+- Start with fresh, valid data. Use fixed time for deadlines.
 - Use real database tests for SQL and rollback; fakes cannot prove them.
 - Prefer fast, readable tests. Add slower tests for bugs the fast tests cannot catch.
 
-[Test design](references/test-design.md) shows missing-result mistakes.
-[Testability](references/testability.md) shows test-only shortcuts to avoid.
-[Review examples](references/validation.md) show how to judge existing tests.
+Skip simple getters, library behavior, and redundant cases. Do not chase coverage percentages
+or create a test for every method.
 
-Follow project instructions and run its relevant checks. Report conflicts and unavailable
-infrastructure; do not weaken checks or claim untested results passed.
+Follow project instructions and run relevant checks. Report conflicts and unavailable infrastructure;
+do not weaken checks or claim untested results passed.
