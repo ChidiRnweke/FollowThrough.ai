@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.11](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.10...v2.0.11) (2026-10-04)
+
+
+### Bug Fixes
+
+* **agent:** remove arbitrary content and batch caps ([#305](https://github.com/ChidiRnweke/FollowThrough.ai/issues/305)) ([ccd7855](https://github.com/ChidiRnweke/FollowThrough.ai/commit/ccd7855465d58e227bc9b24ba168b1614361e4a0))
+
 ## [2.0.10](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.9...v2.0.10) (2026-10-04)
 
 
