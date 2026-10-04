@@ -207,8 +207,8 @@ export default [
 			};
 		}
 	}).configure({ levels: [1, 2, 3, 4] }),
-	// Keeps titles separated from diagrams and tables the moment they become
-	// adjacent (agent-written notes, a pasted heading, an inserted diagram).
+	// Keeps titles separated from diagrams the moment they become adjacent
+	// (agent-written notes, a pasted heading, an inserted diagram).
 	HeadingSpacing,
 	// Renumbers numbered lists when a deletion touches them, and merges two
 	// lists that a removed paragraph left adjacent.
