@@ -1,55 +1,103 @@
-# Database testing
+# Database tests
 
-Use this recipe when a defect depends on queries, constraints, mapping, migrations, transactions,
-or committed state. Use the production-compatible database system. A different engine or an
-in-memory fake cannot prove those semantics; vendor identity alone also does not prove fidelity.
-Check relevant version, extension, and configuration differences.
+**What:** Writes, rollback, migrations, and queries with filters, joins, or required ordering.
+**When:** A defect could lose, corrupt, expose, or omit stored records.
+**Type:** Integration against the production database engine. A fake cannot establish SQL or rollback.
 
-## Pick the database scenario
+## A transfer commits both changes, or neither
 
-| Risk                                       | Arrange and act                                                                                     | Independently assert                                                       |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Insert/update loses data                   | Seed required relations; run the normal write workflow                                              | A fresh read has every required committed value                            |
-| Query leaks or omits rows                  | Seed matching rows plus realistic nonmatching owners/states; run the real query                     | Exactly the required records, with contractual ordering only               |
-| Constraint is absent or mapped incorrectly | Create a valid conflict at the real boundary; perform the write                                     | Specified rejection and unchanged relevant committed state                 |
-| Correlated writes partially commit         | Seed valid initial balances/relations; exercise success and a reproducible failure                  | All required writes commit, or none do, according to the contract          |
-| Migration loses existing data              | Start at the supported prior schema with representative valid data; apply the migration             | The new schema supports required reads/writes and preserves specified data |
-| Concurrent operations violate an invariant | When this is a real risk, start competing operations with controlled overlap against the real store | The final state and outcomes satisfy the declared consistency guarantee    |
-
-## Prepare reproducible state
-
-1. Use an isolated disposable test environment. Build its schema from committed migrations and
-   required reference data, rather than a manually patched model database.
-2. Start each scenario with clean owned test data or fresh storage. Cleanup only at the end can
-   leave leftovers after interruption. Preserve required reference rows and migration history;
-   respect foreign keys and keep constraints enabled.
-3. Seed valid starting records with visible scenario-defining values.
-4. Close the setup persistence context before invoking the operation.
-
-Schema and required reference data belong in source control. Ordinary user data is scenario
-setup. For migration defects, exercise the relevant historical schema/data transition. Follow
-the project's delivery process; do not rewrite already-applied migrations as a testing shortcut.
-
-## Keep arrange, act, and assert independent
-
-```text
-arrange: write starting records and close the setup context
-act: invoke the real application operation with its normal transaction/commit boundary
-assert: open a fresh context and read committed facts
-```
-
-Never treat the arranged object, ORM identity cache, or uncommitted writes as proof of durable
-state. Separate contexts protect independent observation; they do not require exactly three
-physical connections. Do not wrap the whole test in an outer rollback transaction when that
-changes production commit visibility or transaction behavior.
-
-## Python: real PostgreSQL commit and rollback
-
-Save as `test_transfer.py`. Requires pytest, Psycopg 3, and a disposable PostgreSQL database.
-Set `QA_TEST_DATABASE_URL` explicitly; run `python -m pytest test_transfer.py`. There is no
-fallback to a fake or production URL. Each test owns a uniquely named table.
+### Good — Python
 
 ```python
+# file: test_database_good.py
+from db_fixture import database, transfer, committed_balances
+import pytest
+
+def test_transfer_commits_both_balances(database: tuple[str, str]) -> None:
+    dsn, table = database
+    transfer(dsn, table, "A", "B", 10)
+    assert committed_balances(dsn, table) == [("A", 20), ("B", 15)]
+
+def test_failure_rolls_back_the_debit(database: tuple[str, str]) -> None:
+    dsn, table = database
+    with pytest.raises(ValueError, match="^recipient missing$"):
+        transfer(dsn, table, "A", "missing", 10)
+    assert committed_balances(dsn, table) == [("A", 30), ("B", 5)]
+```
+
+### Bad — Python
+
+```python
+# file: test_database_bad.py
+from db_fixture import database, transfer
+import pytest
+
+def test_transfer(database: tuple[str, str]) -> None:
+    dsn, table = database
+    assert transfer(dsn, table, "A", "B", 10) is None
+
+def test_failure(database: tuple[str, str]) -> None:
+    dsn, table = database
+    with pytest.raises(ValueError, match="^recipient missing$"):
+        transfer(dsn, table, "A", "missing", 10)
+```
+
+Returning normally does not prove a write. An exception does not prove rollback.
+
+### Good — TypeScript
+
+```typescript
+// file: database.good.test.ts
+import { expect } from 'vitest';
+import { test, transfer, committedBalances } from './db_fixture';
+
+test('transfer commits both balances', async ({ database: { sql, table } }) => {
+	await transfer(sql, table, 'A', 'B', 10);
+	expect(await committedBalances(table)).toEqual([
+		{ id: 'A', balance: 20 },
+		{ id: 'B', balance: 15 }
+	]);
+});
+
+test('failure rolls back the debit', async ({ database: { sql, table } }) => {
+	await expect(transfer(sql, table, 'A', 'missing', 10)).rejects.toThrow('recipient missing');
+	expect(await committedBalances(table)).toEqual([
+		{ id: 'A', balance: 30 },
+		{ id: 'B', balance: 5 }
+	]);
+});
+```
+
+### Bad — TypeScript
+
+```typescript
+// file: database.bad.test.ts
+import { expect } from 'vitest';
+import { test, transfer } from './db_fixture';
+
+test('transfer completes', async ({ database: { sql, table } }) => {
+	await expect(transfer(sql, table, 'A', 'B', 10)).resolves.toBeUndefined();
+});
+
+test('failure rejects', async ({ database: { sql, table } }) => {
+	await expect(transfer(sql, table, 'A', 'missing', 10)).rejects.toThrow('recipient missing');
+});
+```
+
+The good tests read through new connections and catch partial commits. The bad tests pass even
+if the debit remains after failure. For queries, seed matching and nonmatching rows and check
+the complete expected records; see [missing-result examples](test-design.md).
+
+## Runnable setup
+
+Requires PostgreSQL, Psycopg 3 + pytest, or Postgres.js + Vitest. Set `QA_TEST_DATABASE_URL` to
+an explicit disposable database. Each fixture owns one unique table and cleans it up.
+In an application, create the schema with production migrations and import the real operation.
+Keep setup, operation, and assertion connections separate; do not hide commits inside a test-wide
+rollback transaction. Serialize tests sharing data; parallelize only with isolated data and cleanup.
+
+```python
+# file: db_fixture.py
 import os
 from collections.abc import Iterator
 from uuid import uuid4
@@ -57,7 +105,6 @@ from uuid import uuid4
 import psycopg
 from psycopg import sql
 import pytest
-
 
 @pytest.fixture
 def database() -> Iterator[tuple[str, str]]:
@@ -77,7 +124,6 @@ def database() -> Iterator[tuple[str, str]]:
         with psycopg.connect(dsn) as conn:
             conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(name))
 
-
 def transfer(dsn: str, table: str, source: str, target: str, amount: int) -> None:
     name = sql.Identifier(table)
     with psycopg.connect(dsn) as conn:
@@ -92,50 +138,22 @@ def transfer(dsn: str, table: str, source: str, target: str, amount: int) -> Non
         if credit.fetchone() is None:
             raise ValueError("recipient missing")
 
-
 def committed_balances(dsn: str, table: str) -> list[tuple[str, int]]:
     with psycopg.connect(dsn) as conn:
         return conn.execute(sql.SQL(
             "SELECT id, balance FROM {} ORDER BY id"
         ).format(sql.Identifier(table))).fetchall()
-
-
-def test_transfer_commits_both_balances(database: tuple[str, str]) -> None:
-    dsn, table = database
-
-    transfer(dsn, table, "A", "B", 10)
-
-    assert committed_balances(dsn, table) == [("A", 20), ("B", 15)]
-
-
-def test_missing_recipient_rolls_back_the_debit(database: tuple[str, str]) -> None:
-    dsn, table = database
-
-    with pytest.raises(ValueError, match="^recipient missing$"):
-        transfer(dsn, table, "A", "missing", 10)
-
-    assert committed_balances(dsn, table) == [("A", 30), ("B", 5)]
 ```
 
-The connection context commits on normal exit and rolls back on exception, then closes the
-connection. The assertion opens a new connection, so it cannot observe uncommitted writes or
-an ORM cache. See [Psycopg connection behavior](https://www.psycopg.org/psycopg3/docs/basic/usage.html#connection-context).
-
-## TypeScript: real PostgreSQL with Vitest and Postgres.js
-
-Save as `transfer.test.ts`. Requires `vitest` and `postgres`, plus the same explicit test URL.
-The fixture owns setup and teardown; the operation owns its transaction. `sql.begin` supplies
-a connection-scoped transaction and rolls back when the callback throws.
-[Postgres.js transaction documentation](https://github.com/porsager/postgres#transactions).
-
 ```typescript
+// file: db_fixture.ts
 import { randomUUID } from 'node:crypto';
 import postgres, { type Sql } from 'postgres';
-import { expect, test as base } from 'vitest';
+import { test as base } from 'vitest';
 
 type Database = { sql: Sql; table: string };
 
-const test = base.extend<{ database: Database }>({
+export const test = base.extend<{ database: Database }>({
 	database: async ({}, use) => {
 		const url = process.env.QA_TEST_DATABASE_URL;
 		if (!url) throw new Error('QA_TEST_DATABASE_URL is required');
@@ -155,7 +173,13 @@ const test = base.extend<{ database: Database }>({
 	}
 });
 
-async function transfer(sql: Sql, table: string, source: string, target: string, amount: number) {
+export async function transfer(
+	sql: Sql,
+	table: string,
+	source: string,
+	target: string,
+	amount: number
+) {
 	await sql.begin(async (transaction) => {
 		const debited = await transaction`
       UPDATE ${transaction(table)} SET balance = balance - ${amount}
@@ -168,7 +192,7 @@ async function transfer(sql: Sql, table: string, source: string, target: string,
 	});
 }
 
-async function committedBalances(table: string) {
+export async function committedBalances(table: string) {
 	const url = process.env.QA_TEST_DATABASE_URL;
 	if (!url) throw new Error('QA_TEST_DATABASE_URL is required');
 	const reader = postgres(url, { max: 1 });
@@ -181,56 +205,10 @@ async function committedBalances(table: string) {
 		await reader.end();
 	}
 }
-
-test('transfer commits both balances', async ({ database: { sql, table } }) => {
-	await transfer(sql, table, 'A', 'B', 10);
-
-	expect(await committedBalances(table)).toEqual([
-		{ id: 'A', balance: 20 },
-		{ id: 'B', balance: 15 }
-	]);
-});
-
-test('missing recipient rolls back the debit', async ({ database: { sql, table } }) => {
-	await expect(transfer(sql, table, 'A', 'missing', 10)).rejects.toThrow('recipient missing');
-
-	expect(await committedBalances(table)).toEqual([
-		{ id: 'A', balance: 30 },
-		{ id: 'B', balance: 5 }
-	]);
-});
 ```
 
-**Catches:** forgetting to commit, updating only one balance, using the wrong amount, or
-committing the debit before a later failure. **Bad replacement:** asserting two `UPDATE` calls
-or inspecting the input account objects does not prove durable atomicity.
-
-**Adapt:** import the real operation and create its schema with production migrations. These
-examples include a minimal table and transfer function to make the tests executable; they do
-not implement overdraft, currency, idempotency, or concurrent-transfer rules. For those contracts,
-add representative setup and assertions, not extra private-method expectations. For ORM code,
-close setup/session state and query through a fresh context after the real commit boundary.
-
-## Choose isolation before concurrency
-
-Run sequentially when tests share mutable database state. Parallel execution requires isolated
-queries, constraints, cleanup ownership, and enough database capacity. Unique IDs alone may not
-isolate global queries. Per-test databases, schemas, or containers can help; choose the simplest
-faithful lifecycle whose measured cost is justified. A container per test is not required.
-
-Extract connection, disposal, and insertion mechanics when they obscure the scenario. Keep
-business facts and independently expected results visible. Helpers may open fresh contexts;
-do not optimize those reads away without checking the resulting loss of independence.
-
-## Prioritize valuable persistence cases
-
-- Cover writes that could corrupt durable state.
-- Cover consequential reads: filtering, ownership, joins, ordering when contractual, and complex
-  mapping. Assert complete relevant results so empty or missing records cannot pass unnoticed.
-- Use workflow integration coverage when it already protects a simple repository. Add focused
-  repository tests for distinct query or persistence risks, not to repeat the same evidence.
-- Test pure complex mapping separately where useful; test ORM/database behavior against the
-  real store. Avoid snapshots of generated SQL when committed behavior is the actual contract.
-
-These choices let behavior-focused tests protect changes such as replacing an ORM without
-fixing the suite to its internal implementation.
+These examples cover atomicity, not overdraft or concurrency rules. Preserve required reference
+data during cleanup. Protect complex reads with focused tests; avoid duplicating simple repository
+checks already exercised by a workflow. Test ORM reconstruction through its actual database contract.
+[Psycopg](https://www.psycopg.org/psycopg3/docs/basic/usage.html#connection-context),
+[Postgres.js](https://github.com/porsager/postgres#transactions).

@@ -1,32 +1,66 @@
-# End-to-end testing
+# End-to-end tests
 
-Use a public user or API entry point when startup, composition, routing, deployment, or a
-complete critical workflow adds evidence that narrower tests cannot supply. A browser is not
-required for an API workflow.
+**What:** An important task completed through the application's public UI or API.
+**When:** Routing, authentication, startup, or connections between features could break that task.
+**Type:** End-to-end. Keep detailed rule variations in unit tests.
 
-## Write the workflow
+## Save a note, then retrieve it through the public API
 
-1. Select one important user goal and the specific failure the public boundary can reveal.
-2. Establish valid isolated data and the dependencies needed for that evidence. Record any
-   substituted external service; a recorder does not prove delivery by that provider.
-3. Perform the goal through the public application, rather than invoking its internal helpers.
-4. Assert the user-visible result through the application's normal read path. Observe external
-   effects where their required contract is visible.
-5. Make cleanup and failure diagnostics reliable across interrupted runs. Run the workflow in
-   the project's intended environment and report its actual scope.
-
-## TypeScript: exercise a public HTTP write and read
-
-Save as `notes.e2e.test.ts` and run with Vitest in a Node environment. This standalone example
-includes a real loopback HTTP application and a fresh state/lifecycle fixture. It proves the
-public HTTP workflow; its in-memory application storage does not prove database integration.
+### Good — TypeScript
 
 ```typescript
+// file: http.good.test.ts
+import { expect } from 'vitest';
+import { test } from './http_fixture';
+
+test('saved title can be retrieved', async ({ baseUrl }) => {
+	const saved = await fetch(`${baseUrl}/notes/note-1`, {
+		method: 'POST',
+		body: 'Quarterly review'
+	});
+	await saved.text();
+
+	const read = await fetch(`${baseUrl}/notes/note-1`);
+
+	expect(saved.status).toBe(201);
+	expect(read.status).toBe(200);
+	expect(await read.json()).toEqual({ id: 'note-1', title: 'Quarterly review' });
+});
+```
+
+### Bad — TypeScript
+
+```typescript
+// file: http.bad.test.ts
+import { expect } from 'vitest';
+import { test } from './http_fixture';
+
+test('saved title can be retrieved', async ({ baseUrl }) => {
+	const saved = await fetch(`${baseUrl}/notes/note-1`, {
+		method: 'POST',
+		body: 'Quarterly review'
+	});
+	await saved.text();
+	expect(saved.status).toBe(201);
+});
+```
+
+The bad test passes if the write returns success but stores the wrong title. For browser journeys,
+create/save through the UI and reopen through the application's normal read path.
+
+## Runnable setup
+
+Use Vitest in Node. This fixture starts a real HTTP server with fresh data per test. Its storage
+is just the example application's data: it does not prove database behavior. In a project,
+replace the fixture with the actual application launcher or deployment and its auth/data setup.
+
+```typescript
+// file: http_fixture.ts
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { expect, test as base } from 'vitest';
+import { test as base } from 'vitest';
 
-const test = base.extend<{ baseUrl: string }>({
+export const test = base.extend<{ baseUrl: string }>({
 	baseUrl: async ({}, use) => {
 		let savedTitle = '';
 		const server = createServer(async (request, response) => {
@@ -60,39 +94,9 @@ const test = base.extend<{ baseUrl: string }>({
 		}
 	}
 });
-
-test('a saved title is returned through the public read path', async ({ baseUrl }) => {
-	const saved = await fetch(`${baseUrl}/notes/note-1`, {
-		method: 'POST',
-		body: 'Quarterly review'
-	});
-	await saved.text(); // Consume the response body before releasing the connection.
-
-	const read = await fetch(`${baseUrl}/notes/note-1`);
-
-	expect(saved.status).toBe(201);
-	expect(read.status).toBe(200);
-	expect(await read.json()).toEqual({ id: 'note-1', title: 'Quarterly review' });
-});
 ```
 
-**Catches:** a broken write route, wrong status, or a read path that does not return the saved
-value. **Bad replacement:** asserting an internal map contains the title bypasses routing,
-HTTP, and the public read path.
-
-**Adapt:** replace the toy server fixture with the real application launcher or test deployment.
-Keep the same public write/read assertions, use the actual auth/data fixtures, and disclose
-substituted providers. Invoke the application's existing entry points rather than adding test
-routes. For browser goals, perform the same write/read through visible controls as shown in
-[Frontend testing](frontend-testing.md). Diagnose with private storage inspection if needed,
-but retain public observations as the workflow's assertions.
-
-Keep the set focused on distinct critical goals. One or two broad workflows can be a useful
-starting point, not a maximum. Do not repeat every business-rule variation at the slowest layer
-or enforce a pyramid ratio. CRUD-heavy systems may need mostly integration tests; for a small
-API, public workflow checks may cost little more than in-process integration checks.
-
-Prefer one goal per test. A naturally sequential workflow can justify several acts when splitting
-has exceptional real dependency cost; document that reason. Do not combine independent goals
-just to reuse setup. Put expensive checks after faster feedback when appropriate to the project's
-delivery process. Wider scope does not excuse brittle internal assertions or uncontrolled data.
+Keep a small set of distinct important journeys, not every unit-test case repeated through a
+browser. CRUD applications can need more integration tests than unit tests; no fixed suite ratio
+is required. Several steps can check one journey. Disclose substituted providers and missing
+infrastructure. A passing example server is not verification of a real application's deployment.

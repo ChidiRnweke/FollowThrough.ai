@@ -1,79 +1,15 @@
-# Frontend testing
+# Frontend tests
 
-Test what the user can see and do. Keep pure presentation decisions in unit tests, interaction
-and rendering in component tests, and application composition or browser behavior in public UI
-workflows. Use the project's existing runner and supported browser setup.
+**What:** Results of typing/clicking, loading indicators, errors, and usable controls.
+**When:** A screen interaction or displayed result changes.
+**Type:** Component for individual screens/controls; end-to-end for routing, auth, or saved data.
 
-## Choose a scenario
+## Saving shows progress, accepts the edited title, and reports failure
 
-| Risk                                                      | Boundary                                        | Required observation                                                                                                  |
-| --------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Incorrect formatting or selection rule                    | Unit                                            | Independently known displayed value or decision                                                                       |
-| A control does not perform its action                     | Rendered component                              | User interaction changes the visible result or emits the declared public event                                        |
-| A form submits invalid data or hides errors               | Component; wider workflow for server validation | Invalid input shows the required error and causes no prohibited submission; valid input produces the expected outcome |
-| Loading, empty, failure, or retry state is wrong          | Component with a controlled typed dependency    | The specified state appears, then changes correctly after the controlled result                                       |
-| Routes, auth, wiring, or persistence break a goal         | Browser/application workflow                    | The goal succeeds through the public UI and the normal read path retains its result                                   |
-| A control is clipped, obscured, or unusable at a viewport | Real browser                                    | It is visible, reachable, and usable in the required layout                                                           |
-
-These are applications of behavior-based testing to UI work. DOM-only environments cannot
-establish browser geometry or actual interaction reachability.
-
-## Write an interaction test
-
-1. Render the real component with minimal valid data. Keep the decisive label, value, and state
-   visible in setup. Replace only needed I/O boundaries; keep rendering and event handling real.
-2. Locate the control through its semantic role and accessible name, or another stable public
-   identifier when semantic selection cannot express the target. Avoid CSS structure, framework
-   internals, and private instance methods.
-3. Perform the user action: type, select, submit, or activate the control through the runner's
-   interaction API. A public component event can be the contract; an internal handler call is not.
-4. Wait for the specified visible result with the runner's supported asynchronous assertions.
-   Do not use fixed sleeps as evidence that rendering or a request finished.
-5. Assert the complete relevant outcome: updated content, meaningful error, required event
-   payload, or no prohibited effect. Do not snapshot the entire rendered tree for one rule.
-
-## TypeScript: a real Svelte interaction and controlled async result
-
-Use the following three files as a standalone example. Requires Svelte 5, Vite's Svelte plugin,
-Vitest, `vitest-browser-svelte`, and `@vitest/browser-playwright`, with Chromium installed.
-Run Vitest with `--config vitest.frontend.config.ts`. In an existing project, use its configured
-browser runner and import the actual component; do not add a competing application setup.
-
-`TitleEditor.svelte`:
-
-```svelte
-<script lang="ts">
-	let { save }: { save: (title: string) => Promise<void> } = $props();
-	let title = $state('');
-	let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-	async function submit(): Promise<void> {
-		saveState = 'saving';
-		try {
-			await save(title);
-			saveState = 'saved';
-		} catch {
-			saveState = 'error';
-		}
-	}
-</script>
-
-<label>Title <input bind:value={title} /></label>
-<button onclick={submit} disabled={saveState === 'saving'}>Save</button>
-<p role="status">
-	{saveState === 'saving'
-		? 'Saving…'
-		: saveState === 'saved'
-			? 'Saved'
-			: saveState === 'error'
-				? 'Could not save'
-				: ''}
-</p>
-```
-
-`TitleEditor.test.ts`:
+### Good — TypeScript / Svelte
 
 ```typescript
+// file: TitleEditor.good.test.ts
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
@@ -115,9 +51,116 @@ test('a failed save displays an error and allows another attempt', async () => {
 });
 ```
 
-`vitest.frontend.config.ts`:
+### Bad — TypeScript / Svelte
 
 ```typescript
+// file: TitleEditor.bad.test.ts
+import { expect, test } from 'vitest';
+import { page } from 'vitest/browser';
+import { render } from 'vitest-browser-svelte';
+import TitleEditor from './TitleEditor.svelte';
+
+test('saving the edited title works', async () => {
+	const save = async (_title: string): Promise<void> => {};
+	render(TitleEditor, { save });
+	await page.getByRole('textbox', { name: 'Title' }).fill('Quarterly review');
+	await page.getByRole('button', { name: 'Save' }).click();
+	await expect.element(page.getByRole('status')).toBeInTheDocument();
+});
+
+test('failed save works', async () => {
+	const save = async (_title: string): Promise<void> => {
+		throw new Error('Offline');
+	};
+	render(TitleEditor, { save });
+	await page.getByRole('textbox', { name: 'Title' }).fill('Quarterly review');
+	await page.getByRole('button', { name: 'Save' }).click();
+	await expect.element(page.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+});
+```
+
+The bad tests pass with the wrong title, no progress indicator, or a hidden failure: the elements
+still exist. The good tests click the real control and check its text, availability, and submitted data.
+
+## A Save control works at a narrow viewport
+
+### Good — Python / Playwright
+
+```python
+# file: test_frontend_good.py
+from playwright.sync_api import Page, expect
+from editor_fixture import editor
+
+def test_save_uses_the_edited_title(editor: Page) -> None:
+    editor.get_by_role("textbox", name="Title").fill("Quarterly review")
+    editor.get_by_role("button", name="Save").click()
+    expect(editor.get_by_role("status")).to_have_text("Saved: Quarterly review")
+
+def test_save_is_reachable(editor: Page) -> None:
+    save = editor.get_by_role("button", name="Save")
+    expect(save).to_be_in_viewport(ratio=1)
+    save.click()
+    expect(editor.get_by_role("status")).to_have_text("Saved: ")
+```
+
+### Bad — Python / Playwright
+
+```python
+# file: test_frontend_bad.py
+from playwright.sync_api import Page, expect
+from editor_fixture import editor
+
+def test_save_uses_the_edited_title(editor: Page) -> None:
+    editor.get_by_role("textbox", name="Title").fill("Quarterly review")
+    editor.get_by_role("button", name="Save").click()
+    expect(editor.get_by_role("button", name="Save")).to_be_attached()
+
+def test_save_is_reachable(editor: Page) -> None:
+    expect(editor.get_by_role("button", name="Save")).to_be_attached()
+```
+
+Presence does not prove correct text or reachability. Test layout in a real browser. Require full
+viewport visibility only when the design requires it; scrollable controls have a different expectation.
+
+## Runnable setup
+
+Svelte: use Svelte 5, Vitest, `vitest-browser-svelte`, the Svelte Vite plugin, and the Playwright
+browser provider. Run `vitest run --config vitest.frontend.config.ts`. Python: use pytest-playwright
+with Chromium. Import the actual component/page in a project; these are standalone examples.
+
+```svelte
+<!-- file: TitleEditor.svelte -->
+<script lang="ts">
+	let { save }: { save: (title: string) => Promise<void> } = $props();
+	let title = $state('');
+	let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+	async function submit(): Promise<void> {
+		saveState = 'saving';
+		try {
+			await save(title);
+			saveState = 'saved';
+		} catch {
+			saveState = 'error';
+		}
+	}
+</script>
+
+<label>Title <input bind:value={title} /></label>
+<button onclick={submit} disabled={saveState === 'saving'}>Save</button>
+<p role="status">
+	{saveState === 'saving'
+		? 'Saving…'
+		: saveState === 'saved'
+			? 'Saved'
+			: saveState === 'error'
+				? 'Could not save'
+				: ''}
+</p>
+```
+
+```typescript
+// file: vitest.frontend.config.ts
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { playwright } from '@vitest/browser-playwright';
@@ -125,7 +168,7 @@ import { playwright } from '@vitest/browser-playwright';
 export default defineConfig({
 	plugins: [svelte()],
 	test: {
-		include: ['TitleEditor.test.ts'],
+		include: ['TitleEditor.*.test.ts'],
 		browser: {
 			enabled: true,
 			headless: true,
@@ -136,28 +179,10 @@ export default defineConfig({
 });
 ```
 
-**Catches:** passing the old/wrong title, premature success while saving is pending, duplicate
-submission of this action, hidden failures, or leaving Save disabled after failure.
-**Bad replacement:** checking only that Save exists, calling `submit()` directly, or sleeping
-for an arbitrary duration before checking success.
-
-**Adapt:** preserve the actual public component contract. Here `save(title)` is an explicit
-outgoing capability; recording its payload checks that contract, not a private handler call.
-The typed pending promise controls timing without patching methods or using `vi.fn`.
-These tests establish rendered behavior and requested save data; they do not prove server
-persistence. See [Vitest component testing](https://vitest.dev/guide/browser/component-testing)
-and [browser configuration](https://vitest.dev/guide/browser/).
-
-## Python: browser interaction and a narrow-viewport control
-
-Save as `test_editor.py`. Requires `pytest-playwright` and its Chromium browser. Run
-`python -m pytest test_editor.py`. This complete example renders a small real frontend into a
-browser page; use `page.goto` for the actual application when testing routes or persistence.
-
 ```python
+# file: editor_fixture.py
 import pytest
-from playwright.sync_api import Page, expect
-
+from playwright.sync_api import Page
 
 @pytest.fixture
 def editor(page: Page) -> Page:
@@ -177,49 +202,9 @@ def editor(page: Page) -> Page:
         </script>
     """)
     return page
-
-
-def test_save_uses_the_edited_title(editor: Page) -> None:
-    editor.get_by_role("textbox", name="Title").fill("Quarterly review")
-
-    editor.get_by_role("button", name="Save").click()
-
-    expect(editor.get_by_role("status")).to_have_text("Saved: Quarterly review")
-
-
-def test_save_is_reachable_in_a_narrow_viewport(editor: Page) -> None:
-    save = editor.get_by_role("button", name="Save")
-    expect(save).to_be_in_viewport(ratio=1)
-
-    save.click()
-
-    expect(editor.get_by_role("status")).to_have_text("Saved: ")
 ```
 
-**Catches:** a disconnected action, stale title, and a control outside the required viewport or
-obscured so it cannot be activated. **Bad replacement:** `expect(save).to_be_attached()` can pass
-for a clipped or unreachable control. Viewport membership alone does not establish hit-target
-reachability; the click and its result supply that evidence.
-
-**Adapt:** set the actual affected viewport, theme, panel state, and valid data. Keep full-viewport
-visibility only when the UX requires it; scrollable controls have a different contract. Use
-Playwright's retrying assertions rather than fixed sleeps. The fixture and assertion APIs are
-in [Playwright's pytest plugin](https://playwright.dev/python/docs/test-runners) and
-[Python assertions](https://playwright.dev/python/docs/test-assertions).
-
-## Test asynchronous states deliberately
-
-- **Loading:** keep the dependency pending; assert the required progress state and interaction
-  availability. Then resolve it and assert the final content.
-- **Empty:** return a valid empty result; assert the intended empty state and available action.
-- **Failure:** return the specified failure; assert the user-visible error rather than fallback
-  success content. If retry is part of the contract, activate it and verify recovery.
-- **Validation:** provide the invalid input, submit, and assert the meaningful error and absence
-  of prohibited effects. Cover server rejection through the real boundary when that is the risk.
-- **Stale result:** when concurrent requests matter, resolve them in controlled reverse order
-  and assert that the result for the current selection remains displayed.
-
-Give each scenario fresh state and restore test-owned resources. Component tests with a typed
-fake do not prove server compatibility; keep that evidence in integration tests. Critical
-frontend goals may need [end-to-end coverage](end-to-end-testing.md); do not duplicate every
-component variant through a browser workflow.
+Use retrying assertions, not sleeps. Keep requests pending to test loading; return explicit empty
+results or errors to test those screens. A fake save cannot prove server persistence.
+[Vitest browser setup](https://vitest.dev/guide/browser/),
+[Playwright pytest](https://playwright.dev/python/docs/test-runners).
