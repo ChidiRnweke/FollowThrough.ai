@@ -408,6 +408,12 @@ would misrepresent the note.
   on 2026-10-04 the agent built a working simulator from one prompt, with inputs, formulas and a
   chart reaching the expected balance, and in 0 of 3 did it embed the widget in the note. Building
   is no longer the limit; embedding is.
+  Part of that limit was the embed line itself. `create_widget` returned it with double quotes,
+  which the agent must escape inside the JSON arguments of `edit_note`. An unescaped quote fails
+  the whole run as malformed tool arguments, before the edit is made. The line now uses single
+  quotes, which parse to the same widget node and need no escaping. The agent instructions also
+  say that widgets exist and when to build one instead of a Markdown table, because without them
+  the agent answered requests for calculators and trackers with static text.
 
 - **Layout history.** Whether layout revisions are kept for restore (ADR 0011). Data history is
   not kept.
