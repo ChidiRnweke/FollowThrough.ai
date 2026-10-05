@@ -36,16 +36,6 @@ const createTodos = (todos: readonly AgentPayloadObject[]): ChatToolActivity =>
 const renderCard = (tool: ChatToolActivity) =>
 	render(ToolApprovalCard, { tool, shell, onapprove: () => {}, onreject: () => {} });
 
-const visible = async (
-	screen: Awaited<ReturnType<typeof renderCard>>,
-	texts: Record<string, string>
-) => {
-	const counts: Record<string, number> = {};
-	for (const [key, text] of Object.entries(texts))
-		counts[key] = (await screen.getByText(text).all()).length;
-	return counts;
-};
-
 describe('The review card shows the content a call will store', () => {
 	it('shows each todo title and its stored details', async () => {
 		const screen = await renderCard(
@@ -56,17 +46,15 @@ describe('The review card shows the content a call will store', () => {
 					responsibility: 'mine',
 					dueDate: '2026-08-10'
 				},
-				{ title: 'Book the review', responsibility: 'waiting_on' }
+				{ title: 'Book the review', responsibility: 'waiting_on', waitingOn: 'Priya' }
 			])
 		);
-		expect(
-			await visible(screen, {
-				first: 'Draft the RFC',
-				second: 'Book the review',
-				description: 'Description: Cover the rollout plan',
-				due: 'Due: 2026-08-10'
-			})
-		).toEqual({ first: 1, second: 1, description: 1, due: 1 });
+		await expect.element(screen.getByText('Draft the RFC', { exact: true })).toBeVisible();
+		await expect.element(screen.getByText('Book the review', { exact: true })).toBeVisible();
+		await expect.element(screen.getByText('Description: Cover the rollout plan')).toBeVisible();
+		await expect.element(screen.getByText('Responsibility: mine')).toBeVisible();
+		await expect.element(screen.getByText('Due: 2026-08-10')).toBeVisible();
+		await expect.element(screen.getByText('Waiting on: Priya')).toBeVisible();
 	});
 
 	it('shows compact overflow and the expanded item for the same todo batch', async () => {
@@ -77,28 +65,27 @@ describe('The review card shows the content a call will store', () => {
 				}))
 			)
 		);
-		const compact = await visible(screen, { more: '…and 1 more' });
+		await expect.element(screen.getByText('…and 1 more')).toBeVisible();
 		await screen.getByRole('button', { name: 'Review in full' }).click();
-		const full = await visible(screen, { sixth: 'Todo Six' });
-		expect({ compact, full }).toEqual({ compact: { more: 1 }, full: { sixth: 1 } });
+		await expect.element(screen.getByText('Todo Six', { exact: true })).toBeVisible();
 	});
 });
 
 describe('The review card names what an id-only call acts on', () => {
 	it('names the note an archive_note call will archive', async () => {
 		const screen = await renderCard(pendingCall('archive_note', { noteId: NOTE_ID }));
-		expect(await visible(screen, { note: 'Infrastructure' })).toEqual({ note: 1 });
-		expect(await screen.getByRole('button', { name: 'Review in full' }).all()).toHaveLength(0);
+		await expect.element(screen.getByText('Move note to trash · Infrastructure')).toBeVisible();
+		await expect
+			.element(screen.getByRole('button', { name: 'Review in full' }))
+			.not.toBeInTheDocument();
 	});
 
 	it('shows both the note being renamed and its proposed title', async () => {
 		const screen = await renderCard(
 			pendingCall('rename_note', { noteId: NOTE_ID, title: 'Renamed' })
 		);
-		expect(await visible(screen, { proposed: 'Renamed', current: 'on Infrastructure' })).toEqual({
-			proposed: 1,
-			current: 1
-		});
+		await expect.element(screen.getByText('Rename note · Renamed')).toBeVisible();
+		await expect.element(screen.getByText('on Infrastructure', { exact: true })).toBeVisible();
 	});
 });
 
@@ -127,8 +114,8 @@ describe('The review card only offers the room a change actually needs', () => {
 
 	it('hands a settings change the control that makes it instead', async () => {
 		const screen = await renderSettings();
-		expect(await screen.getByRole('link', { name: 'Open settings' }).all()).toHaveLength(1);
-		expect(await visible(screen, { previous: 'openai/gpt-5.6' })).toEqual({ previous: 1 });
+		await expect.element(screen.getByRole('link', { name: 'Open settings' })).toBeVisible();
+		await expect.element(screen.getByText('openai/gpt-5.6', { exact: true })).toBeVisible();
 	});
 });
 
