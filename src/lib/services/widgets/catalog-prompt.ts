@@ -43,6 +43,7 @@ export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
 		`- Functions: ${Object.values(formulaFunctions)
 			.map((definition) => definition.usage)
 			.join('; ')}.`,
+		'- Inside a function body the names are fixed: `item` is the current element and `i` is its position, a number. You cannot name your own parameter, so write `item.amount`, never `x.amount` or `i.amount`. A `map` or `filter` inside another body rebinds `item` to the inner element; totals per group are `map(group(@/rows, "category"), { category: item.key, amount: sum(map(item.items, item.amount)) })`.',
 		'- A failed formula (division by zero, a missing number) reads as `null` and the widget says why.',
 		'',
 		'## Workspace sources',

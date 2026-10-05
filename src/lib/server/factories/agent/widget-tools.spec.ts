@@ -23,6 +23,9 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates } from '$lib/models/widgets';
+import { readAgentPayloadObject } from '$lib/models/agent/payload';
+import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import { widgetReferencesIn } from '$lib/services/notes/references';
 
 const setup = () => {
 	const repository = new InMemoryWidgetRepository();
@@ -110,7 +113,7 @@ describe('agent widget tools', () => {
 		const { tool } = setup();
 		expect(() => jsonObjectSchema(tool('edit_widget_layout').parameters)).not.toThrow();
 	});
-	it('create a widget from JSON strings and return the line that embeds it', async () => {
+	const createLaunch = async () => {
 		const { repository, tool } = setup();
 		const output = await tool('create_widget')
 			.prepare({
@@ -120,8 +123,23 @@ describe('agent widget tools', () => {
 				data: JSON.stringify(widgetTemplates.checklist.data)
 			})
 			.execute();
-		const created = repository.widgets.find((widget) => widget.title === 'Launch');
-		expect(JSON.stringify(output)).toContain(`:::widgetNode {widgetId=\\"${created?.id}\\"} :::`);
+		const read = readAgentPayloadObject(output);
+		const embed = read.kind === 'valid' ? read.value.embed : null;
+		return {
+			embed: typeof embed === 'string' ? embed : '',
+			created: repository.widgets.find((widget) => widget.title === 'Launch')
+		};
+	};
+	it('create a widget from JSON strings and return a line that embeds it in a note', async () => {
+		const { embed, created } = await createLaunch();
+		const note = noteContentFromMarkdown(`Plan\n\n${embed}\n`);
+		expect(widgetReferencesIn([note])).toEqual([created?.id]);
+	});
+	// The agent inserts the line inside edit_note's JSON arguments; a double quote it forgets to
+	// escape there fails the whole run as malformed tool arguments.
+	it('return an embed line with no double quote to escape', async () => {
+		const { embed } = await createLaunch();
+		expect(embed).toMatch(/^:::widgetNode \{widgetId='[^"]+'\} :::$/);
 	});
 	it('refuse to create a widget whose layout names an uncataloged component', async () => {
 		const { tool } = setup();
