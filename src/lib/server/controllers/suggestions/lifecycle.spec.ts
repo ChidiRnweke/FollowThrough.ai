@@ -194,23 +194,10 @@ describe('Suggestion lifecycle invariants', () => {
 			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
 		]);
 		const result = await revert.revert(testActor(), { suggestionId: testSuggestionId() });
-		expect(result.status).toBe('reverted');
-	});
-
-	it('reverting removes the applied artifact', async () => {
-		const { suggestions, artifacts, revert } = setup();
-		suggestions.suggestions = [
-			suggestionBuilder({
-				status: 'accepted',
-				appliedArtifactId: testTodoId()
-			})
-		];
-		artifacts.artifacts = [todoBuilder()];
-		await artifacts.effects.record(testActor(), testSuggestionId(), [
-			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
-		]);
-		await revert.revert(testActor(), { suggestionId: testSuggestionId() });
-		expect(artifacts.artifacts).toEqual([]);
+		expect({ status: result.status, remainingArtifacts: artifacts.artifacts }).toEqual({
+			status: 'reverted',
+			remainingArtifacts: []
+		});
 	});
 });
 

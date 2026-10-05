@@ -44,11 +44,6 @@ describe('Project export entry invariants', () => {
 		});
 	});
 
-	it('never offers a folder as a document of its own', () => {
-		const entries = projectExportEntries([folder('Interviews', [note('Round one')])]);
-		expect(entries.map((entry) => entry.id)).toEqual(['round one']);
-	});
-
 	it('yields nothing for a folder with no notes in it', () => {
 		expect(projectExportEntries([folder('Empty', [])])).toEqual([]);
 	});

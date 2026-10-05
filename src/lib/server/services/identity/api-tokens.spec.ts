@@ -22,14 +22,12 @@ const mint = async (scope: 'read' | 'full' = 'read') => {
 };
 
 describe('API token minting', () => {
-	it('returns a prefixed plaintext credential', async () => {
+	it('returns a prefixed credential without storing its plaintext', async () => {
 		const { minted } = await mint();
-		expect(minted.plaintext.startsWith('ftm_')).toBe(true);
-	});
-
-	it('never exposes the plaintext on the stored record', async () => {
-		const { minted } = await mint();
-		expect(JSON.stringify(minted.token)).not.toContain(minted.plaintext);
+		expect({
+			prefix: minted.plaintext.startsWith('ftm_'),
+			storedPlaintext: JSON.stringify(minted.token).includes(minted.plaintext)
+		}).toEqual({ prefix: true, storedPlaintext: false });
 	});
 
 	it('issues a distinct credential each time', async () => {
@@ -70,7 +68,10 @@ describe('API token verification', () => {
 	it('rejects a revoked token', async () => {
 		const { subject, minted } = await mint();
 		await subject.revoke(testActor(), minted.token.id);
-		expect(await subject.verify(`Bearer ${minted.plaintext}`)).toBeNull();
+		expect({
+			verified: await subject.verify(`Bearer ${minted.plaintext}`),
+			listed: await subject.list(testActor())
+		}).toEqual({ verified: null, listed: [] });
 	});
 
 	it('rejects an expired token', async () => {
@@ -87,12 +88,6 @@ describe('API token verification', () => {
 });
 
 describe('API token listing', () => {
-	it('omits revoked tokens', async () => {
-		const { subject, minted } = await mint();
-		await subject.revoke(testActor(), minted.token.id);
-		expect(await subject.list(testActor())).toEqual([]);
-	});
-
 	it('does not revoke a token belonging to another user', async () => {
 		const { subject, minted } = await mint();
 		await expect(subject.revoke(testActor(2), minted.token.id)).rejects.toThrow(

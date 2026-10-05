@@ -229,24 +229,8 @@ describe('resubmitting an edited question', () => {
 	};
 
 	it('replaces the discarded question in the transcript', async () => {
-		const { controller, conversations, receipt } = await settled({
+		const { controller, conversations, sessions, runs, receipt } = await settled({
 			requestId: '20000000-0000-4000-8000-000000000001',
-			input: 'Summarise this'
-		});
-		await controller.submit(testActor(), {
-			requestId: '20000000-0000-4000-8000-000000000002',
-			conversationId: receipt.conversationId,
-			input: 'Summarise this in one line',
-			retryUserOrdinal: 1
-		});
-		expect(conversations.messages.map((message) => message.content.text)).toEqual([
-			'Summarise this in one line'
-		]);
-	});
-
-	it('rewinds provider session memory to before the discarded question', async () => {
-		const { controller, sessions, receipt } = await settled({
-			requestId: '20000000-0000-4000-8000-000000000003',
 			input: 'Summarise this'
 		});
 		await sessions.append(testActor(), receipt.conversationId, [
@@ -254,12 +238,20 @@ describe('resubmitting an edited question', () => {
 			assistantItem('Here you go')
 		]);
 		await controller.submit(testActor(), {
-			requestId: '20000000-0000-4000-8000-000000000004',
+			requestId: '20000000-0000-4000-8000-000000000002',
 			conversationId: receipt.conversationId,
 			input: 'Summarise this in one line',
 			retryUserOrdinal: 1
 		});
-		expect(await sessions.list(testActor(), receipt.conversationId)).toHaveLength(0);
+		expect({
+			transcript: conversations.messages.map((message) => message.content.text),
+			providerItems: await sessions.list(testActor(), receipt.conversationId),
+			retryHasControlOrdinal: 'retryUserOrdinal' in (runs.runs.at(-1)?.inputSnapshot ?? {})
+		}).toEqual({
+			transcript: ['Summarise this in one line'],
+			providerItems: [],
+			retryHasControlOrdinal: false
+		});
 	});
 
 	it('leaves earlier turns in place', async () => {
@@ -300,20 +292,6 @@ describe('resubmitting an edited question', () => {
 				retryUserOrdinal: 1
 			})
 		).rejects.toThrow('Wait for the current agent run to finish');
-	});
-
-	it('keeps the rewind out of the frozen input, so retrying the run cannot rewind again', async () => {
-		const { controller, runs, receipt } = await settled({
-			requestId: '20000000-0000-4000-8000-00000000000a',
-			input: 'Summarise this'
-		});
-		await controller.submit(testActor(), {
-			requestId: '20000000-0000-4000-8000-00000000000b',
-			conversationId: receipt.conversationId,
-			input: 'Summarise this in one line',
-			retryUserOrdinal: 1
-		});
-		expect(runs.runs.at(-1)?.inputSnapshot).not.toHaveProperty('retryUserOrdinal');
 	});
 });
 

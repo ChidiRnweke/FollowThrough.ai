@@ -44,16 +44,12 @@ describe('Workbench store closing every tab', () => {
 
 	it('navigates to the overview once', async () => {
 		const { router, store } = setup(twoTabUrl, twoTabs, NOTE_A);
-		await store.closeTabs(twoTabs);
-		expect(router.currentUrl().pathname).toBe('/today');
-	});
-
-	// A closed tab must not stay pinned, or it reappears on the next hydrate.
-	it('unpins tabs that were closed', async () => {
-		const { store } = setup(twoTabUrl, twoTabs, NOTE_A);
 		store.pinnedTabs = [NOTE_A];
 		await store.closeTabs(twoTabs);
-		expect(store.pinnedTabs).toEqual([]);
+		expect({ pathname: router.currentUrl().pathname, pinnedTabs: store.pinnedTabs }).toEqual({
+			pathname: '/today',
+			pinnedTabs: []
+		});
 	});
 
 	// Same last-tab branch, reached one tab at a time.

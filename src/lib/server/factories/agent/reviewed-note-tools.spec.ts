@@ -85,9 +85,20 @@ describe('Revision-bound note tool approvals', () => {
 	it('applies the checkpoint after recreating the registry', async () => {
 		const fixture = setup();
 		const pending = await fixture.prepare();
+		if (!pending.review) throw new Error('Expected a review');
+		const review = noteChangeReviewSchema.parse(JSON.parse(pending.review.content));
 		const persisted = readPendingDecisions(JSON.parse(JSON.stringify([pending]))).decisions;
 		await fixture.invoke(fixture.registry(persisted));
-		expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
+		expect({ review, appliedBody: fixture.content.notes[0].plainText }).toMatchObject({
+			review: {
+				kind: 'prepared',
+				change: {
+					base: { revision: 1, title: 'Release' },
+					result: { plainText: 'Launch Tuesday.' }
+				}
+			},
+			appliedBody: 'Launch Tuesday.'
+		});
 	});
 	it('refuses to reinterpret an approved patch after the note changes', async () => {
 		const fixture = setup();

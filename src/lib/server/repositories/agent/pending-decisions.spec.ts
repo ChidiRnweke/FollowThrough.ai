@@ -17,11 +17,8 @@ describe('Reading the pending decisions off a run row', () => {
 	const decision = { callId: 'call-1', toolName: 'archive_note', arguments: { noteId: 'note-1' } };
 
 	it('reads a stored decision back as itself', () => {
-		expect(readPendingDecisions([decision]).decisions).toEqual([decision]);
-	});
-
-	it('reports nothing dropped when every decision reads', () => {
-		expect(readPendingDecisions([decision]).dropped).toEqual([]);
+		const result = readPendingDecisions([decision]);
+		expect(result).toEqual({ kind: 'readable', decisions: [decision], dropped: [] });
 	});
 
 	it('drops a decision naming a tool the catalog no longer has', () => {
