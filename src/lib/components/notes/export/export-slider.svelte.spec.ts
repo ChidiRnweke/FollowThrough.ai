@@ -22,16 +22,10 @@ describe('ExportSlider', () => {
 	it('labels the control for assistive tech', async () => {
 		const screen = await render(ExportSlider, { ...base });
 		await expect.element(screen.getByRole('slider', { name: 'Turn limit' })).toBeVisible();
-	});
 
-	it('shows the current value', async () => {
-		const screen = await render(ExportSlider, { ...base });
-		await expect.element(screen.getByText('20')).toBeVisible();
-	});
-
-	it('describes how the current value reads', async () => {
-		const screen = await render(ExportSlider, { ...base });
 		await expect.element(screen.getByText(/standard runs/)).toBeVisible();
+
+		await expect.element(screen.getByText('20')).toBeVisible();
 	});
 
 	it('marks the deployment default among the anchors', async () => {
@@ -43,10 +37,7 @@ describe('ExportSlider', () => {
 	it('keeps the accessible name when showLabel is false', async () => {
 		const screen = await render(ExportSlider, { ...base, showLabel: false });
 		await expect.element(screen.getByRole('slider', { name: 'Turn limit' })).toBeVisible();
-	});
 
-	it('hides the visible label when showLabel is false', async () => {
-		const screen = await render(ExportSlider, { ...base, showLabel: false });
 		await expect.element(screen.getByText('Turn limit')).not.toBeInTheDocument();
 	});
 

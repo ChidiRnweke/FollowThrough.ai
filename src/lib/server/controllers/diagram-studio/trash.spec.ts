@@ -133,24 +133,6 @@ describe('diagram trash transitions', () => {
 });
 
 describe('Diagram soft delete', () => {
-	it('marks an archived diagram as trashed rather than removing it', async () => {
-		const { controller, diagrams } = setup();
-		const diagram = drawioBuilder();
-		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(diagrams.diagrams).toEqual([
-			{ ...diagram, archivedAt: timestamp, updatedAt: timestamp }
-		]);
-	});
-
-	it('lists an archived diagram in the trash', async () => {
-		const { controller, library, diagrams } = setup();
-		const diagram = drawioBuilder();
-		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(await library.listArchived(testActor())).toHaveLength(1);
-	});
-
 	it('takes a restored diagram back out of the trash', async () => {
 		const { controller, library, diagrams } = setup();
 		const diagram = drawioBuilder();
@@ -158,6 +140,8 @@ describe('Diagram soft delete', () => {
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
 		await controller.restoreProjectDiagram(testActor(), { diagramId: diagram.id });
 		expect(await library.listArchived(testActor())).toHaveLength(0);
+		const listed = await library.listForProject(testActor(), diagram.projectId);
+		expect(listed.diagrams).toHaveLength(1);
 	});
 
 	// The defect this whole block exists for: archiving marked the row and hid it
@@ -170,24 +154,10 @@ describe('Diagram soft delete', () => {
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
 		const listed = await library.listForProject(testActor(), diagram.projectId);
 		expect(listed.diagrams).toHaveLength(0);
-	});
-
-	it('stops counting an archived diagram', async () => {
-		const { controller, library, diagrams } = setup();
-		const diagram = drawioBuilder();
-		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
+		expect(await library.listArchived(testActor())).toMatchObject([
+			{ id: diagram.id, archivedAt: timestamp, updatedAt: timestamp }
+		]);
 		expect(await library.countForProject(testActor(), diagram.projectId)).toBe(0);
-	});
-
-	it('puts a restored diagram back in the project listing', async () => {
-		const { controller, library, diagrams } = setup();
-		const diagram = drawioBuilder();
-		diagrams.diagrams = [diagram];
-		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		await controller.restoreProjectDiagram(testActor(), { diagramId: diagram.id });
-		const listed = await library.listForProject(testActor(), diagram.projectId);
-		expect(listed.diagrams).toHaveLength(1);
 	});
 
 	// The gallery's confirmation promises a note shows the diagram as unavailable

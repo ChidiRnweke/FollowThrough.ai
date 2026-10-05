@@ -18,13 +18,20 @@ describe('Bundle packing invariants', () => {
 	});
 
 	it('keeps the bytes each file was packed with', () => {
-		const archive = packZip([file('Notes.pdf', 'the body')]);
-		expect(new AdmZip(archive).getEntry('Notes.pdf')?.getData().toString()).toBe('the body');
-	});
-
-	it('keeps the folder structure a path describes', () => {
-		const archive = packZip([file('Interviews/Round two/Notes.pdf')]);
-		expect(entryNames(archive)).toEqual(['Interviews/Round two/Notes.pdf']);
+		const archive = packZip([
+			file('Notes.pdf', 'the body'),
+			file('Interviews/Round two/Notes.pdf', 'nested body')
+		]);
+		const zip = new AdmZip(archive);
+		expect({
+			rootBytes: zip.getEntry('Notes.pdf')?.getData().toString(),
+			nestedBytes: zip.getEntry('Interviews/Round two/Notes.pdf')?.getData().toString(),
+			paths: entryNames(archive)
+		}).toEqual({
+			rootBytes: 'the body',
+			nestedBytes: 'nested body',
+			paths: ['Interviews/Round two/Notes.pdf', 'Notes.pdf']
+		});
 	});
 
 	it('drops traversal segments from a path', () => {

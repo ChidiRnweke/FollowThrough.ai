@@ -44,13 +44,6 @@ describe('Expired upload sweep', () => {
 		await sweep(store, objects).run();
 
 		expect(objects.removed).toEqual(['staging/a']);
-	});
-
-	it('deletes the reservation row', async () => {
-		const store = new InMemoryUploadReservations([uploadAt('2026-07-28T09:00:00.000Z')]);
-
-		await sweep(store, new InMemoryUploadObjects()).run();
-
 		expect(store.deleted).toHaveLength(1);
 	});
 

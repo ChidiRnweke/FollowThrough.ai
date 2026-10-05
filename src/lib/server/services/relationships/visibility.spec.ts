@@ -35,21 +35,22 @@ const setup = () => {
 	);
 	return { notes, source, target, graph };
 };
-it('omits a retained relationship when its target is no longer readable', async () => {
-	const { notes, source, graph } = setup();
-	// The repository read surface excludes the target after its project is archived.
-	notes.notes = [source];
-	expect(await graph.readContexts(testActor(), [relation])).toEqual([]);
-});
-it('omits a retained relationship when its source is no longer readable', async () => {
-	const { notes, target, graph } = setup();
-	notes.notes = [target];
-	expect(await graph.readContexts(testActor(), [relation])).toEqual([]);
-});
-it('retains a relationship while both notes are readable', async () => {
+it('returns only relationships whose source and target are readable', async () => {
 	const { notes, source, target, graph } = setup();
 	notes.notes = [source, target];
-	expect(await graph.readContexts(testActor(), [relation])).toEqual([
-		{ relationship: relation, source, target }
+	const readable = { ...relation, id: `${relation.id}-readable` as NoteRelationship['id'] };
+	const missingTarget = {
+		...relation,
+		id: `${relation.id}-missing-target` as NoteRelationship['id'],
+		targetNoteId: '00000000-0000-4000-8000-000000000003' as NoteRelationship['targetNoteId']
+	};
+	const missingSource = {
+		...relation,
+		id: `${relation.id}-missing-source` as NoteRelationship['id'],
+		sourceNoteId: '00000000-0000-4000-8000-000000000003' as NoteRelationship['sourceNoteId'],
+		targetNoteId: target.id
+	};
+	expect(await graph.readContexts(testActor(), [missingTarget, missingSource, readable])).toEqual([
+		{ relationship: readable, source, target }
 	]);
 });

@@ -41,20 +41,12 @@ describe('Inline Mermaid conversion invariants', () => {
 		expect(result.suggestion.kind === 'diagram' ? result.suggestion.payload.kind : undefined).toBe(
 			'drawio'
 		);
-	});
 
-	it('preserves the agent generated XML directly', async () => {
-		const { controller } = setup();
-		const result = await controller.convertInlineMermaid(testActor(), input);
+		expect(result.suggestion.provenanceId).toBe(testProvenanceId(1));
+
 		expect(
 			result.suggestion.kind === 'diagram' ? result.suggestion.payload.source : undefined
 		).toBe(VALID_DRAWIO_XML);
-	});
-
-	it('records the fresh agent provenance on the suggestion', async () => {
-		const { controller } = setup();
-		const result = await controller.convertInlineMermaid(testActor(), input);
-		expect(result.suggestion.provenanceId).toBe(testProvenanceId(1));
 	});
 
 	it('does not persist a suggestion after terminal XML validation failure', async () => {

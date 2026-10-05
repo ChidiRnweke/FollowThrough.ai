@@ -91,6 +91,8 @@ describe('Diagram generation run settlement', () => {
 		expect(
 			persistence.runs.map((run) => ({ startedAt: run.startedAt, finishedAt: run.finishedAt }))
 		).toEqual([{ startedAt: testNow, finishedAt: testNow }]);
+
+		expect(persistence.runs.map((run) => run.status)).toEqual(['completed']);
 	});
 	it('fails the run when the generated draw.io proposal cannot be saved', async () => {
 		const { controller, persistence, suggestions } = setup();
@@ -123,12 +125,6 @@ describe('Diagram generation run settlement', () => {
 		expect(persistence.runs.map((run) => ({ status: run.status, failure: run.failure }))).toEqual([
 			{ status: 'failed', failure: 'Provider connection lost' }
 		]);
-	});
-
-	it('completes a run after its Mermaid submission passes validation', async () => {
-		const { controller, persistence } = setup();
-		await controller.reviseInlineMermaid(testActor(), revision);
-		expect(persistence.runs.map((run) => run.status)).toEqual(['completed']);
 	});
 
 	it('lets the provider correct rejected draw.io XML before accepting its next submission', async () => {

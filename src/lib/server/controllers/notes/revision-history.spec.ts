@@ -61,6 +61,8 @@ describe('Note revision history invariants', () => {
 		await publishRepeatedly(content, controller, 1);
 		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
 		expect(result.revisions).toHaveLength(1);
+
+		expect(result.revisions[0]).not.toHaveProperty('document');
 	});
 
 	it('orders the history newest first', async () => {
@@ -87,23 +89,8 @@ describe('Note revision history invariants', () => {
 		await publishRepeatedly(content, controller, NOTE_REVISION_HISTORY_LIMIT + 5);
 		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
 		expect(result.revisions).toHaveLength(NOTE_REVISION_HISTORY_LIMIT);
-	});
 
-	it('evicts the oldest snapshots first', async () => {
-		const { content, controller } = setup();
-		content.notes = [noteBuilder()];
-		await publishRepeatedly(content, controller, NOTE_REVISION_HISTORY_LIMIT + 5);
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
-		// 25 publications, 20 kept: revisions 1–5 are gone and 6 is the oldest survivor.
 		expect(result.revisions.at(-1)?.revision).toBe(6);
-	});
-
-	it('omits the document body from the history list', async () => {
-		const { content, controller } = setup();
-		content.notes = [noteBuilder()];
-		await publishRepeatedly(content, controller, 1);
-		const result = await controller.listRevisions(testActor(), { noteId: testNoteId() });
-		expect(result.revisions[0]).not.toHaveProperty('document');
 	});
 
 	it('reads one snapshot in full for the diff', async () => {

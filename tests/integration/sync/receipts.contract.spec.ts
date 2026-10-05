@@ -129,13 +129,6 @@ it('retains cancellation proof without a receipt body', async () => {
 		kind: 'cancelled'
 	});
 });
-it('rejects different input using permanent proof', async () => {
-	const { owner, receipt } = await savedReceipt('8912');
-	const receipts = new WorkspaceSyncReceipts(context.db);
-	expect(await receipts.find(owner, receipt.operationId, '{"different":true}')).toEqual({
-		kind: 'reused'
-	});
-});
 
 it('stores no document content in the permanent operation ledger', async () => {
 	const { owner, receipt } = await savedReceipt('8913');

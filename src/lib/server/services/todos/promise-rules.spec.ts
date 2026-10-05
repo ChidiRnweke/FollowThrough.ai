@@ -14,12 +14,10 @@ const baseDate = new Date('2026-07-11T09:00:00.000Z');
 describe('parsePromises', () => {
 	it('separates the action from a direct commitment', () => {
 		expect(parsePromises(selection('I will send the design.'))[0]?.action).toBe('Send the design');
-	});
-	it('classifies a direct commitment as mine', () => {
-		expect(parsePromises(selection('I will send the design.'))[0]?.responsibility).toBe('mine');
-	});
-	it('classifies will language as explicit', () => {
+
 		expect(parsePromises(selection('I will send the design.'))[0]?.strength).toBe('explicit');
+
+		expect(parsePromises(selection('I will send the design.'))[0]?.responsibility).toBe('mine');
 	});
 	it('classifies commitments made by others', () => {
 		expect(parsePromises(selection('Jan will send the API spec.'))[0]?.responsibility).toBe(
@@ -30,8 +28,7 @@ describe('parsePromises', () => {
 		expect(parsePromises(selection('I will send it tomorrow.'))[0]?.dueDateVerbatim).toBe(
 			'tomorrow'
 		);
-	});
-	it('resolves a relative due date', () => {
+
 		expect(parsePromises(selection('I will send it tomorrow.'), baseDate)[0]?.resolvedDueDate).toBe(
 			'2026-07-12'
 		);

@@ -106,6 +106,12 @@ describe('Safe draw.io iframe messaging invariants', () => {
 		expect(port.posted.map((entry) => entry.message)).not.toContainEqual(
 			expect.objectContaining({ action: 'load', title: expect.anything() })
 		);
+
+		expect(port.posted[0]?.origin).toBe(DRAWIO_EMBED_ORIGIN);
+
+		expect(port.posted[0]?.message.autosave).toBe(1);
+
+		expect(port.posted[0]?.message.xml).toBe('<mxfile/>');
 	});
 
 	it('configures the hosted editor before initialization', () => {
@@ -114,29 +120,11 @@ describe('Safe draw.io iframe messaging invariants', () => {
 		expect(port.posted[0]?.message.action).toBe('configure');
 	});
 
-	it('loads XML when the active iframe initializes', () => {
-		const { port } = setup();
-		port.emit({ event: 'init' });
-		expect(port.posted[0]?.message.xml).toBe('<mxfile/>');
-	});
-
-	it('enables hosted editor autosave', () => {
-		const { port } = setup();
-		port.emit({ event: 'init' });
-		expect(port.posted[0]?.message.autosave).toBe(1);
-	});
-
 	it('hands autosaved XML to the host', async () => {
 		const { port, autosaves } = setup();
 		port.emit({ event: 'autosave', xml: '<mxfile><diagram/></mxfile>' });
 		await exported();
 		expect(autosaves).toEqual(['<mxfile><diagram/></mxfile>']);
-	});
-
-	it('posts only to the exact hosted origin', () => {
-		const { port } = setup();
-		port.emit({ event: 'init' });
-		expect(port.posted[0]?.origin).toBe(DRAWIO_EMBED_ORIGIN);
 	});
 
 	it('ignores messages from the wrong origin', () => {

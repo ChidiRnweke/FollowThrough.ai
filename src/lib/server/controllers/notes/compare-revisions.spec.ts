@@ -62,16 +62,7 @@ describe('Reading one note revision as plain text', () => {
 			revisionId: await revisionIdOf(controller, 1)
 		});
 		expect(result.plainText).toBe('Original');
-	});
 
-	it('marks the snapshot the note is currently published at', async () => {
-		const { content, controller } = setup();
-		content.notes = [noteBuilder({ plainText: 'Original' })];
-		await publishRepeatedly(content, controller, 1);
-		const result = await controller.readRevision(testActor(), {
-			noteId: testNoteId(),
-			revisionId: await revisionIdOf(controller, 1)
-		});
 		expect(result.isPublished).toBe(true);
 	});
 
@@ -98,16 +89,7 @@ describe('Diffing a note revision against a baseline', () => {
 			revisionId: await revisionIdOf(controller, 1)
 		});
 		expect(result.againstRevision).toBe(2);
-	});
 
-	it('reads the patch from the baseline toward the requested version', async () => {
-		const { content, controller } = setup();
-		content.notes = [noteBuilder({ plainText: 'Original' })];
-		await publishRepeatedly(content, controller, 2);
-		const result = await controller.compareRevisions(testActor(), {
-			noteId: testNoteId(),
-			revisionId: await revisionIdOf(controller, 1)
-		});
 		expect(result.diff.patch).toContain('+Original');
 	});
 

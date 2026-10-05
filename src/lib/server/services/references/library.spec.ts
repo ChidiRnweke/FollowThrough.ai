@@ -108,32 +108,7 @@ describe('Reference management invariants', () => {
 			relevanceNote: 'Relevant'
 		});
 		expect(reference.sourceAnchorId).toBe(testAnchorId());
-	});
 
-	it('retains provenance on a created reference', async () => {
-		const { service, anchors, provenance } = setup();
-		anchors.anchors = [anchorBuilder()];
-		provenance.provenance = [
-			{
-				id: testProvenanceId(),
-				userId: testActor().userId,
-				producerKind: 'pipeline',
-				producerName: 'Reference',
-				pipeline: 'reference',
-				sourceAnchorId: testAnchorId(),
-				metadata: {},
-				createdAt: testNow
-			}
-		];
-		const reference = await service.create(testActor(), {
-			noteId: testNoteId(),
-			sourceAnchorId: testAnchorId(),
-			provenanceId: testProvenanceId(),
-			url: 'https://example.com' as Url,
-			title: 'Example',
-			tier: 'official',
-			relevanceNote: 'Relevant'
-		});
 		expect(reference.provenanceId).toBe(testProvenanceId());
 	});
 });

@@ -158,7 +158,7 @@ describe('Postgres todo repository invariants', () => {
 		});
 		expect(await repository.listCategories(actor('58'))).toEqual([]);
 	});
-	it('persists a category set on update', async () => {
+	it('sets a category then clears it when the next update omits it', async () => {
 		const { owner, project } = await seedNote('59');
 		const repository = new TodoRecords(context.db);
 		const todo = await repository.insert(owner, {
@@ -172,24 +172,13 @@ describe('Postgres todo repository invariants', () => {
 			updatedAt: now
 		});
 		await repository.update(owner, { ...todo, category: 'Client work' });
-		expect((await repository.findById(owner, todo.id))?.category).toBe('Client work');
-	});
-	it('clears a category when the update omits it', async () => {
-		const { owner, project } = await seedNote('60');
-		const repository = new TodoRecords(context.db);
-		const todo = await repository.insert(owner, {
-			id: '50000000-0000-4000-8000-000000000060' as TodoId,
-			userId: owner.userId,
-			projectId: project.id,
-			title: 'Decategorised',
-			category: 'Client work',
-			status: 'open',
-			responsibility: 'mine',
-			createdAt: now,
-			updatedAt: now
-		});
+		const afterSet = (await repository.findById(owner, todo.id))?.category;
 		const { category: _cleared, ...withoutCategory } = todo;
 		await repository.update(owner, withoutCategory);
-		expect((await repository.findById(owner, todo.id))?.category).toBeUndefined();
+		const afterOmission = (await repository.findById(owner, todo.id))?.category;
+		expect({ afterSet, afterOmission }).toEqual({
+			afterSet: 'Client work',
+			afterOmission: undefined
+		});
 	});
 });

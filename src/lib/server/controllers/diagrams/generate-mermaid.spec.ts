@@ -52,11 +52,7 @@ describe('Generate Mermaid workflow invariants', () => {
 		const { controller } = setup();
 		const result = await controller.generateMermaid(testActor(), input);
 		expect(result.suggestion.kind).toBe('diagram');
-	});
 
-	it('preserves the generated Mermaid source in the suggestion', async () => {
-		const { controller } = setup();
-		const result = await controller.generateMermaid(testActor(), input);
 		expect(
 			result.suggestion.kind === 'diagram' ? result.suggestion.payload.source : undefined
 		).toBe('flowchart LR\nA --> B');

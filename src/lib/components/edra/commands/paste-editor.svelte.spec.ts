@@ -135,17 +135,10 @@ describe('Pasting a copied paragraph at a caret inside another paragraph', () =>
 		const editor = mount();
 		pasteInto(editor, CLOSED, 'Frontend ');
 		const blocks = editor.getJSON().content!.length;
-		editor.destroy();
-
-		expect(blocks).toBe(1);
-	});
-
-	it('lands the text in the paragraph the caret was in', () => {
-		const editor = mount();
-		pasteInto(editor, CLOSED, 'Frontend ');
 		const first = editor.getJSON().content![0];
 		editor.destroy();
 
+		expect(blocks).toBe(1);
 		expect(JSON.stringify(first)).toContain('Frontend');
 	});
 

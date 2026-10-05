@@ -36,11 +36,6 @@ describe('note drag contract', () => {
 		const data = transfer();
 		writeNoteDrag(data, noteId);
 		expect(data.getData(NOTE_DRAG_MIME)).toBe(noteId);
-	});
-
-	it('uses copy semantics', () => {
-		const data = transfer();
-		writeNoteDrag(data, noteId);
 		expect(data.effectAllowed).toBe('copy');
 	});
 

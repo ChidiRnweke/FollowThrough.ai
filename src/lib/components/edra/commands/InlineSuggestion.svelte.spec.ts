@@ -47,15 +47,16 @@ describe('InlineSuggestion extension', () => {
 
 	it('requests a suggestion after real contenteditable typing', async () => {
 		let calls = 0;
-		const { editor } = mountEditor(async () => {
+		const { editor, element } = mountEditor(async () => {
 			calls++;
 			return { text: ' to avoid data loss.' };
 		});
-		moveCaret(editor);
-		await userEvent.keyboard(' ');
-		await vi.advanceTimersByTimeAsync(100);
+		await typeAtCaret(editor);
+		await waitForOffer(editor);
+		const ghost = element.querySelector('.inline-suggestion');
 		editor.destroy();
 		expect(calls).toBe(1);
+		expect(ghost?.textContent).toContain('to avoid data loss.');
 	});
 
 	it('does not request a suggestion for a caret move without an edit', async () => {
@@ -68,15 +69,6 @@ describe('InlineSuggestion extension', () => {
 		await vi.advanceTimersByTimeAsync(100);
 		editor.destroy();
 		expect(calls).toBe(0);
-	});
-
-	it('renders ghost text after the caret rests', async () => {
-		const { editor, element } = mountEditor(async () => ({ text: ' to avoid data loss.' }));
-		await typeAtCaret(editor);
-		await waitForOffer(editor);
-		const ghost = element.querySelector('.inline-suggestion');
-		editor.destroy();
-		expect(ghost?.textContent).toContain('to avoid data loss.');
 	});
 
 	it('inserts the suggestion on Tab and clears the ghost text', async () => {
@@ -124,21 +116,8 @@ describe('InlineSuggestion extension', () => {
 	});
 
 	it('dismisses the ghost text on Escape without inserting', async () => {
-		const { editor, element } = mountEditor(async () => ({ text: ' to avoid data loss.' }));
-		await typeAtCaret(editor);
-		await waitForOffer(editor);
-		editor.view.dom.dispatchEvent(
-			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-		);
-		const ghost = element.querySelector('.inline-suggestion');
-		const inserted = editor.getText().includes('avoid data loss');
-		editor.destroy();
-		expect({ hasGhost: ghost !== null, inserted }).toEqual({ hasGhost: false, inserted: false });
-	});
-
-	it('does not immediately offer again after Escape', async () => {
 		let calls = 0;
-		const { editor } = mountEditor(async () => {
+		const { editor, element } = mountEditor(async () => {
 			calls++;
 			return { text: ' to avoid data loss.' };
 		});
@@ -147,8 +126,11 @@ describe('InlineSuggestion extension', () => {
 		editor.view.dom.dispatchEvent(
 			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
 		);
+		const ghost = element.querySelector('.inline-suggestion');
+		const inserted = editor.getText().includes('avoid data loss');
 		await vi.advanceTimersByTimeAsync(100);
 		editor.destroy();
+		expect({ hasGhost: ghost !== null, inserted }).toEqual({ hasGhost: false, inserted: false });
 		expect(calls).toBe(1);
 	});
 

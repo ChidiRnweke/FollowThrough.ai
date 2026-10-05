@@ -25,10 +25,7 @@ it('restores the same diagram request after refresh despite a different input pr
 			operation: 'revise'
 		}).requestId
 	).toBe(first.requestId);
-});
 
-it('keeps identical diagram requests separate for different accounts', () => {
-	const first = new DiagramSubmissions(sessionStorage).prepare('diagram-test-a', revision);
 	expect(
 		new DiagramSubmissions(sessionStorage).prepare('diagram-test-b', revision).requestId
 	).not.toBe(first.requestId);

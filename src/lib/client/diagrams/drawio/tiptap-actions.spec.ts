@@ -67,16 +67,7 @@ describe('Inline diagram document invariants', () => {
 			'mermaid',
 			'drawio'
 		]);
-	});
 
-	it('acceptance leaves the Mermaid source unchanged', () => {
-		const port = new InMemoryEditorPort();
-		insertAcceptedDrawioAfterMermaid(
-			port,
-			port.state.doc.firstChild!,
-			0,
-			'60000000-0000-4000-8000-000000000002' as DiagramId
-		);
 		expect(port.state.doc.firstChild?.textContent).toBe('A --> B');
 	});
 
@@ -90,17 +81,7 @@ describe('Inline diagram document invariants', () => {
 		);
 		setPendingDrawioSuggestion(port, port.state.doc.firstChild!, 0, null);
 		expect(port.state.doc.firstChild?.attrs.pendingDrawioSuggestionId).toBeNull();
-	});
 
-	it('rejection inserts no draw.io reference', () => {
-		const port = new InMemoryEditorPort();
-		setPendingDrawioSuggestion(
-			port,
-			port.state.doc.firstChild!,
-			0,
-			'10000000-0000-4000-8000-000000000001' as SuggestionId
-		);
-		setPendingDrawioSuggestion(port, port.state.doc.firstChild!, 0, null);
 		expect(port.state.doc.childCount).toBe(1);
 	});
 });

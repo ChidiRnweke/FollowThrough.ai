@@ -74,11 +74,6 @@ test('compact note toolbar controls use 44px touch targets', async ({ page }) =>
 			})
 		);
 	expect(targetsMeetMinimum).toBe(true);
-});
-
-test('compact note toolbar keeps the full Publish action visible', async ({ page }) => {
-	await page.setViewportSize({ width: 320, height: 568 });
-	await openFirstNote(page);
 	await expect(page.getByRole('button', { name: 'Publish note' })).toContainText('Publish');
 });
 
@@ -88,16 +83,9 @@ test('sm note toolbar restores inline Export', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Export document' })).toBeVisible();
 });
 
-test('compact note chat opens without changing the note URL', async ({ page }) => {
-	await page.setViewportSize({ width: 375, height: 667 });
-	const href = await openFirstNote(page);
-	await page.getByRole('button', { name: 'Open chat' }).click();
-	await expect(page).toHaveURL(href);
-});
-
 test('compact note chat opens in a Sheet with note context', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 667 });
-	await openFirstNote(page);
+	const href = await openFirstNote(page);
 	const noteTitle = (
 		await page
 			.locator('[data-note-pane]:visible')
@@ -106,17 +94,12 @@ test('compact note chat opens in a Sheet with note context', async ({ page }) =>
 			.locator('[aria-current="page"]')
 			.innerText()
 	).trim();
-	await page.getByRole('button', { name: 'Open chat' }).click();
-	await expect(page.getByLabel('Chat context')).toContainText(noteTitle);
-});
-
-test('closing compact note chat restores focus to its trigger', async ({ page }) => {
-	await page.setViewportSize({ width: 375, height: 667 });
-	await openFirstNote(page);
 	const trigger = page.getByRole('button', { name: 'Open chat', exact: true });
 	await trigger.click();
+	await expect(page.getByLabel('Chat context')).toContainText(noteTitle);
 	const sheet = page.getByRole('dialog', { name: 'Let FollowThrough act' });
 	await sheet.getByRole('button', { name: 'Close panel' }).click();
+	await expect(page).toHaveURL(href);
 	await expect(trigger).toBeFocused();
 });
 

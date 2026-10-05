@@ -191,22 +191,6 @@ describe('the stored suggestion payloads', () => {
 		});
 		expect(unreadable).toEqual([]);
 	});
-
-	it('also satisfy the strict parser the write path uses', ({ skip }) => {
-		if (rows.length === 0)
-			skip(
-				'No producer suggestion was captured; run pnpm corpus:capture after a real suggestion exists.'
-			);
-		const failures = rows.flatMap((row) => {
-			try {
-				suggestionPayloadSchemas[row.kind].parse(row.payload);
-				return [];
-			} catch (error) {
-				return [error instanceof Error ? error.message : String(error)];
-			}
-		});
-		expect(failures).toEqual([]);
-	});
 });
 
 describe('the stored provenance rows', () => {

@@ -26,16 +26,6 @@ describe('Note conflict comparison', () => {
 		await expect
 			.element(screen.getByRole('heading', { name: 'This note changed somewhere else' }))
 			.toBeVisible();
-		await screen.getByRole('button', { name: 'Review later' }).click();
-	});
-
-	it('offers both safe resolution choices', async () => {
-		const screen = await render(NoteConflictDialog, {
-			open: true,
-			record: conflictRecord(),
-			onUseRemote: async () => undefined,
-			onKeepLocal: async () => undefined
-		});
 		await expect.element(screen.getByRole('button', { name: 'Keep mine' })).toBeVisible();
 		await screen.getByRole('button', { name: 'Review later' }).click();
 	});

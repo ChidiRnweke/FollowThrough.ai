@@ -62,18 +62,18 @@ describe('Deciding what a copied selection carries', () => {
 
 	it('collects every diagram in a select-all', () => {
 		const state = stateWith(
-			[mermaid('graph TD; A-->B'), mermaid('graph TD; C-->D')],
+			[
+				mermaid('graph TD; A-->B'),
+				mermaid('graph TD; C-->D'),
+				image('/api/attachments/a1/content'),
+				image('/two.png')
+			],
 			(doc) => new AllSelection(doc)
 		);
-		expect(selectionMedia(state).mermaidSources).toEqual(['graph TD; A-->B', 'graph TD; C-->D']);
-	});
-
-	it('collects every image in a select-all', () => {
-		const state = stateWith(
-			[paragraph('before'), image('/api/attachments/a1/content'), image('/two.png')],
-			(doc) => new AllSelection(doc)
-		);
-		expect(selectionMedia(state).imageSrcs).toEqual(['/api/attachments/a1/content', '/two.png']);
+		expect(selectionMedia(state)).toMatchObject({
+			mermaidSources: ['graph TD; A-->B', 'graph TD; C-->D'],
+			imageSrcs: ['/api/attachments/a1/content', '/two.png']
+		});
 	});
 
 	it('leaves a copy without any picture to the default behaviour', () => {

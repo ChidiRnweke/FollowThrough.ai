@@ -70,7 +70,15 @@ describe('Diagram conflict review', () => {
 			}
 		];
 		try {
-			const screen = render(DiagramConflictDialog, props());
+			const choices: string[] = [];
+			const input = props();
+			input.onUseRemote = async () => {
+				choices.push('remote');
+			};
+			input.onKeepLocal = async () => {
+				choices.push('local');
+			};
+			const screen = render(DiagramConflictDialog, input);
 			const evidence = [];
 			for (const item of expected) {
 				const region = [...document.querySelectorAll<HTMLElement>('section[aria-label]')].find(
@@ -86,13 +94,19 @@ describe('Diagram conflict review', () => {
 				});
 			}
 			await screen.getByRole('button', { name: 'Review later' }).click();
-			expect(evidence).toEqual(
-				expected.map((item) => ({
+			expect({
+				evidence,
+				closed: screen.container.querySelector('[role="dialog"]') === null,
+				choices
+			}).toEqual({
+				evidence: expected.map((item) => ({
 					label: item.label,
 					title: item.title,
 					preview: item.svg
-				}))
-			);
+				})),
+				closed: true,
+				choices: []
+			});
 		} finally {
 			await commands.removeDrawioProtocolFixture();
 		}
@@ -108,12 +122,6 @@ describe('Diagram conflict review', () => {
 		await screen.getByRole('button', { name: 'Keep mine' }).click();
 		await expect.element(screen.getByRole('alert')).toHaveTextContent('Connection lost');
 		await screen.getByRole('button', { name: 'Review later' }).click();
-	});
-
-	it('allows deferring review without choosing a document', async () => {
-		const screen = render(DiagramConflictDialog, props());
-		await screen.getByRole('button', { name: 'Review later' }).click();
-		await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
 	});
 });
 

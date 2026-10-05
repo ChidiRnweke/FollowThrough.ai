@@ -29,10 +29,6 @@ describe('Exact diagram document preview', () => {
 	it('shows a pending preview before an export is available', async () => {
 		const screen = render(DiagramDocumentPreview, { source: '<mxfile/>', title: 'Draft' });
 		await expect.element(screen.getByRole('status')).toHaveTextContent('Drawing preview');
-	});
-
-	it('renders the captured document export', async () => {
-		const screen = render(DiagramDocumentPreview, { source: '<mxfile/>', title: 'Draft' });
 		const iframe = frame(screen.container);
 		emit(iframe, { event: 'load' });
 		emit(iframe, {

@@ -56,10 +56,7 @@ describe('NoteVersionHistory', () => {
 	it('lists each version by when it was taken', async () => {
 		const screen = await render(NoteVersionHistory, base);
 		expect(await screen.getByText(formatRelativeTime(summary.createdAt)).all()).not.toHaveLength(0);
-	});
 
-	it('marks the version the note is published at', async () => {
-		const screen = await render(NoteVersionHistory, base);
 		expect(await screen.getByText('Published').all()).not.toHaveLength(0);
 	});
 

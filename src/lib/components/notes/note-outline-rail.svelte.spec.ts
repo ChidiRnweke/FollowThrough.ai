@@ -23,10 +23,7 @@ describe('NoteOutlineRail', () => {
 	it('draws one tick per heading', async () => {
 		const screen = await render(NoteOutlineRail, { headings, onpick: noop });
 		expect(screen.container.querySelectorAll('.note-outline-ticks li')).toHaveLength(3);
-	});
 
-	it('labels every heading in the expanded list', async () => {
-		const screen = await render(NoteOutlineRail, { headings, onpick: noop });
 		expect(
 			[...screen.container.querySelectorAll('.note-outline-list button')].map((button) =>
 				button.textContent?.trim()

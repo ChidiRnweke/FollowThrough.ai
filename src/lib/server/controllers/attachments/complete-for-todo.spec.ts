@@ -39,15 +39,11 @@ describe('Completing a todo screenshot', () => {
 	it('links the finalized attachment to the todo', async () => {
 		const { attachments, controller } = setup();
 		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
-		expect(attachments.todoLinks).toEqual([{ attachmentId: ATTACHMENT_ID, todoId: testTodoId() }]);
-	});
-
-	it('returns the attachment the description should link to', async () => {
-		const { attachments, controller } = setup();
-		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
 		const view = await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
+		const otherTodo = await controller.listForTodo(testActor(), testTodoId(2));
+		expect(attachments.todoLinks).toEqual([{ attachmentId: ATTACHMENT_ID, todoId: testTodoId() }]);
 		expect(view.attachment.id).toBe(ATTACHMENT_ID);
+		expect(otherTodo).toEqual([]);
 	});
 
 	// The link and the attachment commit together, so a screenshot is never left
@@ -66,14 +62,6 @@ describe('Completing a todo screenshot', () => {
 		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
 		const listed = await controller.listForTodo(testActor(), testTodoId());
 		expect(listed.map((view) => view.attachment.id)).toEqual([ATTACHMENT_ID]);
-	});
-
-	it('does not list another todo screenshots', async () => {
-		const { attachments, controller } = setup();
-		reserveUpload(attachments, UPLOAD_ID, ATTACHMENT_ID);
-		await controller.completeForTodo(testActor(), UPLOAD_ID, testTodoId());
-		const listed = await controller.listForTodo(testActor(), testTodoId(2));
-		expect(listed).toEqual([]);
 	});
 });
 

@@ -63,24 +63,14 @@ it('hides note attachment lists after the owning project is archived', async () 
 	expect(await records.list(owner, note.id)).toEqual([]);
 });
 
-it('hides project-owned attachment lists after project archival', async () => {
-	const { owner, project, records, archive } = await setup('34002', false);
+it('blocks attachment list, download, and path reads after project archival', async () => {
+	const { owner, project, note, records, library, attachment, archive } = await setup('34002');
 	await archive();
 	expect(await records.listForProject(owner, project.id)).toEqual([]);
-});
-
-it('refuses to mint a download destination for an archived-project attachment', async () => {
-	const { owner, attachment, library, archive } = await setup('34003');
-	await archive();
+	expect(await records.findByPath(owner, note.id, 'document.txt')).toBeUndefined();
 	await expect(library.downloadById(owner, attachment.attachment.id)).rejects.toThrow(
 		'Attachment was not found'
 	);
-});
-
-it('hides note-relative attachment reads after project archival', async () => {
-	const { owner, note, records, archive } = await setup('34004');
-	await archive();
-	expect(await records.findByPath(owner, note.id, 'document.txt')).toBeUndefined();
 });
 
 it('rejects new upload reservations in archived projects', async () => {

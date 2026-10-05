@@ -70,17 +70,7 @@ describe('Permanent note deletion invariants', () => {
 			noteBuilder({ id: testNoteId(3), parentId: testNoteId(2), archivedAt: testNow })
 		];
 		const result = await controller.deleteForever(testActor(), { noteId: testNoteId() });
-		expect(result.deletedNoteIds).toHaveLength(3);
-	});
-
-	it('deletes the contents before the folder that holds them', async () => {
-		const { notes, controller } = setup();
-		notes.notes = [
-			noteBuilder({ kind: 'folder', archivedAt: testNow }),
-			noteBuilder({ id: testNoteId(2), parentId: testNoteId(), archivedAt: testNow })
-		];
-		const result = await controller.deleteForever(testActor(), { noteId: testNoteId() });
-		expect(result.deletedNoteIds).toEqual([testNoteId(2), testNoteId()]);
+		expect(result.deletedNoteIds).toEqual([testNoteId(3), testNoteId(2), testNoteId()]);
 	});
 
 	// Older placement races could leave an active child under an archived folder.

@@ -65,12 +65,6 @@ test('asking about a selection pins it to the composer as a chip', async ({ page
 	await askAboutSelection(page);
 
 	await expect(chips(page)).toHaveCount(1);
-});
-
-test('the pinned chip says how much of the note came along', async ({ page }) => {
-	await openFirstNote(page);
-	await selectFromParagraph(page, 12);
-	await askAboutSelection(page);
 
 	await expect(page.getByLabel('Chat context')).toContainText(/\d+ words?/);
 });
@@ -113,12 +107,6 @@ test.describe('with the chat docked beside the note', () => {
 		await selectFromParagraph(page, 12);
 
 		await expect(liveChip(page)).toBeVisible();
-	});
-
-	test('the highlighted passage is attached without being pinned', async ({ page }) => {
-		await openFirstNote(page);
-		await openDockedChat(page);
-		await selectFromParagraph(page, 12);
 
 		await expect(chips(page)).toHaveCount(0);
 	});
@@ -157,17 +145,8 @@ test.describe('with the chat docked beside the note', () => {
 		await page.getByLabel('Pin this passage to the message').click();
 
 		await expect(chips(page)).toHaveCount(1);
-	});
 
-	test('pinning from the chip leaves no live chip behind', async ({ page }) => {
-		await openFirstNote(page);
-		await openDockedChat(page);
-		await selectFromParagraph(page, 12);
-		// The chip row grows as the passage lands in it; clicking mid-reflow reaches for a
-		// pin that has already moved.
 		await expect(liveChip(page)).toBeVisible();
-		await page.getByLabel('Pin this passage to the message').click();
-
 		await expect(liveChip(page)).toHaveCount(0);
 	});
 

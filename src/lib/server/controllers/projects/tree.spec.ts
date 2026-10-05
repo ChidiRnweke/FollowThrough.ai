@@ -35,24 +35,20 @@ describe('Project tree presentation', () => {
 		expect(tree[0]?.children[0]?.entry.id).toBe(testNoteId(2));
 	});
 
-	it('does not expose root skill documents in project trees', async () => {
-		const { repository, controller } = setup();
-		repository.entries = [
-			noteBuilder({ id: testNoteId(1) }),
-			noteBuilder({ id: testNoteId(2), kind: 'skill' })
-		];
-		const { tree } = await controller.get(testActor(), { projectId: projectBuilder().id });
-		expect(tree.map((node) => node.entry.id)).toEqual([testNoteId(1)]);
-	});
-
-	it('does not expose nested skill documents in project trees', async () => {
+	it('omits root and nested skill documents from project trees', async () => {
 		const { repository, controller } = setup();
 		repository.entries = [
 			noteBuilder({ id: testNoteId(1), kind: 'folder' }),
 			noteBuilder({ id: testNoteId(2), parentId: testNoteId(1) }),
-			noteBuilder({ id: testNoteId(3), kind: 'skill', parentId: testNoteId(1) })
+			noteBuilder({ id: testNoteId(3), kind: 'skill', parentId: testNoteId(1) }),
+			noteBuilder({ id: testNoteId(4), kind: 'skill' })
 		];
 		const { tree } = await controller.get(testActor(), { projectId: projectBuilder().id });
-		expect(tree[0]?.children.map((node) => node.entry.id)).toEqual([testNoteId(2)]);
+		expect(
+			tree.map((node) => ({
+				id: node.entry.id,
+				children: node.children.map((child) => child.entry.id)
+			}))
+		).toEqual([{ id: testNoteId(1), children: [testNoteId(2)] }]);
 	});
 });

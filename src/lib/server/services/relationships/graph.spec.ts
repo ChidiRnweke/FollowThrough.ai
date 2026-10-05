@@ -100,17 +100,6 @@ describe('Relationship management invariants', () => {
 			provenanceId: testProvenanceId()
 		});
 		expect(relationship.provenanceId).toBe(testProvenanceId());
-	});
-
-	it('retains the source anchor on a created relationship', async () => {
-		const { service, anchors } = setup();
-		anchors.anchors = [anchorBuilder()];
-		const relationship = await service.create(testActor(), {
-			sourceNoteId: testNoteId(),
-			targetNoteId: testNoteId(2),
-			kind: 'mentions',
-			sourceAnchorId: anchorBuilder().id
-		});
 		expect(relationship.sourceAnchorId).toBe(anchorBuilder().id);
 	});
 });

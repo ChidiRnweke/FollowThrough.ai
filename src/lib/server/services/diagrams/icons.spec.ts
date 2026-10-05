@@ -18,16 +18,14 @@ describe('Finding a logo for a diagram', () => {
 	it('returns the icon names the library matched', async () => {
 		const { search } = respondWith(icons('logos:aws-s3'));
 		expect((await search.search('aws'))[0]?.name).toBe('logos:aws-s3');
-	});
 
-	// The URL is the whole point: draw.io renders it through `shape=image`, and the
-	// XML validator permits it because it is https rather than a data URI.
-	it('hands back a URL draw.io can render', async () => {
-		const { search } = respondWith(icons('logos:aws-s3'));
 		expect((await search.search('aws'))[0]?.url).toBe(
 			'https://api.iconify.design/logos/aws-s3.svg'
 		);
 	});
+
+	// The URL is the whole point: draw.io renders it through `shape=image`, and the
+	// XML validator permits it because it is https rather than a data URI.
 
 	it('asks the library for what it was given', async () => {
 		const { calls, search } = respondWith(icons());

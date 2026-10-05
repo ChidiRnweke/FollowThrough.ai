@@ -99,6 +99,8 @@ describe('heading spacing on load', () => {
 
 		expect(blockTypes(editor)).toEqual(['heading-1', 'paragraph', 'mermaid', 'paragraph']);
 		editor.destroy();
+
+		expect(diagramTextOf(editor)).toBe(mermaidSource);
 	});
 
 	it('inserts a paragraph between a mermaid and a following title on load', () => {
@@ -114,16 +116,6 @@ describe('heading spacing on load', () => {
 
 	// Regression: the paragraph lands between the heading and the diagram, so
 	// the diagram's source must be untouched by the spacing.
-	it('keeps the mermaid source intact while spacing it from the title', () => {
-		const editor = createEditor({ type: 'doc', content: [] });
-		editor.commands.setContent({
-			type: 'doc',
-			content: [heading('Title'), mermaid(mermaidSource)]
-		});
-
-		expect(diagramTextOf(editor)).toBe(mermaidSource);
-		editor.destroy();
-	});
 
 	it('spaces a diagram pasted after a title as well', () => {
 		const editor = createEditor({
@@ -153,18 +145,6 @@ describe('heading Enter around block nodes', () => {
 	// Regression: Enter at the end of a title that sits above a diagram must
 	// leave a paragraph between them — the split may never reach into the
 	// diagram's own node.
-	it('leaves the mermaid source untouched when Enter is pressed at the end of the title', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [heading('Title'), mermaid(mermaidSource)]
-		});
-		editor.commands.setTextSelection(6); // end of "Title", inside the heading
-
-		pressEnter(editor);
-
-		expect(diagramTextOf(editor)).toBe(mermaidSource);
-		editor.destroy();
-	});
 
 	it('keeps a paragraph between the title and a following mermaid after Enter', () => {
 		const editor = createEditor({
@@ -177,6 +157,8 @@ describe('heading Enter around block nodes', () => {
 
 		expect(blockBeforeMermaid(editor)).toBe('paragraph');
 		editor.destroy();
+
+		expect(diagramTextOf(editor)).toBe(mermaidSource);
 	});
 
 	it('keeps a paragraph between the title and a following table after Enter', () => {

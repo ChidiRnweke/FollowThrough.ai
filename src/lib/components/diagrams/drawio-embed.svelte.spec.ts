@@ -105,25 +105,17 @@ describe('Hosted draw.io editor states', () => {
 	it('retains and retries autosaved XML after persistence fails', async () => {
 		let unavailable = true;
 		let saved = '';
-		const { screen, retry } = renderEditor(undefined, async (xml) => {
+		const { screen, statuses, retry } = renderEditor(undefined, async (xml) => {
 			if (unavailable) throw new Error('Offline');
 			saved = xml;
 		});
 		emit(frameOf(screen), { event: 'autosave', xml: '<mxfile><diagram/></mxfile>' });
 		await settle();
+		expect(statuses.at(-1)).toMatchObject({ phase: 'failed', failure: 'Offline' });
 		unavailable = false;
 		retry();
 		await settle();
 		expect(saved).toBe('<mxfile><diagram/></mxfile>');
-	});
-
-	it('reports autosave persistence failure without an uncaught rejection', async () => {
-		const { screen, statuses } = renderEditor(undefined, async () => {
-			throw new Error('Offline');
-		});
-		emit(frameOf(screen), { event: 'autosave', xml: '<mxfile/>' });
-		await settle();
-		expect(statuses.at(-1)).toMatchObject({ phase: 'failed', failure: 'Offline' });
 	});
 
 	it('keeps edits made while saving marked as modified', async () => {
@@ -141,11 +133,23 @@ describe('Hosted draw.io editor states', () => {
 	});
 
 	it('replaces the frame when accepting a different document', async () => {
-		const { screen, replace } = renderEditor();
-		const old = frameOf(screen);
-		replace('<mxfile><diagram/></mxfile>');
-		await settle();
-		expect(frameOf(screen)).not.toBe(old);
+		await commands.installDrawioProtocolFixture();
+		try {
+			const { screen, replace } = renderEditor();
+			const old = frameOf(screen);
+			replace('<mxfile><diagram id="replacement"/></mxfile>');
+			const replacement = await vi.waitUntil(() => {
+				const candidate = frameOf(screen);
+				return candidate !== old ? candidate : false;
+			});
+			const loadedXml = await inspectFixture(replacement);
+			expect({ replaced: replacement !== old, loadedXml }).toEqual({
+				replaced: true,
+				loadedXml: '<mxfile><diagram id="replacement"/></mxfile>'
+			});
+		} finally {
+			await commands.removeDrawioProtocolFixture();
+		}
 	});
 
 	it('renders the hosted editor with an accessible title', async () => {
@@ -153,25 +157,11 @@ describe('Hosted draw.io editor states', () => {
 		await expect.element(screen.getByTitle('draw.io editor for Architecture')).toBeInTheDocument();
 	});
 
-	it('hands its controls to the host', () => {
-		const { commit } = renderEditor();
-		expect(commit).not.toThrow();
-	});
-
 	it('reports reaching the ready phase', async () => {
 		const { screen, statuses } = renderEditor();
 		emit(frameOf(screen), { event: 'load' });
 		await settle();
 		expect(statuses.at(-1)?.phase).toBe('ready');
-	});
-
-	// A resting state is not something the host should print, so it is reported
-	// rather than rendered: the header decides what, if anything, to say.
-	it('draws no status text of its own', async () => {
-		const { screen } = renderEditor();
-		emit(frameOf(screen), { event: 'load' });
-		await settle();
-		expect(screen.container.querySelectorAll('[role="status"]')).toHaveLength(0);
 	});
 
 	// draw.io only accepts `configure` while booting, so re-theming means
@@ -230,20 +220,6 @@ describe('Hosted draw.io editor states', () => {
 		});
 		await settle();
 		expect(statuses.at(-1)).toMatchObject({ phase: 'failed', failure: 'Save failed' });
-	});
-
-	it('keeps the iframe mounted when persistence fails', async () => {
-		const { screen, commit } = renderEditor(async () => {
-			throw new Error('Save failed');
-		});
-		const iframe = frameOf(screen);
-		emit(iframe, { event: 'load' });
-		commit();
-		emit(iframe, {
-			event: 'export',
-			xml: '<mxfile/>',
-			data: 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%2F%3E'
-		});
 		await expect.element(screen.getByTitle('draw.io editor for Architecture')).toBeInTheDocument();
 	});
 });

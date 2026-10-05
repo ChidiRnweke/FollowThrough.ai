@@ -71,37 +71,22 @@ describe('Creating a diagram', () => {
 	// diagram was the one agent output that could vanish when a chat closed.
 	it('writes the diagram it was asked to create', async () => {
 		const { controller, diagrams } = setup();
-		await controller.createDiagram(testActor(), creating());
-		expect(diagrams.diagrams).toHaveLength(1);
-	});
-
-	it('answers with the diagram it created', async () => {
-		const { controller, diagrams } = setup();
 		const output = await controller.createDiagram(testActor(), creating());
-		expect(output.diagramId).toBe(diagrams.diagrams[0]?.id);
-	});
+		expect(diagrams.diagrams).toHaveLength(1);
 
-	it('stores the source it was given', async () => {
-		const { controller, diagrams } = setup();
-		await controller.createDiagram(testActor(), creating());
+		expect(diagrams.diagrams[0]?.renderedSvg).toBeUndefined();
+
+		expect(diagrams.diagrams[0]).toMatchObject({ publishedRevision: 0 });
+
 		expect(diagrams.diagrams[0]?.source).toBe(VALID_DRAWIO_XML);
+		expect(output.diagramId).toBe(diagrams.diagrams[0]?.id);
 	});
 
 	// Publishing stays the user's decision, exactly as it does for a note, which is
 	// also born at published revision 0.
-	it('creates the diagram unpublished', async () => {
-		const { controller, diagrams } = setup();
-		await controller.createDiagram(testActor(), creating());
-		expect(diagrams.diagrams[0]).toMatchObject({ publishedRevision: 0 });
-	});
 
 	// Only the draw.io embed can draw a preview, so the row waits for the canvas
 	// rather than storing a blank one it could never tell apart from a real one.
-	it('creates the diagram with no preview yet', async () => {
-		const { controller, diagrams } = setup();
-		await controller.createDiagram(testActor(), creating());
-		expect(diagrams.diagrams[0]?.renderedSvg).toBeUndefined();
-	});
 
 	// A chat is provenance, not ownership. Asking one conversation for two diagrams
 	// used to be refused because the row was unique on the conversation.
@@ -131,38 +116,20 @@ describe('Editing a diagram', () => {
 		const { controller, diagrams } = setup();
 		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
 		diagrams.diagrams = [target];
-		await controller.editDiagram(testActor(), {
+		const output = await controller.editDiagram(testActor(), {
 			source: VALID_DRAWIO_XML,
 			diagramId: target.id
 		});
 		expect(diagrams.diagrams[0]?.source).toBe(VALID_DRAWIO_XML);
-	});
 
-	it('answers with the diagram it edited', async () => {
-		const { controller, diagrams } = setup();
-		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
-		diagrams.diagrams = [target];
-		const output = await controller.editDiagram(testActor(), {
-			source: VALID_DRAWIO_XML,
-			diagramId: target.id
+		expect(diagrams.diagrams[0]).toMatchObject({
+			publishedRevision: target.publishedRevision
 		});
 		expect(output.diagramId).toBe(target.id);
 	});
 
 	// ADR 0003: the write is a working revision, so publishing stays the user's
 	// decision even though the agent no longer needs a gesture to be seen.
-	it('leaves what the user published untouched', async () => {
-		const { controller, diagrams } = setup();
-		const target = drawioBuilder({ source: '<mxfile>before</mxfile>' });
-		diagrams.diagrams = [target];
-		await controller.editDiagram(testActor(), {
-			source: VALID_DRAWIO_XML,
-			diagramId: target.id
-		});
-		expect(diagrams.diagrams[0]).toMatchObject({
-			publishedRevision: target.publishedRevision
-		});
-	});
 
 	it('rejects a diagram the actor cannot read', async () => {
 		const { controller } = setup();
@@ -184,6 +151,8 @@ describe('Reading a saved diagram', () => {
 		diagrams.diagrams = [diagram];
 		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
 		expect(result.labels).not.toContain('mxfile');
+
+		expect(result.projectId).toBe(diagram.projectId);
 	});
 
 	it('returns a Mermaid diagram’s source as its labels', async () => {
@@ -200,13 +169,5 @@ describe('Reading a saved diagram', () => {
 		diagrams.diagrams = [diagram];
 		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
 		expect(result.title).toBe('Ingest pipeline');
-	});
-
-	it('returns the project needed to derive its virtual path', async () => {
-		const { controller, diagrams } = setup();
-		const diagram = drawioBuilder({ source: VALID_DRAWIO_XML });
-		diagrams.diagrams = [diagram];
-		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(result.projectId).toBe(diagram.projectId);
 	});
 });

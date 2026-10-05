@@ -11,10 +11,6 @@ const notes = [
 const titles = (query: string) => rankNoteLinkTargets(notes, query).map((note) => note.title);
 
 describe('Ranking notes for an @ query', () => {
-	it('offers a title that starts with the query first', () => {
-		expect(titles('des')[0]).toBe('Design review');
-	});
-
 	/** A word-start match is what the author meant; a mid-word one rarely is. */
 	it('ranks a word-start match above a mid-word one', () => {
 		expect(titles('des')).toEqual([
@@ -22,14 +18,14 @@ describe('Ranking notes for an @ query', () => {
 			'Fundamentals of design',
 			'Redesigned onboarding'
 		]);
+
+		expect(titles('des')).not.toContain('Deployment runbook');
+
+		expect(titles('des')[0]).toBe('Design review');
 	});
 
 	it('ignores case', () => {
 		expect(titles('DESIGN')[0]).toBe('Design review');
-	});
-
-	it('excludes titles that do not match at all', () => {
-		expect(titles('des')).not.toContain('Deployment runbook');
 	});
 
 	it('offers everything for an empty query', () => {
