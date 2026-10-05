@@ -52,14 +52,9 @@ describe('reading a stored session item', () => {
 
 	it('reads assistant text and preserves the provider bag it does not interpret', () => {
 		const item = parseSessionItem(storedAssistant);
-		expect(
-			item.type === 'assistant_message' && {
-				text: item.content[0]?.text,
-				providerData: item.content[0]?.providerData
-			}
-		).toEqual({
-			text: 'Here you go',
-			providerData: { annotations: [] }
+		expect(item).toMatchObject({
+			type: 'assistant_message',
+			content: [{ type: 'output_text', text: 'Here you go', providerData: { annotations: [] } }]
 		});
 	});
 

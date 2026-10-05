@@ -11,10 +11,7 @@ describe('What a look inside the files came back with', () => {
 		const rows = Array.from(screen.getByRole('list').element().querySelectorAll('li'));
 		expect(
 			rows.map((row) => Array.from(row.children, (child) => child.textContent?.trim() ?? ''))
-		).toEqual([
-			['3', 'alpha'],
-			['beta']
-		]);
+		).toEqual([['3', 'alpha'], ['beta']]);
 		await expect.element(screen.getByText('alpha')).toBeVisible();
 	});
 

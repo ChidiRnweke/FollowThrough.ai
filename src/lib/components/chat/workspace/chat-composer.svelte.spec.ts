@@ -316,8 +316,8 @@ it('shows the offline state even when no run is streaming', async () => {
 		offlineLabel: (await screen.getByText('Offline', { exact: true }).all()).length,
 		placeholder: (await screen.getByPlaceholder('Reconnect to send').all()).length
 	}).toEqual({ offlineLabel: 1, placeholder: 1 });
-await expect.element(screen.getByText('Offline', { exact: true })).toBeVisible();
-await expect.element(screen.getByPlaceholder('Reconnect to send')).toBeVisible();
+	await expect.element(screen.getByText('Offline', { exact: true })).toBeVisible();
+	await expect.element(screen.getByPlaceholder('Reconnect to send')).toBeVisible();
 });
 it('does not offer to send a prepared message while offline', async () => {
 	const screen = render(ChatComposer, { ...base, connection: 'offline', prompt: 'Ready to send' });
