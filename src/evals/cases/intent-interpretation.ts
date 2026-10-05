@@ -331,15 +331,17 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			});
 
 			const targetId = workspace.noteIds.get('API connection pool saturation runbook');
-			if (!targetId) throw new Error('Connection pool runbook was not seeded');
+			const projectId = workspace.projectIds.get('Runbooks');
+			if (!targetId || !projectId) throw new Error('Connection pool runbook was not seeded');
 			const names = result.calledToolNames;
 			const searchIndex = names.indexOf('search');
 			const writeIndex = names.findIndex((name) => name === 'edit_note' || name === 'save_note');
-			const groundedSearch = result.toolCalls.some(
-				(call) =>
-					call.name === 'search' &&
-					!call.failure &&
-					JSON.stringify(call.output ?? '').includes(targetId)
+			const groundedSearch = hasSuccessfulReadEvidence(
+				result.toolCalls,
+				['search', 'grep', 'sed'],
+				targetId,
+				`/projects/${projectId}/notes/${targetId}.md`,
+				'checked-out connections'
 			);
 			const writesSearchedNote = result.toolCalls.some(
 				(call) =>

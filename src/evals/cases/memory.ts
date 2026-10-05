@@ -18,6 +18,25 @@ const ENGLISH_ONLY = 'Always answer in English.';
  * and capture are scored separately because an agent can be perfect at one and
  * broken at the others, and a single memory score would hide that.
  */
+export const referenceArchitectureUpdateApplied = (plainText: string): boolean => {
+	const sections = plainText.split(/(?=^## Section \d+\s*$)/m);
+	const requested = Array.from({ length: 12 }, (_, index) => index + 2).map((number) =>
+		sections.find((part) => new RegExp(`^## Section ${number}\\s*$`, 'm').test(part))
+	);
+	const substantive = requested.every((section) => {
+		if (!section) return false;
+		const content = section.replace(/^## Section \d+\s*$/m, '').trim();
+		return content.length >= 40 && !content.includes('Draft architecture guidance.');
+	});
+	const updatedContent = requested.filter(Boolean).join(' ').toLocaleLowerCase('en');
+	return (
+		substantive &&
+		/knowledge layer/.test(updatedContent) &&
+		/(depth.{0,30}breadth|breadth.{0,30}depth)/.test(updatedContent) &&
+		/reference docs?/.test(updatedContent)
+	);
+};
+
 export const memoryCases: readonly EvalCase[] = [
 	{
 		id: 'memory-adherence-dutch-prompt',
@@ -333,13 +352,7 @@ export const memoryCases: readonly EvalCase[] = [
 			});
 
 			const note = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const sections = note.note.plainText.split(/(?=^## Section \d+\s*$)/m);
-			const taskApplied = Array.from({ length: 12 }, (_, index) => index + 2).every((number) => {
-				const section = sections.find((part) =>
-					new RegExp(`^## Section ${number}\\s*$`, 'm').test(part)
-				);
-				return section !== undefined && !section.includes('Draft architecture guidance.');
-			});
+			const taskApplied = referenceArchitectureUpdateApplied(note.note.plainText);
 			const verdict = await expectSuggestionPending(
 				lab,
 				workspace.actor,
