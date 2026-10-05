@@ -646,7 +646,7 @@ describe('Postgres agent session repository invariants', () => {
 		const item = unrecognisedItem('compaction');
 		await repository.append(owner, conversationId, [item]);
 		const [row] = await repository.list(owner, conversationId);
-		expect(row?.item).toEqual({ type: 'unrecognised', item });
+		expect(row?.item).toEqual(item);
 	});
 
 	it('refuses a column that does not hold a JSON object', async () => {

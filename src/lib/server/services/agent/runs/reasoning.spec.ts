@@ -150,10 +150,16 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
-	it('resolves a named current project from application context', () => {
-		expect(buildAgentInstructions({})).toContain(
-			"currentProject whose name matches the project the user named already supplies that project's exact id"
-		);
+	it('uses the resolved project id instead of a human-readable name', () => {
+		const instructions = buildAgentInstructions({});
+		expect({
+			usesCurrentProject: instructions.includes(
+				"currentProject whose name matches the project the user named already supplies that project's exact id"
+			),
+			requiresTypedIds: instructions.includes(
+				"never substitute a human-readable name or a different entity's id"
+			)
+		}).toEqual({ usesCurrentProject: true, requiresTypedIds: true });
 	});
 
 	it('applies standing language preference before incidental message language', () => {
@@ -221,10 +227,19 @@ describe('Agent runtime boundary', () => {
 		);
 	});
 
-	it('treats successful same-conversation mutations as durable evidence', () => {
-		expect(buildAgentInstructions({})).toContain(
-			'if the user repeats the same request, do not perform the same write again'
-		);
+	it('uses durable facts in multi-step work without repeating settled writes', () => {
+		const instructions = buildAgentInstructions({});
+		expect({
+			noRepeat: instructions.includes(
+				'if the user repeats the same request, do not perform the same write again'
+			),
+			captureEmbeddedFact: instructions.includes(
+				'scan the current message for any durable fact even when it is embedded inside the task'
+			),
+			preserveDecisionAndFollowUp: instructions.includes(
+				'contains both a durable decision and a follow-up, preserve both as independent effects'
+			)
+		}).toEqual({ noRepeat: true, captureEmbeddedFact: true, preserveDecisionAndFollowUp: true });
 	});
 
 	it('applies stored response language across input languages', () => {
@@ -655,33 +670,25 @@ describe('Agent tool event invariants', () => {
 		});
 	});
 
-	it('presents a direct long-tail call by its action name', () => {
-		const event = new AgentToolEventMapper().map(
+	it('preserves a direct tool action name through its full event lifecycle', () => {
+		const mapper = new AgentToolEventMapper();
+		const started = mapper.map(
 			toolCalled({
 				callId: 'call-3',
 				name: 'create_note',
 				arguments: JSON.stringify({ title: 'Decision log' })
 			})
 		);
-		expect(event).toEqual({
-			type: 'tool_started',
-			callId: 'call-3',
-			name: 'create_note',
-			arguments: { title: 'Decision log' }
+		const succeeded = mapper.map(toolOutput({ callId: 'call-3', name: 'create_note' }));
+		expect({ started, succeeded }).toEqual({
+			started: {
+				type: 'tool_started',
+				callId: 'call-3',
+				name: 'create_note',
+				arguments: { title: 'Decision log' }
+			},
+			succeeded: { type: 'tool_succeeded', callId: 'call-3', name: 'create_note' }
 		});
-	});
-
-	it('preserves the action name on direct tool output', () => {
-		const mapper = new AgentToolEventMapper();
-		mapper.map(
-			toolCalled({
-				callId: 'call-4',
-				name: 'save_note',
-				arguments: JSON.stringify({ note: {} })
-			})
-		);
-		const event = mapper.map(toolOutput({ callId: 'call-4', name: 'save_note' }));
-		expect(event).toEqual({ type: 'tool_succeeded', callId: 'call-4', name: 'save_note' });
 	});
 
 	it('settles an outcome without an id onto the one call in flight', () => {
