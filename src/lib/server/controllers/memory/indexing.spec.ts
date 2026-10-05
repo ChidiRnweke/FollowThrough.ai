@@ -58,24 +58,11 @@ describe('Memory persistence and search', () => {
 			projectId: testProjectId(),
 			content: 'Fact'
 		});
-		expect(
-			(await search.searchByEmbedding(testActor(), [1, 0, 4], 10)).map(
-				({ document }) => document.memoryEntryId
-			)
-		).toEqual([entry.id]);
-	});
-	it('indexes a shared entry into search chunks', async () => {
-		const { search, controller } = await setup();
-		await controller.create(testActor(), { projectId: testProjectId(), content: 'Fact' });
-		expect(search.documents).toHaveLength(1);
-	});
-	it('marks memory-sourced chunks with the entry id', async () => {
-		const { search, controller } = await setup();
-		const { entry } = await controller.create(testActor(), {
-			projectId: testProjectId(),
-			content: 'Fact'
-		});
-		expect(search.documents[0]?.document.memoryEntryId).toBe(entry.id);
+		const matches = await search.searchByEmbedding(testActor(), [1, 0, 4], 10);
+		expect({
+			searchableIds: matches.map(({ document }) => document.memoryEntryId),
+			chunkIds: search.documents.map((item) => item.document.memoryEntryId)
+		}).toEqual({ searchableIds: [entry.id], chunkIds: [entry.id] });
 	});
 	it('does not index an entry withheld from agents', async () => {
 		const { search, controller } = await setup();

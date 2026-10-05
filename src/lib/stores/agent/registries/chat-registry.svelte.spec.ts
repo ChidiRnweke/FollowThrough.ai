@@ -71,9 +71,12 @@ describe('chat session registry', () => {
 
 	it('drops the store when its last holder releases it', () => {
 		const key = registry.mint();
-		registry.for(key);
+		registry.for(key).conversationId = conversationId;
 		registry.release(key);
-		expect(registry.peek(key)).toBeUndefined();
+		expect({
+			store: registry.peek(key),
+			conversation: registry.keyForConversation(conversationId)
+		}).toEqual({ store: undefined, conversation: undefined });
 	});
 
 	it('keeps the store while a second holder remains', () => {
@@ -119,17 +122,10 @@ describe('chat session registry', () => {
 		const key = registry.mint();
 		registry.for(key).runStatus = 'running';
 		try {
-			expect(registry.streamingCount()).toBe(1);
-		} finally {
-			registry.release(key);
-		}
-	});
-
-	it('stays under the stream limit with a single run in flight', () => {
-		const key = registry.mint();
-		registry.for(key).runStatus = 'running';
-		try {
-			expect(registry.atStreamLimit()).toBe(false);
+			expect({ streaming: registry.streamingCount(), atLimit: registry.atStreamLimit() }).toEqual({
+				streaming: 1,
+				atLimit: false
+			});
 		} finally {
 			registry.release(key);
 		}

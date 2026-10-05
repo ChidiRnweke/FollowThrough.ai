@@ -64,7 +64,7 @@ describe('Conversation visibility invariants', () => {
 		expect(renamed.title).toBe('Decision notes');
 	});
 
-	it('discards the rewound question and every turn after it', async () => {
+	it('discards the rewound question and later turns while keeping the earlier exchange', async () => {
 		const journal = new ConversationArchive(new InMemoryConversationRepository());
 		const conversation = await journal.getOrCreate(testActor(), { prompt: 'First' });
 		await journal.recordUserPrompt(testActor(), conversation.id, 'First');
@@ -72,18 +72,11 @@ describe('Conversation visibility invariants', () => {
 		await journal.recordUserPrompt(testActor(), conversation.id, 'Second');
 		await journal.recordAssistantText(testActor(), conversation.id, 'Second answer');
 		await journal.truncateFromUserMessage(testActor(), conversation.id, 2);
-		expect(await journal.listMessages(testActor(), conversation.id)).toHaveLength(2);
-	});
-
-	it('keeps the turns before the rewound question', async () => {
-		const journal = new ConversationArchive(new InMemoryConversationRepository());
-		const conversation = await journal.getOrCreate(testActor(), { prompt: 'First' });
-		await journal.recordUserPrompt(testActor(), conversation.id, 'First');
-		await journal.recordAssistantText(testActor(), conversation.id, 'First answer');
-		await journal.recordUserPrompt(testActor(), conversation.id, 'Second');
-		await journal.truncateFromUserMessage(testActor(), conversation.id, 2);
 		const remaining = await journal.listMessages(testActor(), conversation.id);
-		expect(contentOf(remaining.at(-1)).text).toBe('First answer');
+		expect({
+			count: remaining.length,
+			contents: remaining.map((message) => contentOf(message).text)
+		}).toEqual({ count: 2, contents: ['First', 'First answer'] });
 	});
 
 	it('leaves the transcript alone when the ordinal is past the last question', async () => {

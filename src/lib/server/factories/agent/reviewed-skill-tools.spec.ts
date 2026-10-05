@@ -132,20 +132,23 @@ describe('Revision-bound skill content approvals', () => {
 		'uses the same guarded %s path for automatic acceptance',
 		async (operation) => {
 			const fixture = setup('skill', operation);
-			await fixture.invoke(fixture.registry([], 'auto_accept'));
-			expect(fixture.content.notes[0]).toMatchObject({
-				plainText: 'Check releases on Tuesday.',
-				currentRevision: 2
+			const result = await fixture.invoke(fixture.registry([], 'auto_accept'));
+			expect({
+				note: fixture.content.notes[0],
+				patchResult:
+					operation === 'patch'
+						? { appliedEdits: result.appliedEdits, matchedTexts: result.matchedTexts }
+						: undefined
+			}).toEqual({
+				note: expect.objectContaining({
+					plainText: 'Check releases on Tuesday.',
+					currentRevision: 2
+				}),
+				patchResult:
+					operation === 'patch' ? { appliedEdits: 1, matchedTexts: ['Monday'] } : undefined
 			});
 		}
 	);
-	it('returns the matched edit count from the saved skill review', async () => {
-		const fixture = setup('skill', 'patch');
-		expect(await fixture.invoke(fixture.registry([], 'auto_accept'))).toMatchObject({
-			appliedEdits: 1,
-			matchedTexts: ['Monday']
-		});
-	});
 	it('leaves an ordinary note unchanged when a skill tool is automatically accepted', async () => {
 		const fixture = setup('note');
 		await fixture.invoke(fixture.registry([], 'auto_accept'));

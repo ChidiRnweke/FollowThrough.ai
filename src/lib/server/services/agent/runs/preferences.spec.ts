@@ -62,18 +62,18 @@ describe('OpenRouter catalog invariants', () => {
 		expect(stale).toEqual(first);
 	});
 
-	it('marks models without tool support as unavailable', async () => {
+	it('projects tool support, vision capability, and recommended ordering from one catalog response', async () => {
 		const models = await catalog(async () => modelResponse).list();
-		expect(models.find((model) => model.id === 'vendor/text-model')?.supportsTools).toBe(false);
-	});
-
-	it('derives native vision support from input modalities', async () => {
-		const models = await catalog(async () => modelResponse).list();
-		expect(models.find((model) => model.id === 'vendor/tool-model')?.supportsVision).toBe(true);
-	});
-
-	it('places recommended models before the full catalog', async () => {
-		const models = await catalog(async () => modelResponse).list();
-		expect(models[0]?.id).toBe('vendor/tool-model');
+		expect({
+			firstId: models[0]?.id,
+			textModelSupportsTools: models.find((model) => model.id === 'vendor/text-model')
+				?.supportsTools,
+			toolModelSupportsVision: models.find((model) => model.id === 'vendor/tool-model')
+				?.supportsVision
+		}).toEqual({
+			firstId: 'vendor/tool-model',
+			textModelSupportsTools: false,
+			toolModelSupportsVision: true
+		});
 	});
 });

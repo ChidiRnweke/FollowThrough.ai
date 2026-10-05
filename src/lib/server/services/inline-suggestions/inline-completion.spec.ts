@@ -102,20 +102,16 @@ describe('sanitizeCompletion', () => {
 });
 
 describe('inline completion grounding', () => {
-	it('includes source titles in the completion prompt', () => {
-		expect(inlineCompletionPrompt(request, context)).toContain('The Odyssey');
-	});
-
-	it('includes retrieved content in the completion prompt', () => {
-		expect(inlineCompletionPrompt(request, context)).toContain('An epic poem attributed to Homer.');
-	});
-
-	it('includes the authoritative note text in the completion prompt', () => {
-		expect(inlineCompletionPrompt(request, context)).toContain('The full note text.');
-	});
-
-	it('includes user memory in the completion prompt', () => {
-		expect(inlineCompletionPrompt(request, context)).toContain('The user prefers concise prose.');
+	it('grounds one completion prompt in source, retrieval, note text, and user memory', () => {
+		const prompt = inlineCompletionPrompt(request, context);
+		expect(
+			[
+				'The Odyssey',
+				'An epic poem attributed to Homer.',
+				'The full note text.',
+				'The user prefers concise prose.'
+			].every((fact) => prompt.includes(fact))
+		).toBe(true);
 	});
 });
 
@@ -129,23 +125,13 @@ describe('inline completion telemetry', () => {
 		usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 }
 	});
 
-	it('records the model', () => {
-		expect(attributes[SemanticConventions.LLM_MODEL_NAME]).toBe('deepseek/deepseek-v4-flash');
-	});
-
-	it('records prompt tokens', () => {
-		expect(attributes[SemanticConventions.LLM_TOKEN_COUNT_PROMPT]).toBe(20);
-	});
-
-	it('records completion tokens', () => {
-		expect(attributes[SemanticConventions.LLM_TOKEN_COUNT_COMPLETION]).toBe(3);
-	});
-
-	it('records total tokens', () => {
-		expect(attributes[SemanticConventions.LLM_TOKEN_COUNT_TOTAL]).toBe(23);
-	});
-
-	it('records the finish reason', () => {
-		expect(attributes[SemanticConventions.LLM_FINISH_REASON]).toBe('stop');
+	it('records the model response in one telemetry event', () => {
+		expect(attributes).toMatchObject({
+			[SemanticConventions.LLM_MODEL_NAME]: 'deepseek/deepseek-v4-flash',
+			[SemanticConventions.LLM_TOKEN_COUNT_PROMPT]: 20,
+			[SemanticConventions.LLM_TOKEN_COUNT_COMPLETION]: 3,
+			[SemanticConventions.LLM_TOKEN_COUNT_TOTAL]: 23,
+			[SemanticConventions.LLM_FINISH_REASON]: 'stop'
+		});
 	});
 });

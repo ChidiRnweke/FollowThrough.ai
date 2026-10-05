@@ -40,24 +40,14 @@ describe('reranker trace semantics', () => {
 	);
 	const outputAttributes = rerankerOutputTraceAttributes([match]);
 
-	it('records the reranker query', () => {
-		expect(inputAttributes[SemanticConventions.RERANKER_QUERY]).toBe('Who escaped the cave?');
-	});
-
-	it('records the reranker model', () => {
-		expect(inputAttributes[SemanticConventions.RERANKER_MODEL_NAME]).toBe(DEFAULT_RERANK_MODEL);
-	});
-
-	it('caps top k at the available document count', () => {
-		expect(inputAttributes[SemanticConventions.RERANKER_TOP_K]).toBe(1);
-	});
-
-	it('records input document content under the reranker convention', () => {
-		expect(
-			inputAttributes[
-				`${SemanticConventions.RERANKER_INPUT_DOCUMENTS}.0.${SemanticConventions.DOCUMENT_CONTENT}`
-			]
-		).toBe('Title: "The Odyssey"\nSection: "Cyclops"\nContent: |-\n  Nobody escapes the cave.');
+	it('records the query, model, capped input count, and document content for one rerank', () => {
+		expect(inputAttributes).toMatchObject({
+			[SemanticConventions.RERANKER_QUERY]: 'Who escaped the cave?',
+			[SemanticConventions.RERANKER_MODEL_NAME]: DEFAULT_RERANK_MODEL,
+			[SemanticConventions.RERANKER_TOP_K]: 1,
+			[`${SemanticConventions.RERANKER_INPUT_DOCUMENTS}.0.${SemanticConventions.DOCUMENT_CONTENT}`]:
+				'Title: "The Odyssey"\nSection: "Cyclops"\nContent: |-\n  Nobody escapes the cave.'
+		});
 	});
 
 	it('records output document scores under the reranker convention', () => {

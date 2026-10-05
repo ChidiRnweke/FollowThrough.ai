@@ -144,19 +144,14 @@ describe('boundary groups drawn without ownership', () => {
 	].join('');
 
 	it('is not also reported as two shapes drawn on top of each other', () => {
-		expect(fired(drawnAroundButNotOwned)).not.toContain('vertices-do-not-overlap');
-	});
-
-	it('does not report the arrow entering the boundary as an obstruction', () => {
-		expect(fired(drawnAroundButNotOwned)).not.toContain('edge-clears-vertices');
-	});
-
-	it('still catches a genuine partial collision between two shapes', () => {
-		expect(
-			fired(
-				`${CLEAN}${vertex({ id: 'c', value: 'Ledger', x: 0, y: 200, width: 160 })}${vertex({ id: 'd', value: 'Notifier', x: 100, y: 200, width: 160 })}`
-			)
-		).toEqual(['vertices-do-not-overlap']);
+		const findings = fired(drawnAroundButNotOwned);
+		expect({
+			overlap: findings.includes('vertices-do-not-overlap'),
+			edge: findings.includes('edge-clears-vertices')
+		}).toEqual({
+			overlap: false,
+			edge: false
+		});
 	});
 });
 

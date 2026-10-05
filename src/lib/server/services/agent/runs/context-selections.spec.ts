@@ -33,7 +33,13 @@ describe('The pinned passages a run is built with', () => {
 
 	it('normalises a lone singular selection into the plural field', async () => {
 		const context = await build({ noteId: note.id, selection: selection() });
-		expect(context.selections?.[0]?.text).toBe('Ship the export flow.');
+		expect({
+			excerpt: context.selections?.[0]?.text,
+			hasLegacyField: 'selection' in context
+		}).toEqual({
+			excerpt: 'Ship the export flow.',
+			hasLegacyField: false
+		});
 	});
 
 	it('names the note a passage came from when that note is already loaded', async () => {
@@ -61,14 +67,5 @@ describe('The pinned passages a run is built with', () => {
 	it('omits the field entirely when nothing was pinned', async () => {
 		const context = await build({ noteId: note.id });
 		expect(context).not.toHaveProperty('selections');
-	});
-
-	/**
-	 * The excerpt would otherwise reach the model twice — once here and once in the
-	 * `<attached_selections>` block the user message carries.
-	 */
-	it('does not repeat the singular selection alongside the plural field', async () => {
-		const context = await build({ noteId: note.id, selection: selection() });
-		expect(context).not.toHaveProperty('selection');
 	});
 });

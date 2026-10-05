@@ -44,24 +44,22 @@ describe('reading the eval cache file', () => {
 
 	// The cast this replaced trusted the file because this class had written it,
 	// which holds until a run is killed mid-write.
-	it('quarantines a cache file that is not JSON', async () => {
+	it('quarantines truncated JSON and still serves the provider value', async () => {
 		await withCacheDirectory(async (directory) => {
 			const path = join(directory, 'cache.json');
 			await writeFile(path, '{ "embed:1": [1, 2', 'utf8');
 			const cache = new DiskCache(path, false);
-			await cache.resolve('embed:1', async () => 'live');
-			expect(await quarantined(directory)).toBeDefined();
-		});
-	});
-
-	it('keeps the evidence of what the unreadable file held', async () => {
-		await withCacheDirectory(async (directory) => {
-			const path = join(directory, 'cache.json');
-			await writeFile(path, '{ "embed:1": [1, 2', 'utf8');
-			const cache = new DiskCache(path, false);
-			await cache.resolve('embed:1', async () => 'live');
+			const result = await cache.resolve('embed:1', async () => 'live');
 			const moved = await quarantined(directory);
-			expect(await readFile(join(directory, moved ?? ''), 'utf8')).toBe('{ "embed:1": [1, 2');
+			expect({
+				result,
+				quarantined: moved !== undefined,
+				bytes: await readFile(join(directory, moved ?? ''), 'utf8')
+			}).toEqual({
+				result: 'live',
+				quarantined: true,
+				bytes: '{ "embed:1": [1, 2'
+			});
 		});
 	});
 
@@ -73,15 +71,6 @@ describe('reading the eval cache file', () => {
 			const cache = new DiskCache(path, false);
 			await cache.resolve('embed:1', async () => 'live');
 			expect(await quarantined(directory)).toBeDefined();
-		});
-	});
-
-	it('still answers the caller from the provider after quarantining', async () => {
-		await withCacheDirectory(async (directory) => {
-			const path = join(directory, 'cache.json');
-			await writeFile(path, '{ truncated', 'utf8');
-			const cache = new DiskCache(path, false);
-			expect(await cache.resolve('embed:1', async () => 'live')).toBe('live');
 		});
 	});
 

@@ -14,17 +14,12 @@ describe('Pinning a passage to the composer', () => {
 	});
 
 	it('labels the chip with the note it came from', () => {
-		expect(selectionChipOf(selection(), 'Q3 planning').name).toBe('Q3 planning');
-	});
-
-	it('counts the words in the passage', () => {
-		expect(selectionChipOf(selection(), 'Q3 planning').wordCount).toBe(6);
-	});
-
-	it('keeps the passage itself, so the request carries what was pinned', () => {
-		expect(selectionChipOf(selection(), 'Q3 planning').selection.text).toBe(
-			'We ship the export flow first.'
-		);
+		const chip = selectionChipOf(selection(), 'Q3 planning');
+		expect({ name: chip.name, wordCount: chip.wordCount, excerpt: chip.selection.text }).toEqual({
+			name: 'Q3 planning',
+			wordCount: 6,
+			excerpt: 'We ship the export flow first.'
+		});
 	});
 
 	/** The dedup in `ChatStore.addChip` is by id, so this is what stops a double pin. */

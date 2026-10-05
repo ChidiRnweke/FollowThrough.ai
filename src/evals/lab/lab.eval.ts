@@ -40,16 +40,15 @@ describe('eval lab smoke', () => {
 		runId = receipt.runId;
 		// Stop before the provider call can cost anything.
 		await lab.controllers.agent().cancel(actor, receipt.runId);
-		expect(receipt.status).toBe('queued');
-	});
-
-	it('settles the run out of the active slot', async () => {
 		const deadline = Date.now() + 15_000;
 		let status = (await lab.controllers.agent().getRun(actor, runId)).run.status;
 		while (!TERMINAL.includes(status) && Date.now() < deadline) {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			status = (await lab.controllers.agent().getRun(actor, runId)).run.status;
 		}
-		expect(TERMINAL.includes(status)).toBe(true);
+		expect({ submitted: receipt.status, settled: TERMINAL.includes(status) }).toEqual({
+			submitted: 'queued',
+			settled: true
+		});
 	});
 });

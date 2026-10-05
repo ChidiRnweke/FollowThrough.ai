@@ -57,9 +57,12 @@ describe('durable agent submission', () => {
 			requestId: crypto.randomUUID(),
 			input: 'Wait for cancellation'
 		});
+		const cancelled = await controller.cancel(testActor(), receipt.runId);
 		await controller.cancel(testActor(), receipt.runId);
-		await controller.cancel(testActor(), receipt.runId);
-		expect(runs.events.filter((record) => record.event.type === 'cancelled')).toHaveLength(1);
+		expect({
+			status: cancelled.run.status,
+			cancelEvents: runs.events.filter((record) => record.event.type === 'cancelled').length
+		}).toEqual({ status: 'cancelled', cancelEvents: 1 });
 	});
 	it('returns a queued receipt before provider execution', async () => {
 		const { controller } = setup();
@@ -123,20 +126,12 @@ describe('durable agent submission', () => {
 			requestId: '10000000-0000-4000-8000-000000000002',
 			input: 'Compare the options'
 		};
-		await controller.submit(testActor(), input);
-		await controller.submit(testActor(), input);
-		expect(conversations.messages.filter((message) => message.role === 'user')).toHaveLength(1);
-	});
-
-	it('returns the same run for a duplicate logical request', async () => {
-		const { controller } = setup();
-		const input = {
-			requestId: '10000000-0000-4000-8000-000000000003',
-			input: 'Compare the options'
-		};
 		const first = await controller.submit(testActor(), input);
 		const second = await controller.submit(testActor(), input);
-		expect(second.runId).toBe(first.runId);
+		expect({
+			prompts: conversations.messages.filter((message) => message.role === 'user').length,
+			runIds: [first.runId, second.runId]
+		}).toEqual({ prompts: 1, runIds: [first.runId, first.runId] });
 	});
 
 	it('rejects another active run in the same conversation', async () => {
@@ -171,12 +166,15 @@ describe('scope staged before the user moved screens', () => {
 		return context.runs.runs.at(-1)?.inputSnapshot as RunAgentInput | undefined;
 	};
 
-	it('scopes the run to the screen the user is actually on', async () => {
-		expect((await moved())?.projectId).toBe(testProjectId());
-	});
-
-	it('carries the staged project through for the agent to reconcile', async () => {
-		expect((await moved())?.requestedScope?.projectId).toBe(testProjectId(2));
+	it('uses the current project and retains the staged scope for reconciliation', async () => {
+		const snapshot = await moved();
+		expect({
+			currentProject: snapshot?.projectId,
+			stagedProject: snapshot?.requestedScope?.projectId
+		}).toEqual({
+			currentProject: testProjectId(),
+			stagedProject: testProjectId(2)
+		});
 	});
 
 	it('leaves the staged scope out when nothing was overridden', async () => {
@@ -347,36 +345,18 @@ describe('durable agent lifecycle commands', () => {
 		}
 	});
 
-	it('cancels a queued run immediately', async () => {
-		const { controller } = setup();
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000006',
-			input: 'Stop before start'
-		});
-		const snapshot = await controller.cancel(testActor(), receipt.runId);
-		expect(snapshot.run.status).toBe('cancelled');
-	});
-
-	it('aborts the in-flight execution of a running run', async () => {
+	it('marks a running run as cancelling and aborts its in-flight execution', async () => {
 		const { controller, runner } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-00000000000c',
 			input: 'Stop mid-stream'
 		});
 		await runner.started.promise;
-		await controller.cancel(testActor(), receipt.runId);
-		expect(runner.signals.at(-1)?.aborted).toBe(true);
-	});
-
-	it('marks a running run as cancelling while the executor settles it', async () => {
-		const { controller, runner } = setup('running');
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-00000000000d',
-			input: 'Stop mid-stream'
-		});
-		await runner.started.promise;
 		const snapshot = await controller.cancel(testActor(), receipt.runId);
-		expect(snapshot.run.status).toBe('cancelling');
+		expect({ status: snapshot.run.status, aborted: runner.signals.at(-1)?.aborted }).toEqual({
+			status: 'cancelling',
+			aborted: true
+		});
 	});
 
 	it('cancels a run parked on an approval with nothing left to abort', async () => {
@@ -528,36 +508,27 @@ describe('durable agent lifecycle commands', () => {
 		}
 	});
 
-	it('records nothing when one call in a batch is not pending (1/2)', async () => {
-		const { controller, receipt } = await awaitingApproval([
-			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
-		]);
-		await expect(
-			controller.decideMany(testActor(), {
-				runId: receipt.runId,
-				callIds: ['call-a', 'call-missing'],
-				decision: 'approve'
-			})
-		).rejects.toThrow('The pending tool call was not found');
-	});
-
 	it('leaves the awaiting run and pending call unchanged when a batch includes an unknown call', async () => {
 		const pending = [
 			{ callId: 'call-a', toolName: 'create_todo', arguments: {} }
 		] satisfies PendingAgentDecision[];
 		const { controller, runs, receipt } = await awaitingApproval(pending);
-		await controller
+		const failure = await controller
 			.decideMany(testActor(), {
 				runId: receipt.runId,
 				callIds: ['call-a', 'call-missing'],
 				decision: 'approve'
 			})
-			.catch((error) => {
-				if (!(error instanceof Error) || error.message !== 'The pending tool call was not found')
-					throw error;
-				return { kind: 'failure' };
-			});
+			.then(
+				() => ({ kind: 'unexpected-success' as const }),
+				(error) => {
+					if (!(error instanceof Error) || error.message !== 'The pending tool call was not found')
+						throw error;
+					return { kind: 'failure' as const, message: error.message };
+				}
+			);
 		expect({
+			failure,
 			status: runs.runs.find((run) => run.id === receipt.runId)?.status,
 			pending: runs.runs.find((run) => run.id === receipt.runId)?.pendingDecisions,
 			decisions: await runs.loadUnconsumed(receipt.runId),
@@ -565,6 +536,7 @@ describe('durable agent lifecycle commands', () => {
 				(record) => record.event.type === 'run_queued' && record.event.reason === 'resumed'
 			)
 		}).toEqual({
+			failure: { kind: 'failure', message: 'The pending tool call was not found' },
 			status: 'awaiting_approval',
 			pending,
 			decisions: [],
@@ -591,21 +563,9 @@ describe('durable agent lifecycle commands', () => {
 	});
 
 	it('manual retry creates ancestry without another prompt', async () => {
-		const { controller, conversations, runner } = setup('running');
+		const { controller, conversations, runner, runs } = setup('running');
 		const receipt = await controller.submit(testActor(), {
 			requestId: '10000000-0000-4000-8000-000000000009',
-			input: 'Try this once'
-		});
-		await runner.started.promise;
-		await controller.failRun(receipt.runId, new Error('Provider unavailable'));
-		await controller.retry(testActor(), receipt.runId, '10000000-0000-4000-8000-000000000010');
-		expect(conversations.messages.filter((message) => message.role === 'user')).toHaveLength(1);
-	});
-
-	it('manual retry points at the failed run', async () => {
-		const { controller, runs, runner } = setup('running');
-		const receipt = await controller.submit(testActor(), {
-			requestId: '10000000-0000-4000-8000-000000000011',
 			input: 'Try this once'
 		});
 		await runner.started.promise;
@@ -616,6 +576,9 @@ describe('durable agent lifecycle commands', () => {
 			'10000000-0000-4000-8000-000000000012'
 		);
 		const child = runs.runs.find((run) => run.id === retried.runId);
-		expect(child?.retryOfRunId).toBe(receipt.runId as AgentRunId);
+		expect({
+			userPrompts: conversations.messages.filter((message) => message.role === 'user').length,
+			retryOfRunId: child?.retryOfRunId
+		}).toEqual({ userPrompts: 1, retryOfRunId: receipt.runId as AgentRunId });
 	});
 });

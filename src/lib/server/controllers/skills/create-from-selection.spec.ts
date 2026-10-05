@@ -78,16 +78,19 @@ const input = {
 
 describe('Create skill workflow invariants', () => {
 	it('creates a skill document from the selected text', async () => {
-		const { controller, skills } = setup();
-		await controller.createFromSelection(testActor(), input);
-		expect(skills.skills[0]?.note.plainText).toBe(input.selection.text);
-	});
-
-	it('records provenance against the source selection anchor', async () => {
-		const { controller, anchors, provenance } = setup();
-		await controller.createFromSelection(testActor(), input);
-		expect({ anchors: anchors.anchors, provenance: provenance.provenance }).toMatchObject({
-			anchors: [{ noteId: input.selection.noteId, quote: input.selection.text }],
+		const { controller, skills, anchors, provenance } = setup();
+		const { skillNoteId } = await controller.createFromSelection(testActor(), input);
+		expect({
+			id: skills.skills[0]?.note.id,
+			text: skills.skills[0]?.note.plainText,
+			projectId: skills.skills[0]?.note.projectId,
+			anchor: anchors.anchors,
+			provenance: provenance.provenance
+		}).toMatchObject({
+			id: skillNoteId,
+			text: input.selection.text,
+			projectId: noteBuilder().projectId,
+			anchor: [{ noteId: input.selection.noteId, quote: input.selection.text }],
 			provenance: [
 				{ sourceAnchorId: anchors.anchors[0]?.id, userId: testActor().userId, producerKind: 'user' }
 			]
@@ -115,11 +118,6 @@ describe('Create skill workflow invariants', () => {
 			skills: [],
 			notes: [testNoteId()]
 		});
-	});
-	it('creates the skill document in the source project', async () => {
-		const { controller, skills } = setup();
-		await controller.createFromSelection(testActor(), input);
-		expect(skills.skills[0]?.note.projectId).toBe(noteBuilder().projectId);
 	});
 	it('rejects an empty name before inserting the skill document', async () => {
 		const { controller } = setup();

@@ -39,19 +39,18 @@ describe('Every tool in the catalog knows what it opens onto', () => {
 });
 
 describe('A read of one thing is a link, not a disclosure', () => {
-	it('names the note the shell already knows', () => {
+	it('names the known note as a link that opens in place', () => {
 		const disclosure = toolDisclosure(
 			call({ name: 'get_note', arguments: { noteId: NOTE_ID } }),
 			shell
 		);
-		expect(disclosure).toEqual({
-			kind: 'link',
-			entity: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
+		expect({ disclosure, opens: opensInPlace(disclosure) }).toEqual({
+			disclosure: {
+				kind: 'link',
+				entity: { kind: 'note', id: NOTE_ID, title: 'Infrastructure', named: true }
+			},
+			opens: false
 		});
-	});
-
-	it('offers no chevron, because the row already says everything it has', () => {
-		expect(opensInPlace(toolDisclosure(call({ name: 'get_note' }), shell))).toBe(false);
 	});
 });
 
@@ -232,9 +231,12 @@ describe('A look inside the virtual files shows what came back', () => {
 });
 
 describe('A field set on an existing record shows what moved', () => {
-	it('states the change without a before when the tool returns none', () => {
+	it('states only the changed status and omits unchanged metadata', () => {
 		const disclosure = toolDisclosure(
-			call({ name: 'update_todo', arguments: { todoId: TODO_ID, status: 'done' } }),
+			call({
+				name: 'update_todo',
+				arguments: { todoId: TODO_ID, status: 'done', title: 'Ship it' }
+			}),
 			shell
 		);
 		expect(disclosure.kind === 'record' && disclosure.changed).toEqual([
@@ -254,16 +256,6 @@ describe('A field set on an existing record shows what moved', () => {
 		expect(disclosure.kind === 'record' && disclosure.changed).toEqual([
 			{ label: 'Default model', from: 'claude-sonnet-5', to: 'claude-opus-5' }
 		]);
-	});
-
-	it('does not offer an id back to the reader as a field they changed', () => {
-		const disclosure = toolDisclosure(
-			call({ name: 'update_todo', arguments: { todoId: TODO_ID, title: 'Ship it' } }),
-			shell
-		);
-		expect(
-			disclosure.kind === 'record' && disclosure.changed.map((change) => change.label)
-		).toEqual([]);
 	});
 });
 

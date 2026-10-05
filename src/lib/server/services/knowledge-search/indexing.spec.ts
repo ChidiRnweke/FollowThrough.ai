@@ -172,7 +172,10 @@ describe('Diagram indexing invariants', () => {
 			diagram,
 			{ kind: 'note', title: noteBuilder().title }
 		);
-		expect(repository.documents[0]?.document.diagramId).toBe(diagram.id);
+		expect({
+			diagramId: repository.documents[0]?.document.diagramId,
+			noteId: repository.documents[0]?.document.noteId
+		}).toEqual({ diagramId: diagram.id, noteId: undefined });
 	});
 
 	// A diagram in the trash is out of the project, so a search that still returned
@@ -244,15 +247,6 @@ describe('Diagram indexing invariants', () => {
 
 	// A diagram chunk is its own retrieval source now: carrying the note as well
 	// would violate the single-source constraint the database enforces.
-	it('leaves the note off a diagram chunk so it stands as its own source', async () => {
-		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).diagrams;
-		await indexer.index(testActor(), diagramBuilder(), {
-			kind: 'note',
-			title: noteBuilder().title
-		});
-		expect(repository.documents[0]?.document.noteId).toBeUndefined();
-	});
 });
 
 describe('Memory indexing invariants', () => {
@@ -263,16 +257,10 @@ describe('Memory indexing invariants', () => {
 			testActor(),
 			entry
 		);
-		expect(repository.documents[0]?.document.memoryEntryId).toBe(entry.id);
-	});
-
-	it('gives memory chunks no note source', async () => {
-		const repository = new InMemorySearchRepository();
-		await new ContentIndex(repository, 'test-embedding', undefined, true).memories.index(
-			testActor(),
-			memoryEntryBuilder()
-		);
-		expect(repository.documents[0]?.document.noteId).toBeUndefined();
+		expect({
+			memoryId: repository.documents[0]?.document.memoryEntryId,
+			noteId: repository.documents[0]?.document.noteId
+		}).toEqual({ memoryId: entry.id, noteId: undefined });
 	});
 
 	it('reuses a chunk with an unchanged content hash', async () => {

@@ -199,28 +199,21 @@ describe('ChatComposer execution mode', () => {
  * be able to tell their own choice from the workspace's.
  */
 describe('ChatComposer model', () => {
-	it('names the model this chat chose', async () => {
-		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
-		await expect
-			.element(screen.getByLabelText('Model for this chat: Claude Sonnet 4.5'))
-			.toBeInTheDocument();
-	});
-
-	it('names the workspace default when the chat chose none', async () => {
+	it('names and marks the inherited workspace default', async () => {
 		const screen = await render(ChatComposer, { ...base, modelOverride: null });
-		await expect
-			.element(screen.getByLabelText('Model for this chat: V4 Flash'))
-			.toBeInTheDocument();
+		expect({
+			modelLabel: (await screen.getByLabelText('Model for this chat: V4 Flash').all()).length,
+			defaultMarker: (await screen.getByText('· default').all()).length
+		}).toEqual({ modelLabel: 1, defaultMarker: 1 });
 	});
 
-	it('marks an inherited model as the default rather than passing it off as a choice', async () => {
-		const screen = await render(ChatComposer, { ...base, modelOverride: null });
-		await expect.element(screen.getByText('· default')).toBeInTheDocument();
-	});
-
-	it('leaves the default marking off a model the chat chose for itself', async () => {
+	it('names an explicit chat model without marking it as the default', async () => {
 		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
-		await expect.element(screen.getByText('· default')).not.toBeInTheDocument();
+		expect({
+			modelLabel: (await screen.getByLabelText('Model for this chat: Claude Sonnet 4.5').all())
+				.length,
+			defaultMarker: (await screen.getByText('· default').all()).length
+		}).toEqual({ modelLabel: 1, defaultMarker: 0 });
 	});
 
 	/**
@@ -247,21 +240,16 @@ describe('ChatComposer model', () => {
 	 * The server ignores a describer when the chat model reads images itself, so
 	 * offering the list would be offering a setting that changes nothing.
 	 */
-	it('closes the vision tab when the chat model reads images itself', async () => {
-		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
-		await screen.getByLabelText('Model for this chat: Claude Sonnet 4.5').click();
-		expect(await screen.getByRole('tab', { name: 'Vision model' }).element()).toHaveProperty(
-			'disabled',
-			true
-		);
-	});
-
-	it('says why the vision tab is closed rather than leaving it inert', async () => {
+	it('disables vision-model selection and explains why for an image-capable model', async () => {
 		const screen = await render(ChatComposer, { ...base, modelOverride: sonnet.id });
 		await screen.getByLabelText('Model for this chat: Claude Sonnet 4.5').click();
 		await expect
 			.element(screen.getByLabelText('Claude Sonnet 4.5 supports both text and image inputs.'))
-			.toBeInTheDocument();
+			.toBeVisible();
+		expect(await screen.getByRole('tab', { name: 'Vision model' }).element()).toHaveProperty(
+			'disabled',
+			true
+		);
 	});
 
 	/**
@@ -324,11 +312,12 @@ describe('ChatComposer send affordance', () => {
 
 it('shows the offline state even when no run is streaming', async () => {
 	const screen = render(ChatComposer, { ...base, connection: 'offline' });
-	await expect.element(screen.getByText('Offline', { exact: true })).toBeVisible();
-});
-it('explains the reconnect requirement at the message input', async () => {
-	const screen = render(ChatComposer, { ...base, connection: 'offline' });
-	await expect.element(screen.getByPlaceholder('Reconnect to send')).toBeVisible();
+	expect({
+		offlineLabel: (await screen.getByText('Offline', { exact: true }).all()).length,
+		placeholder: (await screen.getByPlaceholder('Reconnect to send').all()).length
+	}).toEqual({ offlineLabel: 1, placeholder: 1 });
+await expect.element(screen.getByText('Offline', { exact: true })).toBeVisible();
+await expect.element(screen.getByPlaceholder('Reconnect to send')).toBeVisible();
 });
 it('does not offer to send a prepared message while offline', async () => {
 	const screen = render(ChatComposer, { ...base, connection: 'offline', prompt: 'Ready to send' });

@@ -25,15 +25,11 @@ describe('Reading the pending decisions off a run row', () => {
 	});
 
 	it('drops a decision naming a tool the catalog no longer has', () => {
-		expect(readPendingDecisions([{ ...decision, toolName: 'archive_notes' }]).decisions).toEqual(
-			[]
-		);
-	});
-
-	it('names the dropped call id, so the warning can point at it', () => {
-		expect(readPendingDecisions([{ ...decision, toolName: 'archive_notes' }]).dropped).toEqual([
-			'call-1'
-		]);
+		expect(readPendingDecisions([{ ...decision, toolName: 'archive_notes' }])).toEqual({
+			kind: 'readable',
+			decisions: [],
+			dropped: ['call-1']
+		});
 	});
 
 	it('keeps the readable decisions beside a dropped one', () => {

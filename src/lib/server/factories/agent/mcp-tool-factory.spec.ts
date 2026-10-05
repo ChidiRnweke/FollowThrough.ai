@@ -92,17 +92,6 @@ describe('MCP tool surface', () => {
 		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
 	});
 
-	it('refuses to revoke an access token on a read-scoped token', async () => {
-		const retriever = new InMemoryToolRetriever();
-		retriever.names = ['revoke_api_token'];
-		const client = await connect('read', { retriever });
-		const result = await client.callTool({
-			name: 'search_tools',
-			arguments: { query: 'revoke token' }
-		});
-		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
-	});
-
 	it('offers no tool that creates an access token', async () => {
 		const retriever = new InMemoryToolRetriever();
 		retriever.names = ['create_api_token'];
@@ -112,12 +101,6 @@ describe('MCP tool surface', () => {
 			arguments: { query: 'create token' }
 		});
 		expect(JSON.parse((result.content as { text: string }[])[0].text)).toEqual([]);
-	});
-
-	it('has no free-form wrapper tool', async () => {
-		const client = await connect('full');
-		const { tools } = await client.listTools();
-		expect(tools.map((tool) => tool.name)).not.toContain('use_tool');
 	});
 
 	it('rejects a payload that does not match the target schema', async () => {

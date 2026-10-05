@@ -113,17 +113,16 @@ describe('A failure a tool returned as a value is still a failure', () => {
 		}
 	};
 
-	it('reads the failure off the arm that carries it', () => {
-		expect(toolFailure(noOpEdit)).toBe('No edits were applied.');
-	});
-
-	it('keeps the detail the failure was read out of, which is what the model was given', () => {
-		expect(toolOutput(noOpEdit)).toEqual({
-			kind: 'failure',
-			code: 'NOTE_REVIEW_FAILED',
-			message: 'No edits were applied.',
-			recovery: 'Correct the problems below and submit a new tool call.',
-			details: { problems: ['Edit 1: oldText was not found.'] }
+	it('reads a failed tool call and preserves its model-facing failure detail', () => {
+		expect({ failure: toolFailure(noOpEdit), output: toolOutput(noOpEdit) }).toEqual({
+			failure: 'No edits were applied.',
+			output: {
+				kind: 'failure',
+				code: 'NOTE_REVIEW_FAILED',
+				message: 'No edits were applied.',
+				recovery: 'Correct the problems below and submit a new tool call.',
+				details: { problems: ['Edit 1: oldText was not found.'] }
+			}
 		});
 	});
 

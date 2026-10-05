@@ -87,37 +87,35 @@ describe('Built-in skill provisioning invariants', () => {
 		]);
 	});
 
-	it('provisions the current FollowThrough guide version for new users', async () => {
+	it('provisions the current guide, its product instructions, and initial revisions for a new user', async () => {
 		const { provisioner, skills } = setup();
-		await provisioner.ensure(testActor());
-		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
-		expect(followThrough?.metadata?.['followthrough.built-in-version']).toBe('3');
-	});
-
-	it('provisions detailed product guidance for new users', async () => {
-		const { provisioner, skills } = setup();
-		await provisioner.ensure(testActor());
-		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
-		expect(followThrough?.note.plainText).toContain('## Product model');
-	});
-
-	it('upgrades an untouched stock FollowThrough skill in place', async () => {
-		const { provisioner, skills } = await setupLegacyFollowThrough();
 		await provisioner.ensure(testActor());
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect({
 			version: followThrough?.metadata?.['followthrough.built-in-version'],
-			revision: followThrough?.note.currentRevision
-		}).toEqual({ version: '3', revision: 2 });
+			hasProductGuidance: followThrough?.note.plainText.includes('## Product model'),
+			initialRevisions: skills.skills.map((skill) => skill.note.currentRevision)
+		}).toEqual({ version: '3', hasProductGuidance: true, initialRevisions: [1, 1, 1] });
 	});
 
-	it('records one immutable revision for a stock guide upgrade', async () => {
-		const { provisioner, notes } = await setupLegacyFollowThrough();
+	it('upgrades an untouched stock FollowThrough skill in place', async () => {
+		const { provisioner, skills, notes } = await setupLegacyFollowThrough();
 		await provisioner.ensure(testActor());
-		const followThrough = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
-		expect(notes.revisions.filter((revision) => revision.noteId === followThrough.id)).toHaveLength(
-			2
-		);
+		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
+		expect({
+			version: followThrough?.metadata?.['followthrough.built-in-version'],
+			revision: followThrough?.note.currentRevision,
+			immutableRevisions: notes.revisions.filter(
+				(revision) => revision.noteId === followThrough?.note.id
+			)
+		}).toEqual({
+			version: '3',
+			revision: 2,
+			immutableRevisions: expect.arrayContaining([
+				expect.objectContaining({ revision: 1 }),
+				expect.objectContaining({ revision: 2 })
+			])
+		});
 	});
 
 	it('does not repeat an already-applied stock guide upgrade', async () => {
@@ -263,12 +261,6 @@ describe('Built-in skill provisioning invariants', () => {
 		await provisioner.ensure(testActor());
 		const followThrough = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough');
 		expect(followThrough?.isEnabled).toBe(false);
-	});
-
-	it('records the initial skill revision', async () => {
-		const { provisioner, notes } = setup();
-		await provisioner.ensure(testActor());
-		expect(notes.revisions.map((revision) => revision.revision)).toEqual([1, 1, 1]);
 	});
 
 	it('upgrades an untouched previous-version guide to the current one', async () => {
