@@ -5,7 +5,7 @@ import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 import type { Lab } from '../lab/application';
 import { seedWorkspace, type SeededWorkspace, type WorkspaceFixture } from '../lab/workspace';
 import { runCase, type AgentRunResult } from '../lab/run-case';
-import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
+import { findCall, scoreToolCalling } from '../assertions/tool-calls';
 import { runWidgetProbe, type ProbeStep } from '../assertions/widget/probe';
 import {
 	embedVerdict,
@@ -126,10 +126,13 @@ function buildCase(scenario: WidgetScenario): EvalCase {
 				found.kind === 'found'
 					? await probeSaved(lab, workspace, found.widget, scenario.probe)
 					: { passed: false, explanation: `${found.explanation}; ${runSummary(result)}` };
-			const embed =
+			const embedded =
 				found.kind === 'found'
 					? await embedVerdict(lab, workspace.actor, noteId, found.widget)
 					: { passed: false, explanation: 'no widget to embed' };
+			const embed = embedded.passed
+				? embedded
+				: { passed: false, explanation: `${embedded.explanation}; ${runSummary(result)}` };
 			px.logOutput({
 				model: result.model,
 				toolCalls: result.calledToolNames,
@@ -409,10 +412,18 @@ const searchTrigger: EvalCase = {
 			prompt: this.input.prompt as string,
 			mode: 'auto_accept'
 		});
-		const discovery = scoreToolDiscovery(result, 'create_widget');
-		const verdict = discovery.passed
-			? discovery
-			: { passed: false, explanation: `${discovery.explanation}; ${runSummary(result)}` };
+		// Discovery is the capability here: the agent searched, then saved a widget. Payloads it
+		// had to repair are logged as `rejectedCreates`, not counted against discovery.
+		const names = result.calledToolNames;
+		const searched = names.includes('search_tools');
+		const created = result.toolCalls.some((call) => call.name === 'create_widget' && !call.failure);
+		const verdict: WidgetVerdict =
+			searched && created && names.indexOf('search_tools') < names.indexOf('create_widget')
+				? { passed: true, explanation: 'searched the catalog, then saved a widget' }
+				: {
+						passed: false,
+						explanation: `${searched ? 'searched' : 'never called search_tools'}; ${created ? 'saved a widget' : 'saved no widget'}; ${runSummary(result)}`
+					};
 		const found = widgetTitled(await savedWidgets(lab, workspace.actor), /./);
 		const build =
 			found.kind === 'found'
