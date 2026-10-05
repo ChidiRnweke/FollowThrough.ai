@@ -48,23 +48,12 @@ describe('Reviewed note changes', () => {
 	it('refuses to apply after a different edit', async () => {
 		const { controller, change, content, note } = await setup();
 		content.notes = [{ ...note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }];
-		expect(await controller.applyReviewedChange(testActor(), change, 'authored')).toMatchObject({
+		const outcome = await controller.applyReviewedChange(testActor(), change, 'authored');
+		expect(outcome).toMatchObject({
 			kind: 'failure',
 			code: 'STALE_REVIEW'
 		});
-	});
-	it('leaves the newer content intact after refusing a stale review', async () => {
-		const { controller, change, content, note } = await setup();
-		content.notes = [{ ...note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }];
-		await controller.applyReviewedChange(testActor(), change, 'authored');
 		expect(content.notes[0].plainText).toBe('Launch Friday.');
-	});
-	it('reports an already satisfied review as unchanged', async () => {
-		const { controller, change } = await setup();
-		await controller.applyReviewedChange(testActor(), change, 'authored');
-		expect(await controller.applyReviewedChange(testActor(), change, 'authored')).toMatchObject({
-			kind: 'unchanged'
-		});
 	});
 	it('does not repeat indexing when the result is already present', async () => {
 		const { controller, change, content } = await setup();

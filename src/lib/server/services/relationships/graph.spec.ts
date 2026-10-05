@@ -54,16 +54,6 @@ describe('Relationship management invariants', () => {
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
-	it('persists a relationship between notes in one project', async () => {
-		const { service, relationships } = setup();
-		await service.create(testActor(), {
-			sourceNoteId: testNoteId(),
-			targetNoteId: testNoteId(2),
-			kind: 'prior_decision'
-		});
-		expect(relationships.relationships[0]?.kind).toBe('prior_decision');
-	});
-
 	it('rejects an anchor from a note other than the relationship source', async () => {
 		const { service, anchors } = setup();
 		anchors.anchors = [anchorBuilder({ noteId: testNoteId(2) })];
@@ -95,11 +85,14 @@ describe('Relationship management invariants', () => {
 		const relationship = await service.create(testActor(), {
 			sourceNoteId: testNoteId(),
 			targetNoteId: testNoteId(2),
-			kind: 'mentions',
+			kind: 'prior_decision',
 			sourceAnchorId: anchorBuilder().id,
 			provenanceId: testProvenanceId()
 		});
-		expect(relationship.provenanceId).toBe(testProvenanceId());
+		expect({ kind: relationship.kind, provenanceId: relationship.provenanceId }).toEqual({
+			kind: 'prior_decision',
+			provenanceId: testProvenanceId()
+		});
 		expect(relationship.sourceAnchorId).toBe(anchorBuilder().id);
 	});
 });

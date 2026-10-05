@@ -12,25 +12,21 @@ const entryNames = (archive: Buffer): string[] =>
 		.sort();
 
 describe('Bundle packing invariants', () => {
-	it('writes one entry per file', () => {
-		const archive = packZip([file('One.pdf'), file('Two.pdf'), file('Three.pdf')]);
-		expect(entryNames(archive)).toEqual(['One.pdf', 'Three.pdf', 'Two.pdf']);
-	});
-
-	it('keeps the bytes each file was packed with', () => {
+	it('writes one entry per file and preserves each file path and body', () => {
 		const archive = packZip([
-			file('Notes.pdf', 'the body'),
-			file('Interviews/Round two/Notes.pdf', 'nested body')
+			file('One.pdf', 'one body'),
+			file('Interviews/Round two/Notes.pdf', 'nested body'),
+			file('Two.pdf', 'two body')
 		]);
 		const zip = new AdmZip(archive);
 		expect({
-			rootBytes: zip.getEntry('Notes.pdf')?.getData().toString(),
+			rootBytes: zip.getEntry('One.pdf')?.getData().toString(),
 			nestedBytes: zip.getEntry('Interviews/Round two/Notes.pdf')?.getData().toString(),
 			paths: entryNames(archive)
 		}).toEqual({
-			rootBytes: 'the body',
+			rootBytes: 'one body',
 			nestedBytes: 'nested body',
-			paths: ['Interviews/Round two/Notes.pdf', 'Notes.pdf']
+			paths: ['Interviews/Round two/Notes.pdf', 'One.pdf', 'Two.pdf']
 		});
 	});
 

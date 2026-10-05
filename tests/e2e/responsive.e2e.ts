@@ -54,13 +54,6 @@ for (const viewport of viewports.filter(({ width }) => width < 768)) {
 	});
 }
 
-test('compact note actions expose Export in the overflow menu', async ({ page }) => {
-	await page.setViewportSize({ width: 320, height: 568 });
-	await openFirstNote(page);
-	await page.getByRole('button', { name: 'Note actions' }).click();
-	await expect(page.getByRole('menuitem', { name: 'Export document' })).toBeVisible();
-});
-
 test('compact note toolbar controls use 44px touch targets', async ({ page }) => {
 	await page.setViewportSize({ width: 320, height: 568 });
 	await openFirstNote(page);
@@ -75,6 +68,8 @@ test('compact note toolbar controls use 44px touch targets', async ({ page }) =>
 		);
 	expect(targetsMeetMinimum).toBe(true);
 	await expect(page.getByRole('button', { name: 'Publish note' })).toContainText('Publish');
+	await page.getByRole('button', { name: 'Note actions' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Export document' })).toBeVisible();
 });
 
 test('sm note toolbar restores inline Export', async ({ page }) => {
@@ -124,19 +119,14 @@ test('compact todo list uses stacked records', async ({ page }) => {
 	expect(tableVisible).toBe(false);
 });
 
-test('2xl retains the inline contextual panel width', async ({ page }) => {
+test('keeps the contextual panel open from 2xl inline into the xl Sheet', async ({ page }) => {
 	await page.setViewportSize({ width: 1536, height: 960 });
 	await page.goto('/today');
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('button', { name: 'Toggle chat panel' }).click();
 	await expect(page.getByRole('complementary', { name: 'Agent' })).toHaveCSS('width', '384px');
-});
-
-test('xl opens the contextual panel as a Sheet', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
-	await page.goto('/today');
 	await page.waitForLoadState('networkidle');
-	await page.getByRole('button', { name: 'Toggle chat panel' }).click();
 	const sheet = page.locator('[data-slot="sheet-content"]');
 	await expect(sheet).toBeVisible();
 	await expect(sheet.getByRole('heading', { name: 'Let FollowThrough act' })).toBeVisible();

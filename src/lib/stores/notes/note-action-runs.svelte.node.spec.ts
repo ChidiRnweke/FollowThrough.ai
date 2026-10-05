@@ -57,24 +57,13 @@ describe('NoteActionRunsStore', () => {
 
 	it('hands a result to the handler registered for its action', async () => {
 		const { store, transport } = setup();
-		const applied: unknown[] = [];
-		store.on('convert', (result) => void applied.push(result));
-		void start(store);
-		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: '<mxfile />' });
-		await Promise.resolve();
-
-		expect(applied).toEqual(['<mxfile />']);
-	});
-
-	it('gives the handler the context captured when the run started', async () => {
-		const { store, transport } = setup();
-		const contexts: unknown[] = [];
-		store.on('convert', (_result, context) => void contexts.push(context));
+		const delivered: { result: unknown; context: unknown }[] = [];
+		store.on('convert', (result, context) => void delivered.push({ result, context }));
 		const settled = start(store);
-		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: 'x' });
+		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: '<mxfile />' });
 		await settled;
 
-		expect(contexts).toEqual([{ source: 'graph TD' }]);
+		expect(delivered).toEqual([{ result: '<mxfile />', context: { source: 'graph TD' } }]);
 		expect(store.running).toEqual([]);
 		expect(transport.openStreams).toEqual([]);
 	});

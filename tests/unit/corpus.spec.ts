@@ -51,17 +51,16 @@ const reasons = (entries: readonly { readonly reason: string }[]): readonly stri
 	[...new Set(entries.map((entry) => entry.reason))].sort();
 
 describe('the stored note documents', () => {
-	it('all read back as documents', () => {
-		expect(noteDocuments.map((document) => readProseMirrorDocument(document).type)).toEqual(
-			noteDocuments.map(() => 'doc')
-		);
-	});
-
-	it('contain no node the schema failed to model', () => {
-		const unknown = noteDocuments.flatMap((document) =>
-			unknownProseMirrorNodes(readProseMirrorDocument(document))
-		);
-		expect(reasons(unknown)).toEqual([]);
+	it('read back as documents without unmodelled nodes', () => {
+		const documents = noteDocuments.map((document) => readProseMirrorDocument(document));
+		const unknown = documents.flatMap((document) => unknownProseMirrorNodes(document));
+		expect({
+			rootTypes: documents.map((document) => document.type),
+			unknownReasons: reasons(unknown)
+		}).toEqual({
+			rootTypes: noteDocuments.map(() => 'doc'),
+			unknownReasons: []
+		});
 	});
 });
 
@@ -152,11 +151,10 @@ const journalledToolNames = (rows: readonly unknown[]): readonly string[] =>
 describe('the tool names in both stored journals', () => {
 	it('are all names the agent surface has', () => {
 		const names = [...journalledToolNames(runEvents), ...journalledToolNames(toolMessages)];
-		expect([...new Set(names.filter((name) => readAgentToolName(name) === undefined))]).toEqual([]);
-	});
-
-	it('include the one name that is not in the catalog, so the check is not vacuous', () => {
-		expect(journalledToolNames(runEvents)).toContain('search_tools');
+		expect({
+			unknownNames: [...new Set(names.filter((name) => readAgentToolName(name) === undefined))],
+			hasSearchTools: journalledToolNames(runEvents).includes('search_tools')
+		}).toEqual({ unknownNames: [], hasSearchTools: true });
 	});
 });
 
