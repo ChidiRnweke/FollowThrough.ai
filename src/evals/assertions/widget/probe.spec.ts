@@ -293,16 +293,32 @@ describe('widget probe', () => {
 		expect(probe(draft, gradeCalculator.probe)).toBe('');
 	});
 
-	it('finds a "Now" field by the heading above it', () => {
+	it('accepts a needed grade rounded to a whole number', () => {
+		const draft: WidgetDraft = {
+			...gradeCalculator.reference,
+			layout: {
+				...gradeCalculator.reference.layout,
+				derived: {
+					...gradeCalculator.reference.layout.derived,
+					neededText:
+						'format((@/target * 100 - @/derived/earned) / (100 - @/derived/gradedWeight), 0)'
+				}
+			}
+		};
+		expect(probe(draft, gradeCalculator.probe)).toBe('');
+	});
+
+	it('finds a field labelled only "Now" or "min" by the heading above it', () => {
 		const result = (key: string) => ({
 			type: 'Stack',
 			props: {},
 			children: [`${key}Name`, `${key}Now`]
 		});
 		const heading = (text: string) => ({ type: 'Heading', props: { text }, children: [] });
+		// A live run labelled each field with its unit only.
 		const now = (key: string) => ({
 			type: 'NumberInput',
-			props: { label: 'Now', value: { $bindState: `/${key}` } },
+			props: { label: key === 'lead' ? 'min' : 'Now', value: { $bindState: `/${key}` } },
 			children: []
 		});
 		const draft: WidgetDraft = {

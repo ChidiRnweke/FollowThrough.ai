@@ -193,13 +193,16 @@ const byLabel = (
 	candidates: readonly WidgetElement[],
 	state: JsonValue,
 	matches: (own: string, context: string) => boolean,
-	fallback: (own: string) => boolean = () => false
+	fallback: (own: string, context: string) => boolean = () => false
 ): WidgetElement | undefined =>
 	candidates.find((element) => matches(labelOf(element, state), labelOf(element, state))) ??
 	candidates.find((element) =>
 		matches(labelOf(element, state), contextLabelOf(widget, element, state))
 	) ??
-	candidates.find((element) => fallback(labelOf(element, state)));
+	candidates.find((element) => fallback(labelOf(element, state), labelOf(element, state))) ??
+	candidates.find((element) =>
+		fallback(labelOf(element, state), contextLabelOf(widget, element, state))
+	);
 
 const describeInputs = (widget: Widget, state: JsonValue): string =>
 	placed(widget)
@@ -574,8 +577,9 @@ const edit = (
 		),
 		state.data,
 		(own, context) => step.row.test(context) && (step.column ? step.column.test(own) : true),
-		// A field labelled "Midterm (30%)" holds the midterm's value; it needs no column word.
-		(own) => step.row.test(own)
+		// A field named only for its row needs no column word: "Midterm (30%)", or a field
+		// labelled with its unit ("min") under the heading "Deploy lead time".
+		(_own, context) => step.row.test(context)
 	);
 	const pointer = field && bound(field.props.value);
 	if (field && pointer && typeof step.value !== 'boolean')
