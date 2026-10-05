@@ -53,40 +53,18 @@ describe('NoteVersionDiff', () => {
 			Array.from(screen.container.querySelectorAll('.diff-block'), (block) => block.textContent)
 		).toEqual(['Old title', 'New title']);
 	});
-	it('renders the base pane label', async () => {
-		const screen = await render(NoteVersionDiff, base);
-		expect(await screen.getByText('Version 2').all()).not.toHaveLength(0);
-	});
-
-	it('renders the candidate pane label', async () => {
-		const screen = await render(NoteVersionDiff, base);
-		expect(await screen.getByText('The note now').all()).not.toHaveLength(0);
-	});
-
-	it('renders the candidate content the reader asked to see', async () => {
-		const screen = await render(NoteVersionDiff, base);
-		expect(await screen.getByText('rewritten differently').all()).not.toHaveLength(0);
-	});
 
 	it('adds the diff class only to blocks the model flagged', async () => {
 		const screen = await render(NoteVersionDiff, base);
-		expect(screen.container.querySelectorAll('.diff-block')).toHaveLength(2);
-	});
-
-	it('does not wash a block that is identical on both sides', async () => {
-		const screen = await render(NoteVersionDiff, base);
-		const washed = Array.from(screen.container.querySelectorAll('.diff-block'));
-		expect(washed.some((block) => block.textContent?.includes('kept'))).toBe(false);
-	});
-
-	it('marks the replaced base block as removed', async () => {
-		const screen = await render(NoteVersionDiff, base);
-		expect(screen.container.querySelectorAll('.diff-removed')).toHaveLength(1);
-	});
-
-	it('marks the replacement candidate block as added', async () => {
-		const screen = await render(NoteVersionDiff, base);
+		const blocks = Array.from(screen.container.querySelectorAll('.diff-block'));
+		expect(blocks).toHaveLength(2);
+		expect(await screen.getByText('1 added · 1 removed').all()).not.toHaveLength(0);
 		expect(screen.container.querySelectorAll('.diff-added')).toHaveLength(1);
+		expect(screen.container.querySelectorAll('.diff-removed')).toHaveLength(1);
+		expect(await screen.getByText('rewritten differently').all()).not.toHaveLength(0);
+		expect(await screen.getByText('The note now').all()).not.toHaveLength(0);
+		expect(await screen.getByText('Version 2').all()).not.toHaveLength(0);
+		expect(blocks.some((block) => block.textContent?.includes('kept'))).toBe(false);
 	});
 
 	it('does not flag any block when the documents are identical', async () => {
@@ -114,11 +92,6 @@ describe('NoteVersionDiff', () => {
 			labels: (await screen.getByText('Linked todo', { exact: true }).all()).length,
 			controls: screen.container.querySelectorAll('[role="checkbox"]').length
 		}).toEqual({ labels: 2, controls: 0 });
-	});
-
-	it('summarises the change quietly', async () => {
-		const screen = await render(NoteVersionDiff, base);
-		expect(await screen.getByText('1 added · 1 removed').all()).not.toHaveLength(0);
 	});
 
 	it.each([

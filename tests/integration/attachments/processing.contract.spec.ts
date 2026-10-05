@@ -191,12 +191,6 @@ it('preserves successful empty extraction when the version is read back', async 
 		parserKind: 'text',
 		extractedText: ''
 	});
-});
-
-it('exposes successfully extracted empty text as an empty agent file', async () => {
-	const { owner, records, view, parser, worker } = await setup('21702');
-	parser.text = '';
-	await worker.process(owner, view.version.id);
 	const files = new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
 			attachments: records,

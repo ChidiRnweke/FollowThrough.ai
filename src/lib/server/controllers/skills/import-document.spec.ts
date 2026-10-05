@@ -159,8 +159,15 @@ describe('Skill document imports', () => {
 			slug: skill.slug,
 			revision: skill.note.currentRevision,
 			published: skill.note.publishedRevision,
-			history: notes.revisions
-		}).toEqual({ slug: 'decision-writing', revision: 2, published: 0, history: [] });
+			history: notes.revisions,
+			title: skill.note.title
+		}).toEqual({
+			slug: 'decision-writing',
+			revision: 2,
+			published: 0,
+			history: [],
+			title: 'Release decisions'
+		});
 	});
 	it('rolls back the renamed document when its metadata write fails', async () => {
 		const { controller, notes, skills, note } = importSkill();
@@ -182,11 +189,6 @@ describe('Skill document imports', () => {
 		await expect(
 			controller.update(testActor(), { noteId: note.id, displayName: '  ' })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
-	});
-	it('renames the skill note when its display name changes', async () => {
-		const { controller, notes, note } = importSkill();
-		await controller.update(testActor(), { noteId: note.id, displayName: 'Release decisions' });
-		expect(notes.notes[0].title).toBe('Release decisions');
 	});
 	it('does not save instructions when their portable metadata is incomplete', async () => {
 		const { controller, notes } = importSkill();
@@ -231,24 +233,21 @@ describe('Skill document imports', () => {
 		).rejects.toThrow('A skill with this portable name already exists');
 	});
 	it('saves imported instructions as an unpublished draft without a snapshot', async () => {
-		const { controller, notes } = importSkill();
+		const { controller, notes, content } = importSkill();
 		const result = await controller.update(testActor(), input);
 		expect({
 			text: result.skill.note.plainText,
 			revision: result.skill.note.currentRevision,
 			published: result.skill.note.publishedRevision,
-			snapshots: notes.revisions.length
+			snapshots: notes.revisions.length,
+			indexed: content.indexedNoteIds
 		}).toEqual({
 			text: 'Write a decision and explain its consequences.',
 			revision: 2,
 			published: 0,
-			snapshots: 0
+			snapshots: 0,
+			indexed: [testNoteId()]
 		});
-	});
-	it('indexes the imported document', async () => {
-		const { controller, content } = importSkill();
-		await controller.update(testActor(), input);
-		expect(content.indexedNoteIds).toEqual([testNoteId()]);
 	});
 	it('refuses an import if the conditional document write loses a race', async () => {
 		const { controller, notes } = importSkill();

@@ -128,59 +128,47 @@ describe('Suggestion lifecycle invariants', () => {
 			})
 		];
 		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
-		expect(artifacts.artifacts).toEqual([
-			expect.objectContaining({
+		const artifact = artifacts.artifacts[0];
+		expect({
+			artifact: expect.objectContaining({
 				title: 'Send the design',
 				userId: testActor().userId,
 				projectId: testProjectId(),
 				status: 'open',
 				createdAt: testNow,
 				updatedAt: testNow
-			})
-		]);
+			}),
+			waitingOnWasPersisted: artifact ? Object.hasOwn(artifact, 'waitingOn') : true
+		}).toEqual({
+			artifact: expect.objectContaining({
+				title: 'Send the design',
+				userId: testActor().userId,
+				projectId: testProjectId(),
+				status: 'open',
+				createdAt: testNow,
+				updatedAt: testNow
+			}),
+			waitingOnWasPersisted: false
+		});
 	});
-	it('clears the counterparty when accepting personal work', async () => {
+	it('accepting a proposal applies its artifact and transitions it to accepted', async () => {
 		const { suggestions, artifacts, accept } = setup();
-		suggestions.suggestions = [
-			suggestionBuilder({
-				payload: {
-					projectId: testProjectId(),
-					title: 'Send the design',
-					responsibility: 'mine',
-					waitingOn: 'Sam'
-				}
-			})
-		];
-		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
-		expect(artifacts.artifacts[0]?.waitingOn).toBeUndefined();
-	});
-
-	it('accepting a proposal transitions it to accepted', async () => {
-		const { suggestions, accept } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
 		const result = await accept.accept(testActor(), { suggestionId: testSuggestionId() });
-		expect(result.suggestion.status).toBe('accepted');
+		expect({
+			status: result.suggestion.status,
+			artifacts: artifacts.artifacts.map((artifact) => artifact.title)
+		}).toEqual({ status: 'accepted', artifacts: ['Send the design'] });
 	});
 
-	it('accepting a proposal applies its artifact', async () => {
-		const { suggestions, artifacts, accept } = setup();
-		suggestions.suggestions = [suggestionBuilder()];
-		await accept.accept(testActor(), { suggestionId: testSuggestionId() });
-		expect(artifacts.artifacts.map((artifact) => artifact.title)).toEqual(['Send the design']);
-	});
-
-	it('rejecting a proposal transitions it to rejected', async () => {
-		const { suggestions, reject } = setup();
-		suggestions.suggestions = [suggestionBuilder()];
-		const result = await reject.reject(testActor(), { suggestionId: testSuggestionId() });
-		expect(result.status).toBe('rejected');
-	});
-
-	it('rejecting a proposal does not apply an artifact', async () => {
+	it('rejecting a proposal transitions it without applying an artifact', async () => {
 		const { suggestions, artifacts, reject } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
-		await reject.reject(testActor(), { suggestionId: testSuggestionId() });
-		expect(artifacts.artifacts).toEqual([]);
+		const result = await reject.reject(testActor(), { suggestionId: testSuggestionId() });
+		expect({ status: result.status, artifacts: artifacts.artifacts }).toEqual({
+			status: 'rejected',
+			artifacts: []
+		});
 	});
 
 	it('an expired proposal cannot be accepted', async () => {
@@ -206,46 +194,26 @@ describe('Suggestion lifecycle invariants', () => {
 			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
 		]);
 		const result = await revert.revert(testActor(), { suggestionId: testSuggestionId() });
-		expect(result.status).toBe('reverted');
-	});
-
-	it('reverting removes the applied artifact', async () => {
-		const { suggestions, artifacts, revert } = setup();
-		suggestions.suggestions = [
-			suggestionBuilder({
-				status: 'accepted',
-				appliedArtifactId: testTodoId()
-			})
-		];
-		artifacts.artifacts = [todoBuilder()];
-		await artifacts.effects.record(testActor(), testSuggestionId(), [
-			{ kind: 'created', after: { type: 'todos', value: todoBuilder() } }
-		]);
-		await revert.revert(testActor(), { suggestionId: testSuggestionId() });
-		expect(artifacts.artifacts).toEqual([]);
+		expect({ status: result.status, remainingArtifacts: artifacts.artifacts }).toEqual({
+			status: 'reverted',
+			remainingArtifacts: []
+		});
 	});
 });
 
 describe('Suggestion transaction invariants', () => {
-	it('reports an acceptance persistence failure as an external-service error', async () => {
-		const { suggestions, accept } = setup();
-		suggestions.suggestions = [suggestionBuilder()];
-		suggestions.failAcceptance = true;
-		await expect(
-			accept.accept(testActor(), { suggestionId: testSuggestionId() })
-		).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE' });
-	});
-
-	it('rolls back an artifact when acceptance persistence fails', async () => {
+	it('rolls back a failed acceptance and reports an external-service error', async () => {
 		const { suggestions, artifacts, accept } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
 		suggestions.failAcceptance = true;
-		try {
-			await accept.accept(testActor(), { suggestionId: testSuggestionId() });
-		} catch {
-			// The invariant under test is the restored state.
-		}
-		expect(artifacts.artifacts).toEqual([]);
+		const failure = await accept.accept(testActor(), { suggestionId: testSuggestionId() }).then(
+			() => ({ kind: 'unexpected-success' }),
+			(error: { code?: string }) => ({ kind: 'failure', code: error.code })
+		);
+		expect({ failure, artifacts: artifacts.artifacts }).toEqual({
+			failure: { kind: 'failure', code: 'EXTERNAL_SERVICE' },
+			artifacts: []
+		});
 	});
 
 	it('keeps an accepted suggestion when artifact revert fails', async () => {
@@ -289,17 +257,15 @@ describe('Draw.io acceptance invariants', () => {
 	it('refuses a draw.io suggestion accepted without its review', async () => {
 		const { suggestions, accept } = setup();
 		suggestions.suggestions = [drawioSuggestion()];
-		await expect(
-			accept.acceptReviewed(testActor(), { suggestionId: testSuggestionId(9) })
-		).rejects.toMatchObject({ code: 'VALIDATION' });
-	});
-
-	it('leaves the suggestion pending when its acceptance is refused', async () => {
-		const { suggestions, accept } = setup();
-		suggestions.suggestions = [drawioSuggestion()];
-		await accept
+		const failure = await accept
 			.acceptReviewed(testActor(), { suggestionId: testSuggestionId(9) })
-			.catch(() => undefined);
-		expect(suggestions.suggestions[0]?.status).toBe('proposed');
+			.then(
+				() => ({ kind: 'unexpected-success' }),
+				(error: { code?: string }) => ({ kind: 'failure', code: error.code })
+			);
+		expect({ failure, status: suggestions.suggestions[0]?.status }).toEqual({
+			failure: { kind: 'failure', code: 'VALIDATION' },
+			status: 'proposed'
+		});
 	});
 });

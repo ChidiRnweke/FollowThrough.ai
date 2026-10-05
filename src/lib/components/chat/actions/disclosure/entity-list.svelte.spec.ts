@@ -20,19 +20,13 @@ const renderList = (entities: readonly EntityRef[], total?: number) =>
 	});
 
 describe('What came back is shown as the things themselves', () => {
-	it('names each one rather than counting them', async () => {
-		const screen = await renderList([todo('Draft the RFC'), todo('Book the review')]);
-		expect(await screen.getByText(/Draft the RFC|Book the review/).all()).toHaveLength(2);
-	});
-
-	it('makes a thing that has somewhere to go a control', async () => {
-		const screen = await renderList([todo('Draft the RFC', TODO_ID)]);
-		await expect.element(screen.getByRole('button', { name: /Draft the RFC/ })).toBeInTheDocument();
-	});
-
-	it('leaves a thing with nowhere to go looking like nothing that opens', async () => {
-		const screen = await renderList([todo('Draft the RFC')]);
-		expect(await screen.getByRole('button').all()).toHaveLength(0);
+	it('names every returned entity and makes only linkable items controls', async () => {
+		const screen = await renderList([todo('Draft the RFC', TODO_ID), todo('Book the review')]);
+		const list = screen.getByRole('list').element();
+		expect({ text: list.textContent, buttons: list.querySelectorAll('button').length }).toEqual({
+			text: expect.stringMatching(/Draft the RFC[\s\S]*Book the review/),
+			buttons: 1
+		});
 	});
 
 	it('counts the rows it did not show rather than listing them', async () => {

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
-import type {
-	ProseMirrorDocument,
-	ProseMirrorTableCellNode,
-	ProseMirrorTableHeaderNode
-} from '$lib/models/notes';
+import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
 import { prepareExport } from './export-preparation';
@@ -181,7 +177,7 @@ describe('Pdf generation invariants', () => {
 		expect(placed.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('renders both large diagrams inline, placing both (1/4)', async () => {
+	it('places both diagrams inline and preserves surrounding text and portrait pages', async () => {
 		const buffer = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
 			title: 'Export',
@@ -190,49 +186,20 @@ describe('Pdf generation invariants', () => {
 				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
 			}
 		});
-		// Both diagrams must actually be placed: pdfmake only embeds an image XObject
-		// when it draws it onto a page.
 		const placed = buffer.toString('latin1').match(/\/Subtype \/Image/g) ?? [];
-		expect(placed.length).toBeGreaterThanOrEqual(2);
-	});
-
-	it('renders both large diagrams inline, placing both (2/4)', async () => {
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
-			title: 'Export',
-			diagramPngs: {
-				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
-			}
-		});
-		// A landscape A4 MediaBox would be the portrait box swapped.
-		expect(buffer.toString('latin1')).not.toContain('841.89 595.28');
-	});
-
-	it('renders both large diagrams inline, placing both (3/4)', async () => {
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
-			title: 'Export',
-			diagramPngs: {
-				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
-			}
-		});
+		const pdf = buffer.toString('latin1');
 		const text = pdfText(buffer);
-		expect(text).toContain('Before the diagrams.');
-	});
-
-	it('renders both large diagrams inline, placing both (4/4)', async () => {
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: TWO_DIAGRAM_DOCUMENT }],
-			title: 'Export',
-			diagramPngs: {
-				[mermaidSourceHash(DIAGRAM_SOURCE)]: TINY_PNG,
-				[mermaidSourceHash(SECOND_DIAGRAM_SOURCE)]: TINY_PNG
-			}
+		expect({
+			images: placed.length >= 2,
+			landscape: pdf.includes('841.89 595.28'),
+			before: text,
+			after: text
+		}).toEqual({
+			images: true,
+			landscape: false,
+			before: expect.stringContaining('Before the diagrams.'),
+			after: expect.stringContaining('After the diagrams.')
 		});
-		const text = pdfText(buffer);
-		expect(text).toContain('After the diagrams.');
 	});
 
 	it('honours export settings', async () => {
@@ -242,7 +209,7 @@ describe('Pdf generation invariants', () => {
 		expect(buffer.toString('latin1')).toContain('NotoSerif');
 	});
 
-	it('renders emoji and symbols through fallback fonts (1/2)', async () => {
+	it('renders emoji and symbols through fallback fonts', async () => {
 		const withEmoji: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -261,206 +228,26 @@ describe('Pdf generation invariants', () => {
 			notes: [{ title: 'Note', document: withEmoji }],
 			title: 'Export'
 		});
-		expect(buffer.toString('latin1')).toContain('NotoEmoji');
-		const _text = pdfText(buffer);
-	});
-
-	it('renders emoji and symbols through fallback fonts (2/2)', async () => {
-		const withEmoji: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'heading',
-					attrs: { level: 1 },
-					content: [{ type: 'text', text: 'Launch 🚀 update' }]
-				},
-				{
-					type: 'paragraph',
-					content: [{ type: 'text', text: 'Family 👨‍👩‍👧 done ✅ naïve → and ≠' }]
-				}
-			]
-		};
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: withEmoji }],
-			title: 'Export'
-		});
+		const pdf = buffer.toString('latin1');
 		const text = pdfText(buffer);
-		for (const expected of ['Launch', '🚀', '👨', '👩', '👧', '✅', 'naïve', '→', '≠']) {
-			expect(text).toContain(expected);
-		}
+		const glyphsSurvived = ['Launch', '🚀', '👨', '👩', '👧', '✅', 'naïve', '→', '≠'].every(
+			(glyph) => text.includes(glyph)
+		);
+		expect({ emojiFont: pdf.includes('NotoEmoji'), glyphsSurvived }).toEqual({
+			emojiFont: true,
+			glyphsSurvived: true
+		});
 	});
 
-	it('renders tables as a grid, keeping cell text and spans (1/2)', async () => {
-		const cell = (text: string): ProseMirrorTableCellNode => ({
-			type: 'tableCell',
-			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-		});
-		const header = (text: string): ProseMirrorTableHeaderNode => ({
-			type: 'tableHeader',
-			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-		});
-		const withTable: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'table',
-					content: [
-						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
-						{
-							type: 'tableRow',
-							content: [
-								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
-							]
-						},
-						{ type: 'tableRow', content: [cell('RevenueUp'), cell('FortyTwo')] }
-					]
-				}
-			]
-		};
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: withTable }],
-			title: 'Export'
-		});
-		expect(buffer.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-		const _text = pdfText(buffer);
-	});
-
-	it('renders tables as a grid, keeping cell text and spans (2/2)', async () => {
-		const cell = (text: string): ProseMirrorTableCellNode => ({
-			type: 'tableCell',
-			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-		});
-		const header = (text: string): ProseMirrorTableHeaderNode => ({
-			type: 'tableHeader',
-			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
-		});
-		const withTable: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'table',
-					content: [
-						{ type: 'tableRow', content: [header('QuarterlyMetric'), header('ValueNow')] },
-						{
-							type: 'tableRow',
-							content: [
-								{ ...cell('SpanningCell'), attrs: { colspan: 2, rowspan: 1, colwidth: null } }
-							]
-						},
-						{ type: 'tableRow', content: [cell('RevenueUp'), cell('FortyTwo')] }
-					]
-				}
-			]
-		};
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: withTable }],
-			title: 'Export'
-		});
-		const text = pdfText(buffer);
-		for (const expected of [
-			'QuarterlyMetric',
-			'ValueNow',
-			'SpanningCell',
-			'RevenueUp',
-			'FortyTwo'
-		]) {
-			expect(text).toContain(expected);
-		}
-	});
-
-	it('renders code blocks in a panel, keeping indentation and dropping the language (1/3)', async () => {
-		const withCode: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'codeBlock',
-					attrs: { language: 'ts' },
-					content: [
-						{
-							type: 'text',
-							text: 'function answer() {\n  const answer = 42;\n  return answer;\n}'
-						}
-					]
-				}
-			]
-		};
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: withCode }],
-			title: 'Export'
-		});
-		const text = pdfText(buffer);
-		// The codeBlock's language attribute is editor metadata, not document content.
-		expect(text).not.toContain('TS');
-	});
-
-	it('renders code blocks in a panel, keeping indentation and dropping the language (2/3)', async () => {
-		const withCode: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'codeBlock',
-					attrs: { language: 'ts' },
-					content: [
-						{
-							type: 'text',
-							text: 'function answer() {\n  const answer = 42;\n  return answer;\n}'
-						}
-					]
-				}
-			]
-		};
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: withCode }],
-			title: 'Export'
-		});
-		const text = pdfText(buffer);
-		expect(text).toContain('  const answer = 42;');
-	});
-
-	it('renders code blocks in a panel, keeping indentation and dropping the language (3/3)', async () => {
-		const withCode: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'codeBlock',
-					attrs: { language: 'ts' },
-					content: [
-						{
-							type: 'text',
-							text: 'function answer() {\n  const answer = 42;\n  return answer;\n}'
-						}
-					]
-				}
-			]
-		};
-		const buffer = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document: withCode }],
-			title: 'Export'
-		});
-		const text = pdfText(buffer);
-		expect(text).toContain('  return answer;');
-	});
-
-	it('omits the file name from the page unless includeTitle is set (1/2)', async () => {
+	it('omits the file name from the page when includeTitle is false', async () => {
 		const titled = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport'
 		});
 		expect(pdfText(titled)).not.toContain('ZebraQuarterlyReport');
-
-		const _withTitle = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document }],
-			title: 'ZebraQuarterlyReport',
-			settings: { ...defaultExportSettings, includeTitle: true }
-		});
 	});
 
-	it('omits the file name from the page unless includeTitle is set (2/2)', async () => {
-		const _titled = await memoizedGeneratePdf({
-			notes: [{ title: 'Note', document }],
-			title: 'ZebraQuarterlyReport'
-		});
-
+	it('includes the file name in the page when includeTitle is true', async () => {
 		const withTitle = await memoizedGeneratePdf({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport',

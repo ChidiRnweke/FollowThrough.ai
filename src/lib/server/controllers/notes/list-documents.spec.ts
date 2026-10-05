@@ -33,13 +33,10 @@ describe('Note document batch invariants', () => {
 			noteIds: [testNoteId(2), testNoteId(1)]
 		});
 		expect(documents.map((document) => document.title)).toEqual(['Findings', 'Kickoff']);
-	});
-
-	it('carries the body a caller needs to render the note', async () => {
-		const { content, controller } = setup();
-		twoNotes(content);
-		const documents = await controller.listDocuments(testActor(), { noteIds: [testNoteId(1)] });
-		expect(documents[0]?.document).toEqual({ type: 'doc', content: [{ type: 'paragraph' }] });
+		expect(documents[1]?.document).toEqual({
+			type: 'doc',
+			content: [{ type: 'paragraph' }]
+		});
 	});
 
 	it('reads nothing for an empty request', async () => {

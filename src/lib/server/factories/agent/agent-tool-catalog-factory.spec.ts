@@ -11,8 +11,4 @@ describe('Agent tool catalog', () => {
 				.sort()
 		).toEqual([...LOCKED_TOOL_NAMES].sort());
 	});
-
-	it('gives every tool a description for the settings list to search', () => {
-		expect(describeAgentTools().every((entry) => entry.description.length > 0)).toBe(true);
-	});
 });

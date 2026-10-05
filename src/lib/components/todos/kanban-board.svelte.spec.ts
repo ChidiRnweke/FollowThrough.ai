@@ -50,14 +50,32 @@ describe('KanbanBoard quick-add focus', () => {
 });
 
 describe('KanbanBoard status drops', () => {
-	it('commits a tail drop when the collapsed target items omit the dragged todo', async () => {
+	it('renders and commits a tail drop into the collapsed target', async () => {
 		const done = Array.from({ length: 6 }, (_, index) => view(index + 1, 'done'));
 		const moving = view(20, 'in_progress');
 		const moves: Array<{ id: TodoId; status: TodoStatus }> = [];
 		await render(KanbanBoard, {
 			todos: [...done, moving],
+			columns: ['done'],
 			onmove: (id, status) => moves.push({ id, status })
 		});
+
+		const shadow = {
+			id: SHADOW_PLACEHOLDER_ITEM_ID as TodoId,
+			view: moving,
+			[SHADOW_ITEM_MARKER_PROPERTY_NAME]: true
+		};
+		dispatchDnd('done', 'consider', {
+			items: [...done.slice(0, 5).map((item) => ({ id: item.todo.id, view: item })), shadow],
+			info: {
+				id: moving.todo.id,
+				trigger: TRIGGERS.DRAGGED_ENTERED,
+				source: SOURCES.POINTER
+			}
+		});
+		await expect
+			.poll(() => document.querySelector('[data-todo-status="done"]')?.children.length)
+			.toBe(6);
 
 		dispatchDnd('done', 'finalize', {
 			items: done.slice(0, 5).map((item) => ({ id: item.todo.id, view: item })),
@@ -118,29 +136,5 @@ describe('KanbanBoard status drops', () => {
 		});
 
 		expect(moves).toHaveLength(0);
-	});
-
-	it('keeps the tail placeholder rendered in a collapsed target', async () => {
-		const done = Array.from({ length: 6 }, (_, index) => view(index + 1, 'done'));
-		const moving = view(20, 'in_progress');
-		await render(KanbanBoard, { todos: [...done, moving], columns: ['done'] });
-		const shadow = {
-			id: SHADOW_PLACEHOLDER_ITEM_ID as TodoId,
-			view: moving,
-			[SHADOW_ITEM_MARKER_PROPERTY_NAME]: true
-		};
-
-		dispatchDnd('done', 'consider', {
-			items: [...done.slice(0, 5).map((item) => ({ id: item.todo.id, view: item })), shadow],
-			info: {
-				id: moving.todo.id,
-				trigger: TRIGGERS.DRAGGED_ENTERED,
-				source: SOURCES.POINTER
-			}
-		});
-
-		await vi.waitFor(() => {
-			expect(document.querySelector('[data-todo-status="done"]')?.children).toHaveLength(6);
-		});
 	});
 });

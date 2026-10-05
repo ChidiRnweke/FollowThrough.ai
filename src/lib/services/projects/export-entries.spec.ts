@@ -28,26 +28,20 @@ describe('Project export entry invariants', () => {
 
 	it('files a note under the folder holding it', () => {
 		const entries = projectExportEntries([folder('Interviews', [note('Round one')])]);
-		expect(entries[0]?.path).toBe('Interviews/Round one');
+		expect({ path: entries[0]?.path, ids: entries.map((entry) => entry.id) }).toEqual({
+			path: 'Interviews/Round one',
+			ids: ['round one']
+		});
 	});
 
 	it('composes the path through nested folders', () => {
 		const entries = projectExportEntries([
 			folder('Interviews', [folder('Round two', [note('Findings')])])
 		]);
-		expect(entries[0]?.path).toBe('Interviews/Round two/Findings');
-	});
-
-	it('counts the folders a note sits under as its depth', () => {
-		const entries = projectExportEntries([
-			folder('Interviews', [folder('Round two', [note('Findings')])])
-		]);
-		expect(entries[0]?.depth).toBe(2);
-	});
-
-	it('never offers a folder as a document of its own', () => {
-		const entries = projectExportEntries([folder('Interviews', [note('Round one')])]);
-		expect(entries.map((entry) => entry.id)).toEqual(['round one']);
+		expect({ path: entries[0]?.path, depth: entries[0]?.depth }).toEqual({
+			path: 'Interviews/Round two/Findings',
+			depth: 2
+		});
 	});
 
 	it('yields nothing for a folder with no notes in it', () => {

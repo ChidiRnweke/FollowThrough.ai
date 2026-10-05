@@ -13,10 +13,7 @@ describe('Applying a note patch', () => {
 			ok: true,
 			markdown: expect.stringContaining('Ship the feature.')
 		});
-	});
 
-	it('leaves the rest of the note byte-identical', () => {
-		const result = patch(body, { oldText: 'Ship the thing.', newText: 'Ship the feature.' });
 		expect(result.ok && result.markdown).toBe(
 			'# Plan\n\nShip the feature.\n\nThen ship it again.\n'
 		);
@@ -100,20 +97,13 @@ describe('Rejecting a note patch', () => {
 			{ oldText: 'missing', newText: 'x' }
 		);
 		expect(result.ok).toBe(false);
+
+		expect(result.ok === false && result.failures[0]).toMatchObject({ editIndex: 1 });
 	});
 
 	it('reports every failing edit, not just the first', () => {
 		const result = patch(body, { oldText: 'missing', newText: 'x' }, { oldText: '', newText: 'y' });
 		expect(result.ok === false && result.failures).toHaveLength(2);
-	});
-
-	it('identifies which edit failed', () => {
-		const result = patch(
-			body,
-			{ oldText: '# Plan', newText: '# Roadmap' },
-			{ oldText: 'missing', newText: 'x' }
-		);
-		expect(result.ok === false && result.failures[0]).toMatchObject({ editIndex: 1 });
 	});
 });
 
@@ -126,16 +116,13 @@ describe('Tolerating a near-exact anchor', () => {
 	it('tolerates internal whitespace drift in the anchor', () => {
 		const result = patch('Ship  the thing.', { oldText: 'Ship the thing.', newText: 'Ship it.' });
 		expect(result.ok && result.markdown).toBe('Ship it.');
+
+		expect(result.ok && result.matchedTexts).toEqual(['Ship  the thing.']);
 	});
 
 	it('tolerates typographic punctuation in the anchor', () => {
 		const result = patch('Say \u201Chello\u201D.', { oldText: 'Say "hello".', newText: 'Done.' });
 		expect(result.ok && result.markdown).toBe('Done.');
-	});
-
-	it('reports the actual text a tolerant match replaced', () => {
-		const result = patch('Ship  the thing.', { oldText: 'Ship the thing.', newText: 'Ship it.' });
-		expect(result.ok && result.matchedTexts).toEqual(['Ship  the thing.']);
 	});
 
 	it('rejects a tolerant match that is not unique', () => {

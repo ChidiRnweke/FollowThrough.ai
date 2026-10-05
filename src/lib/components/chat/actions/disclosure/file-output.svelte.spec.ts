@@ -6,23 +6,13 @@ const renderOutput = (lines: readonly { readonly text: string; readonly lineNumb
 	render(FileOutput, { lines });
 
 describe('What a look inside the files came back with', () => {
-	it('shows each line that came back', async () => {
-		const screen = await renderOutput([{ text: 'northwind should own the rollout' }]);
-		await expect.element(screen.getByText('northwind should own the rollout')).toBeVisible();
-	});
-
-	it('says where a line sits, when that is known', async () => {
-		const screen = await renderOutput([
-			{ text: 'alpha', lineNumber: 3 },
-			{ text: 'beta', lineNumber: 4 }
-		]);
+	it('shows returned lines with their known numbers and no invented number', async () => {
+		const screen = await renderOutput([{ text: 'alpha', lineNumber: 3 }, { text: 'beta' }]);
 		const rows = Array.from(screen.getByRole('list').element().querySelectorAll('li'));
 		expect(
 			rows.map((row) => Array.from(row.children, (child) => child.textContent?.trim() ?? ''))
-		).toEqual([
-			['3', 'alpha'],
-			['4', 'beta']
-		]);
+		).toEqual([['3', 'alpha'], ['beta']]);
+		await expect.element(screen.getByText('alpha')).toBeVisible();
 	});
 
 	/**

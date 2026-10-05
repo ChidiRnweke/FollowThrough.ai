@@ -39,14 +39,10 @@ describe('Copying a selection as Markdown', () => {
 
 	it('writes a heading as Markdown syntax', () => {
 		expect(markdown).toContain('## Release notes');
-	});
 
-	it('writes a list as Markdown syntax', () => {
-		expect(markdown).toContain('one');
-	});
-
-	it('keeps the list items on separate lines', () => {
 		expect(markdown.split('\n').filter((line) => line.trim().endsWith('two'))).toHaveLength(1);
+
+		expect(markdown).toContain('one');
 	});
 });
 
@@ -88,9 +84,7 @@ describe('Copying a selection that cuts across nodes', () => {
 
 	it('still writes list syntax for a partial list selection', () => {
 		expect(selectionMarkdown(openSlice)).toContain('-');
-	});
 
-	it('keeps the text that was actually selected', () => {
 		expect(selectionMarkdown(openSlice)).toContain('item');
 	});
 });

@@ -34,23 +34,6 @@ it('expands every ancestor of an active note deeper than 32 folders', async () =
 	await expect.element(screen.getByText('Deep active note', { exact: true })).toBeVisible();
 });
 
-it('allows the reader to collapse an ancestor after opening the active note', async () => {
-	const folder = noteBuilder({
-		kind: 'folder',
-		title: 'Folder',
-		document: { type: 'doc', content: [] },
-		plainText: ''
-	});
-	const note = noteBuilder({ id: testNoteId(2), parentId: folder.id });
-	const screen = await render(ProjectTreeExpansionFixture, {
-		projects: [projectBuilder()],
-		notes: [folder, note],
-		activeNoteId: note.id
-	});
-	const toggle = screen.getByRole('button', { name: 'Folder', exact: true });
-	await toggle.click();
-	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
-});
 it('restores a saved collapsed project on the next mount', async () => {
 	const project = projectBuilder();
 	localStorage.setItem('workbench.tree.expanded', JSON.stringify([`project:${project.id}`]));
@@ -76,30 +59,6 @@ it('saves folder expansion for the next visit', async () => {
 		.toBe(JSON.stringify([folder.id]));
 });
 
-it('renders the active note beyond the old eight-level rendering cutoff', async () => {
-	const folders = Array.from({ length: 12 }, (_, index) =>
-		noteBuilder({
-			id: testNoteId(index + 1),
-			title: `Folder ${index + 1}`,
-			kind: 'folder',
-			...(index ? { parentId: testNoteId(index) } : {}),
-			document: { type: 'doc', content: [] },
-			plainText: ''
-		})
-	);
-	const active = noteBuilder({
-		id: testNoteId(13),
-		parentId: testNoteId(12),
-		title: 'Deep active note'
-	});
-	const screen = await render(ProjectTreeExpansionFixture, {
-		projects: [projectBuilder()],
-		notes: [...folders, active],
-		activeNoteId: active.id
-	});
-	await expect.element(screen.getByText('Deep active note', { exact: true })).toBeVisible();
-});
-
 function folderWithNote(folderIndex: number, title: string) {
 	const folder = noteBuilder({
 		id: testNoteId(folderIndex),
@@ -121,6 +80,7 @@ it('keeps a collapsed ancestor closed after the tree refreshes', async () => {
 	});
 	const toggle = screen.getByRole('button', { name: 'Refreshed folder', exact: true });
 	await toggle.click();
+	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
 	await screen.rerender({ notes: [folder, note] });
 	await expect.element(toggle).toHaveAttribute('aria-expanded', 'false');
 });

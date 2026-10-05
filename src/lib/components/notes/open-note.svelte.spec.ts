@@ -80,19 +80,15 @@ describe('opening a stored note', () => {
 			.toContain('Generated document');
 	});
 
-	it('renders a real stored document held in reactive state', async () => {
-		const state = $state({ document: storedDocument() });
-		const screen = openNote(state.document);
-		await settle();
-
-		expect(screen.container.querySelector('[contenteditable="true"]')?.textContent).not.toBe('');
-	});
-
-	it('puts every top-level block of it on screen', async () => {
+	it('opens a real stored document and renders each top-level block', async () => {
 		const document = storedDocument();
 		const state = $state({ document });
 		const screen = openNote(state.document);
 		await settle();
+
+		expect(screen.container.querySelector('[contenteditable="true"]')?.textContent).not.toBe('');
+
+		expect(findProseMirrorDocumentIssue(screen.component.getDocument())).toBeUndefined();
 
 		const textIn = (node: ProseMirrorNode): string[] => {
 			if (node.type === 'text') return node.text ? [node.text] : [];
@@ -139,11 +135,4 @@ describe('opening a stored note', () => {
 	// `getDocument` is what a save posts, and `remote/notes` parses it with the
 	// strict schema. A note that opens but cannot be saved is still broken, and
 	// that was true for the whole time the schema rejected `textAlign: null`.
-	it('gives back a document its own save path accepts', async () => {
-		const state = $state({ document: storedDocument() });
-		const screen = openNote(state.document);
-		await settle();
-
-		expect(findProseMirrorDocumentIssue(screen.component.getDocument())).toBeUndefined();
-	});
 });

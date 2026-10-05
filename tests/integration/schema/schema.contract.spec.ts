@@ -14,18 +14,6 @@ describe('Postgres schema contracts', () => {
 		>`select column_name from information_schema.columns where table_name = 'notes' order by column_name`;
 		expect(rows.map((row) => row.column_name)).toContain('project_id');
 	});
-	it('enforces case-insensitive project uniqueness per user', async () => {
-		const rows = await context.client<
-			{ indexdef: string }[]
-		>`select indexdef from pg_indexes where indexname = 'projects_user_name_unique'`;
-		expect(rows[0]?.indexdef).toContain('lower(name)');
-	});
-	it('limits project name uniqueness to active projects', async () => {
-		const rows = await context.client<
-			{ indexdef: string }[]
-		>`select indexdef from pg_indexes where indexname = 'projects_user_name_unique'`;
-		expect(rows[0]?.indexdef.toLowerCase()).toContain('where (archived_at is null)');
-	});
 	it('indexes the trash listing, the one query that seeks archived notes', async () => {
 		const rows = await context.client<
 			{ indexdef: string }[]

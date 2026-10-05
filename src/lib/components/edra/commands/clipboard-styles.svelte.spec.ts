@@ -6,74 +6,31 @@ import { stripPastedStyling } from './clipboard-styles';
  * `DOMParser`.
  */
 describe('Pasting console output copied from a browser', () => {
-	const console = '<span style="color: rgb(255, 0, 0)">Failed to load resource: 429</span>';
+	const copied =
+		'<div><span style="color: rgb(255, 0, 0)">Failed to load resource: 429</span>' +
+		'<table><tr><td style="color: red">a</td></tr></table>' +
+		'<ul style="color: red"><li>one</li><li>two</li></ul>' +
+		'<a href="https://example.com" class="x">docs</a>' +
+		'<p><strong>ship it</strong></p><p style="text-align: center">mid</p>' +
+		'<p class="ansi-red-fg">err</p><font color="#f00">old</font>' +
+		'<span style="font-family: Courier">mono</span>' +
+		'<span style="font-size: 28px">big</span>' +
+		'<p style="background-color: #ffff00">warn</p></div>';
 
-	it('drops the text colour', () => {
-		expect(stripPastedStyling(console)).not.toContain('color');
-	});
-
-	it('keeps the message itself', () => {
-		expect(stripPastedStyling(console)).toContain('Failed to load resource: 429');
-	});
-});
-
-describe('Pasting text styled by its source', () => {
-	it('drops a background colour', () => {
-		expect(stripPastedStyling('<p style="background-color: #ffff00">warn</p>')).not.toContain(
-			'background'
-		);
-	});
-
-	it('drops a font size', () => {
-		expect(stripPastedStyling('<span style="font-size: 28px">big</span>')).not.toContain(
-			'font-size'
-		);
-	});
-
-	it('drops a font family', () => {
-		expect(stripPastedStyling('<span style="font-family: Courier">mono</span>')).not.toContain(
-			'font-family'
-		);
-	});
-
-	it('drops a legacy font colour attribute', () => {
-		expect(stripPastedStyling('<font color="#f00">old</font>')).not.toContain('#f00');
-	});
-
-	it('drops source class names', () => {
-		expect(stripPastedStyling('<p class="ansi-red-fg">err</p>')).not.toContain('ansi-red-fg');
-	});
-
-	it('leaves the style attribute off entirely when nothing else was in it', () => {
-		expect(stripPastedStyling('<span style="color: red">x</span>')).toBe('<span>x</span>');
-	});
-
-	it('keeps a style the editor cares about', () => {
-		expect(stripPastedStyling('<p style="text-align: center">mid</p>')).toContain('text-align');
-	});
-});
-
-describe('Pasting content that carries meaning, not just looks', () => {
-	it('keeps bold', () => {
-		expect(stripPastedStyling('<p><strong>ship it</strong></p>')).toContain('<strong>');
-	});
-
-	it('keeps a link target', () => {
-		expect(stripPastedStyling('<a href="https://example.com" class="x">docs</a>')).toContain(
-			'href="https://example.com"'
-		);
-	});
-
-	it('keeps list structure', () => {
-		expect(stripPastedStyling('<ul style="color: red"><li>one</li><li>two</li></ul>')).toContain(
-			'<li>one</li><li>two</li>'
-		);
-	});
-
-	it('keeps table structure', () => {
-		expect(stripPastedStyling('<table><tr><td style="color: red">a</td></tr></table>')).toContain(
-			'<td>a</td>'
-		);
+	it('keeps content and semantic formatting while removing source styling', () => {
+		const cleaned = stripPastedStyling(copied);
+		expect(cleaned).toContain('Failed to load resource: 429');
+		expect(cleaned).toContain('<td>a</td>');
+		expect(cleaned).toContain('<li>one</li><li>two</li>');
+		expect(cleaned).toContain('href="https://example.com"');
+		expect(cleaned).toContain('<strong>ship it</strong>');
+		expect(cleaned).toContain('text-align: center');
+		expect(cleaned).not.toContain('ansi-red-fg');
+		expect(cleaned).not.toContain('#f00');
+		expect(cleaned).not.toContain('font-family');
+		expect(cleaned).not.toContain('font-size');
+		expect(cleaned).not.toContain('background');
+		expect(cleaned).not.toContain('color:');
 	});
 });
 

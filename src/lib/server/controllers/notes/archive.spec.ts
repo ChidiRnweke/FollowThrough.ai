@@ -59,23 +59,11 @@ describe('Note archive invariants', () => {
 	});
 
 	it('archives the note through the controller', async () => {
-		const { notes, controller } = setup();
+		const { notes, controller, indexer } = setup();
 		notes.notes = [noteBuilder()];
 		const result = await controller.archive(testActor(), { noteId: testNoteId() });
 		expect(result.note.archivedAt).toBeDefined();
-	});
-
-	it('removes the archived note from the active list', async () => {
-		const { notes, controller } = setup();
-		notes.notes = [noteBuilder()];
-		await controller.archive(testActor(), { noteId: testNoteId() });
 		expect(await notes.listActive(testActor())).toEqual([]);
-	});
-
-	it('reindexes the archived note so retrieval removes its chunks', async () => {
-		const { notes, controller, indexer } = setup();
-		notes.notes = [noteBuilder()];
-		await controller.archive(testActor(), { noteId: testNoteId() });
 		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
 

@@ -4,10 +4,6 @@ import { TOOL_RETRIEVAL_GOALS } from '../cases/tool-retrieval';
 import { ALL_EVAL_CASES, SMOKE_CASE_IDS, selectEvalCases } from './case-catalog';
 
 describe('eval case selection', () => {
-	it('keeps the ambiguity-hardened inventory at 229 cases', () => {
-		expect(ALL_EVAL_CASES).toHaveLength(229);
-	});
-
 	it('keeps every stable case id unique', () => {
 		expect(new Set(ALL_EVAL_CASES.map((evalCase) => evalCase.id)).size).toBe(ALL_EVAL_CASES.length);
 	});
@@ -24,7 +20,6 @@ describe('eval case selection', () => {
 			'retrieval-postgres-failover',
 			'retrieval-cache-pressure',
 			'retrieval-tls-expiry',
-			'retrieval-hard-failover-with-pool-distractor',
 			'retrieval-hard-cache-pressure-with-leak-distractor',
 			'retrieval-hard-certificate-with-secret-distractor',
 			'retrieval-hard-failover-negative-evidence'

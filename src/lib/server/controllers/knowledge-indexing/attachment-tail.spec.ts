@@ -7,10 +7,7 @@ import {
 } from '$lib/server/services/knowledge-search/indexing';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import { Embeddings, type EmbeddingClient } from '$lib/server/services/knowledge-search/embeddings';
-import {
-	InMemoryEmbeddingClient,
-	InMemorySearchRepository
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
@@ -24,23 +21,6 @@ const text =
 describe('complete attachment search', () => {
 	it('makes text beyond fifty chunks available to literal search before embedding', async () => {
 		const repository = new InMemorySearchRepository();
-		const attachment = view('text/plain', 'report.txt').attachment;
-		await new ContentIndex(
-			repository,
-			new InMemoryEmbeddingClient().model,
-			new TokenAwareChunker(700, 50)
-		).attachments.index(testActor(), attachment, text);
-		const matches = await repository.search(testActor(), 'amberfalcon', 10);
-		expect(
-			matches.map(({ document }) => ({
-				beyondOldLimit: document.chunkIndex >= 50,
-				path: document.attachmentPath
-			}))
-		).toEqual([{ beyondOldLimit: true, path: 'report.txt' }]);
-	});
-
-	it('embeds the complete document in bounded batches without dropping its tail', async () => {
-		const repository = new InMemorySearchRepository();
 		const batchTokens: number[] = [];
 		const provider: EmbeddingClient = {
 			embeddings: {
@@ -53,11 +33,17 @@ describe('complete attachment search', () => {
 			}
 		};
 		const client = new Embeddings('test-key', { client: provider, model: 'test-embedding' });
+		const attachment = view('text/plain', 'report.txt').attachment;
 		await new ContentIndex(
 			repository,
 			client.model,
 			new TokenAwareChunker(700, 50)
-		).attachments.index(testActor(), view('text/plain').attachment, text);
+		).attachments.index(testActor(), attachment, text);
+		const matches = await repository.search(testActor(), 'amberfalcon', 10);
+		const literalMatch = matches.map(({ document }) => ({
+			beyondOldLimit: document.chunkIndex >= 50,
+			path: document.attachmentPath
+		}));
 		await new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			client,
@@ -75,11 +61,13 @@ describe('complete attachment search', () => {
 			document.content.includes('amberfalcon')
 		);
 		expect({
+			literalMatch,
 			usesMultipleBatches: batchTokens.length > 1,
 			respectsBatchBudget: batchTokens.every((tokens) => tokens <= 30_000),
 			pending: (await repository.listPendingSources(10)).length,
 			tailVector: tail?.document.embedding
 		}).toEqual({
+			literalMatch: [{ beyondOldLimit: true, path: 'report.txt' }],
 			usesMultipleBatches: true,
 			respectsBatchBudget: true,
 			pending: 0,

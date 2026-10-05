@@ -12,10 +12,6 @@ const titles = (query: string) =>
 	rankHeadingTargets(headings, query).map((heading) => heading.textContent);
 
 describe('Ranking headings for a # query', () => {
-	it('offers a heading that starts with the query first', () => {
-		expect(titles('des')[0]).toBe('Design review');
-	});
-
 	/** A word-start match is what the author meant; a mid-word one rarely is. */
 	it('ranks a word-start match above a mid-word one', () => {
 		expect(titles('des')).toEqual([
@@ -23,6 +19,10 @@ describe('Ranking headings for a # query', () => {
 			'Fundamentals of design',
 			'Redesigned onboarding'
 		]);
+
+		expect(titles('des')).not.toContain('Deployment runbook');
+
+		expect(titles('des')[0]).toBe('Design review');
 	});
 
 	it('breaks ties towards the shallower heading', () => {
@@ -35,10 +35,6 @@ describe('Ranking headings for a # query', () => {
 
 	it('ignores case', () => {
 		expect(titles('DESIGN')[0]).toBe('Design review');
-	});
-
-	it('excludes headings that do not match at all', () => {
-		expect(titles('des')).not.toContain('Deployment runbook');
 	});
 
 	it('offers everything for an empty query', () => {

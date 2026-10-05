@@ -32,14 +32,16 @@ describe('Reading a Markdown archive', () => {
 		expect(outcome.ok && outcome.result.entries).toHaveLength(1);
 	});
 
-	it('keeps each file’s folder path', () => {
-		const outcome = read({ 'a/b/one.md': '# One' });
-		expect(outcome.ok && outcome.result.entries[0]?.segments).toEqual(['a', 'b', 'one.md']);
-	});
-
-	it('accepts .markdown as well as .md', () => {
-		const outcome = read({ 'one.markdown': '# One' });
-		expect(outcome.ok && outcome.result.entries).toHaveLength(1);
+	it('reads Markdown extensions and preserves each file path in one archive', () => {
+		const outcome = read({ 'a/b/one.md': '# One', 'two.markdown': '# Two' });
+		if (!outcome.ok) throw new Error(`Archive rejected: ${outcome.rejection.reason}`);
+		expect({
+			paths: outcome.result.entries.map((file) => file.path),
+			segments: outcome.result.entries.map((file) => file.segments)
+		}).toEqual({
+			paths: ['a/b/one.md', 'two.markdown'],
+			segments: [['a', 'b', 'one.md'], ['two.markdown']]
+		});
 	});
 
 	it('reports a non-Markdown file as skipped rather than dropping it silently', () => {
@@ -97,24 +99,15 @@ describe('Choosing a note’s title', () => {
 		);
 	});
 
-	it('ignores the frontmatter title', () => {
+	/** The filename wins, while the document heading remains body content. */
+	it('uses the filename instead of frontmatter and keeps a leading heading in the body', () => {
 		const note = parseMarkdownNote(
-			entry('one.md', '---\ntitle: From Frontmatter\n---\n# From Heading\n\nBody.')
+			entry('some-file.md', '---\ntitle: From Frontmatter\n---\n# From Heading\n\nBody.')
 		);
-		expect(note.title).toBe('one');
-	});
-
-	it('ignores a leading heading', () => {
-		expect(parseMarkdownNote(entry('some-file.md', '# From Heading\n\nBody.')).title).toBe(
-			'some file'
-		);
-	});
-
-	/** The heading is the document's first line, not the note's name, so it stays. */
-	it('keeps a leading heading in the body', () => {
-		expect(parseMarkdownNote(entry('one.md', '# Title\n\nBody.')).markdown).toBe(
-			'# Title\n\nBody.'
-		);
+		expect({ title: note.title, markdown: note.markdown }).toEqual({
+			title: 'some file',
+			markdown: '# From Heading\n\nBody.'
+		});
 	});
 
 	it('keeps a heading that is not the first block', () => {
@@ -130,9 +123,7 @@ describe('Choosing a note’s title', () => {
 describe('Handling frontmatter', () => {
 	it('strips frontmatter from the body rather than rendering it as prose', () => {
 		expect(splitFrontmatter('---\ntags: [a]\n---\nBody.').body.trim()).toBe('Body.');
-	});
 
-	it('records the keys it found', () => {
 		expect(splitFrontmatter('---\ntags: [a]\nauthor: Ada\n---\nBody.').keys).toEqual([
 			'tags',
 			'author'

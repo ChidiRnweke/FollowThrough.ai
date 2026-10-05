@@ -60,14 +60,12 @@ describe('The collapsed row says what the model is thinking about', () => {
 		);
 	});
 
-	it('truncates a sentence too long to sit in a one-line row (1/2)', () => {
+	it('truncates a long sentence at the display limit with an ellipsis', () => {
 		const title = reasoningTitle(parseReasoning('a'.repeat(200)));
-		expect(title.length).toBeLessThanOrEqual(61);
-	});
-
-	it('truncates a sentence too long to sit in a one-line row (2/2)', () => {
-		const title = reasoningTitle(parseReasoning('a'.repeat(200)));
-		expect(title.endsWith('…')).toBe(true);
+		expect({ length: title.length, ellipsis: title.endsWith('…') }).toEqual({
+			length: 61,
+			ellipsis: true
+		});
 	});
 
 	it('says "Reasoning" when there is nothing to name it by', () => {

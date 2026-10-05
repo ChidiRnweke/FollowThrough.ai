@@ -4,11 +4,6 @@ import { marked } from 'marked';
 import ChatMarkdown from './chat-markdown.svelte';
 
 describe('chat markdown', () => {
-	it('renders Markdown structure', async () => {
-		const screen = await render(ChatMarkdown, { content: '## Rendered title' });
-		await expect.element(screen.getByRole('heading', { name: 'Rendered title' })).toBeVisible();
-	});
-
 	it('sanitizes generated HTML before rendering it', async () => {
 		const screen = await render(ChatMarkdown, {
 			content: '<img src="x" alt="Unsafe image" onerror="alert(1)">'
@@ -55,15 +50,11 @@ it('renders multiple Mermaid diagrams in a message', async () => {
 });
 
 it('renders a streamed diagram only once its fence closes', async () => {
-	const content = '```mermaid\nflowchart LR\nA --> B\n';
+	const content = '```mermaid\nflowchart LR\nA -->';
 	const screen = await render(ChatMarkdown, { content });
-	await screen.rerender({ content: content + '```' });
-	await expect.element(screen.getByRole('img', { name: 'Mermaid diagram' })).toBeVisible();
-});
-
-it('keeps incomplete Mermaid fences as code', async () => {
-	const screen = await render(ChatMarkdown, { content: '```mermaid\nflowchart LR\nA -->' });
 	await expect.element(screen.getByText('flowchart LR\nA -->', { exact: true })).toBeVisible();
+	await screen.rerender({ content: content + ' B\n```' });
+	await expect.element(screen.getByRole('img', { name: 'Mermaid diagram' })).toBeVisible();
 });
 
 it('shows the source and explanation when a diagram is invalid', async () => {

@@ -23,16 +23,6 @@ describe('attachments and the note document revision', () => {
 		await service.complete(testActor(), UPLOAD_ID);
 
 		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
-	});
-
-	it('writes no note revision snapshot for a completed upload', async () => {
-		const { service, repository, notes } = setup();
-		const note = noteBuilder();
-		notes.notes.push(note);
-		repository.upload = uploadFor(note.id);
-
-		await service.complete(testActor(), UPLOAD_ID);
-
 		expect(notes.revisions).toEqual([]);
 	});
 

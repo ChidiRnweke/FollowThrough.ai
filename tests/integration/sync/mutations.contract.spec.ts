@@ -125,8 +125,8 @@ describe('synchronized domain mutations on PostgreSQL', () => {
 });
 
 describe('imported note metadata', () => {
-	it('applies explicitly edited metadata with the guarded document', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9105');
+	it('preserves explicitly edited metadata across a later document-only save', async () => {
+		const { owner, note, controller, synchronization, baseEtag } = await setup('9105');
 		const outcome = await controller.synchronize(owner, {
 			operationId: crypto.randomUUID(),
 			baseEtag,
@@ -140,19 +140,15 @@ describe('imported note metadata', () => {
 				sectionNumbering: true
 			}
 		});
-		const rows = await context.client<
-			{ title: string; pinned: boolean; numbering: boolean }[]
-		>`select title, is_pinned as pinned, section_numbering as numbering from notes where id = ${note.id}`;
-		expect({ kind: outcome.kind, note: rows[0] }).toEqual({
-			kind: 'applied',
-			note: { title: 'Offline title', pinned: true, numbering: true }
-		});
-	});
-	it('retains metadata omitted from an imported document edit', async () => {
-		const { owner, note, controller, baseEtag } = await setup('9106');
-		await controller.synchronize(owner, {
+		const resource = await synchronization.objects.read(
+			owner,
+			{ type: 'notes', id: [note.id] },
+			null
+		);
+		if (resource.kind !== 'found') throw new Error('Updated note was not readable');
+		const omittedOutcome = await controller.synchronize(owner, {
 			operationId: crypto.randomUUID(),
-			baseEtag,
+			baseEtag: resource.snapshot.etag,
 			command: {
 				kind: 'saveNote',
 				noteId: note.id,
@@ -161,9 +157,13 @@ describe('imported note metadata', () => {
 			}
 		});
 		const rows = await context.client<
-			{ title: string; pinned: boolean }[]
-		>`select title, is_pinned as pinned from notes where id = ${note.id}`;
-		expect(rows[0]).toEqual({ title: note.title, pinned: note.isPinned });
+			{ title: string; pinned: boolean; numbering: boolean }[]
+		>`select title, is_pinned as pinned, section_numbering as numbering from notes where id = ${note.id}`;
+		expect({ kind: outcome.kind, omittedKind: omittedOutcome.kind, note: rows[0] }).toEqual({
+			kind: 'applied',
+			omittedKind: 'applied',
+			note: { title: 'Offline title', pinned: true, numbering: true }
+		});
 	});
 });
 

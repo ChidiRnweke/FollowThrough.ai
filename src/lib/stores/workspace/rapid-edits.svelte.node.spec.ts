@@ -72,24 +72,20 @@ describe('quick successive edits to one resource', () => {
 			'high'
 		]);
 	});
-	it('sends the second edit against the version the first produced', async () => {
-		const { edit, server, settle } = await setup();
-		await Promise.all([edit({ status: 'done' }), edit({ priority: 'high' })]);
-		await settle();
-		expect(server.requests.map((request) => request.baseEtag)).toEqual([
-			syncEtag(1n),
-			syncEtag(2n)
-		]);
-	});
-	it('stores both edits on the server without a review', async () => {
+	it('sends successive edits against their parent versions and stores both without review', async () => {
 		const { edit, server, settle, key, resources } = await setup();
 		await Promise.all([edit({ status: 'done' }), edit({ priority: 'high' })]);
 		await settle();
 		const stored = server.records.get(key)?.value;
 		expect({
+			baseEtags: server.requests.map((request) => request.baseEtag),
 			pending: resources.pending.length,
 			server: stored?.type === 'todos' && [stored.value.status, stored.value.priority]
-		}).toEqual({ pending: 0, server: ['done', 'high'] });
+		}).toEqual({
+			baseEtags: [syncEtag(1n), syncEtag(2n)],
+			pending: 0,
+			server: ['done', 'high']
+		});
 	});
 });
 

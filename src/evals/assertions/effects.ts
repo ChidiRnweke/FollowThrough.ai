@@ -97,16 +97,25 @@ export async function expectNoteCreated(
 export async function expectSuggestionPending(
 	lab: Lab,
 	actor: ActorContext,
-	kind: SuggestionKind
+	kind: SuggestionKind,
+	matchesMemoryContent?: (content: string) => boolean
 ): Promise<EffectVerdict> {
 	const { groups } = await lab.controllers.suggestions().list(actor, { status: 'proposed' });
-	const kinds = groups.flatMap((group) => group.suggestions.map((view) => view.suggestion.kind));
-	const hit = kinds.includes(kind);
+	const suggestions = groups.flatMap((group) => group.suggestions.map((view) => view.suggestion));
+	const matchingKind = suggestions.filter((suggestion) => suggestion.kind === kind);
+	const hit = matchesMemoryContent
+		? matchingKind.some(
+				(suggestion) =>
+					suggestion.kind === 'memory' &&
+					typeof suggestion.payload.content === 'string' &&
+					matchesMemoryContent(suggestion.payload.content)
+			)
+		: matchingKind.length > 0;
 	return {
 		passed: hit,
 		explanation: hit
-			? `a "${kind}" suggestion is pending review`
-			: `no pending "${kind}" suggestion; found ${kinds.length ? kinds.join(', ') : 'none'}`
+			? `a matching "${kind}" suggestion is pending review`
+			: `no matching pending "${kind}" suggestion; found ${matchingKind.length ? matchingKind.map((suggestion) => (suggestion.kind === 'memory' ? suggestion.payload.content : suggestion.kind)).join('; ') : 'none'}`
 	};
 }
 

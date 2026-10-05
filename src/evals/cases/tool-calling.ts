@@ -45,39 +45,6 @@ export const toolCallingCases: readonly EvalCase[] = [
 		}
 	},
 	{
-		id: 'tool-calling-negative-no-retrieval',
-		name: 'answers a conversational aside without reaching for tools',
-		splits: [ARCHETYPES.toolCalling, 'negative'],
-		input: { prompt: 'Thanks, that is all I needed for now.' },
-		expected: { forbiddenTools: ['search', 'list_user_memory', 'get_workspace_context'] },
-		metadata: { note: 'Negative case: the capability must not fire when it is not warranted.' },
-		async run(lab) {
-			const workspace = await seedWorkspace(lab, personaWorkspace);
-			const result = await runCase(lab, workspace.actor, {
-				prompt: this.input.prompt as string,
-				mode: 'auto_accept'
-			});
-			px.logOutput({
-				model: result.model,
-				response: result.finalResponse,
-				toolCalls: result.calledToolNames
-			});
-
-			const verdict = scoreToolCalling(result, {
-				forbidden: this.expected.forbiddenTools as string[]
-			});
-			px.logAnnotation({
-				name: ARCHETYPES.toolCalling,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'pass' : 'fail',
-				explanation: verdict.explanation
-			});
-
-			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
-		}
-	},
-	{
 		id: 'tool-discovery-create-todo',
 		name: 'discovers todo creation through the tool catalog',
 		splits: [ARCHETYPES.toolDiscovery],

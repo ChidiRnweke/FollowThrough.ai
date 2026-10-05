@@ -59,13 +59,9 @@ test('choosing a block inserts it', async ({ page }) => {
 	await typeSlash(page, 'mermaid');
 	await page.getByRole('button', { name: 'Mermaid Diagram' }).click();
 	await expect(page.locator('[data-note-pane] .diagram-node').first()).toBeVisible();
+
+	await expect(page.locator('[data-note-pane] .tiptap')).not.toContainText('/mermaid');
 });
 
 // The typed `/query` has to go: leaving it behind strands the text above the
 // block the command just inserted.
-test('choosing a block removes the typed query', async ({ page }) => {
-	await openFreshNote(page);
-	await typeSlash(page, 'mermaid');
-	await page.getByRole('button', { name: 'Mermaid Diagram' }).click();
-	await expect(page.locator('[data-note-pane] .tiptap')).not.toContainText('/mermaid');
-});

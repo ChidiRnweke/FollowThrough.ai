@@ -11,9 +11,15 @@ const synced: SyncIndicatorInput = {
 	failure: null
 };
 it('shows offline pending changes without hiding their durable status', () => {
-	expect(syncIndicator({ ...synced, online: false, pending: 2 })).toMatchObject({
+	const indicator = syncIndicator({ ...synced, online: false, pending: 2 });
+	expect({
+		kind: indicator.kind,
+		badge: indicator.badge,
+		description: indicator.description
+	}).toEqual({
 		kind: 'offline',
-		badge: 2
+		badge: 2,
+		description: "2 changes will sync when you're back online."
 	});
 });
 it('keeps incomplete downloads visible after a successful journal pull', () => {
@@ -24,9 +30,4 @@ it('does not add a badge during an ordinary online save', () => {
 });
 it('names a single decision in the singular', () => {
 	expect(syncIndicator({ ...synced, review: 1 }).headline).toBe('1 change needs a decision');
-});
-it('describes offline pending work with its actual count', () => {
-	expect(syncIndicator({ ...synced, online: false, pending: 2 }).description).toBe(
-		"2 changes will sync when you're back online."
-	);
 });

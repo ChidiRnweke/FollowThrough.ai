@@ -25,55 +25,23 @@ const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddin
 	});
 
 describe('Deferred embedding write path', () => {
-	it('stages accepted text even when the embedding provider is unavailable', async () => {
+	it('stages deferred text for lexical but not semantic search', async () => {
 		const repository = new InMemorySearchRepository();
 		const client = new InMemoryEmbeddingClient();
-		client.failure = new Error('provider unavailable');
+		const actor = testActor();
+		const note = noteBuilder({ plainText: 'Kubernetes ingress notes' });
+		await deferredIndexer(repository, client).index(actor, note);
 
-		await deferredIndexer(repository, client).index(
-			testActor(),
-			noteBuilder({ plainText: 'Kubernetes ingress notes' })
+		const pending = await repository.listPending(actor, { kind: 'note', noteId: note.id });
+		const lexical = await repository.search(actor, 'ingress', 10);
+		const semantic = await repository.searchByEmbedding(actor, [1, 2, 3], 10);
+		expect({ pending: pending.length, lexical: lexical.length, semantic: semantic.length }).toEqual(
+			{
+				pending: 1,
+				lexical: 1,
+				semantic: 0
+			}
 		);
-
-		expect(await repository.search(testActor(), 'ingress', 10)).toHaveLength(1);
-	});
-
-	it('leaves the staged chunk awaiting a vector', async () => {
-		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
-
-		await deferredIndexer(repository, client).index(
-			testActor(),
-			noteBuilder({ plainText: 'Kubernetes ingress notes' })
-		);
-
-		expect(
-			await repository.listPending(testActor(), { kind: 'note', noteId: noteBuilder().id })
-		).toHaveLength(1);
-	});
-
-	it('makes the new text findable lexically before it is embedded', async () => {
-		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
-
-		await deferredIndexer(repository, client).index(
-			testActor(),
-			noteBuilder({ plainText: 'Kubernetes ingress notes' })
-		);
-
-		expect(await repository.search(testActor(), 'ingress', 10)).toHaveLength(1);
-	});
-
-	it('keeps the chunk out of semantic search until it has a vector', async () => {
-		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
-
-		await deferredIndexer(repository, client).index(
-			testActor(),
-			noteBuilder({ plainText: 'Kubernetes ingress notes' })
-		);
-
-		expect(await repository.searchByEmbedding(testActor(), [1, 2, 3], 10)).toHaveLength(0);
 	});
 });
 
@@ -88,20 +56,10 @@ describe('Embedding backfill', () => {
 
 		await backfill(repository, client).run();
 
-		expect(await repository.searchByEmbedding(testActor(), [1, 2, 3], 10)).toHaveLength(1);
-	});
-
-	it('leaves nothing pending once it has run', async () => {
-		const repository = new InMemorySearchRepository();
-		const client = new InMemoryEmbeddingClient();
-		await deferredIndexer(repository, client).index(
-			testActor(),
-			noteBuilder({ plainText: 'Kubernetes ingress notes' })
-		);
-
-		await backfill(repository, client).run();
-
-		expect(await repository.listPendingSources(10)).toEqual([]);
+		expect({
+			semanticCount: (await repository.searchByEmbedding(testActor(), [1, 2, 3], 10)).length,
+			pending: await repository.listPendingSources(10)
+		}).toEqual({ semanticCount: 1, pending: [] });
 	});
 
 	it('does nothing when there is no backlog', async () => {
@@ -127,49 +85,36 @@ describe('Semantic continuity across an edit', () => {
 		return { repository, client, indexer };
 	};
 
-	it('still answers semantic search with the previous text after an edit', async () => {
+	it('preserves old semantic results while replacement text takes over lexical search', async () => {
 		const { repository, indexer } = await indexAndBackfill();
 
 		await indexer.index(testActor(), noteBuilder({ plainText: 'Rewritten egress notes' }));
 
-		const matches = await repository.searchByEmbedding(testActor(), [1, 2, 3], 10);
-		expect(matches.map((match) => match.document.content)).toEqual(['Original ingress notes']);
+		const semantic = await repository.searchByEmbedding(testActor(), [1, 2, 3], 10);
+		const lexicalCurrent = await repository.search(testActor(), 'egress', 10);
+		const lexicalSuperseded = await repository.search(testActor(), 'ingress', 10);
+		expect({
+			semantic: semantic.map((match) => match.document.content),
+			lexicalCurrent: lexicalCurrent.map((match) => match.document.content),
+			lexicalSuperseded: lexicalSuperseded.map((match) => match.document.content)
+		}).toEqual({
+			semantic: ['Original ingress notes'],
+			lexicalCurrent: ['Rewritten egress notes'],
+			lexicalSuperseded: []
+		});
 	});
 
-	it('serves the new text lexically while the old text is still embedded', async () => {
-		const { repository, indexer } = await indexAndBackfill();
-
-		await indexer.index(testActor(), noteBuilder({ plainText: 'Rewritten egress notes' }));
-
-		const matches = await repository.search(testActor(), 'egress', 10);
-		expect(matches.map((match) => match.document.content)).toEqual(['Rewritten egress notes']);
-	});
-
-	it('hides the superseded text from lexical search', async () => {
-		const { repository, indexer } = await indexAndBackfill();
-
-		await indexer.index(testActor(), noteBuilder({ plainText: 'Rewritten egress notes' }));
-
-		expect(await repository.search(testActor(), 'ingress', 10)).toEqual([]);
-	});
-
-	it('swaps semantic search onto the new text once the worker catches up', async () => {
+	it('swaps semantic search to the new text and retires the old row after backfill', async () => {
 		const { repository, client, indexer } = await indexAndBackfill();
 		await indexer.index(testActor(), noteBuilder({ plainText: 'Rewritten egress notes' }));
 
 		await backfill(repository, client).run();
 
 		const matches = await repository.searchByEmbedding(testActor(), [1, 2, 3], 10);
-		expect(matches.map((match) => match.document.content)).toEqual(['Rewritten egress notes']);
-	});
-
-	it('retires the superseded row once its replacement is embedded', async () => {
-		const { repository, client, indexer } = await indexAndBackfill();
-		await indexer.index(testActor(), noteBuilder({ plainText: 'Rewritten egress notes' }));
-
-		await backfill(repository, client).run();
-
-		expect(repository.documents).toHaveLength(1);
+		expect({
+			semantic: matches.map((match) => match.document.content),
+			remainingRows: repository.documents.length
+		}).toEqual({ semantic: ['Rewritten egress notes'], remainingRows: 1 });
 	});
 
 	it('keeps answering semantically when a further edit lands mid-backfill', async () => {

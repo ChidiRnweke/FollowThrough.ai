@@ -40,7 +40,11 @@ describe('complete resource replication', () => {
 		await cache.refresh();
 		const restarted = new ResourceCache('user-a', { repository, transport });
 		restarted.setOnline(false);
-		expect(await restarted.open('note:1')).toEqual({ kind: 'ready', value: first.value });
+		const opened = await restarted.open('note:1');
+		expect({ opened, accessed: restarted.access('note:1') }).toEqual({
+			opened: { kind: 'ready', value: first.value },
+			accessed: { kind: 'ready', value: first.value }
+		});
 	});
 	it('opens cached content while a newer page is still downloading', async () => {
 		const { transport, cache } = setup();
@@ -50,9 +54,13 @@ describe('complete resource replication', () => {
 		const pulling = cache.refresh();
 		await gate.started;
 		const opened = await cache.open('note:1');
+		const accessed = cache.access('note:1');
 		gate.release();
 		await pulling;
-		expect(opened).toEqual({ kind: 'ready', value: first.value });
+		expect({ opened, accessed }).toEqual({
+			opened: { kind: 'ready', value: first.value },
+			accessed: { kind: 'ready', value: first.value }
+		});
 	});
 	it('preserves cached content when synchronization fails', async () => {
 		const { transport, cache } = setup();

@@ -150,13 +150,6 @@ describe('Recorded proposal undo', () => {
 			before
 		]);
 	});
-	it('refuses to overwrite an intervening edit', async () => {
-		const { service, repository, created } = await replacement();
-		repository.put(created);
-		await expect(service.restore(testActor(), acceptedMemory('update'))).rejects.toThrow(
-			'its saved data has changed'
-		);
-	});
 	it('does not partially reverse a replacement when either record changed', async () => {
 		const { service, repository, created, deleted } = await replacement();
 		repository.put(created);
@@ -164,8 +157,11 @@ describe('Recorded proposal undo', () => {
 			() => null,
 			(error) => error
 		);
-		expect({ failed: failure !== null, records: [...repository.records.values()] }).toEqual({
-			failed: true,
+		expect({
+			message: failure instanceof Error ? failure.message : undefined,
+			records: [...repository.records.values()]
+		}).toEqual({
+			message: 'Cannot undo this suggestion because its saved data has changed.',
 			records: [deleted, created]
 		});
 	});

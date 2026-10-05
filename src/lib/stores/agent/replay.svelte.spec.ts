@@ -67,16 +67,6 @@ describe('chat replay checkpoints', () => {
 			.poll(() => ({ connection: store.connection, status: store.entries.at(-1)?.status }))
 			.toEqual({ connection: 'detached', status: 'completed' });
 	});
-	it('keeps the previous cursor when session storage rejects a checkpoint', async () => {
-		const { store, storage, transport } = await setup();
-		storage.writable = false;
-		const failed = await transport.deliver(frame).then(
-			() => ({ kind: 'success' as const }),
-			() => ({ kind: 'failure' as const })
-		);
-		if (failed.kind !== 'failure') throw new Error('Storage failure was not exercised');
-		expect(store.cursor).toBe('0');
-	});
 	it('does not append text twice when replay retries a failed checkpoint', async () => {
 		const { store, storage, transport } = await setup();
 		storage.writable = false;
@@ -87,7 +77,10 @@ describe('chat replay checkpoints', () => {
 		if (failed.kind !== 'failure') throw new Error('Storage failure was not exercised');
 		storage.writable = true;
 		await transport.deliver(frame);
-		expect(entryText(store.entries.at(-1)!)).toBe('Saved once.');
+		expect({ cursor: store.cursor, text: entryText(store.entries.at(-1)!) }).toEqual({
+			cursor: '1',
+			text: 'Saved once.'
+		});
 	});
 	it('reports unreadable saved activity and checkpoints its cursor', async () => {
 		const { store, storage, transport } = await setup();

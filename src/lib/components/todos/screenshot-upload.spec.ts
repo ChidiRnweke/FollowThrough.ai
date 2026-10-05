@@ -61,47 +61,40 @@ const screenshot = (): File =>
 	new File([new Uint8Array([1, 2, 3])], 'shot.png', { type: 'image/png' });
 
 describe('uploadTodoScreenshot', () => {
-	it('returns the stable content url to link from the description', async () => {
-		const { transport } = recordingTransport();
-		const url = await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport);
-		expect(url).toBe('/api/attachments/attachment-1/content');
-	});
-
 	// Namespacing by todo is what keeps two todos in one project from colliding
 	// on the project-scoped unique attachment path.
-	it('namespaces the object path under the todo', async () => {
-		const { transport, initiated } = recordingTransport();
-		await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport);
-		expect(initiated[0]?.path).toMatch(new RegExp(`^todos/${testTodoId()}/\\d+-shot\\.png$`));
+	it('uploads a project screenshot under its todo and returns its stable content link', async () => {
+		const { transport, initiated, completed } = recordingTransport();
+		const url = await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport);
+		expect({
+			path: initiated[0]?.path,
+			noteId: initiated[0]?.noteId,
+			completed,
+			url
+		}).toEqual({
+			path: expect.stringMatching(new RegExp(`^todos/${testTodoId()}/\\d+-shot\\.png$`)),
+			noteId: undefined,
+			completed: [{ uploadId: 'upload-1', todoId: testTodoId() }],
+			url: '/api/attachments/attachment-1/content'
+		});
 	});
 
-	it('initiates as a project attachment rather than a note one', async () => {
-		const { transport, initiated } = recordingTransport();
-		await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport);
-		expect(initiated[0]?.noteId).toBeUndefined();
-	});
-
-	it('completes through the todo-linking command', async () => {
-		const { transport, completed } = recordingTransport();
-		await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport);
-		expect(completed).toEqual([{ uploadId: 'upload-1', todoId: testTodoId() }]);
-	});
-
-	it('does not complete an upload whose bytes were rejected', async () => {
-		const { transport, completed } = recordingTransport({ ok: false });
-		await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport).catch(
-			() => undefined
-		);
-		expect(completed).toEqual([]);
-	});
-
-	it('surfaces the storage error detail', async () => {
-		const { transport } = recordingTransport({
+	it('surfaces storage rejection and does not complete the upload', async () => {
+		const { transport, completed } = recordingTransport({
 			ok: false,
 			body: '<Error><Message>Entity too large</Message></Error>'
 		});
-		await expect(
-			uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport)
-		).rejects.toThrow('Entity too large');
+		let error: unknown;
+		try {
+			await uploadTodoScreenshot(testTodoId(), testProjectId(), screenshot(), transport);
+		} catch (caught) {
+			error = caught;
+		}
+		expect({ error, completed }).toEqual({
+			error: expect.objectContaining({
+				message: 'Object storage rejected the screenshot: Entity too large'
+			}),
+			completed: []
+		});
 	});
 });

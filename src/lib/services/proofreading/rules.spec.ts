@@ -87,9 +87,7 @@ describe('proofreadSuggestion', () => {
 
 	it('empties the span for a removal', () => {
 		expect(proofreadSuggestion('remove', 'the', 'the').replacement).toBe('');
-	});
 
-	it('labels a removal rather than showing an empty menu row', () => {
 		expect(proofreadSuggestion('remove', 'the', 'the').label).toBe('Remove');
 	});
 

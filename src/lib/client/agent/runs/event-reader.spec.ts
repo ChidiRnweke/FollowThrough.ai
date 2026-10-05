@@ -42,18 +42,16 @@ describe('Reading one frame off the run event stream', () => {
 		});
 	});
 
-	it('turns the serialized timestamp back into a date', () => {
+	it('reads the event payload and converts its serialized timestamp', () => {
 		const result = readAgentRunEventRecord(frame);
-		expect(result.kind === 'readable' && result.createdAt.toISOString()).toBe(
-			'2026-08-31T10:00:00.000Z'
-		);
-	});
-
-	it('reads the event the frame carries', () => {
-		const result = readAgentRunEventRecord(frame);
-		expect(result.kind === 'readable' && result.event).toEqual({
-			type: 'text_delta',
-			text: 'Found two.'
+		expect(
+			result.kind === 'readable' && {
+				event: result.event,
+				createdAt: result.createdAt.toISOString()
+			}
+		).toEqual({
+			event: { type: 'text_delta', text: 'Found two.' },
+			createdAt: '2026-08-31T10:00:00.000Z'
 		});
 	});
 

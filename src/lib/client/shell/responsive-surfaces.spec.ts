@@ -30,27 +30,20 @@ describe('agent invocation surface', () => {
 	it('opens chat beside content when the docked panel fits', () => {
 		const surface = new FakeAskAgentSurface();
 		createAskAgent(surface)(request);
-		expect(surface.opened).toBe(true);
-	});
-
-	it('stages the prompt in the mounted docked chat', () => {
-		const surface = new FakeAskAgentSurface();
-		createAskAgent(surface)(request);
-		expect(surface.staged).toEqual(request);
+		expect({ opened: surface.opened, staged: surface.staged }).toEqual({
+			opened: true,
+			staged: request
+		});
 	});
 
 	it('carries the prompt when chat needs a full-page navigation', () => {
 		const surface = new FakeAskAgentSurface();
 		surface.fits = false;
 		createAskAgent(surface)(request);
-		expect(surface.carried).toEqual(request);
-	});
-
-	it('navigates to a new chat when the docked panel does not fit', () => {
-		const surface = new FakeAskAgentSurface();
-		surface.fits = false;
-		createAskAgent(surface)(request);
-		expect(surface.href).toBe('/chats/new');
+		expect({ carried: surface.carried, href: surface.href }).toEqual({
+			carried: request,
+			href: '/chats/new'
+		});
 	});
 
 	it('preserves selection context for the eventual send', () => {

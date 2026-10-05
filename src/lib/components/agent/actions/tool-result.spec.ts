@@ -31,12 +31,12 @@ describe('Collections are counted before they are listed', () => {
 		{ id: 'b', title: 'Meeting notes' }
 	];
 
-	it('counts what came back', () => {
-		expect(summariseToolResult(notes).headline).toBe('2 results');
-	});
-
-	it('names the items it found', () => {
-		expect(summariseToolResult(notes).lines).toEqual(['Runtime notes', 'Meeting notes']);
+	it('counts the collection and names each item', () => {
+		const result = summariseToolResult(notes);
+		expect({ headline: result.headline, lines: result.lines }).toEqual({
+			headline: '2 results',
+			lines: ['Runtime notes', 'Meeting notes']
+		});
 	});
 
 	it('states an empty search plainly instead of hiding it', () => {
@@ -59,14 +59,12 @@ describe('A recoverable failure is the headline', () => {
 		recovery: 'Call search_tools to discover the capability.'
 	};
 
-	it('leads with what went wrong', () => {
-		expect(summariseToolResult(output).headline).toBe('No tool named "save_notes".');
-	});
-
-	it('keeps the way out of it', () => {
-		expect(summariseToolResult(output).lines).toEqual([
-			'Call search_tools to discover the capability.'
-		]);
+	it('leads with what went wrong and keeps the recovery step', () => {
+		const result = summariseToolResult(output);
+		expect({ headline: result.headline, lines: result.lines }).toEqual({
+			headline: 'No tool named "save_notes".',
+			lines: ['Call search_tools to discover the capability.']
+		});
 	});
 });
 
@@ -77,24 +75,19 @@ describe('Transport bookkeeping is not a result', () => {
 		).toEqual(['Title: Runtime notes']);
 	});
 
-	it('counts the tools a search found rather than naming them', () => {
-		expect(
-			summariseToolResult([{ name: 'create_note' }, { name: 'save_note' }], 'search_tools').headline
-		).toBe('Found 2 tools it can use');
-	});
-
-	it('never lists the internal names a tool search returned', () => {
-		expect(
-			summariseToolResult([{ name: 'create_note' }, { name: 'save_note' }], 'search_tools').lines
-		).toEqual([]);
+	it('counts the tool results without listing their internal names', () => {
+		const result = summariseToolResult(
+			[{ name: 'create_note' }, { name: 'save_note' }],
+			'search_tools'
+		);
+		expect({ headline: result.headline, lines: result.lines }).toEqual({
+			headline: 'Found 2 tools it can use',
+			lines: []
+		});
 	});
 });
 
 describe('Records read as labelled fields', () => {
-	it('labels a returned field in the reader terms', () => {
-		expect(summariseToolResult({ title: 'Runtime notes' }).lines).toEqual(['Title: Runtime notes']);
-	});
-
 	it('keeps identifiers out of the fields a person reads', () => {
 		expect(
 			summariseToolResult({ title: 'Runtime', projectId: 'e0d3f07c-460b-40c3-9b8c-a8dc00ddc565' })

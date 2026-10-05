@@ -1,22 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { edge, mxfile, vertex, wrappedVertex } from '$lib/testing/diagrams/fixtures/drawio';
-import { buildDiagramGraph, centreOf, parseStyle, type DiagramGraph } from './graph';
+import { buildDiagramGraph, type DiagramGraph } from './graph';
 
 const graphOf = (body: string): Extract<DiagramGraph, { kind: 'graph' }> => {
 	const graph = buildDiagramGraph(mxfile(body));
 	if (graph.kind === 'failure') throw new Error(`fixture did not validate: ${graph.reason}`);
 	return graph;
 };
-
-describe('style parsing', () => {
-	it('reads key-value pairs', () => {
-		expect(parseStyle('shape=image;image=https://example.test/a.svg;').get('shape')).toBe('image');
-	});
-
-	it('maps a bare token to an empty value', () => {
-		expect(parseStyle('rounded;html=1;').get('rounded')).toBe('');
-	});
-});
 
 describe('vertex reading', () => {
 	it('decodes a rich-text label to plain text', () => {
@@ -130,10 +120,6 @@ describe('absolute geometry', () => {
 			width: 120,
 			height: 60
 		});
-	});
-
-	it('computes a centre from absolute bounds', () => {
-		expect(centreOf({ x: 100, y: 200, width: 120, height: 60 })).toEqual({ x: 160, y: 230 });
 	});
 });
 

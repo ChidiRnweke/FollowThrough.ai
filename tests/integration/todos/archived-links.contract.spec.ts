@@ -43,20 +43,16 @@ const archivedLink = async (suffix: string) => {
 
 it('persists completion after the linked note is archived through its controller', async () => {
 	const { owner, note, controller, records, todo } = await archivedLink('20901');
-	await controller.update(owner, { todoId: todo.id, status: 'done' });
+	await controller.update(owner, {
+		todoId: todo.id,
+		status: 'done',
+		title: 'Send the revised draft'
+	});
 	expect(await records.findById(owner, todo.id)).toMatchObject({
 		status: 'done',
+		title: 'Send the revised draft',
 		linkedNoteId: note.id,
 		completedAt: expect.any(String)
-	});
-});
-
-it('persists text changes without discarding the archived link', async () => {
-	const { owner, note, controller, records, todo } = await archivedLink('20902');
-	await controller.update(owner, { todoId: todo.id, title: 'Send the revised draft' });
-	expect(await records.findById(owner, todo.id)).toMatchObject({
-		title: 'Send the revised draft',
-		linkedNoteId: note.id
 	});
 });
 

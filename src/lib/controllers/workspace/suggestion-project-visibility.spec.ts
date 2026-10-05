@@ -50,8 +50,14 @@ const setup = (archived: boolean, proposal = suggestion) => {
 		)
 	);
 };
-it('hides profile memory proposals from an archived source project', () => {
-	expect(setup(true).memorySuggestions()).toEqual([]);
+it('hides an archived source proposal from all active projections while preserving its row', () => {
+	const views = setup(true);
+	expect({
+		proposals: views.memorySuggestions(),
+		shellCount: views.shell(user.id)?.pendingSuggestionCount,
+		todayCount: views.today('2026-09-27' as LocalDate).pendingSuggestionCount,
+		stored: views.get('suggestions', suggestion.id)
+	}).toEqual({ proposals: [], shellCount: 0, todayCount: 0, stored: suggestion });
 });
 it('keeps profile memory proposals from an active source project', () => {
 	expect(
@@ -59,12 +65,6 @@ it('keeps profile memory proposals from an active source project', () => {
 			.memorySuggestions()
 			.map((view) => view.suggestion.id)
 	).toEqual([suggestion.id]);
-});
-it('excludes archived origins from shell attention counts', () => {
-	expect(setup(true).shell(user.id)?.pendingSuggestionCount).toBe(0);
-});
-it('excludes archived origins from today attention counts', () => {
-	expect(setup(true).today('2026-09-27' as LocalDate).pendingSuggestionCount).toBe(0);
 });
 it('excludes archived project payloads even without a source note', () => {
 	const proposal = memorySuggestionBuilder({
@@ -76,7 +76,4 @@ it('excludes archived project payloads even without a source note', () => {
 		}
 	});
 	expect(setup(true, proposal).shell(user.id)?.pendingSuggestionCount).toBe(0);
-});
-it('retains the hidden proposal record', () => {
-	expect(setup(true).get('suggestions', suggestion.id)).toEqual(suggestion);
 });

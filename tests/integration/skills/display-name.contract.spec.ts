@@ -73,13 +73,16 @@ describe('Skill display name authority', () => {
 		await controller.update(owner, { noteId: note.id, displayName: 'Ship checklist' });
 		expect((await records.findByNoteId(owner, note.id))?.note.title).toBe('Ship checklist');
 	});
-	it('publishes both sync resources when the note title changes', async () => {
+	it('publishes the renamed skill and note resources with the derived database name', async () => {
 		const { owner, note, catalog, journal, transactionRunner } = await setup('12202');
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
 		const batch = await journal.pullPage(owner, initial.cursor);
-		expect(batch.records).toEqual(
-			expect.arrayContaining([
+		expect({
+			resources: batch.records,
+			storedName: await context.client`select name from skills where note_id = ${note.id}`
+		}).toEqual({
+			resources: expect.arrayContaining([
 				{
 					key: workspaceResourceKey({ type: 'notes', id: [note.id] }),
 					resource: expect.objectContaining({ kind: 'found' })
@@ -88,15 +91,9 @@ describe('Skill display name authority', () => {
 					key: workspaceResourceKey({ type: 'skills', id: [note.id] }),
 					resource: expect.objectContaining({ kind: 'found' })
 				}
-			])
-		);
-	});
-	it('keeps the legacy sync name equal to the edited note title', async () => {
-		const { owner, note, catalog, transactionRunner } = await setup('12203');
-		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
-		expect(await context.client`select name from skills where note_id = ${note.id}`).toEqual([
-			{ name: 'Ship checklist' }
-		]);
+			]),
+			storedName: [{ name: 'Ship checklist' }]
+		});
 	});
 	it('prevents a metadata writer from changing the derived display name', async () => {
 		const { note } = await setup('12204');
@@ -104,21 +101,6 @@ describe('Skill display name authority', () => {
 		expect(await context.client`select name from skills where note_id = ${note.id}`).toEqual([
 			{ name: note.title }
 		]);
-	});
-	it('rolls back the name projection with a rejected rename', async () => {
-		const { owner, note, catalog, transactionRunner } = await setup('12205');
-		await transactionRunner
-			.run(async () => {
-				await saveNoteDraft(catalog, transactionRunner, owner, {
-					...note,
-					title: 'Ship checklist'
-				});
-				throw new Error('Reject rename');
-			})
-			.catch(() => ({ kind: 'failure' }));
-		expect(
-			await context.client`select notes.title, skills.name from notes join skills on skills.note_id = notes.id where notes.id = ${note.id}`
-		).toEqual([{ title: note.title, name: note.title }]);
 	});
 	it('rolls back both sync resources with a rejected rename', async () => {
 		const { owner, note, catalog, transactionRunner, journal } = await setup('12206');
@@ -132,10 +114,13 @@ describe('Skill display name authority', () => {
 				throw new Error('Reject rename');
 			})
 			.catch(() => ({ kind: 'failure' }));
-		expect(await journal.pullPage(owner, initial.cursor)).toEqual({
-			cursor: initial.cursor,
-			records: [],
-			hasMore: false
+		expect({
+			batch: await journal.pullPage(owner, initial.cursor),
+			projection:
+				await context.client`select notes.title, skills.name from notes join skills on skills.note_id = notes.id where notes.id = ${note.id}`
+		}).toEqual({
+			batch: { cursor: initial.cursor, records: [], hasMore: false },
+			projection: [{ title: note.title, name: note.title }]
 		});
 	});
 });

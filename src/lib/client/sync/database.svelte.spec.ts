@@ -22,27 +22,23 @@ afterEach(async () => {
 });
 
 describe('workspace transaction ownership', () => {
-	it('preserves the original application failure after aborting a transaction', async () => {
-		const database = await open();
-		const failure = new Error('The saved resource could not be validated');
-		const pending = database.transaction('rw', 'records', async () => {
-			await database.table('records').put({ accountId: 'alice', key: 'note:1' });
-			throw failure;
-		});
-		await expect(pending).rejects.toBe(failure);
-	});
 	it('rolls back all writes when application work fails', async () => {
 		const database = await open();
+		const failure = new Error('Could not finish settlement');
+		let observed: unknown;
 		await database
 			.transaction('rw', ['records', 'meta'], async () => {
 				await database.table('records').put({ accountId: 'alice', key: 'note:1' });
 				await database.table('meta').put({ key: 'checkpoint', cursor: '5' });
-				throw new Error('Could not finish settlement');
+				throw failure;
 			})
-			.catch(() => ({ kind: 'failure' }));
-		expect(
-			await Promise.all(['records', 'meta'].map((store) => database.table(store).toArray()))
-		).toEqual([[], []]);
+			.catch((error: unknown) => {
+				observed = error;
+			});
+		const records = await Promise.all(
+			['records', 'meta'].map((store) => database.table(store).toArray())
+		);
+		expect({ observed, records }).toEqual({ observed: failure, records: [[], []] });
 	});
 });
 

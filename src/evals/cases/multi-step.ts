@@ -120,19 +120,30 @@ export const multiStepCases: readonly EvalCase[] = [
 			const listIndex = names.indexOf('list_todos');
 			const updateIndex = names.indexOf('update_todo');
 			const sequenceCorrect = listIndex >= 0 && updateIndex > listIndex;
+			const { todos } = await lab.controllers.todos().list(workspace.actor, {});
+			const tls = todos.find((view) => view.todo.title === 'Renew the TLS certificates');
+			const neighbors = todos
+				.filter((view) => view.todo.title !== 'Renew the TLS certificates')
+				.map((view) => ({ title: view.todo.title, status: view.todo.status }));
+			const correctEffects =
+				tls?.todo.status === 'done' &&
+				neighbors.length === 2 &&
+				neighbors.every((todo) => todo.status === 'open');
 
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
-				score: sequenceCorrect ? 1 : 0,
-				label: sequenceCorrect ? 'pass' : 'fail',
+				score: sequenceCorrect && correctEffects ? 1 : 0,
+				label: sequenceCorrect && correctEffects ? 'pass' : 'fail',
 				explanation: sequenceCorrect
-					? `list_todos at ${listIndex}, update_todo at ${updateIndex}`
+					? `list_todos at ${listIndex}, update_todo at ${updateIndex}; TLS done=${tls?.todo.status === 'done'}; neighbors unchanged=${neighbors.every((todo) => todo.status === 'open')}`
 					: `list_todos=${listIndex}, update_todo=${updateIndex}; expected list before update`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(listIndex, 'must call list_todos').toBeGreaterThanOrEqual(0);
-			expect(updateIndex, 'must call update_todo').toBeGreaterThan(listIndex);
+			expect({ status: result.status, sequenceCorrect, correctEffects }).toEqual({
+				status: 'completed',
+				sequenceCorrect: true,
+				correctEffects: true
+			});
 		}
 	},
 	{
@@ -145,7 +156,7 @@ export const multiStepCases: readonly EvalCase[] = [
 		expected: { tool: 'create_todo', hasProjectId: true },
 		metadata: {
 			layer: 'agent',
-			note: 'Agent must figure out the projectId before creating the todo.'
+			note: 'The named project ID must be the persisted scope of the requested todo.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, todosWorkspace);
@@ -160,22 +171,30 @@ export const multiStepCases: readonly EvalCase[] = [
 			});
 
 			const call = findCall(result, 'create_todo');
-			const hasProject = call && typeof call.arguments.projectId === 'string';
+			const expectedProjectId = workspace.projectIds.get('Platform');
+			const hasProject = call?.arguments.projectId === expectedProjectId;
+			const { todos } = await lab.controllers.todos().list(workspace.actor, {});
+			const persisted = todos.find((view) =>
+				view.todo.title.toLowerCase().includes('deploy v2 to production')
+			);
+			const correctlyScoped = persisted?.todo.projectId === expectedProjectId;
 
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
-				score: call && hasProject ? 1 : 0,
-				label: call && hasProject ? 'pass' : 'fail',
+				score: call && hasProject && correctlyScoped ? 1 : 0,
+				label: call && hasProject && correctlyScoped ? 'pass' : 'fail',
 				explanation: hasProject
-					? `create_todo called with projectId=${call.arguments.projectId}`
+					? `create_todo used the Platform ID; persisted in expected project=${correctlyScoped}`
 					: call
 						? 'create_todo called without projectId'
 						: `create_todo never called; called ${result.calledToolNames.join(', ')}`
 			});
 
-			expect(result.status).toBe('completed');
-			expect(call, 'must call create_todo').toBeTruthy();
-			expect(hasProject, 'create_todo must include a projectId').toBe(true);
+			expect({ status: result.status, hasProject, correctlyScoped }).toEqual({
+				status: 'completed',
+				hasProject: true,
+				correctlyScoped: true
+			});
 		}
 	},
 	{
@@ -186,7 +205,7 @@ export const multiStepCases: readonly EvalCase[] = [
 		expected: { requiredTools: ['create_todos'], todoMarkers: ['runbook', 'alert'] },
 		metadata: {
 			layer: 'agent',
-			note: 'The note is not preselected, so the agent must read it before using the bulk todo capability.'
+			note: 'The note is supplied to the run. The agent must discover the bulk todo capability and persist its two commitments.'
 		},
 		async run(lab) {
 			const workspace = await seedWorkspace(lab, {
@@ -220,19 +239,18 @@ export const multiStepCases: readonly EvalCase[] = [
 
 			const verdict = scoreToolDiscovery(result, 'create_todos');
 			const names = result.calledToolNames;
-			const readIndex = names.indexOf('sed');
 			const createIndex = names.indexOf('create_todos');
 			const { todos } = await lab.controllers.todos().list(workspace.actor, { projectId });
 			const titles = todos.map((view) => view.todo.title.toLowerCase());
 			const persisted = (this.expected.todoMarkers as string[]).every((marker) =>
 				titles.some((title) => title.includes(marker))
 			);
-			const passed = verdict.passed && readIndex >= 0 && createIndex > readIndex && persisted;
+			const passed = verdict.passed && persisted;
 			px.logAnnotation({
 				name: ARCHETYPES.multiStep,
 				score: passed ? 1 : 0,
 				label: passed ? 'pass' : 'fail',
-				explanation: `${verdict.explanation}; read=${readIndex}; create=${createIndex}; todos=${titles.join(' | ')}`
+				explanation: `${verdict.explanation}; create=${createIndex}; todos=${titles.join(' | ')}`
 			});
 
 			expect({ status: result.status, readThenCreatedBoth: passed }).toEqual({

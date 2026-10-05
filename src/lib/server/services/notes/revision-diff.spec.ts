@@ -30,11 +30,7 @@ describe('Diffing note revision texts', () => {
 		const before = revisionText({ plainText: 'keep\nold line' });
 		const after = revisionText({ revision: 2, plainText: 'keep\nnew line\nextra' });
 		expect(diffNoteRevisionTexts(before, after).addedLines).toBe(2);
-	});
 
-	it('counts the lines a change removes', () => {
-		const before = revisionText({ plainText: 'keep\nold line' });
-		const after = revisionText({ revision: 2, plainText: 'keep\nnew line\nextra' });
 		expect(diffNoteRevisionTexts(before, after).removedLines).toBe(1);
 	});
 

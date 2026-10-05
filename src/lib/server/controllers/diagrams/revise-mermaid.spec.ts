@@ -109,29 +109,14 @@ describe('Revise Mermaid workflow invariants', () => {
 	});
 
 	it('persists rendered output for a Mermaid revision', async () => {
-		const { controller } = setup();
+		const { controller, diagrams } = setup();
 		const result = await controller.reviseMermaid(testActor(), {
 			diagramId: mermaidBuilder().id,
 			instruction: 'add queue'
 		});
 		expect(result.diagram.renderedSvg).toContain('<svg>');
-	});
 
-	it('indexes the saved Mermaid revision', async () => {
-		const { controller, diagrams } = setup();
-		await controller.reviseMermaid(testActor(), {
-			diagramId: mermaidBuilder().id,
-			instruction: 'add queue'
-		});
-		expect(diagrams.indexedIds).toEqual([mermaidBuilder().id]);
-	});
-
-	it('preserves the existing title when the provider submits source without a new title', async () => {
-		const { controller } = setup();
-		const result = await controller.reviseMermaid(testActor(), {
-			diagramId: mermaidBuilder().id,
-			instruction: 'add queue'
-		});
 		expect(result.diagram.title).toBe(mermaidBuilder().title);
+		expect(diagrams.indexedIds).toEqual([mermaidBuilder().id]);
 	});
 });

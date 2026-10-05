@@ -93,56 +93,31 @@ const setup = () => {
 };
 
 describe('Memory proposal orchestration invariants', () => {
-	it('creates a memory suggestion for review', async () => {
-		const { controller } = setup();
-		const result = await controller.propose(testActor(), addInput());
-		expect(result.suggestion.kind).toBe('memory');
-	});
-
-	it('retains the caller provenance on the proposal', async () => {
-		const { controller } = setup();
-		const result = await controller.propose(testActor(), addInput());
-		expect(result.suggestion.provenanceId).toBe(testProvenanceId());
-	});
-
-	it('leaves the entry uncreated without an authorizing trust policy', async () => {
+	it('records provenance for a reviewable proposal without creating the entry', async () => {
 		const { entries, controller } = setup();
-		await controller.propose(testActor(), addInput());
-		expect(entries.entries).toEqual([]);
+		const result = await controller.propose(testActor(), addInput());
+		expect({
+			kind: result.suggestion.kind,
+			provenanceId: result.suggestion.provenanceId,
+			entries: entries.entries
+		}).toEqual({ kind: 'memory', provenanceId: testProvenanceId(), entries: [] });
 	});
 
-	it('applies the entry when the memory pipeline is trusted', async () => {
+	it('applies and links a trusted suggestion to its entry', async () => {
 		const { entries, trust, controller } = setup();
 		trust.autoAccept = true;
-		await controller.propose(testActor(), addInput());
-		expect(entries.entries).toHaveLength(1);
-	});
-
-	it('marks an auto-applied suggestion as auto-accepted', async () => {
-		const { trust, controller } = setup();
-		trust.autoAccept = true;
 		const result = await controller.propose(testActor(), addInput());
-		expect(result.suggestion.isAutoAccepted).toBe(true);
-	});
-
-	it('links an auto-accepted suggestion to the created entry', async () => {
-		const { trust, controller } = setup();
-		trust.autoAccept = true;
-		const result = await controller.propose(testActor(), addInput());
-		expect(result.suggestion.appliedArtifactId).toBe(result.appliedEntry?.id);
-	});
-
-	it('keeps a user-scoped proposal free of any project', async () => {
-		const { controller } = setup();
-		const result = await controller.propose(testActor(), {
-			provenanceId: testProvenanceId(),
-			scope: 'user',
-			operation: 'add',
-			content: 'I lead the platform team.'
+		expect({
+			entryCount: entries.entries.length,
+			accepted: result.suggestion.isAutoAccepted,
+			appliedArtifactId: result.suggestion.appliedArtifactId,
+			entryId: result.appliedEntry?.id
+		}).toEqual({
+			entryCount: 1,
+			accepted: true,
+			appliedArtifactId: entries.entries[0]?.id,
+			entryId: entries.entries[0]?.id
 		});
-		expect(
-			result.suggestion.kind === 'memory' ? result.suggestion.payload.projectId : 'wrong-kind'
-		).toBeUndefined();
 	});
 
 	it('creates a profile entry when a trusted user-scoped proposal is applied', async () => {

@@ -80,39 +80,20 @@ describe('Note revision invariants', () => {
 });
 
 describe('Note save transaction invariants', () => {
-	it('reports an indexing failure as an external-service error', async () => {
+	it('reports indexing failure and rolls back the note and revision state', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
 		content.failIndex = true;
-		await expect(
-			controller.save(testActor(), { note: { ...note, plainText: 'Changed' } })
-		).rejects.toMatchObject({ code: 'EXTERNAL_SERVICE' });
-	});
-
-	it('rolls back the note when indexing fails', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder();
-		content.notes = [note];
-		content.failIndex = true;
-		try {
-			await controller.save(testActor(), { note: { ...note, plainText: 'Changed' } });
-		} catch {
-			// The restored note is the invariant under test.
-		}
-		expect(content.notes[0]?.currentRevision).toBe(1);
-	});
-
-	it('does not create revisions even when indexing fails', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder();
-		content.notes = [note];
-		content.failIndex = true;
-		try {
-			await controller.save(testActor(), { note: { ...note, plainText: 'Changed' } });
-		} catch {
-			// The restored revision collection is the invariant under test.
-		}
+		const outcome = await controller
+			.save(testActor(), { note: { ...note, plainText: 'Changed' } })
+			.then(
+				() => ({ kind: 'success' as const }),
+				(error: Error) => ({ kind: 'failure' as const, code: (error as { code?: string }).code })
+			);
+		expect(outcome).toEqual({ kind: 'failure', code: 'EXTERNAL_SERVICE' });
+		expect(content.notes[0]?.currentRevision).toBe(note.currentRevision);
+		expect(content.notes[0]?.id).toBe(note.id);
 		expect(content.recordedRevisions).toEqual([]);
 	});
 
@@ -122,19 +103,6 @@ describe('Note save transaction invariants', () => {
 		await expect(
 			controller.save(testActor(2), { note: noteBuilder({ userId: testActor(2).userId }) })
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-
-	it('preserves the note identity after rollback', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder();
-		content.notes = [note];
-		content.failIndex = true;
-		try {
-			await controller.save(testActor(), { note: { ...note, title: 'Changed' } });
-		} catch {
-			// The restored identity is the invariant under test.
-		}
-		expect(content.notes[0]?.id).toBe(testNoteId());
 	});
 });
 
@@ -166,13 +134,7 @@ describe('Note publish invariants', () => {
 		content.notes = [note];
 		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
 		expect(content.recordedRevisions).toHaveLength(1);
-	});
 
-	it('creates a revision snapshot on publish (2/2)', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder();
-		content.notes = [note];
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
 		expect(content.recordedRevisions[0]?.revision).toBe(note.currentRevision);
 	});
 
@@ -185,16 +147,7 @@ describe('Note publish invariants', () => {
 			baseEtag: noteEtag(note)
 		});
 		expect(result.note.publishedRevision).toBe(note.currentRevision);
-	});
 
-	it('sets publishedRevision to currentRevision on the note (2/2)', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder();
-		content.notes = [note];
-		const result = await controller.publish(testActor(), {
-			noteId: note.id,
-			baseEtag: noteEtag(note)
-		});
 		expect(result.note.publishedAt).toBeDefined();
 	});
 
@@ -212,21 +165,6 @@ describe('Note publish invariants', () => {
 });
 
 describe('Note discard draft invariants', () => {
-	it('restores content from the last published revision (1/2)', async () => {
-		const { content, controller } = setup();
-		const note = noteBuilder({ plainText: 'Original' });
-		content.notes = [note];
-		// Publish the original
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
-		// Edit (draft save)
-		const saved = await controller.save(testActor(), {
-			note: { ...content.notes[0]!, plainText: 'Draft change' }
-		});
-		expect(saved.note.plainText).toBe('Draft change');
-		// Discard
-		const _discarded = await controller.discardDraft(testActor(), { noteId: note.id });
-	});
-
 	it('restores content from the last published revision (2/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Original' });

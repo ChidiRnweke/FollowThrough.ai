@@ -111,14 +111,16 @@ describe('Task creation rules', () => {
 		});
 		expect(todo.id).toBe(id);
 	});
-	it('trims a todo title at creation', async () => {
+	it('normalizes the title and clears an irrelevant counterparty at creation', async () => {
 		const { controller } = setup();
 		const { todo } = await controller.create(testActor(), {
 			projectId: testProjectId(),
 			title: '  Send design  ',
-			responsibility: 'mine'
+			responsibility: 'mine',
+			waitingOn: 'Sam'
 		});
 		expect(todo.title).toBe('Send design');
+		expect(todo.waitingOn).toBeUndefined();
 	});
 	it('allows waiting-on work without a named counterparty', async () => {
 		const { controller } = setup();

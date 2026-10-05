@@ -12,19 +12,22 @@ const entryNames = (archive: Buffer): string[] =>
 		.sort();
 
 describe('Bundle packing invariants', () => {
-	it('writes one entry per file', () => {
-		const archive = packZip([file('One.pdf'), file('Two.pdf'), file('Three.pdf')]);
-		expect(entryNames(archive)).toEqual(['One.pdf', 'Three.pdf', 'Two.pdf']);
-	});
-
-	it('keeps the bytes each file was packed with', () => {
-		const archive = packZip([file('Notes.pdf', 'the body')]);
-		expect(new AdmZip(archive).getEntry('Notes.pdf')?.getData().toString()).toBe('the body');
-	});
-
-	it('keeps the folder structure a path describes', () => {
-		const archive = packZip([file('Interviews/Round two/Notes.pdf')]);
-		expect(entryNames(archive)).toEqual(['Interviews/Round two/Notes.pdf']);
+	it('writes one entry per file and preserves each file path and body', () => {
+		const archive = packZip([
+			file('One.pdf', 'one body'),
+			file('Interviews/Round two/Notes.pdf', 'nested body'),
+			file('Two.pdf', 'two body')
+		]);
+		const zip = new AdmZip(archive);
+		expect({
+			rootBytes: zip.getEntry('One.pdf')?.getData().toString(),
+			nestedBytes: zip.getEntry('Interviews/Round two/Notes.pdf')?.getData().toString(),
+			paths: entryNames(archive)
+		}).toEqual({
+			rootBytes: 'one body',
+			nestedBytes: 'nested body',
+			paths: ['Interviews/Round two/Notes.pdf', 'One.pdf', 'Two.pdf']
+		});
 	});
 
 	it('drops traversal segments from a path', () => {

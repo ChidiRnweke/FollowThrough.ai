@@ -13,16 +13,21 @@ import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/d
 describe('AgentReplayVirtualizer', () => {
 	it('sinks a large tool result and leaves a readable pointer', async () => {
 		const files = new InMemoryAgentFiles();
+		const content = 'large result '.repeat(5000);
 		const result = await new AgentReplayVirtualizer(files).virtualize(
 			testActor(),
 			testConversationId(),
-			stringResultItem('search', 'call-1', 'large result '.repeat(5000))
+			stringResultItem('search', 'call-1', content)
 		);
 
-		expect(result).toMatchObject({
-			output: expect.stringMatching(
+		expect({
+			pointer: result.type === 'function_call_result' && result.output,
+			stored: (await files.list(testActor()))[0]?.content
+		}).toEqual({
+			pointer: expect.stringMatching(
 				/^\[content stored at \/conversations\/.*\/tool-results\/call-1\/item.output-/
-			)
+			),
+			stored: content
 		});
 	});
 
@@ -34,18 +39,6 @@ describe('AgentReplayVirtualizer', () => {
 		);
 
 		expect(() => JSON.parse(result.type === 'function_call' ? result.arguments : '')).not.toThrow();
-	});
-
-	it('persists the exact bytes behind the pointer', async () => {
-		const files = new InMemoryAgentFiles();
-		const content = 'large result '.repeat(5000);
-		await new AgentReplayVirtualizer(files).virtualize(
-			testActor(),
-			testConversationId(),
-			stringResultItem('search', 'call-3', content)
-		);
-
-		expect((await files.list(testActor()))[0]?.content).toBe(content);
 	});
 
 	it('preserves diagram rows for the canvas recovery reader', async () => {

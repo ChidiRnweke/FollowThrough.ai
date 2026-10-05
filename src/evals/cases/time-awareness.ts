@@ -32,31 +32,9 @@ const PAGO_PAGO = 'Pacific/Pago_Pago';
 const isoLocalDate = (now: Date, timeZone: string): string =>
 	new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
 
-/** A human date like "Saturday, August 1, 2026", what the judge can verify against. */
-const longLocalDate = (now: Date, timeZone: string): string =>
-	new Intl.DateTimeFormat('en-US', { timeZone, dateStyle: 'full' }).format(now);
-
-/** Locale-aware but deterministic: accepts equivalent en-GB renderings, including 10 August 2026. */
-export const statesLocalCalendarDate = (response: string, now: Date, timeZone: string): boolean => {
-	// Presentation Markdown is not part of the date. Models commonly emphasize
-	// the answer, so compare the visible text rather than its source delimiters.
-	const normalized = response.replace(/[*_~`]/g, '').toLocaleLowerCase('en-GB');
-	const formats: Intl.DateTimeFormatOptions[] = [
-		{ dateStyle: 'full' },
-		{ dateStyle: 'long' },
-		{ dateStyle: 'medium' },
-		{ dateStyle: 'short' }
-	];
-	const candidates = ['en-GB', 'en-US'].flatMap((locale) =>
-		formats.map((options) =>
-			new Intl.DateTimeFormat(locale, { timeZone, ...options })
-				.format(now)
-				.toLocaleLowerCase(locale)
-		)
-	);
-	candidates.push(isoLocalDate(now, timeZone));
-	return candidates.some((candidate) => normalized.includes(candidate));
-};
+/** These date-only evals ask for ISO output so UTC and local dates cannot be conflated. */
+export const matchesLocalIsoDate = (response: string, expected: string): boolean =>
+	response.trim() === expected;
 
 export const hasCreatedRange = (arguments_: AgentPayloadObject | undefined): boolean =>
 	typeof arguments_?.createdAfter === 'string' || typeof arguments_?.createdBefore === 'string';
@@ -69,8 +47,7 @@ export const isReasonableLastMonthStart = (value: unknown, now: Date): boolean =
 	return parsed >= startOfPreviousCalendarMonth && parsed <= now.getTime() - 20 * DAY_MS;
 };
 
-const appContextFor = (timeZone: string): AppContextSnapshotV1 => {
-	const now = new Date();
+const appContextFor = (timeZone: string, now = new Date()): AppContextSnapshotV1 => {
 	return {
 		version: 1,
 		capturedAt: now.toISOString(),
@@ -112,23 +89,26 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 		id: 'time-today-local-date-kiribati',
 		name: 'states today in the client timezone (UTC+14) rather than UTC',
 		splits: [ARCHETYPES.timeAwareness],
-		input: { prompt: "What is today's date?", timeZone: KIRIBATI },
+		input: {
+			prompt: "What is today's date? Reply only with the date in YYYY-MM-DD format.",
+			timeZone: KIRIBATI
+		},
 		expected: {},
 		metadata: {
 			note: 'The system line renders the server clock in the client IANA timezone (feature 17). In UTC+14 the local date is almost always a day ahead of UTC, so a UTC answer is a detectable failure.'
 		},
 		async run(lab) {
 			const now = new Date();
-			const expected = longLocalDate(now, KIRIBATI);
+			const expected = isoLocalDate(now, KIRIBATI);
 			const workspace = await seedWorkspace(lab, minimalWorkspace);
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
-				appContext: appContextFor(KIRIBATI)
+				appContext: appContextFor(KIRIBATI, now)
 			});
 			logOutput(result);
 
-			const correctDate = statesLocalCalendarDate(result.finalResponse, now, KIRIBATI);
+			const correctDate = matchesLocalIsoDate(result.finalResponse, expected);
 			px.logAnnotation({
 				name: ARCHETYPES.timeAwareness,
 				score: correctDate ? 1 : 0,
@@ -145,23 +125,26 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 		id: 'time-today-local-date-samoa',
 		name: 'states today in the client timezone (UTC−11) rather than UTC',
 		splits: [ARCHETYPES.timeAwareness],
-		input: { prompt: "What is today's date?", timeZone: PAGO_PAGO },
+		input: {
+			prompt: "What is today's date? Reply only with the date in YYYY-MM-DD format.",
+			timeZone: PAGO_PAGO
+		},
 		expected: {},
 		metadata: {
 			note: 'Paired with the UTC+14 case: two timezones a day apart must yield two different local dates, so a model that just repeats one trained answer cannot pass both.'
 		},
 		async run(lab) {
 			const now = new Date();
-			const expected = longLocalDate(now, PAGO_PAGO);
+			const expected = isoLocalDate(now, PAGO_PAGO);
 			const workspace = await seedWorkspace(lab, minimalWorkspace);
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
-				appContext: appContextFor(PAGO_PAGO)
+				appContext: appContextFor(PAGO_PAGO, now)
 			});
 			logOutput(result);
 
-			const correctDate = statesLocalCalendarDate(result.finalResponse, now, PAGO_PAGO);
+			const correctDate = matchesLocalIsoDate(result.finalResponse, expected);
 			px.logAnnotation({
 				name: ARCHETYPES.timeAwareness,
 				score: correctDate ? 1 : 0,
@@ -187,7 +170,10 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 		},
 		async run(lab) {
 			const now = new Date();
-			const expected = longLocalDate(now, 'UTC');
+			const expected = new Intl.DateTimeFormat('en-US', {
+				timeZone: 'UTC',
+				dateStyle: 'full'
+			}).format(now);
 			const workspace = await seedWorkspace(lab, staleClockWorkspace());
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
@@ -394,54 +380,102 @@ export const timeAwarenessCases: readonly EvalCase[] = [
 	}
 ];
 
-/** Execution interval per tool name, from the persisted event log. */
-function executionIntervals(result: AgentRunResult): Map<string, { start: Date; end: Date }> {
+type TimedToolCall = {
+	readonly callId: string;
+	readonly name: string;
+	readonly arguments: AgentPayloadObject;
+	readonly output?: unknown;
+	readonly failure?: string;
+	readonly start?: Date;
+	readonly end?: Date;
+};
+
+const timedToolCalls = (result: AgentRunResult): TimedToolCall[] => {
 	const started = new Map<string, Date>();
-	const intervals = new Map<string, { start: Date; end: Date }>();
-	for (const record of result.events) {
-		const { event, createdAt } = record;
+	const completed = new Map<string, Date>();
+	for (const { event, createdAt } of result.events) {
 		if (event.type === 'tool_started') started.set(event.callId, createdAt);
 		const outcome = toolOutcomeEvent(event);
-		if (outcome?.callId !== undefined) {
-			const start = started.get(outcome.callId);
-			if (start) intervals.set(outcome.name, { start, end: createdAt });
-		}
+		if (outcome?.callId !== undefined) completed.set(outcome.callId, createdAt);
 	}
-	return intervals;
+	return result.toolCalls.map((call) => ({
+		...call,
+		start: started.get(call.callId),
+		end: completed.get(call.callId)
+	}));
+};
+
+const callsOverlap = (left: TimedToolCall, right: TimedToolCall): boolean =>
+	left.start !== undefined &&
+	left.end !== undefined &&
+	right.start !== undefined &&
+	right.end !== undefined &&
+	Math.max(left.start.getTime(), right.start.getTime()) <
+		Math.min(left.end.getTime(), right.end.getTime());
+
+interface NamedReadEvidence {
+	readonly noteId: string | undefined;
+	readonly content: string;
+	readonly start: Date | undefined;
+	readonly end: Date | undefined;
 }
 
-/**
- * Independent reads must overlap in wall-clock time, not just both be called.
- * Accepts whichever read tools the model chose, so a case is not coupled to one
- * model's tool preference — but it must use at least two of them, and they must
- * run concurrently.
- */
-export function anyReadOverlap(
+/** Require content from each named note and overlap across all requested reads. */
+export function allNamedReadsOverlap(
+	reads: readonly NamedReadEvidence[],
+	expected: readonly { readonly noteId: string | undefined; readonly content: string }[]
+): boolean {
+	const matching = expected.map(({ noteId, content }) =>
+		reads.find(
+			(read) =>
+				noteId !== undefined &&
+				read.noteId === noteId &&
+				read.content.toLowerCase().includes(content.toLowerCase())
+		)
+	);
+	return (
+		matching.every((read) => read !== undefined) &&
+		matching.every((left, index) =>
+			matching
+				.slice(index + 1)
+				.every(
+					(right) =>
+						left !== undefined &&
+						right !== undefined &&
+						left.start !== undefined &&
+						left.end !== undefined &&
+						right.start !== undefined &&
+						right.end !== undefined &&
+						Math.max(left.start.getTime(), right.start.getTime()) <
+							Math.min(left.end.getTime(), right.end.getTime())
+				)
+		)
+	);
+}
+
+interface ExpectedNoteBodyRead {
+	readonly noteId: string;
+	readonly path: string;
+	readonly content: string;
+}
+
+/** Verify that each expected note body was read from its own path during overlapping calls. */
+export function allExpectedNoteBodiesOverlap(
 	result: AgentRunResult,
-	readToolNames: readonly string[]
-): { passed: boolean; explanation: string } {
-	const intervals = executionIntervals(result);
-	const used = readToolNames.filter((name) => intervals.has(name));
-	if (used.length < 2)
-		return {
-			passed: false,
-			explanation: `only ${used.length} independent read tool(s) were used (${used.join(', ') || 'none'}); called ${result.calledToolNames.join(', ')}`
-		};
-	for (let i = 0; i < used.length; i++) {
-		for (let j = i + 1; j < used.length; j++) {
-			const left = intervals.get(used[i])!;
-			const right = intervals.get(used[j])!;
-			const overlap =
-				Math.max(left.start.getTime(), right.start.getTime()) <
-				Math.min(left.end.getTime(), right.end.getTime());
-			if (overlap)
-				return {
-					passed: true,
-					explanation: `${used[i]} and ${used[j]} ran concurrently`
-				};
-		}
-	}
-	return { passed: false, explanation: `${used.join(' and ')} ran serially, not in parallel` };
+	expected: readonly ExpectedNoteBodyRead[]
+): boolean {
+	const reads = timedToolCalls(result)
+		.filter((call) => !call.failure && (call.name === 'grep' || call.name === 'sed'))
+		.map((call) => ({
+			noteId: expected.find(({ path }) => call.arguments.path === path)?.noteId,
+			content: JSON.stringify(call.output ?? '').toLowerCase(),
+			start: call.start,
+			end: call.end
+		}));
+	return allNamedReadsOverlap(
+		reads,
+		expected.map(({ noteId, content }) => ({ noteId, content }))
+	);
 }
 
 export const parallelExecutionCases: readonly EvalCase[] = [
@@ -480,12 +514,31 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const overlap = anyReadOverlap(result, [
-				'get_today_view',
-				'list_todos',
-				'search',
-				'get_note'
-			]);
+			const calls = timedToolCalls(result).filter((call) => !call.failure);
+			const todayRead = calls.filter(
+				(call) =>
+					['get_today_view', 'list_todos'].includes(call.name) &&
+					JSON.stringify(call.output ?? '')
+						.toLowerCase()
+						.includes('ship the release notes')
+			);
+			const onboardingRead = calls.filter(
+				(call) =>
+					['search', 'get_note'].includes(call.name) &&
+					JSON.stringify(call.output ?? '')
+						.toLowerCase()
+						.includes('onboarding')
+			);
+			const crossTaskOverlap = todayRead.some((today) =>
+				onboardingRead.some((onboarding) => callsOverlap(today, onboarding))
+			);
+			const answer = result.finalResponse.toLowerCase();
+			const answeredBoth =
+				answer.includes('ship the release notes') && answer.includes('onboarding');
+			const overlap = {
+				passed: crossTaskOverlap && answeredBoth,
+				explanation: `today evidence=${todayRead.length}; onboarding evidence=${onboardingRead.length}; independent reads overlap=${crossTaskOverlap}; answer covers both=${answeredBoth}`
+			};
 			px.logAnnotation({
 				name: ARCHETYPES.parallelExecution,
 				score: overlap.passed ? 1 : 0,
@@ -493,8 +546,10 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 				explanation: overlap.explanation
 			});
 
-			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(overlap.passed, overlap.explanation).toBe(true);
+			expect({ status: result.status, passed: overlap.passed }, overlap.explanation).toEqual({
+				status: 'completed',
+				passed: true
+			});
 		}
 	},
 	{
@@ -538,7 +593,31 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 			});
 			logOutput(result);
 
-			const overlap = parallelSameTool(result, 'get_note', 3);
+			const notes = [
+				{ title: 'Access', content: 'data access requests' },
+				{ title: 'Runbooks', content: 'on-call rotation' },
+				{ title: 'Observability', content: 'request latency' }
+			];
+			const projectId = workspace.projectIds.get('Work');
+			if (!projectId) throw new Error('Missing seeded project: Work');
+			const expectedReads = notes.map(({ title, content }) => {
+				const noteId = workspace.noteIds.get(title);
+				if (!noteId) throw new Error(`Missing seeded note: ${title}`);
+				return {
+					noteId,
+					path: `/projects/${projectId}/notes/${noteId}.md`,
+					content
+				};
+			});
+			const allThreeOverlap = allExpectedNoteBodiesOverlap(result, expectedReads);
+			const answer = result.finalResponse.toLowerCase();
+			const groundedAnswer =
+				answer.includes('platform lead') &&
+				['access', 'runbooks', 'observability'].every((title) => answer.includes(title));
+			const overlap = {
+				passed: allThreeOverlap && groundedAnswer,
+				explanation: `all three distinct note bodies were read concurrently=${allThreeOverlap}; answer cites/accesses their findings=${groundedAnswer}`
+			};
 			px.logAnnotation({
 				name: ARCHETYPES.parallelExecution,
 				score: overlap.passed ? 1 : 0,
@@ -551,45 +630,3 @@ export const parallelExecutionCases: readonly EvalCase[] = [
 		}
 	}
 ];
-
-/**
- * True when at least `minCalls` executions of the same tool name overlap in
- * wall-clock time. Keyed per call id, because repeated same-name calls collapse
- * to one entry in the name-keyed `executionIntervals` map.
- */
-function parallelSameTool(
-	result: AgentRunResult,
-	toolName: string,
-	minCalls: number
-): { passed: boolean; explanation: string } {
-	const started = new Map<string, Date>();
-	const intervals: { name: string; start: Date; end: Date }[] = [];
-	for (const record of result.events) {
-		const { event, createdAt } = record;
-		if (event.type === 'tool_started') started.set(event.callId, createdAt);
-		const outcome = toolOutcomeEvent(event);
-		if (outcome?.callId !== undefined) {
-			const start = started.get(outcome.callId);
-			if (start) intervals.push({ name: outcome.name, start, end: createdAt });
-		}
-	}
-	const ofTool = intervals.filter((interval) => interval.name === toolName);
-	if (ofTool.length < minCalls)
-		return {
-			passed: false,
-			explanation: `only ${ofTool.length} ${toolName} call(s) completed; need ${minCalls}; called ${result.calledToolNames.join(', ')}`
-		};
-	for (let i = 0; i < ofTool.length; i++) {
-		for (let j = i + 1; j < ofTool.length; j++) {
-			const overlap =
-				Math.max(ofTool[i].start.getTime(), ofTool[j].start.getTime()) <
-				Math.min(ofTool[i].end.getTime(), ofTool[j].end.getTime());
-			if (overlap)
-				return {
-					passed: true,
-					explanation: `${ofTool.length} ${toolName} calls ran, two of them concurrently`
-				};
-		}
-	}
-	return { passed: false, explanation: `${ofTool.length} ${toolName} calls all ran serially` };
-}

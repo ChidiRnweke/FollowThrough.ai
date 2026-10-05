@@ -148,7 +148,7 @@ describe('IndexedDB workspace storage', () => {
 		repository.close();
 		await expect(repository.get()).rejects.toThrow('Workbench storage is closed');
 	});
-	it('round-trips a workspace record', async () => {
+	it('round-trips a workspace record including the default split ratio', async () => {
 		const { repository } = setup();
 		const original = record();
 		await repository.put(original);
@@ -210,13 +210,5 @@ describe('IndexedDB workspace storage', () => {
 		const stored = await repository.get();
 		repository.close();
 		expect(stored?.splitRatio).toBe(0.35);
-	});
-
-	it('returns the stored record verbatim even when splitRatio is at the default 0.5', async () => {
-		const { repository } = setup();
-		await repository.put(record({ splitRatio: 0.5 }));
-		const stored = await repository.get();
-		repository.close();
-		expect(stored?.splitRatio).toBe(0.5);
 	});
 });

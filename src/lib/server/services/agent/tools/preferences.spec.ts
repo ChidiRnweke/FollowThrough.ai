@@ -30,12 +30,11 @@ const stateOf = (
 describe('Tool preference resolution', () => {
 	it('enables a tool nobody has touched', async () => {
 		const { store: preferences } = store();
-		expect(stateOf(await preferences.view(testActor()), 'archive_project').enabled).toBe(true);
-	});
-
-	it('reports an untouched tool as following the default', async () => {
-		const { store: preferences } = store();
-		expect(stateOf(await preferences.view(testActor()), 'archive_project').source).toBe('default');
+		const state = stateOf(await preferences.view(testActor()), 'archive_project');
+		expect({ enabled: state.enabled, source: state.source }).toEqual({
+			enabled: true,
+			source: 'default'
+		});
 	});
 
 	it('disables a tool the user turned off', async () => {

@@ -53,19 +53,16 @@ describe('Create skill invariants', () => {
 		});
 		expect(output.skill.note.id).toBe(id);
 	});
-	it('creates a skill named after the input', async () => {
-		const { controller } = setup();
+	it('creates and inserts a skill named after the input', async () => {
+		const { controller, skills } = setup();
 		const output = await controller.create(testActor(), {
 			name: 'ADR writing',
 			projectId: testProjectId()
 		});
-		expect(output.skill.note.title).toBe('ADR writing');
-	});
-
-	it('inserts a skill record for the new note', async () => {
-		const { controller, skills } = setup();
-		await controller.create(testActor(), { name: 'ADR writing', projectId: testProjectId() });
-		expect(skills.skills).toHaveLength(1);
+		expect({ title: output.skill.note.title, inserted: skills.skills.length }).toEqual({
+			title: 'ADR writing',
+			inserted: 1
+		});
 	});
 
 	it('places the skill note inside the requested folder', async () => {

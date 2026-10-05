@@ -196,40 +196,6 @@ describe('Memory change application invariants', () => {
 		expect(entry.provenanceId).toBe(testProvenanceId());
 	});
 
-	it('links an update replacement to the entry it supersedes', async () => {
-		const { service } = await setup();
-		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
-		const { entry: replacement } = await service.apply(
-			testActor(),
-			{
-				scope: 'project',
-				projectId: testProjectId(),
-				operation: 'update',
-				memoryEntryId: original.id,
-				content: 'Revised fact'
-			},
-			testProvenanceId()
-		);
-		expect(replacement.replacesEntryId).toBe(original.id);
-	});
-
-	it('supersedes the target entry on update', async () => {
-		const { service } = await setup();
-		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
-		await service.apply(
-			testActor(),
-			{
-				scope: 'project',
-				projectId: testProjectId(),
-				operation: 'update',
-				memoryEntryId: original.id,
-				content: 'Revised fact'
-			},
-			testProvenanceId()
-		);
-		expect((await service.get(testActor(), original.id)).deletedAt).toBeDefined();
-	});
-
 	it('rejects an update against a superseded entry', async () => {
 		const { service } = await setup();
 		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
@@ -257,22 +223,6 @@ describe('Memory change application invariants', () => {
 			)
 		).rejects.toBeInstanceOf(NotFoundError);
 	});
-
-	it('soft-deletes the target on remove', async () => {
-		const { service } = await setup();
-		const { entry: original } = await service.apply(testActor(), addPayload(), testProvenanceId());
-		await service.apply(
-			testActor(),
-			{
-				scope: 'project',
-				projectId: testProjectId(),
-				operation: 'remove',
-				memoryEntryId: original.id
-			},
-			testProvenanceId()
-		);
-		expect(await service.list(testActor(), { projectId: testProjectId() })).toEqual([]);
-	});
 });
 
 describe('Memory application effects', () => {
@@ -290,14 +240,22 @@ describe('Memory application effects', () => {
 			},
 			testProvenanceId()
 		);
-		expect(result.changes).toEqual([
-			{
-				kind: 'modified',
-				before: original,
-				after: expect.objectContaining({ id: original.id, deletedAt: expect.any(String) })
-			},
-			{ kind: 'created', after: result.entry }
-		]);
+		expect({
+			changes: result.changes,
+			replacesEntryId: result.entry.replacesEntryId,
+			oldTargetDeletedAt: (await service.get(testActor(), original.id)).deletedAt
+		}).toEqual({
+			changes: [
+				{
+					kind: 'modified',
+					before: original,
+					after: expect.objectContaining({ id: original.id, deletedAt: expect.any(String) })
+				},
+				{ kind: 'created', after: result.entry }
+			],
+			replacesEntryId: original.id,
+			oldTargetDeletedAt: expect.any(String)
+		});
 	});
 	it('records the original entry before removing it', async () => {
 		const { service } = await setup();
@@ -312,6 +270,12 @@ describe('Memory application effects', () => {
 			},
 			testProvenanceId()
 		);
-		expect(result.changes).toEqual([{ kind: 'modified', before: original, after: result.entry }]);
+		expect({
+			changes: result.changes,
+			visibleEntries: await service.list(testActor(), { projectId: testProjectId() })
+		}).toEqual({
+			changes: [{ kind: 'modified', before: original, after: result.entry }],
+			visibleEntries: []
+		});
 	});
 });

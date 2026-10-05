@@ -74,16 +74,6 @@ describe('ordered list renumbering on item removal', () => {
 		editor.commands.deleteRange(item);
 
 		expect(docJSON(editor).content?.[0]?.attrs?.start).toBe(1);
-		editor.destroy();
-	});
-
-	it('keeps the surviving items of a renumbered list', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [orderedList(['c', 'd'], { start: 3 })]
-		});
-		editor.commands.deleteRange(firstListItemRange(editor));
-
 		expect(itemTexts(docJSON(editor).content?.[0])).toEqual(['d']);
 		editor.destroy();
 	});
@@ -116,18 +106,8 @@ describe('ordered list merging', () => {
 			1
 		);
 		editor.destroy();
-	});
-
-	it('numbers the merged list continuously from 1', () => {
-		const editor = createEditor({
-			type: 'doc',
-			content: [orderedList(['a', 'b']), paragraph(''), orderedList(['c', 'd'])]
-		});
-		const separator = paragraphRanges(editor)[0];
-		editor.commands.deleteRange(separator);
 
 		expect(itemTexts(blockOfType(editor, 'orderedList'))).toEqual(['a', 'b', 'c', 'd']);
-		editor.destroy();
 	});
 
 	it('does not merge a numbered list with a bullet list', () => {

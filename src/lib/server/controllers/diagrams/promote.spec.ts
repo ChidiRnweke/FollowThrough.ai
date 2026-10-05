@@ -46,16 +46,11 @@ describe('Promote diagram workflow invariants', () => {
 	});
 
 	it('creates an ordinary draw.io suggestion for explicit review', async () => {
-		const { controller } = setup();
+		const { controller, diagrams } = setup();
 		const result = await controller.promote(testActor(), { diagramId: mermaidBuilder().id });
 		expect(result.suggestion.kind === 'diagram' ? result.suggestion.payload.kind : undefined).toBe(
 			'drawio'
 		);
-	});
-
-	it('does not persist a draw.io diagram before acceptance', async () => {
-		const { controller, diagrams } = setup();
-		await controller.promote(testActor(), { diagramId: mermaidBuilder().id });
 		expect(diagrams.diagrams).toEqual([mermaidBuilder()]);
 	});
 });

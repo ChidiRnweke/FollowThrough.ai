@@ -202,25 +202,20 @@ const sendWith = async (events: AgentEvent[]) => {
 };
 
 describe('chat event projection', () => {
-	it('keeps tool calls inline between text segments', async () => {
-		const { reply } = await sendWith(streamedEvents);
-		expect(reply.parts.map((part) => part.kind)).toEqual(['text', 'tool', 'text']);
-	});
-
-	it('merges a tool completion into its inline start part', async () => {
-		const { reply } = await sendWith(streamedEvents);
+	it('keeps a completed tool call inline between its surrounding text', async () => {
+		const { store, reply } = await sendWith(streamedEvents);
 		const tool = reply.parts.find((part) => part.kind === 'tool');
-		expect(tool?.kind === 'tool' && tool.tool.status).toBe('succeeded');
-	});
-
-	it('keeps text after a tool call in a separate segment', async () => {
-		const { reply } = await sendWith(streamedEvents);
-		expect(reply.parts.at(-1)).toEqual({ kind: 'text', text: 'Found two.' });
-	});
-
-	it('records the optimistic prompt once', async () => {
-		const { store } = await sendWith(streamedEvents);
-		expect(store.entries.at(0)?.parts).toEqual([{ kind: 'text', text: 'look this up' }]);
+		expect({
+			parts: reply.parts.map((part) => part.kind),
+			toolStatus: tool?.kind === 'tool' ? tool.tool.status : undefined,
+			trailingText: reply.parts.at(-1),
+			optimisticPrompt: store.entries.at(0)?.parts
+		}).toEqual({
+			parts: ['text', 'tool', 'text'],
+			toolStatus: 'succeeded',
+			trailingText: { kind: 'text', text: 'Found two.' },
+			optimisticPrompt: [{ kind: 'text', text: 'look this up' }]
+		});
 	});
 
 	it('notifies reactive observers when the streamed reply completes', async () => {
@@ -512,20 +507,15 @@ describe('the context a send carries', () => {
 		return transport.submitted!;
 	};
 
-	it('sends every pinned passage', async () => {
+	it('sends pinned passages in order and exposes the first as the singular selection', async () => {
 		const sent = await sentWith([pin('ship it', 10), pin('then review', 40)]);
-		expect(sent.selections).toHaveLength(2);
-	});
-
-	it('keeps the order the passages were pinned in', async () => {
-		const sent = await sentWith([pin('ship it', 10), pin('then review', 40)]);
-		expect(sent.selections?.[1]?.text).toBe('then review');
-	});
-
-	/** The selection-bound tools are offered on the strength of this field being set. */
-	it('names the first pinned passage as the singular selection', async () => {
-		const sent = await sentWith([pin('ship it', 10), pin('then review', 40)]);
-		expect(sent.selection?.text).toBe('ship it');
+		expect({
+			passages: sent.selections?.map(({ text }) => text),
+			firstForSelectionTools: sent.selection?.text
+		}).toEqual({
+			passages: ['ship it', 'then review'],
+			firstForSelectionTools: 'ship it'
+		});
 	});
 
 	it('sends passages pinned from different notes', async () => {
@@ -538,18 +528,16 @@ describe('the context a send carries', () => {
 		expect(sent.selections?.[0]?.text).toBe('the live one');
 	});
 
-	it('sends the highlighted passage alongside the pinned ones', async () => {
-		const sent = await sentWith([pin('ship it', 10)], pin('the live one', 70));
-		expect(sent.selections).toHaveLength(2);
-	});
-
 	/**
 	 * Pinning is deliberate and highlighting is incidental, so the pin takes the singular
 	 * field the selection-bound tools are offered on.
 	 */
 	it('lets a pin outrank the highlight for the singular selection', async () => {
 		const sent = await sentWith([pin('ship it', 10)], pin('the live one', 70));
-		expect(sent.selection?.text).toBe('ship it');
+		expect({
+			selections: sent.selections?.map(({ text }) => text),
+			selectionForTools: sent.selection?.text
+		}).toEqual({ selections: ['ship it', 'the live one'], selectionForTools: 'ship it' });
 	});
 
 	it('sends no selection when nothing was pinned', async () => {

@@ -48,13 +48,10 @@ afterEach(async () => {
 it('keeps local data when the reset confirmation is cancelled', async () => {
 	const { store, screen } = await setup();
 	await screen.getByRole('button', { name: 'Reset this device…', exact: true }).click();
+	const beforeCancel = (await store.read('alice')).cache.records.length;
 	await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-	expect((await store.read('alice')).cache.records).toHaveLength(1);
-});
-it('does not reset until the destructive action is confirmed', async () => {
-	const { store, screen } = await setup();
-	await screen.getByRole('button', { name: 'Reset this device…', exact: true }).click();
-	expect((await store.read('alice')).cache.records).toHaveLength(1);
+	const afterCancel = (await store.read('alice')).cache.records.length;
+	expect({ beforeCancel, afterCancel }).toEqual({ beforeCancel: 1, afterCancel: 1 });
 });
 it('resets this account after explicit confirmation', async () => {
 	const { store, screen, reset } = await setup();

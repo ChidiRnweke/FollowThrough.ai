@@ -49,18 +49,18 @@ describe('Previewing the saved note review', () => {
 			});
 		}
 	);
-	it('renders the prepared pair without loading a current note', () => {
-		expect(
-			approvalPreview(
-				'save_note',
-				{ noteId: note.id, markdown: 'Different text' },
-				{ kind: 'note_review', review }
-			)
-		).toMatchObject({
+	it('renders the prepared pair and revision without loading a current note', () => {
+		const preview = approvalPreview(
+			'save_note',
+			{ noteId: note.id, markdown: 'Different text' },
+			{ kind: 'note_review', review }
+		);
+		expect(preview).toMatchObject({
 			kind: 'note',
 			change: {
 				kind: 'prepared',
 				title: 'Release',
+				revision: 1,
 				body: { base: note.document, candidate: review.change.result.document }
 			}
 		});
@@ -75,12 +75,6 @@ describe('Previewing the saved note review', () => {
 		).toMatchObject({
 			kind: 'note',
 			change: { body: { candidate: review.change.result.document } }
-		});
-	});
-	it('shows the prepared revision and the stale-review policy', () => {
-		expect(approvalPreview('save_note', {}, { kind: 'note_review', review })).toMatchObject({
-			kind: 'note',
-			change: { kind: 'prepared', revision: 1 }
 		});
 	});
 	it('shows explicit preparation failures', () => {

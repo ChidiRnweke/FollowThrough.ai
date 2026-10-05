@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectNoteWrite, projectProject, projectTodoWrite } from './tool-views';
-
-describe('agent tool views', () => {
-	it('projects only stable project fields', () => {
-		expect(projectProject({ id: 'p', name: 'Project' } as never)).toEqual({
-			id: 'p',
-			name: 'Project'
-		});
-	});
-});
+import { projectNoteWrite, projectTodoWrite } from './tool-views';
 
 /**
  * The write path never got the treatment the read path did.
@@ -33,16 +24,13 @@ describe('A write says what it made, and nothing else', () => {
 		plainText: 'a very long body'
 	} as never;
 
-	it('carries the id at the top level, where the row looks for it', () => {
-		expect(projectNoteWrite(note).noteId).toBe('note-1');
-	});
-
-	it('leaves the document off the wire', () => {
-		expect('document' in projectNoteWrite(note)).toBe(false);
-	});
-
-	it('leaves the plain text off the wire', () => {
-		expect('plainText' in projectNoteWrite(note)).toBe(false);
+	it('returns only the note receipt needed by the transcript', () => {
+		const view = projectNoteWrite(note);
+		expect({
+			noteId: view.noteId,
+			document: 'document' in view,
+			plainText: 'plainText' in view
+		}).toEqual({ noteId: 'note-1', document: false, plainText: false });
 	});
 
 	it('does the same for a todo', () => {

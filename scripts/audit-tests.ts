@@ -16,12 +16,10 @@ collect(resolve(root, 'tests'));
 
 const banned = /\b(?:vi|jest)\.(?:mock|fn|spyOn)\s*\(/g;
 const failures: string[] = [];
-const assertionExceptions: string[] = [];
 const dependencyCastExceptions: string[] = [];
 const interactionAssertionExceptions: string[] = [];
 const untypedFakeExceptions: string[] = [];
 let testCount = 0;
-const legacyAssertionLimit = 0;
 const legacyDependencyCastLimit = 0;
 const legacyInteractionAssertionLimit = 0;
 const legacyUntypedFakeLimit = 0;
@@ -93,9 +91,9 @@ for (const file of files) {
 						ts.forEachChild(child, count);
 					};
 					count(callback.body);
-					if (!file.endsWith('.e2e.ts') && assertions !== 1) {
+					if (!file.endsWith('.e2e.ts') && assertions === 0) {
 						const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-						assertionExceptions.push(`${file}:${line} has ${assertions} assertions`);
+						failures.push(`${file}:${line} has no assertions`);
 					}
 				}
 			}
@@ -105,15 +103,6 @@ for (const file of files) {
 	visit(source);
 }
 
-if (assertionExceptions.length > 0) {
-	process.stderr.write(
-		`Test assertion audit (${assertionExceptions.length} existing cases to consolidate):\n${assertionExceptions.join('\n')}\n`
-	);
-}
-if (assertionExceptions.length > legacyAssertionLimit)
-	failures.push(
-		`multi-assertion cases increased from the ${legacyAssertionLimit}-case migration baseline to ${assertionExceptions.length}`
-	);
 if (dependencyCastExceptions.length > legacyDependencyCastLimit)
 	failures.push(
 		`unsafe controller dependency casts increased from ${legacyDependencyCastLimit} to ${dependencyCastExceptions.length}`

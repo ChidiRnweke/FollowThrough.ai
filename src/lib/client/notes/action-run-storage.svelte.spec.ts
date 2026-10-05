@@ -20,12 +20,8 @@ const run: StoredNoteActionRun = {
 
 it('does not restore another account’s pending note actions', () => {
 	new SessionRunStorage(sessionStorage, 'action-test-a').save([run]);
-	expect(new SessionRunStorage(sessionStorage, 'action-test-b').load()).toEqual([]);
-});
-
-it('restores the original account’s actions after another account clears its own actions', () => {
-	new SessionRunStorage(sessionStorage, 'action-test-a').save([run]);
 	new SessionRunStorage(sessionStorage, 'action-test-b').save([]);
+	expect(new SessionRunStorage(sessionStorage, 'action-test-b').load()).toEqual([]);
 	expect(new SessionRunStorage(sessionStorage, 'action-test-a').load()).toEqual([run]);
 });
 

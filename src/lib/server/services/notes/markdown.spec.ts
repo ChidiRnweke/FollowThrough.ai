@@ -43,9 +43,7 @@ describe('Dollar signs in Markdown', () => {
 
 	it('keeps a pair of prices as text rather than a formula', () => {
 		expect(JSON.stringify(priced.document)).not.toContain('inlineMath');
-	});
 
-	it('keeps the priced text searchable', () => {
 		expect(priced.plainText).toBe('Costs $4–13 vs $30 per 1,000 pages');
 	});
 
@@ -232,17 +230,13 @@ describe('Note links in a round trip', () => {
 	/** Without this, edit_note would strip every note link from a note it touched. */
 	it('keeps the link target', () => {
 		expect(JSON.stringify(roundTrip(linkedDoc))).toContain('note-42');
-	});
 
-	it('keeps the link as a note link rather than an external one', () => {
 		expect(JSON.stringify(roundTrip(linkedDoc))).toContain('noteLink');
 	});
 
 	it('keeps the link text', () => {
 		expect(noteMarkdownFromContent(linkedDoc)).toContain('the decision');
-	});
 
-	it('serializes to an ordinary Markdown link with a note scheme', () => {
 		expect(noteMarkdownFromContent(linkedDoc)).toContain('](note:note-42)');
 	});
 

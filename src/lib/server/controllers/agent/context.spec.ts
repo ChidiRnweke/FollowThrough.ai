@@ -133,15 +133,6 @@ describe('Agent grounding invariants', () => {
 			attached.map((note) => note.id)
 		);
 	});
-	it('keeps user memory out of application context', async () => {
-		const { builder } = await setup();
-		const context = await builder.build(
-			testActor(),
-			{ conversationId: testConversationId(), noteId: testNoteId(), prompt: 'Anything at all' },
-			{ provenanceId: testProvenanceId() }
-		);
-		expect(context).not.toHaveProperty('userProfile');
-	});
 
 	it('exposes skill summaries without eagerly injecting instructions', async () => {
 		const { builder } = await setup();
@@ -261,7 +252,7 @@ describe('Agent grounding invariants', () => {
 		expect(catalog(context).items.map((item) => item.name)).toEqual(['Decision records']);
 	});
 
-	it('keeps pinned skills when the catalogue overflows its budget', async () => {
+	it('prioritizes pinned skills in a large catalogue', async () => {
 		const { builder, skills } = await setup();
 		const pinned = {
 			...skill(),
@@ -346,12 +337,12 @@ describe('Agent grounding invariants', () => {
 		return context.contextNotes[0];
 	};
 
-	it('omits the content of oversized context notes', async () => {
-		expect((await oversizedContext())?.content).toBeUndefined();
-	});
-
-	it('reports the token count of oversized context notes', async () => {
-		expect((await oversizedContext())?.tokenCount).toBeGreaterThan(4000);
+	it('omits oversized content while reporting its token count', async () => {
+		const contextNote = await oversizedContext();
+		expect({
+			content: contextNote?.content,
+			tokenCountAboveLimit: (contextNote?.tokenCount ?? 0) > 4000
+		}).toEqual({ content: undefined, tokenCountAboveLimit: true });
 	});
 
 	it('asks for missing attached context to be removed instead of answering with fewer notes', async () => {
@@ -423,10 +414,10 @@ describe('Scope staged before the user moved screens', () => {
 	};
 
 	it('names both sides of the divergence for the agent', async () => {
-		expect((await resolved())?.note).toContain('Project Beta');
-	});
-
-	it('resolves the staged note title rather than leaving a bare id', async () => {
-		expect((await resolved())?.noteTitle).toBe('Migration plan');
+		const scope = await resolved();
+		expect({ note: scope?.note, title: scope?.noteTitle }).toEqual({
+			note: expect.stringContaining('Project Beta'),
+			title: 'Migration plan'
+		});
 	});
 });

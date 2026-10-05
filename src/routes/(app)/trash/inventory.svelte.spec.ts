@@ -74,7 +74,7 @@ const setup = async (knownTrash = false) => {
 	session.resources.setOnline(false);
 	return session;
 };
-it('does not call a partially downloaded trash inventory empty', async () => {
+it('shows empty only after the incomplete inventory completes', async () => {
 	const session = await setup();
 	const screen = await render(TrashPage, {
 		data: { session: pageSession(session), sidebarWidth: 280, sidebarOpen: true }
@@ -82,29 +82,17 @@ it('does not call a partially downloaded trash inventory empty', async () => {
 	await expect
 		.element(screen.getByText('The trash is empty', { exact: true }))
 		.not.toBeInTheDocument();
+	session.resources.setOnline(true);
+	await session.resources.requireCollections();
+	await expect.element(screen.getByText('The trash is empty', { exact: true })).toBeVisible();
 });
-it('keeps downloaded trash rows visible while the inventory is incomplete', async () => {
+it('keeps downloaded rows visible and protects incomplete inventory from emptying', async () => {
 	const session = await setup(true);
 	const screen = await render(TrashPage, {
 		data: { session: pageSession(session), sidebarWidth: 280, sidebarOpen: true }
 	});
 	await expect.element(screen.getByText('Known trashed note', { exact: true })).toBeVisible();
-});
-it('does not offer to empty an incomplete trash inventory', async () => {
-	const session = await setup(true);
-	const screen = await render(TrashPage, {
-		data: { session: pageSession(session), sidebarWidth: 280, sidebarOpen: true }
-	});
 	await expect
 		.element(screen.getByRole('button', { name: 'Empty trash', exact: true }))
 		.not.toBeInTheDocument();
-});
-it('shows the empty state after the real cache completes its inventory', async () => {
-	const session = await setup();
-	const screen = await render(TrashPage, {
-		data: { session: pageSession(session), sidebarWidth: 280, sidebarOpen: true }
-	});
-	session.resources.setOnline(true);
-	await session.resources.requireCollections();
-	await expect.element(screen.getByText('The trash is empty', { exact: true })).toBeVisible();
 });

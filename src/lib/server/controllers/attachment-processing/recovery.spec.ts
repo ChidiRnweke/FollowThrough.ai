@@ -21,20 +21,13 @@ describe('durable attachment processing', () => {
 		await claims.withClaim(repository.found.version.id, () => worker.run());
 		expect(repository.found.version.processingStatus).toBe('queued');
 	});
-	it('cannot save extraction results after losing the claim', async () => {
-		const { repository, worker, claims, ocr } = setupAttachments();
-		repository.found = view('application/pdf');
-		const versionId = repository.found.version.id;
-		ocr.beforeParse = async () => claims.lose(versionId);
-		await worker.process(testActor(), versionId);
-		expect(repository.found.version.processingStatus).toBe('processing');
-	});
-	it('does not stage search output after losing the claim', async () => {
+	it('does not save extraction or search results after losing the claim', async () => {
 		const { repository, worker, claims, ocr, search } = setupAttachments();
 		repository.found = view('application/pdf');
 		const versionId = repository.found.version.id;
 		ocr.beforeParse = async () => claims.lose(versionId);
 		await worker.process(testActor(), versionId);
+		expect(repository.found.version.processingStatus).toBe('processing');
 		expect(search.documents).toEqual([]);
 	});
 	it('does not replace search output when an older version finishes', async () => {

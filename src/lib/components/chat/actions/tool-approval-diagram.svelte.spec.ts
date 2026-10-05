@@ -24,37 +24,21 @@ describe('Previewing a pending diagram change', () => {
 		});
 	});
 
-	it('names what an edit adds', () => {
-		const preview = approvalPreview(
-			'edit_diagram',
-			{ source: mxfile('Browser', 'Database', 'Cache') },
-			{ kind: 'diagram', labels: ['Browser', 'Database'], title: 'Architecture' }
-		);
-		expect(
-			preview.kind === 'diagram' && preview.change.kind === 'edited' && preview.change.added
-		).toEqual(['Cache']);
-	});
-
-	it('names what an edit removes', () => {
-		const preview = approvalPreview(
-			'edit_diagram',
-			{ source: mxfile('Browser') },
-			{ kind: 'diagram', labels: ['Browser', 'Database'], title: 'Architecture' }
-		);
-		expect(
-			preview.kind === 'diagram' && preview.change.kind === 'edited' && preview.change.removed
-		).toEqual(['Database']);
-	});
-
-	it('counts the labels an edit leaves alone', () => {
+	it('shows the full edit delta for added, removed, and retained labels', () => {
 		const preview = approvalPreview(
 			'edit_diagram',
 			{ source: mxfile('Browser', 'Cache') },
 			{ kind: 'diagram', labels: ['Browser', 'Database'], title: 'Architecture' }
 		);
 		expect(
-			preview.kind === 'diagram' && preview.change.kind === 'edited' && preview.change.kept
-		).toBe(1);
+			preview.kind === 'diagram' && preview.change.kind === 'edited'
+				? {
+						added: preview.change.added,
+						removed: preview.change.removed,
+						kept: preview.change.kept
+					}
+				: undefined
+		).toEqual({ added: ['Cache'], removed: ['Database'], kept: 1 });
 	});
 
 	// Without the before-image an edit cannot claim anything was added, so it says

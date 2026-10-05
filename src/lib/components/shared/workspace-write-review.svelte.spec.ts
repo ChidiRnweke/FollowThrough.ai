@@ -164,19 +164,15 @@ it('offers no send action for an offline queued change', async () => {
 		.not.toBeInTheDocument();
 });
 
-it('preserves the reviewed intent until destructive confirmation', async () => {
-	const { resources } = await setup();
-	const screen = render(WorkspaceWriteReview, { resources, open: true });
-	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
-	await screen.getByRole('button', { name: /^Discard/ }).click();
-	expect(resources.pending).toHaveLength(1);
-});
-
 it('cancels the destructive decision without changing saved intent', async () => {
 	const { resources } = await setup();
 	const screen = render(WorkspaceWriteReview, { resources, open: true });
 	await screen.getByRole('button', { name: 'Review My project', exact: true }).click();
 	await screen.getByRole('button', { name: /^Discard/ }).click();
+	const beforeCancel = resources.pending.length;
 	await screen.getByRole('button', { name: 'Cancel', exact: true }).click();
-	expect(resources.pending).toHaveLength(1);
+	expect({ beforeCancel, afterCancel: resources.pending.length }).toEqual({
+		beforeCancel: 1,
+		afterCancel: 1
+	});
 });

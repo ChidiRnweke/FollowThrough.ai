@@ -31,13 +31,6 @@ automatic-spacing case. A Luna reviewer audited all six new declarations and the
 at `13aa14e36a194b7246053680b5c826bfe9904189`. No further gaps were found. The integration branch
 includes that change and release 2.0.9. The original inventory remains pinned to its audit base.
 
-## Records
-
-- [Master supplement](master-supplement.json) records the seven decisions for the later table-spacing change.
-- [Inventory](inventory.json) records scope, ownership counts, and baseline runner collection.
-
-Detailed per-test ledgers and finding exports are local working artifacts and are not committed.
-
 ## Changes selected
 
 The accepted changes focus on observable results:

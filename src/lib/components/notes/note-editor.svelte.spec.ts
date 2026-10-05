@@ -457,23 +457,6 @@ describe('Diagram insert point tracking', () => {
 	});
 
 	it('maps a held insert point past typing and inserts there', async () => {
-		const screen = renderEditor();
-		await untilMounted();
-		screen.component.holdInsertionPoint('run-1', 7);
-		screen.component.focusStart();
-		await userEvent.keyboard('Well, ');
-		screen.component.insertMermaid(
-			screen.component.consumeInsertionPoint('run-1') as number,
-			'graph TD'
-		);
-		const document = screen.component.getDocument() as {
-			content?: readonly { type: string }[];
-		};
-
-		expect(document.content?.[1]?.type).toBe('mermaid');
-	});
-
-	it('keeps the run store informed of the moved insert point', async () => {
 		const moved: Array<[string, number]> = [];
 		const screen = renderEditor({
 			onInsertionPointMoved: (runId: string, position: number) => void moved.push([runId, position])
@@ -491,12 +474,18 @@ describe('Diagram insert point tracking', () => {
 		screen.component.focusStart();
 		const before = firstParagraphText();
 		await userEvent.keyboard('Well, ');
-		// The trailing keystroke can be dropped by the input simulation, so assert
-		// against what actually landed: the point is held at 7 and every typed
-		// character lands before it, so the mapped point is 7 + the typed delta.
 		await vi.waitFor(() => {
 			expect(moved.at(-1)).toEqual(['run-1', 7 + (firstParagraphText().length - before.length)]);
 		});
+		screen.component.insertMermaid(
+			screen.component.consumeInsertionPoint('run-1') as number,
+			'graph TD'
+		);
+		const document = screen.component.getDocument() as {
+			content?: readonly { type: string }[];
+		};
+
+		expect(document.content?.[1]?.type).toBe('mermaid');
 	});
 });
 

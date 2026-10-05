@@ -159,12 +159,6 @@ describe('agent settings controller behavior', () => {
 		await controller.updatePreferences(testActor(2), { inlineSuggestionsEnabled: false });
 		expect(await controller.getPreferences(testActor())).toEqual(original);
 	});
-	it('returns the persisted preferences', async () => {
-		const { controller, preferences } = setup();
-		expect(await controller.getPreferences(testActor())).toEqual(
-			await preferences.get(testActor())
-		);
-	});
 
 	it('includes the deployment chat model alongside provider models', async () => {
 		const { controller, models } = setup();
@@ -204,22 +198,18 @@ describe('agent settings controller behavior', () => {
  * a client guessing at it would label a model no run actually uses.
  */
 describe('agent settings model defaults', () => {
-	it('falls back to the deployment chat model when the user has chosen none', async () => {
+	it('resolves deployment chat and vision defaults when the user has chosen none', async () => {
 		const { controller } = setup();
-		expect((await controller.resolveDefaults(testActor())).chatModelId).toBe(DEPLOYMENT_CHAT_MODEL);
+		expect(await controller.resolveDefaults(testActor())).toEqual({
+			chatModelId: DEPLOYMENT_CHAT_MODEL,
+			visionModelId: DEPLOYMENT_VISION_MODEL
+		});
 	});
 
 	it('prefers the user default chat model over the deployment one', async () => {
 		const { controller } = setup();
 		await controller.updatePreferences(testActor(), { defaultModel: 'vendor/tool-model' });
 		expect((await controller.resolveDefaults(testActor())).chatModelId).toBe('vendor/tool-model');
-	});
-
-	it('falls back to the deployment vision model when the user has chosen none', async () => {
-		const { controller } = setup();
-		expect((await controller.resolveDefaults(testActor())).visionModelId).toBe(
-			DEPLOYMENT_VISION_MODEL
-		);
 	});
 });
 

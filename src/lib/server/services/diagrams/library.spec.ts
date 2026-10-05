@@ -104,16 +104,7 @@ describe('Diagram management invariants', () => {
 			kind: 'drawio'
 		});
 		expect(listed.diagrams.map((item) => item.id)).toEqual([drawio.id]);
-	});
 
-	it('counts only the kind it was asked for', async () => {
-		const { service, diagrams } = setup();
-		const mermaid = mermaidBuilder({ sourceNoteId: undefined });
-		const drawio = drawioBuilder({ sourceNoteId: undefined, projectId: mermaid.projectId });
-		diagrams.diagrams = [mermaid, drawio];
-		const listed = await service.listForProject(testActor(), mermaid.projectId, {
-			kind: 'drawio'
-		});
 		expect(listed.total).toBe(1);
 	});
 });

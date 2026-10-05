@@ -53,28 +53,16 @@ describe('synchronized settings', () => {
 				}
 			]
 		]);
-		const tools = new WorkspaceViews(records).toolPreferences(userId, testProjectId());
-		expect(tools.find((tool) => tool.name === toolName)).toMatchObject({
-			enabled: true,
-			source: 'project'
+		const projectTools = new WorkspaceViews(records).toolPreferences(userId, testProjectId());
+		records.delete('project');
+		const accountTools = new WorkspaceViews(records).toolPreferences(userId, testProjectId());
+		expect({
+			project: projectTools.find((tool) => tool.name === toolName),
+			account: accountTools.find((tool) => tool.name === toolName)
+		}).toMatchObject({
+			project: { enabled: true, source: 'project' },
+			account: { enabled: false, source: 'user' }
 		});
-	});
-	it('returns to the account setting when the project override is deleted', () => {
-		const toolName = 'create_note';
-		const records = new Map<string, WorkspaceRecord>([
-			[
-				'user',
-				{
-					type: 'tool_preferences',
-					value: { userId, toolName, enabled: false, createdAt: testNow, updatedAt: testNow }
-				}
-			]
-		]);
-		expect(
-			new WorkspaceViews(records)
-				.toolPreferences(userId, testProjectId())
-				.find((tool) => tool.name === toolName)
-		).toMatchObject({ enabled: false, source: 'user' });
 	});
 	it('keeps tools required for account recovery enabled without a stored preference', () => {
 		expect(

@@ -50,14 +50,11 @@ describe('reading a stored session item', () => {
 		expect(typeof content === 'string' ? undefined : content[0]?.type).toBe('input_image');
 	});
 
-	it('reads an assistant message', () => {
-		expect(parseSessionItem(storedAssistant).type).toBe('assistant_message');
-	});
-
-	it('keeps the provider bag it does not read', () => {
+	it('reads assistant text and preserves the provider bag it does not interpret', () => {
 		const item = parseSessionItem(storedAssistant);
-		expect(item.type === 'assistant_message' && item.content[0]?.providerData).toEqual({
-			annotations: []
+		expect(item).toMatchObject({
+			type: 'assistant_message',
+			content: [{ type: 'output_text', text: 'Here you go', providerData: { annotations: [] } }]
 		});
 	});
 
@@ -92,14 +89,8 @@ describe('reading a stored session item', () => {
 });
 
 describe('an item no arm recognises', () => {
-	it('settles rather than throwing, so the conversation stays readable', () => {
-		expect(parseSessionItem({ type: 'compaction', summary: 'earlier turns' }).type).toBe(
-			'unrecognised'
-		);
-	});
-
-	it('says which type it could not read', () => {
-		const item = parseSessionItem({ type: 'compaction' });
+	it('settles an unrecognised compaction item with a readable type reason', () => {
+		const item = parseSessionItem({ type: 'compaction', summary: 'earlier turns' });
 		expect(item.type === 'unrecognised' && item.reason).toContain('compaction');
 	});
 

@@ -25,20 +25,15 @@ const structured = {
 };
 
 describe('Structured promise client boundary', () => {
-	it('maps structured output into a domain promise', async () => {
+	it('maps the structured action and omits a null owner', async () => {
 		const client = new InMemoryStructuredPromiseClient();
 		client.result = [structured];
 		const extractor = new PromiseDiscovery(client);
 		const result = await extractor.extract(testActor(), selection, context);
-		expect(result[0]?.action).toBe('Send it');
-	});
-
-	it('omits a null owner from the domain promise', async () => {
-		const client = new InMemoryStructuredPromiseClient();
-		client.result = [structured];
-		const extractor = new PromiseDiscovery(client);
-		const result = await extractor.extract(testActor(), selection, context);
-		expect(result[0]?.ownerName).toBeUndefined();
+		expect({ action: result[0]?.action, ownerName: result[0]?.ownerName }).toEqual({
+			action: 'Send it',
+			ownerName: undefined
+		});
 	});
 
 	it('rejects a missing parsed output', async () => {

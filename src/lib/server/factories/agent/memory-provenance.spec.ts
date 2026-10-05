@@ -97,9 +97,12 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 it.each(['agent', 'mcp'] as const)(
 	'retains the %s caller source on a pending memory proposal',
 	async (surface) => {
-		const { propose, origin, suggestions } = setup(surface);
+		const { propose, origin, suggestions, provenance } = setup(surface);
 		await propose();
-		expect(suggestions.suggestions[0]?.provenanceId).toBe(origin.id);
+		expect({
+			suggestionSource: suggestions.suggestions[0]?.provenanceId,
+			knownSource: provenance.provenance
+		}).toEqual({ suggestionSource: origin.id, knownSource: [origin] });
 	}
 );
 it('retains the caller source on an automatically applied memory', async () => {
@@ -107,12 +110,6 @@ it('retains the caller source on an automatically applied memory', async () => {
 	await propose();
 	expect(entries.entries[0]?.provenanceId).toBe(origin.id);
 });
-it('does not replace the known source with a generic memory source', async () => {
-	const { propose, origin, provenance } = setup('agent');
-	await propose();
-	expect(provenance.provenance).toEqual([origin]);
-});
-
 it('rejects a model-supplied source identifier', async () => {
 	const { tool } = setup('agent');
 	expect(() =>

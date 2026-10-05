@@ -43,19 +43,19 @@ describe('shortModelName', () => {
 
 describe('effectiveModel', () => {
 	it('reports a chat that chose its own model as having chosen it', () => {
-		expect(effectiveModel(catalogue, sonnet.id, flash.id).source).toBe('conversation');
-	});
-
-	it('names the model the chat chose', () => {
-		expect(effectiveModel(catalogue, sonnet.id, flash.id).label).toBe('Claude Sonnet 4.5');
+		const model = effectiveModel(catalogue, sonnet.id, flash.id);
+		expect({ source: model.source, label: model.label }).toEqual({
+			source: 'conversation',
+			label: 'Claude Sonnet 4.5'
+		});
 	});
 
 	it('reports a chat that chose nothing as running on the workspace default', () => {
-		expect(effectiveModel(catalogue, null, flash.id).source).toBe('workspace');
-	});
-
-	it('names the workspace default rather than leaving the model unsaid', () => {
-		expect(effectiveModel(catalogue, null, flash.id).label).toBe('V4 Flash');
+		const model = effectiveModel(catalogue, null, flash.id);
+		expect({ source: model.source, label: model.label }).toEqual({
+			source: 'workspace',
+			label: 'V4 Flash'
+		});
 	});
 
 	it('still labels a model the catalogue does not carry', () => {
@@ -90,15 +90,7 @@ describe('modelMetaLine', () => {
 	};
 
 	it('leads with the vendor the title no longer repeats', () => {
-		expect(modelMetaLine(described).startsWith('anthropic')).toBe(true);
-	});
-
-	it('names the context window compactly', () => {
-		expect(modelMetaLine(described)).toContain('200K context');
-	});
-
-	it('says when a model reads images, since that decides whether a vision model is used', () => {
-		expect(modelMetaLine(described)).toContain('sees images');
+		expect(modelMetaLine(described)).toBe('anthropic · 200K context · sees images');
 	});
 
 	/**

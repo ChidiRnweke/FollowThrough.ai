@@ -57,24 +57,15 @@ describe('NoteActionRunsStore', () => {
 
 	it('hands a result to the handler registered for its action', async () => {
 		const { store, transport } = setup();
-		const applied: unknown[] = [];
-		store.on('convert', (result) => void applied.push(result));
-		void start(store);
+		const delivered: { result: unknown; context: unknown }[] = [];
+		store.on('convert', (result, context) => void delivered.push({ result, context }));
+		const settled = start(store);
 		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: '<mxfile />' });
-		await Promise.resolve();
+		await settled;
 
-		expect(applied).toEqual(['<mxfile />']);
-	});
-
-	it('gives the handler the context captured when the run started', async () => {
-		const { store, transport } = setup();
-		const contexts: unknown[] = [];
-		store.on('convert', (_result, context) => void contexts.push(context));
-		void start(store);
-		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: 'x' });
-		await Promise.resolve();
-
-		expect(contexts).toEqual([{ source: 'graph TD' }]);
+		expect(delivered).toEqual([{ result: '<mxfile />', context: { source: 'graph TD' } }]);
+		expect(store.running).toEqual([]);
+		expect(transport.openStreams).toEqual([]);
 	});
 
 	it('persists a context patch so a refresh sees the moved insertion point', () => {
@@ -94,15 +85,6 @@ describe('NoteActionRunsStore', () => {
 		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: 'done' });
 
 		expect(await settled).toEqual({ status: 'completed', result: 'done' });
-	});
-
-	it('clears the run once it completes', async () => {
-		const { store, transport } = setup();
-		const settled = start(store);
-		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: 'done' });
-		await settled;
-
-		expect(store.running).toEqual([]);
 	});
 
 	it('resolves the caller as cancelled when the run is stopped', async () => {
@@ -141,15 +123,6 @@ describe('NoteActionRunsStore', () => {
 		await store.cancel(runId);
 
 		expect(store.find('convert')?.cancelling).toBe(true);
-	});
-
-	it('closes the stream once a run settles', async () => {
-		const { store, transport } = setup();
-		const settled = start(store);
-		transport.emit(runId, { type: 'workflow_result', action: 'convert', result: 'done' });
-		await settled;
-
-		expect(transport.openStreams).toEqual([]);
 	});
 
 	it('replays a run left in flight into the same handler after a refresh', async () => {

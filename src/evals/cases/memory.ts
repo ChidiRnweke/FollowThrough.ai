@@ -18,6 +18,25 @@ const ENGLISH_ONLY = 'Always answer in English.';
  * and capture are scored separately because an agent can be perfect at one and
  * broken at the others, and a single memory score would hide that.
  */
+export const referenceArchitectureUpdateApplied = (plainText: string): boolean => {
+	const sections = plainText.split(/(?=^## Section \d+\s*$)/m);
+	const requested = Array.from({ length: 12 }, (_, index) => index + 2).map((number) =>
+		sections.find((part) => new RegExp(`^## Section ${number}\\s*$`, 'm').test(part))
+	);
+	const substantive = requested.every((section) => {
+		if (!section) return false;
+		const content = section.replace(/^## Section \d+\s*$/m, '').trim();
+		return content.length >= 40 && !content.includes('Draft architecture guidance.');
+	});
+	const updatedContent = requested.filter(Boolean).join(' ').toLocaleLowerCase('en');
+	return (
+		substantive &&
+		/knowledge layer/.test(updatedContent) &&
+		/(depth.{0,30}breadth|breadth.{0,30}depth)/.test(updatedContent) &&
+		/reference docs?/.test(updatedContent)
+	);
+};
+
 export const memoryCases: readonly EvalCase[] = [
 	{
 		id: 'memory-adherence-dutch-prompt',
@@ -192,9 +211,12 @@ export const memoryCases: readonly EvalCase[] = [
 				proposal: findCall(result, 'propose_memory_change')?.arguments
 			});
 
-			const verdict = scoreToolCalling(result, {
-				required: this.expected.requiredTools as string[]
-			});
+			const verdict = await expectSuggestionPending(
+				lab,
+				workspace.actor,
+				'memory',
+				(content) => /\bghent\b/i.test(content) && /\bplatform\b/i.test(content)
+			);
 			px.logAnnotation({
 				name: ARCHETYPES.memoryCapture,
 				score: verdict.passed ? 1 : 0,
@@ -329,9 +351,14 @@ export const memoryCases: readonly EvalCase[] = [
 				proposal: findCall(result, 'propose_memory_change')?.arguments
 			});
 
-			const verdict = scoreToolCalling(result, {
-				required: this.expected.requiredTools as string[]
-			});
+			const note = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const taskApplied = referenceArchitectureUpdateApplied(note.note.plainText);
+			const verdict = await expectSuggestionPending(
+				lab,
+				workspace.actor,
+				'memory',
+				(content) => /knowledge layer/i.test(content) && /reference docs?/i.test(content)
+			);
 			px.logAnnotation({
 				name: ARCHETYPES.memoryProactiveProposal,
 				score: verdict.passed ? 1 : 0,
@@ -340,7 +367,10 @@ export const memoryCases: readonly EvalCase[] = [
 			});
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ taskApplied, memoryIsReviewable: verdict.passed }, verdict.explanation).toEqual({
+				taskApplied: true,
+				memoryIsReviewable: true
+			});
 		}
 	},
 	{
@@ -512,7 +542,13 @@ export const memoryCases: readonly EvalCase[] = [
 						await lab.controllers.notes().get(workspace.actor, { noteId: created.id })
 					).note.plainText.toLowerCase()
 				: '';
-			const queued = await expectSuggestionPending(lab, workspace.actor, 'memory');
+			const queued = await expectSuggestionPending(
+				lab,
+				workspace.actor,
+				'memory',
+				(content) =>
+					/weekly/i.test(content) && /owner/i.test(content) && /(?:next|again)/i.test(content)
+			);
 			const noteComplete = (this.expected.noteContains as string[]).every((part) =>
 				body.includes(part)
 			);

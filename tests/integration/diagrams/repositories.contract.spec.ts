@@ -206,20 +206,10 @@ describe('Project-owned diagram persistence invariants', () => {
 		const notes = new NoteRecords(context.db);
 		await replaceNoteFixture({ ...note, archivedAt: now });
 		await notes.deleteTrashed(owner, note.id);
-		expect(await repository.findById(owner, stored.id)).toBeDefined();
-	});
-
-	it('clears the source note of a diagram whose note is deleted', async () => {
-		const { owner, project, note } = await seedNote('422');
-		const repository = new DiagramRecords(context.db);
-		const stored = await repository.insert(
-			owner,
-			diagram('422', { userId: owner.userId, projectId: project.id, sourceNoteId: note.id })
-		);
-		const notes = new NoteRecords(context.db);
-		await replaceNoteFixture({ ...note, archivedAt: now });
-		await notes.deleteTrashed(owner, note.id);
-		expect((await repository.findById(owner, stored.id))?.sourceNoteId).toBeUndefined();
+		expect(await repository.findById(owner, stored.id)).toMatchObject({
+			id: stored.id,
+			sourceNoteId: undefined
+		});
 	});
 
 	it('lists a note-less diagram under its project', async () => {

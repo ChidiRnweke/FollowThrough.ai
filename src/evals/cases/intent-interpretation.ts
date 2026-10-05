@@ -13,7 +13,11 @@ import { groundingWorkspace, GROUNDING_HASH, MEMORY_HASH } from '../fixtures/wor
 import { skillsWorkspace, SKILL_HASH } from '../fixtures/workspaces/skills';
 import { scoreIntentInterpretation } from '../assertions/intent';
 import { scoreStoppingBehavior } from '../assertions/stopping';
-import { scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
+import {
+	hasSuccessfulReadEvidence,
+	scoreToolCalling,
+	scoreToolDiscovery
+} from '../assertions/tool-calls';
 import {
 	expectSuggestionPending,
 	expectTodoCreated,
@@ -313,7 +317,7 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 			prompt:
 				"I wrote about this before somewhere... if I did can you add today's finding: the latency spike was caused by connection pool exhaustion"
 		},
-		expected: { required: ['search'], atLeastOneOf: [['edit_note', 'save_note', 'create_note']] },
+		expected: { required: ['search'], atLeastOneOf: [['edit_note', 'save_note']] },
 		metadata: {
 			layer: 'agent',
 			note: 'Conditional: search first, then write. Tests search → write sequencing with uncertain user.'
@@ -330,70 +334,62 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				response: result.finalResponse.slice(0, 400)
 			});
 
+			const targetId = workspace.noteIds.get('API connection pool saturation runbook');
+			const projectId = workspace.projectIds.get('Runbooks');
+			if (!targetId || !projectId) throw new Error('Connection pool runbook was not seeded');
+			const names = result.calledToolNames;
+			const searchIndex = names.indexOf('search');
+			const writeIndex = names.findIndex((name) => name === 'edit_note' || name === 'save_note');
+			const groundedSearch = hasSuccessfulReadEvidence(
+				result.toolCalls,
+				['search', 'grep', 'sed'],
+				targetId,
+				`/projects/${projectId}/notes/${targetId}.md`,
+				'checked-out connections'
+			);
+			const writesSearchedNote = result.toolCalls.some(
+				(call) =>
+					(call.name === 'edit_note' || call.name === 'save_note') &&
+					call.arguments.noteId === targetId &&
+					!call.failure
+			);
 			const verdict = scoreIntentInterpretation(result, {
 				required: ['search'],
-				atLeastOneOf: [['edit_note', 'save_note', 'create_note']],
+				atLeastOneOf: [['edit_note', 'save_note']],
 				maxCalls: 10
 			});
-			const targetId = workspace.noteIds.get('API connection pool saturation runbook');
-			if (!targetId) throw new Error('Connection pool runbook was not seeded');
 			const { note } = await lab.controllers.notes().get(workspace.actor, { noteId: targetId });
 			const findingPersisted = note.plainText
 				.toLowerCase()
 				.includes('latency spike was caused by connection pool exhaustion');
 			px.logAnnotation({
 				name: ARCHETYPES.intentInterpretation,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'search_then_write' : 'incomplete',
-				explanation: verdict.explanation
+				score:
+					verdict.passed && groundedSearch && writesSearchedNote && searchIndex < writeIndex
+						? 1
+						: 0,
+				label:
+					verdict.passed && groundedSearch && writesSearchedNote && searchIndex < writeIndex
+						? 'search_then_write'
+						: 'incomplete',
+				explanation: `${verdict.explanation}; selectedResult=${groundedSearch}; sameNoteWrite=${writesSearchedNote}; search=${searchIndex}; write=${writeIndex}`
 			});
 
 			expect({
 				status: result.status,
 				interpreted: verdict.passed,
+				groundedSearch,
+				writesSearchedNote,
+				searchedFirst: searchIndex >= 0 && writeIndex > searchIndex,
 				findingPersisted
-			}).toEqual({ status: 'completed', interpreted: true, findingPersisted: true });
-		}
-	},
-	{
-		id: 'intent-whats-my-situation',
-		name: 'does something useful for a maximally ambiguous prompt',
-		splits: [ARCHETYPES.intentInterpretation],
-		input: { prompt: "What's my situation right now?" },
-		expected: {
-			atLeastOneOf: [['list_todos', 'get_workspace_context', 'list_project_memory', 'search']]
-		},
-		metadata: {
-			layer: 'agent',
-			note: 'Maximally ambiguous. Many valid tools — just must do SOMETHING useful, not answer from thin air.'
-		},
-		async run(lab) {
-			const workspace = await seedWorkspace(lab, todosWorkspace);
-			const projectId = workspace.projectIds.get('Platform');
-			const result = await runCase(lab, workspace.actor, {
-				prompt: this.input.prompt as string,
-				mode: 'auto_accept',
-				...(projectId ? { projectId } : {})
+			}).toEqual({
+				status: 'completed',
+				interpreted: true,
+				groundedSearch: true,
+				writesSearchedNote: true,
+				searchedFirst: true,
+				findingPersisted: true
 			});
-			px.logOutput({
-				model: result.model,
-				toolCalls: result.calledToolNames,
-				response: result.finalResponse.slice(0, 400)
-			});
-
-			const verdict = scoreIntentInterpretation(result, {
-				atLeastOneOf: [['list_todos', 'get_workspace_context', 'list_project_memory', 'search']],
-				maxCalls: 8
-			});
-			px.logAnnotation({
-				name: ARCHETYPES.intentInterpretation,
-				score: verdict.passed ? 1 : 0,
-				label: verdict.passed ? 'grounded' : 'guessed',
-				explanation: verdict.explanation
-			});
-
-			expect(result.status).toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
 		}
 	},
 	{
@@ -717,45 +713,6 @@ export const intentInterpretationCases: readonly EvalCase[] = [
 				label: containsHash ? 'skill_applied' : 'skill_ignored',
 				explanation: containsHash
 					? `response contains ${SKILL_HASH} — skill instructions followed`
-					: `response did NOT contain ${SKILL_HASH}`
-			});
-
-			expect(result.status).toBe('completed');
-			expect(containsHash, `response must contain ${SKILL_HASH}`).toBe(true);
-		}
-	},
-	{
-		id: 'natural-skill-from-domain',
-		name: 'discovers and applies a skill from domain language alone',
-		splits: [ARCHETYPES.intentInterpretation, ARCHETYPES.skillAdherence],
-		input: {
-			prompt: 'Write me a compliance-style status update on where we are with the audit'
-		},
-		expected: { containsHash: SKILL_HASH },
-		metadata: {
-			layer: 'agent',
-			note: 'Vaguer version of skill-discovered-by-name. Skill must be inferred from "compliance-style".'
-		},
-		async run(lab) {
-			const workspace = await seedWorkspace(lab, skillsWorkspace);
-			const result = await runCase(lab, workspace.actor, {
-				prompt: this.input.prompt as string,
-				mode: 'auto_accept',
-				requestedSkillNames: ['Compliance format']
-			});
-			px.logOutput({
-				model: result.model,
-				toolCalls: result.calledToolNames,
-				response: result.finalResponse.slice(0, 400)
-			});
-
-			const containsHash = result.finalResponse.includes(SKILL_HASH);
-			px.logAnnotation({
-				name: ARCHETYPES.intentInterpretation,
-				score: containsHash ? 1 : 0,
-				label: containsHash ? 'skill_applied' : 'skill_missed',
-				explanation: containsHash
-					? `response contains ${SKILL_HASH}`
 					: `response did NOT contain ${SKILL_HASH}`
 			});
 

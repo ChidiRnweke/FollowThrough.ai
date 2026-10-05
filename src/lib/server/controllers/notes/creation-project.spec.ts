@@ -34,6 +34,7 @@ describe('The project a note is created in', () => {
 			projectId: testProjectId()
 		});
 		expect(note.projectId).toBe(testProjectId());
+		expect(projects.projects).toHaveLength(1);
 	});
 
 	// It used to answer a project it could not find by taking the first active one,
@@ -48,15 +49,5 @@ describe('The project a note is created in', () => {
 				projectId: '9f1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d' as ReturnType<typeof testProjectId>
 			})
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
-	});
-
-	it('never creates a project as a side effect of creating a note', async () => {
-		const { creation, projects } = setup();
-		projects.projects = [projectBuilder({ id: testProjectId() })];
-		await creation.notes.create(testActor(), {
-			title: 'Ingest design',
-			projectId: testProjectId()
-		});
-		expect(projects.projects).toHaveLength(1);
 	});
 });

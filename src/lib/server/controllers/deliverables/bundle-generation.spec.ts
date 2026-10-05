@@ -32,8 +32,8 @@ const archiveOf = (storage: InMemoryAttachmentStorage): AdmZip =>
 
 describe('Document bundle invariants', () => {
 	it('writes one document per selected note', async () => {
-		const { service, storage, notes } = setup();
-		await service.generateBundle(testActor(), {
+		const { service, storage, notes, artifacts, provenance } = setup();
+		const output = await service.generateBundle(testActor(), {
 			projectId: testProjectId(),
 			entries: twoNotes(notes),
 			title: 'Research',
@@ -45,17 +45,12 @@ describe('Document bundle invariants', () => {
 				.map((entry) => entry.entryName)
 				.sort()
 		).toEqual(['Interviews/Findings.pdf', 'Kickoff.pdf']);
-	});
 
-	it('renders each document from its own note rather than the whole selection', async () => {
-		const { service, storage, notes } = setup();
-		await service.generateBundle(testActor(), {
-			projectId: testProjectId(),
-			entries: twoNotes(notes),
-			title: 'Research',
-			format: 'pdf'
-		});
 		expect(archiveOf(storage).getEntry('Kickoff.pdf')?.getData().toString()).toBe('pdf:Kickoff');
+		expect(output.fileCount).toBe(2);
+		expect(output.downloadUrl).toContain('bundles/');
+		expect(artifacts.artifacts).toEqual([]);
+		expect(provenance.records).toEqual([]);
 	});
 
 	it('packs the chosen format', async () => {
@@ -72,50 +67,6 @@ describe('Document bundle invariants', () => {
 				.map((entry) => entry.entryName)
 				.sort()
 		).toEqual(['Interviews/Findings.docx', 'Kickoff.docx']);
-	});
-
-	it('reports how many documents the bundle holds', async () => {
-		const { service, notes } = setup();
-		const output = await service.generateBundle(testActor(), {
-			projectId: testProjectId(),
-			entries: twoNotes(notes),
-			title: 'Research',
-			format: 'pdf'
-		});
-		expect(output.fileCount).toBe(2);
-	});
-
-	it('returns a download url for the archive', async () => {
-		const { service, notes } = setup();
-		const output = await service.generateBundle(testActor(), {
-			projectId: testProjectId(),
-			entries: twoNotes(notes),
-			title: 'Research',
-			format: 'pdf'
-		});
-		expect(output.downloadUrl).toContain('bundles/');
-	});
-
-	it('records no artifact, because a bundle is a download and not a deliverable', async () => {
-		const { service, artifacts, notes } = setup();
-		await service.generateBundle(testActor(), {
-			projectId: testProjectId(),
-			entries: twoNotes(notes),
-			title: 'Research',
-			format: 'pdf'
-		});
-		expect(artifacts.artifacts).toEqual([]);
-	});
-
-	it('records no provenance, because nothing was persisted to trace', async () => {
-		const { service, provenance, notes } = setup();
-		await service.generateBundle(testActor(), {
-			projectId: testProjectId(),
-			entries: twoNotes(notes),
-			title: 'Research',
-			format: 'pdf'
-		});
-		expect(provenance.records).toEqual([]);
 	});
 
 	it('rejects an empty selection', async () => {

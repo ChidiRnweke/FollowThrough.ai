@@ -103,16 +103,28 @@ test('uses the offline fallback for an uncached route', async ({ page, context }
 test('keeps remote functions and API responses out of Cache Storage', async ({ page }) => {
 	await page.goto('/today');
 	await waitForServiceWorker(page);
-	const cachedUrls = await page.evaluate(async () => {
+	const cacheState = await page.evaluate(async () => {
 		const urls: string[] = [];
-		for (const name of await caches.keys()) {
+		const names = await caches.keys();
+		for (const name of names) {
 			for (const request of await (await caches.open(name)).keys()) urls.push(request.url);
 		}
-		return urls;
+		const paths = urls.map((url) => new URL(url).pathname);
+		return {
+			remoteOrApi: urls.some((url) => url.includes('/_app/remote/') || url.includes('/api/')),
+			oldPageCache: names.some((name) => name.startsWith('followthrough-pages-')),
+			privatePage: paths.some((path) => /^\/(today|notes|todos|projects)(?:\/|$)/.test(path)),
+			pageData: paths.some((path) => path.includes('__data.json')),
+			generatedShell: paths.includes('/offline-shell.html')
+		};
 	});
-	expect(cachedUrls.some((url) => url.includes('/_app/remote/') || url.includes('/api/'))).toBe(
-		false
-	);
+	expect(cacheState).toEqual({
+		remoteOrApi: false,
+		oldPageCache: false,
+		privatePage: false,
+		pageData: false,
+		generatedShell: true
+	});
 });
 
 test('opens an unvisited cached note URL after going offline', async ({ page, context }) => {
@@ -149,33 +161,6 @@ test('retains an offline task through reload and submits it on reconnect', async
 	await context.setOffline(false);
 	await page.evaluate(() => window.dispatchEvent(new Event('online')));
 	expect(await (await pushed).text()).toContain('applied');
-});
-
-test('stores no private page snapshots or page data', async ({ page }) => {
-	await page.goto('/today');
-	await waitForServiceWorker(page);
-	const privateCaches = await page.evaluate(async () => {
-		const names = await caches.keys();
-		const urls = (
-			await Promise.all(
-				names.map(async (name) =>
-					(await (await caches.open(name)).keys()).map((request) => new URL(request.url).pathname)
-				)
-			)
-		).flat();
-		return {
-			oldPageCache: names.some((name) => name.startsWith('followthrough-pages-')),
-			privatePage: urls.some((path) => /^\/(today|notes|todos|projects)(?:\/|$)/.test(path)),
-			pageData: urls.some((path) => path.includes('__data.json')),
-			generatedShell: urls.includes('/offline-shell.html')
-		};
-	});
-	expect(privateCaches).toEqual({
-		oldPageCache: false,
-		privatePage: false,
-		pageData: false,
-		generatedShell: true
-	});
 });
 
 test('creates a project and note offline with stable links through reload and reconnect', async ({

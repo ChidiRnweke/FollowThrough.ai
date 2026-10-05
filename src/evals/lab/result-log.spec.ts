@@ -28,21 +28,6 @@ const passedWithFailure = JSON.stringify([{ ...result, failure: 'Impossible pass
 const failedWithoutFailure = JSON.stringify([{ ...result, outcome: 'failed' }]);
 
 describe('eval result log', () => {
-	it('retains all provenance fields', () => {
-		expect(result).toEqual({
-			runId: 'campaign-tool-retrieval-baseline',
-			section: 'tool-retrieval',
-			subjectModel: 'openai/gpt-5.6-luna',
-			commit: 'abc123',
-			profile: 'exploratory',
-			caseId: 'tool-retrieval-todos-create',
-			sample: 1,
-			durationMs: 42,
-			outcome: 'passed',
-			completedAt: '2026-08-24T10:00:00.000Z'
-		});
-	});
-
 	it('persists the provenance record', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
 		const path = join(directory, 'results.json');
@@ -80,25 +65,20 @@ describe('eval result log', () => {
 		}
 	});
 
-	it('records the result rather than failing the case when the log is corrupt', async () => {
+	it('records the result and preserves a corrupt log as quarantined evidence', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
 		const path = join(directory, 'results.json');
 		try {
 			await writeFile(path, '[{"caseId": "truncated"}]}\n]', 'utf8');
 			await appendEvalResult(path, result);
-			expect(JSON.parse(await readFile(path, 'utf8'))).toEqual([result]);
-		} finally {
-			await rm(directory, { recursive: true });
-		}
-	});
-
-	it('keeps the unreadable log as evidence rather than overwriting it', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'followthrough-result-log-'));
-		const path = join(directory, 'results.json');
-		try {
-			await writeFile(path, '[{"caseId": "truncated"}]}\n]', 'utf8');
-			await appendEvalResult(path, result);
-			expect((await readdir(directory)).some((name) => name.includes('.corrupt-'))).toBe(true);
+			const quarantine = (await readdir(directory)).find((name) => name.includes('.corrupt-'));
+			expect({
+				results: JSON.parse(await readFile(path, 'utf8')),
+				corruptCopy: quarantine ? await readFile(join(directory, quarantine), 'utf8') : undefined
+			}).toEqual({
+				results: [result],
+				corruptCopy: '[{"caseId": "truncated"}]}\n]'
+			});
 		} finally {
 			await rm(directory, { recursive: true });
 		}

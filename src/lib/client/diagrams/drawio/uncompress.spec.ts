@@ -17,16 +17,13 @@ describe('uncompressDrawioXml', () => {
 	it('inflates a compressed diagram body', async () => {
 		const xml = `<mxfile><diagram id="a" name="Page-1">${await compress(MODEL)}</diagram></mxfile>`;
 		expect(await uncompressDrawioXml(xml)).toContain('<mxGraphModel>');
+
+		expect(await uncompressDrawioXml(xml)).toContain('<diagram id="a" name="Page-1">');
 	});
 
 	it('leaves an already uncompressed document untouched', async () => {
 		const xml = `<mxfile><diagram id="a">${MODEL}</diagram></mxfile>`;
 		expect(await uncompressDrawioXml(xml)).toBe(xml);
-	});
-
-	it('keeps the diagram attributes when inflating', async () => {
-		const xml = `<mxfile><diagram id="a" name="Page-1">${await compress(MODEL)}</diagram></mxfile>`;
-		expect(await uncompressDrawioXml(xml)).toContain('<diagram id="a" name="Page-1">');
 	});
 
 	it('inflates every page of a multi-page document', async () => {

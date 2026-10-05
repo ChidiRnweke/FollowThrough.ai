@@ -69,20 +69,6 @@ const documentXml = async (body: ProseMirrorDocument): Promise<string> => {
 	return new AdmZip(buffer).readAsText('word/document.xml');
 };
 
-/**
- * An external hyperlink's target lives in the relationships part, not the document body —
- * `document.xml` only carries the `r:id` that points at it. Checking the wrong part makes
- * a working link look broken.
- */
-const relationshipsXml = async (body: ProseMirrorDocument): Promise<string> => {
-	const buffer = await memoizedGenerateDocx({
-		notes: [{ title: 'Note', document: body }],
-		styles,
-		title: 'Export'
-	});
-	return new AdmZip(buffer).readAsText('word/_rels/document.xml.rels');
-};
-
 const linked = (marks: ProseMirrorMark[]): ProseMirrorDocument => ({
 	type: 'doc',
 	content: [{ type: 'paragraph', content: [{ type: 'text', marks, text: 'the docs' }] }]
@@ -90,25 +76,22 @@ const linked = (marks: ProseMirrorMark[]): ProseMirrorDocument => ({
 
 describe('Links in an exported document', () => {
 	/** The URL used to be dropped entirely: the anchor text survived, the destination did not. */
-	it('keeps the URL of a link', async () => {
-		const rels = await relationshipsXml(
-			linked([{ type: 'link', attrs: { href: 'https://example.com/spec' } }])
-		);
-		expect(rels).toContain('https://example.com/spec');
-	});
-
-	it('writes the link as a hyperlink relationship, not plain text', async () => {
-		const xml = await documentXml(
-			linked([{ type: 'link', attrs: { href: 'https://example.com/spec' } }])
-		);
-		expect(xml).toContain('<w:hyperlink');
-	});
-
-	it('keeps the link text readable', async () => {
-		const xml = await documentXml(
-			linked([{ type: 'link', attrs: { href: 'https://example.com/spec' } }])
-		);
-		expect(xml).toContain('the docs');
+	it('preserves the destination, hyperlink structure, and readable text for a link', async () => {
+		const zip = await zipFor({
+			notes: [
+				{
+					title: 'Note',
+					document: linked([{ type: 'link', attrs: { href: 'https://example.com/spec' } }])
+				}
+			]
+		});
+		const rels = zip.readAsText('word/_rels/document.xml.rels');
+		const xml = zip.readAsText('word/document.xml');
+		expect({ destination: rels, hyperlink: xml, text: xml }).toEqual({
+			destination: expect.stringContaining('https://example.com/spec'),
+			hyperlink: expect.stringContaining('<w:hyperlink'),
+			text: expect.stringContaining('the docs')
+		});
 	});
 
 	it('keeps emphasis inside a link', async () => {
@@ -243,19 +226,7 @@ describe('Docx export parity with PDF', () => {
 			diagramPngs: { [hash]: TINY_PNG }
 		});
 		expect(zip.getEntries().some((entry) => entry.entryName.startsWith('word/media/'))).toBe(true);
-	});
 
-	it('embeds a browser-rendered diagram as an image (2/2)', async () => {
-		const withDiagram: ProseMirrorDocument = {
-			type: 'doc',
-			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
-		};
-		const hash = mermaidSourceHash(DIAGRAM_SOURCE);
-		const zip = await zipFor({
-			notes: [{ title: 'Note', document: withDiagram }],
-			diagramSvgs: { [hash]: DIAGRAM_SVG },
-			diagramPngs: { [hash]: TINY_PNG }
-		});
 		expect(zip.readAsText('word/document.xml')).toContain('<w:drawing>');
 	});
 
@@ -285,20 +256,11 @@ describe('Docx export parity with PDF', () => {
 			'word/document.xml'
 		);
 		expect(xml).toContain('flowchart');
-	});
 
-	it('keeps the diagram source as code when no render was supplied (2/2)', async () => {
-		const withDiagram: ProseMirrorDocument = {
-			type: 'doc',
-			content: [{ type: 'mermaid', content: [{ type: 'text', text: DIAGRAM_SOURCE }] }]
-		};
-		const xml = (await zipFor({ notes: [{ title: 'Note', document: withDiagram }] })).readAsText(
-			'word/document.xml'
-		);
 		expect(xml).toContain('Courier New');
 	});
 
-	it('omits the file name from the page unless includeTitle is set (1/2)', async () => {
+	it('omits the file name from the page when includeTitle is false', async () => {
 		const untitled = await memoizedGenerateDocx({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport'
@@ -306,20 +268,9 @@ describe('Docx export parity with PDF', () => {
 		expect(new AdmZip(untitled).readAsText('word/document.xml')).not.toContain(
 			'ZebraQuarterlyReport'
 		);
-
-		const _titled = await memoizedGenerateDocx({
-			notes: [{ title: 'Note', document }],
-			title: 'ZebraQuarterlyReport',
-			settings: { ...defaultExportSettings, includeTitle: true }
-		});
 	});
 
-	it('omits the file name from the page unless includeTitle is set (2/2)', async () => {
-		const _untitled = await memoizedGenerateDocx({
-			notes: [{ title: 'Note', document }],
-			title: 'ZebraQuarterlyReport'
-		});
-
+	it('includes the file name in the page when includeTitle is true', async () => {
 		const titled = await memoizedGenerateDocx({
 			notes: [{ title: 'Note', document }],
 			title: 'ZebraQuarterlyReport',
@@ -328,29 +279,18 @@ describe('Docx export parity with PDF', () => {
 		expect(new AdmZip(titled).readAsText('word/document.xml')).toContain('ZebraQuarterlyReport');
 	});
 
-	it('honours export settings when no template styles them (1/3)', async () => {
+	it('honours font, margin, and line-height settings when no template overrides them', async () => {
 		const zip = await zipFor({
 			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
 		});
-		expect(zip.readAsText('word/styles.xml')).toContain('Times New Roman');
-		const _xml = zip.readAsText('word/document.xml');
-	});
-
-	it('honours export settings when no template styles them (2/3)', async () => {
-		const zip = await zipFor({
-			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
-		});
+		const stylesXml = zip.readAsText('word/styles.xml');
 		const xml = zip.readAsText('word/document.xml');
 		// 54pt margins are 1080 twips; 1.6 line height is 384 twentieths of a line.
-		expect(xml).toContain('w:top="1080"');
-	});
-
-	it('honours export settings when no template styles them (3/3)', async () => {
-		const zip = await zipFor({
-			settings: { fontFamily: 'times', fontSize: 12, lineHeight: 1.6, margin: 54 }
+		expect({ font: stylesXml, margin: xml, lineHeight: xml }).toEqual({
+			font: expect.stringContaining('Times New Roman'),
+			margin: expect.stringContaining('w:top="1080"'),
+			lineHeight: expect.stringContaining('w:line="384"')
 		});
-		const xml = zip.readAsText('word/document.xml');
-		expect(xml).toContain('w:line="384"');
 	});
 
 	it('degrades an unreachable remote image without failing the export (1/2)', async () => {
@@ -365,19 +305,7 @@ describe('Docx export parity with PDF', () => {
 			await zipFor({ notes: [{ title: 'Note', document: withRemoteImage }] })
 		).readAsText('word/document.xml');
 		expect(xml).toContain('[image unavailable]');
-	});
 
-	it('degrades an unreachable remote image without failing the export (2/2)', async () => {
-		const withRemoteImage: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{ type: 'image', attrs: { src: 'http://127.0.0.1:9/missing.png' } },
-				{ type: 'paragraph', content: [{ type: 'text', text: 'Still here.' }] }
-			]
-		};
-		const xml = (
-			await zipFor({ notes: [{ title: 'Note', document: withRemoteImage }] })
-		).readAsText('word/document.xml');
 		expect(xml).toContain('Still here.');
 	});
 
@@ -411,37 +339,7 @@ describe('Docx export parity with PDF', () => {
 			'word/document.xml'
 		);
 		expect(xml).toContain('Inner');
-	});
 
-	it('keeps nested lists at their own indent level (2/2)', async () => {
-		const withNestedList: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'bulletList',
-					content: [
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'Outer' }] },
-								{
-									type: 'bulletList',
-									content: [
-										{
-											type: 'listItem',
-											content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Inner' }] }]
-										}
-									]
-								}
-							]
-						}
-					]
-				}
-			]
-		};
-		const xml = (await zipFor({ notes: [{ title: 'Note', document: withNestedList }] })).readAsText(
-			'word/document.xml'
-		);
 		expect(xml).toContain('<w:ilvl w:val="1"/>');
 	});
 
@@ -464,7 +362,7 @@ describe('Docx export parity with PDF', () => {
 		expect(zip.readAsText('word/numbering.xml')).toContain('<w:numFmt w:val="decimal"/>');
 	});
 
-	it('keeps links and bold inside a blockquote (1/3)', async () => {
+	it('preserves the link, bold mark, and indentation inside a blockquote', async () => {
 		const withQuote: ProseMirrorDocument = {
 			type: 'doc',
 			content: [
@@ -490,65 +388,11 @@ describe('Docx export parity with PDF', () => {
 		};
 		const zip = await zipFor({ notes: [{ title: 'Note', document: withQuote }] });
 		expect(zip.readAsText('word/_rels/document.xml.rels')).toContain('https://example.com/quoted');
-		const _xml = zip.readAsText('word/document.xml');
-	});
-
-	it('keeps links and bold inside a blockquote (2/3)', async () => {
-		const withQuote: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'blockquote',
-					content: [
-						{
-							type: 'paragraph',
-							content: [
-								{
-									type: 'text',
-									text: 'quoted docs',
-									marks: [
-										{ type: 'link', attrs: { href: 'https://example.com/quoted' } },
-										{ type: 'bold' }
-									]
-								}
-							]
-						}
-					]
-				}
-			]
-		};
-		const zip = await zipFor({ notes: [{ title: 'Note', document: withQuote }] });
 		const xml = zip.readAsText('word/document.xml');
-		expect(xml).toContain('<w:b/>');
-	});
-
-	it('keeps links and bold inside a blockquote (3/3)', async () => {
-		const withQuote: ProseMirrorDocument = {
-			type: 'doc',
-			content: [
-				{
-					type: 'blockquote',
-					content: [
-						{
-							type: 'paragraph',
-							content: [
-								{
-									type: 'text',
-									text: 'quoted docs',
-									marks: [
-										{ type: 'link', attrs: { href: 'https://example.com/quoted' } },
-										{ type: 'bold' }
-									]
-								}
-							]
-						}
-					]
-				}
-			]
-		};
-		const zip = await zipFor({ notes: [{ title: 'Note', document: withQuote }] });
-		const xml = zip.readAsText('word/document.xml');
-		expect(xml).toContain('<w:ind w:left="720"/>');
+		expect({ bold: xml, indentation: xml }).toEqual({
+			bold: expect.stringContaining('<w:b/>'),
+			indentation: expect.stringContaining('<w:ind w:left="720"/>')
+		});
 	});
 });
 

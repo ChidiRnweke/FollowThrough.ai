@@ -134,7 +134,8 @@ describe('secrets backends', () => {
 		const client = new FakeSecretsClient(applicationSecrets());
 		client.failures = 1;
 		const backend = infisicalBackend(client);
-		expect(await backend.readSecret('DATABASE_URL')).toBe('postgresql://app');
+		const value = await backend.readSecret('DATABASE_URL');
+		expect({ value, logins: client.logins }).toEqual({ value: 'postgresql://app', logins: 1 });
 	});
 
 	// This test used to require the opposite, and required a bug. `readOptional`
@@ -156,13 +157,6 @@ describe('secrets backends', () => {
 		await expect(infisicalBackend(client).readOptional('DATABASE_URL')).rejects.toThrow(
 			SecretsBackendError
 		);
-	});
-
-	test('a retry re-authenticates in case the access token expired', async () => {
-		const client = new FakeSecretsClient(applicationSecrets());
-		client.failures = 1;
-		await infisicalBackend(client).readSecret('DATABASE_URL');
-		expect(client.logins).toBe(1);
 	});
 
 	test('platform keys are never served from the secrets backend', async () => {
@@ -203,18 +197,21 @@ describe('secrets backends', () => {
 });
 
 describe('environment hydration', () => {
-	test('secret values are published onto the environment', async () => {
-		const environment: Record<string, string | undefined> = {};
+	test('publishes secrets and defaults while preserving platform configuration', async () => {
+		const environment: Record<string, string | undefined> = {
+			OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317'
+		};
 		const client = new FakeSecretsClient(applicationSecrets());
 		await hydrateEnvironment({ environment, reader: new SecretsReader(infisicalBackend(client)) });
-		expect(environment.DATABASE_URL).toBe('postgresql://app');
-	});
-
-	test('application defaults fill in absent secrets', async () => {
-		const environment: Record<string, string | undefined> = {};
-		const client = new FakeSecretsClient(applicationSecrets());
-		await hydrateEnvironment({ environment, reader: new SecretsReader(infisicalBackend(client)) });
-		expect(environment.S3_BUCKET).toBe(APPLICATION_DEFAULTS.S3_BUCKET);
+		expect({
+			databaseUrl: environment.DATABASE_URL,
+			s3Bucket: environment.S3_BUCKET,
+			endpoint: environment.OTEL_EXPORTER_OTLP_ENDPOINT
+		}).toEqual({
+			databaseUrl: 'postgresql://app',
+			s3Bucket: APPLICATION_DEFAULTS.S3_BUCKET,
+			endpoint: 'http://collector:4317'
+		});
 	});
 
 	test('a missing required secret fails hard', async () => {
@@ -222,16 +219,6 @@ describe('environment hydration', () => {
 		await expect(
 			hydrateEnvironment({ environment: {}, reader: new SecretsReader(infisicalBackend(client)) })
 		).rejects.toThrow('DATABASE_URL');
-	});
-
-	test('platform keys already on the environment survive hydration', async () => {
-		const environment: Record<string, string | undefined> = {
-			OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
-			...applicationSecrets()
-		};
-		const client = new FakeSecretsClient(applicationSecrets());
-		await hydrateEnvironment({ environment, reader: new SecretsReader(infisicalBackend(client)) });
-		expect(environment.OTEL_EXPORTER_OTLP_ENDPOINT).toBe('http://collector:4317');
 	});
 
 	test('the env backend hydrates straight from the environment', async () => {
@@ -245,35 +232,27 @@ describe('environment hydration', () => {
 });
 
 describe('platform environment merging', () => {
-	test('platform keys are copied from the file environment', () => {
-		expect(
-			mergePlatformEnvironment({}, { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317' })
-		).toEqual({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317' });
-	});
-
 	// adapter-node has already read BODY_SIZE_LIMIT by the time hydration runs, so the only
 	// way a configured value reaches it is through the process environment.
-	test('the adapter body size limit is copied from the file environment', () => {
-		expect(mergePlatformEnvironment({}, { BODY_SIZE_LIMIT: '52428800' })).toEqual({
-			BODY_SIZE_LIMIT: '52428800'
-		});
-	});
-
 	// Log verbosity is deployment policy: dev .env files carry LOG_LEVEL, and the
 	// secrets backend must never get a vote.
-	test('the log level is copied from the file environment', () => {
-		expect(mergePlatformEnvironment({}, { LOG_LEVEL: 'debug' })).toEqual({
+	test('file platform policy fills missing keys without replacing platform values or secrets', () => {
+		expect(
+			mergePlatformEnvironment(
+				{ INFISICAL_URL: 'https://set' },
+				{
+					OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
+					BODY_SIZE_LIMIT: '52428800',
+					LOG_LEVEL: 'debug',
+					DATABASE_URL: 'postgresql://file',
+					INFISICAL_URL: 'https://file'
+				}
+			)
+		).toEqual({
+			INFISICAL_URL: 'https://set',
+			OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
+			BODY_SIZE_LIMIT: '52428800',
 			LOG_LEVEL: 'debug'
 		});
-	});
-
-	test('application keys are left to the secrets backend', () => {
-		expect(mergePlatformEnvironment({}, { DATABASE_URL: 'postgresql://file' })).toEqual({});
-	});
-
-	test('an existing platform value is not overwritten', () => {
-		expect(
-			mergePlatformEnvironment({ INFISICAL_URL: 'https://set' }, { INFISICAL_URL: 'https://file' })
-		).toEqual({ INFISICAL_URL: 'https://set' });
 	});
 });

@@ -68,16 +68,10 @@ describe('NoteBreadcrumb folder chain', () => {
 				.getByLabelText('test project 3 / hierarchy test / a test folder', { exact: true })
 				.all()
 		).toHaveLength(1);
-	});
 
-	it('drops the folder names from the row of a nested note', async () => {
-		const screen = await render(NoteBreadcrumb, { shell, note });
-		expect(await screen.getByText('a test folder', { exact: true }).all()).toHaveLength(0);
-	});
-
-	it('still shows the note title of a nested note', async () => {
-		const screen = await render(NoteBreadcrumb, { shell, note });
 		expect(await screen.getByText('second note', { exact: true }).all()).not.toHaveLength(0);
+
+		expect(await screen.getByText('a test folder', { exact: true }).all()).toHaveLength(0);
 	});
 
 	it('spells the project out when the note is not in a folder', async () => {

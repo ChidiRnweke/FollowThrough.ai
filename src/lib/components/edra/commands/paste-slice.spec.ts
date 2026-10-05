@@ -34,14 +34,8 @@ const kinds = (node: ProseMirrorNode): string[] => {
 };
 
 describe('Trimming line breaks off the edges of a copied block', () => {
-	it('drops the trailing breaks a paragraph carries', () => {
-		const trimmed = withoutClipboardPadding(sliceOf([para(schema.text('A'), br(), br())], 1, 1));
-
-		expect(kinds(trimmed.content.child(0))).toEqual(['text']);
-	});
-
-	it('drops the leading breaks a paragraph carries', () => {
-		const trimmed = withoutClipboardPadding(sliceOf([para(br(), schema.text('A'))], 1, 1));
+	it('drops padding breaks from both ends of a copied paragraph', () => {
+		const trimmed = withoutClipboardPadding(sliceOf([para(br(), schema.text('A'), br())], 1, 1));
 
 		expect(kinds(trimmed.content.child(0))).toEqual(['text']);
 	});
@@ -90,18 +84,14 @@ describe('Trimming line breaks off the edges of a copied block', () => {
 });
 
 describe('Trimming blank blocks off the edges of a pasted slice', () => {
-	it('drops a leading blank paragraph', () => {
-		expect(names(withoutClipboardPadding(sliceOf([blank(), text('A')])))).toEqual(['A']);
-	});
-
-	it('drops a trailing blank paragraph', () => {
-		expect(names(withoutClipboardPadding(sliceOf([text('A'), blank()])))).toEqual(['A']);
-	});
-
 	it('drops blank paragraphs at both ends', () => {
 		expect(
 			names(withoutClipboardPadding(sliceOf([blank(), text('A'), text('B'), blank()])))
 		).toEqual(['A', 'B']);
+
+		expect(names(withoutClipboardPadding(sliceOf([text('A'), blank()])))).toEqual(['A']);
+
+		expect(names(withoutClipboardPadding(sliceOf([blank(), text('A')])))).toEqual(['A']);
 	});
 
 	it('drops a paragraph left empty by its own trailing breaks', () => {

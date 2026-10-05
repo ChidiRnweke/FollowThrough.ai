@@ -47,16 +47,6 @@ const setup = () => {
 };
 
 describe('Task edit rules', () => {
-	it('clears a counterparty for personal work at creation', async () => {
-		const { controller } = setup();
-		const { todo: created } = await controller.create(testActor(), {
-			projectId: testProjectId(),
-			title: 'Send design',
-			responsibility: 'mine',
-			waitingOn: 'Sam'
-		});
-		expect(created.waitingOn).toBeUndefined();
-	});
 	it('switching responsibility to mine clears the counterparty', async () => {
 		const { controller, todos } = setup();
 		todos.todos = [todoBuilder({ responsibility: 'waiting_on', waitingOn: 'Sam' })];

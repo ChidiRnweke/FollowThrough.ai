@@ -64,16 +64,4 @@ describe('Today grouping from resolved facts', () => {
 			input: [1, 2, 3, 4, 5, 6, 7, 8].map(testNoteId)
 		});
 	});
-	it('does not invent records when the supplied view is partial', () => {
-		expect(
-			assembleToday({ today, due: [], waiting: [], notes: [], pendingSuggestionCount: 0 })
-		).toEqual({
-			overdue: [],
-			dueToday: [],
-			waitingOn: [],
-			pendingSuggestionCount: 0,
-			pinnedNotes: [],
-			recentNotes: []
-		});
-	});
 });

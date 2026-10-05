@@ -122,6 +122,12 @@ it('extracts searchable labels from the published XML', async () => {
 	const { controller, input } = setup();
 	const saved = await controller.publishProjectDiagram(testActor(), input).then(savedDiagram);
 	expect(saved.searchableText).toBe('API & worker');
+
+	expect({
+		source: saved.source,
+		current: saved.currentRevision,
+		published: saved.publishedRevision
+	}).toEqual({ source: input.source, current: 2, published: 2 });
 });
 
 it('publishes rich, repeated and blank labels with the same policy as browser review', async () => {
@@ -130,16 +136,6 @@ it('publishes rich, repeated and blank labels with the same policy as browser re
 		.publishProjectDiagram(testActor(), { ...input, source: RICH_DRAWIO_LABELS_XML })
 		.then(savedDiagram);
 	expect(saved.searchableText).toBe('Browser\nQueue');
-});
-
-it('publishes the submitted source as a new document revision', async () => {
-	const { controller, input } = setup();
-	const saved = await controller.publishProjectDiagram(testActor(), input).then(savedDiagram);
-	expect({
-		source: saved.source,
-		current: saved.currentRevision,
-		published: saved.publishedRevision
-	}).toEqual({ source: input.source, current: 2, published: 2 });
 });
 
 it('makes published labels searchable with the source-note title', async () => {

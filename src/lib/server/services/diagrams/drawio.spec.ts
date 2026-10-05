@@ -92,9 +92,7 @@ describe('Untrusted draw.io XML invariants', () => {
 				VALID_DRAWIO_XML.replace('id="2"', 'id="2" href="javascript:alert(1)"')
 			)
 		).toThrow('unsafe URL');
-	});
 
-	it('names the cell an unsafe URL sits on, so the author can go and find it', () => {
 		expect(() =>
 			new DrawioXmlValidator().validate(
 				VALID_DRAWIO_XML.replace('id="2"', 'id="2" href="javascript:alert(1)"')
@@ -173,22 +171,9 @@ describe('Untrusted draw.io XML invariants', () => {
 describe('Draw.io preview and retrieval invariants', () => {
 	it('removes scripts from exported SVG previews', () => {
 		const result = new DrawioSvgSanitizer().sanitize(
-			'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><text>Safe</text></svg>'
+			'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><a href="https://tracker.example"><text>Safe</text></a><rect fill="url(https://tracker.example/pixel)" /></svg>'
 		);
 		expect(result).not.toContain('<script');
-	});
-
-	it('removes external links from exported SVG previews', () => {
-		const result = new DrawioSvgSanitizer().sanitize(
-			'<svg xmlns="http://www.w3.org/2000/svg"><a href="https://tracker.example"><text>Safe</text></a></svg>'
-		);
-		expect(result).not.toContain('tracker.example');
-	});
-
-	it('removes external paint URLs from exported SVG previews', () => {
-		const result = new DrawioSvgSanitizer().sanitize(
-			'<svg xmlns="http://www.w3.org/2000/svg"><rect fill="url(https://tracker.example/pixel)" /></svg>'
-		);
 		expect(result).not.toContain('tracker.example');
 	});
 

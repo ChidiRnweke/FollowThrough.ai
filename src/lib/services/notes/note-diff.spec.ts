@@ -80,12 +80,7 @@ describe('diffNoteDocuments', () => {
 		const candidate = doc(para('a'), para('x'), para('c'));
 		const diff = diffNoteDocuments(base, candidate);
 		expect(diff.base.map((block) => block.index)).toEqual([0, 1, 2, 3]);
-	});
 
-	it('classifies every candidate block exactly once, in document order', () => {
-		const base = doc(para('a'), para('b'), para('c'), para('d'));
-		const candidate = doc(para('a'), para('x'), para('c'));
-		const diff = diffNoteDocuments(base, candidate);
 		expect(diff.candidate.map((block) => block.index)).toEqual([0, 1, 2]);
 	});
 

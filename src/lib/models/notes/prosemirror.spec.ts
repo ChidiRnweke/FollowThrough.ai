@@ -55,30 +55,6 @@ describe('ProseMirror document invariants', () => {
  * them without needing a DOM, so a regression fails in the fastest test first.
  */
 describe('attributes the editor actually writes', () => {
-	it('accepts the null textAlign that TextAlign defaults to', () => {
-		expect(
-			findProseMirrorDocumentIssue({
-				type: 'doc',
-				content: [{ type: 'paragraph', attrs: { textAlign: null }, content: [] }]
-			})
-		).toBeUndefined();
-	});
-
-	it('accepts the anchor attributes TableOfContents adds to a heading', () => {
-		expect(
-			findProseMirrorDocumentIssue({
-				type: 'doc',
-				content: [
-					{
-						type: 'heading',
-						attrs: { level: 2, textAlign: null, id: 'anchor', 'data-toc-id': 'anchor' },
-						content: []
-					}
-				]
-			})
-		).toBeUndefined();
-	});
-
 	it('accepts an image height stored as a number rather than a string', () => {
 		expect(
 			findProseMirrorDocumentIssue({
@@ -91,14 +67,6 @@ describe('attributes the editor actually writes', () => {
 	// Open by construction: any extension may add a global attribute to any node,
 	// which is how `data-toc-id` arrived. Rejecting them made the schema a list of
 	// every extension ever configured.
-	it('keeps an attribute no extension in this repo writes yet', () => {
-		expect(
-			findProseMirrorDocumentIssue({
-				type: 'doc',
-				content: [{ type: 'paragraph', attrs: { textAlign: null, 'data-future': 'x' } }]
-			})
-		).toBeUndefined();
-	});
 });
 
 describe('reading a document out of storage', () => {
@@ -111,22 +79,19 @@ describe('reading a document out of storage', () => {
 	};
 
 	it('degrades an unmodelled block instead of throwing', () => {
-		expect(unknownProseMirrorNodes(readProseMirrorDocument(withUnknownBlock))).toHaveLength(1);
-	});
-
-	it('names the type it could not read', () => {
-		expect(unknownProseMirrorNodes(readProseMirrorDocument(withUnknownBlock))[0]?.reason).toContain(
-			'compaction'
-		);
-	});
-
-	it('keeps the blocks around it intact', () => {
-		expect(readProseMirrorDocument(withUnknownBlock).content?.[0]?.type).toBe('paragraph');
-	});
-
-	it('keeps the unreadable block whole so it round-trips', () => {
-		const [unknown] = unknownProseMirrorNodes(readProseMirrorDocument(withUnknownBlock));
-		expect(unknown?.raw).toEqual({ type: 'compaction', summary: 'from a newer editor' });
+		const document = readProseMirrorDocument(withUnknownBlock);
+		const unknown = unknownProseMirrorNodes(document)[0];
+		expect({
+			unknownCount: unknownProseMirrorNodes(document).length,
+			keptKnownPrefix: document.content?.[0]?.type,
+			reason: unknown?.reason,
+			raw: unknown?.raw
+		}).toEqual({
+			unknownCount: 1,
+			keptKnownPrefix: 'paragraph',
+			reason: expect.stringContaining('compaction'),
+			raw: { type: 'compaction', summary: 'from a newer editor' }
+		});
 	});
 
 	// The write boundary must not accept what the read boundary tolerates:

@@ -33,16 +33,14 @@ describe('renderMarkdown', () => {
 		expect(result).toEqual({ kind: 'failure', raw: UNPARSEABLE });
 	});
 
-	it('does not propagate the parser failure to the caller', () => {
-		const render = () => renderMarkdown(UNPARSEABLE, parserThatThrowsOnDollars());
-		expect(render).not.toThrow();
-	});
-
-	it('recovers on the next chunk once the text parses again', () => {
+	it('returns raw content on a parser failure and recovers on the next chunk', () => {
 		const parser = parserThatThrowsOnDollars();
-		renderMarkdown(UNPARSEABLE, parser);
+		const failed = renderMarkdown(UNPARSEABLE, parser);
 		const result = renderMarkdown('plain text', parser);
-		expect(result.kind).toBe('rendered');
+		expect({ failed, recovered: result.kind }).toEqual({
+			failed: { kind: 'failure', raw: UNPARSEABLE },
+			recovered: 'rendered'
+		});
 	});
 
 	it('treats blank content as nothing to render', () => {

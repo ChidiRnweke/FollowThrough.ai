@@ -30,25 +30,19 @@ it('reports the confirmed local save when the next durable queue write fails', a
 		search.replacement = 'deploy';
 		await search.search();
 		await search.replaceAll();
-		expect(search.searchError).toBe(
-			'Saved replacements on this device in 1 note (Note 1). Save not confirmed for "Note 2": Device storage is full. 1 remaining note was not attempted. Review the saved changes before searching again.'
-		);
-	} finally {
-		fixture.stop();
-	}
-});
-
-it('keeps only the first replacement in the durable queue after a later failure', async () => {
-	const fixture = await replacementWorkspace();
-	try {
-		const search = new GlobalSearchStore(() => fixture.resources);
-		search.query = 'ship';
-		search.replacement = 'deploy';
-		await search.search();
-		await search.replaceAll();
-		expect(
-			(await fixture.outbox.list(fixture.account)).map((entry) => entry.intent.command)
-		).toMatchObject([{ kind: 'saveNote', plainText: 'deploy release' }]);
+		expect({
+			error: search.searchError,
+			queued: (await fixture.outbox.list(fixture.account)).map((entry) => {
+				const command = entry.intent.command;
+				return command.kind === 'saveNote'
+					? { kind: command.kind, plainText: command.plainText }
+					: command;
+			})
+		}).toMatchObject({
+			error:
+				'Saved replacements on this device in 1 note (Note 1). Save not confirmed for "Note 2": Device storage is full. 1 remaining note was not attempted. Review the saved changes before searching again.',
+			queued: [{ kind: 'saveNote', plainText: 'deploy release' }]
+		});
 	} finally {
 		fixture.stop();
 	}

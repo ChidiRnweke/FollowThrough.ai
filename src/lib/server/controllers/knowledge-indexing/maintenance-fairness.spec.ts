@@ -33,22 +33,17 @@ const setup = async () => {
 	return { repository, client, worker };
 };
 
-it('reaches healthy sources after a full batch of persistent failures', async () => {
-	const { repository, worker } = await setup();
-	await worker.run();
-	await worker.run();
-	expect(
-		repository.documents
-			.filter(({ document }) => document.embedding)
-			.map(({ document }) => document.noteId)
-	).toEqual([testNoteId(3), testNoteId(4)]);
-});
-
-it('wraps around and retries earlier sources after they recover', async () => {
+it('gets past poison sources, then retries them after recovery', async () => {
 	const { repository, client, worker } = await setup();
 	await worker.run();
 	await worker.run();
+	const healthy = repository.documents
+		.filter(({ document }) => document.embedding)
+		.map(({ document }) => document.noteId);
 	client.rejectedContents.clear();
 	await worker.run();
-	expect(await repository.listPendingSources(10)).toEqual([]);
+	expect({ healthy, pending: await repository.listPendingSources(10) }).toEqual({
+		healthy: [testNoteId(3), testNoteId(4)],
+		pending: []
+	});
 });

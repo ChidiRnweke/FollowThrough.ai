@@ -43,9 +43,7 @@ describe('Pasting text that contains prices', () => {
 		expect(pasted?.content.textBetween(0, pasted.content.size, '\n')).toContain(
 			'$4–13 vs $30 per 1,000 pages.'
 		);
-	});
 
-	it('creates no math node', () => {
 		expect(JSON.stringify(pasted?.content.toJSON())).not.toContain('inlineMath');
 	});
 });

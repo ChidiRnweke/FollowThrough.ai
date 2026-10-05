@@ -108,32 +108,20 @@ describe('the proofreading menu', () => {
 		const underline = await waitForUnderline(element);
 		editor.destroy();
 		expect(underline.className).toBe('proofread-issue proofread-issue--spelling');
-	});
 
-	it('underlines the misspelled word and nothing around it', async () => {
-		const { editor, element } = mountEditor();
-		const underline = await waitForUnderline(element);
-		editor.destroy();
 		expect(underline.textContent).toBe('teh');
 	});
 
 	it('opens the menu when a reader clicks the underline', async () => {
 		const { editor, element, menu } = mountEditor();
 		const underline = await waitForUnderline(element);
-		await userEvent.click(underline);
-		await waitForMenu(menu);
-		editor.destroy();
-		expect(menu.style.visibility).toBe('visible');
-	});
-
-	it('anchors the menu to the flagged word rather than the caret', async () => {
-		const { editor, element, menu } = mountEditor();
-		const underline = await waitForUnderline(element);
 		const word = underline.getBoundingClientRect();
 		await userEvent.click(underline);
 		await waitForMenu(menu);
 		const placed = menu.getBoundingClientRect();
+		const visible = menu.style.visibility;
 		editor.destroy();
+		expect(visible).toBe('visible');
 		// Floating UI places it below and left-aligned; a few pixels of drift is the
 		// offset middleware, a hundred would be the caret or the document origin.
 		expect(Math.abs(placed.left - word.left)).toBeLessThan(8);
@@ -157,37 +145,19 @@ describe('the proofreading menu', () => {
 	});
 
 	it('corrects the word when the offered fix is applied', async () => {
-		const { editor, element } = mountEditor();
-		const underline = await waitForUnderline(element);
-		await userEvent.click(underline);
-		const selection = proofreadSelection(editor.state)!;
-		editor.commands.applyProofreadSuggestion(selection.from, selection.to, 'the');
-		const text = editor.state.doc.textContent;
-		editor.destroy();
-		expect(text).toBe('I saw the dog in the garden this morning.');
-	});
-
-	it('closes the menu once the correction has been made', async () => {
 		const { editor, element, menu } = mountEditor();
 		const underline = await waitForUnderline(element);
 		await userEvent.click(underline);
 		await waitForMenu(menu);
 		const selection = proofreadSelection(editor.state)!;
 		editor.commands.applyProofreadSuggestion(selection.from, selection.to, 'the');
-		await vi.advanceTimersByTimeAsync(80);
-		editor.destroy();
-		expect(menu.style.visibility).toBe('hidden');
-	});
-
-	it('removes the underline once the word is corrected', async () => {
-		const { editor, element } = mountEditor();
-		const underline = await waitForUnderline(element);
-		await userEvent.click(underline);
-		const selection = proofreadSelection(editor.state)!;
-		editor.commands.applyProofreadSuggestion(selection.from, selection.to, 'the');
 		await vi.advanceTimersByTimeAsync(120);
+		const text = editor.state.doc.textContent;
+		const menuVisibility = menu.style.visibility;
 		const remaining = element.querySelectorAll('.proofread-issue').length;
 		editor.destroy();
+		expect(text).toBe('I saw the dog in the garden this morning.');
+		expect(menuVisibility).toBe('hidden');
 		expect(remaining).toBe(0);
 	});
 });

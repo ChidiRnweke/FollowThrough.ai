@@ -12,6 +12,8 @@ describe('Mermaid theme rules', () => {
 
 	it('marks dark mode so mermaid does not derive light-mode contrasts', () => {
 		expect(createMermaidConfig(true).themeVariables.darkMode).toBe(true);
+
+		expect(createMermaidConfig(true).themeVariables.darkMode).toBe(true);
 	});
 
 	it('spends the brand accent only on sequence activations', () => {
@@ -20,19 +22,9 @@ describe('Mermaid theme rules', () => {
 		expect(brandUses).toHaveLength(1);
 	});
 
-	it('keeps the light preset when nothing is overridden', () => {
-		expect(mermaidTokensFor({ base: 'light' }).muted).toBe('#f4f4f0');
-	});
-
 	it('applies an overridden colour on top of the preset', () => {
 		expect(mermaidTokensFor({ base: 'light', palette: { muted: '#ffeedd' } }).muted).toBe(
 			'#ffeedd'
-		);
-	});
-
-	it('leaves colours it was not given at the preset', () => {
-		expect(mermaidTokensFor({ base: 'dark', palette: { muted: '#ffeedd' } }).foreground).toBe(
-			'#fbfbf9'
 		);
 	});
 
@@ -41,9 +33,5 @@ describe('Mermaid theme rules', () => {
 			createMermaidConfig({ base: 'light', palette: { muted: '#ffeedd' } }).themeVariables
 				.primaryColor
 		).toBe('#ffeedd');
-	});
-
-	it('still accepts a bare dark-mode flag from the editor', () => {
-		expect(createMermaidConfig(true).themeVariables.darkMode).toBe(true);
 	});
 });

@@ -81,58 +81,38 @@ describe('Promise extraction orchestration invariants', () => {
 	});
 
 	it('leaves a todo pending when the pipeline is not trusted', async () => {
-		const { extractor, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.createdTodos).toEqual([]);
-	});
-
-	it('returns accepted status and the created task identity', async () => {
-		const { extractor, trust, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.suggestions[0]).toMatchObject({
-			status: 'accepted',
-			appliedArtifactId: result.createdTodos[0].id,
-			isAutoAccepted: true
-		});
-	});
-
-	it('returns a proposed suggestion when review is required', async () => {
-		const { extractor, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.suggestions[0].status).toBe('proposed');
-	});
-
-	it('scopes an auto-created todo to the source note project', async () => {
-		const { extractor, trust, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.createdTodos[0]?.projectId).toBe(testProjectId());
-	});
-
-	it('records pipeline provenance against the selection anchor', async () => {
 		const { extractor, provenance, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
 		const result = await controller.extractPromises(testActor(), { selection });
-		expect(provenance.records[0]?.sourceAnchorId).toBe(result.anchorId);
+		expect({
+			createdTodos: result.createdTodos,
+			status: result.suggestions[0]?.status,
+			anchor: provenance.records[0]?.sourceAnchorId
+		}).toEqual({ createdTodos: [], status: 'proposed', anchor: result.anchorId });
 	});
 
-	it('marks an auto-created todo with its AI provenance', async () => {
+	it('returns the accepted task with its source project and matching suggestion provenance', async () => {
 		const { extractor, trust, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
 		trust.autoAccept = true;
 		const result = await controller.extractPromises(testActor(), { selection });
-		expect(result.createdTodos[0]?.provenanceId).toBe(result.suggestions[0]?.provenanceId);
+		const task = result.createdTodos[0];
+		expect(task).toMatchObject({
+			projectId: testProjectId(),
+			provenanceId: expect.any(String)
+		});
+		expect(result.suggestions[0]).toMatchObject({
+			status: 'accepted',
+			appliedArtifactId: task.id,
+			isAutoAccepted: true,
+			provenanceId: task.provenanceId
+		});
 	});
 });
 
 describe('Promise extraction transaction invariants', () => {
-	it('rolls back a created todo when suggestion acceptance fails', async () => {
-		const { extractor, suggestions, trust, todos, controller } = setup();
+	it('rolls back the todo and selection anchor when suggestion acceptance fails', async () => {
+		const { content, extractor, suggestions, trust, todos, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
 		trust.autoAccept = true;
 		suggestions.failAcceptance = true;
@@ -141,19 +121,6 @@ describe('Promise extraction transaction invariants', () => {
 		} catch {
 			// The restored todo collection is the invariant under test.
 		}
-		expect(todos.todos).toEqual([]);
-	});
-
-	it('rolls back the selection anchor when suggestion acceptance fails', async () => {
-		const { content, extractor, suggestions, trust, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		trust.autoAccept = true;
-		suggestions.failAcceptance = true;
-		try {
-			await controller.extractPromises(testActor(), { selection });
-		} catch {
-			// The restored anchor collection is the invariant under test.
-		}
-		expect(content.anchors).toEqual([]);
+		expect({ todos: todos.todos, anchors: content.anchors }).toEqual({ todos: [], anchors: [] });
 	});
 });

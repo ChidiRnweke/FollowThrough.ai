@@ -164,27 +164,6 @@ describe('shared mutation submission', () => {
 			independent: { kind: 'present', snapshot: { etag: syncEtag(1n), value: 'Edited' } }
 		});
 	});
-	it('does not recover another tab’s active submission', async () => {
-		const started = Promise.withResolvers<void>();
-		const release = Promise.withResolvers<void>();
-		const requests: string[] = [];
-		const { queue, dependencies } = setup({
-			send: async (input) => {
-				requests.push(input.operationId);
-				started.resolve();
-				await release.promise;
-				return applied(input.operationId, input.command);
-			}
-		});
-		const other = new MutationQueue('alice', dependencies);
-		await queue.append(draft(firstId));
-		const first = queue.flush();
-		await started.promise;
-		const second = other.flush();
-		release.resolve();
-		await Promise.all([first, second]);
-		expect(requests).toEqual([firstId]);
-	});
 	it('does not submit after logout while loading a queued write', async () => {
 		const requests: string[] = [];
 		const { queue } = setup({
@@ -368,8 +347,10 @@ it('leaves a stopped account unchanged when a retry deadline arrives', async () 
 it('returns a waiting state without recovering another tab’s unresolved submission', async () => {
 	const started = Promise.withResolvers<void>();
 	const release = Promise.withResolvers<void>();
+	const requests: string[] = [];
 	const { queue, dependencies } = setup({
 		send: async (input) => {
+			requests.push(input.operationId);
 			started.resolve();
 			await release.promise;
 			return applied(input.operationId, input.command);
@@ -387,7 +368,7 @@ it('returns a waiting state without recovering another tab’s unresolved submis
 	await sending;
 	queue.stop();
 	other.stop();
-	expect(result).toEqual({ kind: 'waiting' });
+	expect({ result, requests }).toEqual({ result: { kind: 'waiting' }, requests: [firstId] });
 });
 
 it('automatically retries the first storage failure before any operation is submitted', async () => {

@@ -42,25 +42,14 @@ const setup = async () => {
 	};
 	return { screen, archive, memory };
 };
-it('keeps saved memory visible while its project is active', async () => {
-	const { screen, memory } = await setup();
+it('moves active project memory to an unavailable view after archive', async () => {
+	const { screen, archive, memory } = await setup();
 	await expect.element(screen.getByText(memory.content, { exact: true })).toBeVisible();
-});
-it('replaces archived project memory with an unavailable state', async () => {
-	const { screen, archive } = await setup();
 	await archive();
 	await expect
 		.element(screen.getByText('This project is no longer available.', { exact: true }))
 		.toBeVisible();
-});
-it('hides retained memory after its project is archived', async () => {
-	const { screen, archive, memory } = await setup();
-	await archive();
 	await expect.element(screen.getByText(memory.content, { exact: true })).not.toBeInTheDocument();
-});
-it('removes the add action after its project is archived', async () => {
-	const { screen, archive } = await setup();
-	await archive();
 	await expect
 		.element(screen.getByRole('button', { name: 'Add memory', exact: true }))
 		.not.toBeInTheDocument();

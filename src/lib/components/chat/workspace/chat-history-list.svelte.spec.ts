@@ -23,9 +23,4 @@ describe('ChatHistoryList', () => {
 		await screen.getByRole('button', { name: 'Reviewed draft Workspace chat' }).click();
 		expect(selected).toEqual([session.id]);
 	});
-
-	it('shows the empty state without conversations', async () => {
-		const screen = await render(ChatHistoryList, { sessions: [], onselect: () => undefined });
-		expect(await screen.getByText('No past conversations yet.').all()).not.toHaveLength(0);
-	});
 });

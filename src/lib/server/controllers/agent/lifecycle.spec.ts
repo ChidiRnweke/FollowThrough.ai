@@ -186,29 +186,21 @@ const currentRun = (runs: InMemoryAgentRunPersistence) =>
 	runs.runs.find((run) => run.id === testRunId)!;
 
 describe('stopping a running agent run', () => {
-	it('settles the run as cancelled', async () => {
-		const { runs } = await stopMidStream();
-		expect(currentRun(runs).status).toBe('cancelled');
-	});
-
-	it('appends a cancelled event for the client stream', async () => {
-		const { runs } = await stopMidStream();
-		expect(runs.events.some((record) => record.event.type === 'cancelled')).toBe(true);
-	});
-
-	it('reports the cancelled outcome to the caller', async () => {
-		const { outcome } = await stopMidStream();
-		expect(outcome).toBe('cancelled');
-	});
-
-	it('records when the run finished', async () => {
-		const { runs } = await stopMidStream();
-		expect(currentRun(runs).finishedAt).toBeDefined();
-	});
-
-	it('notifies subscribers so the open stream closes', async () => {
-		const { notified } = await stopMidStream();
-		expect(notified.filter((runId) => runId === testRunId).length).toBeGreaterThan(1);
+	it('settles and publishes cancellation to the run, stream, and subscribers', async () => {
+		const { runs, outcome, notified } = await stopMidStream();
+		expect({
+			status: currentRun(runs).status,
+			finished: currentRun(runs).finishedAt !== undefined,
+			event: runs.events.some((record) => record.event.type === 'cancelled'),
+			outcome,
+			notifiedMoreThanOnce: notified.filter((runId) => runId === testRunId).length > 1
+		}).toEqual({
+			status: 'cancelled',
+			finished: true,
+			event: true,
+			outcome: 'cancelled',
+			notifiedMoreThanOnce: true
+		});
 	});
 });
 
@@ -273,8 +265,11 @@ describe('a cancellation that races the end of a run', () => {
 		await untilRunning(context.runs);
 		await requestCancellation(context.runs);
 		runner.release();
-		await execution;
-		expect(currentRun(context.runs).status).toBe('cancelled');
+		const outcome = await execution;
+		expect({ status: currentRun(context.runs).status, outcome }).toEqual({
+			status: 'cancelled',
+			outcome: 'cancelled'
+		});
 	});
 
 	it('wins against an approval park that lands after it', async () => {
@@ -289,18 +284,11 @@ describe('a cancellation that races the end of a run', () => {
 		await untilRunning(context.runs);
 		await requestCancellation(context.runs);
 		runner.release();
-		await execution;
-		expect(currentRun(context.runs).status).toBe('cancelled');
-	});
-
-	it('reports the cancelled outcome, not the one it raced', async () => {
-		const runner = finishingRunner({ type: 'completed', sessionItems: [] });
-		const context = setup(runner);
-		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
-		await untilRunning(context.runs);
-		await requestCancellation(context.runs);
-		runner.release();
-		expect(await execution).toBe('cancelled');
+		const outcome = await execution;
+		expect({ status: currentRun(context.runs).status, outcome }).toEqual({
+			status: 'cancelled',
+			outcome: 'cancelled'
+		});
 	});
 });
 
@@ -313,7 +301,7 @@ describe('finishing a cancellation out of band', () => {
 		expect(currentRun(runs).status).toBe('cancelled');
 	});
 
-	it('leaves a run that already settled alone', async () => {
+	it('leaves a completed run and its event journal untouched', async () => {
 		const { lifecycle, runs } = setup(abortingRunner());
 		await new RunPreparation(runs).claim(testRunId, testTime);
 		await new RunSettlements(runs, runs).claim(testRunId, {
@@ -322,19 +310,10 @@ describe('finishing a cancellation out of band', () => {
 			model: currentRun(runs).model
 		});
 		await lifecycle.finishCancellation(testRunId);
-		expect(currentRun(runs).status).toBe('completed');
-	});
-
-	it('appends no orphan event for a run that already settled', async () => {
-		const { lifecycle, runs } = setup(abortingRunner());
-		await new RunPreparation(runs).claim(testRunId, testTime);
-		await new RunSettlements(runs, runs).claim(testRunId, {
-			kind: 'completed',
-			conversationId: testConversationId,
-			model: currentRun(runs).model
-		});
-		await lifecycle.finishCancellation(testRunId);
-		expect(runs.events.some((record) => record.event.type === 'cancelled')).toBe(false);
+		expect({
+			status: currentRun(runs).status,
+			cancelledEvent: runs.events.some((record) => record.event.type === 'cancelled')
+		}).toEqual({ status: 'completed', cancelledEvent: false });
 	});
 
 	it('appends exactly one cancelled event when two settlers race', async () => {
@@ -380,23 +359,17 @@ describe('a cancellation that races preparation', () => {
 		expect(await execution).toBe('cancelled');
 	});
 
-	it('settles as cancelled instead of failing the run', async () => {
-		const context = racingSetup();
-		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
-		await context.building;
-		await requestCancellation(context.runs);
-		context.release();
-		await execution;
-		expect(currentRun(context.runs).status).toBe('cancelled');
-	});
-
 	it('reports the cancelled outcome to the caller', async () => {
 		const context = racingSetup();
 		const execution = context.lifecycle.execute(testRunId, new AbortController().signal);
 		await context.building;
 		await requestCancellation(context.runs);
 		context.release();
-		expect(await execution).toBe('cancelled');
+		const outcome = await execution;
+		expect({ status: currentRun(context.runs).status, outcome }).toEqual({
+			status: 'cancelled',
+			outcome: 'cancelled'
+		});
 	});
 });
 
@@ -419,9 +392,12 @@ describe('settling a run whose execution threw', () => {
 		);
 	});
 
-	it('marks the run failed', async () => {
+	it('marks a provider failure in both the run and client event stream', async () => {
 		const { runs } = await crash(new Error('Provider exploded'));
-		expect(currentRun(runs).status).toBe('failed');
+		expect({
+			status: currentRun(runs).status,
+			failedEvent: runs.events.some((record) => record.event.type === 'failed')
+		}).toEqual({ status: 'failed', failedEvent: true });
 	});
 
 	it('records the provider error code', async () => {
@@ -429,11 +405,6 @@ describe('settling a run whose execution threw', () => {
 			new AgentProviderFailure('Provider exploded', 'EXTERNAL_SERVICE', false)
 		);
 		expect(currentRun(runs).providerErrorCode).toBe('EXTERNAL_SERVICE');
-	});
-
-	it('appends a failed event the client will not wait on', async () => {
-		const { runs } = await crash(new Error('Something unexpected'));
-		expect(runs.events.some((record) => record.event.type === 'failed')).toBe(true);
 	});
 
 	it('cancels rather than fails a run the user asked to stop', async () => {
@@ -479,14 +450,12 @@ describe('settling a run whose execution threw', () => {
 		return context;
 	};
 
-	it('settles the call a failing run was still parked on', async () => {
-		const { toolRows } = await crashHoldingApproval();
-		expect(toolRows.map((row) => row.status)).toEqual(['failed']);
-	});
-
-	it('clears the pending decision once it has been settled in the journal', async () => {
-		const { runs } = await crashHoldingApproval();
-		expect(currentRun(runs).pendingDecisions).toEqual([]);
+	it('settles the parked tool call and clears its pending decision', async () => {
+		const { runs, toolRows } = await crashHoldingApproval();
+		expect({
+			toolStatuses: toolRows.map((row) => row.status),
+			pending: currentRun(runs).pendingDecisions
+		}).toEqual({ toolStatuses: ['failed'], pending: [] });
 	});
 });
 
@@ -560,27 +529,19 @@ const completeTalkativeTurn = async () => {
 };
 
 describe('what a finished turn leaves behind to be reopened', () => {
-	it('writes the agent thinking down, which nothing used to', async () => {
+	it('journals ordered reasoning and speech with distinct cursors', async () => {
 		const { journalled } = await completeTalkativeTurn();
-		expect(journalled.some((entry) => entry.kind === 'reasoning')).toBe(true);
-	});
-
-	it('keeps speech either side of a tool call apart', async () => {
-		const { journalled } = await completeTalkativeTurn();
-		expect(journalled.filter((entry) => entry.kind === 'text').map((entry) => entry.text)).toEqual([
-			'Reading it first.',
-			'Done.'
-		]);
-	});
-
-	it('stamps each with where it began, so the turn can be put back in order', async () => {
-		const { journalled } = await completeTalkativeTurn();
-		expect(journalled.every((entry) => entry.cursor !== undefined)).toBe(true);
-	});
-
-	it('does not collapse the turn onto one cursor, which put every word after every call', async () => {
-		const { journalled } = await completeTalkativeTurn();
-		expect(new Set(journalled.map((entry) => entry.cursor)).size).toBe(journalled.length);
+		expect({
+			reasoning: journalled.some((entry) => entry.kind === 'reasoning'),
+			text: journalled.filter((entry) => entry.kind === 'text').map((entry) => entry.text),
+			hasCursors: journalled.every((entry) => entry.cursor !== undefined),
+			uniqueCursors: new Set(journalled.map((entry) => entry.cursor)).size === journalled.length
+		}).toEqual({
+			reasoning: true,
+			text: ['Reading it first.', 'Done.'],
+			hasCursors: true,
+			uniqueCursors: true
+		});
 	});
 });
 
@@ -603,31 +564,24 @@ describe('Durable note approval publication', () => {
 				};
 			}
 		});
-	it('stores the domain review beside the resumable provider state', async () => {
-		const { lifecycle, runs } = checkpoint();
+	it('publishes the durable review to the run, event, and replayable tool row', async () => {
+		const { lifecycle, runs, toolRows, approvalVisibility } = checkpoint();
 		await lifecycle.execute(testRunId, new AbortController().signal);
-		expect(currentRun(runs)).toMatchObject({
-			status: 'awaiting_approval',
-			serializedState: 'provider-checkpoint',
-			pendingDecisions: [pending]
+		expect({
+			run: currentRun(runs),
+			visibleAfterCheckpoint: approvalVisibility,
+			event: runs.events.find((record) => record.event.type === 'approval_required')?.event,
+			toolRows
+		}).toMatchObject({
+			run: {
+				status: 'awaiting_approval',
+				serializedState: 'provider-checkpoint',
+				pendingDecisions: [pending]
+			},
+			visibleAfterCheckpoint: [true],
+			event: { review: pending.review },
+			toolRows: [{ status: 'approval_required', review: pending.review }]
 		});
-	});
-	it('publishes approvals only once their checkpoint is visible', async () => {
-		const { lifecycle, approvalVisibility } = checkpoint();
-		await lifecycle.execute(testRunId, new AbortController().signal);
-		expect(approvalVisibility).toEqual([true]);
-	});
-	it('carries the same review into the replayable approval event', async () => {
-		const { lifecycle, runs } = checkpoint();
-		await lifecycle.execute(testRunId, new AbortController().signal);
-		expect(
-			runs.events.find((record) => record.event.type === 'approval_required')?.event
-		).toMatchObject({ review: pending.review });
-	});
-	it('journals the same review for a reopened conversation', async () => {
-		const { lifecycle, toolRows } = checkpoint();
-		await lifecycle.execute(testRunId, new AbortController().signal);
-		expect(toolRows).toMatchObject([{ status: 'approval_required', review: pending.review }]);
 	});
 });
 

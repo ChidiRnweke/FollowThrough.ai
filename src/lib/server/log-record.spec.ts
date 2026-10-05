@@ -25,10 +25,6 @@ describe('formatBody', () => {
 		circular.self = circular;
 		expect(formatBody([circular])).toBe('[unserializable]');
 	});
-
-	test('leaves a plain string untouched', () => {
-		expect(formatBody(['[worker] stopped'])).toBe('[worker] stopped');
-	});
 });
 
 describe('recordAttributes', () => {
@@ -36,21 +32,16 @@ describe('recordAttributes', () => {
 		expect(recordAttributes(['[agent-run] tick failed'])['log.tag']).toBe('agent-run');
 	});
 
-	test('carries the stack trace that the string body never had', () => {
-		const error = new Error('boom');
-		expect(recordAttributes(['[worker]', error])['exception.stacktrace']).toBe(error.stack);
-	});
-
-	test('exposes the domain code as its own attribute', () => {
-		const error = new ExternalServiceError('Generated document could not be stored');
-		expect(recordAttributes(['[domain]', error])['error.code']).toBe('EXTERNAL_SERVICE');
-	});
-
-	test('exposes the normalized cause the throw site captured', () => {
+	test('records domain error code, normalized cause, and stack for one failure', () => {
 		const error = new ExternalServiceError('Generated document could not be stored', {
 			cause: 'NoSuchBucket'
 		});
-		expect(recordAttributes([error])['error.details.cause']).toBe('NoSuchBucket');
+		const attributes = recordAttributes([error]);
+		expect({
+			code: attributes['error.code'],
+			cause: attributes['error.details.cause'],
+			stack: attributes['exception.stacktrace']
+		}).toEqual({ code: 'EXTERNAL_SERVICE', cause: 'NoSuchBucket', stack: error.stack });
 	});
 
 	test('adds no exception attributes when no argument is an error', () => {

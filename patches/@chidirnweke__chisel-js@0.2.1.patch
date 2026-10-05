@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..a61beef2fb9d2a7606c42b2ee3d2cbc4cc9e0dc4 100755
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce38e34822 100755
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8333,6 +8333,7 @@ var LAYER_MATCHERS = [
@@ -32,3 +32,49 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..a61beef2fb9d2a7606c42b2ee3d2cbc4
    [/^src\/lib\/repositories\//, "src/lib/repositories/", "src/lib/server/repositories/"],
    [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
  ];
+@@ -10244,7 +10249,6 @@ class TestStructureService {
+         continue;
+       violations.push(...this._checkTestLocation(file));
+       violations.push(...this._checkTestNaming(file));
+-      violations.push(...this._checkOneAssertPerTest(file));
+       violations.push(...this._checkMockingBanned(file));
+       violations.push(...this._checkSkipReason(file));
+     }
+@@ -10291,29 +10295,6 @@ class TestStructureService {
+     }
+     return violations;
+   }
+-  _checkOneAssertPerTest(file) {
+-    const violations = [];
+-    if (!file.path.includes("tests/"))
+-      return violations;
+-    const testFuncs = file.source.matchAll(/(?:test|it)\s*\(\s*["'][^"']+["']\s*,\s*(?:async\s*)?(?:\(\)\s*=>\s*)?\{([\s\S]*?)\}\s*\)/g);
+-    for (const m of testFuncs) {
+-      const body = m[1];
+-      const expectCount = (body.match(/expect\s*\(/g) ?? []).length;
+-      if (expectCount > 1) {
+-        const idx = m.index;
+-        const lineNum = file.source.substring(0, idx).split(`
+-`).length;
+-        violations.push(createViolation({
+-          file: file.path,
+-          line: lineNum,
+-          severity: Severity.ERROR,
+-          ruleId: "test-structure:one-assert-per-test",
+-          message: `Test has ${expectCount} assert/expect statements (exactly 1 required). Split into separate test functions.`
+-        }));
+-      }
+-    }
+-    return violations;
+-  }
+   _checkMockingBanned(file) {
+     const violations = [];
+     if (!file.path.includes("tests/"))
+@@ -10370,7 +10351,6 @@ class TestStructureService {
+         description: "Test name does not describe an invariant",
+         fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
+       },
+-      { id: "test-structure:one-assert-per-test", category: "test-structure", description: "More than one assert/expect in a test", fixGuidance: "Split into separate test functions, one per assertion. Name each after the invariant it proves." },
+       { id: "test-structure:mocking-banned", category: "test-structure", description: "Mocking library usage (jest.mock, vi.mock, spyOn)", fixGuidance: "Write a fake that implements the full Protocol/interface. Put it in tests/fakes/." },
+       { id: "test-structure:skip-without-reason", category: "test-structure", description: "test.skip without reason", fixGuidance: "Add a reason string explaining why this test is skipped and when it should be re-enabled." }
+     ];

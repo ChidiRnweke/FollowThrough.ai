@@ -72,23 +72,11 @@ describe('Note restore invariants', () => {
 	});
 
 	it('clears the archived marker', async () => {
-		const { notes, controller } = setup();
+		const { notes, controller, indexer } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
 		const result = await controller.restore(testActor(), { noteId: testNoteId() });
 		expect(result.note.archivedAt).toBeUndefined();
-	});
-
-	it('returns the note to the active list', async () => {
-		const { notes, controller } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await controller.restore(testActor(), { noteId: testNoteId() });
 		expect(await notes.listActive(testActor())).toHaveLength(1);
-	});
-
-	it('reindexes the note so search can find it again', async () => {
-		const { notes, controller, indexer } = setup();
-		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		await controller.restore(testActor(), { noteId: testNoteId() });
 		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
 

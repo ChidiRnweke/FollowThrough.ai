@@ -85,9 +85,20 @@ describe('Revision-bound note tool approvals', () => {
 	it('applies the checkpoint after recreating the registry', async () => {
 		const fixture = setup();
 		const pending = await fixture.prepare();
+		if (!pending.review) throw new Error('Expected a review');
+		const review = noteChangeReviewSchema.parse(JSON.parse(pending.review.content));
 		const persisted = readPendingDecisions(JSON.parse(JSON.stringify([pending]))).decisions;
 		await fixture.invoke(fixture.registry(persisted));
-		expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
+		expect({ review, appliedBody: fixture.content.notes[0].plainText }).toMatchObject({
+			review: {
+				kind: 'prepared',
+				change: {
+					base: { revision: 1, title: 'Release' },
+					result: { plainText: 'Launch Tuesday.' }
+				}
+			},
+			appliedBody: 'Launch Tuesday.'
+		});
 	});
 	it('refuses to reinterpret an approved patch after the note changes', async () => {
 		const fixture = setup();
@@ -238,14 +249,9 @@ describe('A note change that fails while it is being prepared', () => {
 		return { tool, args, callId: 'note-save-1' };
 	};
 
-	it('does not abort the turn', async () => {
+	it('returns a safe failure to the model without aborting or exposing the internal error', async () => {
 		const { tool, args, callId } = faulty();
-		await expect(tool.needsApproval(context(), args, callId)).resolves.toBe(false);
-	});
-
-	it('returns a failure the model can read', async () => {
-		const { tool, args, callId } = faulty();
-		await tool.needsApproval(context(), args, callId);
+		const approvalRequired = await tool.needsApproval(context(), args, callId);
 		const result = await tool.invoke(context(), JSON.stringify(args), {
 			toolCall: {
 				type: 'function_call',
@@ -254,34 +260,17 @@ describe('A note change that fails while it is being prepared', () => {
 				arguments: JSON.stringify(args)
 			}
 		});
-		expect(readToolFailure(result)).toBeDefined();
-	});
-
-	it('tells the model its arguments are not at fault', async () => {
-		const { tool, args, callId } = faulty();
-		await tool.needsApproval(context(), args, callId);
-		const result = await tool.invoke(context(), JSON.stringify(args), {
-			toolCall: {
-				type: 'function_call',
-				name: 'save_note',
-				callId,
-				arguments: JSON.stringify(args)
-			}
+		const message = JSON.stringify(result);
+		expect({
+			approvalRequired,
+			failure: readToolFailure(result),
+			takesResponsibility: message.includes('The fault is ours, not your arguments.'),
+			leaksInternalText: message.includes('is not writable')
+		}).toEqual({
+			approvalRequired: false,
+			failure: expect.any(String),
+			takesResponsibility: true,
+			leaksInternalText: false
 		});
-		expect(JSON.stringify(result)).toContain('The fault is ours, not your arguments.');
-	});
-
-	it('does not leak the internal error text to the model', async () => {
-		const { tool, args, callId } = faulty();
-		await tool.needsApproval(context(), args, callId);
-		const result = await tool.invoke(context(), JSON.stringify(args), {
-			toolCall: {
-				type: 'function_call',
-				name: 'save_note',
-				callId,
-				arguments: JSON.stringify(args)
-			}
-		});
-		expect(JSON.stringify(result)).not.toContain('is not writable');
 	});
 });
