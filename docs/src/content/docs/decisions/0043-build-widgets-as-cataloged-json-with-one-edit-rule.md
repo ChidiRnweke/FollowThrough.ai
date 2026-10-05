@@ -447,8 +447,15 @@ would misrepresent the note.
   parameters convert to strict JSON Schema.
 - `src/lib/components/chat/actions/widget-approval-preview.spec.ts` checks the approval preview:
   before and after, a stale edit, a created widget, and a widget not yet on the device.
-- `src/evals/cases/effects.ts` `effect-widget-created-then-ticked` asks the agent to create and
-  embed a checklist, then tick one item, and checks the saved widget and note.
+- `src/evals/cases/widgets.ts` asks the agent for twelve widgets, from the PR #299 examples to a
+  grade calculator, a trip cost splitter and an OKR tracker. It also asks for six edits to
+  existing widgets, one request that does not name widgets, and two requests that need no widget.
+  A probe (`src/evals/assertions/widget/probe.ts`) uses each saved widget as a person would. It
+  moves inputs, adds rows, ticks boxes and adds todos, and it compares the labelled values with
+  closed-form results. `widget_build` is gated. `widget_embed` is reported only, until the
+  create-and-embed question below is decided.
+  `src/evals/fixtures/widgets/scenarios.spec.ts` shows that a hand-built reference widget
+  passes each probe.
 - `src/lib/services/widgets/search-text.spec.ts`, the indexing case in
   `widget-mutations.contract.spec.ts` and `src/lib/server/services/knowledge-search/semantic.spec.ts`
   check the search text, the stored chunks and the widget source.
