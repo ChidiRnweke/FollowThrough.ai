@@ -4,11 +4,11 @@ import type { LocalDate } from '$lib/models/workspace';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
-import { savingsSimulator } from '../../fixtures/widgets/calculators';
-import { decisionLog } from '../../fixtures/widgets/records';
+import { decisionLog, statusBoard } from '../../fixtures/widgets/records';
+import { savingsSimulator, tripSplitter } from '../../fixtures/widgets/calculators';
+import { okrTracker, relocationChecklist } from '../../fixtures/widgets/trackers';
 import { projectDashboard } from '../../fixtures/widgets/dashboard';
 import { scenarioRecords } from '../../fixtures/widgets/scenario';
-import { relocationChecklist } from '../../fixtures/widgets/trackers';
 import { runWidgetProbe, type ProbeStep } from './probe';
 
 const noRecords: WidgetSourceRecords = {
@@ -143,5 +143,93 @@ describe('widget probe', () => {
 				[{ kind: 'reads', label: /overall/i, near: 43.33, tolerance: 0.02, percent: true }]
 			)
 		).toBe('');
+	});
+
+	// The shapes below are widgets a live run built correctly and an earlier grader misread.
+
+	it('reads a status beside its row name when the dropdown has no label of its own', () => {
+		const draft: WidgetDraft = {
+			...widgetTemplates.status,
+			layout: {
+				...widgetTemplates.status.layout,
+				elements: {
+					...widgetTemplates.status.layout.elements,
+					status: {
+						...widgetTemplates.status.layout.elements.status,
+						props: { ...widgetTemplates.status.layout.elements.status.props, label: '' }
+					}
+				}
+			}
+		};
+		expect(probe(draft, statusBoard.probe)).toBe('');
+	});
+
+	it('adds a row to a table whose names sit under "Cost" and amounts under "Amount (€)"', () => {
+		const draft: WidgetDraft = {
+			...tripSplitter.reference,
+			layout: {
+				...tripSplitter.reference.layout,
+				elements: {
+					...tripSplitter.reference.layout.elements,
+					costs: {
+						type: 'DataTable',
+						props: {
+							rows: { $bindState: '/costs' },
+							columns: [
+								{ key: 'item', label: 'Cost', kind: 'text' },
+								{ key: 'amount', label: 'Amount (€)', kind: 'number' }
+							],
+							addLabel: 'Add cost'
+						},
+						children: []
+					}
+				}
+			}
+		};
+		expect(probe(draft, tripSplitter.probe)).toBe('');
+	});
+
+	it('finds a key result field by the card it sits in and reads an unlabelled bar by its heading', () => {
+		const card = (key: string, title: string) => ({
+			type: 'Card',
+			props: { title },
+			children: [`${key}Current`]
+		});
+		const current = (key: string) => ({
+			type: 'NumberInput',
+			props: { label: 'Current', value: { $bindState: `/${key}/current` } },
+			children: []
+		});
+		const draft: WidgetDraft = {
+			title: 'Make deploys boring',
+			layout: {
+				root: 'root',
+				elements: {
+					root: {
+						type: 'Stack',
+						props: {},
+						children: ['heading', 'bar', 'lead', 'failure', 'deploys']
+					},
+					heading: { type: 'Heading', props: { text: 'Overall progress' }, children: [] },
+					bar: {
+						type: 'Progress',
+						props: { value: { $state: '/derived/overall' }, max: 100 },
+						children: []
+					},
+					lead: card('lead', 'Deploy lead time'),
+					leadCurrent: current('lead'),
+					failure: card('failure', 'Change failure rate'),
+					failureCurrent: current('failure'),
+					deploys: card('deploys', 'Weekly deploys'),
+					deploysCurrent: current('deploys')
+				},
+				derived: {
+					overall:
+						'round(((120 - @/lead/current) / 90 + (15 - @/failure/current) / 10 + (@/deploys/current - 10) / 30) / 3 * 1000) / 10'
+				}
+			},
+			data: { lead: { current: 75 }, failure: { current: 11 }, deploys: { current: 22 } }
+		};
+		expect(probe(draft, okrTracker.probe)).toBe('');
 	});
 });

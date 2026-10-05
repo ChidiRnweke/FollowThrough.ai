@@ -10,7 +10,7 @@ export const expenseTracker: WidgetScenario = {
 	id: 'widget-build-expense-tracker',
 	name: 'an expense tracker totals rows a person adds and ticks',
 	prompt:
-		'In my Background note, add an expense tracker widget with a monthly budget of 2,000. Start it with: Rent (Housing) 1,200, paid; Groceries (Food) 182.50, paid; Train pass (Transport) 64, not paid yet. I want to add expenses as they come in, tick what is paid, see what I spent and what is left, and see a chart of spending by category.',
+		'In my Background note, add an expense tracker widget with a monthly budget of 2,000. Start it with: Rent (Housing) 1,200, paid; Groceries (Food) 182.50, paid; Train pass (Transport) 64, not paid yet. I want to add expenses as they come in and tick what is paid. Show the total of all expenses, paid or not, what is left of the budget after them, and a chart of spending by category.',
 	workspace: personaWorkspace,
 	...BACKGROUND,
 	titleFragment: /expense|budget|spend/i,

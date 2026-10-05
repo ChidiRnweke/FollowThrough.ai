@@ -160,7 +160,7 @@ export const widgetReadout = (
 			};
 		});
 	return {
-		lines: exported.blocks.flatMap(linesOf),
+		lines: withRowLabels(exported.blocks.flatMap(linesOf)),
 		charts,
 		problems: [
 			...issues.map((issue) => `${issue.path}: ${issue.message}`),
@@ -170,6 +170,18 @@ export const widgetReadout = (
 		]
 	};
 };
+
+/**
+ * A value with no label of its own reads under the text just before it, as it does on screen:
+ * a row of "Design" and a dropdown showing "On track" reads "Design: On track".
+ */
+const withRowLabels = (lines: readonly ReadoutLine[]): readonly ReadoutLine[] =>
+	lines.map((line, index) => {
+		const before = lines[index - 1];
+		return line.label === '' && before && before.label === before.text
+			? { label: before.label, text: line.text }
+			: line;
+	});
 
 /** Every number written in `text`: "129,885", "€1,319.59", "5%", "7 of 14". */
 export const numbersIn = (text: string): readonly number[] =>

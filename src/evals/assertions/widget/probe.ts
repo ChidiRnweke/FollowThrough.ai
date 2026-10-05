@@ -143,6 +143,38 @@ const labelOf = (element: WidgetElement, state: JsonValue): string => {
 	return typeof label === 'string' ? label : '';
 };
 
+/**
+ * An element's label with the titles of the cards around it: "Deploy lead time Current" for a
+ * Current field in a card per key result. Tried only when no own label matches, since a card
+ * titled "Savings simulator" would otherwise match every input inside it.
+ */
+const contextLabelOf = (widget: Widget, target: WidgetElement, state: JsonValue): string => {
+	const parents = new Map<WidgetElement, WidgetElement>();
+	for (const [, element] of placedElements(widget.layout))
+		for (const child of element.children) {
+			const placedChild = widget.layout.elements[child];
+			if (placedChild) parents.set(placedChild, element);
+		}
+	const titles: string[] = [];
+	for (let at = parents.get(target); at; at = parents.get(at)) {
+		const title = resolveProp(at.props.title, state);
+		if (at.type === 'Card' && typeof title === 'string') titles.unshift(title);
+	}
+	return [...titles, labelOf(target, state)].join(' ');
+};
+
+/** The first element whose own label matches, else the first whose card titles and label do. */
+const byLabel = (
+	widget: Widget,
+	candidates: readonly WidgetElement[],
+	state: JsonValue,
+	matches: (own: string, context: string) => boolean
+): WidgetElement | undefined =>
+	candidates.find((element) => matches(labelOf(element, state), labelOf(element, state))) ??
+	candidates.find((element) =>
+		matches(labelOf(element, state), contextLabelOf(widget, element, state))
+	);
+
 const describeInputs = (widget: Widget, state: JsonValue): string =>
 	placed(widget)
 		.filter((element) => INPUTS.has(element.type) && bound(element.props.value))
@@ -154,11 +186,11 @@ const set = (
 	state: ProbeState,
 	step: Extract<ProbeStep, { kind: 'set' }>
 ): StepOutcome => {
-	const input = placed(widget).find(
-		(element) =>
-			INPUTS.has(element.type) &&
-			bound(element.props.value) &&
-			step.input.test(labelOf(element, state.data))
+	const input = byLabel(
+		widget,
+		placed(widget).filter((element) => INPUTS.has(element.type) && bound(element.props.value)),
+		state.data,
+		(_own, context) => step.input.test(context)
 	);
 	const pointer = input && bound(input.props.value);
 	if (!pointer)
@@ -260,6 +292,40 @@ const addsTo = (widget: Widget, pointer: string): boolean =>
 			.some((binding) => binding.action === 'pushState' && binding.params?.statePath === pointer)
 	);
 
+const cellFits = (column: WidgetDataTableColumn, value: boolean | number | string): boolean =>
+	typeof value === 'boolean'
+		? column.kind === 'checkbox'
+		: typeof value === 'number'
+			? column.kind === 'number'
+			: column.kind === 'text' ||
+				(column.kind === 'select' && cellValue(column, value) !== undefined);
+
+/**
+ * A column for each cell, in order: its label matches, it holds that kind of value, and no two
+ * cells share it. A trip table labels its names "Cost" and its numbers "Amount (€)"; matching
+ * by label alone would put both cells in "Cost".
+ */
+const assignColumns = (
+	columns: readonly WidgetDataTableColumn[],
+	cells: readonly ProbeCell[]
+): readonly WidgetDataTableColumn[] | undefined => {
+	const assign = (
+		index: number,
+		used: ReadonlySet<string>
+	): readonly WidgetDataTableColumn[] | undefined => {
+		const cell = cells[index];
+		if (!cell) return [];
+		for (const column of columns) {
+			if (used.has(column.key) || !cell.column.test(column.label) || !cellFits(column, cell.value))
+				continue;
+			const rest = assign(index + 1, new Set([...used, column.key]));
+			if (rest) return [column, ...rest];
+		}
+		return undefined;
+	};
+	return assign(0, new Set());
+};
+
 const addRow = (
 	widget: Widget,
 	state: ProbeState,
@@ -268,9 +334,7 @@ const addRow = (
 	const tables = placed(widget).filter(
 		(element) => element.type === 'DataTable' && bound(element.props.rows)
 	);
-	const table = tables.find((element) =>
-		step.cells.every((cell) => columnsOf(element).some((column) => cell.column.test(column.label)))
-	);
+	const table = tables.find((element) => assignColumns(columnsOf(element), step.cells));
 	const pointer = table && bound(table.props.rows);
 	if (!table || !pointer)
 		return {
@@ -288,9 +352,10 @@ const addRow = (
 	if (typeof table.props.addLabel !== 'string' && !addsTo(widget, pointer))
 		return { kind: 'failure', explanation: `the table at ${pointer} has no way to add a row` };
 	const columns = columnsOf(table);
+	const assigned = assignColumns(columns, step.cells) ?? [];
 	let row: JsonObject = emptyRow(columns);
-	for (const cell of step.cells) {
-		const column = columns.find((candidate) => cell.column.test(candidate.label));
+	for (const [index, cell] of step.cells.entries()) {
+		const column = assigned[index];
 		const value = column && cellValue(column, cell.value);
 		if (!column || value === undefined)
 			return {
@@ -473,16 +538,17 @@ const edit = (
 		};
 	}
 	// A field of its own, such as "Midterm score", when the value is not kept in a table.
-	const field = placed(widget).find((element) => {
-		const label = labelOf(element, state.data);
-		return (
-			INPUTS.has(element.type) &&
-			bound(element.props.value) !== undefined &&
-			kindFits(element, step.value) &&
-			step.row.test(label) &&
-			(step.column ? step.column.test(label) : true)
-		);
-	});
+	const field = byLabel(
+		widget,
+		placed(widget).filter(
+			(element) =>
+				INPUTS.has(element.type) &&
+				bound(element.props.value) !== undefined &&
+				kindFits(element, step.value)
+		),
+		state.data,
+		(own, context) => step.row.test(context) && (step.column ? step.column.test(own) : true)
+	);
 	const pointer = field && bound(field.props.value);
 	if (field && pointer && typeof step.value !== 'boolean')
 		return {

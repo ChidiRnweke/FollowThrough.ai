@@ -94,11 +94,12 @@ export const decisionMatrix: WidgetScenario = {
 	titleFragment: /decision|matrix/i,
 	probe: [
 		{ kind: 'says', label: /lead|best|winner|top|recommend/i, text: /build in house/i },
-		{ kind: 'reads', label: /lead|best|winner|top|recommend/i, near: 21, tolerance: 0 },
+		// The scores show where the prompt asked for them: per option, as the chart plots them.
+		{ kind: 'reads', label: /build in house/i, near: 21, tolerance: 0 },
 		{ kind: 'chart', points: 3 },
 		{ kind: 'set', input: /impact/i, value: 1 },
 		{ kind: 'says', label: /lead|best|winner|top|recommend/i, text: /wait a quarter/i },
-		{ kind: 'reads', label: /lead|best|winner|top|recommend/i, near: 16, tolerance: 0 }
+		{ kind: 'reads', label: /wait a quarter/i, near: 16, tolerance: 0 }
 	],
 	reference: widgetTemplates.decision
 };

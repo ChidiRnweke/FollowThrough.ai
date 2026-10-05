@@ -227,7 +227,9 @@ function editCase(scenario: EditScenario): EvalCase {
 				after && after[otherPart] !== before.widget[otherPart]
 					? `the request changed the widget's ${otherPart === 'layoutRevision' ? 'layout' : 'data'} as well`
 					: undefined,
-				result.calledToolNames.includes(scenario.tool) ? undefined : `never called ${scenario.tool}`
+				result.calledToolNames.includes(scenario.tool)
+					? undefined
+					: `never called ${scenario.tool}; ${runSummary(result)}`
 			].filter((problem) => problem !== undefined);
 			const probe = after
 				? await probeSaved(lab, workspace, after, scenario.probe)
@@ -407,7 +409,10 @@ const searchTrigger: EvalCase = {
 			prompt: this.input.prompt as string,
 			mode: 'auto_accept'
 		});
-		const verdict = scoreToolDiscovery(result, 'create_widget');
+		const discovery = scoreToolDiscovery(result, 'create_widget');
+		const verdict = discovery.passed
+			? discovery
+			: { passed: false, explanation: `${discovery.explanation}; ${runSummary(result)}` };
 		const found = widgetTitled(await savedWidgets(lab, workspace.actor), /./);
 		const build =
 			found.kind === 'found'
@@ -456,7 +461,12 @@ const notAWidget = (
 			response: result.finalResponse,
 			toolCalls: result.calledToolNames
 		});
-		const verdict = scoreToolCalling(result, { required, forbidden: ['create_widget'] });
+		// Another tool failing and recovering is not what this case measures.
+		const verdict = scoreToolCalling(result, {
+			required,
+			forbidden: ['create_widget'],
+			requireNoFailures: false
+		});
 		px.logAnnotation({
 			name: ARCHETYPES.toolCalling,
 			score: verdict.passed ? 1 : 0,

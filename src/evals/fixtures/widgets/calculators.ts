@@ -173,7 +173,7 @@ export const tripSplitter: WidgetScenario = {
 		{
 			kind: 'addRow',
 			cells: [
-				{ column: /item|what|description|expense|name|for/i, value: 'Museum passes' },
+				{ column: /item|what|description|expense|name|for|cost/i, value: 'Museum passes' },
 				{ column: /amount|price|cost|eur|€/i, value: 60 }
 			]
 		},
