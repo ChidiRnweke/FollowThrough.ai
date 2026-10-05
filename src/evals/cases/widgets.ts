@@ -67,6 +67,12 @@ async function probeSaved(
 	};
 }
 
+/** What the run did, for a verdict that found nothing to grade. */
+const runSummary = (result: AgentRunResult): string =>
+	`run ${result.status}${result.failure ? ` (${result.failure})` : ''}; called ${
+		result.calledToolNames.join(', ') || 'no tools'
+	}; replied "${result.finalResponse.slice(0, 300)}"`;
+
 /** Calls the tool rejected: each one is a payload the agent had to repair. */
 const rejected = (result: AgentRunResult, tool: string): number =>
 	result.toolCalls.filter((call) => call.name === tool && call.failure).length;
@@ -119,7 +125,7 @@ function buildCase(scenario: WidgetScenario): EvalCase {
 			const build =
 				found.kind === 'found'
 					? await probeSaved(lab, workspace, found.widget, scenario.probe)
-					: { passed: false, explanation: found.explanation };
+					: { passed: false, explanation: `${found.explanation}; ${runSummary(result)}` };
 			const embed =
 				found.kind === 'found'
 					? await embedVerdict(lab, workspace.actor, noteId, found.widget)
