@@ -17,6 +17,7 @@ import {
 	resolveProp,
 	widgetReadout,
 	type JsonObject,
+	type ReadoutLine,
 	type WidgetReadout
 } from './readout';
 
@@ -143,10 +144,18 @@ const labelOf = (element: WidgetElement, state: JsonValue): string => {
 	return typeof label === 'string' ? label : '';
 };
 
+/** The text a Heading or Text element shows, or undefined for anything else. */
+const captionOf = (element: WidgetElement, state: JsonValue): string | undefined => {
+	if (element.type !== 'Heading' && element.type !== 'Text') return undefined;
+	const text = resolveProp(element.props.text, state);
+	return typeof text === 'string' ? text : undefined;
+};
+
 /**
- * An element's label with the titles of the cards around it: "Deploy lead time Current" for a
- * Current field in a card per key result. Tried only when no own label matches, since a card
- * titled "Savings simulator" would otherwise match every input inside it.
+ * An element's label with what names it on screen: the titles of the cards around it, and at
+ * each level the nearest heading or text before it. A "Now" field under the heading "Deploy lead
+ * time" reads "Deploy lead time Now". Tried only after own labels, since a card titled "Savings
+ * simulator" would otherwise match every input inside it.
  */
 const contextLabelOf = (widget: Widget, target: WidgetElement, state: JsonValue): string => {
 	const parents = new Map<WidgetElement, WidgetElement>();
@@ -155,25 +164,42 @@ const contextLabelOf = (widget: Widget, target: WidgetElement, state: JsonValue)
 			const placedChild = widget.layout.elements[child];
 			if (placedChild) parents.set(placedChild, element);
 		}
-	const titles: string[] = [];
-	for (let at = parents.get(target); at; at = parents.get(at)) {
-		const title = resolveProp(at.props.title, state);
-		if (at.type === 'Card' && typeof title === 'string') titles.unshift(title);
+	const names: string[] = [];
+	for (
+		let at: WidgetElement = target, parent = parents.get(at);
+		parent;
+		at = parent, parent = parents.get(at)
+	) {
+		const siblings = parent.children.flatMap((key) => widget.layout.elements[key] ?? []);
+		const caption = siblings
+			.slice(0, siblings.indexOf(at))
+			.map((sibling) => captionOf(sibling, state))
+			.findLast((text) => text !== undefined);
+		const title = resolveProp(parent.props.title, state);
+		names.unshift(
+			...(parent.type === 'Card' && typeof title === 'string' ? [title] : []),
+			...(caption ? [caption] : [])
+		);
 	}
-	return [...titles, labelOf(target, state)].join(' ');
+	return [...names, labelOf(target, state)].join(' ');
 };
 
-/** The first element whose own label matches, else the first whose card titles and label do. */
+/**
+ * The element a person would pick: own label first, then its label in context, then — when
+ * `fallback` allows — a looser match on its own label alone.
+ */
 const byLabel = (
 	widget: Widget,
 	candidates: readonly WidgetElement[],
 	state: JsonValue,
-	matches: (own: string, context: string) => boolean
+	matches: (own: string, context: string) => boolean,
+	fallback: (own: string) => boolean = () => false
 ): WidgetElement | undefined =>
 	candidates.find((element) => matches(labelOf(element, state), labelOf(element, state))) ??
 	candidates.find((element) =>
 		matches(labelOf(element, state), contextLabelOf(widget, element, state))
-	);
+	) ??
+	candidates.find((element) => fallback(labelOf(element, state)));
 
 const describeInputs = (widget: Widget, state: JsonValue): string =>
 	placed(widget)
@@ -547,7 +573,9 @@ const edit = (
 				kindFits(element, step.value)
 		),
 		state.data,
-		(own, context) => step.row.test(context) && (step.column ? step.column.test(own) : true)
+		(own, context) => step.row.test(context) && (step.column ? step.column.test(own) : true),
+		// A field labelled "Midterm (30%)" holds the midterm's value; it needs no column word.
+		(own) => step.row.test(own)
 	);
 	const pointer = field && bound(field.props.value);
 	if (field && pointer && typeof step.value !== 'boolean')
@@ -585,10 +613,21 @@ const addTodo = (state: ProbeState, todo: ProbeTodo): StepOutcome => ({
 	}
 });
 
+/**
+ * The lines under `label`: those it names, and the line just after a caption it names — a
+ * "Leading option" heading over the text "Build in house" reads as one value.
+ */
+const labelled = (readout: WidgetReadout, label: RegExp): readonly ReadoutLine[] =>
+	readout.lines.flatMap((line, index) => {
+		if (!label.test(line.label)) return [];
+		const next = readout.lines[index + 1];
+		return line.label === line.text && next ? [line, next] : [line];
+	});
+
 const check = (readout: WidgetReadout, step: ProbeStep): StepOutcome => {
 	switch (step.kind) {
 		case 'reads': {
-			const lines = readout.lines.filter((line) => step.label.test(line.label));
+			const lines = labelled(readout, step.label);
 			const tolerance = step.tolerance ?? DEFAULT_TOLERANCE;
 			const targets = step.percent ? [step.near, step.near / 100] : [step.near];
 			const hit = lines.some((line) =>
@@ -613,7 +652,7 @@ const check = (readout: WidgetReadout, step: ProbeStep): StepOutcome => {
 					};
 		}
 		case 'says': {
-			const lines = readout.lines.filter((line) => step.label.test(line.label));
+			const lines = labelled(readout, step.label);
 			return lines.some((line) => step.text.test(line.text))
 				? { kind: 'checked' }
 				: {

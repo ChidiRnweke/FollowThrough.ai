@@ -384,7 +384,7 @@ const createdThenTicked: EvalCase = {
 		});
 		annotate(ARCHETYPES.widgetEdit, ticked, ['applied', 'not_applied']);
 		annotate(ARCHETYPES.widgetEmbed, embed, ['embedded', 'not_embedded']);
-		expect(ticked.passed, ticked.explanation).toBe(true);
+		expect(ticked.passed, `${ticked.explanation}; ${runSummary(result)}`).toBe(true);
 	}
 };
 

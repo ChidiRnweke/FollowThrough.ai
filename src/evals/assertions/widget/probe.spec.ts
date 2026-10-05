@@ -4,8 +4,12 @@ import type { LocalDate } from '$lib/models/workspace';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
-import { decisionLog, statusBoard } from '../../fixtures/widgets/records';
-import { savingsSimulator, tripSplitter } from '../../fixtures/widgets/calculators';
+import { decisionLog, decisionMatrix, statusBoard } from '../../fixtures/widgets/records';
+import {
+	gradeCalculator,
+	savingsSimulator,
+	tripSplitter
+} from '../../fixtures/widgets/calculators';
 import { okrTracker, relocationChecklist } from '../../fixtures/widgets/trackers';
 import { projectDashboard } from '../../fixtures/widgets/dashboard';
 import { scenarioRecords } from '../../fixtures/widgets/scenario';
@@ -229,6 +233,105 @@ describe('widget probe', () => {
 				}
 			},
 			data: { lead: { current: 75 }, failure: { current: 11 }, deploys: { current: 22 } }
+		};
+		expect(probe(draft, okrTracker.probe)).toBe('');
+	});
+
+	it('reads the leader from the text under a "Leading option" heading', () => {
+		const elements = widgetTemplates.decision.layout.elements;
+		const draft: WidgetDraft = {
+			...widgetTemplates.decision,
+			layout: {
+				...widgetTemplates.decision.layout,
+				elements: {
+					...elements,
+					card: {
+						...elements.card,
+						children: ['leaderHeading', 'leader', 'weights', 'table', 'chart']
+					},
+					leaderHeading: { type: 'Heading', props: { text: 'Leading option' }, children: [] },
+					leader: { type: 'Text', props: { text: { $state: '/derived/leader' } }, children: [] }
+				}
+			}
+		};
+		expect(probe(draft, decisionMatrix.probe)).toBe('');
+	});
+
+	it('changes a score kept in a field named only for its part, such as "Midterm (30%)"', () => {
+		const input = (label: string, key: string) => ({
+			type: 'NumberInput',
+			props: { label, value: { $bindState: `/${key}` } },
+			children: []
+		});
+		const metric = (label: string, formula: string) => ({
+			type: 'Metric',
+			props: { label, value: { $state: `/derived/${formula}` } },
+			children: []
+		});
+		const draft: WidgetDraft = {
+			title: 'Grades',
+			layout: {
+				root: 'card',
+				elements: {
+					card: {
+						type: 'Card',
+						props: { title: 'Grade calculator' },
+						children: ['assignments', 'midterm', 'average', 'needed']
+					},
+					assignments: input('Assignments (20%)', 'assignments'),
+					midterm: input('Midterm (30%)', 'midterm'),
+					average: metric('Current average', 'average'),
+					needed: metric('Score needed on final', 'needed')
+				},
+				derived: {
+					average: '(0.2 * @/assignments + 0.3 * @/midterm) / 0.5',
+					needed: '(70 - 0.2 * @/assignments - 0.3 * @/midterm) / 0.5'
+				}
+			},
+			data: { assignments: 78, midterm: 65 }
+		};
+		expect(probe(draft, gradeCalculator.probe)).toBe('');
+	});
+
+	it('finds a "Now" field by the heading above it', () => {
+		const result = (key: string) => ({
+			type: 'Stack',
+			props: {},
+			children: [`${key}Name`, `${key}Now`]
+		});
+		const heading = (text: string) => ({ type: 'Heading', props: { text }, children: [] });
+		const now = (key: string) => ({
+			type: 'NumberInput',
+			props: { label: 'Now', value: { $bindState: `/${key}` } },
+			children: []
+		});
+		const draft: WidgetDraft = {
+			title: 'Make deploys boring',
+			layout: {
+				root: 'root',
+				elements: {
+					root: { type: 'Stack', props: {}, children: ['lead', 'failure', 'deploys', 'overall'] },
+					lead: result('lead'),
+					leadName: heading('Deploy lead time'),
+					leadNow: now('lead'),
+					failure: result('failure'),
+					failureName: heading('Change failure rate'),
+					failureNow: now('failure'),
+					deploys: result('deploys'),
+					deploysName: heading('Weekly deploys'),
+					deploysNow: now('deploys'),
+					overall: {
+						type: 'Metric',
+						props: { label: 'Overall progress', value: { $state: '/derived/overall' } },
+						children: []
+					}
+				},
+				derived: {
+					overall:
+						'round(((120 - @/lead) / 90 + (15 - @/failure) / 10 + (@/deploys - 10) / 30) / 3 * 1000) / 10'
+				}
+			},
+			data: { lead: 75, failure: 11, deploys: 22 }
 		};
 		expect(probe(draft, okrTracker.probe)).toBe('');
 	});
