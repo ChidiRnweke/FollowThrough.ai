@@ -44,17 +44,15 @@ const setup = async () => {
 };
 it('moves active project memory to an unavailable view after archive', async () => {
 	const { screen, archive, memory } = await setup();
-	const visibleBefore = (await screen.getByText(memory.content, { exact: true }).all()).length;
+	await expect.element(screen.getByText(memory.content, { exact: true })).toBeVisible();
 	await archive();
-	expect({
-		visibleBefore,
-		unavailableAfter: (
-			await screen.getByText('This project is no longer available.', { exact: true }).all()
-		).length,
-		retainedMemoryAfter: (await screen.getByText(memory.content, { exact: true }).all()).length,
-		addActionAfter: (await screen.getByRole('button', { name: 'Add memory', exact: true }).all())
-			.length
-	}).toEqual({ visibleBefore: 1, unavailableAfter: 1, retainedMemoryAfter: 0, addActionAfter: 0 });
+	await expect
+		.element(screen.getByText('This project is no longer available.', { exact: true }))
+		.toBeVisible();
+	await expect.element(screen.getByText(memory.content, { exact: true })).not.toBeInTheDocument();
+	await expect
+		.element(screen.getByRole('button', { name: 'Add memory', exact: true }))
+		.not.toBeInTheDocument();
 });
 it('closes an open memory composer when its project is archived', async () => {
 	const { screen, archive } = await setup();
