@@ -448,7 +448,7 @@ describe('Agent runtime boundary', () => {
 		const instructions = buildAgentInstructions({ selections: [pinnedSelection()] });
 		expect({
 			text: instructions.includes('We ship the export flow first.'),
-			field: instructions.includes('\"selections\"')
+			field: instructions.includes('"selections"')
 		}).toEqual({ text: false, field: false });
 	});
 

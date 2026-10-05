@@ -53,7 +53,7 @@ it('renders a streamed diagram only once its fence closes', async () => {
 	const content = '```mermaid\nflowchart LR\nA -->';
 	const screen = await render(ChatMarkdown, { content });
 	await expect.element(screen.getByText('flowchart LR\nA -->', { exact: true })).toBeVisible();
-	await screen.rerender({ content: content + '```' });
+	await screen.rerender({ content: content + ' B\n```' });
 	await expect.element(screen.getByRole('img', { name: 'Mermaid diagram' })).toBeVisible();
 });
 

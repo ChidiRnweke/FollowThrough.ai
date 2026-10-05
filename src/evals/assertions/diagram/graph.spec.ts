@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { edge, mxfile, vertex, wrappedVertex } from '$lib/testing/diagrams/fixtures/drawio';
-import { buildDiagramGraph, centreOf, parseStyle, type DiagramGraph } from './graph';
+import { buildDiagramGraph, type DiagramGraph } from './graph';
 
 const graphOf = (body: string): Extract<DiagramGraph, { kind: 'graph' }> => {
 	const graph = buildDiagramGraph(mxfile(body));

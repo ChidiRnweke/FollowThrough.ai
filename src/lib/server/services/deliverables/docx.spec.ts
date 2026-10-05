@@ -69,20 +69,6 @@ const documentXml = async (body: ProseMirrorDocument): Promise<string> => {
 	return new AdmZip(buffer).readAsText('word/document.xml');
 };
 
-/**
- * An external hyperlink's target lives in the relationships part, not the document body —
- * `document.xml` only carries the `r:id` that points at it. Checking the wrong part makes
- * a working link look broken.
- */
-const relationshipsXml = async (body: ProseMirrorDocument): Promise<string> => {
-	const buffer = await memoizedGenerateDocx({
-		notes: [{ title: 'Note', document: body }],
-		styles,
-		title: 'Export'
-	});
-	return new AdmZip(buffer).readAsText('word/_rels/document.xml.rels');
-};
-
 const linked = (marks: ProseMirrorMark[]): ProseMirrorDocument => ({
 	type: 'doc',
 	content: [{ type: 'paragraph', content: [{ type: 'text', marks, text: 'the docs' }] }]

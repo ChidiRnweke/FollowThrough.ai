@@ -1,10 +1,9 @@
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
-import type { SkillUsageId } from '$lib/models/skills';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { context, now, seedNote, seedProvenance } from '../database-harness';
+import { context, seedNote } from '../database-harness';
 const seedSkillNote = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { catalog } = createNotesCapability({

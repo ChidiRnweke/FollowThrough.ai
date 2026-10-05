@@ -6,7 +6,6 @@ import { AgentReplayVirtualizer } from './replay-virtualizer';
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import {
-	assistantItem,
 	callItem,
 	resultItem,
 	unrecognisedItem,

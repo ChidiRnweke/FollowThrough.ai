@@ -91,31 +91,21 @@ describe('Promise extraction orchestration invariants', () => {
 		}).toEqual({ createdTodos: [], status: 'proposed', anchor: result.anchorId });
 	});
 
-	it('returns accepted status and the created task identity', async () => {
+	it('returns the accepted task with its source project and matching suggestion provenance', async () => {
 		const { extractor, trust, controller } = setup();
 		extractor.candidates = [candidate('Send it')];
 		trust.autoAccept = true;
 		const result = await controller.extractPromises(testActor(), { selection });
+		const task = result.createdTodos[0];
+		expect(task).toMatchObject({
+			projectId: testProjectId(),
+			provenanceId: expect.any(String)
+		});
 		expect(result.suggestions[0]).toMatchObject({
 			status: 'accepted',
-			appliedArtifactId: result.createdTodos[0].id,
-			isAutoAccepted: true
-		});
-	});
-
-	it('returns the trusted task and matching suggestion provenance', async () => {
-		const { extractor, trust, controller } = setup();
-		extractor.candidates = [candidate('Send it')];
-		trust.autoAccept = true;
-		const result = await controller.extractPromises(testActor(), { selection });
-		expect({
-			projectId: result.createdTodos[0]?.projectId,
-			provenanceId: result.createdTodos[0]?.provenanceId,
-			suggestionProvenance: result.suggestions[0]?.provenanceId
-		}).toEqual({
-			projectId: testProjectId(),
-			provenanceId: result.suggestions[0]?.provenanceId,
-			suggestionProvenance: result.suggestions[0]?.provenanceId
+			appliedArtifactId: task.id,
+			isAutoAccepted: true,
+			provenanceId: task.provenanceId
 		});
 	});
 });

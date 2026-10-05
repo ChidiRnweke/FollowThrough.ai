@@ -13,7 +13,11 @@ import { groundingWorkspace, GROUNDING_HASH, MEMORY_HASH } from '../fixtures/wor
 import { skillsWorkspace, SKILL_HASH } from '../fixtures/workspaces/skills';
 import { scoreIntentInterpretation } from '../assertions/intent';
 import { scoreStoppingBehavior } from '../assertions/stopping';
-import { scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
+import {
+	hasSuccessfulReadEvidence,
+	scoreToolCalling,
+	scoreToolDiscovery
+} from '../assertions/tool-calls';
 import {
 	expectSuggestionPending,
 	expectTodoCreated,

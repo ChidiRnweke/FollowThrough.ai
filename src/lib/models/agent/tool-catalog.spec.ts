@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	FIRST_CLASS_TOOL_NAMES,
 	FIRST_CLASS_TOOL_SET,
 	TOOL_CATALOG,
 	TOOL_DESCRIPTIONS,

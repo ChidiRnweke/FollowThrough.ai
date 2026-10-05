@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
-import type {
-	ProseMirrorDocument,
-	ProseMirrorTableCellNode,
-	ProseMirrorTableHeaderNode
-} from '$lib/models/notes';
+import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
 import { prepareExport } from './export-preparation';
