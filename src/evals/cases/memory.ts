@@ -192,9 +192,12 @@ export const memoryCases: readonly EvalCase[] = [
 				proposal: findCall(result, 'propose_memory_change')?.arguments
 			});
 
-			const verdict = scoreToolCalling(result, {
-				required: this.expected.requiredTools as string[]
-			});
+			const verdict = await expectSuggestionPending(
+				lab,
+				workspace.actor,
+				'memory',
+				(content) => /\bghent\b/i.test(content) && /\bplatform\b/i.test(content)
+			);
 			px.logAnnotation({
 				name: ARCHETYPES.memoryCapture,
 				score: verdict.passed ? 1 : 0,
@@ -329,9 +332,20 @@ export const memoryCases: readonly EvalCase[] = [
 				proposal: findCall(result, 'propose_memory_change')?.arguments
 			});
 
-			const verdict = scoreToolCalling(result, {
-				required: this.expected.requiredTools as string[]
+			const note = await lab.controllers.notes().get(workspace.actor, { noteId });
+			const sections = note.note.plainText.split(/(?=^## Section \d+\s*$)/m);
+			const taskApplied = Array.from({ length: 12 }, (_, index) => index + 2).every((number) => {
+				const section = sections.find((part) =>
+					new RegExp(`^## Section ${number}\\s*$`, 'm').test(part)
+				);
+				return section !== undefined && !section.includes('Draft architecture guidance.');
 			});
+			const verdict = await expectSuggestionPending(
+				lab,
+				workspace.actor,
+				'memory',
+				(content) => /knowledge layer/i.test(content) && /reference docs?/i.test(content)
+			);
 			px.logAnnotation({
 				name: ARCHETYPES.memoryProactiveProposal,
 				score: verdict.passed ? 1 : 0,
@@ -340,7 +354,10 @@ export const memoryCases: readonly EvalCase[] = [
 			});
 
 			expect(result.status, result.failure ?? 'no failure recorded').toBe('completed');
-			expect(verdict.passed, verdict.explanation).toBe(true);
+			expect({ taskApplied, memoryIsReviewable: verdict.passed }, verdict.explanation).toEqual({
+				taskApplied: true,
+				memoryIsReviewable: true
+			});
 		}
 	},
 	{
@@ -512,7 +529,13 @@ export const memoryCases: readonly EvalCase[] = [
 						await lab.controllers.notes().get(workspace.actor, { noteId: created.id })
 					).note.plainText.toLowerCase()
 				: '';
-			const queued = await expectSuggestionPending(lab, workspace.actor, 'memory');
+			const queued = await expectSuggestionPending(
+				lab,
+				workspace.actor,
+				'memory',
+				(content) =>
+					/weekly/i.test(content) && /owner/i.test(content) && /(?:next|again)/i.test(content)
+			);
 			const noteComplete = (this.expected.noteContains as string[]).every((part) =>
 				body.includes(part)
 			);

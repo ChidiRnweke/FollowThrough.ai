@@ -65,29 +65,26 @@ describe('A turn is folded into the things it touched', () => {
 	const turn = () => turnContext([call({}), grep(), sed(), edit(), sed()], shell);
 
 	it('states one note once, however many calls touched it', () => {
-		expect(turn().changed).toHaveLength(1);
-	});
-
-	it('names it', () => {
-		expect(turn().changed[0]?.entity.title).toBe('atlas');
-	});
-
-	it('reports the strongest verb that befell it, not the last or the first', () => {
-		expect(turn().changed[0]?.verb).toBe('edited');
-	});
-
-	it('keeps every pass over it, in the order they happened', () => {
-		expect(turn().changed[0]?.passes.map((pass) => pass.label)).toEqual([
-			'Read note',
-			'Searched for',
-			'Read lines 188–221',
-			'Edited note',
-			'Read lines 188–221'
-		]);
-	});
-
-	it('leaves nothing behind the read door, because the note was changed', () => {
-		expect(turn().read).toHaveLength(0);
+		const context = turn();
+		expect({
+			count: context.changed.length,
+			title: context.changed[0]?.entity.title,
+			verb: context.changed[0]?.verb,
+			passes: context.changed[0]?.passes.map((pass) => pass.label),
+			readCount: context.read.length
+		}).toEqual({
+			count: 1,
+			title: 'atlas',
+			verb: 'edited',
+			passes: [
+				'Read note',
+				'Searched for',
+				'Read lines 188–221',
+				'Edited note',
+				'Read lines 188–221'
+			],
+			readCount: 0
+		});
 	});
 });
 
@@ -134,40 +131,29 @@ describe('A search files its matches under the notes they were found in', () => 
 	const spread = () => turnContext([grep({ noteIds: [ATLAS, BRIEF] })], shell);
 
 	it('gives every matched note a row of its own', () => {
-		expect(spread().read.map((thing) => thing.entity.title)).toEqual(['atlas', 'northwind brief']);
-	});
-
-	it('shows each note only the lines that matched in it', () => {
-		const evidence = spread().read[1]?.passes[0]?.evidence;
-		expect(evidence?.kind === 'passages' && evidence.lines).toHaveLength(1);
+		const rows = spread().read;
+		expect({
+			titles: rows.map((thing) => thing.entity.title),
+			linesPerNote: rows.map((thing) => {
+				const evidence = thing.passes[0]?.evidence;
+				return evidence?.kind === 'passages' ? evidence.lines.length : 0;
+			})
+		}).toEqual({ titles: ['atlas', 'northwind brief'], linesPerNote: [1, 1] });
 	});
 });
 
 describe('A read is context, not a change', () => {
 	it('puts a note the turn only searched behind the read door', () => {
-		expect(turnContext([grep()], shell).read).toHaveLength(1);
-	});
-
-	it('keeps it out of the thread', () => {
-		expect(turnContext([grep()], shell).changed).toHaveLength(0);
-	});
-
-	it('says what it read, in things rather than in calls', () => {
-		expect(readDoorLabel(turnContext([grep(), sed()], shell))).toBe('Read 1 note');
-	});
-});
-
-describe('Nothing is counted that is also shown', () => {
-	// `1 edit` above one edit, `1 match` above one match: the count and the thing it counts
-	// said the same fact twice, ten pixels apart.
-	it('never states how many edits an edit applied', () => {
-		const passes = turnContext([edit()], shell).changed[0]?.passes ?? [];
-		expect(JSON.stringify(passes)).not.toContain('edit');
-	});
-
-	it('never states how many matches a search found', () => {
-		const passes = turnContext([grep()], shell).read[0]?.passes ?? [];
-		expect(JSON.stringify(passes)).not.toContain('match');
+		const context = turnContext([grep()], shell);
+		expect({
+			reads: context.read.length,
+			changed: context.changed.length,
+			label: readDoorLabel(context)
+		}).toEqual({
+			reads: 1,
+			changed: 0,
+			label: 'Read 1 note'
+		});
 	});
 });
 
@@ -214,30 +200,25 @@ describe('A failure is news only when nothing put it right', () => {
 			failure: 'oldText was not found in the note.'
 		});
 
-	it('reports a change nothing recovered', () => {
-		expect(turnContext([failed()], shell).changed[0]?.outcome).toBe('failed');
+	it('reports a failed change with its subject, explanation, and raw evidence', () => {
+		const change = turnContext([failed()], shell).changed[0];
+		const evidence = change?.passes.at(-1)?.evidence;
+		expect({
+			outcome: change?.outcome,
+			title: change?.entity.title,
+			cause: evidence?.kind === 'failure' ? evidence.cause : undefined,
+			raw: evidence?.kind === 'failure' ? evidence.raw : undefined
+		}).toEqual({
+			outcome: 'failed',
+			title: 'atlas',
+			cause: expect.stringContaining('The text it meant to change was not where it expected'),
+			raw: 'oldText was not found in the note.'
+		});
 	});
 
 	it('says nothing about an attempt the turn later got right', () => {
 		expect(turnContext([failed(), edit()], shell).changed[0]?.outcome).not.toBe('failed');
 	});
-
-	it('names what the failure befell, so the reader can go and look', () => {
-		expect(turnContext([failed()], shell).changed[0]?.entity.title).toBe('atlas');
-	});
-
-	it("explains the failure in the reader's terms on the subject it befell", () => {
-		const evidence = turnContext([failed()], shell).changed[0]?.passes.at(-1)?.evidence;
-		expect(evidence?.kind === 'failure' && evidence.cause).toContain(
-			'The text it meant to change was not where it expected'
-		);
-	});
-
-	it("keeps the run's own words as the evidence under that explanation", () => {
-		const evidence = turnContext([failed()], shell).changed[0]?.passes.at(-1)?.evidence;
-		expect(evidence?.kind === 'failure' && evidence.raw).toBe('oldText was not found in the note.');
-	});
-
 	// `explainToolFailure` hands back anything it does not recognise, so carrying both would
 	// print one sentence twice — the duplication this surface exists to remove.
 	it('drops the raw message when it is already the explanation', () => {
@@ -257,10 +238,11 @@ describe('A failure the call could not name still gets a row', () => {
 		call({ name: 'search', status, arguments: {}, failure: 'The index is unavailable.' });
 
 	it('names it by the tool, which is the only identity it has', () => {
-		expect(turnContext([nameless('failed')], shell).read[0]?.entity.title).toBe('Search');
-	});
-
-	it('drops it when a later call of the same tool succeeded', () => {
-		expect(turnContext([nameless('failed'), nameless('succeeded')], shell).read).toHaveLength(0);
+		const failedOnly = turnContext([nameless('failed')], shell).read;
+		const recovered = turnContext([nameless('failed'), nameless('succeeded')], shell).read;
+		expect({ failedTitle: failedOnly[0]?.entity.title, recoveredRows: recovered.length }).toEqual({
+			failedTitle: 'Search',
+			recoveredRows: 0
+		});
 	});
 });

@@ -1,4 +1,12 @@
+import { z } from 'zod';
 import type { AgentRunResult, ToolCall } from '../lab/run-case';
+
+const searchEvidenceResults = z.array(
+	z.object({
+		noteId: z.string(),
+		content: z.string()
+	})
+);
 
 /**
  * Deterministic checks over the persisted tool-call log.
@@ -103,6 +111,42 @@ export function scoreToolDiscovery(result: AgentRunResult, targetTool: string): 
 /** Finds a call by tool name, for asserting on the arguments it was given. */
 export const findCall = (result: AgentRunResult, name: string): ToolCall | undefined =>
 	result.toolCalls.find((call) => call.name === name);
+
+/** A read must return the sought evidence; merely calling a read tool is insufficient. */
+export const hasSuccessfulReadEvidence = (
+	calls: readonly ToolCall[],
+	readToolNames: readonly string[],
+	noteId: string,
+	path: string,
+	content: string | readonly string[]
+): boolean => {
+	const expected = (typeof content === 'string' ? [content] : content).map((phrase) =>
+		phrase.toLocaleLowerCase('en')
+	);
+	return calls.some((call) => {
+		if (!readToolNames.includes(call.name) || call.failure) return false;
+		if (call.name === 'search') {
+			const results = searchEvidenceResults.safeParse(call.output);
+			return (
+				results.success &&
+				results.data.some(
+					(result) =>
+						result.noteId === noteId &&
+						expected.every((phrase) => result.content.toLocaleLowerCase('en').includes(phrase))
+				)
+			);
+		}
+		return (
+			(call.name === 'grep' || call.name === 'sed') &&
+			call.arguments.path === path &&
+			expected.every((phrase) =>
+				JSON.stringify(call.output ?? '')
+					.toLocaleLowerCase('en')
+					.includes(phrase)
+			)
+		);
+	});
+};
 
 /**
  * Scores `approval_compliance`: a mutation under `approval_required` must pause

@@ -21,13 +21,6 @@ describe('Parallel approvals are reviewed as one bundle', () => {
 		]);
 	});
 
-	it('leaves a lone approval as a bundle of one, so the common case is unchanged', () => {
-		const groups = groupChatParts([toolPart('a', 'approval_required')]);
-		expect(groups).toEqual([
-			{ kind: 'approvals', tools: [expect.objectContaining({ callId: 'a' })] }
-		]);
-	});
-
 	it('keeps approvals apart when the model spoke between them', () => {
 		const groups = groupChatParts([
 			toolPart('a', 'approval_required'),

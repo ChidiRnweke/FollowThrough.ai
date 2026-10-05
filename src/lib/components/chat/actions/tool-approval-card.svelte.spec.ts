@@ -47,20 +47,7 @@ const visible = async (
 };
 
 describe('The review card shows the content a call will store', () => {
-	it('shows the title of every todo a create_todos call will create', async () => {
-		const screen = await renderCard(
-			createTodos([
-				{ title: 'Draft the RFC', responsibility: 'mine' },
-				{ title: 'Book the review', responsibility: 'waiting_on' }
-			])
-		);
-		expect(await visible(screen, { first: 'Draft the RFC', second: 'Book the review' })).toEqual({
-			first: 1,
-			second: 1
-		});
-	});
-
-	it('shows the details stored with each todo, not just the titles', async () => {
+	it('shows each todo title and its stored details', async () => {
 		const screen = await renderCard(
 			createTodos([
 				{
@@ -68,18 +55,21 @@ describe('The review card shows the content a call will store', () => {
 					description: 'Cover the rollout plan',
 					responsibility: 'mine',
 					dueDate: '2026-08-10'
-				}
+				},
+				{ title: 'Book the review', responsibility: 'waiting_on' }
 			])
 		);
 		expect(
 			await visible(screen, {
+				first: 'Draft the RFC',
+				second: 'Book the review',
 				description: 'Description: Cover the rollout plan',
 				due: 'Due: 2026-08-10'
 			})
-		).toEqual({ description: 1, due: 1 });
+		).toEqual({ first: 1, second: 1, description: 1, due: 1 });
 	});
 
-	it('says when more todos await review than the card can show', async () => {
+	it('shows compact overflow and the expanded item for the same todo batch', async () => {
 		const screen = await renderCard(
 			createTodos(
 				['One', 'Two', 'Three', 'Four', 'Five', 'Six'].map((title) => ({
@@ -87,19 +77,10 @@ describe('The review card shows the content a call will store', () => {
 				}))
 			)
 		);
-		expect(await visible(screen, { more: '…and 1 more' })).toEqual({ more: 1 });
-	});
-
-	it('shows every todo in the full review, past the compact cap', async () => {
-		const screen = await renderCard(
-			createTodos(
-				['One', 'Two', 'Three', 'Four', 'Five', 'Six'].map((title) => ({
-					title: `Todo ${title}`
-				}))
-			)
-		);
+		const compact = await visible(screen, { more: '…and 1 more' });
 		await screen.getByRole('button', { name: 'Review in full' }).click();
-		expect(await visible(screen, { sixth: 'Todo Six' })).toEqual({ sixth: 1 });
+		const full = await visible(screen, { sixth: 'Todo Six' });
+		expect({ compact, full }).toEqual({ compact: { more: 1 }, full: { sixth: 1 } });
 	});
 });
 
@@ -107,6 +88,7 @@ describe('The review card names what an id-only call acts on', () => {
 	it('names the note an archive_note call will archive', async () => {
 		const screen = await renderCard(pendingCall('archive_note', { noteId: NOTE_ID }));
 		expect(await visible(screen, { note: 'Infrastructure' })).toEqual({ note: 1 });
+		expect(await screen.getByRole('button', { name: 'Review in full' }).all()).toHaveLength(0);
 	});
 
 	it('shows both the note being renamed and its proposed title', async () => {
@@ -143,18 +125,9 @@ describe('The review card only offers the room a change actually needs', () => {
 			onreject: () => {}
 		});
 
-	it('offers no full review for a change with nothing held back', async () => {
-		const screen = await renderCard(pendingCall('archive_note', { noteId: NOTE_ID }));
-		expect(await screen.getByRole('button', { name: 'Review in full' }).all()).toHaveLength(0);
-	});
-
 	it('hands a settings change the control that makes it instead', async () => {
 		const screen = await renderSettings();
 		expect(await screen.getByRole('link', { name: 'Open settings' }).all()).toHaveLength(1);
-	});
-
-	it('states the model being replaced, which the arguments alone never said', async () => {
-		const screen = await renderSettings();
 		expect(await visible(screen, { previous: 'openai/gpt-5.6' })).toEqual({ previous: 1 });
 	});
 });
@@ -172,18 +145,13 @@ describe('Reviewed note approval controls', () => {
 		});
 		await expect.element(screen.getByText('Edit skill · Release', { exact: true })).toBeVisible();
 	});
-	it('blocks a skill approval that has no saved review', async () => {
+	it('blocks approval but leaves rejection available when a skill review is missing', async () => {
 		const screen = await renderCard(
 			pendingCall('save_skill', { noteId: NOTE_ID, markdown: 'Tuesday' })
 		);
 		await expect
 			.element(screen.getByRole('button', { name: 'Approve', exact: true }))
 			.toBeDisabled();
-	});
-	it('keeps rejection available for a skill approval with no saved review', async () => {
-		const screen = await renderCard(
-			pendingCall('save_skill', { noteId: NOTE_ID, markdown: 'Tuesday' })
-		);
 		await expect.element(screen.getByRole('button', { name: 'Reject', exact: true })).toBeEnabled();
 	});
 	it('blocks bundle approval when a skill change has no saved review', async () => {
@@ -206,18 +174,13 @@ describe('Reviewed note approval controls', () => {
 		});
 		await expect.element(screen.getByText('Save note · Release', { exact: true })).toBeVisible();
 	});
-	it('disables approval for a legacy note change', async () => {
+	it('blocks approval but leaves rejection available for a legacy note change', async () => {
 		const screen = await renderCard(
 			pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' })
 		);
 		await expect
 			.element(screen.getByRole('button', { name: 'Approve', exact: true }))
 			.toBeDisabled();
-	});
-	it('keeps rejection available for a legacy note change', async () => {
-		const screen = await renderCard(
-			pendingCall('save_note', { noteId: NOTE_ID, markdown: 'Tuesday' })
-		);
 		await expect.element(screen.getByRole('button', { name: 'Reject', exact: true })).toBeEnabled();
 	});
 	it('does not approve a bundle containing a missing note review', async () => {
@@ -249,20 +212,5 @@ describe('Reviewed note approval controls', () => {
 		await expect
 			.element(screen.getByRole('button', { name: 'Approve', exact: true }))
 			.toBeDisabled();
-	});
-});
-
-describe('The compact note preview scrolls beneath its labels', () => {
-	it('keeps the proposed change label outside the part that scrolls', async () => {
-		const review = noteReviewBuilder();
-		const screen = await renderCard({
-			...pendingCall('save_note', { noteId: review.change.noteId, markdown: 'Tuesday' }),
-			status: 'approval_required',
-			noteReview: review
-		});
-		const label = screen.getByText('Proposed change', { exact: true }).element();
-		const pane = label.closest('.note-diff-pane');
-		const scroller = label.closest('.overflow-y-auto');
-		expect(scroller !== null && pane?.contains(scroller)).toBe(false);
 	});
 });

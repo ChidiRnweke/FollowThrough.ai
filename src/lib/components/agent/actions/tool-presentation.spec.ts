@@ -37,8 +37,12 @@ describe('Tool presentation invariants', () => {
 		expect(toolStatusLabel(tool('save_note', 'succeeded'))).toBe('Saved note');
 	});
 
-	it('describes a rejected note save in human language', () => {
-		expect(toolStatusLabel(tool('save_note', 'rejected'))).toBe('Note change rejected');
+	it('labels and marks a rejected note save as failed', () => {
+		const rejected = tool('save_note', 'rejected');
+		expect({ label: toolStatusLabel(rejected), failed: toolStatusParts(rejected).failed }).toEqual({
+			label: 'Note change rejected',
+			failed: true
+		});
 	});
 
 	it('describes another completed mutation without exposing its identifier', () => {
@@ -57,8 +61,15 @@ describe('A read names the note it read', () => {
 		arguments: { noteId }
 	});
 
-	it('says which note was read', () => {
-		expect(toolStatusLabel(read('succeeded'), shell)).toBe('Read note · Runtime notes');
+	it('names the note and makes it available to open', () => {
+		const result = read('succeeded');
+		expect({
+			label: toolStatusLabel(result, shell),
+			noteId: toolStatusParts(result, shell).noteId
+		}).toEqual({
+			label: 'Read note · Runtime notes',
+			noteId
+		});
 	});
 
 	it('keeps the plain label when the note is not in the tree', () => {
@@ -83,10 +94,6 @@ describe('A read names the note it read', () => {
 		).toBe('Created project');
 	});
 
-	it('offers the note id so the row can open it', () => {
-		expect(toolStatusParts(read('succeeded'), shell).noteId).toBe(noteId);
-	});
-
 	it('keeps navigation when the note is outside the current tree', () => {
 		expect(
 			toolStatusParts(read('succeeded'), { noteTree: [] } as unknown as ShellContext).noteId
@@ -103,14 +110,6 @@ describe('Every call in the log is named in the reader language', () => {
 			})
 		).toBe('Searched notes and files · northwind');
 	});
-
-	it('names a mechanism call rather than un-snake-casing it', () => {
-		expect(toolStatusLabel(tool('search_tools', 'succeeded'))).toBe('Looked up available tools');
-	});
-
-	it('names a quiet read rather than un-snake-casing it', () => {
-		expect(toolStatusLabel(tool('list_projects', 'succeeded'))).toBe('Listed projects');
-	});
 });
 
 describe('A file path subject resolves to the note it points at', () => {
@@ -124,12 +123,15 @@ describe('A file path subject resolves to the note it points at', () => {
 		arguments: { path: `/projects/proj-1/notes/${noteId}.md` }
 	});
 
-	it('names the note the excerpt came from', () => {
-		expect(toolStatusLabel(excerpt(), shell)).toBe('Read file excerpt · Runtime notes');
-	});
-
-	it('offers the id of the note the excerpt came from', () => {
-		expect(toolStatusParts(excerpt(), shell).noteId).toBe(noteId);
+	it('names the note and makes the excerpt source available to open', () => {
+		const result = excerpt();
+		expect({
+			label: toolStatusLabel(result, shell),
+			noteId: toolStatusParts(result, shell).noteId
+		}).toEqual({
+			label: 'Read file excerpt · Runtime notes',
+			noteId
+		});
 	});
 
 	it('identifies an attachment source as an attachment', () => {
@@ -150,22 +152,15 @@ describe('The subject is what the reader recognises', () => {
 		).toBe('Runtime');
 	});
 
-	it('names what a search looked for', () => {
-		expect(
-			toolStatusParts({ ...tool('search', 'succeeded'), arguments: { query: 'agent skills' } })
-				.subject
-		).toBe('agent skills');
-	});
-
-	it('offers no note to open for a subject that is not a note', () => {
-		expect(
-			toolStatusParts({ ...tool('search', 'succeeded'), arguments: { query: 'agent skills' } })
-				.noteId
-		).toBeUndefined();
-	});
-
-	it('marks a rejected call as failed so the row can say so in colour', () => {
-		expect(toolStatusParts(tool('save_note', 'rejected')).failed).toBe(true);
+	it('names a search query without making it a note to open', () => {
+		const result = { ...tool('search', 'succeeded'), arguments: { query: 'agent skills' } };
+		expect({
+			subject: toolStatusParts(result).subject,
+			noteId: toolStatusParts(result).noteId
+		}).toEqual({
+			subject: 'agent skills',
+			noteId: undefined
+		});
 	});
 });
 

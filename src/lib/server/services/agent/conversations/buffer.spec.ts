@@ -44,30 +44,23 @@ const imageItem = (image: string) => userItemWithImage('What does this diagram s
 const diagramSource = JSON.stringify({ kind: 'drawio', source: '<mxfile>huge</mxfile>' });
 
 describe('ConversationBuffer', () => {
-	it('drops an inline image from the persisted snapshot', async () => {
+	it('keeps image context in the active run and a safe text-only persisted snapshot', async () => {
 		const buffer = await bufferWith([imageItem(pngDataUrl)]);
-		expect(JSON.stringify(await buffer.snapshot())).not.toContain(';base64,');
-	});
-
-	it('keeps the text that accompanied a dropped image', async () => {
-		const buffer = await bufferWith([imageItem(pngDataUrl)]);
-		expect(JSON.stringify(await buffer.snapshot())).toContain('What does this diagram show?');
-	});
-
-	// The placeholder has to be a part the provider can accept. Left in the image's
-	// own field it read as a URL, and the provider refused the whole request —
-	// "Expected a valid URL, but got a value with an invalid format" — so one image
-	// made its conversation impossible to continue.
-	it('replaces a dropped image with a text part rather than a broken image part', async () => {
-		const buffer = await bufferWith([imageItem(pngDataUrl)]);
-		const [item] = await buffer.snapshot();
-		const parts = item?.type === 'user_message' ? item.content : '';
-		expect(typeof parts === 'string' ? undefined : parts[1]?.type).toBe('input_text');
-	});
-
-	it('leaves no image part behind for the provider to reject', async () => {
-		const buffer = await bufferWith([imageItem(pngDataUrl)]);
-		expect(JSON.stringify(await buffer.snapshot())).not.toContain('input_image');
+		const active = JSON.stringify(await buffer.getItems());
+		const persisted = JSON.stringify(await buffer.snapshot());
+		expect({
+			activeImage: active.includes(';base64,'),
+			persistedPrompt: persisted.includes('What does this diagram show?'),
+			persistedTextPlaceholder: persisted.includes('input_text'),
+			persistedImage: persisted.includes('input_image'),
+			persistedBase64: persisted.includes(';base64,')
+		}).toEqual({
+			activeImage: true,
+			persistedPrompt: true,
+			persistedTextPlaceholder: true,
+			persistedImage: false,
+			persistedBase64: false
+		});
 	});
 
 	// Conversations stored before the fix still hold the unsendable item, and a
@@ -85,14 +78,18 @@ describe('ConversationBuffer', () => {
 	// An mxfile is 5–8 KB and rides in both the call and its result, so a
 	// conversation with a few revisions replayed tens of kilobytes of markup every
 	// turn for a document the agent almost never needed to re-read.
-	it('elides diagram source from what the model is shown', async () => {
-		const buffer = await bufferWith([callItem('create_diagram', 'diagram-call', diagramSource)]);
-		expect(JSON.stringify(await buffer.getItems())).not.toContain('<mxfile>huge</mxfile>');
-	});
-
-	it('elides the source from the result as well as the call', async () => {
-		const buffer = await bufferWith([resultItem('create_diagram', 'diagram-call', diagramSource)]);
-		expect(JSON.stringify(await buffer.getItems())).not.toContain('<mxfile>huge</mxfile>');
+	it('elides diagram source from the model replay while keeping it persisted for readback', async () => {
+		const buffer = await bufferWith([
+			callItem('create_diagram', 'diagram-call', diagramSource),
+			resultItem('create_diagram', 'diagram-call', diagramSource)
+		]);
+		const replay = JSON.stringify(await buffer.getItems());
+		const persisted = JSON.stringify(await buffer.snapshot());
+		expect({
+			callElided: !replay.includes('<mxfile>huge</mxfile>'),
+			readbackTool: replay.includes('read_canvas_diagram'),
+			persistedSource: persisted.includes('<mxfile>huge</mxfile>')
+		}).toEqual({ callElided: true, readbackTool: true, persistedSource: true });
 	});
 
 	// The source of a call that *failed* stays, because nothing else can hand it
@@ -120,34 +117,11 @@ describe('ConversationBuffer', () => {
 		expect(JSON.stringify(await buffer.getItems())).toContain('<mxfile>rejected</mxfile>');
 	});
 
-	it('points the agent at the tool that reads it back', async () => {
-		const buffer = await bufferWith([callItem('create_diagram', 'diagram-call', diagramSource)]);
-		expect(JSON.stringify(await buffer.getItems())).toContain('read_canvas_diagram');
-	});
-
-	// Elided on the way out, never on the way in: the stored document is what
-	// `read_canvas_diagram` hands back.
-	it('keeps the whole document in what is persisted', async () => {
-		const buffer = await bufferWith([callItem('create_diagram', 'diagram-call', diagramSource)]);
-		expect(JSON.stringify(await buffer.snapshot())).toContain('<mxfile>huge</mxfile>');
-	});
-
 	it('leaves another tool’s arguments alone', async () => {
 		const buffer = await bufferWith([
 			callItem('save_note', 'note-call', JSON.stringify({ source: 'keep me' }))
 		]);
 		expect(JSON.stringify(await buffer.getItems())).toContain('keep me');
-	});
-
-	it('leaves an item without an image untouched', async () => {
-		const item = assistantItem('Understood.');
-		const buffer = await bufferWith([item]);
-		expect(await buffer.snapshot()).toEqual([item]);
-	});
-
-	it('still returns the image to the run that is in flight', async () => {
-		const buffer = await bufferWith([imageItem(pngDataUrl)]);
-		expect(JSON.stringify(await buffer.getItems())).toContain(';base64,');
 	});
 
 	// A row from a newer provider must survive a load and a save. Restructuring a

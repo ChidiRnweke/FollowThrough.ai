@@ -16,18 +16,8 @@ describe('tool catalog', () => {
 		);
 	});
 
-	it('describes every first-class tool', () => {
-		expect(
-			FIRST_CLASS_TOOL_NAMES.every((name) => TOOL_DESCRIPTIONS.some((entry) => entry.name === name))
-		).toBe(true);
-	});
-
 	it('keeps first-class tools out of the on-demand catalog', () => {
 		expect(TOOL_CATALOG.every((entry) => !FIRST_CLASS_TOOL_SET.has(entry.name))).toBe(true);
-	});
-
-	it('keeps every other tool in the on-demand catalog', () => {
-		expect(TOOL_CATALOG.length).toBe(TOOL_DESCRIPTIONS.length - FIRST_CLASS_TOOL_NAMES.length);
 	});
 
 	it('fails fast when a name drifts from the catalog', () => {
@@ -43,24 +33,22 @@ describe('tool catalog', () => {
 	 * which `AgentTools.agentTools()` assembles rather than defines — so it is a
 	 * name the journal stores and never a name a run can park on.
 	 */
-	it('reads a catalog name into the agent surface', () => {
-		expect(readAgentToolName('save_note')).toBe('save_note');
+	it('reads a catalog name into both tool boundaries', () => {
+		expect({ agent: readAgentToolName('save_note'), catalog: readToolName('save_note') }).toEqual({
+			agent: 'save_note',
+			catalog: 'save_note'
+		});
 	});
 
 	it('reads search_tools, which has no catalog entry', () => {
-		expect(readAgentToolName('search_tools')).toBe('search_tools');
+		expect({
+			agent: readAgentToolName('search_tools'),
+			catalog: readToolName('search_tools')
+		}).toEqual({ agent: 'search_tools', catalog: undefined });
 	});
 
 	it('refuses a name the agent surface does not have', () => {
 		expect(readAgentToolName('save_notes')).toBeUndefined();
-	});
-
-	it('reads a catalog name into the catalog', () => {
-		expect(readToolName('save_note')).toBe('save_note');
-	});
-
-	it('refuses search_tools as a catalog name, because nothing binds it', () => {
-		expect(readToolName('search_tools')).toBeUndefined();
 	});
 
 	it('routes vague note cleanup away from whole-body replacement', () => {

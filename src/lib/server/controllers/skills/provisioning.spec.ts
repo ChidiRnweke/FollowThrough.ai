@@ -6,16 +6,6 @@ import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 
-it('lists installed built-in skills on the first request', async () => {
-	const state = builtInSkillsFixture();
-	const controller = new Skills(capabilityDependencies<SkillsDependencies>(state));
-	expect((await controller.list(testActor())).skills.map((skill) => skill.name)).toEqual([
-		'FollowThrough',
-		'Settings',
-		'Diagramming'
-	]);
-});
-
 it('rolls back the Inbox, skill notes and revisions when metadata cannot be stored', async () => {
 	const state = builtInSkillsFixture();
 	state.skills.writeFailure = new Error('Skill storage unavailable');

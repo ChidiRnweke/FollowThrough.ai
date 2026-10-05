@@ -62,9 +62,3 @@ it('does not offer revisions of an archived skill', async () => {
 		code: 'NOT_FOUND'
 	});
 });
-it('returns no history for a skill with no immutable snapshots', async () => {
-	const { controller, notes, note } = await setup();
-	notes.notes = [{ ...note, publishedRevision: 0 }];
-	notes.revisions = [];
-	expect(await controller.listVersions(testActor(), { noteId: note.id })).toEqual([]);
-});

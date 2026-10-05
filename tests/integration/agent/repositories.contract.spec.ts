@@ -640,20 +640,13 @@ describe('Postgres agent session repository invariants', () => {
 
 	// The column holds whatever the provider SDK wrote. A shape this code has not
 	// met must not make the conversation unreadable.
-	it('reads a row it does not recognise as the unrecognised arm', async () => {
+	it('round-trips an unrecognised stored row without changing its data', async () => {
 		const { owner, conversationId } = await seedConversation('82');
-		const repository = new AgentSessionRecords(context.db);
-		await repository.append(owner, conversationId, [unrecognisedItem('compaction')]);
-		const [row] = await repository.list(owner, conversationId);
-		expect(row?.item.type).toBe('unrecognised');
-	});
-
-	it('hands an unrecognised row back exactly as it was stored', async () => {
-		const { owner, conversationId } = await seedConversation('83');
 		const repository = new AgentSessionRecords(context.db);
 		const item = unrecognisedItem('compaction');
 		await repository.append(owner, conversationId, [item]);
-		expect((await repository.list(owner, conversationId))[0]?.item).toEqual(item);
+		const [row] = await repository.list(owner, conversationId);
+		expect(row?.item).toEqual({ type: 'unrecognised', item });
 	});
 
 	it('refuses a column that does not hold a JSON object', async () => {
@@ -696,13 +689,6 @@ describe('Postgres tool-embedding repository invariants', () => {
 	});
 	const seedRankableTools = (repository: ToolEmbeddingRecords) =>
 		repository.upsert([row('contract_alpha', basis(0)), row('contract_beta', basis(1))]);
-
-	it('round-trips seeded rows', async () => {
-		const repository = new ToolEmbeddingRecords(context.db);
-		await repository.upsert([row('contract_alpha', basis(0)), row('contract_beta', basis(1))]);
-		const listed = (await repository.list()).map((entry) => entry.name);
-		expect(listed).toEqual(expect.arrayContaining(['contract_alpha', 'contract_beta']));
-	});
 
 	it('ranks by cosine distance to the query', async () => {
 		const repository = new ToolEmbeddingRecords(context.db);

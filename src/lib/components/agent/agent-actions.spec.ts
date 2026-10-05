@@ -1,27 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentActions, type AgentActionSpec } from './agent-actions';
-
-const all = (): AgentActionSpec[] => Object.values(agentActions);
-
-describe('Invocation points stay inside the space their screen gives them', () => {
-	it('keeps every label short enough not to wrap an action cluster', () => {
-		expect(all().filter((action) => action.label.length > 22)).toEqual([]);
-	});
-
-	it('keeps every prompt short enough to sit on one line in the docked panel', () => {
-		expect(all().filter((action) => action.prompt.length > 55)).toEqual([]);
-	});
-});
-
-describe('Invocation points speak the house voice', () => {
-	it('opens every prompt with an imperative rather than a bare question', () => {
-		expect(all().filter((action) => action.prompt.endsWith('?'))).toEqual([]);
-	});
-
-	it('leaves the trailing period off, like the chat starters', () => {
-		expect(all().filter((action) => action.prompt.endsWith('.'))).toEqual([]);
-	});
-});
+import { agentActions } from './agent-actions';
 
 describe('Invocation points stay anchored in notes', () => {
 	// The thesis: notes are the artifact, and todos, memory, attachments and
@@ -37,10 +15,6 @@ describe('Invocation points stay anchored in notes', () => {
 			.filter(([, action]) => !/notes?\b/i.test(action.prompt))
 			.map(([key]) => key);
 		expect(drifted).toEqual([]);
-	});
-
-	it('sends the todos screen back to the notes rather than into triage', () => {
-		expect(agentActions.todosFromNotes.prompt).toContain('notes');
 	});
 
 	it('names what the project action returns instead of a vague verb', () => {

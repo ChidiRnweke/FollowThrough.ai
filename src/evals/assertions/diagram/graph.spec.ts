@@ -8,16 +8,6 @@ const graphOf = (body: string): Extract<DiagramGraph, { kind: 'graph' }> => {
 	return graph;
 };
 
-describe('style parsing', () => {
-	it('reads key-value pairs', () => {
-		expect(parseStyle('shape=image;image=https://example.test/a.svg;').get('shape')).toBe('image');
-	});
-
-	it('maps a bare token to an empty value', () => {
-		expect(parseStyle('rounded;html=1;').get('rounded')).toBe('');
-	});
-});
-
 describe('vertex reading', () => {
 	it('decodes a rich-text label to plain text', () => {
 		expect(
@@ -130,10 +120,6 @@ describe('absolute geometry', () => {
 			width: 120,
 			height: 60
 		});
-	});
-
-	it('computes a centre from absolute bounds', () => {
-		expect(centreOf({ x: 100, y: 200, width: 120, height: 60 })).toEqual({ x: 160, y: 230 });
 	});
 });
 

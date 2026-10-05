@@ -87,31 +87,24 @@ describe('Approval fields surface structured content as items', () => {
 		]
 	};
 
-	it('renders one item per element, each led by its own title', () => {
-		const fields = approvalFields(createTodos, shell);
-		expect(fields.items?.map((item) => item.headline)).toEqual([
-			'Draft the RFC',
-			'Book the review'
-		]);
-	});
-
-	it('keeps each item’s readable fields as labelled lines', () => {
-		const [first] = approvalFields(createTodos, shell).items ?? [];
-		expect(first?.details).toEqual([
-			'Description: Cover the rollout plan',
-			'Responsibility: mine',
-			'Due: 2026-08-10'
-		]);
-	});
-
-	it('leaves no trace of an id inside the items', () => {
+	it('renders each item with its readable fields and no project id', () => {
 		const fields = approvalFields(createTodos, shell);
 		const rendered = fields.items?.flatMap((item) => [item.headline, ...item.details]).join(' ');
-		expect(rendered).not.toContain(PROJECT_ID);
-	});
-
-	it('still folds the project id into the place line', () => {
-		expect(approvalFields(createTodos, shell).location).toBe('in Platform Notes');
+		expect({
+			headlines: fields.items?.map((item) => item.headline),
+			firstDetails: fields.items?.[0]?.details,
+			location: fields.location,
+			renderedIncludesProjectId: rendered?.includes(PROJECT_ID)
+		}).toEqual({
+			headlines: ['Draft the RFC', 'Book the review'],
+			firstDetails: [
+				'Description: Cover the rollout plan',
+				'Responsibility: mine',
+				'Due: 2026-08-10'
+			],
+			location: 'in Platform Notes',
+			renderedIncludesProjectId: false
+		});
 	});
 
 	it('drops values inside an item that would not read as a line', () => {
@@ -127,30 +120,23 @@ describe('Approval fields surface structured content as items', () => {
 			[];
 		expect(item?.details).toEqual([`Description: ${'a'.repeat(200)}`]);
 	});
-
-	it('omits the items list when no argument is an array of objects', () => {
-		expect(approvalFields(createNote, shell).items).toBeUndefined();
-	});
 });
 
 describe('Approval fields name the note an id-only call acts on', () => {
-	it('states the note as the subject when the call has no title of its own', () => {
-		expect(approvalFields({ noteId: PARENT_ID }, shell).headline).toBe('Infrastructure');
+	it('uses the note as the subject without exposing its id', () => {
+		const fields = approvalFields({ noteId: PARENT_ID }, shell);
+		const rendered = [fields.headline, fields.location, ...fields.details].join(' ');
+		expect({ headline: fields.headline, containsId: rendered.includes(PARENT_ID) }).toEqual({
+			headline: 'Infrastructure',
+			containsId: false
+		});
 	});
 
 	it('keeps the new title as the headline when the call carries one', () => {
-		expect(approvalFields({ noteId: PARENT_ID, title: 'Renamed' }, shell).headline).toBe('Renamed');
-	});
-
-	it('names the note as context when the call carries a new title', () => {
-		expect(approvalFields({ noteId: PARENT_ID, title: 'Renamed' }, shell).location).toBe(
-			'on Infrastructure'
-		);
-	});
-
-	it('leaves no trace of the note id anywhere in the rendered lines', () => {
-		const fields = approvalFields({ noteId: PARENT_ID }, shell);
-		const rendered = [fields.headline, fields.location, ...fields.details].join(' ');
-		expect(rendered).not.toContain(PARENT_ID);
+		const fields = approvalFields({ noteId: PARENT_ID, title: 'Renamed' }, shell);
+		expect({ headline: fields.headline, location: fields.location }).toEqual({
+			headline: 'Renamed',
+			location: 'on Infrastructure'
+		});
 	});
 });

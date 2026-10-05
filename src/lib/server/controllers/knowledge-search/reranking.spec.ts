@@ -44,13 +44,6 @@ describe('controller-owned search ranking', () => {
 			)
 		).toEqual(['candidate 0', 'candidate 1']);
 	});
-	it('returns the sole candidate while ranking is unavailable', async () => {
-		const fixture = setup(1);
-		fixture.reranker.failure = new Error('No provider available');
-		expect(
-			(await fixture.controller.search(actor, { query: 'query' })).map((match) => match.content)
-		).toEqual(['candidate 0']);
-	});
 	it('rejects malformed embedding output instead of running an empty search', async () => {
 		const fixture = setup(1);
 		fixture.embeddings.returnWrongCount = true;

@@ -3,6 +3,7 @@ import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
 import { runCase } from '../lab/run-case';
 import { retrievalCorpusWorkspace } from '../fixtures/workspaces/engineering';
+import { hasSuccessfulReadEvidence } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
 
 /**
@@ -31,30 +32,31 @@ const directQueries = [
 const ambiguousQueries = [
 	{
 		id: 'retrieval-tls-expiry',
+		title: 'Certificate rotation runbook',
 		prompt:
 			'Clients are getting handshake errors after sixty days. Which exact path does our runbook say to check?',
 		phrase: 'ACME challenge'
 	},
 	{
-		id: 'retrieval-hard-failover-with-pool-distractor',
-		prompt:
-			'The old writer endpoint cannot be reached, but the waiting copy is healthy. Which exact command from our runbooks should I use to restore service without waiting for the old node?',
-		phrase: 'pg_ctl promote'
-	},
-	{
 		id: 'retrieval-hard-cache-pressure-with-leak-distractor',
+		title: 'Redis cache eviction runbook',
 		prompt:
-			'Nothing is down, but repeated reads keep missing while resident bytes sit at the ceiling. I must not purge live data. Which exact cache policy does our runbook say applies?',
-		phrase: 'allkeys-lru'
+			'Nothing is down, but repeated reads keep missing while resident bytes sit at the ceiling. I must not purge live data. Which exact cache policy and no-purge instruction does our runbook give? Quote both.',
+		phrase: [
+			'allkeys-lru',
+			'Never flush the cache during business hours; warm it from the read replica instead.'
+		]
 	},
 	{
 		id: 'retrieval-hard-certificate-with-secret-distractor',
+		title: 'Certificate rotation runbook',
 		prompt:
 			'A browser refuses the site identity, and unattended renewal last succeeded about two months ago. Which exact path does our runbook say to check?',
 		phrase: 'ACME challenge'
 	},
 	{
 		id: 'retrieval-hard-failover-negative-evidence',
+		title: 'Postgres failover runbook',
 		prompt:
 			'The writer is unreachable. The standby is caught up, and connection-pool metrics are normal. What exact recovery command does our runbook give?',
 		phrase: 'pg_ctl promote'
@@ -109,14 +111,25 @@ const ambiguousAgentRetrievalCases: readonly EvalCase[] = ambiguousQueries.map((
 	},
 	async run(lab) {
 		const workspace = await seedWorkspace(lab, retrievalCorpusWorkspace);
+		const expectedNoteId = workspace.noteIds.get(entry.title);
+		const projectId = workspace.projectIds.get('Runbooks');
+		if (!expectedNoteId || !projectId) throw new Error(`Missing seeded runbook: ${entry.title}`);
+		const expectedPath = `/projects/${projectId}/notes/${expectedNoteId}.md`;
 		const result = await runCase(lab, workspace.actor, {
 			prompt: entry.prompt,
 			mode: 'auto_accept'
 		});
-		const usedRetrieval = result.calledToolNames.some((name) =>
-			['search', 'get_note', 'grep', 'sed'].includes(name)
+		const phrases = (typeof entry.phrase === 'string' ? [entry.phrase] : entry.phrase).map(
+			(phrase) => phrase.toLowerCase()
 		);
-		const grounded = result.finalResponse.toLowerCase().includes(entry.phrase.toLowerCase());
+		const groundedRead = hasSuccessfulReadEvidence(
+			result.toolCalls,
+			['search', 'grep', 'sed'],
+			expectedNoteId,
+			expectedPath,
+			phrases
+		);
+		const grounded = phrases.every((phrase) => result.finalResponse.toLowerCase().includes(phrase));
 
 		px.logOutput({
 			model: result.model,
@@ -125,18 +138,18 @@ const ambiguousAgentRetrievalCases: readonly EvalCase[] = ambiguousQueries.map((
 		});
 		px.logAnnotation({
 			name: ARCHETYPES.retrieval,
-			score: usedRetrieval && grounded ? 1 : 0,
-			label: usedRetrieval && grounded ? 'resolved' : 'miss',
-			explanation: usedRetrieval
+			score: groundedRead && grounded ? 1 : 0,
+			label: groundedRead && grounded ? 'resolved' : 'miss',
+			explanation: groundedRead
 				? grounded
-					? `read workspace evidence and grounded the answer in "${entry.phrase}"`
-					: `read workspace evidence but did not return "${entry.phrase}"`
-				: 'answered without reading the competing runbooks'
+					? `a successful read returned the requested evidence and the answer used it`
+					: `read evidence but did not answer with all requested facts`
+				: `no successful read returned all requested facts for ${entry.title}`
 		});
 
-		expect({ status: result.status, usedRetrieval, grounded }).toEqual({
+		expect({ status: result.status, groundedRead, grounded }).toEqual({
 			status: 'completed',
-			usedRetrieval: true,
+			groundedRead: true,
 			grounded: true
 		});
 	}

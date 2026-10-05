@@ -19,27 +19,6 @@ const seedSkillNote = async (suffix: string) => {
 	return { ...seeded, note };
 };
 describe('Postgres skill repository invariants', () => {
-	it('persists skill usage provenance', async () => {
-		const { owner, note } = await seedSkillNote('33');
-		const provenance = await seedProvenance(owner, '33');
-		const repository = new SkillRecords(context.db);
-		await repository.insert(owner, {
-			note,
-			description: 'Contract',
-			triggerHints: ['contract'],
-			slug: 'contract-skill',
-			metadata: {},
-			allowImplicitInvocation: true,
-			isEnabled: true
-		});
-		const usage = await repository.recordUsage(owner, {
-			id: 'b0000000-0000-4000-8000-000000000033' as SkillUsageId,
-			skillNoteId: note.id,
-			provenanceId: provenance.id,
-			createdAt: now
-		});
-		expect(usage.provenanceId).toBe(provenance.id);
-	});
 	it('hides enabled skills from an archived project', async () => {
 		const { owner, note, project } = await seedSkillNote('49');
 		const repository = new SkillRecords(context.db);

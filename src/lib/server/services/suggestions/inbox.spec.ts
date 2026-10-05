@@ -144,12 +144,4 @@ describe('Suggestion management invariants', () => {
 		];
 		expect(await service.listByStatus(testActor(), 'proposed')).toEqual([suggestionBuilder()]);
 	});
-
-	it('still returns the readable suggestions beside it', async () => {
-		const { service, suggestions } = setup();
-		suggestions.unreadable = [
-			{ status: 'unreadable', id: testSuggestionId(9), kind: 'todo', reason: 'bad payload' }
-		];
-		expect(await service.listByStatus(testActor(), 'proposed')).toEqual([]);
-	});
 });

@@ -299,6 +299,12 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 
 			const view = await lab.controllers.notes().get(actor, { noteId: skillNoteId });
 			const changed = view.note.plainText !== seeded.note.plainText;
+			const body = view.note.plainText.toLowerCase();
+			const numberedFromOne =
+				/(?:number(?:ed|ing)?)[^\n]{0,50}\b1\b/i.test(view.note.plainText) ||
+				/\b1\b[^\n]{0,50}(?:number(?:ed|ing)?)/i.test(view.note.plainText);
+			const keptUnrelatedRules =
+				view.note.plainText.includes(SKILL_HASH) && body.includes('hedging language');
 			px.logAnnotation({
 				name: ARCHETYPES.effect,
 				score: changed ? 1 : 0,
@@ -308,9 +314,19 @@ export const skillAdherenceCases: readonly EvalCase[] = [
 					: 'skill body is unchanged after the request'
 			});
 
-			expect(result.status).toBe('completed');
-			expect(usedEditTool, 'must edit the skill body through an edit tool').toBe(true);
-			expect(changed, 'skill body must have changed').toBe(true);
+			expect({
+				status: result.status,
+				usedEditTool,
+				changed,
+				numberedFromOne,
+				keptUnrelatedRules
+			}).toEqual({
+				status: 'completed',
+				usedEditTool: true,
+				changed: true,
+				numberedFromOne: true,
+				keptUnrelatedRules: true
+			});
 		}
 	},
 	{

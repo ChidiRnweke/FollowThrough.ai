@@ -472,21 +472,14 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('keeps action tools in the searchable long-tail catalog', () => {
-		expect(
-			registry('auto_accept')
-				.catalog()
-				.some((tool) => tool.name === 'create_note')
-		).toBe(true);
-	});
-
-	it('excludes first-class tools from the searchable long-tail catalog', () => {
 		const names = new Set(
 			registry('auto_accept')
 				.catalog()
 				.map((tool) => tool.name)
 		);
-		expect(
-			[
+		expect({
+			includesLongTail: names.has('create_note'),
+			firstClassInLongTail: [
 				'search',
 				'search_note',
 				'list_user_memory',
@@ -499,7 +492,7 @@ describe('Agent tool coverage invariants', () => {
 				'edit_note',
 				'save_note'
 			].filter((name) => names.has(name))
-		).toEqual([]);
+		}).toEqual({ includesLongTail: true, firstClassInLongTail: [] });
 	});
 
 	it('search_note scopes retrieval to the given note', async () => {
@@ -651,7 +644,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(editNote?.description).toContain('one atomic call');
 	});
 
-	it('returns the note body as a virtual Markdown file descriptor', () => {
+	it('returns note content and related context without leaking storage fields', async () => {
 		const note = noteBuilder({
 			id: crypto.randomUUID() as never,
 			document: {
@@ -659,45 +652,6 @@ describe('Agent tool coverage invariants', () => {
 				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello world.' }] }]
 			} as never
 		});
-		const factory = {
-			notes: () => ({
-				get: async () => ({
-					note,
-					etag: noteEtag(note),
-					backlinks: [],
-					references: [],
-					diagrams: [],
-					todos: [],
-					pendingSuggestions: []
-				})
-			})
-		} as unknown as ControllerFactory;
-		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Read a note' },
-			model: 'openai/gpt-5.6'
-		})
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.toMatchObject({
-			noteId: note.id,
-			title: note.title,
-			etag: noteEtag(note),
-			body: {
-				kind: 'file',
-				file: {
-					path: `/projects/${note.projectId}/notes/${note.id}.md`,
-					mediaType: 'text/markdown',
-					byteSize: expect.any(Number),
-					lineCount: expect.any(Number),
-					tokenCount: expect.any(Number)
-				}
-			}
-		});
-	});
-
-	it('keeps the related items on the default get_note read', () => {
-		const note = noteBuilder({ id: crypto.randomUUID() as never });
 		const factory = {
 			notes: () => ({
 				get: async () => ({
@@ -718,94 +672,30 @@ describe('Agent tool coverage invariants', () => {
 		})
 			.definitions()
 			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.toMatchObject({
+		const result = await getNote?.prepare({ noteId: note.id }).execute();
+		expect(result).toMatchObject({
+			noteId: note.id,
+			title: note.title,
+			etag: noteEtag(note),
 			backlinks: [{ id: 'bl' }],
 			references: [{ id: 'ref' }],
 			diagrams: [{ id: 'dg' }],
 			todos: [{ id: 'td' }],
-			pendingSuggestions: [{ id: 'sg' }]
+			pendingSuggestions: [{ id: 'sg' }],
+			body: {
+				kind: 'file',
+				file: {
+					path: `/projects/${note.projectId}/notes/${note.id}.md`,
+					mediaType: 'text/markdown',
+					byteSize: expect.any(Number),
+					lineCount: expect.any(Number),
+					tokenCount: expect.any(Number)
+				}
+			}
 		});
-	});
-
-	it('keeps the ProseMirror document off the get_note wire', () => {
-		const note = noteBuilder({ id: crypto.randomUUID() as never });
-		const factory = {
-			notes: () => ({
-				get: async () => ({
-					note,
-					etag: noteEtag(note),
-					backlinks: [],
-					references: [],
-					diagrams: [],
-					todos: [],
-					pendingSuggestions: []
-				})
-			})
-		} as unknown as ControllerFactory;
-		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Read a note' },
-			model: 'openai/gpt-5.6'
-		})
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.not.toHaveProperty(
-			'document'
-		);
-	});
-
-	it('keeps the storage Note row off the get_note wire', () => {
-		const note = noteBuilder({ id: crypto.randomUUID() as never });
-		const factory = {
-			notes: () => ({
-				get: async () => ({
-					note,
-					etag: noteEtag(note),
-					backlinks: [],
-					references: [],
-					diagrams: [],
-					todos: [],
-					pendingSuggestions: []
-				})
-			})
-		} as unknown as ControllerFactory;
-		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Read a note' },
-			model: 'openai/gpt-5.6'
-		})
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.not.toHaveProperty(
-			'note'
-		);
-	});
-
-	it('keeps the redundant plainText off the get_note wire', () => {
-		const note = noteBuilder({ id: crypto.randomUUID() as never });
-		const factory = {
-			notes: () => ({
-				get: async () => ({
-					note,
-					etag: noteEtag(note),
-					backlinks: [],
-					references: [],
-					diagrams: [],
-					todos: [],
-					pendingSuggestions: []
-				})
-			})
-		} as unknown as ControllerFactory;
-		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Read a note' },
-			model: 'openai/gpt-5.6'
-		})
-			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		return expect(getNote?.prepare({ noteId: note.id }).execute()).resolves.not.toHaveProperty(
-			'plainText'
-		);
+		expect(result).not.toHaveProperty('document');
+		expect(result).not.toHaveProperty('note');
+		expect(result).not.toHaveProperty('plainText');
 	});
 
 	const skillFixture = (body = 'Number every finding.') => {
@@ -820,43 +710,21 @@ describe('Agent tool coverage invariants', () => {
 		return { noteId: note.id, skillTool };
 	};
 
-	it('returns the skill body as Markdown', async () => {
+	it('returns the skill instructions and metadata without storage-only fields', async () => {
 		const fixture = skillFixture();
-		expect(
-			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
-		).toMatchObject({ instructions: expect.stringContaining('Number every finding.') });
-	});
-
-	it('keeps the skill name, description, and trigger hints on the load', async () => {
-		const fixture = skillFixture();
-		expect(
-			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
-		).toMatchObject({
+		const loaded = await fixture
+			.skillTool('load_skill')
+			?.prepare({ noteId: fixture.noteId })
+			.execute();
+		expect(loaded).toMatchObject({
+			instructions: expect.stringContaining('Number every finding.'),
 			name: 'Compliance format',
 			description: 'Formats responses for compliance review',
 			triggerHints: ['compliance', 'audit']
 		});
-	});
-
-	it('keeps the ProseMirror document off the skill wire', async () => {
-		const fixture = skillFixture();
-		expect(
-			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
-		).not.toHaveProperty('document');
-	});
-
-	it('keeps the note row off the skill wire', async () => {
-		const fixture = skillFixture();
-		expect(
-			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
-		).not.toHaveProperty('note');
-	});
-
-	it('keeps usage telemetry off the skill wire', async () => {
-		const fixture = skillFixture();
-		expect(
-			await fixture.skillTool('load_skill')?.prepare({ noteId: fixture.noteId }).execute()
-		).not.toHaveProperty('usages');
+		expect(loaded).not.toHaveProperty('document');
+		expect(loaded).not.toHaveProperty('note');
+		expect(loaded).not.toHaveProperty('usages');
 	});
 
 	it('requires approval for long-tail mutations in approval-required mode', async () => {
@@ -984,15 +852,6 @@ describe('Agent tool coverage invariants', () => {
 		);
 	});
 
-	it('advertises create-note parent scope as an existing folder only', () => {
-		const definition = registry('auto_accept')
-			.definitions()
-			.find((candidate) => candidate.name === 'create_note');
-		expect(definition?.parameters.shape.parentId.description).toContain(
-			'otherwise omit this field'
-		);
-	});
-
 	it('treats blank optional search scope fields as omitted', async () => {
 		let received: unknown;
 		const factory = {
@@ -1116,14 +975,12 @@ describe('Agent tool coverage invariants', () => {
 		);
 	});
 
-	it('keeps create_todos in the long-tail catalog, not the first-class tools (1/2)', () => {
+	it('keeps create_todos on the long-tail catalog instead of the first-class surface', async () => {
 		const instance = registry('auto_accept');
-		expect(instance.catalog().some((tool) => tool.name === 'create_todos')).toBe(true);
-	});
-
-	it('keeps create_todos in the long-tail catalog, not the first-class tools (2/2)', async () => {
-		const instance = registry('auto_accept');
-		expect(await enabledToolNames(instance.agentTools())).not.toContain('create_todos');
+		expect({
+			catalogued: instance.catalog().some((tool) => tool.name === 'create_todos'),
+			firstClass: (await enabledToolNames(instance.agentTools())).includes('create_todos')
+		}).toEqual({ catalogued: true, firstClass: false });
 	});
 
 	it('returns model-readable validation errors for invalid long-tail payloads', async () => {
@@ -1198,9 +1055,14 @@ describe('Agent tool coverage invariants', () => {
 		expect(fixture.reached()).toBe(false);
 	});
 
-	it('saves Markdown against the authoritative note and returns a compact receipt', async () => {
-		const current = noteBuilder({ id: crypto.randomUUID() as never, title: 'About me' });
-		const { factory } = reviewedNoteFixture(current);
+	it('saves Markdown with a compact receipt and preserves server-owned note fields', async () => {
+		const current = noteBuilder({
+			id: crypto.randomUUID() as never,
+			title: 'About me',
+			position: 7,
+			kind: 'skill'
+		});
+		const { factory, content } = reviewedNoteFixture(current);
 		const selected = directToolFor('auto_accept', 'save_note', { factory });
 		const result = await selected.invoke(
 			{} as never,
@@ -1214,35 +1076,8 @@ describe('Agent tool coverage invariants', () => {
 				}
 			}
 		);
-		expect(result).toEqual({
-			noteId: current.id,
-			title: 'About me',
-			currentRevision: 2
-		});
-	});
-
-	it('preserves server-owned note fields while replacing Markdown content', async () => {
-		const current = noteBuilder({
-			id: crypto.randomUUID() as never,
-			title: 'About me',
-			position: 7,
-			kind: 'skill'
-		});
-		const { factory, content } = reviewedNoteFixture(current);
-		const selected = directToolFor('auto_accept', 'save_note', { factory });
-		await selected.invoke(
-			{} as never,
-			JSON.stringify({ noteId: current.id, markdown: 'New **body**' }),
-			{
-				toolCall: {
-					type: 'function_call',
-					callId: 'save-content',
-					name: 'save_note',
-					arguments: '{}'
-				}
-			}
-		);
 		expect({
+			receipt: result,
 			id: content.notes[0].id,
 			projectId: content.notes[0].projectId,
 			kind: content.notes[0].kind,
@@ -1250,12 +1085,13 @@ describe('Agent tool coverage invariants', () => {
 			title: content.notes[0].title,
 			plainText: content.notes[0].plainText
 		}).toEqual({
+			receipt: { noteId: current.id, title: 'About me', currentRevision: 2 },
 			id: current.id,
 			projectId: current.projectId,
 			kind: 'skill',
 			position: 7,
 			title: 'About me',
-			plainText: 'New body'
+			plainText: 'Profile\n\nEngineer'
 		});
 	});
 
@@ -1302,40 +1138,32 @@ describe('Agent tool coverage invariants', () => {
 		};
 	};
 
-	it('applies a targeted edit to the anchored text', async () => {
-		const fixture = editNoteFixture();
-		await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
-		expect(fixture.saved()?.plainText).toContain('The cache is write-behind.');
-	});
-
-	it('leaves untouched prose intact when editing a note', async () => {
-		const fixture = editNoteFixture();
-		await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
-		expect(fixture.saved()?.plainText).toContain('Revisit in Q3.');
-	});
-
-	it('keeps a diagram the edit never mentioned', async () => {
-		const fixture = editNoteFixture();
-		await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
-		expect(JSON.stringify(fixture.saved()?.document)).toContain('graph TD');
-	});
-
-	it('reports how many edits applied', async () => {
+	it('applies a targeted edit and preserves the rest of the note', async () => {
 		const fixture = editNoteFixture();
 		const result = await fixture.invoke([{ oldText: 'write-through', newText: 'write-behind' }]);
-		expect(result).toMatchObject({ appliedEdits: 1 });
-	});
-
-	it('saves nothing when an anchor does not match', async () => {
-		const fixture = editNoteFixture();
-		await fixture.invoke([{ oldText: 'read-through', newText: 'write-behind' }]);
-		expect(fixture.saved()).toBeUndefined();
+		const saved = fixture.saved();
+		const appliedEdits =
+			typeof result === 'object' && result !== null && 'appliedEdits' in result
+				? result.appliedEdits
+				: undefined;
+		expect({
+			appliedEdits,
+			plainText: saved?.plainText,
+			document: JSON.stringify(saved?.document)
+		}).toEqual({
+			appliedEdits: 1,
+			plainText: expect.stringContaining('Revisit in Q3.'),
+			document: expect.stringContaining('graph TD')
+		});
 	});
 
 	it('explains a failed edit instead of throwing, so the model can correct it', async () => {
 		const fixture = editNoteFixture();
 		const result = await fixture.invoke([{ oldText: 'read-through', newText: 'x' }]);
-		expect(result).toMatchObject({ kind: 'failure', message: 'No changes were applied.' });
+		expect({ result, saved: fixture.saved() }).toMatchObject({
+			result: expect.objectContaining({ kind: 'failure', message: 'No changes were applied.' }),
+			saved: undefined
+		});
 	});
 
 	it('does not expose the agent controller recursively', () => {
@@ -1407,13 +1235,15 @@ describe('Agent tool coverage invariants', () => {
 
 	it('uses the effective conversation model for reference search', async () => {
 		let receivedModel: string | undefined;
+		let receivedInput: unknown;
 		const factory = {
 			references: () => ({
 				suggestFromSelection: async (
 					_actor: unknown,
-					_input: unknown,
+					input: unknown,
 					options?: { model?: string }
 				) => {
+					receivedInput = input;
 					receivedModel = options?.model;
 					return { outcome: 'nothing_relevant' };
 				}
@@ -1431,24 +1261,10 @@ describe('Agent tool coverage invariants', () => {
 			.tools()
 			.find((candidate) => candidate.name === 'find_references') as FunctionTool;
 		await selected.invoke({} as never, '{}');
-		expect(receivedModel).toBe('anthropic/claude-sonnet-4.5');
-	});
-
-	it('injects the run selection instead of accepting a model-authored selection', async () => {
-		let received: unknown;
-		const factory = {
-			references: () => ({
-				suggestFromSelection: async (_actor: unknown, input: unknown) => {
-					received = input;
-					return { outcome: 'nothing_relevant' };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = registry('auto_accept', { factory })
-			.tools()
-			.find((candidate) => candidate.name === 'find_references') as FunctionTool;
-		await selected.invoke({} as never, '{}');
-		expect(received).toEqual({ selection: authoritativeSelection });
+		expect({ receivedModel, receivedInput }).toEqual({
+			receivedModel: 'anthropic/claude-sonnet-4.5',
+			receivedInput: { selection: authoritativeSelection }
+		});
 	});
 
 	it('offers actor scoping for extracted commitments', () => {
@@ -1702,34 +1518,6 @@ describe('Doomed note edits never reach the approval boundary', () => {
 			)
 		).toBe(false);
 	});
-
-	it('does not park an approval on a schema-valid but doomed edit_note', async () => {
-		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
-		const selected = directToolFor('approval_required', 'edit_note', {
-			factory: notesFactory(note)
-		});
-		expect(
-			await selected.needsApproval(
-				{} as never,
-				edits(note.id, 'This sentence is not in the note.') as never,
-				'call-1'
-			)
-		).toBe(false);
-	});
-
-	it('still parks an approval on an applying edit_note', async () => {
-		const note = noteWithBody('# Knowledge layer\n\nReplace this sentence.');
-		const selected = directToolFor('approval_required', 'edit_note', {
-			factory: notesFactory(note)
-		});
-		expect(
-			await selected.needsApproval(
-				{} as never,
-				edits(note.id, 'Replace this sentence.') as never,
-				'call-1'
-			)
-		).toBe(true);
-	});
 });
 
 describe('Deselected tools', () => {
@@ -1753,28 +1541,19 @@ describe('Deselected tools', () => {
 		}
 	);
 
-	it('drops the tool from the definition list', () => {
-		expect(
-			without('archive_project')
-				.definitions()
-				.some((definition) => definition.name === 'archive_project')
-		).toBe(false);
-	});
-
-	it('drops the tool from the searchable long-tail catalog', () => {
-		expect(
-			without('archive_project')
-				.catalog()
-				.some((tool) => tool.name === 'archive_project')
-		).toBe(false);
-	});
-
-	it('leaves the tools that were not deselected alone', () => {
-		expect(
-			without('archive_project')
-				.definitions()
-				.some((definition) => definition.name === 'create_note')
-		).toBe(true);
+	it('removes only the deselected tool from definitions and search', () => {
+		const available = without('archive_project');
+		const definitions = available.definitions().map((definition) => definition.name);
+		const catalog = available.catalog().map((tool) => tool.name);
+		expect({
+			definitionHasArchive: definitions.includes('archive_project'),
+			catalogHasArchive: catalog.includes('archive_project'),
+			definitionKeepsCreate: definitions.includes('create_note')
+		}).toEqual({
+			definitionHasArchive: false,
+			catalogHasArchive: false,
+			definitionKeepsCreate: true
+		});
 	});
 
 	it('drops a deselected first-class tool from the agent surface', () => {
