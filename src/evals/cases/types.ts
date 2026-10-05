@@ -85,5 +85,14 @@ export const ARCHETYPES = {
 	/** Does the agent actually land the requested effect instead of ending the turn in narration? */
 	taskCompletion: 'task_completion',
 	/** Does re-running an identical request avoid duplicating the side effects it already produced? */
-	reworkAvoidance: 'rework_avoidance'
+	reworkAvoidance: 'rework_avoidance',
+	/** Does a widget the agent built work when a person uses it: inputs move the numbers, rows add up? */
+	widgetBuild: 'widget_build',
+	/**
+	 * Does the note the person named embed the widget? Reported, not gated: ADR 0043 leaves
+	 * create-and-embed undecided, and gating it would hold every build result hostage to it.
+	 */
+	widgetEmbed: 'widget_embed',
+	/** Did a requested change to an existing widget land as the right kind of edit, and only that? */
+	widgetEdit: 'widget_edit'
 } as const;
