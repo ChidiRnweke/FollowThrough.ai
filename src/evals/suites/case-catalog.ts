@@ -1,6 +1,6 @@
 import type { EvalCase } from '../cases/types';
 import { toolCallingCases } from '../cases/tool-calling';
-import { toolRetrievalCases } from '../cases/tool-retrieval';
+import { toolRetrievalCases, toolSetRetrievalCases } from '../cases/tool-retrieval';
 import { toolInvocationCases, toolSearchTriggerCases } from '../cases/tool-invocation';
 import { memoryCases } from '../cases/memory';
 import { safetyCases } from '../cases/safety';
@@ -20,9 +20,10 @@ import { multiTurnCorrectnessCases } from '../cases/multi-turn-correctness';
 import { inlineSuggestionCases } from '../cases/inline-suggestion';
 import { timeAwarenessCases, parallelExecutionCases } from '../cases/time-awareness';
 import { completionRegressionCases } from '../cases/completion';
+import { widgetCases } from '../cases/widgets';
 
 export const EVAL_SECTIONS = {
-	'tool-retrieval': toolRetrievalCases,
+	'tool-retrieval': [...toolRetrievalCases, ...toolSetRetrievalCases],
 	retrieval: retrievalCases,
 	'tool-calling': toolCallingCases,
 	stopping: stoppingCases,
@@ -42,7 +43,8 @@ export const EVAL_SECTIONS = {
 	'inline-suggestion': inlineSuggestionCases,
 	'intent-interpretation': intentInterpretationCases,
 	'multi-turn-correctness': multiTurnCorrectnessCases,
-	completion: completionRegressionCases
+	completion: completionRegressionCases,
+	widgets: widgetCases
 } satisfies Record<string, readonly EvalCase[]>;
 
 export type EvalSection = keyof typeof EVAL_SECTIONS;

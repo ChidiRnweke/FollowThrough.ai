@@ -221,6 +221,47 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 		goal: 'add a progress bar element to the top of the tracker widget',
 		expected: 'edit_widget_layout'
 	},
+	// The same capabilities as a person asks for them: the thing, not the word "widget".
+	{
+		id: 'widget-create-implicit-calculator',
+		goal: 'an interactive savings calculator in this note',
+		expected: 'create_widget'
+	},
+	{
+		id: 'widget-create-implicit-budget',
+		goal: 'track monthly expenses against a budget with a chart',
+		expected: 'create_widget'
+	},
+	{
+		id: 'widget-create-implicit-dashboard',
+		goal: 'a dashboard of the open and overdue todos in this project',
+		expected: 'create_widget'
+	},
+	{
+		id: 'widget-catalog-implicit',
+		goal: 'which charts, sliders and inputs can I build with',
+		expected: 'read_widget_catalog'
+	},
+	{
+		id: 'widget-data-edit-implicit',
+		goal: 'change the interest rate on the savings simulator',
+		expected: 'edit_widget_data'
+	},
+	{
+		id: 'widget-layout-edit-implicit',
+		goal: 'add a category column to the expense table',
+		expected: 'edit_widget_layout'
+	},
+	{
+		id: 'widget-list-implicit',
+		goal: 'find the habit tracker in this project',
+		expected: 'list_widgets'
+	},
+	{
+		id: 'widget-read-implicit',
+		goal: 'what does the budget tracker in this note show right now',
+		expected: 'read_widget'
+	},
 
 	// Suggestions
 	{
@@ -413,6 +454,35 @@ export const TOOL_RETRIEVAL_GOALS: readonly RetrievalGoal[] = [
 
 const TOP_K = 5;
 
+/**
+ * Goals that need several tools in one search. Building a widget needs the catalog as well as
+ * `create_widget`, and editing one needs its current revision from `read_widget`; a search that
+ * surfaces only one of the pair leaves the agent guessing or making a second search.
+ */
+interface RetrievalToolSet {
+	readonly id: string;
+	readonly goal: string;
+	readonly expected: readonly ToolName[];
+}
+
+export const TOOL_SET_GOALS: readonly RetrievalToolSet[] = [
+	{
+		id: 'widget-build-set',
+		goal: 'build an interactive widget with inputs, formulas and a chart',
+		expected: ['read_widget_catalog', 'create_widget']
+	},
+	{
+		id: 'widget-edit-data-set',
+		goal: 'update the values in an existing widget',
+		expected: ['read_widget', 'edit_widget_data']
+	},
+	{
+		id: 'widget-edit-layout-set',
+		goal: 'add a chart to an existing widget',
+		expected: ['read_widget', 'edit_widget_layout']
+	}
+];
+
 export const toolRetrievalCases: readonly EvalCase[] = TOOL_RETRIEVAL_GOALS.filter(
 	(entry) => !FIRST_CLASS_TOOL_SET.has(entry.expected)
 ).map((entry) => ({
@@ -439,5 +509,29 @@ export const toolRetrievalCases: readonly EvalCase[] = TOOL_RETRIEVAL_GOALS.filt
 		});
 
 		expect(ranked, `expected ${entry.expected} in the top ${TOP_K}`).toContain(entry.expected);
+	}
+}));
+
+export const toolSetRetrievalCases: readonly EvalCase[] = TOOL_SET_GOALS.map((entry) => ({
+	id: `tool-retrieval-${entry.id}`,
+	name: `catalog surfaces ${entry.expected.join(' and ')} for: ${entry.goal}`,
+	splits: [ARCHETYPES.toolRetrieval],
+	input: { goal: entry.goal, topK: TOP_K },
+	expected: { tools: [...entry.expected] },
+	metadata: { layer: 'retriever', note: 'No agent turn; every expected tool must rank.' },
+	async run(lab) {
+		const ranked = await rankToolsForGoal(lab, catalogActor(), entry.goal, TOP_K);
+		const missing = entry.expected.filter((tool) => !ranked.includes(tool));
+		px.logOutput({ ranked, missing });
+		px.logAnnotation({
+			name: ARCHETYPES.toolRetrieval,
+			score: missing.length === 0 ? 1 : 0,
+			label: missing.length === 0 ? 'all_ranked' : 'miss',
+			explanation:
+				missing.length === 0
+					? `${entry.expected.join(', ')} all in the top ${TOP_K}`
+					: `${missing.join(', ')} absent from top ${TOP_K}; got ${ranked.join(', ')}`
+		});
+		expect(missing, `expected ${entry.expected.join(', ')} in the top ${TOP_K}`).toEqual([]);
 	}
 }));
