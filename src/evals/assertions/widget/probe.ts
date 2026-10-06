@@ -60,7 +60,8 @@ export type ProbeStep =
 	| {
 			readonly kind: 'reads';
 			readonly label: RegExp;
-			readonly near: number;
+			/** Several values when more than one design is right, such as a weighted sum or average. */
+			readonly near: number | readonly number[];
 			readonly tolerance?: number;
 			/** The value is a percentage, so a fraction (0.43 for 43%) reads as well. */
 			readonly percent?: boolean;
@@ -171,14 +172,18 @@ const contextLabelOf = (widget: Widget, target: WidgetElement, state: JsonValue)
 		at = parent, parent = parents.get(at)
 	) {
 		const siblings = parent.children.flatMap((key) => widget.layout.elements[key] ?? []);
-		const caption = siblings
-			.slice(0, siblings.indexOf(at))
-			.map((sibling) => captionOf(sibling, state))
-			.findLast((text) => text !== undefined);
+		// The nearest heading names the section even when a line of text sits between it and the
+		// field, as "Deploy lead time" over "120 min → 30 min" over an "Update current" input.
+		const before = siblings.slice(0, siblings.indexOf(at));
+		const nearest = (type: string) =>
+			before
+				.filter((sibling) => sibling.type === type)
+				.map((sibling) => captionOf(sibling, state))
+				.findLast((text) => text !== undefined);
 		const title = resolveProp(parent.props.title, state);
 		names.unshift(
 			...(parent.type === 'Card' && typeof title === 'string' ? [title] : []),
-			...(caption ? [caption] : [])
+			...[nearest('Heading'), nearest('Text')].filter((text) => text !== undefined)
 		);
 	}
 	return [...names, labelOf(target, state)].join(' ');
@@ -571,8 +576,8 @@ const edit = (
 		widget,
 		placed(widget).filter(
 			(element) =>
-				INPUTS.has(element.type) &&
-				bound(element.props.value) !== undefined &&
+				(INPUTS.has(element.type) || element.type === 'Checkbox') &&
+				fieldPointer(element) !== undefined &&
 				kindFits(element, step.value)
 		),
 		state.data,
@@ -581,8 +586,8 @@ const edit = (
 		// labelled with its unit ("min") under the heading "Deploy lead time".
 		(_own, context) => step.row.test(context)
 	);
-	const pointer = field && bound(field.props.value);
-	if (field && pointer && typeof step.value !== 'boolean')
+	const pointer = field && fieldPointer(field);
+	if (field && pointer)
 		return {
 			kind: 'applied',
 			state: {
@@ -592,9 +597,13 @@ const edit = (
 		};
 	return {
 		kind: 'failure',
-		explanation: `no row or field matching ${step.row}${step.column ? ` / ${step.column}` : ''} takes ${JSON.stringify(step.value)}`
+		explanation: `no row or field matching ${step.row}${step.column ? ` / ${step.column}` : ''} takes ${JSON.stringify(step.value)}; inputs: ${describeInputs(widget, state.data)}`
 	};
 };
+
+/** Where a field writes: a checkbox binds `checked`, every other input binds `value`. */
+const fieldPointer = (element: WidgetElement): string | undefined =>
+	element.type === 'Checkbox' ? bound(element.props.checked) : bound(element.props.value);
 
 const addTodo = (state: ProbeState, todo: ProbeTodo): StepOutcome => ({
 	kind: 'applied',
@@ -633,14 +642,15 @@ const check = (readout: WidgetReadout, step: ProbeStep): StepOutcome => {
 		case 'reads': {
 			const lines = labelled(readout, step.label);
 			const tolerance = step.tolerance ?? DEFAULT_TOLERANCE;
-			const targets = step.percent ? [step.near, step.near / 100] : [step.near];
+			const nears = typeof step.near === 'number' ? [step.near] : step.near;
+			const targets = nears.flatMap((near) => (step.percent ? [near, near / 100] : [near]));
 			const hit = lines.some((line) =>
 				numbersIn(line.text).some((value) =>
 					targets.some(
 						// A cent of slack for rounding, scaled down with a fraction.
 						(target) =>
 							Math.abs(value - target) <=
-							Math.abs(target) * tolerance + (target === step.near ? 0.01 : 0.0001)
+							Math.abs(target) * tolerance + (nears.includes(target) ? 0.01 : 0.0001)
 					)
 				)
 			);

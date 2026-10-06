@@ -10,7 +10,7 @@ import {
 	savingsSimulator,
 	tripSplitter
 } from '../../fixtures/widgets/calculators';
-import { okrTracker, relocationChecklist } from '../../fixtures/widgets/trackers';
+import { habitTracker, okrTracker, relocationChecklist } from '../../fixtures/widgets/trackers';
 import { projectDashboard } from '../../fixtures/widgets/dashboard';
 import { scenarioRecords } from '../../fixtures/widgets/scenario';
 import { runWidgetProbe, type ProbeStep } from './probe';
@@ -336,6 +336,140 @@ describe('widget probe', () => {
 					deploys: result('deploys'),
 					deploysName: heading('Weekly deploys'),
 					deploysNow: now('deploys'),
+					overall: {
+						type: 'Metric',
+						props: { label: 'Overall progress', value: { $state: '/derived/overall' } },
+						children: []
+					}
+				},
+				derived: {
+					overall:
+						'round(((120 - @/lead) / 90 + (15 - @/failure) / 10 + (@/deploys - 10) / 30) / 3 * 1000) / 10'
+				}
+			},
+			data: { lead: 75, failure: 11, deploys: 22 }
+		};
+		expect(probe(draft, okrTracker.probe)).toBe('');
+	});
+
+	it('accepts a matrix that shows weighted averages instead of weighted sums', () => {
+		const derived = widgetTemplates.decision.layout.derived;
+		const draft: WidgetDraft = {
+			...widgetTemplates.decision,
+			layout: {
+				...widgetTemplates.decision.layout,
+				derived: {
+					...derived,
+					scores:
+						'map(@/options, { option: item.name, score: (item.impact * @/weights/impact + item.cost * @/weights/cost + item.risk * @/weights/risk) / (@/weights/impact + @/weights/cost + @/weights/risk) })'
+				}
+			}
+		};
+		expect(probe(draft, decisionMatrix.probe)).toBe('');
+	});
+
+	it('ticks a day box that sits beside its habit name rather than in a table', () => {
+		const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+		const habit = (index: number, name: string) => ({
+			[`habit${index}`]: {
+				type: 'Stack',
+				props: { direction: 'horizontal' },
+				children: [`name${index}`, ...days.map((day) => `${day}${index}`)]
+			},
+			[`name${index}`]: { type: 'Text', props: { text: name }, children: [] },
+			...Object.fromEntries(
+				days.map((day) => [
+					`${day}${index}`,
+					{
+						type: 'Checkbox',
+						props: {
+							label: day[0]!.toUpperCase() + day.slice(1),
+							checked: { $bindState: `/habits/${index}/${day}` }
+						},
+						children: []
+					}
+				])
+			)
+		});
+		const draft: WidgetDraft = {
+			title: 'Habits',
+			layout: {
+				root: 'card',
+				elements: {
+					card: {
+						type: 'Card',
+						props: { title: 'Habit tracker' },
+						children: ['checkins', 'habit0', 'habit1', 'chart']
+					},
+					checkins: {
+						type: 'Metric',
+						props: {
+							label: 'Check-ins',
+							value: { $template: '${/derived/done} of ${/derived/possible}' }
+						},
+						children: []
+					},
+					...habit(0, 'Write 30 minutes'),
+					...habit(1, 'No meetings before 10'),
+					chart: {
+						type: 'BarChart',
+						props: {
+							rows: { $state: '/derived/perHabit' },
+							x: 'habit',
+							series: [{ key: 'days', label: 'Days' }]
+						},
+						children: []
+					}
+				},
+				derived: {
+					perHabit:
+						'map(@/habits, { habit: item.name, days: count(filter([item.mon, item.tue, item.wed, item.thu, item.fri, item.sat, item.sun], item)) })',
+					done: 'sum(map(@/derived/perHabit, item.days))',
+					possible: 'count(@/habits) * 7'
+				}
+			},
+			data: {
+				habits: ['Write 30 minutes', 'No meetings before 10'].map((name) => ({
+					name,
+					...Object.fromEntries(days.map((day) => [day, false]))
+				}))
+			}
+		};
+		expect(probe(draft, habitTracker.probe)).toBe('');
+	});
+
+	it('finds an "Update current" field by the heading above a line of text', () => {
+		const result = (key: string, name: string, start: number, target: number) => ({
+			[key]: {
+				type: 'Stack',
+				props: {},
+				children: [`${key}Name`, `${key}Info`, `${key}Input`]
+			},
+			[`${key}Name`]: { type: 'Heading', props: { text: name }, children: [] },
+			[`${key}Info`]: {
+				type: 'Text',
+				props: { text: { $template: `${start} → ${target} · currently \${/${key}}` } },
+				children: []
+			},
+			[`${key}Input`]: {
+				type: 'NumberInput',
+				props: { label: 'Update current', value: { $bindState: `/${key}` } },
+				children: []
+			}
+		});
+		const draft: WidgetDraft = {
+			title: 'Make deploys boring',
+			layout: {
+				root: 'card',
+				elements: {
+					card: {
+						type: 'Card',
+						props: { title: 'OKR' },
+						children: ['lead', 'failure', 'deploys', 'overall']
+					},
+					...result('lead', 'Deploy lead time', 120, 30),
+					...result('failure', 'Change failure rate', 15, 5),
+					...result('deploys', 'Weekly deploys', 10, 40),
 					overall: {
 						type: 'Metric',
 						props: { label: 'Overall progress', value: { $state: '/derived/overall' } },

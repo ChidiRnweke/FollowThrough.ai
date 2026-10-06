@@ -2336,8 +2336,16 @@ const sharedToolDefinitions = (
 			'mutation',
 			z.object({
 				title: z.string().min(1),
-				layout: z.string().min(2).describe('The layout object, encoded as a JSON string.'),
-				data: z.string().min(2).describe('The data object, encoded as a JSON string.'),
+				layout: z
+					.string()
+					.min(2)
+					.describe(
+						'The layout as one JSON object serialised to a string: double-quoted keys, escaped inner quotes, and nothing before or after the closing brace.'
+					),
+				data: z
+					.string()
+					.min(2)
+					.describe('The data as one JSON object serialised to a string, like layout.'),
 				projectId: projectId.optional(),
 				noteId: noteId
 					.optional()
@@ -2359,7 +2367,10 @@ const sharedToolDefinitions = (
 						data: jsonArgument(input.data, widgetDataSchema, 'data')
 					}
 				});
-				const embed = `:::widgetNode {widgetId="${widget.id}"} :::`;
+				// Single quotes parse the same as double ones, and need no escaping inside the JSON
+				// arguments of the edit_note call that inserts the line. An unescaped double quote
+				// there fails the whole run as malformed tool arguments.
+				const embed = `:::widgetNode {widgetId='${widget.id}'} :::`;
 				// Creating saves the widget in the project; only a reviewed note edit shows it in a
 				// note (ADR 0003), so the result names that edit rather than performing it.
 				return {

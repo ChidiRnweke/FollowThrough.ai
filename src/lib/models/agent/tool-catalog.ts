@@ -473,15 +473,17 @@ export const TOOL_DESCRIPTIONS = [
 		name: 'read_widget_catalog',
 		classification: 'read',
 		description:
-			'Read the widget catalog: the layout format, the state expressions, and every component with its props. Read it before create_widget or edit_widget_layout, and use only what it lists.',
-		retrievalText: 'widget components props format reference before building a widget'
+			'Read the widget catalog: the layout format, the state expressions, the formula language, the todo and note sources, and every component with its props. Read it before create_widget or edit_widget_layout, and use only what it lists.',
+		retrievalText:
+			'which components, inputs, sliders, charts, tables and formulas an interactive widget can use, before building one'
 	},
 	{
 		name: 'create_widget',
 		classification: 'mutation',
 		description:
-			'Create a widget in a project: a small interface such as a checklist, tracker or table, saved on its own so several notes can show it. Read read_widget_catalog first. `layout` and `data` are JSON objects sent as JSON strings. Creating does not put the widget in a note. When the user wants it in a note, pass that `noteId`; the result then carries an `embed` line such as :::widgetNode {widgetId="…"} ::: and the edit_note call to make, and you must make it before you finish.',
-		retrievalText: 'create a checklist tracker table widget in a note'
+			"Create a widget in a project: a live tool saved on its own so several notes can show it, such as a calculator or simulator with inputs, sliders, formulas and a chart; an expense, habit or OKR tracker with an editable table; a checklist; a decision matrix; or a dashboard that counts the project's todos. Use it instead of a Markdown table whenever the result must compute, respond to input or stay up to date. Read read_widget_catalog first, then create the finished widget in one call: never create a test or scratch widget, because no tool deletes one and it stays in the user's project. A rejected layout saves nothing and returns the problems to fix. `layout` and `data` are JSON objects sent as JSON strings. Creating does not put the widget in a note. When the user wants it in a note, pass that `noteId`; the result then carries an `embed` line such as :::widgetNode {widgetId='…'} ::: and the edit_note call to make, and you must make it before you finish. Insert the line exactly as returned, single quotes included.",
+		retrievalText:
+			'build an interactive calculator, simulator, budget or expense tracker, checklist, decision matrix, chart, or dashboard of project todos in a note'
 	},
 	{
 		name: 'list_widgets',
@@ -502,14 +504,16 @@ export const TOOL_DESCRIPTIONS = [
 		classification: 'mutation',
 		description:
 			'Change the data of a widget without changing how it looks, such as ticking a checklist item or updating a number. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the data read by read_widget, for example [{"op":"replace","path":"/items/0/done","value":true}]. Send expectedDataRevision from that read. A stale revision fails: read the widget again and retry.',
-		retrievalText: 'update widget data tick checklist item change tracker value'
+		retrievalText:
+			'change a value in an existing widget: tick an item, set an input, rate, amount or number in a calculator, simulator, tracker or dashboard'
 	},
 	{
 		name: 'edit_widget_layout',
 		classification: 'mutation',
 		description:
-			'Change the structure of a widget: add, remove or reconfigure elements. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the layout read by read_widget. Every element needs `type`, `props` and `children` (an empty array for a leaf). Only these components exist: Stack, Card, Heading, Text, Checkbox, Progress, Metric. Send expectedLayoutRevision from that read. A rejected layout returns the problems to fix.',
-		retrievalText: 'change widget layout add remove element restructure widget'
+			'Change the structure of a widget: add, remove or reconfigure elements. `patch` is an RFC 6902 JSON Patch array, sent as a JSON string, applied to the layout read by read_widget. Every element needs `type`, `props` and `children` (an empty array for a leaf). Use only the components read_widget_catalog lists. Send expectedLayoutRevision from that read. A rejected layout returns the problems to fix.',
+		retrievalText:
+			'change how an existing widget looks: add or remove a chart, column, input, metric or element'
 	},
 	{
 		name: 'search_icons',

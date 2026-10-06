@@ -82,7 +82,8 @@ export const decisionLog: WidgetScenario = {
 
 /**
  * Weights 3/2/1 score Build 5·3 + 2·2 + 2·1 = 21, Buy 9 + 6 + 4 = 19 and Wait 3 + 10 + 5 = 18.
- * An impact weight of 1 scores them 11, 13 and 16, so waiting leads.
+ * An impact weight of 1 scores them 11, 13 and 16, so waiting leads. A matrix may also show the
+ * weighted average, the sum over the total weight: 21 / 6 = 3.5, and 16 / 4 = 4.
  */
 export const decisionMatrix: WidgetScenario = {
 	id: 'widget-build-decision-matrix',
@@ -91,15 +92,15 @@ export const decisionMatrix: WidgetScenario = {
 		'In my Background note, add a decision matrix widget to choose between "Build in house", "Buy a vendor tool" and "Wait a quarter". Score each from 1 to 5 on impact, cost and risk, where higher is better: Build in house 5, 2, 2; Buy a vendor tool 3, 3, 4; Wait a quarter 1, 5, 5. Weight impact 3, cost 2 and risk 1, and let me move the weights. Show the leading option and a chart of the weighted scores.',
 	workspace: personaWorkspace,
 	...BACKGROUND,
-	titleFragment: /decision|matrix/i,
+	titleFragment: /decision|matrix|build|buy|choice|option/i,
 	probe: [
 		{ kind: 'says', label: /lead|best|winner|top|recommend/i, text: /build in house/i },
 		// The scores show where the prompt asked for them: per option, as the chart plots them.
-		{ kind: 'reads', label: /build in house/i, near: 21, tolerance: 0 },
+		{ kind: 'reads', label: /build in house/i, near: [21, 3.5], tolerance: 0 },
 		{ kind: 'chart', points: 3 },
 		{ kind: 'set', input: /impact/i, value: 1 },
 		{ kind: 'says', label: /lead|best|winner|top|recommend/i, text: /wait a quarter/i },
-		{ kind: 'reads', label: /wait a quarter/i, near: 16, tolerance: 0 }
+		{ kind: 'reads', label: /wait a quarter/i, near: [16, 4], tolerance: 0 }
 	],
 	reference: widgetTemplates.decision
 };

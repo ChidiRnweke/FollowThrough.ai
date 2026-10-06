@@ -96,10 +96,10 @@ export const gradeCalculator: WidgetScenario = {
 	titleFragment: /grade|course/i,
 	// 1% lets a grade shown as a whole number pass: 60.8 needed on the final reads "61%".
 	probe: [
-		{ kind: 'reads', label: /average|so far|current/i, near: 70.2, tolerance: 0.01 },
+		{ kind: 'reads', label: /average|avg|so far|current|graded/i, near: 70.2, tolerance: 0.01 },
 		{ kind: 'reads', label: /need|required/i, near: 69.8, tolerance: 0.01 },
 		{ kind: 'edit', row: /midterm/i, column: /score|grade|mark|result|points/i, value: 80 },
-		{ kind: 'reads', label: /average|so far|current/i, near: 79.2, tolerance: 0.01 },
+		{ kind: 'reads', label: /average|avg|so far|current|graded/i, near: 79.2, tolerance: 0.01 },
 		{ kind: 'reads', label: /need|required/i, near: 60.8, tolerance: 0.01 }
 	],
 	reference: {

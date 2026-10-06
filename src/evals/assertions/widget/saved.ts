@@ -57,7 +57,11 @@ export async function embedVerdict(
 		passed: embedded,
 		explanation: embedded
 			? `note "${note.title}" embeds widget "${widget.title}"`
-			: `note "${note.title}" does not embed widget "${widget.title}"`
+			: // Text that names the widget without embedding it means the edit was made but the
+				// embed line did not parse as a block, which is a different fault from no edit.
+				`note "${note.title}" does not embed widget "${widget.title}"${
+					note.plainText.includes(widget.id) ? ' (its id is in the text, not as an embed)' : ''
+				}`
 	};
 }
 
