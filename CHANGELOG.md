@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.2...v2.1.3) (2026-10-06)
+
+
+### Bug Fixes
+
+* **notes:** keep table headers in place during agent edits and in widgets ([#315](https://github.com/ChidiRnweke/FollowThrough.ai/issues/315)) ([c5ac3cf](https://github.com/ChidiRnweke/FollowThrough.ai/commit/c5ac3cf7269dcf2f2f48b821e59ad7a15c4f100d))
+
 ## [2.1.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.1...v2.1.2) (2026-10-06)
 
 
