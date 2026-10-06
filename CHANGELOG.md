@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.1...v2.1.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* **chat:** name a pass's subject, show search queries, and keep openai reasoning ([#313](https://github.com/ChidiRnweke/FollowThrough.ai/issues/313)) ([69a2fe2](https://github.com/ChidiRnweke/FollowThrough.ai/commit/69a2fe29a4d0c36996e25e2add19e02be3383fd3))
+
 ## [2.1.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.0...v2.1.1) (2026-10-06)
 
 
