@@ -197,7 +197,10 @@
    the live editor DOM by `note-editor`, never persisted into the note document. */
 .note-block-shimmer {
 	position: relative;
-	overflow: hidden;
+	/* `clip`, not `hidden`: `hidden` makes the block a scroll container, and a
+	   shimmered table's sticky header cells would then offset against it by
+	   `--note-header-h`, landing on a body row (see the table rules in editor.css). */
+	overflow: clip;
 	border-radius: 4px;
 	/* The ink reveal: mask starts off to the right (hidden) and settles fully
 	   opaque at the end, so the changed text appears with the ripple and stays. */

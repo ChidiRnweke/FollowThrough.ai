@@ -392,6 +392,69 @@ describe('Agent-updated block shimmer', () => {
 		expect(shimmered).toEqual(['edited']);
 	});
 
+	it('keeps a shimmered table header on its own row', async () => {
+		const table = (balance: string) => ({
+			type: 'table',
+			content: [
+				{
+					type: 'tableRow',
+					content: [
+						{
+							type: 'tableHeader',
+							content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Year' }] }]
+						},
+						{
+							type: 'tableHeader',
+							content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Balance' }] }]
+						}
+					]
+				},
+				...['5', '10', '15'].map((year) => ({
+					type: 'tableRow',
+					content: [
+						{
+							type: 'tableCell',
+							content: [{ type: 'paragraph', content: [{ type: 'text', text: year }] }]
+						},
+						{
+							type: 'tableCell',
+							content: [{ type: 'paragraph', content: [{ type: 'text', text: balance }] }]
+						}
+					]
+				}))
+			]
+		});
+		const before = documentWith(table('100')) as ProseMirrorDocument;
+		const after = documentWith(table('200')) as ProseMirrorDocument;
+		// The note workspace sets this from its measured utility header.
+		document.body.style.setProperty('--note-header-h', '120px');
+		const screen = render(NoteEditor, {
+			noteId: '00000000-0000-4000-8000-000000000002' as NoteId,
+			projectId: PROJECT_ID,
+			revision: 1,
+			document: before,
+			onreviseMermaid: async (source) => ({ source }),
+			onconvertMermaid: async () => {
+				throw new Error('Not used by this test');
+			},
+			onrejectDrawio: async () => undefined
+		});
+		await new Promise((resolve) =>
+			requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))
+		);
+		screen.component.replaceDocument(after, before);
+		await untilShimmered(screen.container);
+		const header = screen.container.querySelector<HTMLElement>('th')!;
+		// Start the table below the stick line, as under a real note header;
+		// above it, the header would rightly stick to the viewport instead.
+		screen.container.style.paddingTop = '200px';
+		const offset =
+			header.getBoundingClientRect().top - header.closest('table')!.getBoundingClientRect().top;
+		document.body.style.removeProperty('--note-header-h');
+
+		expect(offset).toBeLessThan(2);
+	});
+
 	it('leaves a replace without a previous document untouched', async () => {
 		const before = documentWith(
 			{ type: 'paragraph', content: [{ type: 'text', text: 'kept' }] },

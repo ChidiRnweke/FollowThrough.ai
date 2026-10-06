@@ -502,7 +502,7 @@
 	overflow-x: clip;
 }
 
-.tiptap table {
+.tiptap table:not([data-slot='table']) {
 	box-sizing: border-box;
 	width: 100%;
 	margin-top: 1rem;
@@ -512,8 +512,8 @@
 	border-radius: 0.25rem;
 }
 
-.tiptap table td,
-.tiptap table th {
+.tiptap table:not([data-slot='table']) td,
+.tiptap table:not([data-slot='table']) th {
 	position: relative;
 	min-width: 100px;
 	padding: 0.5rem;
@@ -522,22 +522,22 @@
 	border: 1px solid var(--color-border);
 }
 
-.tiptap table td:first-of-type:not(a),
-.tiptap table th:first-of-type:not(a) {
+.tiptap table:not([data-slot='table']) td:first-of-type:not(a),
+.tiptap table:not([data-slot='table']) th:first-of-type:not(a) {
 	margin-top: 0;
 }
 
-.tiptap table td p,
-.tiptap table th p {
+.tiptap table:not([data-slot='table']) td p,
+.tiptap table:not([data-slot='table']) th p {
 	margin: 0;
 }
 
-.tiptap table td p + p,
-.tiptap table th p + p {
+.tiptap table:not([data-slot='table']) td p + p,
+.tiptap table:not([data-slot='table']) th p + p {
 	margin-top: 0.75rem;
 }
 
-.tiptap table th {
+.tiptap table:not([data-slot='table']) th {
 	font-weight: bold;
 	background-color: var(--color-muted);
 }
@@ -546,15 +546,21 @@
    `--note-header-h` is measured from the utility header in note-workspace.svelte.
    `background-clip: padding-box` keeps collapsed borders painting on stuck cells
    (a known Chrome sticky+border-collapse quirk). z-index stays below the utility
-   header's z-20 and the table grips' z-10. */
-.tiptap table th {
+   header's z-20 and the table grips' z-10.
+   A sticky cell offsets against its nearest scroll container, so no box between
+   a table and the pane viewport may set `overflow` to anything but `clip`;
+   otherwise the cells drop `--note-header-h` onto a body row. That is also why
+   every rule here skips `[data-slot='table']`: widget tables embedded in a note
+   are shadcn tables inside a horizontally scrolling container, with their own
+   styling. */
+.tiptap table:not([data-slot='table']) th {
 	position: sticky;
 	top: var(--note-header-h, 0px);
 	z-index: 5;
 	background-clip: padding-box;
 }
 
-.tiptap table .column-resize-handle {
+.tiptap table:not([data-slot='table']) .column-resize-handle {
 	position: absolute;
 	top: 0;
 	right: -2px;
@@ -564,7 +570,7 @@
 	background-color: var(--primary);
 }
 
-.tiptap table .selectedCell {
+.tiptap table:not([data-slot='table']) .selectedCell {
 	/* Stronger visual, avoids collapse issues */
 	z-index: 1;
 	/* Stronger visual, avoids collapse issues */
@@ -586,7 +592,7 @@
 	transition: opacity 300ms ease-in-out;
 }
 
-.tiptap table .grip-column {
+.tiptap table:not([data-slot='table']) .grip-column {
 	top: -0.8rem;
 	left: 0;
 	width: 100%;
@@ -596,27 +602,27 @@
 	border-radius: 1rem;
 }
 
-.tiptap table .grip-column::before,
-.tiptap table .grip-column.selected::before {
+.tiptap table:not([data-slot='table']) .grip-column::before,
+.tiptap table:not([data-slot='table']) .grip-column.selected::before {
 	width: 0.625rem;
 	content: '';
 	background-color: var(--color-muted-foreground);
 }
 
-.tiptap table .grip-column:hover {
+.tiptap table:not([data-slot='table']) .grip-column:hover {
 	background-color: var(--muted);
 }
 
-.tiptap table .grip-column::before {
+.tiptap table:not([data-slot='table']) .grip-column::before {
 	border-bottom: 2px dotted var(--muted);
 }
 
-.tiptap table .grip-column.selected {
+.tiptap table:not([data-slot='table']) .grip-column.selected {
 	background-color: var(--muted);
 	border-color: var(--color-border);
 }
 
-.tiptap table .grip-row {
+.tiptap table:not([data-slot='table']) .grip-row {
 	top: 0;
 	left: -0.8rem;
 	width: 0.8rem;
@@ -626,24 +632,24 @@
 	border-radius: 1rem;
 }
 
-.tiptap table .grip-row::before,
-.tiptap table .grip-row.selected::before {
+.tiptap table:not([data-slot='table']) .grip-row::before,
+.tiptap table:not([data-slot='table']) .grip-row.selected::before {
 	height: 0.625rem;
 	content: '';
 	border-left: 2px dotted var(--color-muted-foreground);
 }
 
-.tiptap table .grip-row:hover {
+.tiptap table:not([data-slot='table']) .grip-row:hover {
 	background-color: var(--muted);
 }
 
-.tiptap table .grip-row.selected {
+.tiptap table:not([data-slot='table']) .grip-row.selected {
 	background-color: var(--muted);
 	border-color: var(--color-border);
 }
 
 /* Cell grip — appears on cell hover or when selected */
-/* .tiptap table .grip-cell {
+/* .tiptap table:not([data-slot='table']) .grip-cell {
 	position: absolute;
 	right: -0.125rem;
 	translate: 0 calc(50% - 0.25rem);
@@ -655,9 +661,9 @@
 	transition: all 200ms ease-in-out;
 } */
 
-.tiptap table td:hover .grip-cell,
-.tiptap table th:hover .grip-cell,
-.tiptap table .grip-cell.selected {
+.tiptap table:not([data-slot='table']) td:hover .grip-cell,
+.tiptap table:not([data-slot='table']) th:hover .grip-cell,
+.tiptap table:not([data-slot='table']) .grip-cell.selected {
 	opacity: 1;
 }
 
