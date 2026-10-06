@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SubjectPass } from '$lib/components/agent';
+	import { passLabelText, type SubjectPass } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal } from '$lib/components/icons';
 	import ChatMarkdown from '../chat-markdown.svelte';
@@ -15,9 +15,12 @@
 
 	let {
 		passes,
+		title,
 		onexpand
 	}: {
 		passes: readonly SubjectPass[];
+		/** The row's display name, which a pass over the subject itself takes as its object. */
+		title: string;
 		/** Offered only where there is more to read than the column can hold. */
 		onexpand?: () => void;
 	} = $props();
@@ -55,7 +58,8 @@
 	{#each passes as pass, index (index)}
 		<div class="flex flex-col {CHAT_GAP_BOND}">
 			<p class="{CHAT_TEXT_REQUEST} {chatActionEmphasis(pass.mutating)}">
-				{pass.label}{#if pass.query}&nbsp;<span class="italic text-foreground">{pass.query}</span
+				{passLabelText(pass.label, title)}{#if pass.query}&nbsp;<span class="italic text-foreground"
+						>{pass.query}</span
 					>{/if}
 			</p>
 			{#if pass.evidence.kind === 'passages'}

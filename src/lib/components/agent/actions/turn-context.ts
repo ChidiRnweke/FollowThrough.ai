@@ -5,7 +5,7 @@ import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
 import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { mechanismTools, type MechanismTool } from './rendered-tools';
-import { completedToolLabel, friendlyToolLabel } from './tool-labels';
+import { completedToolLabel, friendlyToolLabel, subjectVerb } from './tool-labels';
 import { explainToolFailure } from './tool-result';
 import { fileEntity, toolEntity } from './tool-entities';
 import { toolDisclosure, type FieldChange, type FileOutputLine } from './tool-disclosure';
@@ -55,9 +55,33 @@ export type PassEvidence =
 	 */
 	| { readonly kind: 'failure'; readonly cause: string; readonly raw?: string };
 
-export interface SubjectPass {
-	/** What the agent asked for, in the reader's words: `Searched for`, `Read lines 188–221`. */
+/**
+ * What the agent asked for, in the reader's words.
+ *
+ * Two arms because a pass's object is either its own subject or something else. Only a row knows
+ * its subject's display name — a todo's title resolves after the fold — so a pass over its own
+ * subject carries the verb, and the row joins the name to it.
+ */
+export type PassLabel =
+	/** Complete on its own: `Searched for`, `Read lines 188–221`. */
+	| { readonly kind: 'phrase'; readonly text: string }
+	/** A verb whose object is the row's subject: `Saved` reads "Saved model families". */
+	| { readonly kind: 'subject'; readonly verb: string };
+
+export const passLabelText = (label: PassLabel, title: string): string =>
+	label.kind === 'phrase' ? label.text : `${label.verb} ${title}`;
+
+/** A look that found nothing. It has no subject, so its label is always a whole phrase. */
+export interface BarrenPass {
 	readonly label: string;
+	/** The reader's own words handed to a tool. Rendered italic; absent when there were none. */
+	readonly query?: string;
+	readonly mutating: boolean;
+	readonly evidence: PassEvidence;
+}
+
+export interface SubjectPass {
+	readonly label: PassLabel;
 	/** The reader's own words handed to a tool. Rendered italic; absent when there were none. */
 	readonly query?: string;
 	/**
@@ -88,7 +112,7 @@ export interface TurnContext {
 	/** Things it only read. This is the context it answered from. */
 	readonly read: readonly SubjectActivity[];
 	/** Looks that came back with nothing. An absence explains a thin answer. */
-	readonly barren: readonly SubjectPass[];
+	readonly barren: readonly BarrenPass[];
 	/** The agent finding its footing: named, reachable, never prominent. */
 	readonly setup: readonly string[];
 }
@@ -405,11 +429,22 @@ function callEntries(
 	const disclosure = toolDisclosure(tool, shell);
 	const request = passRequest(tool);
 	const outcome = outcomeOf(tool);
+	// A call still in flight keeps its whole present-tense label: "Saving" is not yet a thing that
+	// befell the subject, and the verbs below are all past.
+	const objectVerb = outcome === 'running' ? undefined : subjectVerb(tool.name);
+	const label: PassLabel = objectVerb
+		? { kind: 'subject', verb: objectVerb }
+		: { kind: 'phrase', text: request.label };
 	const entry = (entity: EntityRef, evidence: PassEvidence): CallEntry => ({
 		entity,
 		verb,
 		outcome,
-		pass: { ...request, mutating: isWriteVerb(verb), evidence }
+		pass: {
+			label,
+			...(request.query ? { query: request.query } : {}),
+			mutating: isWriteVerb(verb),
+			evidence
+		}
 	});
 
 	if (disclosure.kind === 'failure') {
@@ -498,7 +533,7 @@ function callEntries(
 export function turnContext(tools: readonly ChatToolActivity[], shell?: ShellContext): TurnContext {
 	const order: string[] = [];
 	const subjects = new Map<string, SubjectActivity>();
-	const barren: SubjectPass[] = [];
+	const barren: BarrenPass[] = [];
 	const setup: string[] = [];
 
 	for (const tool of tools) {

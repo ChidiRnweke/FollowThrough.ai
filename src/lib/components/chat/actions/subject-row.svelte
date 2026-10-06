@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { isWriteVerb, type SubjectActivity } from '$lib/components/agent';
+	import { isWriteVerb, passLabelText, type SubjectActivity } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -35,12 +35,20 @@
 	 * alone stays flat: a chevron that pays out a restatement of the row it hangs off is what
 	 * teaches a reader to stop opening the next one, including the one that would have shown a
 	 * real change.
+	 *
+	 * A search string is not a restatement, though. A note the agent found by searching said only
+	 * "· searched", and nothing anywhere said what for — the one fact that lets a reader judge
+	 * whether the hit was relevant.
 	 */
-	const opens = $derived(subject.passes.some((pass) => pass.evidence.kind !== 'none'));
+	const opens = $derived(
+		subject.passes.some((pass) => pass.evidence.kind !== 'none' || pass.query !== undefined)
+	);
 
 	const passages = $derived(
 		subject.passes.flatMap((pass) =>
-			pass.evidence.kind === 'passages' ? [{ label: pass.label, lines: pass.evidence.lines }] : []
+			pass.evidence.kind === 'passages'
+				? [{ label: passLabelText(pass.label, title), lines: pass.evidence.lines }]
+				: []
 		)
 	);
 
@@ -155,7 +163,7 @@
 			<!-- pt-1 is the bond step: this detail belongs to the row directly above it. -->
 			<div class="{CHAT_ROW_INDENT} pt-1">
 				<ErrorBoundary label="what the agent did here" class="my-0">
-					<SubjectPasses passes={subject.passes} onexpand={() => (expanded = true)} />
+					<SubjectPasses passes={subject.passes} {title} onexpand={() => (expanded = true)} />
 				</ErrorBoundary>
 			</div>
 		</Collapsible.Content>

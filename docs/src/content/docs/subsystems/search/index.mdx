@@ -82,7 +82,7 @@ flowchart LR
 
 ## Web search
 
-Web search never touches the index. `withWebResearch` (`repositories/agent/web-research-transport.ts`) wraps the provider's fetch and appends an `openrouter:web_search` tool to every `/chat/completions` request; the model decides whether to call it. Defaults are engine `exa`, 20 results per search, 40 total (`CHAT_WEB_SEARCH_DEFAULTS`, `src/lib/models/agent/index.ts:172`), overridable per deployment via `OPENROUTER_WEB_SEARCH_ENGINE` / `_MAX_RESULTS` / `_MAX_TOTAL_RESULTS` and per user in agent preferences. Exa is the default because it returns page content rather than snippets. Unrecognised engine names and non-positive caps are ignored rather than disabling search.
+Web search never touches the index. `withWebResearch` (`repositories/agent/web-research-transport.ts`) wraps the provider's fetch and appends an `openrouter:web_search` tool to every `/chat/completions` request; the model decides whether to call it. Defaults are engine `auto`, 20 results per search, 40 total (`CHAT_WEB_SEARCH_DEFAULTS`, `src/lib/models/agent/index.ts:172`), overridable per deployment via `OPENROUTER_WEB_SEARCH_ENGINE` / `_MAX_RESULTS` / `_MAX_TOTAL_RESULTS` and per user in agent preferences. `auto` is the default because the Exa engine suppresses OpenAI models' reasoning summaries, and `auto` gives each provider its native search; Exa returns page content rather than snippets, so a user or deployment can still choose it. Unrecognised engine names and non-positive caps are ignored rather than disabling search.
 
 ## Invariants
 

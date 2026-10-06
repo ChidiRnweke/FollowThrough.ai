@@ -23,10 +23,13 @@ export {
 } from './actions/tool-disclosure';
 export {
 	isWriteVerb,
+	passLabelText,
 	readDoorLabel,
 	runningSteps,
 	turnContext,
+	type BarrenPass,
 	type PassEvidence,
+	type PassLabel,
 	type PassOutcome,
 	type RunningStep,
 	type SubjectActivity,

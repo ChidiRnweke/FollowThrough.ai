@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SubjectPass } from '$lib/components/agent';
+	import type { BarrenPass } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { FtChevronRight } from '$lib/components/icons';
@@ -12,7 +12,7 @@
 		chatActionEmphasis
 	} from './chat-row';
 
-	let { pass }: { pass: SubjectPass } = $props();
+	let { pass }: { pass: BarrenPass } = $props();
 </script>
 
 <!--

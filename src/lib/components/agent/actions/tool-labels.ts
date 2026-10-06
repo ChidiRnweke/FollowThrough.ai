@@ -204,3 +204,47 @@ export const friendlyToolLabel = (name: string): string =>
 
 export const completedToolLabel = (name: string): string =>
 	isCatalogTool(name) ? completedLabels[name] : `${friendlyToolLabel(name)} completed`;
+
+/**
+ * The verb a call performed on the one thing it was about, for the row that already names it.
+ *
+ * Inside a row titled `model families`, "Read note" said the subject a second time and said it
+ * worse: the generic noun is a placeholder for a name the reader can see. With the verb alone the
+ * row supplies the name, and the pass reads "Opened model families". `get_note` is "Opened"
+ * rather than "Read" because it returns the note's file handle and links, not its text — the
+ * excerpt after it is the read, and two "Read" lines in a row looked like one read twice.
+ *
+ * Partial on purpose: a tool absent here keeps its whole label, because its object is not the
+ * subject — a search, an excerpt, a listing, a proposal about something else.
+ */
+const subjectVerbs: Partial<Record<AgentToolName, string>> = {
+	get_project: 'Opened',
+	create_project: 'Created',
+	rename_project: 'Renamed',
+	archive_project: 'Archived',
+	create_folder: 'Created',
+	get_note: 'Opened',
+	create_note: 'Created',
+	save_note: 'Saved',
+	edit_note: 'Edited',
+	rename_note: 'Renamed',
+	restore_note: 'Restored',
+	publish_note: 'Published',
+	create_todo: 'Created',
+	update_todo: 'Updated',
+	save_skill: 'Saved',
+	edit_skill: 'Edited',
+	create_skill: 'Created',
+	update_skill: 'Updated',
+	create_diagram: 'Created',
+	edit_diagram: 'Edited',
+	revise_mermaid_diagram: 'Revised',
+	read_project_diagram: 'Read',
+	read_canvas_diagram: 'Read',
+	get_artifact: 'Opened',
+	delete_artifact: 'Deleted',
+	regenerate_artifact: 'Regenerated'
+};
+
+export const subjectVerb = (name: string): string | undefined =>
+	isCatalogTool(name) ? subjectVerbs[name] : undefined;
