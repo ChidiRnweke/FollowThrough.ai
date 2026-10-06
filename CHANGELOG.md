@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.3...v2.2.0) (2026-10-06)
+
+
+### Features
+
+* **chat:** mention and auto-pin widgets, diagrams and attachments ([#312](https://github.com/ChidiRnweke/FollowThrough.ai/issues/312)) ([32bf0b2](https://github.com/ChidiRnweke/FollowThrough.ai/commit/32bf0b218ba46b6088355c8df58176e9768cb25f))
+
 ## [2.1.3](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.2...v2.1.3) (2026-10-06)
 
 
