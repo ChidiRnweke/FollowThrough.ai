@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mentionCandidatesFor, mentionQueryOf } from './mentions';
+import { mentionCandidatesFor, mentionQueryOf, type MentionableResources } from './mentions';
+import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
+import { attachmentViewBuilder } from '$lib/testing/attachments/fixtures/views';
+import { diagramBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { NoteId, NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -19,6 +22,8 @@ const entry = (overrides: Partial<NoteSummary> & Pick<NoteSummary, 'id' | 'title
 		updatedAt: at,
 		...overrides
 	}) as NoteSummary;
+
+const none: MentionableResources = { widgets: [], diagrams: [], attachments: [] };
 
 const skill = (name: string, noteId: NoteId): SkillSummary => ({
 	name,
@@ -57,7 +62,8 @@ describe('mention candidates', () => {
 				'Research',
 				[entry({ id: id(1), title: 'Research', kind: 'folder' })],
 				[],
-				'unknown'
+				'unknown',
+				none
 			)
 		).toEqual([]);
 	});
@@ -68,10 +74,9 @@ describe('mention candidates', () => {
 	] as NoteSummary[];
 
 	it('offers folders alongside notes', () => {
-		expect(mentionCandidatesFor('resea', tree, [], 'complete').map((chip) => chip.kind)).toEqual([
-			'note',
-			'folder'
-		]);
+		expect(
+			mentionCandidatesFor('resea', tree, [], 'complete', none).map((chip) => chip.kind)
+		).toEqual(['note', 'folder']);
 	});
 
 	it('counts the notes a folder stands for', () => {
@@ -80,20 +85,54 @@ describe('mention candidates', () => {
 			entry({ id: id(2), title: 'Findings', parentId: id(1) })
 		] as NoteSummary[];
 		expect(
-			mentionCandidatesFor('research', tree, [], 'complete').find((chip) => chip.kind === 'folder')
-				?.noteCount
+			mentionCandidatesFor('research', tree, [], 'complete', none).find(
+				(chip) => chip.kind === 'folder'
+			)?.noteCount
 		).toBe(1);
 	});
 
 	it('leaves archived entries out', () => {
 		expect(
-			mentionCandidatesFor('research', tree, [], 'complete').map((chip) => chip.name)
+			mentionCandidatesFor('research', tree, [], 'complete', none).map((chip) => chip.name)
 		).not.toContain('Archived research');
 	});
 
 	it('offers matching skills', () => {
 		expect(
-			mentionCandidatesFor('analy', [], [skill('Note analyzer', id(9))], 'complete')[0]?.kind
+			mentionCandidatesFor('analy', [], [skill('Note analyzer', id(9))], 'complete', none)[0]?.kind
 		).toBe('skill');
+	});
+
+	it('offers widgets, diagrams and files after notes', () => {
+		expect(
+			mentionCandidatesFor('', [], [], 'complete', {
+				widgets: [widgetBuilder()],
+				diagrams: [diagramBuilder()],
+				attachments: [attachmentViewBuilder()]
+			}).map((chip) => chip.kind)
+		).toEqual(['widget', 'diagram', 'attachment']);
+	});
+
+	it('names a file by its file name', () => {
+		expect(
+			mentionCandidatesFor('', [], [], 'complete', {
+				...none,
+				attachments: [attachmentViewBuilder()]
+			})[0]?.name
+		).toBe('brief.pdf');
+	});
+
+	it('names an untitled diagram so it can still be picked', () => {
+		expect(
+			mentionCandidatesFor('', [], [], 'complete', { ...none, diagrams: [diagramBuilder()] })[0]
+				?.name
+		).toBe('Untitled diagram');
+	});
+
+	it('keeps one crowded kind from filling the popup', () => {
+		const widgets = Array.from({ length: 9 }, (_, n) =>
+			widgetBuilder({ id: testWidgetId(n + 1), title: `Widget ${n}` })
+		);
+		expect(mentionCandidatesFor('', [], [], 'complete', { ...none, widgets })).toHaveLength(4);
 	});
 });

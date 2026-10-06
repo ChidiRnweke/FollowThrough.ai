@@ -22,7 +22,7 @@ const skill = (name: string): SkillSummary => ({
 const contextFor = (skills: readonly SkillSummary[]) =>
 	new AgentContext().build(
 		{ conversationId: testConversationId(), prompt: 'Help' },
-		{ base: {}, skills, contextNotes: [], profileMemory: [] }
+		{ base: {}, skills, contextNotes: [], contextResources: [], profileMemory: [] }
 	);
 it('advertises complete summaries beyond the former prompt budget', () => {
 	const context = contextFor([skill('Review'.repeat(4000))]);
@@ -50,6 +50,7 @@ it.each([{ requestedSkillNames: ['REVIEW'] }, { requestedSkillNoteIds: [testNote
 				base: {},
 				skills: [{ ...skill('Display name'), allowImplicitInvocation: false }],
 				contextNotes: [],
+				contextResources: [],
 				profileMemory: []
 			}
 		);
@@ -69,6 +70,7 @@ it('keeps an explicitly requested disabled skill out of the advertised catalog',
 			base: {},
 			skills: [{ ...skill('Review'), isEnabled: false }],
 			contextNotes: [],
+			contextResources: [],
 			profileMemory: []
 		}
 	);

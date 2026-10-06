@@ -156,6 +156,12 @@ export class AttachmentLibrary {
 		return this.attachments.listForTodo(actor, todoId);
 	}
 
+	async get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView> {
+		const found = await this.attachments.findById(actor, attachmentId);
+		if (!found) throw new NotFoundError('Attachment was not found');
+		return found;
+	}
+
 	async downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }> {
 		const found = await this.attachments.findById(actor, attachmentId);
 		if (!found) throw new NotFoundError('Attachment was not found');

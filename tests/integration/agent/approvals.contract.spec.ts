@@ -48,7 +48,7 @@ const seed = async (suffix: string) => {
 		requestId: `approval-contract-${suffix}`,
 		pendingDecisions: [{ callId: 'call-a', toolName: 'archive_note', arguments: {} }],
 		inputSnapshot: { conversationId: conversation.id, prompt: 'Cancel this request' },
-		contextSnapshot: { contextNotes: [], skills: { items: [] } },
+		contextSnapshot: { contextNotes: [], contextResources: [], skills: { items: [] } },
 		provenanceId: provenance.id,
 		createdAt: now,
 		updatedAt: now

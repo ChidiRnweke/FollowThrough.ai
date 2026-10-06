@@ -22,6 +22,12 @@ type ProjectId = Brand<string, 'ProjectId'>;
 
 type NoteId = Brand<string, 'NoteId'>;
 
+type WidgetId = Brand<string, 'WidgetId'>;
+
+type DiagramId = Brand<string, 'DiagramId'>;
+
+type AttachmentId = Brand<string, 'AttachmentId'>;
+
 type ProvenanceId = Brand<string, 'ProvenanceId'>;
 
 export type ConversationId = Brand<string, 'ConversationId'>;
@@ -392,6 +398,7 @@ export interface AgentRunContext extends BaseAgentContextData {
 	readonly appContext?: ResolvedAgentAppContextV1;
 	readonly userMemory?: readonly string[];
 	readonly contextNotes: readonly ContextNote[];
+	readonly contextResources: readonly ContextResource[];
 	readonly skills: AgentSkillCatalog;
 }
 
@@ -655,6 +662,64 @@ export interface ContextSelection extends TextSelection {
 	readonly title?: string;
 }
 
+/**
+ * A widget, diagram or file the user attached to a message: by `@` mention, or because it was
+ * open in the focused pane. Notes keep their own `contextNoteIds`; these are the resources that
+ * are not notes.
+ */
+export type ContextResourceRef =
+	| { readonly kind: 'widget'; readonly id: WidgetId }
+	| { readonly kind: 'diagram'; readonly id: DiagramId }
+	| { readonly kind: 'attachment'; readonly id: AttachmentId };
+
+/**
+ * The text of one attached resource as it reaches the model. At or under the context token
+ * limit it rides inline; above it the model is told where to read it instead.
+ */
+export type ContextResourceText =
+	| { readonly inclusion: 'inline'; readonly text: string; readonly tokenCount: number }
+	| { readonly inclusion: 'too_large'; readonly tokenCount: number };
+
+/** An attachment's processing state, reported when it has no extracted text to show. */
+export type UnextractedAttachmentStatus =
+	'queued' | 'processing' | 'ready' | 'partial' | 'unsupported' | 'failed';
+
+/**
+ * One attached resource as assembled for a run. `filePath` is the resource's path in the agent
+ * file namespace (ADR 0035); a widget has none, so the model reads it with read_widget. An
+ * attachment whose text was never extracted has no file and says why.
+ */
+export type ContextResource =
+	| {
+			readonly kind: 'widget';
+			readonly widgetId: WidgetId;
+			readonly title: string;
+			readonly text: ContextResourceText;
+	  }
+	| {
+			readonly kind: 'diagram';
+			readonly diagramId: DiagramId;
+			readonly diagramKind: 'mermaid' | 'drawio';
+			readonly title: string;
+			readonly filePath: string;
+			readonly text: ContextResourceText;
+	  }
+	| {
+			readonly kind: 'attachment';
+			readonly attachmentId: AttachmentId;
+			readonly name: string;
+			readonly content:
+				| {
+						readonly kind: 'extracted';
+						readonly filePath: string;
+						readonly text: ContextResourceText;
+				  }
+				| {
+						readonly kind: 'not_extracted';
+						readonly processingStatus: UnextractedAttachmentStatus;
+				  };
+	  };
+
 /** Image input resolved by the controller before provider execution. */
 export type AgentRunImages =
 	| { readonly kind: 'none' }
@@ -678,6 +743,7 @@ export interface StagedAgentRunInput {
 	/** Every passage the user pinned to this message, in the order they pinned them. */
 	readonly selections?: readonly TextSelection[];
 	readonly contextNoteIds?: readonly NoteId[];
+	readonly contextResources?: readonly ContextResourceRef[];
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];
 	readonly modelOverride?: string | null;
@@ -826,6 +892,7 @@ export interface SubmitAgentRunInput {
 	readonly selection?: TextSelection;
 	readonly selections?: readonly TextSelection[];
 	readonly contextNoteIds?: readonly NoteId[];
+	readonly contextResources?: readonly ContextResourceRef[];
 	readonly requestedSkillNames?: readonly string[];
 	readonly requestedSkillNoteIds?: readonly NoteId[];
 	readonly appContext?: AppContextSnapshotV1;
@@ -1673,6 +1740,67 @@ const contextNoteSchema = z
 		tokenCount: z.number().int().nonnegative()
 	})
 	.strict();
+const contextResourceTextSchema = z.discriminatedUnion('inclusion', [
+	z
+		.object({
+			inclusion: z.literal('inline'),
+			text: z.string(),
+			tokenCount: z.number().int().nonnegative()
+		})
+		.strict(),
+	z
+		.object({ inclusion: z.literal('too_large'), tokenCount: z.number().int().nonnegative() })
+		.strict()
+]) satisfies z.ZodType<ContextResourceText>;
+const contextResourceSchema = z.discriminatedUnion('kind', [
+	z
+		.object({
+			kind: z.literal('widget'),
+			widgetId: brandedUuid<WidgetId>(),
+			title: z.string(),
+			text: contextResourceTextSchema
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('diagram'),
+			diagramId: brandedUuid<DiagramId>(),
+			diagramKind: z.enum(['mermaid', 'drawio']),
+			title: z.string(),
+			filePath: z.string(),
+			text: contextResourceTextSchema
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal('attachment'),
+			attachmentId: brandedUuid<AttachmentId>(),
+			name: z.string(),
+			content: z.discriminatedUnion('kind', [
+				z
+					.object({
+						kind: z.literal('extracted'),
+						filePath: z.string(),
+						text: contextResourceTextSchema
+					})
+					.strict(),
+				z
+					.object({
+						kind: z.literal('not_extracted'),
+						processingStatus: z.enum([
+							'queued',
+							'processing',
+							'ready',
+							'partial',
+							'unsupported',
+							'failed'
+						])
+					})
+					.strict()
+			])
+		})
+		.strict()
+]) satisfies z.ZodType<ContextResource>;
 const agentSkillCatalogItemSchema = z
 	.object({ noteId: z.string(), name: z.string(), description: z.string() })
 	.strict();
@@ -1686,6 +1814,8 @@ export const agentRunContextSchema: z.ZodType<AgentRunContext> = z
 		appContext: resolvedAgentAppContextSchema.optional(),
 		userMemory: z.array(z.string()).optional(),
 		contextNotes: z.array(contextNoteSchema),
+		// Required, but a run context persisted before resources could be attached has none.
+		contextResources: z.array(contextResourceSchema).default([]),
 		skills: z
 			.object({
 				items: z.array(agentSkillCatalogItemSchema),
@@ -1790,6 +1920,11 @@ export const workflowRunContextSchema: z.ZodType<WorkflowRunContext> = z.union([
 export const emptyAgentRunContextSchema = z.object({}).strict();
 
 const submittedSelectionSchema = textSelectionSchema.extend({ text: z.string() });
+export const contextResourceRefSchema = z.discriminatedUnion('kind', [
+	z.object({ kind: z.literal('widget'), id: brandedUuid<WidgetId>() }).strict(),
+	z.object({ kind: z.literal('diagram'), id: brandedUuid<DiagramId>() }).strict(),
+	z.object({ kind: z.literal('attachment'), id: brandedUuid<AttachmentId>() }).strict()
+]) satisfies z.ZodType<ContextResourceRef>;
 const submittedImagesSchema = z.array(conversationImageSchema).optional();
 
 export const agentRunIdInputSchema = z.object({
@@ -1814,6 +1949,7 @@ export const submitAgentRunInputSchema = z
 		selection: submittedSelectionSchema.optional(),
 		selections: z.array(submittedSelectionSchema).optional(),
 		contextNoteIds: z.array(noteIdSchema).optional(),
+		contextResources: z.array(contextResourceRefSchema).optional(),
 		requestedSkillNames: z.array(z.string()).optional(),
 		requestedSkillNoteIds: z.array(noteIdSchema).optional(),
 		appContext: appContextSnapshotSchema.optional(),
@@ -1832,6 +1968,7 @@ export const stagedAgentRunInputSchema = z
 		selection: textSelectionSchema.optional(),
 		selections: z.array(textSelectionSchema).optional(),
 		contextNoteIds: z.array(noteIdSchema).optional(),
+		contextResources: z.array(contextResourceRefSchema).optional(),
 		requestedSkillNames: z.array(z.string()).optional(),
 		requestedSkillNoteIds: z.array(noteIdSchema).optional(),
 		modelOverride: z.string().nullable().optional(),

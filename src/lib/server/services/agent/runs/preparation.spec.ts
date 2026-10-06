@@ -9,7 +9,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { RunPreparation, RunPreparationCancelled } from './preparation';
 
-const context = { contextNotes: [], skills: { items: [] } };
+const context = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' = 'running') => {
 	const runs = new InMemoryAgentRunPersistence();
 	const run: ResolvedAgentRun = {

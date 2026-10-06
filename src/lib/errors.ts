@@ -20,7 +20,8 @@ export type NotFoundErrorDetails =
 	| { readonly todoId: string }
 	| { readonly memoryEntryId: string }
 	| { readonly diagramId: string }
-	| { readonly widgetId: string };
+	| { readonly widgetId: string }
+	| { readonly attachmentId: string };
 
 export interface DomainErrorDetailsByCode {
 	readonly VALIDATION: NoDomainErrorDetails;

@@ -1,6 +1,9 @@
 import type { NoteSummary } from '$lib/models/notes';
 import type { SkillSummary } from '$lib/models/skills';
 import type { ResourceChip } from '$lib/models/chat';
+import type { Widget } from '$lib/models/widgets';
+import type { Diagram } from '$lib/models/diagrams';
+import type { AttachmentView } from '$lib/models/attachments';
 import { MENTION_PATTERN } from '$lib/models/chat';
 export { MENTION_PATTERN } from '$lib/models/chat';
 import { folderNoteIds } from '$lib/services/notes/folder-context';
@@ -22,6 +25,19 @@ export const mentionQueryOf = (prompt: string): string | undefined =>
 const NOTE_CANDIDATES = 6;
 const FOLDER_CANDIDATES = 4;
 const SKILL_CANDIDATES = 4;
+const WIDGET_CANDIDATES = 4;
+const DIAGRAM_CANDIDATES = 4;
+const ATTACHMENT_CANDIDATES = 4;
+
+/** The non-note resources a mention can reach, already matched and scoped by the views. */
+export interface MentionableResources {
+	readonly widgets: readonly Widget[];
+	readonly diagrams: readonly Diagram[];
+	readonly attachments: readonly AttachmentView[];
+}
+
+export const diagramNameOf = (diagram: Pick<Diagram, 'title'>): string =>
+	diagram.title || 'Untitled diagram';
 
 const matches = (title: string, query: string): boolean => title.toLowerCase().includes(query);
 
@@ -29,7 +45,8 @@ export const mentionCandidatesFor = (
 	query: string,
 	noteTree: readonly NoteSummary[],
 	skills: readonly SkillSummary[],
-	availability: 'unknown' | 'complete'
+	availability: 'unknown' | 'complete',
+	resources: MentionableResources
 ): ResourceChip[] => {
 	const needle = query.toLowerCase();
 	const live = noteTree.filter((entry) => !entry.archivedAt && matches(entry.title, needle));
@@ -50,5 +67,20 @@ export const mentionCandidatesFor = (
 		.filter((skill) => matches(skill.name, needle))
 		.slice(0, SKILL_CANDIDATES)
 		.map((skill): ResourceChip => ({ kind: 'skill', id: skill.noteId, name: skill.name }));
-	return [...notes, ...folders, ...matched];
+	const widgets = resources.widgets
+		.slice(0, WIDGET_CANDIDATES)
+		.map((widget): ResourceChip => ({ kind: 'widget', id: widget.id, name: widget.title }));
+	const diagrams = resources.diagrams.slice(0, DIAGRAM_CANDIDATES).map((diagram): ResourceChip => ({
+		kind: 'diagram',
+		id: diagram.id,
+		name: diagramNameOf(diagram)
+	}));
+	const attachments = resources.attachments
+		.slice(0, ATTACHMENT_CANDIDATES)
+		.map((view): ResourceChip => ({
+			kind: 'attachment',
+			id: view.attachment.id,
+			name: view.attachment.path
+		}));
+	return [...notes, ...folders, ...matched, ...widgets, ...diagrams, ...attachments];
 };

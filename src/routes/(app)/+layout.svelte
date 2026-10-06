@@ -8,7 +8,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { AppSidebar, CommandPalette, RightPanel, WorkspaceTabs } from '$lib/components/shell';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-	import { parseTabId, noteIdOf, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { parseTabId, noteIdOf, openResourceOf, type TabId } from '$lib/stores/workbench/tab-ref';
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
@@ -153,6 +153,7 @@
 	}
 
 	const activeNoteId = $derived(workbench.focusedNoteId ?? urlActiveNoteId());
+	const openResource = $derived(openResourceOf(workbench.focusedTabId));
 	const activeProjectId = $derived(workbench.activeProjectId ?? urlActiveProjectId());
 	// The sidebar tree highlight tracks where the user *is*: off note routes the
 	// stale focused tab must not light up a note (RightPanel keeps the real
@@ -308,6 +309,7 @@
 			agentDefaults={data.session.agentDefaults}
 			agentAvailable={data.session.bootstrap.agentAvailable && data.session.resources.online}
 			{activeNoteId}
+			{openResource}
 			{activeProjectId}
 		/>
 	{/if}

@@ -1,3 +1,4 @@
+import type { ContextResourceRef } from '$lib/models/agent';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type { WidgetId } from '$lib/models/widgets';
@@ -120,4 +121,15 @@ export function widgetIdOf(id: TabId | undefined): WidgetId | undefined {
 	if (id === undefined) return undefined;
 	const ref = parseTabId(id);
 	return ref?.kind === 'widget' ? ref.widgetId : undefined;
+}
+
+/** The widget or diagram a tab shows, as chat context refers to it; `undefined` for other kinds. */
+export function openResourceOf(
+	id: TabId | undefined
+): Extract<ContextResourceRef, { kind: 'widget' | 'diagram' }> | undefined {
+	if (id === undefined) return undefined;
+	const ref = parseTabId(id);
+	if (ref?.kind === 'widget') return { kind: 'widget', id: ref.widgetId };
+	if (ref?.kind === 'diagram') return { kind: 'diagram', id: ref.diagramId };
+	return undefined;
 }

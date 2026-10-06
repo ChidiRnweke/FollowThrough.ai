@@ -861,7 +861,13 @@ export class Diagrams implements DiagramsController {
 			deps.contextSkills.listEnabled(actor, base.projectId),
 			deps.contextMemory.list(actor, {})
 		]);
-		return deps.contextFormatter.build(input, { base, skills, profileMemory, contextNotes: [] });
+		return deps.contextFormatter.build(input, {
+			base,
+			skills,
+			profileMemory,
+			contextNotes: [],
+			contextResources: []
+		});
 	}
 
 	private prompt(task: DiagramTask): string {

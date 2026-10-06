@@ -1,4 +1,5 @@
 import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { ContextResourceRef } from '$lib/models/agent';
 
 export type ResourceChip =
 	| { readonly kind: 'note' | 'skill'; readonly id: NoteId; readonly name: string }
@@ -7,7 +8,11 @@ export type ResourceChip =
 			readonly id: NoteId;
 			readonly name: string;
 			readonly noteCount: number;
-	  };
+	  }
+	| (ContextResourceRef & { readonly name: string });
+
+/** The chip kinds that travel as `contextResources` rather than as note ids. */
+export type ResourceKind = ContextResourceRef['kind'];
 
 export interface SelectionChip {
 	readonly kind: 'selection';

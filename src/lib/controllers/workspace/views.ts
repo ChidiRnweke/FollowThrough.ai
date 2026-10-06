@@ -207,6 +207,49 @@ export class WorkspaceViews {
 			.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path));
 	}
 
+	/**
+	 * What the chat composer can `@` mention besides notes: live widgets, diagrams of either
+	 * kind and files, in one project when the chat has one and across active projects when it
+	 * does not. Matched by title, or by file name for an attachment.
+	 */
+	mentionableResources(
+		query: string,
+		projectId?: ProjectId
+	): {
+		readonly widgets: readonly Widget[];
+		readonly diagrams: readonly Diagram[];
+		readonly attachments: readonly AttachmentView[];
+	} {
+		const search = query.trim().toLowerCase();
+		const inScope = (owner: ProjectId): boolean =>
+			this.isActiveProject(owner) && (!projectId || owner === projectId);
+		const matches = (name: string | undefined): boolean =>
+			!search || (name ?? '').toLowerCase().includes(search);
+		return {
+			widgets: this.all('widgets')
+				.filter(
+					(widget) => inScope(widget.projectId) && !widget.archivedAt && matches(widget.title)
+				)
+				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)),
+			diagrams: this.all('diagrams')
+				.filter(
+					(diagram) => inScope(diagram.projectId) && !diagram.archivedAt && matches(diagram.title)
+				)
+				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)),
+			attachments: this.all('attachments')
+				.filter((attachment) => inScope(attachment.projectId) && matches(attachment.path))
+				.flatMap((attachment) => {
+					const version = attachment.currentVersionId
+						? this.get('attachment_versions', attachment.currentVersionId)
+						: undefined;
+					return version
+						? [{ attachment: { ...attachment, currentVersionId: version.id }, version }]
+						: [];
+				})
+				.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path))
+		};
+	}
+
 	trashedNotes(projectId?: ProjectId): readonly TrashedNote[] {
 		const projects = new Map(this.projects.map((project) => [project.id, project]));
 		return this.all('notes')

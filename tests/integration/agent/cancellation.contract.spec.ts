@@ -42,7 +42,7 @@ const seed = async (suffix: string) => {
 		requestId: `cancellation-contract-${suffix}`,
 		pendingDecisions: [],
 		inputSnapshot: { conversationId: conversation.id, prompt: 'Cancel this request' },
-		contextSnapshot: { contextNotes: [], skills: { items: [] } },
+		contextSnapshot: { contextNotes: [], contextResources: [], skills: { items: [] } },
 		provenanceId: provenance.id,
 		createdAt: now,
 		updatedAt: now
