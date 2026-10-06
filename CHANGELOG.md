@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.1.0...v2.1.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **agent:** build widgets for interactive requests and embed them ([#310](https://github.com/ChidiRnweke/FollowThrough.ai/issues/310)) ([6e7ba22](https://github.com/ChidiRnweke/FollowThrough.ai/commit/6e7ba225b48de8ed1d71cf71b1897d4cd5fc74d4))
+
 ## [2.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.0.11...v2.1.0) (2026-10-04)
 
 
