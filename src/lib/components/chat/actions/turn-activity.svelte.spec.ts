@@ -48,7 +48,7 @@ const renderTurn = (tools: ChatToolActivity[]) =>
 describe('A settled turn reports the things it touched, once each', () => {
 	it('states the touched note once and shows the edit outcome', async () => {
 		const screen = await renderTurn([call({}), grep(), call({ name: 'save_note' })]);
-		expect(await screen.getByText('Infrastructure').all()).toHaveLength(1);
+		expect(await screen.getByText('Infrastructure', { exact: true }).all()).toHaveLength(1);
 		await expect.element(screen.getByText('· edited')).toBeVisible();
 	});
 
@@ -104,6 +104,30 @@ describe('Evidence waits until it is asked for', () => {
 			.click();
 		await expect.element(screen.getByText('northwind should own the rollout')).toBeVisible();
 		await expect.element(screen.getByText('rollout', { exact: true })).toBeVisible();
+	});
+
+	// A hit from a knowledge search carries no passage, so its row once had nothing behind it and
+	// said only "· searched" — never what the agent searched for.
+	it('reveals what a search searched for on a note it found', async () => {
+		const screen = await renderTurn([
+			call({
+				name: 'search',
+				arguments: { query: 'rollout plan' },
+				output: [{ source: { kind: 'note', noteId: NOTE_ID, title: 'Infrastructure' } }]
+			})
+		]);
+		await screen.getByRole('button', { name: 'Read 1 note' }).click();
+		await screen.getByRole('button', { name: 'Infrastructure · searched' }).click();
+		await expect.element(screen.getByText('rollout plan', { exact: true })).toBeVisible();
+	});
+
+	it('names the note in its own passes rather than calling it "note"', async () => {
+		const screen = await renderTurn([grep(), call({ name: 'save_note' })]);
+		await screen
+			.getByRole('button', { name: /Infrastructure/ })
+			.first()
+			.click();
+		await expect.element(screen.getByText('Saved Infrastructure')).toBeVisible();
 	});
 });
 

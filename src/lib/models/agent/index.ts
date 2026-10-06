@@ -257,8 +257,14 @@ export interface WebResearchSettings {
 	readonly maxTotalResults: number;
 }
 
+/**
+ * `auto`, not Exa: with OpenRouter's Exa engine attached, OpenAI reasoning models stream no
+ * reasoning summary at all (GPT-6 Luna: 0 characters in 8 of 8 runs; `auto` and `native`: every
+ * run). `auto` also gives each provider with a native search its own. The cost is that native
+ * search returns snippets where Exa returned page content.
+ */
 export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
-	engine: 'exa',
+	engine: 'auto',
 	maxResults: 20,
 	maxTotalResults: 40
 };

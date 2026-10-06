@@ -4,7 +4,7 @@ import type { NoteSummary } from '$lib/models/notes';
 
 import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
-import { readDoorLabel, runningSteps, turnContext } from './turn-context';
+import { passLabelText, readDoorLabel, runningSteps, turnContext } from './turn-context';
 
 const ATLAS = '9e8e1812-0a7c-474d-96e4-65c5b60b3f75';
 const BRIEF = '2f0f5a2c-1c22-4a7f-9d1f-7cf4a1f2b0d1';
@@ -70,17 +70,17 @@ describe('A turn is folded into the things it touched', () => {
 			count: context.changed.length,
 			title: context.changed[0]?.entity.title,
 			verb: context.changed[0]?.verb,
-			passes: context.changed[0]?.passes.map((pass) => pass.label),
+			passes: context.changed[0]?.passes.map((pass) => passLabelText(pass.label, 'atlas')),
 			readCount: context.read.length
 		}).toEqual({
 			count: 1,
 			title: 'atlas',
 			verb: 'edited',
 			passes: [
-				'Read note',
+				'Opened atlas',
 				'Searched for',
 				'Read lines 188–221',
-				'Edited note',
+				'Edited atlas',
 				'Read lines 188–221'
 			],
 			readCount: 0
@@ -94,7 +94,27 @@ describe('A pass carries what the agent asked for', () => {
 	});
 
 	it('names the lines an excerpt took', () => {
-		expect(turnContext([sed()], shell).read[0]?.passes[0]?.label).toBe('Read lines 188–221');
+		expect(turnContext([sed()], shell).read[0]?.passes[0]?.label).toEqual({
+			kind: 'phrase',
+			text: 'Read lines 188–221'
+		});
+	});
+});
+
+describe('A pass over its own subject is named by the row, not by a generic noun', () => {
+	// Under a row titled "atlas", "Read note" repeated the subject less clearly than its name.
+	it('carries only the verb, so the row can supply the name', () => {
+		expect(turnContext([call({ name: 'save_note' })], shell).changed[0]?.passes[0]?.label).toEqual({
+			kind: 'subject',
+			verb: 'Saved'
+		});
+	});
+
+	it('keeps a call still in flight as its whole present-tense phrase', () => {
+		expect(turnContext([call({ status: 'running' })], shell).read[0]?.passes[0]?.label).toEqual({
+			kind: 'phrase',
+			text: 'Read note'
+		});
 	});
 });
 

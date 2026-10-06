@@ -2,9 +2,9 @@ import { expect, it } from 'vitest';
 import { CHAT_WEB_SEARCH_DEFAULTS, REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { resolveWebResearch } from './web-research';
 
-it('uses page content and the established chat budget when no override is selected', () => {
+it('lets each provider choose its own search, with the established chat budget, when no override is selected', () => {
 	expect(resolveWebResearch({}, CHAT_WEB_SEARCH_DEFAULTS)).toEqual({
-		engine: 'exa',
+		engine: 'auto',
 		maxResults: 20,
 		maxTotalResults: 40
 	});

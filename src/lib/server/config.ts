@@ -117,11 +117,12 @@ export const APPLICATION_DEFAULTS = Object.freeze({
 	OPENROUTER_ATTACHMENT_VISION_MODEL: 'google/gemini-2.5-flash-lite',
 	MISTRAL_BASE_URL: 'https://api.mistral.ai/v1',
 	MISTRAL_OCR_MODEL: 'mistral-ocr-latest',
-	/* Exa rather than 'auto': auto resolves to the model's own native search, which
-	   returns snippets from a handful of results. Exa retrieves page content, which is
-	   what makes the difference between citing a headline and answering from the page.
+	/* 'auto' rather than Exa: with the Exa engine attached, OpenAI reasoning models stream no
+	   reasoning summary (GPT-6 Luna: 0 of 8 runs), so the chat shows no thinking at all. Auto
+	   uses each provider's native search where it has one. Exa returned page content where
+	   native search returns snippets; that is the trade made here.
 	   Accepts auto | native | exa | firecrawl | parallel | perplexity. */
-	OPENROUTER_WEB_SEARCH_ENGINE: 'exa',
+	OPENROUTER_WEB_SEARCH_ENGINE: 'auto',
 	OPENROUTER_WEB_SEARCH_MAX_RESULTS: '20',
 	OPENROUTER_WEB_SEARCH_MAX_TOTAL_RESULTS: '40',
 	RETRIEVAL_CHUNK_TOKENS: '2400',

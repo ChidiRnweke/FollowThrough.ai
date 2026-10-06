@@ -27,7 +27,7 @@ describe('OpenRouter web search transport', () => {
 				{ type: 'function', function: { name: 'get_project' } },
 				{
 					type: 'openrouter:web_search',
-					parameters: { engine: 'exa', max_results: 20, max_total_results: 40 }
+					parameters: { engine: 'auto', max_results: 20, max_total_results: 40 }
 				}
 			]
 		});
