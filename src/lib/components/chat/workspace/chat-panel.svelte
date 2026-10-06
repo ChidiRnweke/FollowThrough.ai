@@ -7,6 +7,7 @@
 	import type {
 		AgentModel,
 		AgentPreferenceValues,
+		ContextResourceRef,
 		ConversationImageInput,
 		Conversation,
 		RunAgentInput
@@ -52,13 +53,15 @@
 	} from '$lib/services/chat/mentions';
 	import type { ComposerSelection, MentionHistory } from '$lib/models/chat';
 	import { readMentionInput } from '$lib/client/agent/mention-input';
-	import { MENTION_PATTERN, mentionCandidatesFor, mentionQueryOf } from './mentions';
+	import { MENTION_PATTERN, diagramNameOf, mentionCandidatesFor, mentionQueryOf } from './mentions';
+	import { chipKeyOf, contextResourceRefOf } from '$lib/services/chat/chips';
 
 	let {
 		chat,
 		shell,
 		sessions,
 		activeNoteId,
+		openResource,
 		activeProjectId,
 		initialConversationId,
 		showHistory = true,
@@ -77,6 +80,11 @@
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
+		/**
+		 * The widget or diagram open in the focused pane. It travels along the way the open
+		 * note does; a file never opens in a pane, so it can only be mentioned.
+		 */
+		openResource?: Extract<ContextResourceRef, { kind: 'widget' | 'diagram' }>;
 		activeProjectId?: ProjectId;
 		initialConversationId?: Conversation['id'] | null;
 		showHistory?: boolean;
@@ -316,14 +324,35 @@
 		});
 	}
 
-	// The open note travels along automatically, like Copilot's current file.
+	// The open note — or the open widget or diagram — travels along automatically, like
+	// Copilot's current file.
 	const autoChip = $derived.by((): ResourceChip | undefined => {
-		if (!activeNoteId || chat.autoChipDismissedFor === activeNoteId) return undefined;
-		if (chat.chips.some((chip) => chip.kind === 'note' && chip.id === activeNoteId))
-			return undefined;
+		const candidate = openResourceChip() ?? openNoteChip();
+		if (!candidate || chat.autoChipDismissedFor === chipKeyOf(candidate)) return undefined;
+		if (chat.chips.some((chip) => chipKeyOf(chip) === chipKeyOf(candidate))) return undefined;
+		return candidate;
+	});
+
+	function openNoteChip(): ResourceChip | undefined {
+		if (!activeNoteId) return undefined;
 		const note = shell?.noteTree.find((entry) => entry.id === activeNoteId);
 		return note ? { kind: 'note', id: note.id, name: note.title } : undefined;
-	});
+	}
+
+	function openResourceChip(): ResourceChip | undefined {
+		if (!openResource) return undefined;
+		if (openResource.kind === 'widget') {
+			const widget = resources.views.widget(openResource.id);
+			return widget ? { kind: 'widget', id: widget.id, name: widget.title } : undefined;
+		}
+		// A studio conversation already works on its canvas; attaching that same diagram again
+		// would hand the agent two copies of the drawing it is editing.
+		if (canvas?.diagramId === openResource.id) return undefined;
+		const diagram = resources.views.diagram(openResource.id);
+		return diagram && !diagram.archivedAt
+			? { kind: 'diagram', id: diagram.id, name: diagramNameOf(diagram) }
+			: undefined;
+	}
 
 	/**
 	 * Whose selection counts. The same note the request is grounded in, so the passage the
@@ -360,7 +389,13 @@
 	const mentionCandidates = $derived(
 		mentionQuery === undefined || !shell
 			? []
-			: mentionCandidatesFor(mentionQuery, shell.noteTree, shell.skills, resources.availability)
+			: mentionCandidatesFor(
+					mentionQuery,
+					shell.noteTree,
+					shell.skills,
+					resources.availability,
+					resources.views.mentionableResources(mentionQuery, activeProjectId)
+				)
 	);
 	const visibleChips = $derived(
 		chat.chips.map((chip) =>
@@ -458,9 +493,7 @@
 	):
 		| { kind: 'ready'; request: Omit<RunAgentInput, 'conversationId'> }
 		| { kind: 'unavailable'; message: string } {
-		const folderIds = chat.chips
-			.filter((chip): chip is ResourceChip => chip.kind === 'folder')
-			.map((chip) => chip.id);
+		const folderIds = chat.chips.flatMap((chip) => (chip.kind === 'folder' ? [chip.id] : []));
 		const folders = resolveFolderContext(
 			shell?.noteTree ?? [],
 			folderIds,
@@ -476,7 +509,10 @@
 				kind: 'unavailable',
 				message: 'An attached folder is no longer available. Remove it or choose another folder.'
 			};
-		const contextNoteIds = [...new Set([...(autoChip ? [autoChip.id] : []), ...folders.noteIds])];
+		const contextNoteIds = [
+			...new Set([...(autoChip?.kind === 'note' ? [autoChip.id] : []), ...folders.noteIds])
+		];
+		const contextResources = autoChip ? contextResourceRefOf(autoChip) : [];
 		const interactionNoteId = focusedNoteId;
 		const interactionProjectId = interactionNoteId
 			? shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId
@@ -501,6 +537,7 @@
 				// A tagged folder rides in as the notes inside it; the store unions these
 				// with the note chips it maps itself.
 				...(contextNoteIds.length ? { contextNoteIds } : {}),
+				...(contextResources.length ? { contextResources } : {}),
 				...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
 				...(handoff?.requestedSkillNames
 					? { requestedSkillNames: [...handoff.requestedSkillNames] }
@@ -791,11 +828,11 @@
 				onmodelchange={(value) => (chat.modelOverride = value)}
 				onvisionmodelchange={(value) => (chat.visionModelOverride = value)}
 				onremovechip={(chip, automatic) => {
-					// Two chips arrive automatic — the open note and the live selection — and neither
-					// is held in `chat.chips`, so dismissing them is remembering not to offer them
-					// again rather than removing anything.
-					if (automatic && chip.kind === 'note') chat.autoChipDismissedFor = chip.id;
-					else if (automatic && chip.kind === 'selection') chat.dismissedSelectionId = chip.id;
+					// Two chips arrive automatic — the open note, widget or diagram, and the live
+					// selection — and neither is held in `chat.chips`, so dismissing them is
+					// remembering not to offer them again rather than removing anything.
+					if (automatic && chip.kind === 'selection') chat.dismissedSelectionId = chip.id;
+					else if (automatic) chat.autoChipDismissedFor = chipKeyOf(chip);
 					else unpick(chip);
 				}}
 				onpinselection={(chip) => chat.addChip(chip)}

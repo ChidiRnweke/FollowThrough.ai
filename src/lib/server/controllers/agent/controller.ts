@@ -68,14 +68,21 @@ import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import { AgentProviderFailure } from '$lib/errors';
-import type { AgentContext } from '$lib/server/services/agent/runs/context';
+import type { AgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
+import type { WidgetReader } from '$lib/server/services/widgets/contracts';
+import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import type { AttachmentLibrary } from '$lib/server/services/attachments/library';
+import {
+	attachmentFilePath,
+	diagramFilePath
+} from '$lib/server/services/agent-files/virtual-files';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
-import type { AgentRunContext, PreparedAgentRun } from '$lib/models/agent';
+import type { AgentRunContext, ContextResourceRef, PreparedAgentRun } from '$lib/models/agent';
 import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
@@ -255,6 +262,12 @@ export interface AgentDependencies {
 	readonly contextNotes: NoteReader;
 
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
+
+	readonly contextWidgets: WidgetReader;
+
+	readonly contextDiagrams: Pick<DiagramLibrary, 'get'>;
+
+	readonly contextAttachments: Pick<AttachmentLibrary, 'get'>;
 
 	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 
@@ -681,6 +694,7 @@ export class Agent implements AgentController {
 			...(input.selection ? { selection: input.selection } : {}),
 			...(input.selections?.length ? { selections: input.selections } : {}),
 			...(input.contextNoteIds ? { contextNoteIds: input.contextNoteIds } : {}),
+			...(input.contextResources?.length ? { contextResources: input.contextResources } : {}),
 			...(requestedSkillNames.length ? { requestedSkillNames } : {}),
 			...(input.requestedSkillNoteIds
 				? { requestedSkillNoteIds: input.requestedSkillNoteIds }
@@ -995,10 +1009,13 @@ export class Agent implements AgentController {
 				}
 			: { kind: 'no_current_note' as const };
 		const base = this.dependencies.contextFormatter.base(input, current);
-		const [skills, contextNotes, profileMemory] = await Promise.all([
+		const [skills, contextNotes, contextResources, profileMemory] = await Promise.all([
 			this.dependencies.contextSkills.listEnabled(actor, base.projectId),
 			Promise.all(
 				(input.contextNoteIds ?? []).map((noteId) => this.loadAttachedNote(actor, noteId))
+			),
+			Promise.all(
+				(input.contextResources ?? []).map((ref) => this.loadAttachedResource(actor, ref))
 			),
 			this.dependencies.contextMemory.list(actor, {})
 		]);
@@ -1007,6 +1024,7 @@ export class Agent implements AgentController {
 				base,
 				skills,
 				contextNotes,
+				contextResources,
 				profileMemory
 			});
 		const conversation = await this.dependencies.contextConversations.get(
@@ -1029,6 +1047,7 @@ export class Agent implements AgentController {
 				base,
 				skills,
 				contextNotes,
+				contextResources,
 				profileMemory,
 				appContext
 			});
@@ -1047,6 +1066,7 @@ export class Agent implements AgentController {
 			base,
 			skills,
 			contextNotes,
+			contextResources,
 			profileMemory,
 			appContext: { ...appContext, requestedScope }
 		});
@@ -1061,6 +1081,44 @@ export class Agent implements AgentController {
 				'An attached note is no longer available. Remove it from context and retry.',
 				{ noteId }
 			);
+		}
+	}
+
+	private async loadAttachedResource(
+		actor: ActorContext,
+		ref: ContextResourceRef
+	): Promise<AttachedResource> {
+		try {
+			switch (ref.kind) {
+				case 'widget':
+					return {
+						kind: 'widget',
+						widget: await this.dependencies.contextWidgets.get(actor, ref.id)
+					};
+				case 'diagram': {
+					const diagram = await this.dependencies.contextDiagrams.get(actor, ref.id);
+					return { kind: 'diagram', diagram, filePath: diagramFilePath(diagram) };
+				}
+				case 'attachment': {
+					const view = await this.dependencies.contextAttachments.get(actor, ref.id);
+					return {
+						kind: 'attachment',
+						view,
+						filePath: attachmentFilePath(view.attachment.projectId, view.attachment.id)
+					};
+				}
+			}
+		} catch (error) {
+			if (!(error instanceof NotFoundError)) throw error;
+			const retry = 'is no longer available. Remove it from context and retry.';
+			switch (ref.kind) {
+				case 'widget':
+					throw new NotFoundError(`An attached widget ${retry}`, { widgetId: ref.id });
+				case 'diagram':
+					throw new NotFoundError(`An attached diagram ${retry}`, { diagramId: ref.id });
+				case 'attachment':
+					throw new NotFoundError(`An attached file ${retry}`, { attachmentId: ref.id });
+			}
 		}
 	}
 

@@ -12,7 +12,6 @@ import type {
 } from '$lib/models/agent';
 import { isHttpError } from '@sveltejs/kit';
 import { isAgentPayloadObject } from '$lib/models/agent/payload';
-import type { NoteId } from '$lib/models/notes';
 import type { SuggestionView, SuggestionId } from '$lib/models/suggestions';
 import type {
 	AgentRunClientStorage,
@@ -35,8 +34,9 @@ import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
 import type { SelectionChip } from './selection-chip';
 import { SvelteSet } from 'svelte/reactivity';
-import type { ContextChip, ResourceChip, MentionHistory } from '$lib/models/chat';
+import type { ContextChip, MentionHistory } from '$lib/models/chat';
 import { createMentionHistory } from '$lib/services/chat/mentions';
+import { contextResourceRefOf, uniqueContextResources } from '$lib/services/chat/chips';
 export type { ContextChip, ResourceChip } from '$lib/models/chat';
 
 export type { ChatToolActivity } from './chat-tools';
@@ -414,7 +414,8 @@ export class ChatStore {
 	deciding = $state(false);
 	chips = $state<ContextChip[]>([]);
 	mentionDraft = $state<MentionHistory>(createMentionHistory(''));
-	autoChipDismissedFor = $state<NoteId | undefined>(undefined);
+	/** The automatic chip the user waved off, by `chipKeyOf`, so it stays off for that one resource. */
+	autoChipDismissedFor = $state<string | undefined>(undefined);
 	/**
 	 * The one highlighted passage the user has waved off, by chip id. Not cleared on send:
 	 * the text stays highlighted after a message goes out, and re-attaching a passage
@@ -695,10 +696,12 @@ export class ChatStore {
 		if (!this.canExecute || this.isStreaming) return;
 		const generation = this.generation;
 		const requestId = crypto.randomUUID();
-		const noteChips = this.chips
-			.filter((chip): chip is ResourceChip => chip.kind === 'note')
-			.map((chip) => chip.id);
+		const noteChips = this.chips.flatMap((chip) => (chip.kind === 'note' ? [chip.id] : []));
 		const skillChips = this.chips.flatMap((chip) => (chip.kind === 'skill' ? [chip.id] : []));
+		const contextResources = uniqueContextResources([
+			...(input.contextResources ?? []),
+			...this.chips.flatMap(contextResourceRefOf)
+		]);
 		// The singular `selection` is derived here and nowhere else. It stays on the wire
 		// because the selection-bound tools (extract_promises, relate_selection, …) are offered
 		// only when the run input has one; the plural field is what the prompt actually quotes.
@@ -757,6 +760,7 @@ export class ChatStore {
 				...(input.noteId ? { noteId: input.noteId } : {}),
 				...(selections.length ? { selections, selection: selections[0] } : {}),
 				contextNoteIds: [...new SvelteSet([...(input.contextNoteIds ?? []), ...noteChips])],
+				...(contextResources.length ? { contextResources } : {}),
 				...(input.requestedSkillNames ? { requestedSkillNames: input.requestedSkillNames } : {}),
 				requestedSkillNoteIds: [
 					...new SvelteSet([...(input.requestedSkillNoteIds ?? []), ...skillChips])

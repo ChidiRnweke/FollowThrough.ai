@@ -264,7 +264,7 @@ describe('shared cached chat history', () => {
 				executionMode: 'approval_required',
 				requestId: crypto.randomUUID(),
 				inputSnapshot: runAgentInputBuilder({ conversationId }),
-				contextSnapshot: { contextNotes: [], skills: { items: [] } }
+				contextSnapshot: { contextNotes: [], contextResources: [], skills: { items: [] } }
 			},
 			pendingDecisions: [],
 			latestCursor: '2'

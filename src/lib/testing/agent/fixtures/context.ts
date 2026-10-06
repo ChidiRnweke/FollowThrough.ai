@@ -14,6 +14,7 @@ import { AgentEvents } from '$lib/server/services/agent/runs/events';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { InMemoryAgentRunner, InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
+import { InMemoryContextResources } from '$lib/testing/agent/fakes/in-memory-context-resources';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
@@ -29,6 +30,7 @@ export const agentContextFixture = () => {
 	const notes = new InMemoryNoteContent();
 	notes.notes = [noteBuilder()];
 	const skills = new InMemorySkills();
+	const resources = new InMemoryContextResources();
 	const projects = new InMemoryProjects();
 	const memory = new InMemoryMemoryEntryRepository();
 	const conversations = new InMemoryConversationRepository();
@@ -51,6 +53,9 @@ export const agentContextFixture = () => {
 		contextFormatter: new AgentContext(),
 		contextNotes: notes,
 		contextSkills: skills,
+		contextWidgets: resources.widgetReader,
+		contextDiagrams: resources.diagramReader,
+		contextAttachments: resources.attachmentReader,
 		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: projects,
 		contextMemory: memory,
@@ -106,6 +111,7 @@ export const agentContextFixture = () => {
 		runs,
 		notes,
 		skills,
+		resources,
 		projects,
 		memory,
 		conversations

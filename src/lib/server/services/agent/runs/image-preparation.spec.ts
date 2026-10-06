@@ -14,7 +14,7 @@ import { ConversationBuffer } from '../conversations/buffer';
 import { AgentReplayVirtualizer } from '../conversations/replay-virtualizer';
 import { AgentReasoning } from './reasoning';
 
-const context: AgentRunContext = { contextNotes: [], skills: { items: [] } };
+const context: AgentRunContext = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const now = '2026-09-16T00:00:00.000Z' as DateTime;
 const conversationId = testConversationId();
 const imageUrl =

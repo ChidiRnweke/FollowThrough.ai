@@ -22,7 +22,7 @@ const run = (
 const prepared: Extract<WorkflowRunContext, { kind: 'diagram'; state: 'prepared' }> = {
 	kind: 'diagram',
 	state: 'prepared',
-	context: { contextNotes: [], skills: { items: [] } },
+	context: { contextNotes: [], contextResources: [], skills: { items: [] } },
 	conversationId: testConversationId(),
 	effectiveModel: 'test/frozen',
 	executionMode: 'auto_accept',

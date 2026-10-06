@@ -21,9 +21,33 @@
 		FtAttachments as Paperclip,
 		FtClose as X,
 		FtLoader as Loader,
-		FtStop as Square
+		FtStop as Square,
+		FtWidget
 	} from '$lib/components/icons';
 	import ImageLightbox from '../image-lightbox.svelte';
+
+	/**
+	 * Six kinds of candidate outgrow the panel, so the list scrolls at the same height as the
+	 * command list; the arrow keys move `highlighted`, and the row they land on is kept in view.
+	 */
+	let mentionList = $state<HTMLDivElement | null>(null);
+	$effect(() => {
+		const row = mentionList?.querySelectorAll('[role="option"]')[highlighted];
+		row?.scrollIntoView({ block: 'nearest' });
+	});
+
+	/** Total over the resource kinds, so a new kind is a type error here, not a "Note" label. */
+	const resourceKinds: Record<
+		ResourceChip['kind'],
+		{ readonly label: string; readonly icon: typeof FileText }
+	> = {
+		note: { label: 'Note', icon: FileText },
+		folder: { label: 'Folder', icon: Folder },
+		skill: { label: 'Skill', icon: Wrench },
+		widget: { label: 'Widget', icon: FtWidget },
+		diagram: { label: 'Diagram', icon: Workflow },
+		attachment: { label: 'File', icon: Paperclip }
+	};
 
 	let {
 		prompt = $bindable(''),
@@ -112,11 +136,7 @@
 			? 'border-dashed text-muted-foreground'
 			: ''}"
 	>
-		{#if chip.kind === 'skill'}
-			<Wrench class="size-3 shrink-0" />
-		{:else if chip.kind === 'folder'}
-			<Folder class="size-3 shrink-0" />
-		{:else if chip.kind === 'selection'}
+		{#if chip.kind === 'selection'}
 			{#if live}
 				<!-- The gesture the pin glyph invites, made real. Reaching for it and getting
 				     nothing was the whole complaint: it looked like the control that keeps the
@@ -139,7 +159,8 @@
 				<Pin class="size-3 shrink-0" />
 			{/if}
 		{:else}
-			<FileText class="size-3 shrink-0" />
+			{@const Icon = resourceKinds[chip.kind].icon}
+			<Icon class="size-3 shrink-0" />
 		{/if}
 		<!-- Naming the note would be a worse label here: the highlight is not the note, and it
 		     is about to be some other part of it. The title is on the hover card instead. -->
@@ -226,9 +247,10 @@
 		{#if mentionCandidates.length > 0}
 			<!-- audit-allow: no-ad-hoc-shadow — The mention listbox floats above the composer; shadow-md matches the sanctioned overlay elevation of the ui popovers it cannot reuse here. -->
 			<div
-				class="absolute bottom-full left-0 z-50 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-md"
+				bind:this={mentionList}
+				class="absolute bottom-full left-0 z-50 mb-1 max-h-72 w-72 scroll-py-1 overflow-x-hidden overflow-y-auto rounded-md border border-border bg-popover shadow-md"
 				role="listbox"
-				aria-label="Mention a note, folder, or skill"
+				aria-label="Mention a note, folder, skill, widget, diagram, or file"
 			>
 				{#each mentionCandidates as candidate, index (candidate.kind + candidate.id)}
 					<Button
@@ -243,21 +265,10 @@
 						onpointerenter={() => onhighlight(index)}
 						onclick={() => onpick(candidate)}
 					>
-						{#if candidate.kind === 'skill'}
-							<Wrench class="size-3.5 shrink-0 text-muted-foreground" />
-						{:else if candidate.kind === 'folder'}
-							<Folder class="size-3.5 shrink-0 text-muted-foreground" />
-						{:else}
-							<FileText class="size-3.5 shrink-0 text-muted-foreground" />
-						{/if}
+						{@const kind = resourceKinds[candidate.kind]}
+						<kind.icon class="size-3.5 shrink-0 text-muted-foreground" />
 						<span class="truncate">{candidate.name}</span>
-						<span class="ml-auto text-xs text-muted-foreground">
-							{candidate.kind === 'skill'
-								? 'Skill'
-								: candidate.kind === 'folder'
-									? 'Folder'
-									: 'Note'}
-						</span>
+						<span class="ml-auto text-xs text-muted-foreground">{kind.label}</span>
 					</Button>
 				{/each}
 			</div>

@@ -10,7 +10,7 @@ import {
 import { tokenEncoding } from '$lib/models/tokenization/token-encoding';
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentId } from '$lib/models/attachments';
-import type { DiagramId } from '$lib/models/diagrams';
+import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { Note, NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
@@ -57,6 +57,14 @@ const normalizePath = (input: string): string => {
 
 const lineCount = (content: string): number =>
 	content.length === 0 ? 0 : content.split('\n').length;
+
+/** Where an attachment's extracted text is mounted. */
+export const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
+	`/projects/${projectId}/attachments/${attachmentId}.txt`;
+
+/** Where a diagram's source is mounted; the extension says which language it is. */
+export const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
+	`/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`;
 
 export const agentFileOf = (path: string, mediaType: string, content: string): AgentFile => ({
 	metadata: {
@@ -199,7 +207,7 @@ export class AgentVirtualFiles {
 							? []
 							: [
 									agentFileOf(
-										`/projects/${project.id}/attachments/${view.attachment.id}.txt`,
+										attachmentFilePath(project.id, view.attachment.id),
 										'text/plain',
 										text
 									)
@@ -207,7 +215,7 @@ export class AgentVirtualFiles {
 					}),
 					...diagramPage.diagrams.map((diagram) =>
 						agentFileOf(
-							`/projects/${project.id}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`,
+							diagramFilePath(diagram),
 							diagram.kind === 'mermaid' ? 'text/vnd.mermaid' : 'application/vnd.jgraph.mxfile+xml',
 							diagram.source
 						)

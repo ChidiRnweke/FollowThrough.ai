@@ -47,7 +47,11 @@ import type { AgentRunner, ConversationJournal } from '$lib/server/services/agen
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
 const testTime = '2026-01-01T00:00:00.000Z' as DateTime;
-const resolvedContext: AgentRunContext = { contextNotes: [], skills: { items: [] } };
+const resolvedContext: AgentRunContext = {
+	contextNotes: [],
+	contextResources: [],
+	skills: { items: [] }
+};
 
 /**
  * Stands in for a provider stream the user stops: it hangs until the signal

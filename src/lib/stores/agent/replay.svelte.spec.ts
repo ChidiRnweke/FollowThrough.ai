@@ -43,7 +43,7 @@ describe('chat replay checkpoints', () => {
 				status: 'completed',
 				requestId: 'test-replay-request',
 				pendingDecisions: [],
-				contextSnapshot: { contextNotes: [], skills: { items: [] } },
+				contextSnapshot: { contextNotes: [], contextResources: [], skills: { items: [] } },
 				inputSnapshot: {
 					conversationId,
 					prompt: 'Read saved activity'

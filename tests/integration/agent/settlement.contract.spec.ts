@@ -51,7 +51,7 @@ const setup = async (suffix: string) => {
 		requestId: `settlement-contract-${suffix}`,
 		pendingDecisions: [],
 		inputSnapshot: { conversationId: conversation.id, prompt: 'Settlement contract' },
-		contextSnapshot: { contextNotes: [], skills: { items: [] } },
+		contextSnapshot: { contextNotes: [], contextResources: [], skills: { items: [] } },
 		provenanceId: provenance.id,
 		createdAt: now,
 		updatedAt: now

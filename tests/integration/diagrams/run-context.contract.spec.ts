@@ -38,7 +38,7 @@ const seed = async (suffix: string) => {
 	const prepared: Extract<WorkflowRunContext, { kind: 'diagram'; state: 'prepared' }> = {
 		kind: 'diagram',
 		state: 'prepared',
-		context: { contextNotes: [], skills: { items: [] } },
+		context: { contextNotes: [], contextResources: [], skills: { items: [] } },
 		conversationId: conversation.id,
 		effectiveModel: run.model,
 		executionMode: 'auto_accept',

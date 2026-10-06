@@ -54,7 +54,7 @@ it('preserves cancellation committed while prepared context waits for the run ro
 				const current = await preparation.getForWrite(owner, run.id);
 				const change = preparation.context(
 					current,
-					{ contextNotes: [], skills: { items: [] } },
+					{ contextNotes: [], contextResources: [], skills: { items: [] } },
 					now
 				);
 				return preparation.persistContext(owner, run.id, change);

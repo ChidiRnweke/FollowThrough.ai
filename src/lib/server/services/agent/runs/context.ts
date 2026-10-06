@@ -4,11 +4,16 @@ import type {
 	ContextSelection,
 	Conversation,
 	ContextNote,
+	ContextResource,
+	ContextResourceText,
 	ResolvedAgentAppContextV1,
 	RunAgentInput,
 	AppContextSnapshotV1
 } from '$lib/models/agent';
+import type { AttachmentView } from '$lib/models/attachments';
+import type { Diagram } from '$lib/models/diagrams';
 import type { MemoryEntry } from '$lib/models/memory';
+import type { Widget } from '$lib/models/widgets';
 import type { Note } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
 import type { SkillSummary } from '$lib/models/skills';
@@ -18,10 +23,21 @@ export type CurrentContextNote =
 	{ readonly kind: 'note'; readonly note: Note } | { readonly kind: 'no_current_note' };
 export type ConversationContextProject =
 	{ readonly kind: 'project'; readonly project: Project } | { readonly kind: 'no_origin_project' };
+/**
+ * A widget, diagram or file the user attached, as the controller loaded it. Diagrams and
+ * files carry the path the agent file namespace mounts them at, so a resource too large to
+ * inline still says exactly where to read it.
+ */
+export type AttachedResource =
+	| { readonly kind: 'widget'; readonly widget: Widget }
+	| { readonly kind: 'diagram'; readonly diagram: Diagram; readonly filePath: string }
+	| { readonly kind: 'attachment'; readonly view: AttachmentView; readonly filePath: string };
+
 export interface AgentContextValues {
 	readonly base: BaseAgentContextData;
 	readonly skills: readonly SkillSummary[];
 	readonly contextNotes: readonly Note[];
+	readonly contextResources: readonly AttachedResource[];
 	readonly profileMemory: readonly MemoryEntry[];
 	readonly appContext?: ResolvedAgentAppContextV1;
 }
@@ -47,6 +63,60 @@ const contextNoteOf = (note: Note): ContextNote => {
 		...(tokenCount <= contextNoteTokenLimit() ? { content: note.plainText } : {}),
 		tokenCount
 	};
+};
+
+const contextTextOf = (text: string): ContextResourceText => {
+	const tokenCount = encoding().encode(text).length;
+	return tokenCount <= contextNoteTokenLimit()
+		? { inclusion: 'inline', text, tokenCount }
+		: { inclusion: 'too_large', tokenCount };
+};
+
+/**
+ * What of each resource the model reads inline. A widget is its whole definition — the
+ * read_widget payload — because its layout and data are the widget. A draw.io diagram is its
+ * labels: the XML is mostly geometry, and stays one sed call away at its file path. Mermaid
+ * source is already the readable form. A file is its extracted text.
+ */
+const contextResourceOf = (resource: AttachedResource): ContextResource => {
+	switch (resource.kind) {
+		case 'widget': {
+			const { widget } = resource;
+			return {
+				kind: 'widget',
+				widgetId: widget.id,
+				title: widget.title,
+				text: contextTextOf(JSON.stringify({ layout: widget.layout, data: widget.data }, null, 2))
+			};
+		}
+		case 'diagram': {
+			const { diagram } = resource;
+			return {
+				kind: 'diagram',
+				diagramId: diagram.id,
+				diagramKind: diagram.kind,
+				title: diagram.title || 'Untitled diagram',
+				filePath: resource.filePath,
+				text: contextTextOf(diagram.kind === 'mermaid' ? diagram.source : diagram.searchableText)
+			};
+		}
+		case 'attachment': {
+			const { attachment, version } = resource.view;
+			return {
+				kind: 'attachment',
+				attachmentId: attachment.id,
+				name: attachment.path,
+				content:
+					version.extractedText === undefined
+						? { kind: 'not_extracted', processingStatus: version.processingStatus }
+						: {
+								kind: 'extracted',
+								filePath: resource.filePath,
+								text: contextTextOf(version.extractedText)
+							}
+			};
+		}
+	}
 };
 
 interface AdvertisedSkill {
@@ -91,6 +161,7 @@ export class AgentContext {
 			...(values.appContext ? { appContext: values.appContext } : {}),
 			...(userMemories.length ? { userMemory: userMemories.map((entry) => entry.content) } : {}),
 			contextNotes: values.contextNotes.map(contextNoteOf),
+			contextResources: values.contextResources.map(contextResourceOf),
 			skills: this.buildCatalog(values.skills, (skill) =>
 				this.isRequested(skill, requested, requestedNoteIds)
 			)

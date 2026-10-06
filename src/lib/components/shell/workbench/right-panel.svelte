@@ -1,7 +1,12 @@
 <script lang="ts">
 	import type { ShellContext } from '$lib/client/shell/views';
 
-	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
+	import type {
+		AgentModel,
+		AgentPreferenceValues,
+		ContextResourceRef,
+		Conversation
+	} from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
@@ -32,6 +37,7 @@
 		agentDefaults,
 		agentAvailable,
 		activeNoteId,
+		openResource,
 		activeProjectId
 	}: {
 		shell?: ShellContext;
@@ -41,6 +47,7 @@
 		agentDefaults: AgentModelDefaults;
 		agentAvailable: boolean;
 		activeNoteId?: NoteId;
+		openResource?: Extract<ContextResourceRef, { kind: 'widget' | 'diagram' }>;
 		activeProjectId?: ProjectId;
 	} = $props();
 
@@ -164,6 +171,7 @@
 							{shell}
 							{sessions}
 							{activeNoteId}
+							{openResource}
 							{activeProjectId}
 							{agentPreferences}
 							{agentModels}
@@ -260,6 +268,7 @@
 							{shell}
 							{sessions}
 							{activeNoteId}
+							{openResource}
 							{activeProjectId}
 							{agentPreferences}
 							{agentModels}
