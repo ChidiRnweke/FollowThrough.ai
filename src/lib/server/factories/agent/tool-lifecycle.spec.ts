@@ -13,10 +13,7 @@ import {
 } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
-import {
-	AgentToolEventMapper,
-	createToolRecoveryConfig
-} from '$lib/server/services/agent/runs/reasoning';
+import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
 import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
 import type { AgentEvent } from '$lib/models/agent';
 import {
@@ -73,14 +70,7 @@ const run = async (agent: Agent, state?: RunState<unknown, Agent>, events: Agent
 	const stream = await new Runner({ tracingDisabled: true }).run(
 		agent,
 		state ?? 'Change launch day',
-		{
-			stream: true,
-			maxTurns: 4,
-			...createToolRecoveryConfig(
-				agent.tools.map((tool) => tool.name),
-				[]
-			)
-		}
+		{ stream: true, maxTurns: 4 }
 	);
 	const mapper = new AgentToolEventMapper();
 	for await (const event of stream) {
@@ -341,97 +331,5 @@ it('isolates concurrent invalid and valid calls to the same tool', async () => {
 			{ type: 'tool_reported_failure', callId: 'invalid' },
 			{ type: 'tool_succeeded', callId: 'valid' }
 		]
-	});
-});
-
-/**
- * Trace `1cde38f9…` (2026-10-08): one generation held a malformed and a valid
- * `search` call. The SDK answered the malformed one and ran the valid one, but
- * reading the malformed arguments for the chat row threw and ended the turn.
- */
-describe('Protocol-level recovery the SDK owns', () => {
-	const batch = (
-		fixture: ReturnType<typeof scenario>,
-		first: { name: string; arguments: string }
-	) =>
-		new InMemoryToolBatchModel([
-			{ ...first, callId: 'broken' },
-			{
-				name: 'edit_note',
-				callId: 'valid',
-				arguments: JSON.stringify({
-					noteId: fixture.note.id,
-					edits: [{ oldText: 'Monday', newText: 'Tuesday' }]
-				})
-			}
-		]);
-	const outcomes = (events: readonly AgentEvent[]) =>
-		events
-			.filter(
-				(event) =>
-					event.type === 'tool_failed' ||
-					event.type === 'tool_reported_failure' ||
-					event.type === 'tool_succeeded'
-			)
-			.map((event) => ({ type: event.type, callId: event.callId }))
-			.sort((left, right) => String(left.callId).localeCompare(String(right.callId)));
-
-	it('completes the turn when malformed JSON arrives beside a valid sibling call', async () => {
-		const fixture = scenario(0, 'auto_accept');
-		const events: AgentEvent[] = [];
-		await run(
-			new Agent({
-				name: 'Malformed sibling',
-				model: batch(fixture, { name: 'edit_note', arguments: '{"noteId": "x", "edits": [' }),
-				tools: fixture.registry.tools()
-			}),
-			undefined,
-			events
-		);
-		expect({ body: fixture.content.notes[0].plainText, outcomes: outcomes(events) }).toEqual({
-			body: 'Launch Tuesday.',
-			outcomes: [
-				{ type: 'tool_failed', callId: 'broken' },
-				{ type: 'tool_succeeded', callId: 'valid' }
-			]
-		});
-	});
-
-	it('completes the turn when the model calls a tool that does not exist', async () => {
-		const fixture = scenario(0, 'auto_accept');
-		const events: AgentEvent[] = [];
-		await run(
-			new Agent({
-				name: 'Unknown sibling',
-				model: batch(fixture, { name: 'edit_notes', arguments: '{}' }),
-				tools: fixture.registry.tools()
-			}),
-			undefined,
-			events
-		);
-		expect({ body: fixture.content.notes[0].plainText, outcomes: outcomes(events) }).toEqual({
-			body: 'Launch Tuesday.',
-			outcomes: [
-				{ type: 'tool_failed', callId: 'broken' },
-				{ type: 'tool_succeeded', callId: 'valid' }
-			]
-		});
-	});
-
-	it('corrects malformed JSON after the SDK returns its parse feedback', async () => {
-		const fixture = scenario(0, 'auto_accept');
-		const model = new InMemoryToolCallingModel(
-			'edit_note',
-			'{"noteId": "x", "edits": [',
-			JSON.stringify({
-				noteId: fixture.note.id,
-				edits: [{ oldText: 'Monday', newText: 'Tuesday' }]
-			}),
-			'valid JSON'
-		);
-		await run(
-			new Agent({ name: 'Malformed then corrected', model, tools: fixture.registry.tools() })
-		);
-		expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
 	});
 });

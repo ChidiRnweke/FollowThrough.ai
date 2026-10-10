@@ -50,18 +50,6 @@ describe('Provider tool call arguments', () => {
 		expect(call({ callId: 'a' })?.arguments).toEqual({ kind: 'value', value: {} });
 	});
 
-	/** The SDK has already answered this call with a correction; reading it must not end the turn. */
-	it('keeps the call when its JSON arguments are malformed', () => {
-		expect(call({ callId: 'a', arguments: '{' })).toMatchObject({
-			callId: 'a',
-			arguments: { kind: 'corrupt' }
-		});
-	});
-
-	it('keeps the call when its arguments are not an object', () => {
-		expect(call({ callId: 'a', arguments: '[]' })?.arguments.kind).toBe('corrupt');
-	});
-
 	it('rejects a malformed known tool event before it can be mistaken for an unfamiliar event', () => {
 		expect(() => call({ callId: 'a', arguments: 42 })).toThrowError(AgentProviderFailure);
 	});

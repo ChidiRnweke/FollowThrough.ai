@@ -167,6 +167,35 @@ describe('A failure is news only when nothing put it right', () => {
 		await expect.element(screen.getByText(/not applied/)).toBeVisible();
 		expect(await screen.getByText(/changes? (was|were) not applied/).all()).toHaveLength(0);
 	});
+	// The model called a tool that does not exist; the SDK told it so and the turn went on.
+	it('states a call to a tool the agent does not have, with the reason, never as done', async () => {
+		const screen = await renderTurn([
+			call({
+				name: 'save_notes',
+				arguments: {},
+				status: 'failed',
+				failure: 'Tool "save_notes" is not available. Did you mean: save_note?'
+			})
+		]);
+		await screen.getByRole('button', { name: /Read 1/ }).click();
+		await screen.getByRole('button', { name: /Save notes/ }).click();
+		await expect
+			.element(screen.getByText('Tool "save_notes" is not available. Did you mean: save_note?'))
+			.toBeVisible();
+		expect(await screen.getByText(/completed/).all()).toHaveLength(0);
+	});
+
+	it('never says a failed save happened', async () => {
+		const screen = await renderTurn([
+			call({ name: 'save_note', status: 'failed', failure: 'The note was locked.' })
+		]);
+		await screen
+			.getByRole('button', { name: /Infrastructure/ })
+			.first()
+			.click();
+		await expect.element(screen.getByText('The note was locked.')).toBeVisible();
+		expect(await screen.getByText(/Saved/).all()).toHaveLength(0);
+	});
 });
 
 describe('Looks that found nothing are a row like everything else behind the door', () => {

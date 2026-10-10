@@ -261,7 +261,8 @@ const unavailableFailure = (output: ProviderToolOutput): string => {
  * name the agent does not have (`TOOL_NOT_AVAILABLE`, with suggestions), and
  * arguments that are not JSON (a plain-text correction). Neither gets a running
  * row — `tool_started` names a catalog tool with readable arguments — and both
- * settle as `tool_failed`, so the user sees every attempt the model made.
+ * settle as `tool_failed` in the journal. The turn summary then decides what is news: a failure
+ * a later call put right is not reported (see `turn-context.ts`).
  */
 export class AgentToolEventMapper {
 	private readonly calls = new Map<string, { readonly name: string; readonly readable: boolean }>();

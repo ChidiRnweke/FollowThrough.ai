@@ -17,9 +17,6 @@ describe('canonical tool failure', () => {
 	it('reports a corrupt failure instead of classifying it as success', () => {
 		expect(readToolOutput({ kind: 'failure', message: 'Changed' }).kind).toBe('corrupt');
 	});
-	it('reads text that only looks like JSON as a plain result', () => {
-		expect(readToolOutput('{ not json').kind).toBe('success');
-	});
 	it('leaves successful domain states unchanged', () => {
 		expect(readToolOutput({ kind: 'no_matches', matches: [] }).kind).toBe('success');
 	});

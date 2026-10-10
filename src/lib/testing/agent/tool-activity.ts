@@ -1,4 +1,5 @@
 import type { AgentPayload } from '$lib/models/agent/payload';
+import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { ChatToolActivityBase } from '$lib/stores/agent/chat-tools';
 
 /**
@@ -12,17 +13,20 @@ import type { ChatToolActivityBase } from '$lib/stores/agent/chat-tools';
  * who copies it.
  */
 export type ToolActivityOverrides = Partial<
-	Pick<ChatToolActivityBase, 'callId' | 'name' | 'arguments' | 'runId'>
+	Pick<ChatToolActivityBase, 'callId' | 'arguments' | 'runId'>
 > &
 	(
-		| { readonly status?: 'succeeded'; readonly output?: AgentPayload }
-		| { readonly status: 'running' }
-		| { readonly status: 'approval_required' }
-		| { readonly status: 'rejected' }
-		| { readonly status: 'failed'; readonly failure: string }
-		| {
-				readonly status: 'reported_failure';
-				readonly failure: string;
-				readonly output: AgentPayload;
-		  }
+		| ({ readonly name?: AgentToolName } & (
+				| { readonly status?: 'succeeded'; readonly output?: AgentPayload }
+				| { readonly status: 'running' }
+				| { readonly status: 'approval_required' }
+				| { readonly status: 'rejected' }
+				| {
+						readonly status: 'reported_failure';
+						readonly failure: string;
+						readonly output: AgentPayload;
+				  }
+		  ))
+		/** Only a failed call can name a tool the agent does not have: it never ran. */
+		| { readonly name?: string; readonly status: 'failed'; readonly failure: string }
 	);

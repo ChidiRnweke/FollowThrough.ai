@@ -5,8 +5,6 @@ import {
 	InMemoryDiagramModel,
 	type DiagramCandidate
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
-import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
-import type { AgentEvent } from '$lib/models/agent';
 import type { DiagramGenerationRequest, DiagramSubmission } from '$lib/models/diagrams/generation';
 
 const request: DiagramGenerationRequest = {
@@ -61,48 +59,6 @@ describe('Diagram provider submission protocol', () => {
 			}
 			await session.close();
 			expect(provider.closed).toBe(true);
-		} finally {
-			await session.close();
-		}
-	});
-
-	/**
-	 * The submission tool shares the chat tools' failure envelope, so each
-	 * correctable mistake reaches the model as feedback and is recorded as failed,
-	 * and the run goes on to the valid draft.
-	 */
-	it('records every correctable submission as failed and accepts the corrected draft', async () => {
-		const { session } = setup([
-			{ kind: 'raw', format: 'mermaid', arguments: '{"source": "flowchart' },
-			{ kind: 'raw', format: 'mermaid', arguments: '{"source": ""}' },
-			{ kind: 'mermaid', source: 'invalid' },
-			draft
-		]);
-		const mapper = new AgentToolEventMapper();
-		const outcomes: AgentEvent['type'][] = [];
-		try {
-			for await (const event of session.events) {
-				if (event.kind === 'submission') {
-					session.respond(
-						event.id,
-						event.draft.source === 'invalid'
-							? { kind: 'rejected', message: 'Invalid Mermaid syntax' }
-							: { kind: 'accepted', draft: event.draft }
-					);
-					continue;
-				}
-				const mapped = mapper.map(event.event);
-				if (mapped && mapped.type !== 'tool_started') outcomes.push(mapped.type);
-			}
-			expect({ draft: await session.result(), outcomes }).toEqual({
-				draft,
-				outcomes: [
-					'tool_failed',
-					'tool_reported_failure',
-					'tool_reported_failure',
-					'tool_succeeded'
-				]
-			});
 		} finally {
 			await session.close();
 		}

@@ -226,8 +226,15 @@ Source inspection found one further defect: the diagram controller maps provider
 same mapper, and `submit_*_diagram` were not agent tool names, so the first real submission would
 have thrown `UNKNOWN_TOOL_CALL`. Both names are now catalogued.
 
-Evidence: full-path runner tests for malformed JSON beside a valid sibling, an unknown tool name, and
-malformed JSON followed by a corrected call failed on the documentation-branch base and pass after
-the change. A diagram test covering invalid JSON, schema-invalid and rejected drafts before an
-accepted draft failed on the base and passes. E3 rejection remains an expected failed action. No
-live model run reproduced E2; the evidence is deterministic.
+Evidence: through the public interfaces — the agent controller with the production runner,
+the diagram controller with the production submission protocol, the reopened conversation, and the
+rendered turn summary — tests for malformed JSON beside a valid call, an unknown tool name,
+malformed JSON followed by a corrected call, and invalid, schema-invalid and rejected diagram
+drafts failed on the documentation-branch base and pass after the change. E3 rejection remains an
+expected failed action. No live model run reproduced E2; the evidence is deterministic.
+
+A seeded screenshot of the reopened conversation found two problems the first round of
+implementation-level tests had missed: a failed call was labelled in the past tense ("Save notes
+completed", "Saved"), and the claim that the summary shows every attempt was false — by existing
+design it reports a failure only when nothing put it right. The label is fixed and covered by
+rendered tests; the claim is corrected. Those implementation-level tests were replaced.

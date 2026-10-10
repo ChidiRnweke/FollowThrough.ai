@@ -110,17 +110,6 @@ describe('A pass over its own subject is named by the row, not by a generic noun
 		});
 	});
 
-	it('never names a failed call in the past tense', () => {
-		const label = (name: ChatToolActivity['name']) => {
-			const context = turnContext([call({ name, status: 'failed', failure: 'x' })], shell);
-			return [...context.changed, ...context.read][0]?.passes[0]?.label;
-		};
-		expect([label('save_note'), label('save_notes')]).toEqual([
-			{ kind: 'phrase', text: 'Save note' },
-			{ kind: 'phrase', text: 'Save notes' }
-		]);
-	});
-
 	it('keeps a call still in flight as its whole present-tense phrase', () => {
 		expect(turnContext([call({ status: 'running' })], shell).read[0]?.passes[0]?.label).toEqual({
 			kind: 'phrase',

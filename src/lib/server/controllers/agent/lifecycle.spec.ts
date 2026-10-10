@@ -2,7 +2,12 @@ import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
 import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
-import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
+import {
+	InMemoryToolBatchModel,
+	InMemoryToolCallingModel
+} from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
+import type { Model } from '@openai/agents';
+import type { Note } from '$lib/models/notes';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
@@ -589,15 +594,10 @@ describe('Durable note approval publication', () => {
 	});
 });
 
-it('journals a failed tool call and its correction through the production runner', async () => {
+/** The production runner against a scripted model, over one note that says "Launch Monday." */
+const productionRun = async (model: (note: Note) => Model) => {
 	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
 	const notes = reviewedNoteFixture(note);
-	const model = new InMemoryToolCallingModel(
-		'edit_note',
-		JSON.stringify({ noteId: note.id, edits: [] }),
-		JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }),
-		'Too small'
-	);
 	const reasoning = new AgentReasoning(
 		async ({ run, executor, signal }) => {
 			if (!run.inputSnapshot) throw new Error('Run input is missing');
@@ -623,23 +623,103 @@ it('journals a failed tool call and its correction through the production runner
 				virtualize: async (_actor, _id, item) => item
 			}),
 		undefined,
-		() => new InMemoryModelProvider(model)
+		() => new InMemoryModelProvider(model(note))
 	);
 	const fixture = setup(reasoning);
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));
 	await fixture.lifecycle.execute(testRunId, new AbortController().signal);
-	expect({
+	return {
 		status: currentRun(fixture.runs).status,
 		body: notes.content.notes[0].plainText,
 		rows: fixture.toolRows
 			.filter((row) => row.status !== 'running')
-			.map((row) => ({ status: row.status, callId: row.callId }))
-	}).toEqual({
+			.map((row) => ({ status: row.status, name: row.name, callId: row.callId }))
+	};
+};
+
+const editArguments = (note: Note) =>
+	JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] });
+
+it('journals a failed tool call and its correction through the production runner', async () => {
+	expect(
+		await productionRun(
+			(note) =>
+				new InMemoryToolCallingModel(
+					'edit_note',
+					JSON.stringify({ noteId: note.id, edits: [] }),
+					editArguments(note),
+					'Too small'
+				)
+		)
+	).toEqual({
 		status: 'completed',
 		body: 'Launch Tuesday.',
 		rows: [
-			{ status: 'reported_failure', callId: 'call-invalid' },
-			{ status: 'succeeded', callId: 'call-corrected' }
+			{ status: 'reported_failure', name: 'edit_note', callId: 'call-invalid' },
+			{ status: 'succeeded', name: 'edit_note', callId: 'call-corrected' }
 		]
+	});
+});
+
+/**
+ * The SDK answers malformed JSON and unknown tool names itself, and the run goes on (ADR 0015:
+ * the failure is reported, not swallowed). Trace `1cde38f9…` (2026-10-08) held a malformed and
+ * a valid call in one generation; the run failed with `MALFORMED_TOOL_ARGUMENTS` instead.
+ */
+describe('A call the SDK recovers from does not end the run', () => {
+	// Sibling calls in one generation settle in no promised order.
+	const settled = async (outcome: ReturnType<typeof productionRun>) => {
+		const { rows, ...rest } = await outcome;
+		return {
+			...rest,
+			rows: [...rows].sort((a, b) => String(a.callId).localeCompare(String(b.callId)))
+		};
+	};
+	const sibling = (first: { name: string; arguments: string }) => (note: Note) =>
+		new InMemoryToolBatchModel([
+			{ ...first, callId: 'broken' },
+			{ name: 'edit_note', callId: 'valid', arguments: editArguments(note) }
+		]);
+
+	it('completes when malformed JSON arrives beside a valid call', async () => {
+		expect(
+			await settled(
+				productionRun(sibling({ name: 'edit_note', arguments: '{"noteId": "x", "edits": [' }))
+			)
+		).toEqual({
+			status: 'completed',
+			body: 'Launch Tuesday.',
+			rows: [
+				{ status: 'failed', name: 'edit_note', callId: 'broken' },
+				{ status: 'succeeded', name: 'edit_note', callId: 'valid' }
+			]
+		});
+	});
+
+	it('completes when the model calls a tool that does not exist, and journals the attempt', async () => {
+		expect(await settled(productionRun(sibling({ name: 'edit_notes', arguments: '{}' })))).toEqual({
+			status: 'completed',
+			body: 'Launch Tuesday.',
+			rows: [
+				{ status: 'failed', name: 'edit_notes', callId: 'broken' },
+				{ status: 'succeeded', name: 'edit_note', callId: 'valid' }
+			]
+		});
+	});
+
+	it("corrects malformed JSON once the model has the SDK's feedback", async () => {
+		const outcome = await productionRun(
+			(note) =>
+				new InMemoryToolCallingModel(
+					'edit_note',
+					'{"noteId": "x", "edits": [',
+					editArguments(note),
+					'valid JSON'
+				)
+		);
+		expect({ status: outcome.status, body: outcome.body }).toEqual({
+			status: 'completed',
+			body: 'Launch Tuesday.'
+		});
 	});
 });
