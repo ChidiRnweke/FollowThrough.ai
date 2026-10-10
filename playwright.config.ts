@@ -2,9 +2,11 @@ import { defineConfig } from '@playwright/test';
 
 export const testEnv = {
 	CONFIG_SOURCE: 'env',
-	// Auth stays enabled: the dev server hydrates the developer's real Authentik
-	// values from .env. Playwright gets in via a cached session token minted by
-	// the global setup (tests/auth.setup.ts), so no Authentik interaction happens.
+	// Test sessions are minted in Postgres; no OAuth requests use these values.
+	AUTHENTIK_CLIENT_ID: 'playwright-session-tests',
+	AUTHENTIK_CLIENT_SECRET: 'playwright-not-used',
+	AUTHENTIK_DOMAIN: 'http://127.0.0.1:9',
+	AUTHENTIK_CALLBACK_URL: 'http://127.0.0.1:5173/auth/callback',
 	MISTRAL_API_KEY: 'playwright-not-used',
 	OPENROUTER_API_KEY: 'playwright-not-used',
 	OPENROUTER_BASE_URL: 'http://127.0.0.1:9'

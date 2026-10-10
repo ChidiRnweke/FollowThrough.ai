@@ -20,7 +20,7 @@ Do whatever you want with the code: self-host it, fork it, strip it for parts. T
 - **An OpenRouter API key**: every model the agent and the pipelines run is reached through OpenRouter.
 - **A Mistral API key**: OCR on attachments, called directly rather than through OpenRouter. Documents are fetched from a presigned object-storage URL, so the bucket must be reachable from Mistral.
 - **An Infisical project**: the default secrets backend; `scripts/provision-db.js` also writes the provisioned `DATABASE_URL` back into it. Skip it entirely with `CONFIG_SOURCE=env`.
-- **An OIDC provider, for multi-user only**: sign-in is wired against Authentik (`AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, `AUTHENTIK_CALLBACK_URL`). With no `AUTHENTIK_CLIENT_ID` set, authentication is disabled and the app runs as a single local user (`LOCAL_USER_ID`, defaulting to a fixed UUID): the normal single-user dev mode (`src/lib/server/config.ts:24`–`47`).
+- **An OIDC provider**: sign-in is wired against Authentik. All deployments, including local development, require `AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, and `AUTHENTIK_CALLBACK_URL`. Missing or blank values fail startup. There is no unauthenticated single-user mode.
 
 ## How the pieces fit
 
@@ -60,9 +60,9 @@ Telemetry is optional but wired in from the start: both processes boot with `scr
 Configuration is layered, and the two example files map exactly onto the layers:
 
 - **Bootstrap** (`.env.example`): five values telling the app where its secrets live: `CONFIG_SOURCE` plus the `INFISICAL_CLIENT_ID` / `CLIENT_SECRET` / `PROJECT_ID` / `ENVIRONMENT` / `URL`. This file stays on the host; nothing application-specific goes in it.
-- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Three keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY` (`REQUIRED_APPLICATION_KEYS`, `src/lib/server/config.ts:89`). The rest (model choices, S3 credentials, retrieval chunking, archive admission) have defaults in `APPLICATION_DEFAULTS` (`config.ts:95`) and can be omitted.
+- **Application** (`.env.infiscal.example`): everything else, imported into the root of the Infisical project. Seven keys are required with no runtime default: `DATABASE_URL`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `AUTHENTIK_DOMAIN`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, and `AUTHENTIK_CALLBACK_URL`. The rest (model choices, S3 credentials, retrieval chunking, archive admission) have defaults in `APPLICATION_DEFAULTS` (`src/lib/server/config.ts`) and can be omitted.
 
-`CONFIG_SOURCE=env` collapses the two layers: application keys are read straight from the process environment and no Infisical client is created. That is the simple path for a single-user box; Infisical earns its keep when you want secrets rotated outside the deployment or shared between the app and the provisioning script.
+`CONFIG_SOURCE=env` collapses the two layers: application keys are read straight from the process environment and no Infisical client is created. That is the simple path for a small deployment; Infisical earns its keep when you want secrets rotated outside the deployment or shared between the app and the provisioning script.
 
 ## Run it
 
@@ -88,7 +88,7 @@ Configuration is layered, and the two example files map exactly onto the layers:
 
 3. **Put the application config where the app will read it.**
 
-   With Infisical: import `.env.infiscal.example` into your project and replace `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, and `DATABASE_URL` (unless you let provisioning create it: next step). With `CONFIG_SOURCE=env`: export the same keys into the environment.
+   With Infisical: import `.env.infiscal.example` into your project and replace `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `DATABASE_URL`, and all four `AUTHENTIK_*` values (the database URL can be omitted if you let provisioning create it: next step). With `CONFIG_SOURCE=env`: export the same keys into the environment.
 
 4. **Provision and migrate the database (one shot).**
 
@@ -104,7 +104,7 @@ Configuration is layered, and the two example files map exactly onto the layers:
    docker compose -f docker-compose.prod.yml up -d app worker
    ```
 
-   The app listens on `:3000`. Put your reverse proxy in front of it, set `ORIGIN` to the public URL, and (for multi-user) the four `AUTHENTIK_*` values.
+   The app listens on `:3000`. Put your reverse proxy in front of it, set `ORIGIN` to the public URL, and configure the four required `AUTHENTIK_*` values. The callback URL must match the one registered with Authentik.
 
 </Steps>
 
@@ -118,7 +118,7 @@ The shipped `docker-compose.prod.yml` is the author's own deployment: it pulls t
 
 - **Upgrades** are pull-and-restart plus a re-run of the `setup`-profile migrate step; migrations are ordinary Drizzle SQL under `drizzle/`.
 - **Provisioning is idempotent**: `provision-db.js` fails closed: a listing failure against Infisical is never read as "no secret", so re-running it cannot rotate the password of a database it cannot see.
-- **Single-user mode** needs no auth provider at all; adding Authentik later only requires the four `AUTHENTIK_*` keys and a restart.
+- **Authentication is mandatory**: deployments that previously used anonymous single-user access must configure Authentik before upgrading. `LOCAL_USER_ID` no longer selects a runtime account. Existing account data is retained, but this change does not link or transfer it to a new Authentik account. MCP clients always require a FollowThrough API token.
 
 ## Request and archive admission
 

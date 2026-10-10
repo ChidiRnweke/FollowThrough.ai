@@ -32,7 +32,7 @@ const env = {
 	CONFIG_SOURCE: 'env',
 	LOG_LEVEL: 'error',
 	DATABASE_URL: databaseUrl,
-	LOCAL_USER_ID: user,
+	E2E_USER_ID: user,
 	MISTRAL_API_KEY: 'benchmark-not-used',
 	OPENROUTER_API_KEY: 'benchmark-not-used',
 	OPENROUTER_BASE_URL: 'http://127.0.0.1:9'

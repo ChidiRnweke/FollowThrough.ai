@@ -91,7 +91,11 @@ const infisicalBackend = (
 const applicationSecrets = () => ({
 	DATABASE_URL: 'postgresql://app',
 	OPENROUTER_API_KEY: 'router-key',
-	MISTRAL_API_KEY: 'mistral-key'
+	MISTRAL_API_KEY: 'mistral-key',
+	AUTHENTIK_DOMAIN: 'https://auth.example.test',
+	AUTHENTIK_CLIENT_ID: 'test-client',
+	AUTHENTIK_CLIENT_SECRET: 'test-secret',
+	AUTHENTIK_CALLBACK_URL: 'https://app.example.test/auth/callback'
 });
 
 describe('secrets backends', () => {
@@ -197,6 +201,28 @@ describe('secrets backends', () => {
 });
 
 describe('environment hydration', () => {
+	describe.each(['env', 'infisical'] as const)('%s authentication configuration', (source) => {
+		describe.each([undefined, '', '   '])('absent value %s', (value) => {
+			test.each([
+				'AUTHENTIK_DOMAIN',
+				'AUTHENTIK_CLIENT_ID',
+				'AUTHENTIK_CLIENT_SECRET',
+				'AUTHENTIK_CALLBACK_URL'
+			])('rejects %s instead of enabling anonymous access', async (key) => {
+				const values: Record<string, string> = applicationSecrets();
+				if (value === undefined) delete values[key];
+				else values[key] = value;
+				const backend =
+					source === 'env'
+						? new EnvSecretsBackend(values)
+						: infisicalBackend(new FakeSecretsClient(values));
+				await expect(
+					hydrateEnvironment({ environment: {}, reader: new SecretsReader(backend) })
+				).rejects.toThrow(key);
+			});
+		});
+	});
+
 	test('publishes secrets and defaults while preserving platform configuration', async () => {
 		const environment: Record<string, string | undefined> = {
 			OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317'

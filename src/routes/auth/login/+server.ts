@@ -3,10 +3,6 @@ import { AppFactory } from '$lib/server/factories/app-factory';
 import { setPkceCookie, clearWorkspaceAccountCookie } from '$lib/server/config';
 
 export const GET: RequestHandler = async ({ cookies }) => {
-	if (!AppFactory.isAuthEnabled()) {
-		throw redirect(302, '/today');
-	}
-
 	clearWorkspaceAccountCookie(cookies);
 	const oauthService = AppFactory.signIn();
 	const pkce = await oauthService.generatePKCE();
