@@ -1,25 +1,37 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "f09fd8125f2af896c9229d40c805845d76477912",
+	"applicationRevision": "527857e2f6d39f0f5e568d39a672c00c786ccb2c",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "d8ad32290ce8dcb1d0993cc53910364127f19afc",
+		"applicationBase": "85def21d534c7278283d0e3d8e6f6f1a999a6acc",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "Baseline verification on draft #368 matched all 364 semantic diagnostics with provenance and all 47 expanded Chisel messages and locations exactly. Unchanged analyzers remove only the two tool-activity public-helper identities and add none. All 47 Chisel diagnostics match the base exactly. Complete remaining source locations and provenance are refreshed. Constructors, factory outputs, parsing, persistence, journal consumers, tool surfaces, tracing and evaluation dependencies were reviewed separately.",
+		"method": "Baseline verification on draft #370 matched all 362 semantic diagnostics with provenance and all 47 expanded Chisel messages and locations exactly. Unchanged analyzers remove only the conversation adapter repository-import diagnostic. All 362 semantic diagnostics and the other 46 Chisel diagnostics match exactly, including locations. No identities were added or moved. Complete inventories are refreshed; constructor, factory-output, parsing, persistence, fake, replay, authorization, cancellation and tracing dependencies were reviewed separately.",
 		"semanticCounts": {
 			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 10,
+			"public-service-helper": 8,
 			"store-workflow": 55
 		},
-		"semanticTotal": 364,
+		"semanticTotal": 362,
 		"chiselCounts": {
 			"import-boundary:banned-layer-import": 47
 		},
-		"chiselTotal": 47
+		"chiselTotal": 47,
+		"removedSemantic": [],
+		"addedSemantic": [],
+		"removedChisel": [
+			{
+				"file": "src/lib/server/adapters/agent/conversation.ts",
+				"line": 1,
+				"rule": "import-boundary:banned-layer-import",
+				"message": "adapters must not import repositories (src/lib/server/repositories/agent/session-items.ts). Depend on the repository interface and let the factory inject the implementation."
+			}
+		],
+		"addedChisel": [],
+		"locationOnlyChanges": []
 	},
 	"semantic": {
 		"command": "node --experimental-strip-types scripts/audit-architecture.ts --json",
@@ -4337,7 +4349,7 @@
 		"command": "pnpm exec chisel-js check . --json",
 		"exitStatus": 1,
 		"counts": {
-			"import-boundary:banned-layer-import": 47
+			"import-boundary:banned-layer-import": 46
 		},
 		"violations": [
 			{
@@ -4543,12 +4555,6 @@
 				"line": 5,
 				"rule": "import-boundary:banned-layer-import",
 				"message": "controllers must not import controllers (src/lib/controllers/sync/submission.ts). Controllers do not chain, including through type-only operation interfaces. Compose services in the owning controller and move shared data contracts to models."
-			},
-			{
-				"file": "src/lib/server/adapters/agent/conversation.ts",
-				"line": 1,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "adapters must not import repositories (src/lib/server/repositories/agent/session-items.ts). Depend on the repository interface and let the factory inject the implementation."
 			},
 			{
 				"file": "src/lib/stores/agent/app-context.svelte.ts",
@@ -4842,6 +4848,72 @@
 				"src/lib/testing/diagrams/fixtures/generation.ts"
 			],
 			"inventoryNote": "Evaluation results preserve start order, original arguments, reported-failure detail, approval state, and omission of unidentified outcomes. Existing reconstruction fallbacks remain unchanged; none were added. Local runCase tests use the real Agent controller with InMemory repositories and runner. No private helper was exposed, no provider was called, and the overall migration remains incomplete."
+		},
+		{
+			"subject": "Session-item protocol serialization and model-owned boundary contracts",
+			"status": "corrected",
+			"previousDependency": "ConversationSessionAdapter imported toStoredSessionItem directly from a repository module. PostgreSQL append/replace, in-memory rollback snapshots, model tests and replay fixtures used the same exported helper. The older plan described SDK serialization as moved, but reusable wire serialization remained repository-owned.",
+			"currentOwner": "SessionItemSerialization in models/agent/session-item.ts declares serialize over the existing domain and wire types. SessionItemSerializationAdapter owns the unchanged protocol conversion switch; its helpers are private. A dedicated factory exposes the interface. ConversationSessionController and ConversationJsonReader are model-owned contracts; the SDK Session extension stays adapter-owned.",
+			"evidence": [
+				"src/lib/models/agent/session-item.ts",
+				"src/lib/models/agent/index.ts",
+				"src/lib/server/adapters/agent/session-item-serialization.ts",
+				"src/lib/server/adapters/agent/conversation.ts",
+				"src/lib/server/factories/agent/session-item-serialization-factory.ts"
+			],
+			"inventoryNote": "Serialization is protocol adaptation, not a history service or persistence operation. No service composition, controller chain, new parsing location, suppression or persisted-format change was introduced."
+		},
+		{
+			"subject": "Serialization construction, PostgreSQL writes and fake rollback",
+			"status": "corrected",
+			"previousDependency": "AgentSessionRecords constructed with only a database and used an imported mapper for append and replace; the in-memory session repository imported the same mapper for snapshot round trips.",
+			"currentOwner": "Conversation and agent capability factories inject factory-created SessionItemSerialization into the SDK adapter and AgentSessionRecords. All direct contract constructors supply the dependency. The existing InMemory fake preserves its no-argument fixture API and uses the same factory-created serializer for snapshot/reparse rollback.",
+			"evidence": [
+				"src/lib/server/factories/agent/conversation-factory.ts",
+				"src/lib/server/factories/capabilities/agent-capability-factory.ts",
+				"src/lib/server/repositories/agent/postgres/agent-settings.ts",
+				"src/lib/testing/agent/fakes/in-memory-agent-sessions.ts",
+				"tests/integration/agent/repositories.contract.spec.ts",
+				"tests/integration/agent/preparation.contract.spec.ts",
+				"tests/integration/agent/approvals.contract.spec.ts",
+				"tests/integration/agent/settlement.contract.spec.ts"
+			],
+			"inventoryNote": "Database consumers receive a protocol interface, not a service or controller. PostgreSQL ownership, ordering, existing limits and transactions remain unchanged. New real database contracts check replacement wire payloads and ordered tails after replacement/append."
+		},
+		{
+			"subject": "SDK conversion, session buffering and replay consumers",
+			"status": "reviewed",
+			"previousDependency": "SDK handlers parse incoming items and serialize controller results; ConversationSessions owns loading, append/pop/clear, cached presentation and snapshot virtualization.",
+			"currentOwner": "SDK addItems still invokes the existing schema at the provider boundary, and database readers still parse rows. ConversationSessions, ConversationHistoryService, ReplayVirtualization and ConversationSessionStore keep their existing responsibilities. Serialization writer tests now sit with the boundary implementation; replay fixtures use factory-created serialization.",
+			"evidence": [
+				"src/lib/server/adapters/agent/conversation.spec.ts",
+				"src/lib/server/adapters/agent/session-item-serialization.spec.ts",
+				"src/lib/models/agent/session-item.spec.ts",
+				"src/lib/server/controllers/agent/conversation-replay.spec.ts",
+				"src/lib/server/controllers/agent/conversation.ts",
+				"src/lib/server/services/agent/conversations/history.ts",
+				"src/lib/server/services/agent/conversations/replay-virtualizer.ts",
+				"src/lib/server/stores/agent/conversation.ts",
+				"tests/corpus/agent-session-items.json"
+			],
+			"inventoryNote": "All wire arms, omitted optionals, provider metadata, normalized call IDs and lossless unrecognised payloads are preserved. SDK regressions characterize existing limits, buffer-only writes, cache invalidation and pop/clear. Captured provider corpus round trips unchanged."
+		},
+		{
+			"subject": "Conversation authorization, cancellation, tracing and public operations",
+			"status": "reviewed",
+			"previousDependency": "Existing controller operations own lifecycle decisions and transactions; instrumentation and durable execution carry authorization, cancellation and trace context.",
+			"currentOwner": "No operation implementation, tool surface, coverage map, instrumentation registration or lifecycle rule changed. Production application and evaluation assembly continue through the existing capability factories. Focused lifecycle, replay, cancellation, corpus and instrumentation units and isolated agent/diagram contracts passed.",
+			"evidence": [
+				"src/lib/server/controllers/agent/controller.ts",
+				"src/lib/server/controllers/agent/resume-cancellation.spec.ts",
+				"src/lib/server/factories/controller-instrumentation.spec.ts",
+				"src/lib/server/services/telemetry-cancellation.spec.ts",
+				"tests/integration/agent/cancellation-race.contract.spec.ts",
+				"tests/integration/agent/session-deletion-race.contract.spec.ts",
+				"src/lib/server/application.ts",
+				"src/evals/lab/application.ts"
+			],
+			"inventoryNote": "No live providers, live evaluations or Phoenix round-trip ran. Browser migrations, journal redesign, indexing, telemetry restructuring and the diagram SDK mismatch remain outside this slice. The overall application refactor is incomplete."
 		}
 	]
 }
