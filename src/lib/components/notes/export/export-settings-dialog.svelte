@@ -21,18 +21,28 @@
 	const busy = $derived(defaults.busy);
 	const loaded = $derived(defaults.ready);
 
+	let viewGeneration = 0;
 	$effect(() => {
+		void defaults.sessionGeneration;
+		void defaults.accountId;
+		const generation = ++viewGeneration;
 		if (!open) return;
 		const id = projectId;
 		void untrack(() => defaults.open(id)).then((result) => {
+			if (generation !== viewGeneration) return;
 			if (result.kind === 'ready') settings = { ...result.settings };
 			else if (result.kind === 'failure') toast.error(result.message);
 		});
-		return () => defaults.close();
+		return () => {
+			viewGeneration++;
+			defaults.close();
+		};
 	});
 
 	async function save(): Promise<void> {
+		const generation = viewGeneration;
 		const result = await defaults.save(settings);
+		if (generation !== viewGeneration) return;
 		if (result.kind === 'saved') {
 			toast.success('Export defaults saved on this device');
 			open = false;

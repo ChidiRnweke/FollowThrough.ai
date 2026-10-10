@@ -44,7 +44,11 @@
 
 	const documents = $derived(exports.documents(entries.map((entry) => entry.id)));
 
+	let viewGeneration = 0;
 	$effect(() => {
+		void exports.sessionGeneration;
+		void exports.accountId;
+		const generation = ++viewGeneration;
 		if (!open) return;
 		title = sourceTitle;
 		format = 'pdf';
@@ -52,10 +56,19 @@
 		selected.clear();
 		for (const entry of entries) selected.add(entry.id);
 		const id = projectId;
-		void untrack(() => exports.open(id)).then((loaded) => {
+		void untrack(() =>
+			exports.open(
+				id,
+				entries.map((entry) => entry.id)
+			)
+		).then((loaded) => {
+			if (generation !== viewGeneration) return;
 			if (loaded.kind === 'ready') settings = { ...loaded.settings };
 		});
-		return () => exports.close();
+		return () => {
+			viewGeneration++;
+			exports.close();
+		};
 	});
 
 	const selectedEntries = $derived(entries.filter((entry) => selected.has(entry.id)));

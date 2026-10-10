@@ -2,66 +2,69 @@ import {
 	DocumentExports,
 	type BrowserDocumentExportInput
 } from '$lib/controllers/deliverables/export';
-import { ExportDiagrams } from '$lib/controllers/deliverables/diagrams';
 import { DocumentExportStore } from '$lib/stores/deliverables/export.svelte';
 import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
-import { MermaidDiagrams } from '$lib/controllers/diagrams/mermaid';
 import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
 import { InMemoryMermaidRenderer } from '$lib/testing/diagrams/fakes/mermaid-render';
-import { InMemoryMermaidOutput } from '$lib/testing/diagrams/fakes/mermaid-output';
 import {
 	InMemoryDocumentExportRemote,
 	InMemoryDocumentPreviewUrls,
 	InMemoryExportDiagramImages
 } from '$lib/testing/deliverables/fakes/browser-export';
-import { WorkspaceSessions } from '$lib/controllers/workspace/session';
-import { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
 import {
-	InMemoryWorkspaceSessionEnvironment,
-	InMemoryWorkspaceRecovery
-} from '$lib/testing/sync/fakes/in-memory-session';
-import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+	InMemoryDeliverableWorkspace,
+	InMemoryExportEnvironment
+} from '$lib/testing/deliverables/fakes/workspace';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { syncEtag } from '$lib/models/sync';
+import {
+	CacheCommitService,
+	WorkspaceProjectionService,
+	OutboxEditingService
+} from '$lib/services/sync/state';
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
+import { WorkspaceDraftService } from '$lib/services/workspace/draft';
+import { WriteAncestryService } from '$lib/services/sync/ancestry';
+import { WorkspaceFieldReplayService } from '$lib/services/sync/rebase';
 export const browserExportFixture = async () => {
 	const note = noteBuilder();
-	const { resources, transport } = workspaceResourcesFixture(note.userId);
+	const workspace = new InMemoryDeliverableWorkspace(note.userId);
+	const transport = workspace.transport;
 	transport.records.set(workspaceResourceKey({ type: 'notes', id: [note.id] }), {
 		etag: syncEtag(1n),
 		value: { type: 'notes', value: note }
 	});
-	const environment = new InMemoryWorkspaceSessionEnvironment({
-		accountId: note.userId,
-		agentDefaults: { chatModelId: 'provider/chat', visionModelId: 'provider/vision' },
-		agentModels: [],
-		numericDefaults: { webSearchMaxResults: 5, webSearchMaxTotalResults: 10, agentMaxTurns: 10 },
-		agentAvailable: false
-	});
-	const workspace = new WorkspaceSessions(
-		new WorkspaceSessionStore(),
-		environment,
-		{ create: () => resources },
-		new InMemoryWorkspaceRecovery(),
-		agentRulesFixture()
-	);
-	const renderer = new InMemoryMermaidRenderer();
-	const images = new InMemoryExportDiagramImages();
-	const remote = new InMemoryDocumentExportRemote();
-	const urls = new InMemoryDocumentPreviewUrls();
-	const controller = new DocumentExports(
-		new DocumentExportStore(),
-		workspace,
-		new ExportDiagrams(
-			new ExportPreparationService(),
-			new MermaidDiagrams(new MermaidThemeService(), renderer, new InMemoryMermaidOutput()),
-			images
-		),
+	const renderer = new InMemoryMermaidRenderer(),
+		images = new InMemoryExportDiagramImages(),
+		remote = new InMemoryDocumentExportRemote(),
+		urls = new InMemoryDocumentPreviewUrls();
+	const dependencies = {
+		session: workspace,
+		environment: workspace.environment,
+		accounts: workspace.accounts,
+		cacheMerge: new CacheCommitService(),
+		projection: new WorkspaceProjectionService(),
+		snapshots: new InMemoryExportEnvironment()
+	};
+	const settingsDependencies = {
+		...dependencies,
+		rules: new ExportSettingsRuleService(),
+		drafts: new WorkspaceDraftService(),
+		ancestry: new WriteAncestryService(),
+		fields: new WorkspaceFieldReplayService(),
+		editing: new OutboxEditingService()
+	};
+	const controller = new DocumentExports(new DocumentExportStore(), {
+		...dependencies,
+		preparation: new ExportPreparationService(),
+		themes: new MermaidThemeService(),
+		renderer,
+		images,
 		remote,
 		urls
-	);
+	});
 	const input: BrowserDocumentExportInput = {
 		projectId: note.projectId,
 		noteIds: [note.id],
@@ -70,11 +73,10 @@ export const browserExportFixture = async () => {
 		documents: [note],
 		diagrams: []
 	};
-	const loaded = await controller.open(note.projectId);
+	const loaded = await controller.open(note.projectId, [note.id]);
 	return {
 		controller,
 		workspace,
-		resources,
 		transport,
 		renderer,
 		images,
@@ -83,6 +85,9 @@ export const browserExportFixture = async () => {
 		input,
 		loaded,
 		note,
+		dependencies,
+		settingsDependencies,
+		pending: () => workspace.repository.list(note.userId),
 		close: () => {
 			controller.close();
 			workspace.stop();

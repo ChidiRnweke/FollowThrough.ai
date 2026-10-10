@@ -1927,3 +1927,57 @@ file-input error described above. All final journeys pass. The
 [matched evidence report](../pr-evidence/pr336-attachment-independence/README.md)
 records setup and limits. Real object-storage transfer, live model processing,
 production builds and full PWA verification were not run for this slice.
+
+### Browser export and artifact independence — implemented on #365
+
+This slice starts from #365 at `c05bcef0651d915981f4eb098d2f49f1d0329e8a` in
+`refactor/pr336-export-artifact-independence`. ADRs 0007, 0002, 0006, 0015, 0037,
+0040, 0041, 0042 and 0043 govern ownership, persistence, diagrams and parsing.
+The #345 inventory was checked against current code and open PRs, including #353
+and #354. Coordination with
+[#348](https://github.com/ChidiRnweke/FollowThrough.ai/pull/348#issuecomment-6102896631)
+records the raw ports and unchanged shared rule contracts.
+
+- [x] Remove export, settings and artifact controller delegation to workspace session
+      and resource controllers. Remove the export → diagram → Mermaid controller chain.
+      Factories construct controllers with pure rules, passive state and raw I/O.
+- [x] Let export own settings reads, ordered document reads, diagram preparation,
+      previews, generation and bundles. Retain diagram palettes, dimensions, source
+      hashes and SVG fallback when rasterization is unavailable.
+- [x] Let settings own durable drafts and atomic outbox writes, including receipt
+      ancestry and field replay. Default only on confirmed absence. Read and write
+      failures remain explicit and retryable. Parsing stays at existing boundaries.
+- [x] Let artifact actions own downloads, regeneration/removal and incremental pulls.
+      Reuse existing account resource identity, session generations and the passive
+      in-flight pull slot. Atomic merges preserve newer versions and checkpoints.
+- [x] Guard operations against account/session changes, project replacement and dialog
+      closure. Reject conflicting actions, retain independent artifact actions, and
+      release preview URLs on replacement and nested or outer dialog closure.
+- [x] Add typed failure/retry, concurrency, lifetime and synchronization tests. Preserve
+      offline settings, real PDF/DOCX downloads and regeneration, merged/ZIP bundles,
+      document order and paths, and artifact removal in authenticated seeded journeys.
+
+Server document generation, server artifact processing, general workspace sync,
+attachment workflows and editor internals remain outside this slice.
+
+Measured with unchanged checkers against the exact base:
+
+| Check                          | Before | After | New findings                          |
+| ------------------------------ | -----: | ----: | ------------------------------------- |
+| Global controller-import audit |     58 |    53 | None                                  |
+| Chisel prohibited imports      |     42 |    42 | None                                  |
+| #345 semantic checker          |    762 |   762 | No new file/rule/message combinations |
+| #350 strengthened checker      |   1275 |  1242 | No new file/rule/message combinations |
+
+These counts are comparisons, not new baselines or suppressions. Required architecture
+still fails on inherited findings. This slice does not complete #336 and is not ready
+to merge while required checks fail.
+
+Validation includes the full unit and browser suites, selected isolated deliverable
+database contracts, and eight authenticated E2E journeys. Six successful persistence
+and generation journeys also pass on the exact base. The final browser journeys use
+real local object storage and inspect downloaded PDF, DOCX and ZIP content. No live
+model calls are required. The [matched evidence report](../pr-evidence/pr336-export-artifact-independence/README.md)
+records setup, URL cleanup observations and the headless PDF viewer limitation.
+Production builds and full PWA verification were not run for this browser-only slice.
+Full check results and CI status are recorded in the stacked PR.

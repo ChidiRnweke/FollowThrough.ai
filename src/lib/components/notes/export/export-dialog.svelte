@@ -44,7 +44,11 @@
 	const result = $derived(exports.result);
 	const error = $derived(exports.error);
 
+	let viewGeneration = 0;
 	$effect(() => {
+		void exports.sessionGeneration;
+		void exports.accountId;
+		const generation = ++viewGeneration;
 		if (!open) {
 			previewOpen = false;
 			return;
@@ -53,9 +57,14 @@
 		format = 'pdf';
 		const id = projectId;
 		void untrack(() => exports.open(id)).then((loaded) => {
+			if (generation !== viewGeneration) return;
 			if (loaded.kind === 'ready') settings = { ...loaded.settings };
 		});
-		return () => exports.close();
+		return () => {
+			viewGeneration++;
+			previewOpen = false;
+			exports.close();
+		};
 	});
 
 	// Colour controls only earn their space when there is a diagram to colour, and the
@@ -65,6 +74,7 @@
 	const hasSelfStyledDiagrams = $derived(diagramSummary.hasSelfStyledDiagrams);
 
 	async function preview(): Promise<void> {
+		const generation = viewGeneration;
 		await exports.preview({
 			projectId,
 			noteIds: defaultNoteIds,
@@ -73,7 +83,7 @@
 			documents,
 			diagrams
 		});
-		if (exports.previewUrl) previewOpen = true;
+		if (generation === viewGeneration && exports.previewUrl) previewOpen = true;
 	}
 
 	function submit(event: SubmitEvent): void {
@@ -193,7 +203,12 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<Dialog.Root bind:open={previewOpen}>
+<Dialog.Root
+	bind:open={previewOpen}
+	onOpenChange={(value) => {
+		if (!value) exports.dismissPreview();
+	}}
+>
 	<Dialog.Content class="flex h-5/6 flex-col sm:max-w-4xl">
 		<Dialog.Header>
 			<Dialog.Title>PDF Preview</Dialog.Title>

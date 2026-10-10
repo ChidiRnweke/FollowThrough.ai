@@ -1,31 +1,35 @@
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
-import type { WorkspaceSession } from '$lib/controllers/workspace/session';
-export interface ExportSettingsBinding {
-	readonly session: WorkspaceSession;
-	readonly draft: WorkspaceDraftController<'export_settings'>;
-}
+import type { DeliverableBinding } from '$lib/models/browser-deliverables';
+import type { WorkspaceEditContext } from '$lib/models/workspace-editing';
 export class ExportSettingsStore {
 	private revision = 0;
-	private loaded = $state.raw<ExportSettingsBinding | null>(null);
+	private loaded = $state.raw<DeliverableBinding | null>(null);
+	private current = $state.raw<WorkspaceEditContext | null>(null);
 	private working = $state(false);
 	get generation(): number {
 		return this.revision;
 	}
-	get binding(): ExportSettingsBinding | null {
+	get binding(): DeliverableBinding | null {
 		return this.loaded;
+	}
+	get draft(): WorkspaceEditContext | null {
+		return this.current;
 	}
 	get busy(): boolean {
 		return this.working;
 	}
-	bind(binding: ExportSettingsBinding): void {
+	bind(binding: DeliverableBinding): void {
 		this.loaded = binding;
+	}
+	setDraft(draft: WorkspaceEditContext): void {
+		this.current = draft;
 	}
 	setBusy(value: boolean): void {
 		this.working = value;
 	}
 	clear(): void {
-		this.revision += 1;
+		this.revision++;
 		this.loaded = null;
+		this.current = null;
 		this.working = false;
 	}
 }

@@ -1,5 +1,5 @@
 import { rasterizeSvg } from '$lib/client/images/rasterize';
-import type { ExportDiagramImageAdapter } from '$lib/controllers/deliverables/diagrams';
+import type { ExportDiagramImageAdapter } from '$lib/models/browser-deliverables';
 export class BrowserExportDiagramImages implements ExportDiagramImageAdapter {
 	rasterize(svg: string): Promise<string | null> {
 		return rasterizeSvg(svg);

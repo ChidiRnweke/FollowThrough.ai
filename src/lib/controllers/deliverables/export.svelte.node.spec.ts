@@ -4,7 +4,7 @@ import { browserExportFixture as setup } from '$lib/testing/deliverables/fixture
 it('loads absent defaults without staging a workspace write', async () => {
 	const fixture = await setup();
 	try {
-		expect({ loaded: fixture.loaded, pending: fixture.resources.pending }).toEqual({
+		expect({ loaded: fixture.loaded, pending: await fixture.pending() }).toEqual({
 			loaded: { kind: 'ready', settings: defaultExportSettings },
 			pending: []
 		});

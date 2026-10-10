@@ -2,6 +2,10 @@ import type { ArtifactId } from '$lib/models/deliverables';
 export class ArtifactActionStore {
 	private requests = $state<readonly { readonly id: ArtifactId; readonly token: symbol }[]>([]);
 	private stopped = false;
+	private revision = 0;
+	get generation(): number {
+		return this.revision;
+	}
 	get closed(): boolean {
 		return this.stopped;
 	}
@@ -16,6 +20,7 @@ export class ArtifactActionStore {
 	}
 	close(): void {
 		this.stopped = true;
+		this.revision++;
 		this.requests = [];
 	}
 }

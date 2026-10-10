@@ -1,8 +1,5 @@
-import type {
-	DocumentExportRemote,
-	DocumentPreviewUrls
-} from '$lib/controllers/deliverables/export';
-import type { ExportDiagramImageAdapter } from '$lib/controllers/deliverables/diagrams';
+import type { DocumentExportRemote, DocumentPreviewUrls } from '$lib/models/browser-deliverables';
+import type { ExportDiagramImageAdapter } from '$lib/models/browser-deliverables';
 import type {
 	GenerateDocumentInput,
 	GenerateBundleInput,
@@ -63,11 +60,12 @@ export class InMemoryDocumentPreviewUrls implements DocumentPreviewUrls {
 	}
 }
 export class InMemoryExportDiagramImages implements ExportDiagramImageAdapter {
+	png: string | null = 'data:image/png;base64,cG5n';
 	failure: Error | undefined;
 	async rasterize(_svg: string): Promise<string | null> {
 		void _svg;
 		if (this.failure) throw this.failure;
-		return 'data:image/png;base64,cG5n';
+		return this.png;
 	}
 	async hash(value: string): Promise<string> {
 		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
