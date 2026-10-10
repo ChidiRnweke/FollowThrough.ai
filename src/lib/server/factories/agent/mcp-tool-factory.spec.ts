@@ -333,3 +333,17 @@ it('retains the fifteen-tool discovery ceiling for MCP', async () => {
 		).code
 	).toBe('VALIDATION');
 });
+
+it('keeps discovered tools inside the MCP connection that found them', async () => {
+	const retriever = new InMemoryToolRetriever();
+	retriever.names = ['create_todo'];
+	const first = await connect('full', { retriever });
+	const second = await connect('full', { retriever });
+	await first.callTool({ name: 'search_tools', arguments: { query: 'create a todo' } });
+	const firstTools = await first.listTools();
+	const secondTools = await second.listTools();
+	expect({
+		first: firstTools.tools.some((tool) => tool.name === 'create_todo'),
+		second: secondTools.tools.some((tool) => tool.name === 'create_todo')
+	}).toEqual({ first: true, second: false });
+});

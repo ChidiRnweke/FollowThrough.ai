@@ -534,7 +534,7 @@ export const analyzeSource = (
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
 	const sdkAdapter = 'src/lib/server/adapters/agent/sdk-tool.ts';
-	const mcpAdapter = 'src/lib/server/factories/agent/mcp-tool-factory.ts';
+	const mcpAdapter = 'src/lib/server/adapters/agent/mcp-tools.ts';
 	const diagramProtocol = 'src/lib/server/adapters/diagrams/generation.ts';
 	const toolBoundaryImport = (node: ts.Node): boolean => {
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {

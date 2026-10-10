@@ -364,7 +364,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows MCP construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/factories/agent/mcp-tool-factory.ts',
+				'src/lib/server/adapters/agent/mcp-tools.ts',
 				"import { Server } from '@modelcontextprotocol/sdk/server/index.js';"
 			)
 		).toEqual([]);

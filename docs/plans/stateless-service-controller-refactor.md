@@ -1173,3 +1173,17 @@ Every service module below has a planned disposition. This is routing, not compl
   output type; both were corrected before these passing checks. Architecture remains at 51
   prohibited imports; topology, source and test-quality pass. Final application verification and
   remaining factory/browser/enforcement work remain incomplete.
+
+## MCP discovery and dispatch — 2026-10-10
+
+- McpToolSession coordinates discovery, promotion, permitted dispatch and tool failures. Discovered
+  names live in a connection-scoped AgentToolDiscoveryStore. McpToolProtocol owns SDK registration,
+  schema conversion, request reading, wire results and list-change notifications. The factory
+  assembles these dependencies; shared definition/authority selection still belongs to the pending
+  registry migration. Removed the obsolete factory-workflow allowance from the MCP factory.
+- Type checking and lint pass. Agent tool and source-audit tests pass: 14 files / 296 tests,
+  including connection isolation after discovery. Existing read-scope restrictions, exact schemas,
+  unavailable tools, validation/recovery envelopes and reviewed body writes remain covered.
+  Architecture remains at 51 prohibited imports; topology, source and test-quality pass.
+  Full-unit evidence from the preceding reviewed-tool commit is not final verification of this
+  or the remaining migration. No live provider was used.
