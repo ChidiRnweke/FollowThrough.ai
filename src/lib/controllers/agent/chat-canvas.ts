@@ -2,7 +2,6 @@ import type { DiagramId } from '$lib/models/diagrams';
 import type { ChatSessionKey, ChatToolActivity } from '$lib/models/chat';
 import type { ChatSessionsController } from './chat-sessions';
 import type { ChatTranscript } from '$lib/services/chat/transcript';
-import { diagramTab } from '$lib/stores/workbench/tab-ref';
 export interface SessionCanvas {
 	readonly diagramId: DiagramId;
 	readonly tab: string;
@@ -12,6 +11,7 @@ export interface AppliedDiagramWrite {
 	readonly diagramId: DiagramId;
 }
 export interface ChatCanvasReader {
+	tab(diagramId: DiagramId): string;
 	read(tool: ChatToolActivity): DiagramId | undefined;
 }
 export interface ChatCanvasController {
@@ -33,7 +33,7 @@ export class ChatCanvas implements ChatCanvasController {
 		const tools = this.tools(key);
 		for (let index = tools.length - 1; index >= 0; index--) {
 			const diagramId = this.reader.read(tools[index]!);
-			if (diagramId) return { diagramId, tab: diagramTab(diagramId) };
+			if (diagramId) return { diagramId, tab: this.reader.tab(diagramId) };
 		}
 		return undefined;
 	}

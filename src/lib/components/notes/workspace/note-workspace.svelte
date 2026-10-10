@@ -25,7 +25,7 @@
 	import { toast } from 'svelte-sonner';
 	import { chatHandoff } from '$lib/factories/agent/chat-handoff';
 	import { agentActions } from '$lib/components/agent';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench, workbenchNavigation } from '$lib/factories/workbench/workbench';
 	import { noteActions } from '$lib/factories/notes/actions';
 	import { noteActionTracking } from '$lib/factories/notes/action-runs';
 	import type { NoteActionContext } from '$lib/models/agent';
@@ -774,7 +774,9 @@
 			skills={shell.skills}
 			{linkableNotes}
 			onOpenNote={(noteId, options) =>
-				options.background ? workbench.openTabInBackground(noteId) : void workbench.openTab(noteId)}
+				options.background
+					? workbenchNavigation.openTabInBackground(noteId)
+					: void workbenchNavigation.openTab(noteId)}
 			{perNote}
 			onchange={markDirty}
 			onoutline={(headings) => (outline = headings)}

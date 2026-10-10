@@ -112,8 +112,8 @@
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
-	import { SEARCH_TAB_ID } from '$lib/stores/workbench/tab-ref';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { SEARCH_TAB_ID } from '$lib/client/workbench/tab-ref';
+	import { workbench } from '$lib/factories/workbench/workbench';
 
 	export type NoteAiAction = 'promises' | 'relate' | 'reference' | 'diagram';
 	const BLOCK_SEPARATOR = '\n\n';

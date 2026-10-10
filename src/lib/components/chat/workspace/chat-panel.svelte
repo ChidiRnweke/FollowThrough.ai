@@ -22,7 +22,7 @@
 	import { agentSelectionContext } from '$lib/factories/agent/selection-context';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench } from '$lib/factories/workbench/workbench';
 	import { toast } from 'svelte-sonner';
 
 	import { chatCanvas } from '$lib/factories/agent/chat-canvas';

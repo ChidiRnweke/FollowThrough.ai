@@ -18,7 +18,7 @@
 	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { projectActions } from '$lib/factories/projects/actions';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench, workbenchNavigation } from '$lib/factories/workbench/workbench';
 	import NameDialog from './name-dialog.svelte';
 	import ProjectTreeView from './project-tree-view.svelte';
 
@@ -409,7 +409,7 @@
 				return;
 			}
 			inlineEdit = null;
-			await workbench.openTab(output.note.id);
+			await workbenchNavigation.openTab(output.note.id);
 		} else if (pending.kind === 'folder') {
 			const output = await projectActions.createFolder(pending.projectId, value, pending.parentId);
 			if (!output) {
@@ -424,7 +424,7 @@
 				return;
 			}
 			inlineEdit = null;
-			await workbench.openTab(output.skill.note.id);
+			await workbenchNavigation.openTab(output.skill.note.id);
 		}
 	}
 
@@ -493,7 +493,7 @@
 
 	function openSideBySide(noteId: NoteId): void {
 		if (noteId === workbench.focusedNoteId || noteId === workbench.splitNoteId) return;
-		void workbench.setSplit(noteId);
+		void workbenchNavigation.setSplit(noteId);
 	}
 
 	function openNewProject(): void {
@@ -533,8 +533,8 @@
 	{moveEntry}
 	{archiveEntry}
 	{archiveProject}
-	onopen={(noteId) => void workbench.openTab(noteId)}
-	onopenbackground={(noteId) => void workbench.openTabInBackground(noteId)}
+	onopen={(noteId) => void workbenchNavigation.openTab(noteId)}
+	onopenbackground={(noteId) => void workbenchNavigation.openTabInBackground(noteId)}
 	onopensplit={openSideBySide}
 	onrenameproject={(project) =>
 		(dialog = {

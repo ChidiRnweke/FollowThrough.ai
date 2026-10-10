@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { DiagramPane } from '$lib/components/diagrams';
 	import { WorkspacePanes } from '$lib/components/shell';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench } from '$lib/factories/workbench/workbench';
 
 	let { data } = $props();
 </script>

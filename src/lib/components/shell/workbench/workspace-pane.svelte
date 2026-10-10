@@ -3,7 +3,7 @@
 
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-	import { parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
+	import { parseTabId, type TabId } from '$lib/client/workbench/tab-ref';
 	import NotePane from './note-pane.svelte';
 	import ChatPane from './chat-pane.svelte';
 	import GlobalSearchPanel from '$lib/components/search/global-search-panel.svelte';

@@ -9,7 +9,8 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import type { WorkbenchView } from '$lib/models/workbench';
+	let workbench = $state<WorkbenchView>();
 	import type { ShellContext } from '$lib/models/workspace-views';
 	import {
 		todoBuilder,
@@ -41,10 +42,23 @@
 		pendingMemoryNotifications: []
 	};
 	function showTabs(empty: boolean, split = true) {
-		workbench.openTabs = empty ? [] : notes.map((note) => note.id);
-		workbench.focusedTabId = empty ? undefined : notes[1].id;
-		workbench.splitTabId = !empty && split ? notes[2].id : undefined;
-		workbench.pinnedTabs = empty ? [] : [notes[0].id];
+		workbench = {
+			openTabs: empty ? [] : notes.map((note) => note.id),
+			focusedTabId: empty ? undefined : notes[1].id,
+			splitTabId: !empty && split ? notes[2].id : undefined,
+			pinnedTabs: empty ? [] : [notes[0].id],
+			focusedNoteId: empty ? undefined : notes[1].id,
+			splitNoteId: !empty && split ? notes[2].id : undefined,
+			interactionFocusedTabId: undefined,
+			interactionFocusedNoteId: undefined,
+			activeNoteId: empty ? undefined : notes[1].id,
+			activeProjectId: undefined,
+			recentlyUsed: [],
+			stripHidden: false,
+			splitRatio: 0.5,
+			splitActive: !empty && split,
+			isWorkbenchPath: true
+		};
 	}
 	showTabs(page.url.searchParams.has('empty'));
 </script>
@@ -52,6 +66,7 @@
 <Tooltip.Provider>
 	<main data-surface-fixture class="bg-background text-foreground p-4">
 		<WorkspaceTabs
+			{workbench}
 			{shell}
 			sessions={[]}
 			oncreateNote={() => undefined}

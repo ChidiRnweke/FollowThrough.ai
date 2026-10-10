@@ -3,64 +3,23 @@ import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type { WidgetId } from '$lib/models/widgets';
 import { type ChatSessionKey } from '$lib/models/chat';
+import { SEARCH_TAB_ID, type TabId, type TabRef } from '$lib/models/workbench';
+import type { WorkbenchTabReader } from '$lib/controllers/workbench/contracts';
 
-/**
- * What a workbench tab holds.
- *
- * A tab used to *be* a `NoteId`, which is why `TabId` is a plain string alias
- * rather than a branded type: a note tab's id stays the bare uuid it always
- * was, so every URL already in a user's history, every persisted
- * `WorkspaceRecord` in IndexedDB, and every `data-project-tab` selector keeps
- * working with no migration. Only chat tabs carry a prefix; the single search
- * tab is the bare literal `search`, which no uuid can collide with.
- *
- * The safety lives in these helpers rather than in the type. Branding `TabId`
- * would buy nothing at runtime and would force a cast on nearly every line of
- * the workbench specs.
- */
-export type TabId = string;
+export { SEARCH_TAB_ID } from '$lib/models/workbench';
+export const noteTab = (noteId: NoteId): TabId => noteId;
+export const chatTab = (sessionKey: ChatSessionKey): TabId => `chat:${sessionKey}`;
+export const diagramTab = (diagramId: DiagramId): TabId => `diagram:${diagramId}`;
+export const widgetTab = (widgetId: WidgetId): TabId => `widget:${widgetId}`;
+export const searchTab = (): TabId => SEARCH_TAB_ID;
 
-export type TabRef =
-	| { readonly kind: 'note'; readonly noteId: NoteId }
-	| { readonly kind: 'chat'; readonly sessionKey: ChatSessionKey }
-	| { readonly kind: 'diagram'; readonly diagramId: DiagramId }
-	| { readonly kind: 'widget'; readonly widgetId: WidgetId }
-	| { readonly kind: 'search' };
-
+export type { TabId, TabRef } from '$lib/models/workbench';
 const CHAT_PREFIX = 'chat:';
-
 const DIAGRAM_PREFIX = 'diagram:';
-
 const WIDGET_PREFIX = 'widget:';
-
-/**
- * The canvas beside a studio conversation, before anything has been kept.
- *
- * Keyed by the chat session rather than by a diagram, because during drafting
- * there is no diagram: the draft lives in the transcript, and the canvas reads it
- * from there.
- */
-
-/**
- * The one search tab's id. Unlike a chat there is never more than one global
- * search — its state lives in the `globalSearch` store, not behind a key — so
- * the tab id is a bare literal, the way a note tab is a bare uuid.
- */
-export const SEARCH_TAB_ID = 'search';
-
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const isUuid = (value: string): boolean => uuidRegex.test(value);
-
-export const noteTab = (noteId: NoteId): TabId => noteId;
-
-export const chatTab = (sessionKey: ChatSessionKey): TabId => `${CHAT_PREFIX}${sessionKey}`;
-
-export const diagramTab = (diagramId: DiagramId): TabId => `${DIAGRAM_PREFIX}${diagramId}`;
-
-export const widgetTab = (widgetId: WidgetId): TabId => `${WIDGET_PREFIX}${widgetId}`;
-
-export const searchTab = (): TabId => SEARCH_TAB_ID;
 
 /**
  * Reads a tab id, or `undefined` when it is neither a note uuid nor a chat
@@ -132,4 +91,16 @@ export function openResourceOf(
 	if (ref?.kind === 'widget') return { kind: 'widget', id: ref.widgetId };
 	if (ref?.kind === 'diagram') return { kind: 'diagram', id: ref.diagramId };
 	return undefined;
+}
+
+export class BrowserWorkbenchTabReader implements WorkbenchTabReader {
+	ref(id: TabId): TabRef | undefined {
+		return parseTabId(id);
+	}
+	note(id: TabId): NoteId | undefined {
+		return noteIdOf(id);
+	}
+	chat(id: TabId): ChatSessionKey | undefined {
+		return chatKeyOf(id);
+	}
 }

@@ -1,6 +1,6 @@
 import type { NoteSummary } from '$lib/models/notes';
 import { NOTE_DRAG_MIME, type NoteDragTransfer } from '$lib/client/notes/note-drag';
-import { parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
+import { parseTabId, type TabId } from '$lib/client/workbench/tab-ref';
 
 export const TAB_DRAG_MIME = 'application/x-followthrough-tab';
 

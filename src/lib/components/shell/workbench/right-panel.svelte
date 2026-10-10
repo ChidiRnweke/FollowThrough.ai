@@ -18,8 +18,8 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { FtPlus as Plus, FtClose as X, FtExternal as ExternalLink } from '$lib/components/icons';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab, searchTab } from '$lib/stores/workbench/tab-ref';
+	import { workbenchNavigation } from '$lib/factories/workbench/workbench';
+	import { chatTab, searchTab } from '$lib/client/workbench/tab-ref';
 	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -99,7 +99,7 @@
 				size="icon-sm"
 				aria-label="Open chat in workbench"
 				onclick={() => {
-					void workbench.openTab(chatTab(rightPanel.chatSessionKey));
+					void workbenchNavigation.openTab(chatTab(rightPanel.chatSessionKey));
 					rightPanel.close();
 				}}
 			>
@@ -201,7 +201,7 @@
 						<GlobalSearchPanel
 							projects={shell?.projects ?? []}
 							onMoveToCanvas={() => {
-								void workbench.openTab(searchTab());
+								void workbenchNavigation.openTab(searchTab());
 								rightPanel.close();
 							}}
 						/>
@@ -285,7 +285,7 @@
 						<GlobalSearchPanel
 							projects={shell?.projects ?? []}
 							onMoveToCanvas={() => {
-								void workbench.openTab(searchTab());
+								void workbenchNavigation.openTab(searchTab());
 								rightPanel.close();
 							}}
 						/>

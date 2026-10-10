@@ -21,7 +21,7 @@
 	import type { GlobalSearchController } from '$lib/controllers/search/global-search';
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbenchNavigation } from '$lib/factories/workbench/workbench';
 
 	let {
 		globalSearch = defaultSearch,
@@ -92,7 +92,7 @@
 			text: match.text,
 			others: hit.matches.filter((other) => other !== match)
 		});
-		void workbench.openTab(hit.noteId);
+		void workbenchNavigation.openTab(hit.noteId);
 	};
 	const handleOpenMatch = $derived(onOpenMatch ?? openMatch);
 
@@ -309,7 +309,7 @@
 										onclick={() => {
 											const first = hit.matches[0];
 											if (first) handleOpenMatch(hit, first);
-											else void workbench.openTab(hit.noteId);
+											else void workbenchNavigation.openTab(hit.noteId);
 										}}
 									>
 										<Document data-icon class="shrink-0 text-muted-foreground" />

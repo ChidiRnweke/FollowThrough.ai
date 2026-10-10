@@ -25,8 +25,8 @@
 	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { chatRegistry } from '$lib/factories/agent/chat';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
+	import { workbenchNavigation } from '$lib/factories/workbench/workbench';
+	import { chatTab, diagramTab } from '$lib/client/workbench/tab-ref';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
 
 	export interface DiagramGalleryData {
@@ -102,7 +102,7 @@
 		// Just the chat. There is no canvas to open yet: the diagram exists once the
 		// agent creates it, and its own tab opens then. Opening an empty canvas first
 		// showed a pane with nothing in it and a Save button that could not be used.
-		await workbench.openTab(chatTab(sessionKey));
+		await workbenchNavigation.openTab(chatTab(sessionKey));
 	}
 
 	/**
@@ -119,7 +119,7 @@
 			return;
 		}
 		const sessionKey = chatRegistry.sessionKeyFor(diagram.conversationId);
-		await workbench.openSplit(diagramTab(diagram.id), chatTab(sessionKey));
+		await workbenchNavigation.openSplit(diagramTab(diagram.id), chatTab(sessionKey));
 	}
 
 	function askRemove(diagram: Diagram): void {

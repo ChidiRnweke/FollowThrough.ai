@@ -26,7 +26,7 @@
 	import Settings from '@lucide/svelte/icons/settings';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/shell/palette.svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import { workbench } from '$lib/factories/workbench/workbench';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import BrandMark from '../../shared/brand-mark.svelte';
 	import ProjectTree from '../../projects/project-tree.svelte';

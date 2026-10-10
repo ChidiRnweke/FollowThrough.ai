@@ -2,7 +2,11 @@
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { untrack } from 'svelte';
-	import { workbench } from '$lib/stores/workbench/workbench.svelte';
+	import {
+		workbench,
+		workbenchNavigation,
+		workbenchLayout
+	} from '$lib/factories/workbench/workbench';
 	import {
 		chatKeyOf,
 		diagramIdOf,
@@ -13,7 +17,7 @@
 		isSearchTab,
 		noteIdOf,
 		type TabId
-	} from '$lib/stores/workbench/tab-ref';
+	} from '$lib/client/workbench/tab-ref';
 	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
@@ -90,7 +94,7 @@
 
 	function closeSplit(): void {
 		narrowPaneId = focusedNoteId;
-		void workbench.setSplit(undefined);
+		void workbenchNavigation.setSplit(undefined);
 	}
 
 	let dragOverActive = $state(false);
@@ -126,11 +130,11 @@
 		const tabId = readActiveTabDrag(event.dataTransfer, shell.noteTree, openTabs);
 		if (!tabId || tabId === focusedNoteId || tabId === splitNoteId) return;
 		narrowPaneId = tabId;
-		void workbench.setSplit(tabId);
+		void workbenchNavigation.setSplit(tabId);
 	}
 
 	function markInteraction(tabId: TabId): void {
-		workbench.setInteractionFocus(tabId);
+		workbenchNavigation.setInteractionFocus(tabId);
 		// The agent's focus history is a history of notes; a chat pane taking focus
 		// is not a note the agent should start reasoning about.
 		const noteId = noteIdOf(tabId);
@@ -251,7 +255,7 @@
 			<div class="workspace-split-resizer" data-pane-role="divider">
 				<WorkspaceSplitResizer
 					initialSecondaryRatio={splitRatio}
-					onRatioChange={(ratio) => workbench.setSplitRatio(ratio)}
+					onRatioChange={(ratio) => workbenchLayout.setSplitRatio(ratio)}
 				/>
 			</div>
 		{/if}
