@@ -1,6 +1,6 @@
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -18,6 +18,7 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const repository = new KnowledgeIndexRecords(database);
 	const committed = new KnowledgeIndexRecords(context.db);
+	onTestFinished(() => committed.deleteForNote(seeded.owner, seeded.note.id));
 	const index = createTestContentIndex(repository, model, undefined, true);
 	const inline = createTestContentIndex(repository, model);
 	const note = await replaceNoteFixture({ ...seeded.note, plainText: 'original searchable text' });
@@ -118,13 +119,20 @@ describe('PostgreSQL index replacement', () => {
 		const release = Promise.withResolvers<void>();
 		const pending = fixture
 			.maintenance(async (inputs) => {
-				requested.resolve();
-				await release.promise;
+				if (inputs.some((input) => input.startsWith(`${fixture.note.title}\n`))) {
+					requested.resolve();
+					await release.promise;
+				}
 				return { model, vectors: inputs.map(() => vector) };
 			})
 			.run();
 		try {
-			await requested.promise;
+			await Promise.race([
+				requested.promise,
+				pending.then(() => {
+					throw new Error('The target source was not requested for embedding');
+				})
+			]);
 			await fixture.save('newest searchable text', 3);
 		} finally {
 			release.resolve();
@@ -146,13 +154,20 @@ describe('PostgreSQL index replacement', () => {
 		const release = Promise.withResolvers<void>();
 		const pending = fixture
 			.maintenance(async (inputs) => {
-				requested.resolve();
-				await release.promise;
+				if (inputs.some((input) => input.startsWith(`${fixture.note.title}\n`))) {
+					requested.resolve();
+					await release.promise;
+				}
 				return { model, vectors: inputs.map(() => vector) };
 			})
 			.run();
 		try {
-			await requested.promise;
+			await Promise.race([
+				requested.promise,
+				pending.then(() => {
+					throw new Error('The target source was not requested for embedding');
+				})
+			]);
 			const archived = await replaceNoteFixture({
 				...fixture.note,
 				archivedAt: fixture.note.updatedAt

@@ -1501,6 +1501,8 @@ supplemented the diagnostics.
 
 Full units passed: 574 files, 4,518 tests and one existing skip. Knowledge-search PostgreSQL
 contracts passed: four files, 18 tests. Affected controller contracts passed: 48 files, 224 tests.
+The full PostgreSQL contract suite passed: 111 files, 532 tests. Race barriers target the scenario's
+own source and pending chunks are cleaned up after each case.
 Lint, type checking and docs checking passed. Topology, source, test-quality and UI audits passed.
 Semantic findings decreased from 375 to 370; Chisel retains all 47 prohibited imports.
 The [enforcement report](stateless-service-controller-enforcement.md) records evidence and limits.

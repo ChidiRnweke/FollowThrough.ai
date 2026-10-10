@@ -457,6 +457,9 @@ indirect dependencies and concrete exposures still need work. The overall refact
   through an independent connection and rollback. Vectors are supplied locally; no provider runs.
 - Affected isolated contracts: **48 files, 224 passed**, covering notes, skills, diagrams,
   suggestions, attachments and diagram/memory/widget synchronization.
+- Full PostgreSQL contracts: **111 files, 532 passed**. Race barriers match the target source's
+  embedding input; each scenario removes its own pending chunks. The isolated knowledge-search
+  suite also passed again after this test-isolation review.
 - The first atomic-visibility test attempt blocked on the harness's single connection and timed
   out. It now uses an independent reader connection; the complete knowledge-search rerun passed.
 - `pnpm lint` passed. `pnpm check` passed with zero errors and warnings. `pnpm docs:check` passed
