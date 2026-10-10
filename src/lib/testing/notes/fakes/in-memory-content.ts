@@ -29,7 +29,7 @@ import type {
 	NoteRevisionRecorder,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
-import type { NoteIndexer } from '$lib/server/services/notes/contracts';
+import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/indexing';
 
 import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
@@ -233,7 +233,7 @@ export class InMemoryNoteContent
 		return this.anchors.filter((anchor) => anchor.noteId === note.id);
 	}
 
-	async index(actor: ActorContext, note: Note): Promise<IndexingResult> {
+	async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
 		if (this.failIndex || this.failIndexFor.has(note.id))
 			throw new ExternalServiceError('Indexing failed');
 		if (note.userId !== actor.userId) throw new OwnershipError('Cannot index another user’s note');

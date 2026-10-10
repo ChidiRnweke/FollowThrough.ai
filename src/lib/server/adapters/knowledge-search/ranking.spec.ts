@@ -2,12 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
 import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
-import {
-	DEFAULT_RERANK_MODEL,
-	rerankDocumentText,
-	rerankerInputTraceAttributes,
-	rerankerOutputTraceAttributes
-} from './ranking';
+import { DEFAULT_RERANK_MODEL, rerankDocumentText } from './rerank-protocol';
+import { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } from './rerank-tracing';
 
 const match: SearchMatch = {
 	document: {

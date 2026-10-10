@@ -17,11 +17,8 @@ import type {
 	RetrievalIndexRepository,
 	SearchFilter
 } from '$lib/server/repositories/knowledge-search';
-import type {
-	EmbeddingBatch,
-	EmbeddingClient,
-	Reranker
-} from '$lib/server/services/knowledge-search/contracts';
+import type { Reranker } from '$lib/models/knowledge-search';
+import type { EmbeddingBatch, EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 
 interface OwnedSearchDocument {
 	userId: UserId;

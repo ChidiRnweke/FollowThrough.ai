@@ -1,4 +1,3 @@
-import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -39,9 +38,6 @@ export interface MemoryChanges {
 		payload: MemoryChangePayload,
 		provenanceId: ProvenanceId
 	): Promise<MemoryApplication<AppliedChange<MemoryEntry>>>;
-}
-export interface MemoryIndexer {
-	index(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult>;
 }
 
 const now = (): DateTime => new Date().toISOString() as DateTime;

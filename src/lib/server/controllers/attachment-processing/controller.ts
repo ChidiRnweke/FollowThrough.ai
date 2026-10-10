@@ -1,3 +1,4 @@
+import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 
 import type { ActorContext } from '$lib/models/identity';
@@ -61,13 +62,7 @@ interface AttachmentProcessingDependencies {
 	processing: AttachmentProcessingRules;
 	formats: AttachmentFormats;
 	preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
-	indexer: {
-		index(
-			actor: ActorContext,
-			attachment: AttachmentView['attachment'],
-			text: string
-		): Promise<void>;
-	};
+	indexer: Pick<AttachmentIndexing, 'indexAttachment'>;
 	transactionRunner: AtomicOperation;
 	visionModel: string;
 	logger: Pick<Console, 'error'>;
@@ -250,7 +245,11 @@ export class AttachmentProcessing {
 			}
 			const extraction = result.extraction;
 			if (current.attachment.currentVersionId === current.version.id)
-				await this.dependencies.indexer.index(actor, current.attachment, extraction?.text ?? '');
+				await this.dependencies.indexer.indexAttachment(
+					actor,
+					current.attachment,
+					extraction?.text ?? ''
+				);
 			await this.dependencies.records.updateVersion(
 				actor,
 				this.dependencies.processing.complete(current.version, extraction, now())

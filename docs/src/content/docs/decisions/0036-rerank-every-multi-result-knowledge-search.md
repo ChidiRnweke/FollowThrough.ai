@@ -73,7 +73,7 @@ delay.
   same sequence for their workflows.
 - `src/lib/server/controllers/knowledge-search/reranking.spec.ts` proves that reranker order is used
   when the candidate count is below K and that provider failure preserves vector candidates.
-- `src/lib/server/services/knowledge-search/ranking.ts` sends the original query and YAML fields.
+- `src/lib/server/adapters/knowledge-search/ranking.ts` sends the original query and YAML fields.
 - `src/evals/lab/cache/cached-clients.spec.ts` proves that a cached order works with new document IDs
   and changes when document content changes.
 - `src/evals/cases/retrieval.ts` separates direct ranking checks from cases where the agent must

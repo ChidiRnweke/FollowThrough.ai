@@ -21,8 +21,7 @@ describe('attachment search removal', () => {
 				reader,
 				downloads,
 				lifecycle,
-				attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
-					.attachments,
+				attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model),
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
 			})
 		);
@@ -46,7 +45,7 @@ it('keeps attachment bytes when index removal rolls back', async () => {
 			downloads,
 			lifecycle,
 			attachmentIndexer: capabilityDependencies<AttachmentsDependencies['attachmentIndexer']>({
-				remove: async () => {
+				removeAttachment: async () => {
 					throw new Error('Index unavailable');
 				}
 			}),
@@ -83,8 +82,7 @@ it('commits physical cleanup intent without deleting bytes inside the transactio
 			reader,
 			downloads,
 			lifecycle,
-			attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
-				.attachments,
+			attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model),
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		})
 	);

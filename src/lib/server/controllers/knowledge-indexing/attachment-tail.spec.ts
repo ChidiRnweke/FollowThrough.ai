@@ -37,7 +37,7 @@ describe('complete attachment search', () => {
 		await createContentIndex(repository, client.model, {
 			targetTokens: 700,
 			overlapTokens: 50
-		}).attachments.index(testActor(), attachment, text);
+		}).indexAttachment(testActor(), attachment, text);
 		const matches = await repository.search(testActor(), 'amberfalcon', 10);
 		const literalMatch = matches.map(({ document }) => ({
 			beyondOldLimit: document.chunkIndex >= 50,

@@ -58,8 +58,8 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 		new InMemoryEmbeddingClient().model,
 		{ targetTokens: 2400, overlapTokens: 480 },
 		true
-	).diagrams;
-	await index.index(seeded.owner, diagram, { kind: 'note', title: seeded.note.title });
+	);
+	await index.indexDiagram(seeded.owner, diagram, { kind: 'note', title: seeded.note.title });
 	const faults = { afterIndex: false };
 	const controller = new DiagramStudio(
 		new WorkspaceCommandRulesService(),
@@ -77,8 +77,9 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			diagramTrash: library.lifecycle,
 			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
-				index: async (actor, value, sourceContext) => {
-					const result = await index.index(actor, value, sourceContext);
+				diagramContextRequirement: (diagram) => index.diagramContextRequirement(diagram),
+				indexDiagram: async (actor, value, sourceContext) => {
+					const result = await index.indexDiagram(actor, value, sourceContext);
 					if (faults.afterIndex) throw new Error('Index transaction failed');
 					return result;
 				}

@@ -41,7 +41,7 @@ const setup = async (suffix: string) => {
 			memoryEditor: memory.editor,
 			memoryDeleter: memory.deleter,
 			transactionRunner,
-			memoryIndexer: indexWriter.memories,
+			memoryIndexer: indexWriter,
 			indexEmbeddings,
 			indexWriter
 		})

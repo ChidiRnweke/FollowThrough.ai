@@ -1,3 +1,5 @@
+import type { DiagramIndexing } from '$lib/server/services/knowledge-search/indexing';
+import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
@@ -10,7 +12,6 @@ import type {
 import type { DiagramWriter } from '$lib/server/services/diagrams/library';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
@@ -20,7 +21,7 @@ import type { TodoCreationRules } from '$lib/services/todos/edits';
 
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
-import type { MemoryChanges, MemoryIndexer } from '$lib/server/services/memory/library';
+import type { MemoryChanges } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 import type { ReferenceCreator } from '$lib/server/services/references/library';
 import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
@@ -161,13 +162,7 @@ export interface SuggestionsDependencies {
 	indexEmbeddings: IEmbeddings;
 	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
-	diagramIndexer: {
-		index(
-			actor: ActorContext,
-			diagram: Diagram,
-			context: DiagramIndexContext
-		): Promise<IndexingResult>;
-	};
+	diagramIndexer: DiagramIndexing;
 	diagramWriter: DiagramWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
@@ -415,20 +410,23 @@ export class Suggestions implements SuggestionsController {
 			if (record.type === 'memory_entries')
 				await this.finishIndex(
 					actor,
-					await this.dependencies.memoryIndexer.index(actor, record.value)
+					await this.dependencies.memoryIndexer.indexMemory(actor, record.value)
 				);
 			if (record.type === 'diagrams') await this.indexDiagram(actor, record.value);
 		}
 	}
 	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
-		const noteId = diagramIndexNoteId(diagram);
+		const requirement = this.dependencies.diagramIndexer.diagramContextRequirement(diagram);
 		const context: DiagramIndexContext =
-			noteId === undefined
+			requirement.kind === 'standalone'
 				? { kind: 'standalone' }
-				: { kind: 'note', title: (await this.dependencies.sourceNotes.get(actor, noteId)).title };
+				: {
+						kind: 'note',
+						title: (await this.dependencies.sourceNotes.get(actor, requirement.noteId)).title
+					};
 		await this.finishIndex(
 			actor,
-			await this.dependencies.diagramIndexer.index(actor, diagram, context)
+			await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context)
 		);
 	}
 

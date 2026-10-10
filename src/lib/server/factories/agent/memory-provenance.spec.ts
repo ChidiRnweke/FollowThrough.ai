@@ -73,7 +73,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
-			memoryIndexer: index.memories,
+			memoryIndexer: index,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
 			trustPolicyEvaluator: trust,

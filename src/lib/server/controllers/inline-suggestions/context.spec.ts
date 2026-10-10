@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { InlineSuggestionRequest } from '$lib/models/agent';
 import type { MemoryEntry } from '$lib/models/memory';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
-import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
+import type { Reranker } from '$lib/models/knowledge-search';
 import { InMemoryReranker } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { inlineSuggestionFixture } from '$lib/testing/inline-suggestions/fixtures/context';
 import {

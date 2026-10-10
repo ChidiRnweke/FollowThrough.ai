@@ -65,7 +65,7 @@ const application = (
 				.changes,
 			relationshipCreator: createRelationshipServices(relationships, notes, anchors, provenance)
 				.creator,
-			memoryIndexer: index.memories,
+			memoryIndexer: index,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
 			transactionRunner,

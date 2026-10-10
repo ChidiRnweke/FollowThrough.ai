@@ -51,7 +51,7 @@ const setup = () => {
 			widgetReader: library,
 			widgetLister: library,
 			widgetWriter: library,
-			widgetIndexer: index.widgets,
+			widgetIndexer: index,
 			indexEmbeddings: embeddings,
 			indexWriter: index,
 			transactionRunner: new InMemoryTransactionRunner([repository])

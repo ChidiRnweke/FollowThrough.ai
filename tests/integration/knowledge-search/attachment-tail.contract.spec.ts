@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Attachment, AttachmentId, AttachmentVersionId } from '$lib/models/attachments';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
-import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
@@ -63,7 +63,7 @@ const setup = async (suffix: string) => {
 	await createContentIndex(repository, client.model, {
 		targetTokens: 30,
 		overlapTokens: 5
-	}).attachments.index(owner, attachment, text);
+	}).indexAttachment(owner, attachment, text);
 	return { owner, project, attachment, repository, transaction };
 };
 

@@ -81,12 +81,11 @@ import type {
 	DiagramTextExtractor,
 	MermaidDiagramRenderer
 } from '$lib/server/services/diagrams/content';
-import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
+import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/indexing';
 import type { DrawioXmlContentValidator } from '$lib/server/services/diagrams/drawio';
 import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
 import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
@@ -622,17 +621,17 @@ export class Diagrams implements DiagramsController {
 		);
 	}
 	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
-		const noteId = diagramIndexNoteId(diagram);
+		const requirement = this.dependencies.diagramIndexer.diagramContextRequirement(diagram);
 		const context: DiagramIndexContext =
-			noteId === undefined
+			requirement.kind === 'standalone'
 				? { kind: 'standalone' }
 				: {
 						kind: 'note',
-						title: (await this.dependencies.diagramSourceNotes.get(actor, noteId)).title
+						title: (await this.dependencies.diagramSourceNotes.get(actor, requirement.noteId)).title
 					};
 		await this.finishIndex(
 			actor,
-			await this.dependencies.diagramIndexer.index(actor, diagram, context)
+			await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context)
 		);
 	}
 

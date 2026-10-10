@@ -1,13 +1,12 @@
 import { ExternalServiceError } from '$lib/errors';
-import type { SearchMatch } from '$lib/models/knowledge-search';
-import { getDocumentAttributes } from '@arizeai/openinference-core';
 import {
-	MimeType,
-	OpenInferenceSpanKind,
-	SemanticConventions
-} from '@arizeai/openinference-semantic-conventions';
-import type { Attributes } from '@opentelemetry/api';
-import { z } from 'zod';
+	rerankResponseSchema,
+	type Reranker,
+	type SearchMatch
+} from '$lib/models/knowledge-search';
+import { DEFAULT_RERANK_MODEL, rerankDocumentText } from './rerank-protocol';
+import { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } from './rerank-tracing';
+import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
 
@@ -18,15 +17,6 @@ interface LanguageModelClientOptions {
 	readonly appURL?: string;
 }
 
-export interface ISearchRanking {
-	rerank(
-		query: string,
-		matches: readonly SearchMatch[],
-		topN: number,
-		signal?: AbortSignal
-	): Promise<readonly SearchMatch[]>;
-}
-
 /**
  * Reranker backed by Cohere models served through OpenRouter's `/rerank`
  * endpoint, so it runs on the single OpenRouter key rather than a separate
@@ -35,81 +25,12 @@ export interface ISearchRanking {
  * provider failures; the calling controller owns the vector-order fallback.
  */
 
-export const DEFAULT_RERANK_MODEL = 'cohere/rerank-4-fast';
-export const RERANKING_STRATEGY = 'structured-yaml-v1';
-
 export interface SearchRankingOptions extends LanguageModelClientOptions {
 	readonly model?: string;
 	readonly observer?: OperationObserver;
 }
 
-const rerankResponseSchema = z.object({
-	results: z.array(
-		z.object({
-			index: z.number().int().nonnegative(),
-			relevance_score: z.number().optional(),
-			relevanceScore: z.number().optional()
-		})
-	)
-});
-
-/** Titles are retrieval evidence, not display-only metadata. */
-export const rerankDocumentText = (match: SearchMatch): string => {
-	const content = match.document.content
-		.split('\n')
-		.map((line) => `  ${line}`)
-		.join('\n');
-	return [
-		match.document.sourceTitle ? `Title: ${JSON.stringify(match.document.sourceTitle)}` : undefined,
-		match.document.sectionPath
-			? `Section: ${JSON.stringify(match.document.sectionPath)}`
-			: undefined,
-		`Content: |-\n${content}`
-	]
-		.filter((part): part is string => part !== undefined)
-		.join('\n');
-};
-
-const documentAttributes = (
-	matches: readonly SearchMatch[],
-	prefix: string,
-	includeScore: boolean
-): Attributes =>
-	matches.reduce<Attributes>(
-		(attributes, match, index) => ({
-			...attributes,
-			...getDocumentAttributes(
-				{
-					id: match.document.id,
-					content: rerankDocumentText(match),
-					...(includeScore ? { score: match.score } : {})
-				},
-				index,
-				prefix
-			)
-		}),
-		{}
-	);
-
-export const rerankerInputTraceAttributes = (
-	query: string,
-	matches: readonly SearchMatch[],
-	model: string,
-	topN: number
-): Attributes => ({
-	[SemanticConventions.RERANKER_QUERY]: query,
-	[SemanticConventions.RERANKER_MODEL_NAME]: model,
-	[SemanticConventions.RERANKER_TOP_K]: Math.min(topN, matches.length),
-	// Forty candidates already consume 80 attributes at id + content. Omitting
-	// their pre-rerank scores leaves room for all scored output documents under
-	// OpenTelemetry's common 128-attribute span limit.
-	...documentAttributes(matches, SemanticConventions.RERANKER_INPUT_DOCUMENTS, false)
-});
-
-export const rerankerOutputTraceAttributes = (results: readonly SearchMatch[]): Attributes =>
-	documentAttributes(results, SemanticConventions.RERANKER_OUTPUT_DOCUMENTS, true);
-
-export class SearchRanking implements ISearchRanking {
+export class SearchRanking implements Reranker {
 	private readonly endpoint: string;
 	private readonly appURL: string;
 	private readonly model: string;

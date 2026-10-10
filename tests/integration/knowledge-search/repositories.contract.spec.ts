@@ -77,12 +77,7 @@ describe('Postgres deferred embedding invariants', () => {
 		chunkIndex: 0,
 		...(embedded ? { embedding: vector, embeddingModel: 'contract-model' } : {})
 	});
-	// The supersede/hold/retire lifecycle is proven at the unit layer by
-	// controllers/knowledge-indexing/index-maintenance.spec.ts against the in-memory
-	// search repository. This file keeps the two SQL-fidelity facts no fake can
-	// prove: the cross-actor sweep attribution and the per-actor pending read
-	// scope. One end-to-end supersede round-trip through real SQL is covered by
-	// the search-by-embedding tests above (replacement supersedes original).
+	// Real replacement, rollback and stale completion contracts live in index-replacement.contract.spec.ts.
 	// The sweep is deliberately cross-actor — one worker serves every user — so what
 	// matters is that each source is reported against the owner whose data it is.
 	// That pairing is what lets the worker rebuild a correctly scoped ActorContext.

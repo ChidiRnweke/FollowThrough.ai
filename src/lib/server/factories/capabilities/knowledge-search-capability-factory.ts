@@ -40,12 +40,13 @@ import {
 	InlineSuggestionCompletion,
 	type IInlineSuggestionCompletion
 } from '$lib/server/services/inline-suggestions/inline-completion';
-import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
+import type { Reranker } from '$lib/models/knowledge-search';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import {
 	SearchQueryGeneration,
 	type ISearchQueryGeneration
 } from '$lib/server/services/knowledge-search/query-generation';
-import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
+import { SearchRanking } from '$lib/server/adapters/knowledge-search/ranking';
 import {
 	KnowledgeLookup,
 	type IKnowledgeLookup
@@ -166,11 +167,11 @@ export const createKnowledgeSearchCapability = (
 		}),
 		reranker,
 		queryGenerator,
-		attachmentIndexer: index.attachments,
-		noteIndexer: index.notes,
-		diagramIndexer: index.diagrams,
-		memoryIndexer: index.memories,
-		widgetIndexer: index.widgets,
+		attachmentIndexer: index,
+		noteIndexer: index,
+		diagramIndexer: index,
+		memoryIndexer: index,
+		widgetIndexer: index,
 		lookup: new KnowledgeLookup(repository),
 		maintenance: new EmbeddingMaintenance(
 			new IndexBacklog(repository),

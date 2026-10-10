@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProjectId } from '$lib/models/projects';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
-import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
+import type { Reranker } from '$lib/models/knowledge-search';
 import { describe, expect, it } from 'vitest';
 import { CachedReranker, rerankerCacheKey } from './cached-clients';
 import { DiskCache } from './disk-cache';
@@ -58,4 +58,17 @@ describe('reranker cache provenance', () => {
 			await rm(directory, { recursive: true });
 		}
 	});
+});
+
+it('preserves the existing cache identity including uncapped topN', () => {
+	expect(rerankerCacheKey('incident', [match('alpha')], 8)).toBe(
+		'rerank:e2079c8f8e31b5830d69038011f0f12e'
+	);
+});
+it.each(['sourceTitle', 'sectionPath'] as const)('invalidates ranking when %s changes', (field) => {
+	const original = match('alpha');
+	const changed = { ...original, document: { ...original.document, [field]: 'Changed context' } };
+	expect(rerankerCacheKey('incident', [changed], 1)).not.toBe(
+		rerankerCacheKey('incident', [original], 1)
+	);
 });

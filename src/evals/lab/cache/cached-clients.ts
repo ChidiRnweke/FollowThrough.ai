@@ -1,15 +1,12 @@
 import type { SearchMatch } from '$lib/models/knowledge-search';
-import type {
-	EmbeddingBatch,
-	EmbeddingClient,
-	Reranker
-} from '$lib/server/services/knowledge-search/contracts';
+import type { Reranker } from '$lib/models/knowledge-search';
+import type { EmbeddingBatch, EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import {
 	DEFAULT_RERANK_MODEL,
 	RERANKING_STRATEGY,
 	rerankDocumentText
-} from '$lib/server/services/knowledge-search/ranking';
+} from '$lib/server/adapters/knowledge-search/rerank-protocol';
 import { DiskCache, decodeVector, encodeVector } from './disk-cache';
 
 export const rerankerCacheKey = (

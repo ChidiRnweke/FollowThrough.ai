@@ -41,7 +41,7 @@ const setup = async (suffix: string) => {
 			lifecycle: widgets.lifecycle,
 			catalog: widgets.catalog,
 			search: widgets.search,
-			widgetIndexer: index.widgets,
+			widgetIndexer: index,
 			indexEmbeddings: new InMemoryEmbeddingClient(),
 			indexWriter: index,
 			syncMutations: sync.mutations,

@@ -102,7 +102,7 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 				updatedAt: now
 			})
 		},
-		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
+		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker),
 		transactionRunner: transaction.transactionRunner,
 		visionModel: 'test/model',
 		logger: { error: () => {} }

@@ -1,3 +1,4 @@
+import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
 import { ValidationError } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentMemoryProposalInput, AgentToolInput } from '$lib/models/agent-tool-inputs';
@@ -38,8 +39,7 @@ import type {
 	MemoryEntryCreator,
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
-	MemoryEntryLister,
-	MemoryIndexer
+	MemoryEntryLister
 } from '$lib/server/services/memory/library';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
@@ -188,7 +188,10 @@ export class Memory implements MemoryController {
 			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const entry = await this.dependencies.memoryCreator.create(actor, decision.entry);
-			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
+			await this.finishIndex(
+				actor,
+				await this.dependencies.memoryIndexer.indexMemory(actor, entry)
+			);
 			return { entry };
 		});
 	}
@@ -206,7 +209,10 @@ export class Memory implements MemoryController {
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const entry = await this.dependencies.memoryEditor.update(actor, decision.entry);
-			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
+			await this.finishIndex(
+				actor,
+				await this.dependencies.memoryIndexer.indexMemory(actor, entry)
+			);
 			return { entry };
 		});
 	}
@@ -214,7 +220,10 @@ export class Memory implements MemoryController {
 	async remove(actor: ActorContext, input: DeleteMemoryEntryInput): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
 			const entry = await this.dependencies.memoryDeleter.remove(actor, input.memoryEntryId);
-			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
+			await this.finishIndex(
+				actor,
+				await this.dependencies.memoryIndexer.indexMemory(actor, entry)
+			);
 		});
 	}
 
@@ -244,7 +253,7 @@ export class Memory implements MemoryController {
 				for (const change of applied.changes)
 					await this.finishIndex(
 						actor,
-						await this.dependencies.memoryIndexer.index(actor, change.after)
+						await this.dependencies.memoryIndexer.indexMemory(actor, change.after)
 					);
 				const entry = applied.entry;
 				await this.dependencies.suggestionEffects.record(
