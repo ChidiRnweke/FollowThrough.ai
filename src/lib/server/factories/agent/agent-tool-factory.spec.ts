@@ -1,3 +1,7 @@
+import { RunContext } from '@openai/agents';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { AgentToolSessionInput } from '$lib/server/controllers/agent/tool-sessions';
+import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
@@ -757,27 +761,33 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
-		let receivedProvenanceId: unknown;
-		const skill = {
-			note: noteBuilder({ id: crypto.randomUUID() as never, kind: 'skill' }),
-			name: 'Compliance format',
-			description: 'Formats responses for compliance review',
-			triggerHints: ['compliance']
+		let receivedProvenanceId: ProvenanceId | undefined;
+		const note = noteBuilder({ kind: 'skill', title: 'Compliance format' });
+		const loadForAgent: SkillsController['loadForAgent'] = async (_actor, input) => {
+			receivedProvenanceId = input.provenanceId;
+			return {
+				skill: {
+					note,
+					slug: 'compliance-format',
+					description: 'Formats responses for compliance review',
+					triggerHints: ['compliance'],
+					metadata: {},
+					allowImplicitInvocation: true,
+					isEnabled: true
+				},
+				usages: []
+			};
 		};
-		const factory = {
-			toolPreferences: () => ({ list: async () => [] }),
-			skills: () => ({
-				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
-					receivedProvenanceId = input.provenanceId;
-					return { skill, usages: [] };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const run = {
-			userId: testActor().userId,
+		const factory = capabilityDependencies<ControllerFactory>({
+			toolPreferences: () =>
+				capabilityDependencies<ToolPreferencesController>({ list: async () => [] }),
+			skills: () => capabilityDependencies<SkillsController>({ loadForAgent })
+		});
+		const run: AgentToolSessionInput['run'] = {
 			executionMode: 'auto_accept',
 			model: 'openai/gpt-5.6',
-			provenanceId: testProvenanceId()
+			provenanceId: testProvenanceId(),
+			pendingDecisions: []
 		};
 		const registry = await agentToolRegistry(
 			() => factory,
@@ -785,16 +795,15 @@ describe('Agent tool coverage invariants', () => {
 			testTokenizer
 		)({
 			actor: testActor(),
-			request: { prompt: 'Help' } as never,
-			run: run as never,
+			request: { prompt: 'Help', conversationId: testConversationId() },
+			run,
 			executor: { execute: async (_input, action) => action() },
 			signal: new AbortController().signal
 		});
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
-		await (loadSkill as FunctionTool).invoke(
-			{} as never,
-			JSON.stringify({ noteId: '11111111-1111-4111-8111-111111111111' })
-		);
+		if (!loadSkill || loadSkill.type !== 'function')
+			throw new Error('Expected load_skill function tool');
+		await loadSkill.invoke(new RunContext(), JSON.stringify({ noteId: note.id }));
 		expect(receivedProvenanceId).toBe(run.provenanceId);
 	});
 

@@ -1,3 +1,4 @@
+import type { AgentToolRegistry } from './tool-sessions';
 import type { AgentStreamMappings } from '$lib/server/controllers/agent/stream-events';
 import type { ConversationImageInput } from '$lib/models/agent';
 import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
@@ -114,13 +115,7 @@ export class AgentExecution implements AgentRunner {
 			readonly run: AgentRun;
 			readonly executor: AgentToolExecutor;
 			readonly signal: AbortSignal;
-		}) => Promise<{
-			// audit-allow: no-unknown-type — Tool type parameter belongs to @openai/agents; naming it locally would be a double cast.
-			agentTools(alreadyPromoted?: readonly string[]): Tool<unknown>[];
-			offeredToolNames(alreadyPromoted?: readonly string[]): ToolName[];
-			catalog(): readonly { readonly name: string }[];
-			reviewDecision(pending: PendingAgentDecision): PendingAgentDecision;
-		}>,
+		}) => Promise<AgentToolRegistry>,
 		private readonly sessions: AgentExecutionSessions,
 		private readonly available: boolean,
 		private readonly providers: AgentExecutionInfrastructure,

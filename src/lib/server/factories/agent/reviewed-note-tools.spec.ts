@@ -1,3 +1,4 @@
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
@@ -55,7 +56,7 @@ const setup = () => {
 			{ execute: (_call, action) => action() },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			pending
+			restoredToolReviews(fixture.factory, testActor(), pending)
 		);
 	const call: PendingAgentDecision = {
 		callId: 'note-edit-1',
@@ -267,7 +268,11 @@ describe('A note change that fails while it is being prepared', () => {
 			{ execute: (_call, action) => action() },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			[]
+			restoredToolReviews(
+				capabilityDependencies<ControllerFactory>({ notes: () => controller }),
+				testActor(),
+				[]
+			)
 		);
 		const args = { noteId: note.id, markdown: '# Plan\n\n---\n\nBody.\n' };
 		const tool = tools.tools().find((item) => item.name === 'save_note');

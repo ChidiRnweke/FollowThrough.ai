@@ -1,3 +1,4 @@
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -40,7 +41,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 			{ execute: (_call, action) => action() },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			pending
+			restoredToolReviews(fixture.factory, testActor(), pending)
 		);
 	const call: PendingAgentDecision = {
 		callId: 'skill-change-1',

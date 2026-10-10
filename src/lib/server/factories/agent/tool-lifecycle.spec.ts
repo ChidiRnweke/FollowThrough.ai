@@ -1,3 +1,4 @@
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
@@ -50,7 +51,7 @@ const scenario = (
 			options.executor ?? { execute: (_call, action) => action() },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			pending,
+			restoredToolReviews(fixture.factory, testActor(), pending),
 			options.signal ?? new AbortController().signal
 		);
 	const registry = createRegistry();

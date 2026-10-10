@@ -1218,3 +1218,18 @@ Every service module below has a planned disposition. This is routing, not compl
 - Type checking and lint pass. Focused agent/controller/discovery tests pass: 32 files / 369 tests.
   Architecture remains at 51 prohibited imports; topology/source/test-quality pass. Registry
   initialization, remaining tool operation callbacks, browser migrations and final checks remain.
+
+## Registry startup and checkpoint restoration — 2026-10-10
+
+- AgentToolSessions owns current preference loading, authority resolution and saved-review
+  restoration before exposing the runner's registry. The factory now assembles the session graph
+  and returns its controller operation. AgentTools construction no longer restores a checkpoint.
+  AgentExecution and the factory use the named AgentToolRegistry contract.
+- Added startup behavior tests for exact reviewed execution, rejection of a missing saved review,
+  and current project authority. Replaced the provenance test's incomplete run, request, skill and
+  controller casts with narrow valid inputs and a typed recording closure. Existing review tests
+  restore preparations through a shared test fixture that calls the real controller.
+- Type checking and lint pass. Focused agent tests pass: 31 files / 357 tests. Isolated agent,
+  reviewed-note and synchronized tool-policy contracts pass: 12 files / 72 tests. Architecture
+  remains at 51 prohibited imports; topology/source/test-quality pass. Tool-definition callbacks,
+  browser operations, stronger enforcement and final whole-application checks remain pending.

@@ -1,3 +1,4 @@
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
 import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
@@ -623,7 +624,7 @@ it('journals a failed tool call and its correction through the production runner
 				executor,
 				new InMemoryToolRetriever(),
 				{ isEnabled: () => true },
-				run.pendingDecisions,
+				restoredToolReviews(notes.factory, testActor(), run.pendingDecisions),
 				signal
 			);
 		},

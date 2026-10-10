@@ -1,3 +1,8 @@
+import {
+	AgentToolSessions,
+	type AgentToolRegistry,
+	type AgentToolSessionInput
+} from '$lib/server/controllers/agent/tool-sessions';
 import { createAgentToolDiscovery } from './tool-discovery-factory';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
@@ -47,7 +52,6 @@ import type { ActorContext, ApiTokenId } from '$lib/models/identity';
 import type {
 	AgentExecutionMode,
 	PendingAgentDecision,
-	AgentRun,
 	AgentToolContractMap,
 	RunAgentInput,
 	ToolClassification
@@ -1095,7 +1099,7 @@ const jsonArgument = <T>(text: string, schema: z.ZodType<T>, name: string): T =>
 	}
 };
 
-export class AgentTools {
+export class AgentTools implements AgentToolRegistry {
 	private readonly controllers: ControllerFactory;
 	private readonly actor: ActorContext;
 	private readonly mode: AgentExecutionMode;
@@ -1103,7 +1107,6 @@ export class AgentTools {
 	private readonly toolExecutor: AgentToolExecutor;
 	private readonly toolRetriever: ToolRetriever;
 	private readonly toolAccess: ToolAccessPolicy;
-	private readonly reviews: AgentToolReviewControl;
 
 	constructor(
 		private readonly tokens: TokenCounter,
@@ -1114,7 +1117,10 @@ export class AgentTools {
 		toolExecutor: AgentToolExecutor,
 		toolRetriever: ToolRetriever,
 		toolAccess: ToolAccessPolicy,
-		pendingDecisions: readonly PendingAgentDecision[] = [],
+		private readonly reviews: AgentToolReviewControl = createToolReviews(
+			() => controllers.notes(),
+			actor
+		),
 		private readonly signal: AbortSignal = new AbortController().signal
 	) {
 		this.controllers = controllers;
@@ -1124,8 +1130,6 @@ export class AgentTools {
 		this.toolExecutor = toolExecutor;
 		this.toolRetriever = toolRetriever;
 		this.toolAccess = toolAccess;
-		this.reviews = createToolReviews(() => controllers.notes(), actor);
-		this.reviews.restore(pendingDecisions);
 	}
 
 	/** Carry the exact preparation used by the approval gate into the durable checkpoint. */
@@ -2560,42 +2564,34 @@ export class McpTools {
 	}
 }
 
-export const agentToolRegistry =
-	(controllers: () => ControllerFactory, toolRetriever: ToolRetriever, tokens: TokenCounter) =>
-	async ({
-		actor,
-		request,
-		run,
-		executor,
-		signal
-	}: {
-		actor: ActorContext;
-		request: RunAgentInput;
-		run: AgentRun;
-		executor: AgentToolExecutor;
-		signal: AbortSignal;
-	}) => {
+export const agentToolRegistry = (
+	controllers: () => ControllerFactory,
+	toolRetriever: ToolRetriever,
+	tokens: TokenCounter
+): ((input: AgentToolSessionInput) => Promise<AgentToolRegistry>) => {
+	const sessions = new AgentToolSessions(() => {
 		const factory = controllers();
-		const preferences = await factory
-			.toolPreferences()
-			.list(actor, request.projectId ? { projectId: request.projectId } : {});
-		const disabled = new Set(
-			preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
-		);
-		return new AgentTools(
-			tokens,
-			factory,
-			actor,
-			run.executionMode,
-			{
-				provenanceId: run.provenanceId as ProvenanceId,
-				input: request,
-				model: run.model
-			},
-			executor,
-			toolRetriever,
-			{ isEnabled: (toolName) => !disabled.has(toolName) },
-			run.pendingDecisions,
-			signal
-		);
-	};
+		return {
+			preferences: factory.toolPreferences(),
+			create: ({ actor, request, run, executor, signal }, authority) => {
+				const reviews = createToolReviews(() => factory.notes(), actor);
+				return {
+					reviews,
+					registry: new AgentTools(
+						tokens,
+						factory,
+						actor,
+						run.executionMode,
+						{ provenanceId: run.provenanceId as ProvenanceId, input: request, model: run.model },
+						executor,
+						toolRetriever,
+						authority,
+						reviews,
+						signal
+					)
+				};
+			}
+		};
+	});
+	return (input) => sessions.open(input);
+};
