@@ -1,6 +1,6 @@
 # RCA: agent and observability errors, 2026-10-10
 
-Status: investigation recorded; plan tasks 1–5 dispositioned (see Resolution log).
+Status: investigation recorded; plan tasks 1–7 dispositioned (see Resolution log).
 
 This record covers **2026-10-08 06:43:09 UTC through 2026-10-10 06:43:09 UTC**.
 It preserves the evidence for the [remediation plan](../plans/agent-error-remediation-plan.md).
@@ -284,3 +284,23 @@ Evidence: a runner test approves a review, changes the note, and resumes. The st
 the model submits a fresh call, and the approved fresh review applies. With the revision check
 disabled, this test and the existing stale-review test both fail. Existing tests in `patches.spec.ts`
 and `agent-tool-factory.spec.ts` cover unmatched anchors and approval for absent text.
+
+### Plan tasks 6–7 (E1, O1), code-side only
+
+E1: a provider rejection now keeps who rejected which request. The failure message gains the
+upstream provider OpenRouter routed to and the request id, for example `400 Provider returned
+error (provider OpenAI, request req-1)`. The upstream body in `error.metadata.raw` is not read,
+because it may echo the prompt. The classification survives the outer wrapping (tasks 1–3). A
+failed background run is now logged once, because it runs outside the instrumented controller
+boundary and nothing else logged it. The historical cause of the six rejections is unresolved;
+see the task 4 hypothesis.
+
+O1: unresolved. Source shows the web and worker processes start with the same preload, endpoint
+default, log level default and console bridge, and the record builders do not throw on the
+arguments the web boundary logs. Source alone therefore does not explain the missing web records.
+Confirming emission, collector receipt, export and ingestion needs read access to the running web
+process and the deployed collector, which this work did not have.
+
+Evidence: a run against the real provider client with a scripted HTTP 400 transport settles as
+failed with `400 Provider returned error (provider OpenAI, request req-e1)`, and the scripted raw
+body does not appear. Before the change the message was `400 Provider returned error`.
