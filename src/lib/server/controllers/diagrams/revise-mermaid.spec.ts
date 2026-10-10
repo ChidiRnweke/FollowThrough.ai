@@ -1,3 +1,4 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -24,6 +25,7 @@ const setup = (drawio = false) => {
 		provider: generation.provider,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
+				generationRules: new DiagramGenerationRuleService(),
 				transactionRunner: new InMemoryTransactionRunner([
 					diagrams,
 					generation.persistence,

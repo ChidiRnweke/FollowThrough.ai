@@ -888,3 +888,23 @@ Every service module below has a planned disposition. This is routing, not compl
 - Type checking passes. Focused receipt/workspace/synchronization tests pass: 6 files / 20 tests.
   Architecture remains incomplete at 59 prohibited imports and 18 missing interfaces; topology,
   source and test-quality checks pass. Whole-application final verification remains pending.
+
+## Diagram storage, generation and write rules — 2026-10-10
+
+- Split diagram storage into reading, writing, lifecycle and revision capabilities with explicit
+  interfaces. Controllers retain ownership, project scope, locking and revision checks. Removed
+  unused generation and fake export/promotion methods; factories expose the capabilities callers use.
+- Generation validation, model selection and revision decisions now belong to a stateless capability.
+  Mermaid parser processes and Iconify HTTP parsing live in adapters behind narrow interfaces.
+  Existing provider limits, failure messages, timeout and cleanup semantics are unchanged.
+- Shared editing and lifecycle capabilities serve browser/server writes. Diagram ETags are scalar
+  branded value constructors, preserving their persisted spelling. Diagram label presentation and
+  browser canvas workflows remain pending.
+- The dependency checker now accepts adapter imports of repository interfaces, including aliases,
+  while rejecting concrete classes, construction and concrete re-exports. Regression fixtures cover
+  those distinctions. No migration exception was added.
+- Full unit verification passes: 541 files / 4,313 tests / one existing skip. Type check and lint
+  pass. Focused generation/icon tests pass: 41 files / 394 tests; shared editing and boundary tests:
+  38 files / 234 tests. Isolated database contracts pass: 27 files / 153 tests before the shared
+  editing extraction. Architecture remains incomplete at 58 prohibited imports and 10 missing
+  interfaces; topology/source/test-quality checks pass. Final whole-application checks remain pending.

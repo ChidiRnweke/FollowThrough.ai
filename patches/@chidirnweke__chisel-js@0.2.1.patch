@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0dabc16a348 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b237af49d39 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -49,7 +49,15 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
  var PACKAGE_RULES = [
    {
      match: (s) => s === "drizzle-orm" || s.startsWith("drizzle-orm/"),
-@@ -9087,6 +9099,16 @@ class ImportBoundaryService {
+@@ -9068,6 +9080,7 @@ class ImportBoundaryService {
+     this.mode = mode;
+   }
+   check(project) {
++    this.files = new Map(project.files.map((file) => [file.path, file]));
+     const layers = new Map(project.files.map((f) => [f.path, f.layer]));
+     const violations = [];
+     for (const edge of this.graph.allImports) {
+@@ -9087,6 +9100,21 @@ class ImportBoundaryService {
      const importedLayer = layers.get(edge.imported);
      if (importedLayer === undefined)
        return [];
@@ -63,10 +71,51 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
 +    if (edge.isTypeOnly && importedLayer === Layer.CONTROLLERS &&
 +        [Layer.CONTROLLERS, Layer.CLIENT, Layer.ADAPTERS, Layer.STORES].includes(importerLayer))
 +      return [];
++    // A provider adapter implements repository-owned input/output protocols. Only
++    // named interface imports qualify: a concrete class remains a dependency leak.
++    if (edge.isTypeOnly && importerLayer === Layer.ADAPTERS &&
++        importedLayer === Layer.REPOSITORIES && this._importsInterfaces(edge))
++      return [];
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9190,30 +9212,26 @@ function fixFor(importer, imported) {
+@@ -9100,6 +9128,35 @@ class ImportBoundaryService {
+       return [];
+     return [this._violation(edge, "banned-layer-import", `${importerLayer} must not import ${importedLayer} (${edge.imported}). ` + `${fixFor(importerLayer, importedLayer)}`)];
+   }
++  _importsInterfaces(edge) {
++    const source = this.files.get(edge.importer);
++    const target = this.files.get(edge.imported);
++    if (!source?.ast || !target?.ast) return false;
++    const exported = new Set();
++    for (const { sf } of scriptsOf(target.ast)) {
++      for (const statement of sf.statements) {
++        if (ts2.isInterfaceDeclaration(statement) &&
++            statement.modifiers?.some((modifier) => modifier.kind === ts2.SyntaxKind.ExportKeyword))
++          exported.add(statement.name.text);
++      }
++    }
++    let matched = false;
++    for (const { sf } of scriptsOf(source.ast)) {
++      for (const statement of sf.statements) {
++        if (!ts2.isImportDeclaration(statement) ||
++            !ts2.isStringLiteral(statement.moduleSpecifier) ||
++            statement.moduleSpecifier.text !== edge.specifier) continue;
++        matched = true;
++        const clause = statement.importClause;
++        const bindings = clause?.namedBindings;
++        if (clause?.name || !bindings || !ts2.isNamedImports(bindings)) return false;
++        if (bindings.elements.length === 0) return false;
++        if (!bindings.elements.every((entry) => exported.has((entry.propertyName ?? entry.name).text)))
++          return false;
++      }
++    }
++    return matched;
++  }
+   _checkExternal(edge, importerLayer) {
+     if (!BANNED_INTERNAL.has(importerLayer))
+       return [];
+@@ -9190,30 +9247,26 @@ function fixFor(importer, imported) {
      return "One service never imports another. If you need a shared type, it is domain " + "data — move it to $lib/models. Service-local data is fine, but no other " + "service may reach for it. If you need the behaviour, orchestrate both " + "services from a controller.";
    }
    if (importer === Layer.CONTROLLERS && imported === Layer.CONTROLLERS) {
@@ -101,7 +150,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
  class LayoutService {
    ruleIdPrefix = "structure";
    check(project) {
-@@ -9375,8 +9393,8 @@ class StructuralSvelteService {
+@@ -9375,8 +9428,8 @@ class StructuralSvelteService {
        {
          id: "structural:missing-service-interface",
          category: "structural",
@@ -112,7 +161,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
        },
        {
          id: "structural:factory-contains-logic",
-@@ -9445,16 +9463,19 @@ class StructuralSvelteService {
+@@ -9445,16 +9498,19 @@ class StructuralSvelteService {
          if (!ts3.isClassDeclaration(statement) || statement.name === undefined)
            continue;
          const name = statement.name.text;
@@ -135,7 +184,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
          }));
        }
      }
-@@ -10244,7 +10265,6 @@ class TestStructureService {
+@@ -10244,7 +10300,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -143,7 +192,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10311,6 @@ class TestStructureService {
+@@ -10291,29 +10346,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -173,7 +222,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0da
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10367,6 @@ class TestStructureService {
+@@ -10370,7 +10402,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

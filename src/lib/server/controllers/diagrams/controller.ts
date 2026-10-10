@@ -1,9 +1,11 @@
+import type { DiagramTask } from '$lib/models/diagrams';
+import type { DiagramGenerationRules } from '$lib/server/services/diagrams/generation-rules';
 import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import type { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
-import { prepareMermaidRevision } from '$lib/server/services/diagrams/mermaid-revision';
-import type { DiagramDraftWriter } from '$lib/server/services/diagrams/contracts';
+import type { DiagramRunContexts } from '$lib/server/services/diagrams/run-context';
+import type { DiagramDraftWriter } from '$lib/server/services/diagrams/library';
+
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { Skill } from '$lib/models/skills';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
@@ -25,10 +27,7 @@ import type {
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
-import {
-	assertRenderedPng,
-	diagramRevisionModel
-} from '$lib/server/services/diagrams/submission-validation';
+
 import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
@@ -59,15 +58,14 @@ import type {
 } from '$lib/models/diagrams';
 import { UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
+import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
+import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
 import type {
-	DiagramFinder,
-	DiagramIndexer,
-	MermaidSourceValidator,
 	DiagramTextExtractor,
-	DiagramWriter,
-	MermaidDiagramRenderer,
-	DrawioXmlContentValidator
-} from '$lib/server/services/diagrams/contracts';
+	MermaidDiagramRenderer
+} from '$lib/server/services/diagrams/content';
+import type { DrawioXmlContentValidator } from '$lib/server/services/diagrams/drawio';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import {
 	type NoteActionSubmission,
@@ -195,7 +193,7 @@ export interface DiagramAgentDependencies {
 		| 'prepareFailure'
 		| 'persistSettlement'
 	>;
-	readonly runContext: Pick<DiagramRunContext, 'getForWrite' | 'prepare' | 'persist'>;
+	readonly runContext: DiagramRunContexts;
 	readonly provenance: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 	};
@@ -211,29 +209,8 @@ export interface DiagramAgentDependencies {
 	readonly generator: DiagramGenerator;
 }
 
-type DiagramTask = { readonly signal?: AbortSignal } & (
-	| {
-			readonly operation: 'generate';
-			readonly noteId: NoteId;
-			readonly selection: TextSelection;
-			readonly instruction?: string;
-	  }
-	| {
-			readonly operation: 'revise';
-			readonly noteId: NoteId;
-			readonly source: string;
-			readonly instruction: string;
-			readonly renderedPngDataUrl?: string;
-	  }
-	| {
-			readonly operation: 'convert';
-			readonly noteId?: NoteId;
-			readonly source: string;
-			readonly instruction?: string;
-	  }
-);
-
 export interface DiagramsDependencies {
+	readonly generationRules: DiagramGenerationRules;
 	generation: DiagramAgentDependencies;
 	selectionOrigins: Pick<SelectionOriginService, 'resolve'>;
 	suggestionCreator: SuggestionCreator;
@@ -319,7 +296,7 @@ export class Diagrams implements DiagramsController {
 		requestId: string,
 		input: DiagramActionInput
 	): Promise<AgentRunReceipt> {
-		this.validateDiagramTask(input);
+		this.dependencies.generationRules.validate(input);
 		const existing = await this.dependencies.noteActionRequests.findExisting(actor, {
 			requestId,
 			context: { kind: 'diagram_action', input }
@@ -330,7 +307,6 @@ export class Diagrams implements DiagramsController {
 			return existing;
 		}
 		const renderedPngDataUrl = input.operation === 'revise' ? input.renderedPngDataUrl : undefined;
-		assertRenderedPng(renderedPngDataUrl);
 		const preferences = await this.dependencies.generation.preferences.get(actor);
 		const configuredModel = this.dependencies.generation.modelSelection.resolveAgentModel(
 			{},
@@ -340,10 +316,10 @@ export class Diagrams implements DiagramsController {
 		const configured = (await this.dependencies.generation.models.list()).find(
 			(model) => model.id === configuredModel
 		);
-		const model = diagramRevisionModel(
+		const model = this.dependencies.generationRules.model(
 			configuredModel,
 			configured?.supportsVision ?? false,
-			renderedPngDataUrl,
+			Boolean(renderedPngDataUrl),
 			preferences.defaultVisionModel ?? this.dependencies.generation.defaultVisionModel
 		);
 		const request: NoteActionRequest = {
@@ -548,7 +524,12 @@ export class Diagrams implements DiagramsController {
 			},
 			async (draft) => {
 				const current = await this.dependencies.diagramFinder.getForWrite(actor, existing.id);
-				const revised = prepareMermaidRevision(current, existing, draft, this.dependencies.now());
+				const revised = this.dependencies.generationRules.revision(
+					current,
+					existing,
+					draft,
+					this.dependencies.now()
+				);
 				const renderedSvg = await this.dependencies.mermaidRenderer.render(revised.source);
 				const searchableText = await this.dependencies.textExtractor.extract(revised);
 				const saved = await this.dependencies.diagramWriter.persistContent(actor, {
@@ -638,7 +619,7 @@ export class Diagrams implements DiagramsController {
 		publish: (draft: DiagramSubmission & { readonly provenanceId: ProvenanceId }) => Promise<Result>
 	): Promise<Result> {
 		const renderedPngDataUrl = task.operation === 'revise' ? task.renderedPngDataUrl : undefined;
-		this.validateDiagramTask(task);
+		this.dependencies.generationRules.validate(task);
 
 		const preferences = await this.dependencies.generation.preferences.get(actor);
 		const configuredModel = this.dependencies.generation.modelSelection.resolveAgentModel(
@@ -649,10 +630,10 @@ export class Diagrams implements DiagramsController {
 		const configuredCapability = (await this.dependencies.generation.models.list()).find(
 			(candidate) => candidate.id === configuredModel
 		);
-		const model = diagramRevisionModel(
+		const model = this.dependencies.generationRules.model(
 			configuredModel,
 			configuredCapability?.supportsVision ?? false,
-			renderedPngDataUrl,
+			Boolean(renderedPngDataUrl),
 			preferences.defaultVisionModel ?? this.dependencies.generation.defaultVisionModel
 		);
 		const run = await this.dependencies.transactionRunner.run(async () => {
@@ -714,7 +695,7 @@ export class Diagrams implements DiagramsController {
 		task: DiagramTask,
 		run: AgentRun
 	): Promise<DiagramSubmission & { readonly provenanceId: ProvenanceId }> {
-		this.validateDiagramTask(task);
+		this.dependencies.generationRules.validate(task);
 		const model = run.model;
 		const renderedPngDataUrl = task.operation === 'revise' ? task.renderedPngDataUrl : undefined;
 		await this.dependencies.transactionRunner.run(() =>
@@ -831,15 +812,6 @@ export class Diagrams implements DiagramsController {
 			},
 			(result) => JSON.stringify(result)
 		);
-	}
-	private validateDiagramTask(task: DiagramTask | DiagramActionInput): void {
-		assertRenderedPng(task.operation === 'revise' ? task.renderedPngDataUrl : undefined);
-		if (task.operation === 'generate' && !task.selection.text.trim())
-			throw new ValidationError('Diagram source text is required.');
-		if (task.operation === 'revise' && !task.instruction.trim())
-			throw new ValidationError('Describe how the diagram should change.');
-		if (task.operation === 'convert' && !task.source.trim())
-			throw new ValidationError('Mermaid source is required for draw.io conversion.');
 	}
 
 	private async buildDiagramContext(

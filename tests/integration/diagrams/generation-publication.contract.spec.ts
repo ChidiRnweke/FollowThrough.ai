@@ -1,3 +1,4 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { expect, it, vi } from 'vitest';
@@ -7,7 +8,7 @@ import {
 	type PostgresDatabaseContext
 } from '$lib/server/db/postgres-test-context';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
 	InMemoryDiagrams,
 	mermaidBuilder
@@ -49,7 +50,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	});
 	const fixture = diagramGenerationFixture();
 	const records = new DiagramRecords(database);
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		records,
 		notes.repository,
 		notes.anchors,
@@ -59,9 +60,10 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	const diagrams = new InMemoryDiagrams();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
-			diagramFinder: library,
-			diagramWriter: library,
+			diagramFinder: library.finder,
+			diagramWriter: library.writer,
 			diagramSourceNotes: notes.services.reader,
 			mermaidRenderer: diagrams,
 			textExtractor: diagrams,

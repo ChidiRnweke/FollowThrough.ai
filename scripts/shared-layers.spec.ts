@@ -310,3 +310,44 @@ it('keeps SDK adapters from constructing controller implementations', () => {
 		})
 	).toContain('import-boundary:banned-layer-import');
 });
+
+it('lets a provider adapter implement a named repository protocol interface', () => {
+	expect(
+		inspect({
+			'src/lib/server/repositories/diagrams/syntax.ts':
+				'export interface SyntaxReader { parse(source: string): Promise<void>; }',
+			'src/lib/server/adapters/diagrams/syntax.ts':
+				"import type { SyntaxReader as Syntax } from '$lib/server/repositories/diagrams/syntax'; export class Reader implements Syntax { async parse(_source: string): Promise<void> {} }"
+		})
+	).not.toContain('import-boundary:banned-layer-import');
+});
+it('rejects a provider adapter typed against a concrete repository class', () => {
+	expect(
+		inspect({
+			'src/lib/server/repositories/diagrams/syntax.ts':
+				'export class SyntaxReader { async parse(_source: string): Promise<void> {} }',
+			'src/lib/server/adapters/diagrams/syntax.ts':
+				"import type { SyntaxReader } from '$lib/server/repositories/diagrams/syntax'; export class Reader { constructor(private readonly syntax: SyntaxReader) {} }"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('rejects a provider adapter constructing a repository implementation', () => {
+	expect(
+		inspect({
+			'src/lib/server/repositories/diagrams/syntax.ts':
+				'export class SyntaxReader { async parse(_source: string): Promise<void> {} }',
+			'src/lib/server/adapters/diagrams/syntax.ts':
+				"import { SyntaxReader } from '$lib/server/repositories/diagrams/syntax'; export const reader = new SyntaxReader();"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('rejects an adapter re-exporting a concrete repository as a type', () => {
+	expect(
+		inspect({
+			'src/lib/server/repositories/diagrams/syntax.ts':
+				'export class SyntaxReader { async parse(_source: string): Promise<void> {} }',
+			'src/lib/server/adapters/diagrams/syntax.ts':
+				"export type { SyntaxReader } from '$lib/server/repositories/diagrams/syntax';"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});

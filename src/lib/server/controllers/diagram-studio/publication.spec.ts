@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type DiagramWriteOutcome } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/services/diagrams/editing';
+import { diagramEtag } from '$lib/models/diagrams';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { diagramRevisionFixture } from '$lib/testing/diagrams/fixtures/revision-editing';
@@ -19,7 +19,7 @@ describe('Diagram publication invariants', () => {
 			.renameProjectDiagram(testActor(), {
 				diagramId: diagram.id,
 				title: '  Architecture  ',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(result.title).toBe('Architecture');
@@ -33,7 +33,7 @@ describe('Diagram publication invariants', () => {
 			controller.renameProjectDiagram(testActor(), {
 				diagramId: diagram.id,
 				title: '   ',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
@@ -49,7 +49,7 @@ describe('Diagram publication invariants', () => {
 				.saveProjectDiagramDraft(testActor(), {
 					diagramId: diagram.id,
 					source: diagram.source,
-					baseEtag: diagramEtag(foreign)
+					baseEtag: diagramEtag(foreign.id, foreign.currentRevision)
 				})
 				.then(savedDiagram)
 		).rejects.toMatchObject({ code: 'VALIDATION' });
@@ -63,7 +63,7 @@ describe('Diagram publication invariants', () => {
 			.saveProjectDiagramDraft(testActor(), {
 				diagramId: diagram.id,
 				source: '<mxfile>new</mxfile>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(
@@ -71,7 +71,7 @@ describe('Diagram publication invariants', () => {
 				.saveProjectDiagramDraft(testActor(), {
 					diagramId: diagram.id,
 					source: saved.source,
-					baseEtag: diagramEtag(diagram)
+					baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 				})
 				.then(savedDiagram)
 		).toEqual(saved);
@@ -85,7 +85,7 @@ describe('Diagram publication invariants', () => {
 			.renameProjectDiagram(testActor(), {
 				diagramId: diagram.id,
 				title: 'New title',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(
@@ -93,7 +93,7 @@ describe('Diagram publication invariants', () => {
 				.renameProjectDiagram(testActor(), {
 					diagramId: diagram.id,
 					title: 'New title',
-					baseEtag: diagramEtag(diagram)
+					baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 				})
 				.then(savedDiagram)
 		).toEqual(saved);
@@ -108,7 +108,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: '<mxfile>new</mxfile>',
 				renderedSvg: '<svg/>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(
@@ -117,7 +117,7 @@ describe('Diagram publication invariants', () => {
 					diagramId: diagram.id,
 					source: saved.source,
 					renderedSvg: '<svg>regenerated</svg>',
-					baseEtag: diagramEtag(diagram)
+					baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 				})
 				.then(savedDiagram)
 		).toEqual(saved);
@@ -132,7 +132,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		await controller
@@ -140,7 +140,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg>regenerated</svg>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(diagrams.diagramRevisions).toHaveLength(1);
@@ -155,7 +155,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		const snapshot = diagrams.diagramRevisions[0]!;
@@ -163,21 +163,21 @@ describe('Diagram publication invariants', () => {
 			.saveProjectDiagramDraft(testActor(), {
 				diagramId: diagram.id,
 				source: '<mxfile>new</mxfile>',
-				baseEtag: diagramEtag(published)
+				baseEtag: diagramEtag(published.id, published.currentRevision)
 			})
 			.then(savedDiagram);
 		const restored = await controller
 			.restoreDiagramRevision(testActor(), {
 				diagramId: diagram.id,
 				revisionId: snapshot.id,
-				baseEtag: diagramEtag(edited)
+				baseEtag: diagramEtag(edited.id, edited.currentRevision)
 			})
 			.then(savedDiagram);
 		const retried = await controller
 			.restoreDiagramRevision(testActor(), {
 				diagramId: diagram.id,
 				revisionId: snapshot.id,
-				baseEtag: diagramEtag(edited)
+				baseEtag: diagramEtag(edited.id, edited.currentRevision)
 			})
 			.then(savedDiagram);
 		expect({ restored, retried, snapshots: diagrams.diagramRevisions.length }).toMatchObject({
@@ -200,7 +200,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: '<mxfile>other</mxfile>',
 				renderedSvg: '<svg/>',
-				baseEtag: diagramEtag(drawioBuilder())
+				baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
 			})
 		).resolves.toMatchObject({ outcome: 'conflict' });
 	});
@@ -213,7 +213,7 @@ describe('Diagram publication invariants', () => {
 			.saveProjectDiagramDraft(testActor(), {
 				diagramId: diagram.id,
 				source: '<mxfile>draft</mxfile>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(saved.currentRevision > saved.publishedRevision).toBe(true);
@@ -232,7 +232,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(diagrams.diagramRevisions).toHaveLength(1);
@@ -251,7 +251,7 @@ describe('Diagram publication invariants', () => {
 				diagramId: diagram.id,
 				source: diagram.source,
 				renderedSvg: '<svg/>',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.then(savedDiagram);
 		expect(published.publishedRevision).toBe(2);
@@ -265,7 +265,7 @@ describe('Diagram publication invariants', () => {
 			controller.saveProjectDiagramDraft(testActor(), {
 				diagramId: diagram.id,
 				source: '<mxfile>draft</mxfile>',
-				baseEtag: diagramEtag(drawioBuilder())
+				baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
 			})
 		).resolves.toMatchObject({ outcome: 'conflict' });
 	});

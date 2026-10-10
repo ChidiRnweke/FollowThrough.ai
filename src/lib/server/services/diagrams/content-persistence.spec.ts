@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { DiagramLibrary } from './library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import type { DiagramContentWrite } from '$lib/models/diagrams';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -25,7 +25,7 @@ const setup = () => {
 		publishedAt: undefined
 	});
 	diagrams.diagrams = [current];
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
@@ -48,7 +48,7 @@ const setup = () => {
 
 it('preserves placement, provenance and publication state when storing reviewed content', async () => {
 	const { current, library, write } = setup();
-	expect(await library.persistContent(testActor(), write)).toEqual({
+	expect(await library.writer.persistContent(testActor(), write)).toEqual({
 		...current,
 		source: write.source,
 		renderedSvg: write.renderedSvg,
@@ -58,7 +58,7 @@ it('preserves placement, provenance and publication state when storing reviewed 
 
 it('refuses content writes for another actor', async () => {
 	const { library, write } = setup();
-	await expect(library.persistContent(testActor(2), write)).rejects.toMatchObject({
+	await expect(library.writer.persistContent(testActor(2), write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -73,7 +73,7 @@ it('refuses content writes after publication state changes', async () => {
 			currentRevision: current.currentRevision + 1
 		}
 	];
-	await expect(library.persistContent(testActor(), write)).rejects.toMatchObject({
+	await expect(library.writer.persistContent(testActor(), write)).rejects.toMatchObject({
 		code: 'STALE_REVISION'
 	});
 });
@@ -82,7 +82,7 @@ it('refuses Mermaid content without owned provenance', async () => {
 	const { current, library, write, diagrams } = setup();
 	diagrams.diagrams = [mermaidBuilder({ id: current.id })];
 	await expect(
-		library.persistContent(testActor(), {
+		library.writer.persistContent(testActor(), {
 			kind: 'mermaid',
 			diagramId: current.id,
 			source: 'flowchart LR\nA --> C',

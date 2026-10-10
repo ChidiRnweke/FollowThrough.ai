@@ -5,11 +5,11 @@ import { searchableDrawioText } from '$lib/services/diagrams/labels';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
+import type { DiagramWriter } from '$lib/server/services/diagrams/library';
 import type {
-	DiagramWriter,
 	DrawioXmlContentValidator,
 	DrawioSvgPreviewSanitizer
-} from '$lib/server/services/diagrams/contracts';
+} from '$lib/server/services/diagrams/drawio';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
@@ -21,7 +21,7 @@ import type { ReferenceCreator } from '$lib/server/services/references/library';
 import type { MemoryChanges } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
-import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
+import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
@@ -145,7 +145,7 @@ export interface SuggestionsDependencies {
 	diagramWriter: DiagramWriter;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
-	drawioLabels: Pick<DrawioLabelReader, 'read'>;
+	drawioLabels: DrawioLabels;
 	now: () => DateTime;
 	transactionRunner: TransactionRunner;
 }

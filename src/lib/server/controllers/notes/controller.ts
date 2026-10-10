@@ -112,7 +112,8 @@ import type {
 	NoteLinkReconciler,
 	RelationshipFinder
 } from '$lib/server/services/relationships/graph';
-import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
+import type { DiagramLister } from '$lib/server/services/diagrams/library';
+
 import type {
 	NoteReader,
 	NoteTextSearcher,

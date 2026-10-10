@@ -1,18 +1,18 @@
 import { expect, it } from 'vitest';
-import { diagramEtag } from '$lib/services/diagrams/editing';
+import { diagramEtag } from '$lib/models/diagrams';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { decideDiagramRevision, prepareDiagramWrite } from './editing';
+import { DiagramEditingService } from './editing';
 
 it('preserves publication state when restoring an untitled revision as a draft', () => {
 	const current = drawioBuilder({ currentRevision: 4, publishedRevision: 2, title: 'Later title' });
-	const result = prepareDiagramWrite(
+	const result = new DiagramEditingService().prepare(
 		current,
 		{
 			kind: 'restore',
 			revision: { source: current.source, searchableText: current.searchableText }
 		},
-		diagramEtag(current),
+		diagramEtag(current.id, current.currentRevision),
 		testNow
 	);
 	expect(result).toEqual({
@@ -27,7 +27,7 @@ it('preserves publication state when restoring an untitled revision as a draft',
 
 it('does not treat an unchanged unpublished draft as an already completed publication', () => {
 	expect(
-		decideDiagramRevision(
+		new DiagramEditingService().revision(
 			{ kind: 'publish', baseMatches: false, contentChanged: false },
 			{ currentRevision: 4, publishedRevision: 2 }
 		)
@@ -41,7 +41,7 @@ it('keeps the original preview on a completed publication retry', () => {
 		renderedSvg: '<svg>original</svg>'
 	});
 	expect(
-		prepareDiagramWrite(
+		new DiagramEditingService().prepare(
 			current,
 			{
 				kind: 'publish',
@@ -49,7 +49,7 @@ it('keeps the original preview on a completed publication retry', () => {
 				searchableText: current.searchableText,
 				renderedSvg: '<svg>different</svg>'
 			},
-			diagramEtag({ ...current, currentRevision: 3 }),
+			diagramEtag(current.id, 3),
 			testNow
 		)
 	).toEqual({ kind: 'unchanged', diagram: current });

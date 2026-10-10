@@ -1,3 +1,4 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +22,7 @@ const setup = () => {
 	const provenance = new InMemoryProvenanceRecorder();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			generationRules: new DiagramGenerationRuleService(),
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,
 			suggestionCreator: suggestions,

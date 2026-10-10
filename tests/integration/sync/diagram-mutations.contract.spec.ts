@@ -1,7 +1,9 @@
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import type { DiagramId } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/services/diagrams/editing';
+import { diagramEtag } from '$lib/models/diagrams';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
@@ -13,7 +15,7 @@ import { createNotesCapability } from '$lib/server/factories/capabilities/notes-
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { createProjectsCapability } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
@@ -32,7 +34,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const projects = createProjectsCapability({ db: database });
 	const notes = createNotesCapability({ db: database, projects: projects.repository });
 	const records = new DiagramRecords(database);
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		records,
 		notes.repository,
 		notes.anchors,
@@ -58,14 +60,16 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const faults = { afterIndex: false };
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
+			diagramEditing: new DiagramEditingService(),
+			diagramLifecycle: new DiagramLifecycleService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
-			diagramFinder: library,
+			diagramFinder: library.finder,
 			diagramSourceNotes: notes.services.reader,
-			diagramDraftWriter: library,
-			diagramRevisionReader: library,
-			diagramTrash: library,
+			diagramDraftWriter: library.draftWriter,
+			diagramRevisionReader: library.revisionReader,
+			diagramTrash: library.lifecycle,
 			now: () => new Date().toISOString() as typeof diagram.updatedAt,
 			diagramIndexer: {
 				index: async (actor, value, sourceContext) => {
@@ -91,7 +95,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 			diagramId: diagram.id,
 			source,
 			renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
-			baseEtag: diagramEtag(diagram)
+			baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 		});
 		if (published.outcome !== 'saved') throw new Error('Expected publication');
 		const { revisions } = await controller.listDiagramRevisions(owner, { diagramId: diagram.id });
@@ -124,7 +128,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 			.renameProjectDiagram(owner, {
 				diagramId: diagram.id,
 				title: 'New indexed title',
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.catch(() => ({ kind: 'failure' }));
 		expect({
@@ -140,7 +144,7 @@ describe('diagram edits through the shared mutation boundary', () => {
 			.saveProjectDiagramDraft(owner, {
 				diagramId: diagram.id,
 				source,
-				baseEtag: diagramEtag(diagram)
+				baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 			})
 			.catch(() => undefined);
 		expect({

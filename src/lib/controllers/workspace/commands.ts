@@ -3,7 +3,7 @@ import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
-import { decideDiagramRevision } from '$lib/services/diagrams/editing';
+import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
 import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
@@ -17,7 +17,7 @@ import type {
 } from '$lib/models/memory';
 import type { UpdateAgentPreferencesInput } from '$lib/models/agent';
 import { applyAgentPreferenceUpdate } from '$lib/services/agent/preferences';
-import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/trash';
+import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
 import type { Todo, UpdateTodoInput } from '$lib/models/todos';
 import type { Project, ProjectId } from '$lib/models/projects';
 import type { UserId } from '$lib/models/identity';
@@ -244,6 +244,8 @@ export interface WorkspaceCommandController {
 /** Resolve required inventory and prepare the complete optimistic command from observed facts. */
 export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
+		private readonly diagramEditing: DiagramEditingRules,
+		private readonly diagramLifecycle: DiagramLifecycleRules,
 		private readonly skillMetadataEditing: SkillMetadataEditing,
 		private readonly todoCreation: TodoCreationRules,
 		private readonly todoEditing: TodoEditingRules,
@@ -512,11 +514,11 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 							? 'restore'
 							: 'delete';
 				if (action === 'delete') {
-					const decision = decideDiagramTrash(action, diagram);
+					const decision = this.diagramLifecycle.decide(action, diagram);
 					if (decision.kind === 'invalid') throw new Error(decision.message);
 					return content(null);
 				}
-				const decision = diagramTrashChange(action, diagram, now);
+				const decision = this.diagramLifecycle.change(action, diagram, now);
 				if (decision.kind === 'invalid') throw new Error(decision.message);
 				return content({ type: 'diagrams', value: decision.diagram });
 			}
@@ -524,7 +526,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			case 'publishDiagram': {
 				const diagram = value('diagrams');
 				if (diagram.kind !== 'drawio') throw new Error('Only draw.io diagrams can be edited');
-				const decision = decideDiagramRevision(
+				const decision = this.diagramEditing.revision(
 					{
 						kind: command.kind === 'saveDiagram' ? 'save' : 'publish',
 						baseMatches: true,

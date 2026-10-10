@@ -1,8 +1,10 @@
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
 } from '$lib/server/controllers/diagram-studio/controller';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryNoteRepository,
@@ -24,7 +26,7 @@ export const diagramRevisionFixture = () => {
 	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
 	const index = new InMemoryDiagrams();
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
@@ -33,11 +35,13 @@ export const diagramRevisionFixture = () => {
 	);
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
+			diagramEditing: new DiagramEditingService(),
+			diagramLifecycle: new DiagramLifecycleService(),
 			diagramSourceNotes: sourceNotes,
-			diagramFinder: library,
-			diagramDraftWriter: library,
-			diagramRevisionReader: library,
-			diagramTrash: library,
+			diagramFinder: library.finder,
+			diagramDraftWriter: library.draftWriter,
+			diagramRevisionReader: library.revisionReader,
+			diagramTrash: library.lifecycle,
 			now: () => drawioBuilder().createdAt,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
 			diagramIndexer: index,

@@ -1,9 +1,11 @@
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { type DiagramWriteOutcome } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/services/diagrams/editing';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { diagramEtag } from '$lib/models/diagrams';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
@@ -40,7 +42,7 @@ const setup = () => {
 		renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Before</text></svg>'
 	});
 	diagrams.diagrams = [original];
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
@@ -52,9 +54,11 @@ const setup = () => {
 	const index = createContentIndex(search, embeddings.model);
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
+			diagramEditing: new DiagramEditingService(),
+			diagramLifecycle: new DiagramLifecycleService(),
 			diagramSourceNotes: notes,
-			diagramFinder: library,
-			diagramDraftWriter: library,
+			diagramFinder: library.finder,
+			diagramDraftWriter: library.draftWriter,
 			diagramIndexer: index.diagrams,
 			indexEmbeddings: embeddings,
 			indexWriter: index,
@@ -67,7 +71,7 @@ const setup = () => {
 	);
 	const input = {
 		diagramId: original.id,
-		baseEtag: diagramEtag(original),
+		baseEtag: diagramEtag(original.id, original.currentRevision),
 		source: VALID_DRAWIO_XML,
 		renderedSvg: '<svg xmlns="http://www.w3.org/2000/svg"><text>API</text></svg>'
 	};

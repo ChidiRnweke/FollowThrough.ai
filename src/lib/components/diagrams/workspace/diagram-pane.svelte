@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount, untrack } from 'svelte';
-	import { diagramEtag } from '$lib/services/diagrams/editing';
+	import { diagramEtag } from '$lib/models/diagrams';
 	import { accessMessage } from '$lib/services/sync/state';
 	import type {
 		DiagramId,
@@ -210,7 +210,7 @@
 			const result = await restoreDiagramRevision({
 				diagramId,
 				revisionId,
-				baseEtag: diagramEtag(value)
+				baseEtag: diagramEtag(value.id, value.currentRevision)
 			});
 			if (result.outcome !== 'saved')
 				throw new Error('The diagram changed. Review it before restoring a version');

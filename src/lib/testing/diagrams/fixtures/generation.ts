@@ -1,3 +1,4 @@
+import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -65,7 +66,7 @@ export const diagramGenerationFixture = () => {
 		conversations,
 		provenance,
 		notes,
-		mermaidValidator: new MermaidSubmissionValidator(async () => {}),
+		mermaidValidator: new MermaidSubmissionValidator(new InMemoryMermaidSyntaxReader()),
 		now: () => testNow
 	};
 };

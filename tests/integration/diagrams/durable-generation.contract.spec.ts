@@ -1,3 +1,4 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
@@ -66,6 +67,7 @@ const setup = async (suffix: string) => {
 	const requests = new NoteActionRequests(runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		generationRules: new DiagramGenerationRuleService(),
 		...fixture,
 		generation: {
 			...fixture.generation,

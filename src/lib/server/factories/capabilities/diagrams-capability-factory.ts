@@ -1,3 +1,14 @@
+import { DiagramEditingService, type DiagramEditingRules } from '$lib/services/diagrams/editing';
+import {
+	DiagramLifecycleService as DiagramLifecycleRuleService,
+	type DiagramLifecycleRules
+} from '$lib/services/diagrams/trash';
+import { IconifySearchPages } from '$lib/server/adapters/diagrams/iconify';
+import {
+	DiagramGenerationRuleService,
+	type DiagramGenerationRules
+} from '$lib/server/services/diagrams/generation-rules';
+import { NodeMermaidSyntaxReader } from '$lib/server/adapters/diagrams/mermaid-parser';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import type { Database } from '$lib/server/db';
@@ -21,18 +32,46 @@ import type {
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
-import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
+import {
+	MermaidSubmissionValidator,
+	type MermaidSourceValidator
+} from '$lib/server/services/diagrams/submission-validation';
 import { createDiagramGeneration } from './diagram-generation-factory';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
-import { DiagramContent } from '$lib/server/services/diagrams/content';
+import {
+	DiagramContent,
+	type MermaidDiagramRenderer,
+	type DiagramTextExtractor
+} from '$lib/server/services/diagrams/content';
 import {
 	DrawioLabelReader,
+	type DrawioLabels,
+	type DrawioXmlContentValidator,
+	type DrawioSvgPreviewSanitizer,
 	DrawioSvgSanitizer,
 	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
-import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
-import { IconifyIconSearch } from '$lib/server/services/diagrams/icons';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import {
+	PresentedCanvasSource,
+	type CanvasSourceReader
+} from '$lib/server/services/diagrams/canvas-source';
+import { IconifyIconSearch, type IconSearch } from '$lib/server/services/diagrams/icons';
+import {
+	DiagramReadingService,
+	DiagramWritingService,
+	DiagramLifecycleService,
+	DiagramRevisionService,
+	type DiagramFinder,
+	type DiagramLister,
+	type DiagramWriter,
+	type DiagramDraftWriter,
+	type DiagramRevisionReader,
+	type DiagramLifecycle,
+	type DiagramWriteReader,
+	type DiagramConversationFinder,
+	type DiagramReferenceCounter
+} from '$lib/server/services/diagrams/library';
+import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
@@ -64,22 +103,25 @@ export interface DiagramsCapabilityInput {
 }
 
 export interface DiagramsCapability {
-	readonly library: DiagramLibrary;
-	readonly transforms: DiagramContent;
+	readonly editingRules: DiagramEditingRules;
+	readonly lifecycleRules: DiagramLifecycleRules;
+	readonly services: DiagramServices;
+	readonly renderer: MermaidDiagramRenderer;
+	readonly textExtractor: DiagramTextExtractor;
 	readonly generation: DiagramAgentDependencies;
-	readonly suggestionValidator: DrawioXmlValidator;
-	readonly xmlValidator: DrawioXmlValidator;
-	readonly iconSearch: IconifyIconSearch;
-	readonly canvasSource: PresentedCanvasSource;
-	readonly svgSanitizer: DrawioSvgSanitizer;
-	readonly labels: DrawioLabelReader;
-	readonly mermaidValidator: MermaidSubmissionValidator;
+	readonly xmlValidator: DrawioXmlContentValidator;
+	readonly iconSearch: IconSearch;
+	readonly canvasSource: CanvasSourceReader;
+	readonly svgSanitizer: DrawioSvgPreviewSanitizer;
+	readonly labels: DrawioLabels;
+	readonly mermaidValidator: MermaidSourceValidator;
+	readonly generationRules: DiagramGenerationRules;
 	/** One clock for every diagram write, services and controller alike. */
 	readonly now: () => DateTime;
 }
 
 export const createDiagramsCapability = (input: DiagramsCapabilityInput): DiagramsCapability => {
-	const library = new DiagramLibrary(
+	const services = createDiagramServices(
 		new DiagramRecords(input.db),
 		input.notes,
 		input.anchors,
@@ -87,15 +129,18 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		input.projects
 	);
 	return {
-		library,
-		transforms: new DiagramContent(),
-		suggestionValidator: new DrawioXmlValidator(),
+		services,
+		editingRules: new DiagramEditingService(),
+		lifecycleRules: new DiagramLifecycleRuleService(),
+		renderer: new DiagramContent(),
+		textExtractor: new DiagramContent(),
 		xmlValidator: new DrawioXmlValidator(),
-		iconSearch: new IconifyIconSearch(),
+		iconSearch: new IconifyIconSearch(new IconifySearchPages()),
 		canvasSource: new PresentedCanvasSource(input.sessions),
 		svgSanitizer: new DrawioSvgSanitizer(),
 		labels: new DrawioLabelReader(),
-		mermaidValidator: new MermaidSubmissionValidator(),
+		mermaidValidator: new MermaidSubmissionValidator(new NodeMermaidSyntaxReader()),
+		generationRules: new DiagramGenerationRuleService(),
 		now: () => new Date().toISOString() as DateTime,
 		generation: {
 			contextFormatter: input.context,
@@ -118,3 +163,34 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		}
 	};
 };
+
+export interface DiagramServices {
+	readonly finder: DiagramFinder & DiagramWriteReader;
+	readonly lister: DiagramLister;
+	readonly conversations: DiagramConversationFinder;
+	readonly references: DiagramReferenceCounter;
+	readonly writer: DiagramWriter;
+	readonly draftWriter: DiagramDraftWriter;
+	readonly revisionReader: DiagramRevisionReader;
+	readonly lifecycle: DiagramLifecycle;
+}
+export function createDiagramServices(
+	diagrams: DiagramRepository,
+	notes: NoteRepository,
+	anchors: SourceAnchorRepository,
+	provenance: ProvenanceRepository,
+	projects: ProjectRepository
+): DiagramServices {
+	const reader = new DiagramReadingService(diagrams, notes);
+	const revisions = new DiagramRevisionService(diagrams);
+	return {
+		finder: reader,
+		lister: reader,
+		conversations: reader,
+		references: reader,
+		writer: new DiagramWritingService(diagrams, notes, anchors, provenance, projects),
+		draftWriter: revisions,
+		revisionReader: revisions,
+		lifecycle: new DiagramLifecycleService(diagrams)
+	};
+}

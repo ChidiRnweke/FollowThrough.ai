@@ -1,3 +1,4 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
@@ -22,6 +23,7 @@ const setup = (drawio = false) => {
 		suggestions,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
+				generationRules: new DiagramGenerationRuleService(),
 				diagramFinder: diagrams,
 				...generation,
 				drawioXmlValidator: new DrawioXmlValidator(),

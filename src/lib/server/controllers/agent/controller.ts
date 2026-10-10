@@ -62,7 +62,7 @@ import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import { AgentProviderFailure } from '$lib/errors';
 import type { IAgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
-import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { AttachmentLookup } from '$lib/server/services/attachments/library';
 import {
 	attachmentFilePath,
@@ -264,7 +264,7 @@ export interface AgentDependencies {
 
 	readonly contextWidgets: WidgetReader;
 
-	readonly contextDiagrams: Pick<DiagramLibrary, 'get'>;
+	readonly contextDiagrams: DiagramFinder;
 
 	readonly contextAttachments: AttachmentLookup;
 
