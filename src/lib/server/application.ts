@@ -1,5 +1,5 @@
 import type { ScheduledTask } from '$lib/models/maintenance';
-import type { ReferenceFinder } from '$lib/server/controllers/references/search';
+import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import {
@@ -55,7 +55,7 @@ export interface ApplicationOverrides {
 	readonly reranker?: Reranker;
 	readonly queryGenerator?: ISearchQueryGeneration;
 	readonly attachmentStorage?: IAttachmentStorage;
-	readonly referenceFinder?: ReferenceFinder;
+	readonly referenceClient?: WebReferenceClient;
 	readonly modelCatalog?: AgentModelCatalog;
 	readonly ocrEngine?: ITextRecognition;
 	readonly imageDescriber?: IImageDescription;
@@ -154,7 +154,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		openRouterBaseURL,
 		appURL,
 		defaultModel: defaultAgentModel,
-		finder: overrides.referenceFinder
+		client: overrides.referenceClient
 	});
 	const suggestionCapability = createSuggestionsCapability({
 		db,
@@ -275,7 +275,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const artifacts = deliverables.artifacts;
 	const relationships = relationshipCapability;
 	const references = referenceCapability;
-	const referenceFinder = referenceCapability.finder;
+
 	const suggestions = suggestionCapability;
 	const skills = skillCapability.services;
 	const diagramCapability = createDiagramsCapability({
@@ -359,7 +359,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		references: {
 			...toolResults,
 			selectionOrigins: noteCapability.selectionOrigins,
-			referenceFinder,
+			referenceClient: referenceCapability.client,
+			referenceCandidates: referenceCapability.candidates,
+			researchSettings: referenceCapability.settings,
+			researchOverrides: referenceCapability.overrides,
 			referenceRanker: referenceCapability.ranking,
 			suggestionCreator: suggestions.creator,
 			transactionRunner,

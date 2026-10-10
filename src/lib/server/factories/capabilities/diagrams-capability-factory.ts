@@ -1,3 +1,4 @@
+import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import {
 	DiagramLabelPresentationService,
@@ -172,8 +173,9 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			defaultModel: input.defaultModel,
 			defaultVisionModel: input.defaultVisionModel,
 			modelSelection: new AgentModelSelectionService(),
-			createToolEventMapper: () => createAgentStream().tools,
+			createStream: createAgentStream,
 			observeWorkflow: traceWorkflow,
+			createGenerationState: () => new DiagramGenerationStore(),
 			generator: createDiagramGeneration(input)
 		}
 	};

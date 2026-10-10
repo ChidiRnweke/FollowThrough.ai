@@ -1,47 +1,39 @@
-import type { DiagramSubmission, DiagramSubmissionDecision } from '$lib/models/diagrams/generation';
-import type { DiagramGenerationEvent } from '$lib/server/controllers/diagrams/generation';
-export type DiagramCompletion =
-	| { readonly kind: 'completed'; readonly draft: DiagramSubmission }
-	| { readonly kind: 'failure'; readonly error: Error };
+import type { ProviderStreamEvent } from '$lib/models/agent';
+import type { DiagramSubmissionDecision } from '$lib/models/diagrams/generation';
+import type { DiagramGenerationEvent, DiagramCompletion } from '$lib/models/diagrams/generation';
 interface PendingDecision {
 	readonly resolve: (decision: DiagramSubmissionDecision) => void;
 	readonly reject: (error: Error) => void;
 }
 /** One generation execution. Updates retain data; the controller invokes all continuations. */
-export class DiagramGenerationStore {
+export interface DiagramGenerationState {
+	readonly abort: AbortController;
+	readonly status: { readonly kind: 'open' } | DiagramCompletion;
+	finish(completion: DiagramCompletion): void;
+	enqueue(event: DiagramGenerationEvent<ProviderStreamEvent>): void;
+	shift(): DiagramGenerationEvent<ProviderStreamEvent> | undefined;
+	wait(wake: () => void): void;
+	takeWake(): (() => void) | undefined;
+	addDecision(id: string, decision: PendingDecision): void;
+	takeDecision(id: string): PendingDecision | undefined;
+	takeDecisions(): readonly PendingDecision[];
+}
+export class DiagramGenerationStore implements DiagramGenerationState {
 	readonly abort = new AbortController();
-	private readonly queue: DiagramGenerationEvent[] = [];
+	private readonly queue: DiagramGenerationEvent<ProviderStreamEvent>[] = [];
 	private readonly decisions = new Map<string, PendingDecision>();
 	private waiting: (() => void) | undefined;
 	private outcome: { readonly kind: 'open' } | DiagramCompletion = { kind: 'open' };
-	private execution:
-		| {
-				readonly completion: Promise<DiagramCompletion>;
-				readonly events: AsyncIterable<DiagramGenerationEvent>;
-		  }
-		| undefined;
 	get status() {
 		return this.outcome;
-	}
-	get completion() {
-		return this.execution?.completion;
-	}
-	get events() {
-		return this.execution?.events;
-	}
-	start(
-		execution: Promise<DiagramCompletion>,
-		stream: AsyncIterable<DiagramGenerationEvent>
-	): void {
-		this.execution = { completion: execution, events: stream };
 	}
 	finish(completion: DiagramCompletion): void {
 		this.outcome = completion;
 	}
-	enqueue(event: DiagramGenerationEvent): void {
+	enqueue(event: DiagramGenerationEvent<ProviderStreamEvent>): void {
 		this.queue.push(event);
 	}
-	shift(): DiagramGenerationEvent | undefined {
+	shift(): DiagramGenerationEvent<ProviderStreamEvent> | undefined {
 		return this.queue.shift();
 	}
 	wait(wake: () => void): void {

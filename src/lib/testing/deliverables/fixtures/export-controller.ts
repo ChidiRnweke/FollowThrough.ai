@@ -1,3 +1,6 @@
+import type { PreparedExport } from '$lib/models/deliverables';
+import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
+import { InMemoryPdfDocument } from '$lib/testing/deliverables/fakes/pdf-document';
 import {
 	Deliverables,
 	type DeliverablesDependencies
@@ -32,14 +35,17 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 
 type ExportOverrides = Omit<Partial<DeliverablesDependencies>, 'docxGenerator' | 'pdfGenerator'> & {
 	docxGenerator?: DeliverablesDependencies['docxGenerator']['render'];
-	pdfGenerator?: DeliverablesDependencies['pdfGenerator']['render'];
+	pdfGenerator?: (input: PreparedExport) => Promise<Buffer>;
+	pdfRendering?: DeliverablesDependencies['pdfGenerator'];
 };
 export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 	const {
 		docxGenerator = async () => Buffer.from('docx'),
 		pdfGenerator = async () => Buffer.from('pdf'),
+		pdfRendering,
 		...dependencies
 	} = overrides;
+	const pdf = new InMemoryPdfDocument(pdfGenerator);
 	const artifacts = new InMemoryArtifactRepository();
 	const storage = new InMemoryAttachmentStorage();
 	const notes = new InMemoryNoteContent();
@@ -75,7 +81,7 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			noteLister: notes,
 			fetchImage: fetchRemoteDataUrl,
 			docxGenerator: new InMemoryDocumentRenderer(docxGenerator),
-			pdfGenerator: new InMemoryDocumentRenderer(pdfGenerator),
+			pdfGenerator: pdfRendering ?? { ...createPdfRendering(), preparation: pdf, writer: pdf },
 			zipPacker: new DocumentBundleService(),
 			transactionRunner: new InMemoryTransactionRunner([artifacts, provenance]),
 			...dependencies

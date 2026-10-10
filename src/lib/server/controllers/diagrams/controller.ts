@@ -1,3 +1,5 @@
+import type { AgentStreamState } from '$lib/server/stores/agent/stream';
+import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
 import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
@@ -37,7 +39,12 @@ import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
-import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
+import type { DiagramGenerationState } from '$lib/server/stores/diagrams/generation';
+import type { DiagramGenerationEvent, DiagramCompletion } from '$lib/models/diagrams/generation';
+import type {
+	DiagramGenerationRequest,
+	DiagramSubmissionDecision
+} from '$lib/models/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
@@ -173,10 +180,6 @@ export interface DiagramsController {
 	): Promise<AgentPayload>;
 }
 
-interface ToolEventMapper {
-	map(event: ProviderStreamEvent): AgentEvent | undefined;
-}
-
 type DiagramWorkflowObserver = <T>(
 	name: string,
 	context: {
@@ -222,9 +225,14 @@ export interface DiagramAgentDependencies {
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
 	readonly modelSelection: IAgentModelSelectionService;
-	readonly createToolEventMapper: () => ToolEventMapper;
+	readonly createStream: () => {
+		state: AgentStreamState;
+		reader: AgentStreamReader;
+		presentation: AgentStreamPresentation;
+	};
 	readonly observeWorkflow: DiagramWorkflowObserver;
-	readonly generator: DiagramGenerator;
+	readonly generator: DiagramProviderFactory;
+	readonly createGenerationState: () => DiagramGenerationState;
 }
 
 export interface DiagramsDependencies {
@@ -778,7 +786,11 @@ export class Diagrams implements DiagramsController {
 				tags: ['agent', 'diagram']
 			},
 			async () => {
-				const session = this.dependencies.generation.generator.open(
+				const state = this.dependencies.generation.createGenerationState();
+				const provider = this.dependencies.generation.generator.create();
+				const completion = this.startGeneration(
+					state,
+					provider,
 					{
 						model,
 						operation: task.operation,
@@ -789,9 +801,9 @@ export class Diagrams implements DiagramsController {
 					task.signal
 				);
 				try {
-					const mapper = this.dependencies.generation.createToolEventMapper();
+					const stream = this.dependencies.generation.createStream();
 					let assistantText = '';
-					for await (const item of session.events) {
+					for await (const item of this.readGenerationEvents(state)) {
 						task.signal?.throwIfAborted();
 						if (item.kind === 'submission') {
 							try {
@@ -800,14 +812,17 @@ export class Diagrams implements DiagramsController {
 								else await this.dependencies.mermaidValidator.validate(item.draft.source);
 							} catch (error) {
 								if (!(error instanceof ValidationError)) throw error;
-								session.respond(item.id, { kind: 'rejected', message: error.message });
+								this.respondToGeneration(state, item.id, {
+									kind: 'rejected',
+									message: error.message
+								});
 								continue;
 							}
-							session.respond(item.id, { kind: 'accepted', draft: item.draft });
+							this.respondToGeneration(state, item.id, { kind: 'accepted', draft: item.draft });
 							continue;
 						}
 						const event = item.event;
-						const toolEvent = mapper.map(event);
+						const toolEvent = this.mapToolEvent(stream, event);
 						const activity = toolEvent && toolActivityFromEvent(toolEvent);
 						if (activity)
 							await this.dependencies.generation.conversationMessages.recordToolActivity(
@@ -817,7 +832,9 @@ export class Diagrams implements DiagramsController {
 							);
 						if (event.type === 'text_delta') assistantText += event.text;
 					}
-					const draft = await session.result();
+					const result = await completion;
+					if (result.kind === 'failure') throw result.error;
+					const draft = result.draft;
 					if (draft.kind !== (task.operation === 'convert' ? 'drawio' : 'mermaid'))
 						throw new ValidationError('The Diagram Agent submitted the wrong diagram format.');
 					if (assistantText)
@@ -829,7 +846,8 @@ export class Diagrams implements DiagramsController {
 						);
 					return { ...draft, provenanceId: provenance.id };
 				} finally {
-					await session.close();
+					state.abort.abort(new Error('Diagram generation session closed.'));
+					await completion;
 				}
 			},
 			(result) => JSON.stringify(result)
@@ -892,4 +910,141 @@ export class Diagrams implements DiagramsController {
 			this.dependencies.toolResults.arguments(input)
 		);
 	}
+	private mapToolEvent(
+		stream: {
+			state: AgentStreamState;
+			reader: AgentStreamReader;
+			presentation: AgentStreamPresentation;
+		},
+		event: ProviderStreamEvent
+	): AgentEvent | undefined {
+		if (event.type === 'tool_called') {
+			const call = stream.presentation.start(event.call);
+			stream.state.remember(call.callId, call);
+			return {
+				type: 'tool_started',
+				callId: call.callId,
+				name: stream.reader.name(call.name),
+				arguments: call.arguments
+			};
+		}
+		if (event.type !== 'tool_output') return undefined;
+		const { call } = event;
+		const resolved = stream.presentation.completed(call, stream.state.activeCalls);
+		const { callId } = resolved;
+		if (callId !== undefined) stream.state.forget(callId);
+		const identity = {
+			...(callId === undefined ? {} : { callId }),
+			name: stream.reader.name(resolved.name)
+		};
+		return stream.presentation.outcome(identity, stream.reader.output(call.output));
+	}
+	private startGeneration(
+		state: DiagramGenerationState,
+		provider: DiagramProvider,
+		request: DiagramGenerationRequest,
+		signal?: AbortSignal
+	): Promise<DiagramCompletion> {
+		const combined = signal ? AbortSignal.any([signal, state.abort.signal]) : state.abort.signal;
+		return this.produceDiagram(state, provider, request, combined)
+			.then(
+				(draft): DiagramCompletion => ({ kind: 'completed', draft }),
+				(error): DiagramCompletion => {
+					return {
+						kind: 'failure',
+						error: error instanceof Error ? error : new Error(String(error))
+					};
+				}
+			)
+			.then((completion) => {
+				state.finish(completion);
+				state.takeWake()?.();
+				return completion;
+			});
+	}
+	private respondToGeneration(
+		state: DiagramGenerationState,
+		id: string,
+		decision: DiagramSubmissionDecision
+	): void {
+		const pending = state.takeDecision(id);
+		if (!pending) throw new Error('Diagram submission is no longer awaiting a decision.');
+		pending.resolve(decision);
+	}
+	private emitGeneration(
+		state: DiagramGenerationState,
+		event: DiagramGenerationEvent<ProviderStreamEvent>
+	): void {
+		state.enqueue(event);
+		state.takeWake()?.();
+	}
+	private async *readGenerationEvents(
+		state: DiagramGenerationState
+	): AsyncGenerator<DiagramGenerationEvent<ProviderStreamEvent>> {
+		while (true) {
+			const event = state.shift();
+			if (event) {
+				yield event;
+				continue;
+			}
+			const status = state.status;
+			if (status.kind === 'failure') throw status.error;
+			if (status.kind === 'completed') return;
+			await new Promise<void>((resolve) => state.wait(resolve));
+		}
+	}
+	private async produceDiagram(
+		state: DiagramGenerationState,
+		provider: DiagramProvider,
+		request: DiagramGenerationRequest,
+		signal: AbortSignal
+	): Promise<DiagramSubmission> {
+		const cancel = () => {
+			for (const pending of state.takeDecisions())
+				pending.reject(new Error('Diagram generation was cancelled.'));
+		};
+		signal.addEventListener('abort', cancel, { once: true });
+		try {
+			signal.throwIfAborted();
+			return await provider.run(request, signal, {
+				provider: (event) => this.emitGeneration(state, { kind: 'provider', event }),
+				submit: (draft) => {
+					signal.throwIfAborted();
+					const id = crypto.randomUUID();
+					return new Promise<DiagramSubmissionDecision>((resolve, reject) => {
+						state.addDecision(id, { resolve, reject });
+						this.emitGeneration(state, { kind: 'submission', id, draft });
+					});
+				}
+			});
+		} finally {
+			signal.removeEventListener('abort', cancel);
+			cancel();
+			await provider.close();
+		}
+	}
+}
+
+/** Low-level adapter contract; the owning controller coordinates the application operation. */
+export interface AgentStreamReader {
+	name(name: string): import('$lib/models/agent/tool-catalog').AgentToolName;
+	output(
+		output: import('$lib/models/agent').ProviderToolOutput
+	): import('$lib/models/agent').AgentToolOutcome;
+}
+
+export interface DiagramProviderEvents {
+	provider(event: ProviderStreamEvent): void;
+	submit(draft: DiagramSubmission): Promise<DiagramSubmissionDecision>;
+}
+export interface DiagramProvider {
+	run(
+		request: DiagramGenerationRequest,
+		signal: AbortSignal,
+		events: DiagramProviderEvents
+	): Promise<DiagramSubmission>;
+	close(): Promise<void>;
+}
+export interface DiagramProviderFactory {
+	create(): DiagramProvider;
 }

@@ -33,3 +33,7 @@ export interface DiagramGenerationRequest {
 	readonly instructions: string;
 	readonly renderedPngDataUrl?: string;
 }
+
+export type DiagramCompletion =
+	| { readonly kind: 'completed'; readonly draft: DiagramSubmission }
+	| { readonly kind: 'failure'; readonly error: Error };

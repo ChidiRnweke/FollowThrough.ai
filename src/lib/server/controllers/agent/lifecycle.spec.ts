@@ -638,7 +638,8 @@ it('journals a failed tool call and its correction through the production runner
 		{
 			create: (actor, conversationId) =>
 				createConversationSession(new InMemoryAgentSessionRepository(), actor, conversationId, {
-					virtualize: async (_actor, _id, item) => item
+					prepare: (item) => ({ kind: 'unchanged', item }),
+					apply: async (_actor, _id, content) => content.item
 				})
 		},
 		true,

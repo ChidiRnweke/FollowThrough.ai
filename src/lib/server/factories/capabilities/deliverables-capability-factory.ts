@@ -2,8 +2,19 @@ import type { NoteMarkdownReader } from '$lib/models/note-markdown';
 import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import type { TemplateStyleReader } from '$lib/server/controllers/deliverables/controller';
-import type { DiagramExportRenderer } from '$lib/server/controllers/deliverables/diagram-rendering';
-import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
+import type {
+	DiagramRenderResourceReader,
+	DiagramRasterRendering
+} from '$lib/server/controllers/deliverables/controller';
+import type { DiagramRenderCache } from '$lib/server/stores/deliverables/diagram-resources';
+
+import type {
+	PdfFontReader,
+	PdfDocumentWriter
+} from '$lib/server/controllers/deliverables/controller';
+import type { PdfFontCache } from '$lib/server/stores/deliverables/pdf-fonts';
+import type { PdfDocumentPreparation } from '$lib/server/services/deliverables/pdf';
+
 import type { Database } from '$lib/server/db';
 import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
 import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
@@ -49,10 +60,19 @@ export interface DeliverablesCapability {
 	readonly artifactStorage: IAttachmentStorage;
 	readonly fetchImage: typeof fetchRemoteDataUrl;
 	readonly prepareExport: ExportPreparation;
-	readonly diagramRenderer: DiagramExportRenderer;
+	readonly diagramRenderer: {
+		state: DiagramRenderCache;
+		reader: DiagramRenderResourceReader;
+		renderer: DiagramRasterRendering;
+	};
 	readonly mermaidThemes: MermaidThemeRules;
 	readonly docxGenerator: DocxRenderer;
-	readonly pdfGenerator: PdfRenderingController;
+	readonly pdfGenerator: {
+		state: PdfFontCache;
+		fonts: PdfFontReader;
+		preparation: PdfDocumentPreparation;
+		writer: PdfDocumentWriter;
+	};
 	readonly zipPacker: DocumentBundlePacker;
 	readonly markdownToContent: NoteMarkdownReader;
 }

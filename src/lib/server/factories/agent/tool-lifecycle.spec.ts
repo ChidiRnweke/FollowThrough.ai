@@ -1,5 +1,6 @@
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { streamExecutionFixture } from '$lib/testing/agent/fixtures/stream-execution';
+import type { ProviderStreamEvent } from '$lib/models/agent';
 import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -74,12 +75,12 @@ const run = async (agent: Agent, state?: RunState<unknown, Agent>, events: Agent
 		state ?? 'Change launch day',
 		{ stream: true, maxTurns: 4 }
 	);
-	const mapper = createAgentStream().tools;
+	const transcript: ProviderStreamEvent[] = [];
 	for await (const event of stream) {
-		const mapped = mapper.map(parseProviderStreamEvent(event));
-		if (mapped) events.push(mapped);
+		transcript.push(parseProviderStreamEvent(event));
 	}
 	await stream.completed;
+	events.push(...(await streamExecutionFixture(transcript).collect()));
 	return stream;
 };
 

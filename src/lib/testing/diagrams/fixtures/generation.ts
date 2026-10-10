@@ -1,3 +1,4 @@
+import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
@@ -56,8 +57,9 @@ export const diagramGenerationFixture = () => {
 		defaultModel: 'test/model',
 		defaultVisionModel: 'test/vision',
 		modelSelection: new AgentModelSelectionService(),
-		createToolEventMapper: () => createAgentStream().tools,
+		createStream: createAgentStream,
 		observeWorkflow: (_name, _context, operation) => operation(),
+		createGenerationState: () => new DiagramGenerationStore(),
 		generator: provider
 	};
 	return {

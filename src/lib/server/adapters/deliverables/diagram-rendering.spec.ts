@@ -15,7 +15,7 @@ describe('server diagram rasterization', () => {
 		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		try {
 			const port = (server.address() as AddressInfo).port;
-			await createDiagramExportRenderer().render(
+			await rasterize(
 				[
 					{
 						kind: 'svg',
@@ -33,7 +33,7 @@ describe('server diagram rasterization', () => {
 		}
 	}, 30_000);
 	it('renders Mermaid source as a PNG with its diagram dimensions', async () => {
-		const result = await createDiagramExportRenderer().render(
+		const result = await rasterize(
 			[{ kind: 'mermaid', key: 'flow', source: 'flowchart LR\n A[Source] --> B[Document]' }],
 			themes.resolve(false).config
 		);
@@ -51,7 +51,7 @@ describe('server diagram rasterization', () => {
 		});
 	}, 30_000);
 	it('renders saved SVG diagrams without requiring a browser-supplied PNG', async () => {
-		const result = await createDiagramExportRenderer().render(
+		const result = await rasterize(
 			[
 				{
 					kind: 'svg',
@@ -66,10 +66,18 @@ describe('server diagram rasterization', () => {
 	}, 30_000);
 	it('fails explicitly for invalid Mermaid source', async () => {
 		await expect(
-			createDiagramExportRenderer().render(
+			rasterize(
 				[{ kind: 'mermaid', key: 'invalid', source: 'this is not a Mermaid diagram' }],
 				themes.resolve(false).config
 			)
 		).rejects.toThrow('A diagram could not be rendered for export');
 	}, 30_000);
 });
+
+async function rasterize(
+	sources: readonly import('$lib/models/deliverables').ExportDiagramSource[],
+	config: import('$lib/models/diagrams/mermaid-theme').MermaidRenderConfig
+) {
+	const capability = createDiagramExportRenderer();
+	return capability.renderer.render(sources, config, await capability.reader.read());
+}

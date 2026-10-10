@@ -1,3 +1,8 @@
+import type {
+	DiagramProvider,
+	DiagramProviderFactory,
+	DiagramProviderEvents
+} from '$lib/server/controllers/diagrams/controller';
 import {
 	Agent,
 	OpenAIProvider,
@@ -10,11 +15,6 @@ import OpenAI from 'openai';
 import { ValidationError } from '$lib/errors';
 import type { DiagramGenerationRequest, DiagramSubmission } from '$lib/models/diagrams/generation';
 
-import type {
-	DiagramProvider,
-	DiagramProviderEvents,
-	DiagramProviderFactory
-} from '$lib/server/controllers/diagrams/generation';
 import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
 import {
 	diagramSubmissionParameters,

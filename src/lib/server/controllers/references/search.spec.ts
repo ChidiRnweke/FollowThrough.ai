@@ -1,5 +1,8 @@
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
-import { ReferenceSearch } from './search';
+import { References } from './controller';
+import { referenceSearchFixture } from '$lib/testing/references/fixtures/search';
+import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
+import type { WebResearchOptions } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import type { TextSelection } from '$lib/models/notes';
 import type { Url } from '$lib/models/references';
@@ -12,8 +15,8 @@ const selection: TextSelection = {
 	noteId: testNoteId(),
 	revision: 1,
 	from: 0,
-	to: 14,
-	text: 'Use OAuth 2.0.'
+	to: 9,
+	text: 'Use OAuth'
 };
 
 const result = {
@@ -23,21 +26,32 @@ const result = {
 	content: 'Defines the selected authorization protocol.'
 };
 
+const searchOwner = (
+	client: WebReferenceClient,
+	candidates: ReferenceDiscovery,
+	settings: AgentRunSettingsService,
+	overrides: WebResearchOptions
+) => {
+	const fixture = referenceSearchFixture();
+	return new References({
+		...fixture.dependencies,
+		referenceClient: client,
+		referenceCandidates: candidates,
+		researchSettings: settings,
+		researchOverrides: overrides
+	});
+};
 describe('Reference discovery', () => {
 	it('returns structured web references', async () => {
 		const client = new InMemoryWebReferenceClient();
 		client.result = [result];
-		const finder = new ReferenceSearch(
-			client,
-			new ReferenceDiscovery(),
-			new AgentRunSettingsService(),
-			{}
-		);
-		const references = await finder.find(testActor(), selection);
-		expect(references[0]).toMatchObject({
+		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
+		const references = await finder.suggestFromSelection(testActor(), { selection });
+		expect(
+			references.outcome === 'found' ? references.suggestions[0]?.payload : undefined
+		).toMatchObject({
 			url: result.url,
 			tier: 'standard',
-			confidence: 95,
 			relevanceNote: result.content
 		});
 	});
@@ -45,38 +59,27 @@ describe('Reference discovery', () => {
 	it('accepts an honest empty web result', async () => {
 		const client = new InMemoryWebReferenceClient();
 		client.result = [];
-		const finder = new ReferenceSearch(
-			client,
-			new ReferenceDiscovery(),
-			new AgentRunSettingsService(),
-			{}
-		);
-		const references = await finder.find(testActor(), selection);
-		expect(references).toEqual([]);
+		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
+		const references = await finder.suggestFromSelection(testActor(), { selection });
+		expect(references.outcome).toBe('nothing_relevant');
 	});
 
 	it('passes the selected conversation model to the web client', async () => {
 		const client = new InMemoryWebReferenceClient();
 		client.result = [];
-		const finder = new ReferenceSearch(
-			client,
-			new ReferenceDiscovery(),
-			new AgentRunSettingsService(),
-			{}
+		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
+		await finder.suggestFromSelection(
+			testActor(),
+			{ selection },
+			{ model: 'google/gemini-3-flash' }
 		);
-		await finder.find(testActor(), selection, { model: 'google/gemini-3-flash' });
 		expect(client.model).toBe('google/gemini-3-flash');
 	});
 
 	it('rejects a missing structured web result', async () => {
 		const client = new InMemoryWebReferenceClient();
-		const finder = new ReferenceSearch(
-			client,
-			new ReferenceDiscovery(),
-			new AgentRunSettingsService(),
-			{}
-		);
-		await expect(finder.find(testActor(), selection)).rejects.toMatchObject({
+		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
+		await expect(finder.suggestFromSelection(testActor(), { selection })).rejects.toMatchObject({
 			code: 'INVALID_GENERATED_CONTENT'
 		});
 	});
@@ -84,19 +87,14 @@ describe('Reference discovery', () => {
 	it('maps web client failures to an external-service error', async () => {
 		const client = new InMemoryWebReferenceClient();
 		client.failure = new Error('search unavailable');
-		const finder = new ReferenceSearch(
-			client,
-			new ReferenceDiscovery(),
-			new AgentRunSettingsService(),
-			{}
-		);
-		await expect(finder.find(testActor(), selection)).rejects.toMatchObject({
+		const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
+		await expect(finder.suggestFromSelection(testActor(), { selection })).rejects.toMatchObject({
 			code: 'EXTERNAL_SERVICE'
 		});
 	});
 
 	it('reports missing configuration instead of claiming there are no relevant sources', async () => {
-		const finder = new ReferenceSearch(
+		const finder = searchOwner(
 			new ReferenceResearch('', {
 				baseURL: 'http://127.0.0.1:9',
 				appURL: 'https://followthrough.test',
@@ -107,7 +105,7 @@ describe('Reference discovery', () => {
 			new AgentRunSettingsService(),
 			{}
 		);
-		await expect(finder.find(testActor(), selection)).rejects.toMatchObject({
+		await expect(finder.suggestFromSelection(testActor(), { selection })).rejects.toMatchObject({
 			code: 'EXTERNAL_SERVICE'
 		});
 	});
@@ -116,13 +114,11 @@ describe('Reference discovery', () => {
 it('resolves partial deployment overrides against the reference budget at search time', async () => {
 	const client = new InMemoryWebReferenceClient();
 	client.result = [];
-	const finder = new ReferenceSearch(
-		client,
-		new ReferenceDiscovery(),
-		new AgentRunSettingsService(),
-		{ engine: 'firecrawl', maxResults: 5 }
-	);
-	await finder.find(testActor(), selection);
+	const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {
+		engine: 'firecrawl',
+		maxResults: 5
+	});
+	await finder.suggestFromSelection(testActor(), { selection });
 	expect(client.research).toEqual({ engine: 'firecrawl', maxResults: 5, maxTotalResults: 16 });
 });
 
@@ -132,13 +128,8 @@ it('preserves cancellation errors instead of reporting a provider failure', asyn
 	const abort = new AbortController();
 	abort.abort(cancellation);
 	client.failure = cancellation;
-	const finder = new ReferenceSearch(
-		client,
-		new ReferenceDiscovery(),
-		new AgentRunSettingsService(),
-		{}
-	);
-	await expect(finder.find(testActor(), selection, { signal: abort.signal })).rejects.toBe(
-		cancellation
-	);
+	const finder = searchOwner(client, new ReferenceDiscovery(), new AgentRunSettingsService(), {});
+	await expect(
+		finder.suggestFromSelection(testActor(), { selection }, { signal: abort.signal })
+	).rejects.toBe(cancellation);
 });

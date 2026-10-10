@@ -1,6 +1,7 @@
 import type { AgentToolCompletionObserver } from '$lib/models/agent-tool-protocol';
 import { AgentProviderFailure } from '$lib/errors';
 import type {
+	AgentEvent,
 	ConversationId,
 	ConversationImageInput,
 	PersistedSessionItem
@@ -19,7 +20,9 @@ import {
 } from '$lib/models/agent';
 import type { AgentToolRegistry } from '$lib/models/agent-tool-session';
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentStreamMappings } from '$lib/server/controllers/agent/stream-events';
+import type { AgentStreamState } from '$lib/server/stores/agent/stream';
+import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
+
 import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
 import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
 import type { AgentToolRecovery } from '$lib/server/services/agent/runs/tool-recovery';
@@ -97,7 +100,11 @@ export class AgentExecution implements AgentRunner {
 	constructor(
 		private readonly prompts: AgentPromptPreparation,
 		private readonly recovery: AgentToolRecovery,
-		private readonly createStream: () => AgentStreamMappings,
+		private readonly createStream: () => {
+			state: AgentStreamState;
+			reader: AgentStreamReader;
+			presentation: AgentStreamPresentation;
+		},
 		private readonly tools: (input: {
 			readonly actor: ActorContext;
 			readonly request: RunAgentInput;
@@ -193,7 +200,7 @@ export class AgentExecution implements AgentRunner {
 				imageInput,
 				visionDescriptions ?? []
 			);
-			const runTurn = async function* (): AsyncGenerator<AgentExecutionUpdate> {
+			const runTurn = async function* (this: AgentExecution): AsyncGenerator<AgentExecutionUpdate> {
 				const turn = await providers.turn(provider, {
 					model: run.model,
 					instructions,
@@ -206,13 +213,15 @@ export class AgentExecution implements AgentRunner {
 					decisions,
 					serializedState: run.serializedState
 				});
-				const { tools: mapper, reasoning: reasoningMapper } = createStream();
+				const stream = createStream();
 				// One parse, at the only place the provider's own events enter the app.
 				// Everything below it reads a closed union rather than probing.
 				for await (const event of turn.events) {
-					const toolEvent = mapper.map(event);
+					const toolEvent = this.mapToolEvent(stream, event);
 					if (toolEvent) yield { type: 'event', event: toolEvent };
-					const reasoningEvent = reasoningMapper.map(event);
+					const reasoning = stream.presentation.reasoning(event, stream.state.streamed);
+					stream.state.setStreamed(reasoning.streamed);
+					const reasoningEvent = reasoning.event;
 					if (reasoningEvent) yield { type: 'event', event: reasoningEvent };
 					if (event.type === 'text_delta') {
 						outputText += event.text;
@@ -246,7 +255,7 @@ export class AgentExecution implements AgentRunner {
 						traceparent ??= value;
 					}
 				},
-				() => runTurn(),
+				() => runTurn.call(this),
 				() => outputText
 			);
 		} catch (error) {
@@ -257,4 +266,41 @@ export class AgentExecution implements AgentRunner {
 			await provider.close();
 		}
 	}
+	private mapToolEvent(
+		stream: {
+			state: AgentStreamState;
+			reader: AgentStreamReader;
+			presentation: AgentStreamPresentation;
+		},
+		event: ProviderStreamEvent
+	): AgentEvent | undefined {
+		if (event.type === 'tool_called') {
+			const call = stream.presentation.start(event.call);
+			stream.state.remember(call.callId, call);
+			return {
+				type: 'tool_started',
+				callId: call.callId,
+				name: stream.reader.name(call.name),
+				arguments: call.arguments
+			};
+		}
+		if (event.type !== 'tool_output') return undefined;
+		const { call } = event;
+		const resolved = stream.presentation.completed(call, stream.state.activeCalls);
+		const { callId } = resolved;
+		if (callId !== undefined) stream.state.forget(callId);
+		const identity = {
+			...(callId === undefined ? {} : { callId }),
+			name: stream.reader.name(resolved.name)
+		};
+		return stream.presentation.outcome(identity, stream.reader.output(call.output));
+	}
+}
+
+/** Low-level adapter contract; the owning controller coordinates the application operation. */
+export interface AgentStreamReader {
+	name(name: string): import('$lib/models/agent/tool-catalog').AgentToolName;
+	output(
+		output: import('$lib/models/agent').ProviderToolOutput
+	): import('$lib/models/agent').AgentToolOutcome;
 }

@@ -1,10 +1,13 @@
+import type { PdfFontResources, PreparedExport } from '$lib/models/deliverables';
 import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
 import type { NoteMarkdownReader } from '$lib/models/note-markdown';
 import type { TextSelection } from '$lib/models/notes';
-import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
+import type { PdfFontCache } from '$lib/server/stores/deliverables/pdf-fonts';
+import type { PdfDocumentPreparation } from '$lib/server/services/deliverables/pdf';
+
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
@@ -166,7 +169,12 @@ export interface TodosDependencies {
 	projectLister: { list(actor: ActorContext): Promise<readonly Project[]> };
 	markdownToContent: NoteMarkdownReader;
 	exportPreparer: ExportPreparation;
-	pdfGenerator: PdfRenderingController;
+	pdfGenerator: {
+		state: PdfFontCache;
+		fonts: PdfFontReader;
+		preparation: PdfDocumentPreparation;
+		writer: PdfDocumentWriter;
+	};
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
@@ -270,7 +278,7 @@ export class Todos implements TodosController {
 			notes: [{ title, document }],
 			settings: { ...defaultExportSettings, includeTitle: true }
 		});
-		const pdf = await this.dependencies.pdfGenerator.render(prepared);
+		const pdf = await this.renderPdf(prepared);
 		return {
 			data: pdf.toString('base64'),
 			filename: board.filename
@@ -633,4 +641,37 @@ export class Todos implements TodosController {
 			this.dependencies.toolResults.arguments(input)
 		);
 	}
+	private async renderPdf(input: PreparedExport): Promise<Buffer> {
+		const resources = await this.pdfResources();
+		const document = this.dependencies.pdfGenerator.preparation.prepare(input, resources);
+		return this.dependencies.pdfGenerator.writer.write(document, resources);
+	}
+	private async pdfResources(): Promise<PdfFontResources> {
+		const state = this.dependencies.pdfGenerator.state.current;
+		if (state.kind === 'ready') return state.resources;
+		if (state.kind === 'loading') return state.pending;
+		const pending = this.dependencies.pdfGenerator.fonts.read().then(
+			(resources) => {
+				this.dependencies.pdfGenerator.state.setReady(resources);
+				return resources;
+			},
+			(error) => {
+				this.dependencies.pdfGenerator.state.clear();
+				throw error;
+			}
+		);
+		this.dependencies.pdfGenerator.state.setLoading(pending);
+		return pending;
+	}
+}
+
+/** Low-level adapter contract; the owning controller coordinates the application operation. */
+export interface PdfFontReader {
+	read(): Promise<PdfFontResources>;
+}
+export interface PdfDocumentWriter {
+	write(
+		document: import('pdfmake').PdfDocumentDefinition,
+		resources: PdfFontResources
+	): Promise<Buffer>;
 }

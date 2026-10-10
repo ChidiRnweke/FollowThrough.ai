@@ -1,3 +1,5 @@
+import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
+import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import {
 	References,
@@ -51,7 +53,10 @@ export const referenceSearchFixture = () => {
 	const dependencies: ReferencesDependencies = {
 		...agentToolResultsFixture(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
-		referenceFinder: references,
+		referenceClient: references,
+		referenceCandidates: new ReferenceDiscovery(),
+		researchSettings: new AgentRunSettingsService(),
+		researchOverrides: {},
 		referenceRanker: new ReferenceRanking(),
 		referenceModel: 'test/model',
 		noteActionRequests: requests,
