@@ -76,7 +76,11 @@
 	];
 
 	const railButton = 'size-9 text-muted-foreground hover:text-foreground';
-	const railActive = 'bg-accent text-brand hover:text-brand';
+	// The live destination takes the same brand wash as a selected sidebar row, so the rail and
+	// the expanded tree mark "you are here" the same way. Hover keeps the wash rather than
+	// falling back to the neutral ghost hover.
+	const railActive =
+		'bg-brand/10 text-brand hover:bg-brand/10 hover:text-brand dark:bg-brand/15 dark:hover:bg-brand/15';
 </script>
 
 <Sidebar.Root collapsible="icon" variant="inset">
