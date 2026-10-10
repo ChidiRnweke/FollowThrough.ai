@@ -1,3 +1,8 @@
+import type { ActorContext } from '$lib/models/identity';
+import type { AttachmentId, AttachmentView } from '$lib/models/attachments';
+import type { Diagram, DiagramId, ListProjectDiagramsOutput } from '$lib/models/diagrams';
+import type { NoteId, Note, NoteRevision } from '$lib/models/notes';
+import type { ProjectId, Project } from '$lib/models/projects';
 import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
@@ -231,3 +236,65 @@ export const agentResourcePathSchema = pathSegmentsSchema.pipe(
 	])
 );
 export type AgentResourcePath = z.infer<typeof agentResourcePathSchema>;
+
+export interface AgentGrepInput {
+	readonly pattern: string;
+	readonly path: string;
+	readonly fixed: boolean;
+	readonly ignoreCase: boolean;
+}
+
+export interface AgentFilePaths {
+	normalize(input: string): string;
+	note(projectId: ProjectId, noteId: NoteId): string;
+	revision(projectId: ProjectId, noteId: NoteId, revision: number): string;
+	attachment(projectId: ProjectId, attachmentId: AttachmentId): string;
+	diagram(diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string;
+}
+
+export type AgentFileContentMetadata = Pick<
+	AgentFileMetadata,
+	'byteSize' | 'tokenCount' | 'lineCount' | 'checksumSha256'
+>;
+
+export interface AgentFileContentMeasurement {
+	measure(content: string): AgentFileContentMetadata;
+}
+
+export interface AgentFileMaterialization {
+	file(path: string, mediaType: string, content: string): AgentFile;
+	diagram(path: string, diagram: Pick<Diagram, 'kind' | 'source'>): AgentFile;
+}
+
+export interface AgentFileCommandRules {
+	listDirectory(path: string, files: readonly AgentFile[]): AgentLsResult;
+	search(path: string, input: AgentGrepInput, files: readonly AgentFile[]): AgentGrepResult;
+	read(file: AgentFile, range: AgentSedRange): AgentSedResult;
+	missingRead(path: string, files: readonly AgentFile[]): AgentFileError;
+}
+
+/** Persistence and boundary read ports consumed by the complete file operations. */
+export interface AgentFileRepository {
+	list(actor: ActorContext): Promise<readonly StoredAgentFile[]>;
+	findByPath(actor: ActorContext, path: string): Promise<StoredAgentFile | undefined>;
+	store(actor: ActorContext, input: StoreAgentFileInput): Promise<StoredAgentFile>;
+}
+export interface AgentResourcePathReading {
+	read(path: string): AgentResourcePath | undefined;
+}
+export interface AgentFileProjectReader {
+	listActive(actor: ActorContext): Promise<readonly Project[]>;
+}
+export interface AgentFileNoteReader {
+	findById(actor: ActorContext, id: NoteId): Promise<Note | undefined>;
+	listActive(actor: ActorContext, projectId: ProjectId): Promise<readonly Note[]>;
+	listRevisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
+}
+export interface AgentFileAttachmentReader {
+	findById(actor: ActorContext, id: AttachmentId): Promise<AttachmentView | undefined>;
+	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
+}
+export interface AgentFileDiagramReader {
+	findById(actor: ActorContext, id: DiagramId): Promise<Diagram | undefined>;
+	listForProject(actor: ActorContext, projectId: ProjectId): Promise<ListProjectDiagramsOutput>;
+}

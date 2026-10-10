@@ -1,12 +1,13 @@
-import { agentResourcePathSchema, type AgentResourcePath } from '$lib/models/agent-files';
-import type { ActorContext } from '$lib/models/identity';
-import type { StoredAgentFile, StoreAgentFileInput } from '$lib/models/agent-files';
+import {
+	agentResourcePathSchema,
+	type AgentResourcePath,
+	type AgentResourcePathReading
+} from '$lib/models/agent-files';
+export type { AgentFileRepository } from '$lib/models/agent-files';
 
-export interface AgentFileRepository {
-	list(actor: ActorContext): Promise<readonly StoredAgentFile[]>;
-	findByPath(actor: ActorContext, path: string): Promise<StoredAgentFile | undefined>;
-	store(actor: ActorContext, input: StoreAgentFileInput): Promise<StoredAgentFile>;
+/** Canonical resource decoding stays at the repository input boundary. */
+export class AgentResourcePaths implements AgentResourcePathReading {
+	read(path: string): AgentResourcePath | undefined {
+		return agentResourcePathSchema.safeParse(path).data;
+	}
 }
-
-export const readAgentResourcePath = (path: string): AgentResourcePath | undefined =>
-	agentResourcePathSchema.safeParse(path).data;

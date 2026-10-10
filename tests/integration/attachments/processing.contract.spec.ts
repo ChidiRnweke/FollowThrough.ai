@@ -1,3 +1,5 @@
+import { AgentResourcePaths } from '$lib/server/repositories/agent-files/agent-files';
+import { AgentFileContentMeter } from '$lib/server/adapters/agent-files/content-measurement';
 import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -31,9 +33,13 @@ import type {
 } from '$lib/models/attachments';
 import { actor, context, now, seedNote } from '../database-harness';
 import {
-	AgentVirtualFiles,
-	type AgentVirtualFilesDependencies
-} from '$lib/server/services/agent-files/virtual-files';
+	AgentFiles,
+	type AgentFilesDependencies
+} from '$lib/server/controllers/agent-files/controller';
+import { AgentFilePathsService } from '$lib/server/services/agent-files/paths';
+import { AgentFileMetadataService } from '$lib/server/services/agent-files/metadata';
+import { AgentFileCommandRulesService } from '$lib/server/services/agent-files/commands';
+
 import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 const clients: ReturnType<typeof postgres>[] = [];
@@ -201,9 +207,12 @@ it('preserves successful empty extraction when the version is read back', async 
 		parserKind: 'text',
 		extractedText: ''
 	});
-	const files = new AgentVirtualFiles(
-		capabilityDependencies<AgentVirtualFilesDependencies>({
-			tokens: testTokenizer,
+	const files = new AgentFiles(
+		capabilityDependencies<AgentFilesDependencies>({
+			resourcePaths: new AgentResourcePaths(),
+			paths: new AgentFilePathsService(),
+			metadata: new AgentFileMetadataService(new AgentFileContentMeter(testTokenizer)),
+			commands: new AgentFileCommandRulesService(),
 			attachments: records,
 			stored: new InMemoryAgentFiles()
 		})

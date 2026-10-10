@@ -1,3 +1,4 @@
+import { AgentFiles } from '$lib/server/controllers/agent-files/controller';
 import type { Note } from '$lib/models/notes';
 import { noteEtag } from '$lib/models/notes';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -133,11 +134,16 @@ it('makes stored history unavailable when its project is archived', async () => 
 
 it('reads the old publication from the agent version path', async () => {
 	const { owner, note, project, revisions } = await setup('28008');
-	const { reader } = createAgentFilesCapability({
+	const files = createAgentFilesCapability({
 		tokens: testTokenizer,
 		db: context.db,
 		projects: new ProjectRecords(context.db),
 		notes: new NoteRecords(context.db)
+	});
+	const reader = new AgentFiles({
+		...agentToolResultsFixture(),
+		...files,
+		stored: files.repository
 	});
 	expect(
 		await reader.sed(
