@@ -1530,7 +1530,8 @@ and AI action workflows remain outside this slice.
       Cover autosave/retry/failure, offline and duplicate publication, stale completion, external
       adoption, restore/discard, conflict decisions, later typing and release.
 - [x] Finish matched browser evidence and final checks; exact results are recorded below.
-- [ ] Open a stacked PR on #349 and record required CI results. Inherited failing architecture
+- [x] Open stacked draft PR [#351](https://github.com/ChidiRnweke/FollowThrough.ai/pull/351)
+      on #349. Required CI results are tracked on the PR. Inherited failing architecture
       checks remain errors and prevent merge readiness.
 
 The broad browser/notes checklist remains incomplete. No enforcement, allowance, ignore, or
