@@ -14,13 +14,22 @@ import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import type { TokenCounter } from '$lib/models/tokenization';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import {
+	RunCheckpoints,
+	type RunCheckpointWriter
+} from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { RunApprovals, type RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
+import {
+	RunCancellation,
+	type RunCancellationDecisions
+} from '$lib/server/services/agent/runs/cancellation';
 import type { DateTime } from '$lib/models/workspace';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
+import {
+	NoteActionRequests,
+	type NoteActionSubmission
+} from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
 import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchSettings } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
@@ -42,7 +51,7 @@ import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trus
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
-import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
+import { AgentRunLedger, type WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 import {
 	AgentModels,
 	AgentPreferenceCatalog,
@@ -88,18 +97,18 @@ export interface AgentCapability {
 	readonly toolPreferences: ToolAccess;
 	readonly trust: ToolTrust;
 	readonly runs: AgentRunRecords;
-	readonly cancellations: RunCancellation;
-	readonly approvals: RunApprovals;
+	readonly cancellations: RunCancellationDecisions;
+	readonly approvals: RunApprovalDecisions;
 	readonly preparation: RunPreparation;
-	readonly checkpoints: RunCheckpoints;
-	readonly runLedger: AgentRunLedger;
+	readonly checkpoints: RunCheckpointWriter;
+	readonly runLedger: WorkflowRunLedger;
 	readonly runEvents: AgentRunEventRecords;
 	readonly runDecisions: AgentRunDecisionRecords;
 	readonly sessions: AgentSessionRecords;
 	readonly context: IAgentContext;
 	readonly runner: AgentReasoning;
 	readonly settlements: RunSettlements;
-	readonly noteActionRequests: NoteActionRequests;
+	readonly noteActionRequests: NoteActionSubmission;
 	readonly eventBus: AgentEventBus;
 }
 

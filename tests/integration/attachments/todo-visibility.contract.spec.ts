@@ -49,7 +49,9 @@ const setup = async (identity: number) => {
 	});
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
-			attachments,
+			uploads: attachments,
+			reader: attachments,
+			lifecycle: attachments,
 			todoReader: catalog,
 			transactionRunner
 		})

@@ -1,7 +1,15 @@
+import type {
+	OcrRequest,
+	ITextRecognition
+} from '$lib/server/controllers/attachment-processing/controller';
 import { ExternalServiceError } from '$lib/errors';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
-import { z } from 'zod';
-import type { AgentPayload } from '$lib/models/agent/payload';
+import {
+	ocrResponseSchema,
+	type OcrImage,
+	type OcrPage,
+	type OcrResponse
+} from '$lib/models/attachment-recognition';
 import type { OperationObserver } from '$lib/models/telemetry';
 import type { RecognizedContent, RecognizedPage } from '$lib/models/attachments/ocr';
 
@@ -18,18 +26,6 @@ const DEFAULT_OCR_MODEL = 'mistral-ocr-latest';
  */
 const OCR_TIMEOUT_MS = 300_000;
 
-export interface OcrRequest {
-	/** Presigned URL Mistral fetches the document from; must be publicly reachable. */
-	readonly documentUrl: string;
-	readonly kind: 'document' | 'image';
-	readonly fileName: string;
-	readonly signal?: AbortSignal;
-}
-
-export interface ITextRecognition {
-	ocr(input: OcrRequest): Promise<RecognizedPage>;
-}
-
 /**
  * OCR engine backed by Mistral Document AI (`POST /v1/ocr`) directly rather than
  * through OpenRouter's file-parser chat plugin. Going direct is what widens the
@@ -41,42 +37,6 @@ export interface ITextRecognition {
  * that page. Images are referenced from the markdown as `![id](id)`, so the
  * placeholders are what put each image back in its original reading position.
  */
-
-interface OcrImage {
-	readonly id?: string;
-	readonly image_base64?: string;
-}
-
-interface OcrPage {
-	readonly index?: number;
-	readonly markdown?: string;
-	readonly images?: readonly OcrImage[];
-}
-
-interface OcrResponse {
-	readonly pages?: readonly OcrPage[];
-	readonly usage_info?: { readonly pages_processed?: number };
-	readonly message?: string;
-	/** Mistral's error detail: sometimes a string, sometimes a nested object. */
-	readonly detail?: AgentPayload;
-}
-
-const ocrResponseSchema: z.ZodType<OcrResponse> = z.object({
-	pages: z
-		.array(
-			z.object({
-				index: z.number().optional(),
-				markdown: z.string().optional(),
-				images: z
-					.array(z.object({ id: z.string().optional(), image_base64: z.string().optional() }))
-					.optional()
-			})
-		)
-		.optional(),
-	usage_info: z.object({ pages_processed: z.number().optional() }).optional(),
-	message: z.string().optional(),
-	detail: z.json().optional()
-});
 
 export interface MistralOcrOptions {
 	readonly baseURL?: string;
@@ -108,7 +68,7 @@ const pushMarkdown = (parts: RecognizedContent[], text: string): void => {
  * images (an external link, or an image the engine did not return) stays in the
  * markdown untouched.
  */
-export const pageParts = (page: OcrPage): RecognizedContent[] => {
+const pageParts = (page: OcrPage): RecognizedContent[] => {
 	const markdown = page.markdown ?? '';
 	const images = new Map<string, string>();
 	for (const image of page.images ?? []) {
@@ -129,7 +89,7 @@ export const pageParts = (page: OcrPage): RecognizedContent[] => {
 	return parts;
 };
 
-export const responseParts = (payload: OcrResponse): RecognizedContent[] => {
+const responseParts = (payload: OcrResponse): RecognizedContent[] => {
 	const pages = [...(payload.pages ?? [])].sort(
 		(left, right) => (left.index ?? 0) - (right.index ?? 0)
 	);

@@ -248,3 +248,6 @@ export class AgentProviderFailure extends Error {
 
 /** The server authenticated a different account during an outbox request. */
 export class OutboxAccountChangedError extends Error {}
+
+/** The controller rolls back its conversation when another submission wins the request ID. */
+export class DuplicateNoteActionRequest extends Error {}

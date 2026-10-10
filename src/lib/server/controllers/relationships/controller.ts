@@ -1,3 +1,4 @@
+import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { BacklinkSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -21,10 +22,7 @@ import type {
 	NoteActionRequest,
 	SelectionGeneration
 } from '$lib/models/agent';
-import {
-	DuplicateNoteActionRequest,
-	type NoteActionRequests
-} from '$lib/server/services/agent/runs/note-action-requests';
+import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
 import type { RelationshipRuleClassifier } from '$lib/server/services/relationships/rules';
@@ -62,7 +60,7 @@ export interface RelationshipsDependencies {
 	relationshipClassifier: RelationshipClassifier;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	noteActionRequests: NoteActionRequests;
+	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 	relationshipRules: RelationshipRuleClassifier;

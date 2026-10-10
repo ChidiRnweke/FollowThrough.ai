@@ -63,7 +63,23 @@ import type {
 } from '$lib/server/services/deliverables/artifact-contracts';
 import type { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import type { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
-import type { IAttachmentStorage } from '$lib/server/services/attachments/storage';
+export interface ExportObjectStorage {
+	createUploadUrl(input: {
+		objectKey: string;
+		mediaType: string;
+		byteSize: number;
+		checksumSha256: string;
+		expiresInSeconds: number;
+	}): Promise<string>;
+	createDownloadUrl(
+		objectKey: string,
+		expiresInSeconds: number,
+		downloadFilename?: string
+	): Promise<string>;
+	put(objectKey: string, data: Uint8Array, mediaType: string): Promise<void>;
+	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
+	remove(objectKey: string): Promise<void>;
+}
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 /**
@@ -160,14 +176,14 @@ export interface DeliverablesDependencies {
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	templates: DocumentTemplates;
-	templateStorage: IAttachmentStorage;
+	templateStorage: ExportObjectStorage;
 	templateStyles: typeof verifiedTemplateStyles;
 	noteReader: { get(actor: ActorContext, id: NoteId): Promise<Note> };
 	provenanceRecorder: {
 		record(actor: ActorContext, input: ProvenanceRequest): Promise<Provenance>;
 	};
 	artifactWriter: { store(actor: ActorContext, artifact: Artifact): Promise<Artifact> };
-	artifactStorage: IAttachmentStorage;
+	artifactStorage: ExportObjectStorage;
 	attachmentDownloader: {
 		downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }>;
 	};

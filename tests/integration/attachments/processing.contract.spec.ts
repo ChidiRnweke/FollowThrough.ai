@@ -1,3 +1,4 @@
+import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -17,8 +18,11 @@ import {
 	InMemoryOcrEngine,
 	InMemoryImageDescriber
 } from '$lib/testing/attachments/fakes/processing';
-import { AttachmentContent } from '$lib/server/services/attachments/content';
-import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
+import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
+import {
+	AttachmentContent,
+	AttachmentProcessingService
+} from '$lib/server/services/attachments/content';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import type {
 	AttachmentId,
@@ -82,10 +86,13 @@ const setup = async (suffix: string, chunker = { targetTokens: 2400, overlapToke
 			transaction.connectionScope
 		),
 		storage: new InMemoryStorage(),
-		parsers: new AttachmentParserRegistry([parser]),
+		textReader: parser,
 		ocr: new InMemoryOcrEngine(),
 		imageDescriber: new InMemoryImageDescriber(),
 		content: new AttachmentContent(),
+		imageInstructions: new ImageDescriptionService(),
+		processing: new AttachmentProcessingService(),
+		formats: new AttachmentFormatService(),
 		preferences: {
 			get: async () => ({
 				userId: owner.userId,

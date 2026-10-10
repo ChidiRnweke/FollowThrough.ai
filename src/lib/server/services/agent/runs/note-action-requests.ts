@@ -25,8 +25,7 @@ import type { NoteActionResult } from '$lib/server/repositories/agent/agent-runs
 export type { NoteActionResult } from '$lib/server/repositories/agent/agent-runs';
 import { NotFoundError, ValidationError } from '$lib/errors';
 
-/** The controller rolls back its conversation when another submission wins the request ID. */
-export class DuplicateNoteActionRequest extends Error {}
+import { DuplicateNoteActionRequest } from '$lib/errors';
 
 type PromiseRun = WorkflowAgentRun & { readonly contextSnapshot: PromiseExtractionRunContext };
 type ReferenceRun = WorkflowAgentRun & { readonly contextSnapshot: ReferenceSearchRunContext };
@@ -35,7 +34,39 @@ type DiagramRun = WorkflowAgentRun & { readonly contextSnapshot: DiagramActionRu
 type NoteActionRun = PromiseRun | ReferenceRun | RelatedRun | DiagramRun;
 
 /** Persists note-action identity and input through actual repositories. Controllers own transactions. */
-export class NoteActionRequests {
+export interface NoteActionSubmission {
+	prepare(actor: ActorContext, request: NoteActionRequest): Promise<AgentRunReceipt>;
+	existing(actor: ActorContext, request: NoteActionRequest): Promise<AgentRunReceipt>;
+	findExisting(
+		actor: ActorContext,
+		request: NoteActionIdentity
+	): Promise<AgentRunReceipt | undefined>;
+	claim(
+		actor: ActorContext,
+		runId: AgentRunId,
+		kind: 'promise_extraction'
+	): Promise<PromiseRun | undefined>;
+	claim(
+		actor: ActorContext,
+		runId: AgentRunId,
+		kind: 'reference_search'
+	): Promise<ReferenceRun | undefined>;
+	claim(
+		actor: ActorContext,
+		runId: AgentRunId,
+		kind: 'related_notes'
+	): Promise<RelatedRun | undefined>;
+	claim(
+		actor: ActorContext,
+		runId: AgentRunId,
+		kind: 'diagram_action'
+	): Promise<DiagramRun | undefined>;
+	queued(
+		kind: NoteActionRunContext['kind']
+	): Promise<readonly { actor: ActorContext; runId: AgentRunId }[]>;
+	recordResult(runId: AgentRunId, result: NoteActionResult): Promise<void>;
+}
+export class NoteActionRequests implements NoteActionSubmission {
 	constructor(
 		private readonly runs: AgentRunRepository,
 		private readonly events: AgentRunEventRepository,

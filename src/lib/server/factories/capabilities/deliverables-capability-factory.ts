@@ -3,7 +3,7 @@ import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
-import type { IAttachmentStorage } from '$lib/server/services/attachments/storage';
+import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
 import { ArtifactLibrary } from '$lib/server/services/deliverables/artifacts';
 import { packZip } from '$lib/server/services/deliverables/bundle';
 import { generateDocx } from '$lib/server/services/deliverables/docx';

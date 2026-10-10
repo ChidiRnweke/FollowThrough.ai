@@ -16,7 +16,7 @@ describe('Document image processing', () => {
 		];
 		await process(view('application/pdf'));
 		expect(describer.calls[0]).toMatchObject({
-			context: 'Introduction.',
+			prompt: expect.stringContaining('Introduction.'),
 			imageDataUrl: 'data:image/png;base64,AAA'
 		});
 	});

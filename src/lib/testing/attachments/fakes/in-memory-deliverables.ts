@@ -12,7 +12,7 @@ import type { ArtifactRepository, TemplateRepository } from '$lib/server/reposit
 import type {
 	IAttachmentStorage,
 	StoredObjectInfo
-} from '$lib/server/services/attachments/storage';
+} from '$lib/server/repositories/attachments/object-storage';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant

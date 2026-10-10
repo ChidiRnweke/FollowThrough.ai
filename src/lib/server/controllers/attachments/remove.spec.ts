@@ -9,12 +9,16 @@ import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 describe('attachment search removal', () => {
 	it('removes the attachment and its indexed content together', async () => {
-		const { service, repository, search, process } = setupAttachments();
+		const { uploads, reader, downloads, lifecycle, repository, search, process } =
+			setupAttachments();
 		const attachment = view('application/pdf');
 		await process(attachment);
 		const controller = new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
-				attachments: service,
+				uploads,
+				reader,
+				downloads,
+				lifecycle,
 				attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
 					.attachments,
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
@@ -29,11 +33,15 @@ describe('attachment search removal', () => {
 });
 
 it('keeps attachment bytes when index removal rolls back', async () => {
-	const { service, repository, search, storage, process } = setupAttachments();
+	const { uploads, reader, downloads, lifecycle, repository, search, storage, process } =
+		setupAttachments();
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
-			attachments: service,
+			uploads,
+			reader,
+			downloads,
+			lifecycle,
 			attachmentIndexer: capabilityDependencies<AttachmentsDependencies['attachmentIndexer']>({
 				remove: async () => {
 					throw new Error('Index unavailable');
@@ -62,11 +70,15 @@ it('keeps attachment bytes when index removal rolls back', async () => {
 });
 
 it('commits physical cleanup intent without deleting bytes inside the transaction', async () => {
-	const { service, repository, search, storage, process } = setupAttachments();
+	const { uploads, reader, downloads, lifecycle, repository, search, storage, process } =
+		setupAttachments();
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
-			attachments: service,
+			uploads,
+			reader,
+			downloads,
+			lifecycle,
 			attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
 				.attachments,
 			transactionRunner: new InMemoryTransactionRunner([repository, search])

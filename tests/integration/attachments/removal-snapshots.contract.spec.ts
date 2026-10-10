@@ -8,7 +8,7 @@ import type { NoteRevisionId } from '$lib/models/notes';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { AttachmentLibrary } from '$lib/server/services/attachments/library';
+import { AttachmentLifecycleService } from '$lib/server/services/attachments/library';
 import { InMemoryStorage } from '$lib/testing/attachments/fakes/processing';
 import { context, now, seedNote } from '../database-harness';
 
@@ -18,7 +18,7 @@ it('restores the snapshotted attachment with its file bytes after path removal',
 	const records = new AttachmentRecords(tx.database);
 	const notes = new NoteRecords(tx.database);
 	const storage = new InMemoryStorage();
-	const library = new AttachmentLibrary(records, notes, storage);
+	const library = new AttachmentLifecycleService(records, notes);
 	const attachment = await tx.transactionRunner.run(async () => {
 		const upload = await records.createUpload(owner, {
 			id: crypto.randomUUID() as AttachmentUploadId,

@@ -103,3 +103,25 @@ export interface OwnedAttachmentUpload {
 	readonly upload: AttachmentUpload;
 }
 export type UploadRetentionCursor = Pick<AttachmentUpload, 'expiresAt' | 'id'>;
+
+export type AttachmentUploadOwner =
+	| { readonly kind: 'note'; readonly id: string }
+	| { readonly kind: 'project'; readonly id: string };
+export interface AttachmentFileDetails {
+	readonly name: string;
+	readonly mediaType: string;
+	readonly byteSize: number;
+}
+export type AttachmentUploadDraft = (
+	| { readonly noteId: string; readonly projectId?: never }
+	| { readonly projectId: string; readonly noteId?: never }
+) & { readonly path: string; readonly mediaType: string; readonly byteSize: number };
+export type AttachmentUploadRequest = AttachmentUploadDraft & { readonly checksumSha256: string };
+export interface AttachmentUploadIntent {
+	readonly upload: AttachmentUpload;
+	readonly uploadUrl: string;
+	readonly requiredHeaders: Readonly<Record<string, string>>;
+}
+export type AttachmentObjectWrite =
+	| { readonly kind: 'stored' }
+	| { readonly kind: 'failure'; readonly status: number; readonly detail?: string };

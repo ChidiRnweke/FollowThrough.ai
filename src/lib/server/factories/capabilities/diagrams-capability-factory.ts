@@ -13,7 +13,7 @@ import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
-import type { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
+import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 import type {
 	AgentModelCatalog,
 	AgentPreferenceEditor
@@ -51,7 +51,7 @@ export interface DiagramsCapabilityInput {
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
-	readonly runs: AgentRunLedger;
+	readonly runs: WorkflowRunLedger;
 	readonly builtInSkills: BuiltInSkills;
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;

@@ -1,3 +1,4 @@
+import { DuplicateNoteActionRequest } from '$lib/errors';
 import { promisesForResponsibility } from '$lib/server/services/todos/promise-discovery';
 import { hasTodoEdits } from '$lib/services/todos/edits';
 import { decideTodoCreation } from '$lib/services/todos/creation';
@@ -56,10 +57,7 @@ import type {
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
 import type { SelectionGeneration } from '$lib/models/agent';
-import {
-	DuplicateNoteActionRequest,
-	type NoteActionRequests
-} from '$lib/server/services/agent/runs/note-action-requests';
+import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
@@ -139,7 +137,7 @@ export interface TodosDependencies {
 	markdownToContent: typeof noteContentFromMarkdown;
 	exportPreparer: typeof prepareExport;
 	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
-	noteActionRequests: NoteActionRequests;
+	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 	promiseGeneration: SelectionGeneration;

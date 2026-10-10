@@ -4,7 +4,12 @@ import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 import { NotFoundError } from '$lib/errors';
 /** The controller holds the row lock through persistence and any immediate terminal event. */
-export class RunCancellation {
+export interface RunCancellationDecisions {
+	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
+	plan(status: AgentRunStatus, timestamp: DateTime): RunCancellationWrite | null;
+	persist(actor: ActorContext, runId: AgentRunId, change: RunCancellationWrite): Promise<AgentRun>;
+}
+export class RunCancellation implements RunCancellationDecisions {
 	constructor(private readonly runs: AgentRunRepository) {}
 	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {
 		const run = await this.runs.findForWrite(actor, runId);

@@ -103,7 +103,7 @@
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
-	import { uploadNoteAttachment } from './attachment-upload';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
 	import {
 		proofreadSelection,
@@ -439,7 +439,7 @@
 			// upload URL itself.
 			onFileUpload: async (file) => {
 				try {
-					return await uploadNoteAttachment(noteId, file);
+					return await attachmentsController.uploadInline(noteId, file);
 				} catch (error) {
 					toast.error(error instanceof Error ? error.message : 'Image upload failed');
 					throw error;

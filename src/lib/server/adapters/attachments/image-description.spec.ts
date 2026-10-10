@@ -36,7 +36,7 @@ describe('ImageDescription', () => {
 				baseURL: `http://127.0.0.1:${address.port}/v1`
 			}).describe({
 				imageDataUrl,
-				context: 'nearby heading and note text',
+				prompt: 'nearby heading and note text',
 				model: 'vision-test-model'
 			});
 			expect({ description, request: observed }).toMatchObject({
@@ -78,7 +78,11 @@ describe('ImageDescription', () => {
 			await expect(
 				new ImageDescription('synthetic-api-key', {
 					baseURL: `http://127.0.0.1:${address.port}/v1`
-				}).describe({ imageDataUrl: 'https://example.test/image.png', model: 'vision-test-model' })
+				}).describe({
+					imageDataUrl: 'https://example.test/image.png',
+					prompt: 'Describe the image.',
+					model: 'vision-test-model'
+				})
 			).rejects.toThrow('Vision description failed (503)');
 		} finally {
 			await new Promise<void>((resolve, reject) =>

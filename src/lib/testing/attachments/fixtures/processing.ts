@@ -1,8 +1,17 @@
+import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { AttachmentLibrary } from '$lib/server/services/attachments/library';
-import { AttachmentContent } from '$lib/server/services/attachments/content';
-import { AttachmentParserRegistry } from '$lib/server/services/attachments/storage';
+import {
+	AttachmentUploadService,
+	AttachmentReadingService,
+	AttachmentDownloadService,
+	AttachmentLifecycleService
+} from '$lib/server/services/attachments/library';
+import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
+import {
+	AttachmentContent,
+	AttachmentProcessingService
+} from '$lib/server/services/attachments/content';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import {
 	InMemorySearchRepository,
@@ -29,16 +38,22 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 	const ocr = new InMemoryOcrEngine();
 	const describer = new InMemoryImageDescriber();
 	const storage = new InMemoryStorage();
-	const service = new AttachmentLibrary(repository, notes, storage);
+	const uploads = new AttachmentUploadService(repository, notes, storage);
+	const reader = new AttachmentReadingService(repository);
+	const downloads = new AttachmentDownloadService(repository, storage);
+	const lifecycle = new AttachmentLifecycleService(repository, notes);
 	const worker = new AttachmentProcessing({
 		modelSelection: new AgentModelSelectionService(),
 		records: repository,
 		claims,
 		storage,
-		parsers: new AttachmentParserRegistry([textParser]),
+		textReader: textParser,
 		ocr,
 		imageDescriber: describer,
 		content: new AttachmentContent(),
+		imageInstructions: new ImageDescriptionService(),
+		processing: new AttachmentProcessingService(),
+		formats: new AttachmentFormatService(),
 		preferences: {
 			get: async (actor) => ({
 				userId: actor.userId,
@@ -54,7 +69,10 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 		logger: { error: () => {} }
 	});
 	return {
-		service,
+		uploads,
+		reader,
+		downloads,
+		lifecycle,
 		repository,
 		notes,
 		search,

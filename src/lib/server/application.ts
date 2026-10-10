@@ -6,8 +6,8 @@ import {
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { ToolRetriever } from './controllers/tool-discovery/controller';
-import type { ITextRecognition } from './services/attachments/mistral-ocr';
-import type { IImageDescription } from './services/attachments/image-description';
+import type { ITextRecognition } from './controllers/attachment-processing/controller';
+import type { IImageDescription } from './controllers/attachment-processing/controller';
 import type { AttachmentClaims } from './services/attachments/contracts';
 import type { EmbeddingClient } from './services/knowledge-search/contracts';
 import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
@@ -16,7 +16,10 @@ import type { ReferenceFinder } from '$lib/server/services/references/discovery'
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
-import type { IAttachmentStorage, ObjectStorageConfig } from './services/attachments/storage';
+import type {
+	IAttachmentStorage,
+	ObjectStorageConfig
+} from './repositories/attachments/object-storage';
 import type { AgentEventBus } from './stores/agent/events';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
@@ -260,7 +263,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		imageDescriber: overrides.imageDescriber
 	});
 	const attachmentStorage = attachmentCapability.storage;
-	const attachments = attachmentCapability.library;
 	const deliverables = createDeliverablesCapability({
 		db,
 		storage: attachmentStorage
@@ -448,7 +450,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			contextSkills: skills,
 			contextWidgets: widgets.reader,
 			contextDiagrams: diagrams,
-			contextAttachments: attachments,
+			contextAttachments: attachmentCapability.reader,
 			builtInSkills: skillCapability.builtIns,
 			contextMemory: memory.lister,
 			contextProjects: projects,
@@ -483,7 +485,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		attachments: {
-			attachments,
+			uploads: attachmentCapability.uploads,
+			reader: attachmentCapability.reader,
+			downloads: attachmentCapability.downloads,
+			lifecycle: attachmentCapability.lifecycle,
 			todoReader: todos,
 			transactionRunner,
 			attachmentIndexer: knowledgeSearch.attachmentIndexer
@@ -498,7 +503,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenanceRecorder: provenance,
 			artifactWriter: artifacts,
 			artifactStorage: deliverables.artifactStorage,
-			attachmentDownloader: attachments,
+			attachmentDownloader: attachmentCapability.downloads,
 			fetchImage: deliverables.fetchImage,
 			prepareExport: deliverables.prepareExport,
 			exportImageSources: deliverables.exportImageSources,

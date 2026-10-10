@@ -9,7 +9,7 @@
 	import ImageZoom from '$lib/components/shared/image-zoom.svelte';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
-	import { uploadTodoScreenshot } from '../screenshot-upload';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { insertAtCaret, screenshotMarkdown, screenshotsFrom } from '../screenshot-markdown';
 
 	let {
@@ -105,7 +105,7 @@
 		uploading = true;
 		try {
 			for (const file of files) {
-				const url = await uploadTodoScreenshot(todoId, projectId, file);
+				const url = await attachmentsController.uploadScreenshot(todoId, projectId, file);
 				const caretStart = textarea?.selectionStart ?? draft.length;
 				const caretEnd = textarea?.selectionEnd ?? draft.length;
 				const next = insertAtCaret(

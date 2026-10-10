@@ -10,13 +10,13 @@ import {
 } from '$lib/server/services/agent/runs/images';
 import { segmentOutput } from '$lib/server/services/agent/runs/output';
 import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
-import type { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
 import {
 	RunPreparationCancelled,
 	type RunPreparation
 } from '$lib/server/services/agent/runs/preparation';
-import type { RunApprovals } from '$lib/server/services/agent/runs/approvals';
-import type { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
+import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type {
 	ConversationMutationRequest,
@@ -64,7 +64,7 @@ import { AgentProviderFailure } from '$lib/errors';
 import type { IAgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
 import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import type { AttachmentLibrary } from '$lib/server/services/attachments/library';
+import type { AttachmentLookup } from '$lib/server/services/attachments/library';
 import {
 	attachmentFilePath,
 	diagramFilePath
@@ -229,9 +229,9 @@ export interface AgentDependencies {
 	models: AgentModelCatalog;
 	/** Run records: idempotent inserts, lookups and persistence of resolved values. */
 	runs: AgentRunRepository;
-	cancellations: Pick<RunCancellation, 'getForWrite' | 'plan' | 'persist'>;
-	approvals: Pick<RunApprovals, 'getForWrite' | 'plan' | 'persist'>;
-	checkpoints: Pick<RunCheckpoints, 'prepare' | 'persist'>;
+	cancellations: Pick<RunCancellationDecisions, 'getForWrite' | 'plan' | 'persist'>;
+	approvals: Pick<RunApprovalDecisions, 'getForWrite' | 'plan' | 'persist'>;
+	checkpoints: Pick<RunCheckpointWriter, 'prepare' | 'persist'>;
 	preparation: Pick<
 		RunPreparation,
 		'claim' | 'getForWrite' | 'provenance' | 'context' | 'persistProvenance' | 'persistContext'
@@ -262,7 +262,7 @@ export interface AgentDependencies {
 
 	readonly contextDiagrams: Pick<DiagramLibrary, 'get'>;
 
-	readonly contextAttachments: Pick<AttachmentLibrary, 'get'>;
+	readonly contextAttachments: AttachmentLookup;
 
 	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 

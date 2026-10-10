@@ -27,7 +27,9 @@ const setup = () => {
 		todos,
 		controller: new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
-				attachments,
+				uploads: attachments,
+				reader: attachments,
+				lifecycle: attachments,
 				todoReader: todos,
 				transactionRunner: new InMemoryTransactionRunner([attachments])
 			})

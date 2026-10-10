@@ -1,3 +1,4 @@
+import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
@@ -23,7 +24,7 @@ import type {
 } from '$lib/models/agent';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import type { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
+import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 import {
 	assertRenderedPng,
 	diagramRevisionModel
@@ -68,8 +69,7 @@ import type {
 } from '$lib/server/services/diagrams/contracts';
 import type { AgentRunReceipt } from '$lib/models/agent';
 import {
-	NoteActionRequests,
-	DuplicateNoteActionRequest,
+	type NoteActionSubmission,
 	type NoteActionResult
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
@@ -186,7 +186,7 @@ export interface DiagramAgentDependencies {
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
 	readonly runs: Pick<
-		AgentRunLedger,
+		WorkflowRunLedger,
 		| 'prepareCreation'
 		| 'persistCreated'
 		| 'getForWrite'
@@ -248,7 +248,7 @@ export interface DiagramsDependencies {
 	indexEmbeddings: IEmbeddings;
 	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
-	noteActionRequests: NoteActionRequests;
+	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 }

@@ -5,7 +5,12 @@ import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { TodoReader } from '$lib/server/services/todos/contracts';
-import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
+import type {
+	AttachmentUploads,
+	AttachmentReader,
+	AttachmentDownloads,
+	AttachmentLifecycle
+} from '$lib/server/services/attachments/library';
 
 /**
  * Application boundary for attachments: the two-phase upload lifecycle, listing, and
@@ -24,8 +29,8 @@ export interface AttachmentsController {
 	 */
 	initiate(
 		actor: ActorContext,
-		input: Parameters<AttachmentManager['initiate']>[1]
-	): ReturnType<AttachmentManager['initiate']>;
+		input: Parameters<AttachmentUploads['initiate']>[1]
+	): ReturnType<AttachmentUploads['initiate']>;
 	/**
 	 * Finalize a completed upload and return the resulting attachment view.
 	 *
@@ -35,7 +40,7 @@ export interface AttachmentsController {
 	complete(
 		actor: ActorContext,
 		uploadId: AttachmentUploadId
-	): ReturnType<AttachmentManager['complete']>;
+	): ReturnType<AttachmentUploads['complete']>;
 	/**
 	 * Finalize an upload and, in the same transaction, record that a todo's
 	 * description references it.
@@ -47,34 +52,34 @@ export interface AttachmentsController {
 		actor: ActorContext,
 		uploadId: AttachmentUploadId,
 		todoId: TodoId
-	): ReturnType<AttachmentManager['complete']>;
+	): ReturnType<AttachmentUploads['complete']>;
 	/** List the attachments attached to a note, in display order. */
-	list(actor: ActorContext, noteId: NoteId): ReturnType<AttachmentManager['list']>;
+	list(actor: ActorContext, noteId: NoteId): ReturnType<AttachmentReader['list']>;
 	/** List the attachments a todo's description references, in display order. */
-	listForTodo(actor: ActorContext, todoId: TodoId): ReturnType<AttachmentManager['listForTodo']>;
+	listForTodo(actor: ActorContext, todoId: TodoId): ReturnType<AttachmentReader['listForTodo']>;
 	/** List every attachment in a project regardless of which note owns it, for project-wide browsing. */
 	listForProject(
 		actor: ActorContext,
 		projectId: ProjectId
-	): ReturnType<AttachmentManager['listForProject']>;
+	): ReturnType<AttachmentReader['listForProject']>;
 	/** Return a presigned URL that streams the original file bytes. */
 	downloadById(
 		actor: ActorContext,
 		attachmentId: AttachmentId
-	): ReturnType<AttachmentManager['downloadById']>;
+	): ReturnType<AttachmentDownloads['downloadById']>;
 	/** Re-run processing for an attachment whose earlier attempt failed, returning the refreshed view. */
-	retry(actor: ActorContext, attachmentId: AttachmentId): ReturnType<AttachmentManager['retry']>;
+	retry(actor: ActorContext, attachmentId: AttachmentId): ReturnType<AttachmentLifecycle['retry']>;
 	/** Remove an attachment unless its containing note still embeds it. */
 	removeById(
 		actor: ActorContext,
 		attachmentId: AttachmentId
-	): ReturnType<AttachmentManager['removeById']>;
+	): ReturnType<AttachmentLifecycle['removeById']>;
 	/** Return a presigned URL that streams the original file at a note-relative path. */
 	download(
 		actor: ActorContext,
 		noteId: NoteId,
 		path: string
-	): ReturnType<AttachmentManager['download']>;
+	): ReturnType<AttachmentDownloads['download']>;
 	/**
 	 * Read a slice of an attachment's parsed text content by byte offset, returning the
 	 * slice plus the next offset to continue from — lets a client page through a large
@@ -86,14 +91,17 @@ export interface AttachmentsController {
 		path: string,
 		offset?: number,
 		limit?: number
-	): ReturnType<AttachmentManager['read']>;
+	): ReturnType<AttachmentReader['read']>;
 	/** Detach an unreferenced note attachment while retaining file versions for revision restore. */
 	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
 }
 
 /** Everything the {@link AttachmentsController} needs: the attachment manager and a transaction runner for atomic mutations. */
 export interface AttachmentsDependencies {
-	attachments: AttachmentManager;
+	uploads: AttachmentUploads;
+	reader: AttachmentReader;
+	downloads: AttachmentDownloads;
+	lifecycle: AttachmentLifecycle;
 	todoReader: TodoReader;
 	attachmentIndexer: { remove(actor: ActorContext, attachmentId: AttachmentId): Promise<void> };
 	transactionRunner: TransactionRunner;
@@ -101,57 +109,57 @@ export interface AttachmentsDependencies {
 
 export class Attachments implements AttachmentsController {
 	constructor(private readonly dependencies: AttachmentsDependencies) {}
-	initiate(actor: ActorContext, input: Parameters<AttachmentManager['initiate']>[1]) {
-		return this.dependencies.attachments.initiate(actor, input);
+	initiate(actor: ActorContext, input: Parameters<AttachmentUploads['initiate']>[1]) {
+		return this.dependencies.uploads.initiate(actor, input);
 	}
 	complete(actor: ActorContext, uploadId: AttachmentUploadId) {
 		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.attachments.complete(actor, uploadId)
+			this.dependencies.uploads.complete(actor, uploadId)
 		);
 	}
 	completeForTodo(actor: ActorContext, uploadId: AttachmentUploadId, todoId: TodoId) {
 		return this.dependencies.transactionRunner.run(async () => {
 			await this.dependencies.todoReader.get(actor, todoId);
-			const completed = await this.dependencies.attachments.complete(actor, uploadId);
-			await this.dependencies.attachments.linkToTodo(actor, completed.attachment.id, todoId);
+			const completed = await this.dependencies.uploads.complete(actor, uploadId);
+			await this.dependencies.lifecycle.linkToTodo(actor, completed.attachment.id, todoId);
 			return completed;
 		});
 	}
 	list(actor: ActorContext, noteId: NoteId) {
-		return this.dependencies.attachments.list(actor, noteId);
+		return this.dependencies.reader.list(actor, noteId);
 	}
 	async listForTodo(actor: ActorContext, todoId: TodoId) {
 		await this.dependencies.todoReader.get(actor, todoId);
-		return this.dependencies.attachments.listForTodo(actor, todoId);
+		return this.dependencies.reader.listForTodo(actor, todoId);
 	}
 	listForProject(actor: ActorContext, projectId: ProjectId) {
-		return this.dependencies.attachments.listForProject(actor, projectId);
+		return this.dependencies.reader.listForProject(actor, projectId);
 	}
 	downloadById(actor: ActorContext, attachmentId: AttachmentId) {
-		return this.dependencies.attachments.downloadById(actor, attachmentId);
+		return this.dependencies.downloads.downloadById(actor, attachmentId);
 	}
 	retry(actor: ActorContext, attachmentId: AttachmentId) {
 		return this.dependencies.transactionRunner.run(() =>
-			this.dependencies.attachments.retry(actor, attachmentId)
+			this.dependencies.lifecycle.retry(actor, attachmentId)
 		);
 	}
 	removeById(actor: ActorContext, attachmentId: AttachmentId) {
 		return this.dependencies.transactionRunner.run(async () => {
-			const result = await this.dependencies.attachments.removeById(actor, attachmentId);
+			const result = await this.dependencies.lifecycle.removeById(actor, attachmentId);
 			if (result.kind === 'removed')
 				await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
 			return result;
 		});
 	}
 	download(actor: ActorContext, noteId: NoteId, path: string) {
-		return this.dependencies.attachments.download(actor, noteId, path);
+		return this.dependencies.downloads.download(actor, noteId, path);
 	}
 	read(actor: ActorContext, noteId: NoteId, path: string, offset?: number, limit?: number) {
-		return this.dependencies.attachments.read(actor, noteId, path, offset, limit);
+		return this.dependencies.reader.read(actor, noteId, path, offset, limit);
 	}
 	remove(actor: ActorContext, noteId: NoteId, path: string) {
 		return this.dependencies.transactionRunner.run(async () => {
-			const attachmentId = await this.dependencies.attachments.remove(actor, noteId, path);
+			const attachmentId = await this.dependencies.lifecycle.remove(actor, noteId, path);
 			if (attachmentId) await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
 		});
 	}

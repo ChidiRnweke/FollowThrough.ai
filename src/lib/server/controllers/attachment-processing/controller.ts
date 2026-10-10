@@ -1,32 +1,50 @@
 import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
-import {
-	savedTruncatedContent,
-	pendingAttachmentProcessing,
-	completedAttachmentVersion
-} from '$lib/server/services/attachments/content';
+
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentVersion, AttachmentView } from '$lib/models/attachments';
 import type { AgentPreferences } from '$lib/models/agent';
 
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
+	RecognizedPage,
 	DocumentImageDescription,
 	ExtractedAttachmentContent
 } from '$lib/models/attachments/ocr';
-import { isOcrImage, isOcrSupported } from '$lib/server/services/attachments/formats';
-import type { AttachmentContent } from '$lib/server/services/attachments/content';
-import type { ITextRecognition } from '$lib/server/services/attachments/mistral-ocr';
-import type { IImageDescription } from '$lib/server/services/attachments/image-description';
+import type { AttachmentFormats } from '$lib/server/services/attachments/formats';
 import type {
-	IAttachmentStorage,
-	AttachmentParserRegistry
-} from '$lib/server/services/attachments/storage';
+	AttachmentContentPresentation,
+	AttachmentProcessingRules
+} from '$lib/server/services/attachments/content';
+export interface OcrRequest {
+	/** Presigned URL Mistral fetches the document from; must be publicly reachable. */
+	readonly documentUrl: string;
+	readonly kind: 'document' | 'image';
+	readonly fileName: string;
+	readonly signal?: AbortSignal;
+}
+
+export interface ITextRecognition {
+	ocr(input: OcrRequest): Promise<RecognizedPage>;
+}
+
+import type { ImageDescriptionInstructions } from '$lib/server/services/attachments/image-description';
+export interface IImageDescription {
+	describe(input: { imageDataUrl: string; prompt: string; model: string }): Promise<string>;
+}
 import type {
 	AttachmentClaims,
 	AttachmentClaim,
 	AttachmentRepository
 } from '$lib/server/services/attachments/contracts';
 
+export interface AttachmentProcessingStorage {
+	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
+	createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
+}
+export interface AttachmentTextReader {
+	readonly kind: string;
+	parse(bytes: Uint8Array): Promise<string>;
+}
 interface AttachmentProcessingDependencies {
 	readonly modelSelection: IAgentModelSelectionService;
 	records: Pick<
@@ -34,11 +52,14 @@ interface AttachmentProcessingDependencies {
 		'listPendingVersions' | 'findVersionForUpdate' | 'updateVersion'
 	>;
 	claims: AttachmentClaims;
-	storage: IAttachmentStorage;
-	parsers: Pick<AttachmentParserRegistry, 'select'>;
+	storage: AttachmentProcessingStorage;
+	textReader: AttachmentTextReader;
 	ocr: ITextRecognition;
 	imageDescriber: IImageDescription;
-	content: Pick<AttachmentContent, 'plan' | 'render'>;
+	imageInstructions: ImageDescriptionInstructions;
+	content: AttachmentContentPresentation;
+	processing: AttachmentProcessingRules;
+	formats: AttachmentFormats;
 	preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	indexer: {
 		index(
@@ -78,8 +99,8 @@ export class AttachmentProcessing {
 				const view = await this.dependencies.transactionRunner.run(async () => {
 					await claim.assertOwned();
 					const current = await this.dependencies.records.findVersionForUpdate(actor, versionId);
-					if (!current || !pendingAttachmentProcessing(current.version)) return undefined;
-					if (!savedTruncatedContent(current.version))
+					if (!current || !this.dependencies.processing.pending(current.version)) return undefined;
+					if (!this.dependencies.processing.saved(current.version))
 						await this.dependencies.records.updateVersion(actor, {
 							...current.version,
 							processingStatus: 'processing'
@@ -87,7 +108,7 @@ export class AttachmentProcessing {
 					return current;
 				});
 				if (!view) return;
-				const saved = savedTruncatedContent(view.version);
+				const saved = this.dependencies.processing.saved(view.version);
 				const result = saved
 					? { kind: 'extracted' as const, extraction: saved }
 					: await this.extract(actor, view);
@@ -127,18 +148,18 @@ export class AttachmentProcessing {
 	): Promise<ExtractedAttachmentContent | undefined> {
 		const { mediaType, byteSize, objectKey } = view.version;
 		const path = view.attachment.path;
-		const { storage, parsers } = this.dependencies;
-		const parser = parsers.select(mediaType, path);
-		if (parser) {
+		const { storage, textReader } = this.dependencies;
+		if (this.dependencies.formats.text(mediaType, path)) {
 			const bytes = await storage.read(objectKey, byteSize);
-			return { text: await parser.parse(bytes), parserKind: parser.kind };
+			return { text: await textReader.parse(bytes), parserKind: textReader.kind };
 		}
-		if (!isOcrSupported(mediaType, path)) return undefined;
-		const image = isOcrImage(mediaType, path);
+		const kind = this.dependencies.formats.ocrKind(mediaType, path);
+		if (!kind) return undefined;
+		const image = kind === 'image';
 		const documentUrl = await storage.createDownloadUrl(objectKey, 900);
 		const content = await this.dependencies.ocr.ocr({
 			documentUrl,
-			kind: image ? 'image' : 'document',
+			kind,
 			fileName: path
 		});
 		const text = await this.describeDocument(content.parts, model);
@@ -152,7 +173,7 @@ export class AttachmentProcessing {
 				};
 	}
 	private async describeDocument(
-		parts: Parameters<AttachmentContent['plan']>[0],
+		parts: Parameters<AttachmentContentPresentation['plan']>[0],
 		model: string
 	): Promise<string> {
 		const slots = this.dependencies.content.plan(parts);
@@ -188,11 +209,20 @@ export class AttachmentProcessing {
 			};
 		}
 	}
-	private async describeImage(
-		input: Parameters<IImageDescription['describe']>[0]
-	): Promise<DocumentImageDescription> {
+	private async describeImage(input: {
+		imageDataUrl: string;
+		context?: string;
+		model: string;
+	}): Promise<DocumentImageDescription> {
 		try {
-			return { kind: 'described', text: await this.dependencies.imageDescriber.describe(input) };
+			return {
+				kind: 'described',
+				text: await this.dependencies.imageDescriber.describe({
+					imageDataUrl: input.imageDataUrl,
+					model: input.model,
+					prompt: this.dependencies.imageInstructions.prepare(input)
+				})
+			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Image description failed';
 			this.dependencies.logger.error('Image description failed', message);
@@ -208,7 +238,7 @@ export class AttachmentProcessing {
 		await this.dependencies.transactionRunner.run(async () => {
 			await claim.assertOwned();
 			const current = await this.dependencies.records.findVersionForUpdate(actor, view.version.id);
-			if (!current || !pendingAttachmentProcessing(current.version)) return;
+			if (!current || !this.dependencies.processing.pending(current.version)) return;
 			if (result.kind === 'failure') {
 				await this.dependencies.records.updateVersion(actor, {
 					...current.version,
@@ -223,7 +253,7 @@ export class AttachmentProcessing {
 				await this.dependencies.indexer.index(actor, current.attachment, extraction?.text ?? '');
 			await this.dependencies.records.updateVersion(
 				actor,
-				completedAttachmentVersion(current.version, extraction, now())
+				this.dependencies.processing.complete(current.version, extraction, now())
 			);
 		});
 	}
