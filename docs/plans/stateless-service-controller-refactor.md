@@ -1457,8 +1457,9 @@ that agent's changes or claim the wider notes/browser refactor is complete.
       upload callback; this is browser integration evidence, not live object-storage evidence.
 - [x] Verify offline note publication and per-account saved tabs in an isolated Postgres
       production-preview run. Capture matched after images in `docs/pr-evidence/pr336-editor-operations`.
-- [ ] Publish the stacked PR on #347 and record required CI results. Inherited architecture
-      findings still prevent merge readiness.
+- [x] Publish stacked draft PR [#349](https://github.com/ChidiRnweke/FollowThrough.ai/pull/349)
+      on #347. Required CI results are tracked on the PR. Inherited architecture findings
+      still prevent merge readiness; pending checks are not passing evidence.
 
 ### Inventory reconciliation
 
