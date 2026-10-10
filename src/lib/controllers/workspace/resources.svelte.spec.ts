@@ -1,33 +1,32 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { afterEach, describe, expect, it } from 'vitest';
-import { flushSync } from 'svelte';
-import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
+import type {
+	ResourceViewController,
+	WorkspaceResourcesController
+} from '$lib/controllers/workspace/resources';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { initialSyncCursor, syncEtag } from '$lib/models/sync';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import {
 	type WorkspaceResourceIdentity,
 	type WorkspaceResourceType
 } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { initialSyncCursor } from '$lib/models/sync';
-import { syncEtag } from '$lib/models/sync';
 import {
-	InMemorySyncCache,
-	InMemorySyncTransport,
-	InMemoryBatchSyncTransport
-} from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
 } from '$lib/testing/sync/fakes/in-memory-outbox';
-import { createResourceCache } from '$lib/factories/sync/cache';
-import { createMutationQueue } from '$lib/factories/sync/submission';
-import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
-import type {
-	WorkspaceResourcesController,
-	ResourceViewController
-} from '$lib/controllers/workspace/resources';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import {
+	InMemoryBatchSyncTransport,
+	InMemorySyncCache,
+	InMemorySyncTransport
+} from '$lib/testing/sync/fakes/in-memory-sync';
+import { flushSync } from 'svelte';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const project = workspaceRecordSchema.parse({
 	type: 'projects',

@@ -1,33 +1,60 @@
-import type { Note } from '$lib/models/notes';
-import type { WorkspaceSession } from '$lib/controllers/workspace/session';
+import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
+import { TiptapDocumentCopy } from '$lib/client/notes/editor-document';
+import { BrowserWorkspaceEditingEnvironment } from '$lib/client/workspace/editing-environment.svelte';
+import type { NoteWorkspaceEditor } from '$lib/controllers/notes/workspace';
 import { NoteWorkspace, type NoteWorkspaceDependencies } from '$lib/controllers/notes/workspace';
-import { NoteWorkspaceStore } from '$lib/stores/notes/workspace.svelte';
-import { createEditorSession } from '$lib/factories/workspace/editor-session';
-import { NoteDraftEditing } from '$lib/controllers/notes/draft-editing';
+import { BrowserWorkspaceSynchronization } from '$lib/controllers/sync/browser-workspace';
+import { MutationSubmission } from '$lib/controllers/sync/submission';
+import { EditorSessions } from '$lib/controllers/workspace/editor-session';
+import { workspaceDraftStates } from '$lib/factories/workspace/capabilities';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
+import type { NoteEditorPort } from '$lib/models/browser-workspace';
+import type { Note } from '$lib/models/notes';
+import { NoteDocumentPresentationService } from '$lib/services/notes/document-presentation';
+import { NoteEditingService } from '$lib/services/notes/editing';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { WriteAncestryService } from '$lib/services/sync/ancestry';
+import { WorkspaceFieldReplayService } from '$lib/services/sync/rebase';
+import { SyncSchedulingService } from '$lib/services/sync/scheduling';
+import {
+	CacheCommitService,
+	OutboxDeliveryService,
+	OutboxEditingService
+} from '$lib/services/sync/state';
+import { WidgetEditingService } from '$lib/services/widgets/edits';
+import { WidgetPatchService } from '$lib/services/widgets/patches';
+import { WorkspaceDraftService } from '$lib/services/workspace/draft';
+import { NoteEditorOperationStore } from '$lib/stores/notes/editor-operations.svelte';
+import { NoteWorkspaceStore } from '$lib/stores/notes/workspace.svelte';
+import { ResourceCacheStore } from '$lib/stores/sync/cache';
+import { SyncExecutionStore } from '$lib/stores/sync/execution';
+import { MutationQueueStore } from '$lib/stores/sync/submission';
+import { WorkspaceCapabilityStore } from '$lib/stores/workspace/capabilities';
+import { EditorSessionStore } from '$lib/stores/workspace/editor-session.svelte';
+import { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
+import { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryWorkspaceBinding } from '../fakes/in-memory-workspace-binding';
 import { InMemoryWorkspaceEditor } from '../fakes/in-memory-workspace-editor';
 import { InMemoryWorkspaceFeedback } from '../fakes/in-memory-workspace-feedback';
 import { InMemoryWorkspaceRevisions } from '../fakes/in-memory-workspace-revisions';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 
+import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
-import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/models/sync';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
 import { createResourceCache } from '$lib/factories/sync/cache';
-import { createMutationQueue } from '$lib/factories/sync/submission';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { syncEtag } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 	const note = noteBuilder({
 		title: 'Original',
@@ -47,27 +74,65 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 	const transport = new InMemoryNoteWrites();
 	const snapshot = { etag: syncEtag(1n), value: { type: 'notes' as const, value: note } };
 	transport.records.set(key, snapshot);
-	const cache = createResourceCache(note.userId, { repository: outbox.projectedCache, transport });
-	const { writes, execution } = createMutationQueue(note.userId, {
+
+	const cacheState = new ResourceCacheStore<WorkspaceRecord>();
+	const executionState = new SyncExecutionStore();
+	const queueState = new MutationQueueStore<WorkspaceCommand, WorkspaceRecord>();
+	const resourceState = new WorkspaceResourceStore();
+	const projectionState = new WorkspaceProjectionStore(new Map());
+	const account = {
+		accountId: note.userId,
 		repository: outbox,
-		transport,
-		scheduler: new InMemorySyncScheduler(),
+		outbox,
+		cacheStorage: repository,
+		readTransport: transport,
+		writeTransport: transport,
 		writerLock: new InMemoryAccountWriterLock(),
-		pull: () => cache.refresh()
-	});
-	const resources = assembleWorkspaceResources(note.userId, {
-		repository: outbox,
-		cache,
-		writes,
-		execution
-	});
+		scheduler: new InMemorySyncScheduler(),
+		resourceState,
+		projectionState,
+		cacheState,
+		executionState,
+		queueState,
+		ancestry: new WriteAncestryService(),
+		cacheMerge: new CacheCommitService(),
+		editing: new OutboxEditingService(),
+		delivery: new OutboxDeliveryService(),
+		scheduling: new SyncSchedulingService(),
+		fields: new WorkspaceFieldReplayService(),
+		widgetPatches: new WidgetPatchService(),
+		widgetEditing: new WidgetEditingService(),
+		widgetReader: new CatalogWidgetCandidateReader()
+	};
+	const cache = createResourceCache(
+		note.userId,
+		{ repository: outbox.projectedCache, transport },
+		cacheState
+	);
+	const background = new BrowserWorkspaceSynchronization(account);
+	const writes = new MutationSubmission(
+		note.userId,
+		{ repository: outbox, transport, writerLock: account.writerLock },
+		queueState,
+		background,
+		account.editing,
+		account.delivery
+	);
+	const resources = assembleWorkspaceResources(
+		note.userId,
+		{ repository: outbox, cache, writes, execution: background },
+		resourceState,
+		projectionState
+	);
+
 	resources.setOnline(false);
 	await cache.accept(key, snapshot);
 	await resources.initialize();
 	const store = resources.draft({ type: 'notes', id: [note.id] });
 	store.capture();
 	const state = new NoteWorkspaceStore();
-	const session = createEditorSession(() => store.active);
+	const sessionState = new EditorSessionStore();
+	const session = new EditorSessions(() => store.active, sessionState);
 	const scheduler = new InMemorySyncScheduler();
 	const editor = new InMemoryWorkspaceEditor(note);
 	const feedback = new InMemoryWorkspaceFeedback();
@@ -86,24 +151,52 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 			currentRevision: note.currentRevision + 1
 		});
 	}, note.publishedRevision);
+	const binding = new InMemoryWorkspaceBinding(note.userId, executionState);
+	const editorState = new NoteEditorOperationStore();
+	editorState.initialize();
+	const editorIdentity = { key: Symbol('note-editor') };
+	const editors = new WorkspaceCapabilityStore<NoteWorkspaceEditor>();
+	editors.set(editorIdentity, {
+		port: capabilityDependencies<NoteEditorPort>({
+			getDocument: () => editor.getDocument(),
+			getPlainText: () => editor.getPlainText(),
+			setDocument: (doc) => editor.replaceContent(doc),
+			active: true
+		}),
+		state: editorState,
+		events: {
+			changed: () => undefined,
+			shimmer: () => undefined,
+			insertionMoved: () => undefined
+		}
+	});
 	const controller = new NoteWorkspace(
 		capabilityDependencies<NoteWorkspaceDependencies>({
 			state,
-			draft: store,
-			session,
-			scheduler,
-			editor: () => editor,
-			feedback,
-			revisions,
-			editing: new NoteDraftEditing(note.id, store, new NoteSectionNumberingService()),
-			rules: { noteHasUnpublishedChanges },
-			workspace: {
-				current: capabilityDependencies<WorkspaceSession>({ resources }),
-				synchronize: async () => {
-					await resources.synchronize();
-					return { kind: 'complete' };
+			noteId: note.id,
+			account,
+			binding: {
+				state: binding,
+				environment: binding,
+				generation: binding.generation,
+				dispose: () => {
+					binding.disposed = true;
 				}
 			},
+			draftState: workspaceDraftStates.get(store),
+			sessionState,
+			environment: new BrowserWorkspaceEditingEnvironment(),
+			draftRules: new WorkspaceDraftService(),
+			noteEditing: new NoteEditingService(),
+			sections: new NoteSectionNumberingService(),
+			presentation: new NoteDocumentPresentationService(),
+			documents: new TiptapDocumentCopy(),
+			scheduler,
+			editorIdentity: () => editorIdentity,
+			editors,
+			feedback,
+			revisions,
+			rules: { noteHasUnpublishedChanges },
 			conflictChanged: () => undefined
 		})
 	);
@@ -111,6 +204,10 @@ export const noteWorkspaceFixture = async (overrides: Partial<Note> = {}) => {
 	return {
 		note,
 		key,
+		account,
+		background,
+		binding,
+		editorState,
 		cache,
 		repository,
 		outbox,

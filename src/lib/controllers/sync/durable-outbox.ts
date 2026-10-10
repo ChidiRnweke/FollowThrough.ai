@@ -1,43 +1,19 @@
-import type { IOutboxDeliveryService, IOutboxEditingService } from '$lib/services/sync/state';
-import type { WriteAncestryController } from './ancestry';
+import type { OutboxStorage, OutboxTable, OutboxTransaction } from '$lib/models/browser-workspace';
 import type {
 	OutboxEntry,
-	WriteDraft,
-	WriteReceipt,
-	WriteOutcome,
 	WriteBaseResolution,
-	OutboxProjection
+	WriteDraft,
+	WriteOutcome,
+	WriteReceipt
 } from '$lib/models/outbox';
-import type { ResourceState } from '$lib/models/sync';
+import type { IOutboxDeliveryService, IOutboxEditingService } from '$lib/services/sync/state';
+import { cachedSnapshot, receiveResource } from '$lib/services/sync/state';
+import type { WriteAncestryController } from './ancestry';
 import type { DurableWriteController } from './submission';
-import { receiveResource, cachedSnapshot } from '$lib/services/sync/state';
+export type { OutboxStorage, OutboxTable, OutboxTransaction } from '$lib/models/browser-workspace';
 
-export type OutboxTable = 'outbox' | 'records' | 'receipts';
 /** All methods operate on the same live storage transaction. */
-export interface OutboxTransaction<C, T> {
-	entries(): Promise<readonly OutboxEntry<C, T>[]>;
-	receipt(key: string): Promise<WriteReceipt<T> | null>;
-	resource(key: string): Promise<ResourceState<T> | undefined>;
-	allocate(draft: WriteDraft<C, T>): Promise<number>;
-	removeAllocated(sequence: number): Promise<void>;
-	replace(
-		previous: readonly OutboxEntry<C, T>[],
-		next: readonly OutboxEntry<C, T>[]
-	): Promise<void>;
-	putReceipt(key: string, receipt: WriteReceipt<T>): Promise<void>;
-	putResource(key: string, entry: ResourceState<T>): Promise<void>;
-}
-export interface OutboxStorage<C, T> {
-	readDraft(draft: WriteDraft<C, T>): WriteDraft<C, T>;
-	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null>;
-	snapshot(accountId: string): Promise<OutboxProjection<C, T>>;
-	list(accountId: string): Promise<readonly OutboxEntry<C, T>[]>;
-	transaction<R>(
-		accountId: string,
-		tables: readonly OutboxTable[],
-		work: (tx: OutboxTransaction<C, T>) => Promise<R>
-	): Promise<R>;
-}
+
 /** Every read, domain decision and write stays inside the unit of work. */
 export class DurableOutbox<C, T> implements DurableWriteController<C, T> {
 	constructor(

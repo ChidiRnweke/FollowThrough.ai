@@ -1,10 +1,11 @@
-import { expect, it } from 'vitest';
-import { NoteHistory, type NoteHistoryReader } from './history';
-import { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
-import { NotePresentationService } from '$lib/services/notes/presentation';
-import type { NoteActionWorkspace } from './actions';
+import type { NoteHistoryReader } from '$lib/models/browser-workspace';
 import type { NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
 import { testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import type { NoteActionWorkspace } from './actions';
+import { NoteHistory } from './history';
 
 const workspace: NoteActionWorkspace = {
 	current: { bootstrap: { accountId: 'note-history-test' } }

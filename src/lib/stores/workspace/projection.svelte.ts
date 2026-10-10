@@ -1,8 +1,15 @@
-import { SvelteMap } from 'svelte/reactivity';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceViewState } from '$lib/models/workspace-views';
+import { SvelteMap } from 'svelte/reactivity';
 /** Account-scoped normalized records and their mechanical type index. No filtering decisions. */
-export class WorkspaceProjectionStore implements WorkspaceViewState {
+export interface WorkspaceProjectionStateAccess {
+	readonly records: ReadonlyMap<string, WorkspaceRecord>;
+	readonly byType: ReadonlyMap<WorkspaceRecord['type'], readonly WorkspaceRecord[]>;
+	replace(records: ReadonlyMap<string, WorkspaceRecord>): void;
+}
+export class WorkspaceProjectionStore
+	implements WorkspaceProjectionStateAccess, WorkspaceViewState
+{
 	private current = $state.raw<ReadonlyMap<string, WorkspaceRecord>>(new SvelteMap());
 	private index = $state.raw<ReadonlyMap<WorkspaceRecord['type'], readonly WorkspaceRecord[]>>(
 		new SvelteMap()

@@ -1,17 +1,14 @@
-import type { Transaction } from 'dexie';
-import { z } from 'zod';
+import type { OutboxStorage, OutboxTable, OutboxTransaction } from '$lib/models/browser-workspace';
 import {
-	writeReceiptSchema,
 	outboxEntrySchema,
+	writeReceiptSchema,
 	type OutboxEntry,
 	type WriteDraft,
 	type WriteReceipt
 } from '$lib/models/outbox';
-import type {
-	OutboxStorage,
-	OutboxTransaction,
-	OutboxTable
-} from '$lib/controllers/sync/durable-outbox';
+import type { Transaction } from 'dexie';
+import { z } from 'zod';
+
 import {
 	WorkspaceDatabase,
 	WorkspaceStorageError,

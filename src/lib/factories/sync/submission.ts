@@ -1,17 +1,17 @@
-import { OutboxEditingService, OutboxDeliveryService } from '$lib/services/sync/state';
-import {
-	MutationSubmission,
-	type MutationQueueController,
-	type SubmissionLane,
-	type MutationQueueDependencies
-} from '$lib/controllers/sync/submission';
 import {
 	WorkspaceSynchronization,
 	type WorkspaceSynchronizationController
 } from '$lib/controllers/sync/execution';
+import {
+	MutationSubmission,
+	type MutationQueueController,
+	type MutationQueueDependencies,
+	type SubmissionLane
+} from '$lib/controllers/sync/submission';
+import { SyncSchedulingService } from '$lib/services/sync/scheduling';
+import { OutboxDeliveryService, OutboxEditingService } from '$lib/services/sync/state';
 import { SyncExecutionStore } from '$lib/stores/sync/execution';
 import { MutationQueueStore } from '$lib/stores/sync/submission';
-import { SyncSchedulingService } from '$lib/services/sync/scheduling';
 
 export interface MutationQueueCapability<C, T> {
 	readonly writes: MutationQueueController<C, T>;
@@ -20,7 +20,9 @@ export interface MutationQueueCapability<C, T> {
 
 export const createMutationQueue = <C, T>(
 	accountId: string,
-	dependencies: MutationQueueDependencies<C, T>
+	dependencies: MutationQueueDependencies<C, T>,
+	executionState = new SyncExecutionStore(),
+	queueState = new MutationQueueStore<C, T>()
 ): MutationQueueCapability<C, T> => {
 	const execution: WorkspaceSynchronizationController = new WorkspaceSynchronization(
 		{
@@ -29,13 +31,13 @@ export const createMutationQueue = <C, T>(
 			writes: () => writes.submit(),
 			failed: () => writes.notify()
 		},
-		new SyncExecutionStore(),
+		executionState,
 		new SyncSchedulingService()
 	);
 	const writes: MutationQueueController<C, T> & SubmissionLane = new MutationSubmission(
 		accountId,
 		dependencies,
-		new MutationQueueStore<C, T>(),
+		queueState,
 		execution,
 		new OutboxEditingService(),
 		new OutboxDeliveryService()

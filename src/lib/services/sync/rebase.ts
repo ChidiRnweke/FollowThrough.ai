@@ -1,4 +1,5 @@
 import type { WriteRebase } from '$lib/models/outbox';
+import type { WorkspaceResourceType } from '$lib/models/workspace-sync';
 
 /** Key order and absent-versus-undefined fields do not distinguish stored JSON values. */
 const canonical = <V>(value: V): string =>
@@ -48,3 +49,32 @@ export const rebaseFields = <V extends object>(
 	}
 	return { value, overlaps };
 };
+
+export interface IWorkspaceFieldReplayService {
+	replay<V extends object>(
+		type: WorkspaceResourceType,
+		observed: V,
+		local: V,
+		onto: V
+	): { value: V; overlaps: boolean };
+}
+/** Server revision fields follow the authoritative record; widget parts have their own rules. */
+export class WorkspaceFieldReplayService implements IWorkspaceFieldReplayService {
+	replay<V extends object>(
+		type: WorkspaceResourceType,
+		observed: V,
+		local: V,
+		onto: V
+	): { value: V; overlaps: boolean } {
+		const bookkeeping: ReadonlySet<string> = new Set([
+			'updatedAt',
+			'currentRevision',
+			'completedAt'
+		]);
+		const ignored =
+			type === 'widgets'
+				? new Set([...bookkeeping, 'data', 'dataRevision', 'layoutRevision'])
+				: bookkeeping;
+		return rebaseFields(observed, local, onto, ignored);
+	}
+}

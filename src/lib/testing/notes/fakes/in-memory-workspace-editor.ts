@@ -1,5 +1,7 @@
-import type { Note, ProseMirrorDocument } from '$lib/models/notes';
 import type { NoteEditorOperations } from '$lib/controllers/notes/editor-operations';
+import type { Note, ProseMirrorDocument } from '$lib/models/notes';
+import { proseMirrorDocumentSchema } from '$lib/models/notes';
+import type { JSONContent } from '@tiptap/core';
 
 export class InMemoryWorkspaceEditor implements Pick<
 	NoteEditorOperations,
@@ -23,6 +25,9 @@ export class InMemoryWorkspaceEditor implements Pick<
 			type: 'doc',
 			content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
 		};
+	}
+	replaceContent(document: JSONContent): void {
+		this.document = proseMirrorDocumentSchema.parse(document);
 	}
 	replaceDocument(document: ProseMirrorDocument): void {
 		this.document = document;

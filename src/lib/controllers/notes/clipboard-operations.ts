@@ -1,5 +1,7 @@
+import type { ClipboardPaste } from '$lib/models/browser-workspace';
 import type { ClipboardSource, ClipboardTransferReport } from '$lib/models/clipboard';
-export type ClipboardPaste = { readonly kind: 'html' | 'text'; readonly text: string };
+export type { ClipboardPaste } from '$lib/models/browser-workspace';
+
 export interface ClipboardReader {
 	read(format: 'raw' | 'formatted'): Promise<ClipboardPaste>;
 }

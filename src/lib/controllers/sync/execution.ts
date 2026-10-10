@@ -1,6 +1,6 @@
-import type { SyncLane, SyncScheduler, SubmissionResult } from '$lib/models/sync';
-import type { SyncExecutionStore } from '$lib/stores/sync/execution';
+import type { SubmissionResult, SyncLane, SyncScheduler } from '$lib/models/sync';
 import type { ISyncSchedulingService } from '$lib/services/sync/scheduling';
+import type { SyncExecutionStore } from '$lib/stores/sync/execution';
 
 export interface WorkspaceSynchronizationDependencies {
 	readonly scheduler: SyncScheduler;
@@ -115,13 +115,16 @@ export class WorkspaceSynchronization implements WorkspaceSynchronizationControl
 		if (state.retry !== null && state.retry > this.dependencies.scheduler.now())
 			return Promise.resolve();
 		if (state.running) return state.running;
-		const running = this.run(lane).finally(() => {
-			this.state.updateLane(lane, { running: null });
-			this.schedule();
-			const latest = this.state.lane(lane);
-			if (latest.requested && latest.retry === null && !this.stopped && this.online)
-				void this.request(lane);
-		});
+		const running = Promise.resolve()
+			.then(() => this.run(lane))
+			.finally(() => {
+				if (this.state.lane(lane).running !== running || this.state.stopped) return;
+				this.state.updateLane(lane, { running: null });
+				this.schedule();
+				const latest = this.state.lane(lane);
+				if (latest.requested && latest.retry === null && !this.stopped && this.online)
+					void this.request(lane);
+			});
 		this.state.updateLane(lane, { running });
 		return running;
 	}
@@ -168,8 +171,10 @@ export class WorkspaceSynchronization implements WorkspaceSynchronizationControl
 		if (this.stopped || !this.online) return;
 		const at = this.scheduling.wakeAt(this.lanes(), this.state.writeRetries());
 		if (at === null) return;
+		const wakeVersion = this.state.wakeVersion;
 		this.state.setWake(
 			this.dependencies.scheduler.schedule(at, async () => {
+				if (this.state.stopped || this.state.wakeVersion !== wakeVersion) return;
 				this.state.setWake(null);
 				const due = this.scheduling.dueLanes(
 					this.lanes(),

@@ -1,7 +1,8 @@
-import { z } from 'zod';
-import type { Transaction } from 'dexie';
+import type { CacheStorage, CacheTransaction } from '$lib/models/browser-workspace';
 import { syncCursorSchema } from '$lib/models/sync';
-import type { CacheStorage, CacheTransaction } from '$lib/controllers/sync/cache-persistence';
+import type { Transaction } from 'dexie';
+import { z } from 'zod';
+
 import type { StoredCache } from './contracts';
 import { WorkspaceDatabase, storedResourceSchema, storedTable } from './database';
 

@@ -1,17 +1,14 @@
-import type { IOutboxEditingService, IOutboxDeliveryService } from '$lib/services/sync/state';
 import type { WorkspaceSynchronizationController } from '$lib/controllers/sync/execution';
-import type { SynchronizationResult, SyncEtag, SyncScheduler } from '$lib/models/sync';
+import type { AccountWriterLock, OutboxTransport } from '$lib/models/browser-workspace';
 import { type OutboxEntry, type WriteDraft, type WriteOutcome } from '$lib/models/outbox';
+import type { SynchronizationResult, SyncScheduler } from '$lib/models/sync';
+import type { IOutboxDeliveryService, IOutboxEditingService } from '$lib/services/sync/state';
+export type { AccountWriterLock, OutboxTransport } from '$lib/models/browser-workspace';
+export type { SubmissionResult } from '$lib/models/sync';
 
-import type {
-	OutboxProjection,
-	WriteReceipt,
-	WriteBaseResolution,
-	ServerResource,
-	WriteRecovery
-} from '$lib/models/outbox';
-import type { MutationQueueStore } from '$lib/stores/sync/submission';
 import { OutboxAccountChangedError } from '$lib/errors';
+import type { OutboxProjection, WriteBaseResolution, WriteReceipt } from '$lib/models/outbox';
+import type { MutationQueueStore } from '$lib/stores/sync/submission';
 
 export interface DurableWriteController<C, T> {
 	snapshot(accountId: string): Promise<OutboxProjection<C, T>>;
@@ -33,31 +30,7 @@ export interface DurableWriteController<C, T> {
 	settle(accountId: string, sent: OutboxEntry<C, T>, outcome: WriteOutcome<T>): Promise<void>;
 }
 
-export interface OutboxTransport<C, T> {
-	readonly recovery?: {
-		observe(key: string): Promise<ServerResource<T>>;
-		cancel(input: {
-			operationId: string;
-			baseEtag: SyncEtag | null;
-			command: C;
-		}): Promise<WriteRecovery<T>>;
-	};
-	send(input: {
-		readonly operationId: string;
-		readonly baseEtag: SyncEtag | null;
-		readonly command: C;
-	}): Promise<WriteOutcome<T>>;
-}
-
-export interface AccountWriterLock {
-	tryRun<T>(
-		accountId: string,
-		work: () => Promise<T>
-	): Promise<{ kind: 'acquired'; value: T } | { kind: 'busy' }>;
-	run<T>(accountId: string, work: () => Promise<T>): Promise<T>;
-}
 import type { SubmissionResult } from '$lib/models/sync';
-export type { SubmissionResult } from '$lib/models/sync';
 export interface MutationQueueDependencies<C, T> {
 	scheduler: SyncScheduler;
 	repository: DurableWriteController<C, T>;

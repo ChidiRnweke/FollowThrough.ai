@@ -66,6 +66,15 @@ pnpm test:e2e tests/e2e/note-workspace.e2e.ts tests/e2e/note-editor-operations.e
 ```
 
 The observed run used an ignored Playwright configuration to select the isolated server, one
-worker, and the 1680 × 1000 viewport. All five tests passed in 18.9 seconds. New fixtures disable
+worker, and the 1680 × 1000 viewport. The controller-independence correction rerun passed all five tests in 21.9 seconds. New fixtures disable
 inline suggestions. The server used dummy model credentials; these checks do not validate AI
 providers or object storage.
+
+The desktop and narrow after captures were refreshed after removing controller delegation.
+They retain the original viewport, theme, synthetic content and saved interaction state.
+The publication-menu pair is the original #351 regression capture; the correction reran the
+publication and discard journey through the new wiring. Eleven synchronization regression tests
+exercise account/pane lifetime and pending-operation safety. The full browser suite passed
+596 tests, and the isolated production-preview offline publication/account-switch suite passed
+both tests. These results do not establish that unrelated controller dependencies comply with
+the architecture; the global audit still rejects those dependencies.

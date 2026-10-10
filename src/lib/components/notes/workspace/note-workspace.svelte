@@ -87,7 +87,7 @@
 		createNoteWorkspace(
 			view.note.id,
 			draft,
-			() => editorRef,
+			() => editorRef?.identity,
 			(open) => {
 				conflictOpen = open;
 			}

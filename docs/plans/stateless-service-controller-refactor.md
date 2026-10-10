@@ -1507,16 +1507,16 @@ browser suite because the clipboard requires active browser focus.
 This slice starts from #349 at `7cd5b2a8` in `refactor/pr336-note-workspace`, in its own
 worktree. #348 retains shared-service and proofreading ownership. The coordination comment
 on #348 records the narrow `noteHasUnpublishedChanges` contract; its existing method can
-replace the function binding when the stacks combine. No shared-service implementation is
-copied or changed here. Server code, general workspace synchronization/review, widget internals,
-and AI action workflows remain outside this slice.
+replace the function binding when the stacks combine. The controller-independence correction below extends this slice into the supporting account
+synchronization and recovery path. Server code, review UI, widget internals, proofreading and
+AI action workflows remain outside this slice.
 
 - [x] Verify the existing plan and #345 inventory against #349; check open PRs for overlap.
 - [x] Reproduce save, publication, discard, history and both conflict choices using valid
       synthetic local accounts. Capture the unmodified base before editing.
 - [x] Move save/autosave, publication, revision restore, published-draft discard and note conflict
-      coordination into a per-pane browser controller. Retain `NoteDraftEditing`, `EditorSessions`,
-      `WorkspaceDraft`, `NoteEditorOperations` and the existing scheduler/persistence.
+      coordination into a per-pane browser controller. The initial controller delegation was invalid;
+      the correction below replaces it with shared rules, passive state and raw mechanisms.
 - [x] Separate retained note/publication/timer state from controller workflows. Keep factories
       construction-only. Adapt revision access and feedback at the browser boundary.
 - [x] Guard publication before awaiting a save; invalidate old checkpoints on external adoption;
@@ -1534,9 +1534,9 @@ and AI action workflows remain outside this slice.
       on #349. Required CI results are tracked on the PR. Inherited failing architecture
       checks remain errors and prevent merge readiness.
 
-The broad browser/notes checklist remains incomplete. No enforcement, allowance, ignore, or
-migration baseline is changed by this contribution. #345's inventory is historical evidence,
-not a list of errors to suppress.
+The broad browser/notes checklist remains incomplete. The correction strengthens controller-import
+enforcement without an allowance, ignore or migration baseline. #345's inventory is historical
+evidence, not a list of errors to suppress.
 
 ### Observed verification for this slice
 
@@ -1563,3 +1563,60 @@ Initial browser test attempts exposed test timing assumptions around publication
 undo focus, and navigation before reload. The final scenarios wait for persisted state and settled
 navigation. The stale publication metadata defect was independently reproduced on the base and
 fixed in the controller; it was not classified as a test-only failure.
+
+### Controller-independence correction — 2026-10-10
+
+The first #351 implementation violated controller independence. `notes/workspace.ts` imported
+six other controller modules: workspace resources, editor sessions, account sessions, note draft
+editing, editor operations and note history. Five supplied workflow dependencies; history supplied
+a raw reader type. Type-only imports did not make the workflow delegation valid.
+
+- [x] Remove every controller dependency from the note workflow. The note controller now owns
+      save, publication, restore, discard and conflict transactions and their I/O ordering. It uses
+      the existing session checkpoints, editor state, pure note rules and persistence mechanisms.
+- [x] Give background account synchronization an independent controller over the same raw
+      repository, transports, cache, outbox projection, lane state, writer lock and scheduler.
+      No controller methods are forwarded through renamed contracts or factory callbacks in
+      these two operation paths. Some I/O sequencing is repeated because each entry point must
+      own its operation; ancestry, cache merge, draft and field-replay decisions are shared rules.
+- [x] Move shared raw I/O and editor contracts out of controller modules. Factories register
+      the actual mounted editor port and state under an opaque identity. Saving reads that
+      existing editor; external adoption alone replaces its document. Stores expose explicit
+      state interfaces and never invoke their retained workflow promises or callbacks.
+- [x] Retain account-wide retry after pane close. Publish each lane promise before starting
+      work, guard completion by promise identity, and invalidate replaced retry callbacks.
+      Account teardown clears the old state and notifies pending readers. Binding generation
+      guards prevent a late result from clearing a replacement account session.
+- [x] Preserve cancellation proof and dependency review during discard. Regression tests cover
+      concurrent note/background retry, close during a send, stale account results, retry after
+      close, lost send acknowledgement, offline uncertain sends, coalesced later typing, a new
+      dependent edit, stale wake callbacks, held reads at account loss, and another note's queue.
+- [x] Add an unconditional import audit for browser and server controllers, including relative,
+      type-only, dynamic and re-exported imports. Add tests for the boundary. Clarify independence
+      in all three frontend skill copies. No suppressions or baselines are added.
+- [x] Recheck open PR ownership. #348 remains at `92860a95`; the coordination comment records
+      the supporting pure-rule extractions and its ownership of shared API migration/proofreading.
+      The new workspace field-replay policy is domain-specific; it does not duplicate #348's
+      generic field replay capability.
+
+The global audit still finds 66 controller-import edges already present on #349, with no new
+edges. These include the earlier editor/clipboard chain, note actions/history, workspace resources
+and sessions, generic sync/submission, chat, other browser features and server controllers.
+They remain errors. This correction fixes the #351 note path and its background synchronization
+entry point; it does not certify the rest of #336. The remaining work is visible through
+`pnpm test:topology`. Chisel reports 42 inherited imports, down from #349's 44. The #345 semantic
+checker reports 762 findings against 765 on #349, with no new file/rule/message combinations.
+
+Observed correction verification:
+
+- Type checking passes with zero errors and warnings. Source, test-quality and UI audits pass.
+- Full unit suite: 582 files, 4,519 passed and one existing skip. The additional sibling-queue
+  regression is verified in the focused synchronization suite.
+- Full browser suite: 92 files, 596 passed. Five authenticated synthetic E2E journeys pass.
+- Isolated note/sync contracts: 28 files, 161 passed. Production-preview offline note publication
+  and per-account tab restoration: two passed. Production web/worker builds and build-output
+  audit pass. The full PWA suite and live AI/object-storage flows are not claimed.
+- Desktop and narrow after captures were refreshed and inspected against the original #349
+  before captures. The publication-menu pair remains the original observed regression evidence.
+- Required architecture remains failing because of the inherited edges above. These failures
+  are not suppressed, and #351 remains draft rather than merge-ready.

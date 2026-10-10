@@ -1,6 +1,9 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { describe, expect, it } from 'vitest';
+import type { AgentRunTransport } from '$lib/controllers/agent/run-transport';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import type {
 	AgentRunId,
 	AgentRunSnapshot,
@@ -10,29 +13,26 @@ import type {
 	StoredMessage
 } from '$lib/models/agent';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { syncEtag } from '$lib/models/sync';
+import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { createChatFixture } from '$lib/testing/agent/chat-session';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
-	testActor,
-	testNow,
 	runAgentInputBuilder,
-	suggestionBuilder
+	suggestionBuilder,
+	testActor,
+	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createResourceCache } from '$lib/factories/sync/cache';
-import { createMutationQueue } from '$lib/factories/sync/submission';
-import type { AgentRunTransport } from '$lib/controllers/agent/run-transport';
-import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
-import { createChatFixture } from '$lib/testing/agent/chat-session';
-import { chatPresentation } from '$lib/factories/agent/presentation';
+import { describe, expect, it } from 'vitest';
 
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
 const runId = '40000000-0000-4000-8000-000000000001' as AgentRunId;

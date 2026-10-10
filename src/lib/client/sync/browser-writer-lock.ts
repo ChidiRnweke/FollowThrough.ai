@@ -1,4 +1,4 @@
-import type { AccountWriterLock } from '$lib/controllers/sync/submission';
+import type { AccountWriterLock } from '$lib/models/browser-workspace';
 
 /** The browser releases the lock when a tab exits, before another tab recovers its writes. */
 export const browserWriterLock: AccountWriterLock = {

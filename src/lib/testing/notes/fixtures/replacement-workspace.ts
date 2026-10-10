@@ -1,17 +1,17 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { syncEtag } from '$lib/models/sync';
+import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	noteBuilder,
 	projectBuilder,

@@ -2,8 +2,8 @@ import type {
 	ResourceState,
 	SyncCursor,
 	SyncEtag,
-	TransferState,
-	SynchronizationResult
+	SynchronizationResult,
+	TransferState
 } from '$lib/models/sync';
 
 export interface ResourceReadAttempt {
@@ -23,7 +23,20 @@ export interface ResourceCacheSnapshot<T> {
 }
 
 /** Account-scoped cache observations and pending reads, without I/O or cache decisions. */
-export class ResourceCacheStore<T> {
+export interface ResourceCacheStateAccess<T> {
+	read(): ResourceCacheSnapshot<T>;
+	update(changes: Partial<ResourceCacheSnapshot<T>>): void;
+	listeners(): ReadonlySet<() => void>;
+	subscribe(listener: () => void): () => void;
+	fetching(key: string): Promise<SynchronizationResult> | undefined;
+	setFetching(key: string, work: Promise<SynchronizationResult>): void;
+	removeFetching(key: string): void;
+	attempts(): ReadonlyMap<string, ResourceReadAttempt>;
+	setAttempt(key: string, attempt: ResourceReadAttempt): void;
+	removeAttempt(key: string): void;
+	clearAttempts(): void;
+}
+export class ResourceCacheStore<T> implements ResourceCacheStateAccess<T> {
 	private state: ResourceCacheSnapshot<T> = {
 		entries: new Map(),
 		readGeneration: 0,
