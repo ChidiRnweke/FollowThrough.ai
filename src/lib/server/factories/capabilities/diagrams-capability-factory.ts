@@ -1,3 +1,7 @@
+import {
+	DiagramLabelPresentationService,
+	type DiagramLabelPresentation
+} from '$lib/services/diagrams/labels';
 import { DiagramEditingService, type DiagramEditingRules } from '$lib/services/diagrams/editing';
 import {
 	DiagramLifecycleService as DiagramLifecycleRuleService,
@@ -114,6 +118,7 @@ export interface DiagramsCapability {
 	readonly canvasSource: CanvasSourceReader;
 	readonly svgSanitizer: DrawioSvgPreviewSanitizer;
 	readonly labels: DrawioLabels;
+	readonly labelPresentation: DiagramLabelPresentation;
 	readonly mermaidValidator: MermaidSourceValidator;
 	readonly generationRules: DiagramGenerationRules;
 	/** One clock for every diagram write, services and controller alike. */
@@ -139,6 +144,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 		canvasSource: new PresentedCanvasSource(input.sessions),
 		svgSanitizer: new DrawioSvgSanitizer(),
 		labels: new DrawioLabelReader(),
+		labelPresentation: new DiagramLabelPresentationService(),
 		mermaidValidator: new MermaidSubmissionValidator(new NodeMermaidSyntaxReader()),
 		generationRules: new DiagramGenerationRuleService(),
 		now: () => new Date().toISOString() as DateTime,

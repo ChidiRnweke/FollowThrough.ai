@@ -5,7 +5,8 @@
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 
 	import { legacyNoteReview, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
+	import { createDiagramReviews } from '$lib/factories/diagrams/reviews';
+	const diagramReviews = createDiagramReviews();
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -86,7 +87,7 @@
 	const diagramBaseline = $derived.by((): ApprovalBaseline => {
 		if (diagram?.state.kind !== 'ready') return { kind: 'none' };
 		const { source, title } = diagram.state.value;
-		const read = readDrawioLabels(source);
+		const read = diagramReviews.read(source);
 		return read.kind === 'labels'
 			? { kind: 'diagram', labels: read.labels, title: title ?? 'Untitled diagram' }
 			: { kind: 'none' };

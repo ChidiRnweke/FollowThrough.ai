@@ -1,3 +1,4 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -64,6 +65,7 @@ const setup = () => {
 			indexWriter: index,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			diagramLabelPresentation: new DiagramLabelPresentationService(),
 			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, search])

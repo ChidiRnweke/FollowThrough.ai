@@ -1,3 +1,4 @@
+import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
 import type { Database } from '$lib/server/db';
 import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
@@ -14,7 +15,7 @@ import {
 	exportDiagramReferences,
 	exportWidgetReferences
 } from '$lib/services/deliverables/export-preparation';
-import { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
+import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
 import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
@@ -38,7 +39,8 @@ export const createDeliverablesCapability = (input: DeliverablesCapabilityInput)
 	exportImageSources,
 	exportDiagramReferences,
 	exportWidgetReferences,
-	diagramRenderer: new DiagramRasterizer(),
+	diagramRenderer: createDiagramExportRenderer(),
+	mermaidThemes: new MermaidThemeService(),
 	docxGenerator: generateDocx,
 	pdfGenerator: generatePdf,
 	zipPacker: packZip,

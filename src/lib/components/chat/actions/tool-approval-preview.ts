@@ -3,8 +3,9 @@ import type { AgentPreferenceValues } from '$lib/models/agent';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { FieldChange } from '$lib/components/agent';
 import { argumentLabel } from './tool-approval-fields';
-import { readDrawioLabels } from '$lib/client/diagrams/drawio/labels';
-import { drawioLabelDiff } from '$lib/services/diagrams/labels';
+import { createDiagramReviews } from '$lib/factories/diagrams/reviews';
+import type { DiagramChange } from '$lib/models/diagrams/drawio-labels';
+const diagramReviews = createDiagramReviews();
 import {
 	jsonPatchSchema,
 	widgetCatalog,
@@ -65,18 +66,6 @@ export type ApprovalBaseline =
  * `removed` would make an empty removal mean both "nothing was removed" and
  * "there was nothing to remove from".
  */
-export type DiagramChange =
-	| { readonly kind: 'created'; readonly title: string; readonly labels: readonly string[] }
-	| {
-			readonly kind: 'edited';
-			readonly title: string;
-			readonly added: readonly string[];
-			readonly removed: readonly string[];
-			readonly kept: number;
-	  }
-	/** The proposed source did not parse, so there is nothing truthful to show. */
-	| { readonly kind: 'unreadable'; readonly title: string };
-
 /**
  * What a widget approval shows: the widget as the shared rule would leave it, beside what it is
  * now for an edit. A proposal the rule would refuse says why, so approving it is not a surprise.
@@ -177,25 +166,6 @@ export const isNoteBodyTool = (name: string): boolean => NOTE_BODY_TOOLS.has(nam
 /** Tools whose payload is a whole draw.io document. */
 const DIAGRAM_TOOLS = new Set(['create_diagram', 'edit_diagram']);
 
-const diagramTitle = (args: AgentPayloadObject, fallback: string): string =>
-	typeof args.title === 'string' && args.title.trim() ? args.title : fallback;
-
-const diagramChange = (
-	name: string,
-	args: AgentPayloadObject,
-	baseline: ApprovalBaseline
-): DiagramChange => {
-	const source = typeof args.source === 'string' ? args.source : '';
-	const read = readDrawioLabels(source);
-	const before = baseline.kind === 'diagram' ? baseline : undefined;
-	const title = diagramTitle(args, before?.title ?? 'Untitled diagram');
-	if (read.kind === 'unreadable') return { kind: 'unreadable', title };
-	// An edit without its before-image cannot claim anything was added, so it
-	// reports what the diagram will contain — the same answer creating gives.
-	if (name !== 'edit_diagram' || !before) return { kind: 'created', title, labels: read.labels };
-	return { kind: 'edited', title, ...drawioLabelDiff(before.labels, read.labels) };
-};
-
 /** Tools whose arguments describe a widget the shared rule can apply here. */
 const WIDGET_TOOLS = new Set(['create_widget', 'edit_widget_data', 'edit_widget_layout']);
 
@@ -276,7 +246,14 @@ export const approvalPreview = (
 			)
 		};
 	if (DIAGRAM_TOOLS.has(name))
-		return { kind: 'diagram', change: diagramChange(name, args, baseline) };
+		return {
+			kind: 'diagram',
+			change: diagramReviews.preview(
+				name,
+				args,
+				baseline.kind === 'diagram' ? baseline : { kind: 'none' }
+			)
+		};
 	if (WIDGET_TOOLS.has(name)) return { kind: 'widget', change: widgetChange(name, args, baseline) };
 	if (!NOTE_BODY_TOOLS.has(name)) return { kind: 'arguments' };
 	if (baseline.kind !== 'note_review')

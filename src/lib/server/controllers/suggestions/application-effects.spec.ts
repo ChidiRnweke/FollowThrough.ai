@@ -1,3 +1,4 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -68,6 +69,7 @@ describe('Proposal effect coordination', () => {
 				diagramWriter: diagrams,
 				drawioXmlValidator: new DrawioXmlValidator(),
 				drawioSvgSanitizer: new DrawioSvgSanitizer(),
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: new DrawioLabelReader(),
 				now: () => testNow,
 				diagramIndexer: diagrams,

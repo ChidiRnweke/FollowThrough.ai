@@ -1,8 +1,9 @@
-import { mode } from 'mode-watcher';
+import type { MermaidTheme } from '$lib/models/diagrams/mermaid-theme';
 import type { DiagramSize, ExportSettings } from '$lib/models/deliverables';
 import { svgViewBoxSize } from '$lib/services/deliverables/export-preparation';
 import { rasterizeSvg } from '$lib/client/images/rasterize';
-import { initializeMermaid, sanitizeMermaidSvg } from '$lib/client/diagrams/mermaid-rendering';
+import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+const mermaidDiagrams = createMermaidDiagrams();
 import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 
 /**
@@ -90,58 +91,6 @@ async function sha256hex(value: string): Promise<string> {
 	return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-const INLINED_PROPERTIES = [
-	'fill',
-	'fill-opacity',
-	'stroke',
-	'stroke-width',
-	'stroke-dasharray',
-	'opacity',
-	'font-size',
-	'font-weight',
-	'text-anchor'
-];
-
-/**
- * Mermaid styles its SVG through a <style> block, which PDF SVG rendering ignores.
- * Mount the SVG off-screen and bake the computed styles into presentation attributes.
- */
-function inlineSvgStyles(markup: string): string {
-	const host = document.createElement('div');
-	host.style.position = 'fixed';
-	host.style.left = '-10000px';
-	host.style.top = '0';
-	host.innerHTML = markup;
-	document.body.appendChild(host);
-	try {
-		const svg = host.querySelector('svg');
-		if (!svg) return markup;
-		const elements = [...svg.querySelectorAll('*')].filter(
-			(element) => element.tagName.toLowerCase() !== 'style'
-		);
-		// Read all computed values before mutating anything: stripping a class would
-		// break the CSS selectors that style the element's descendants.
-		const resolved = elements.map((element) => {
-			const computed = getComputedStyle(element);
-			return INLINED_PROPERTIES.map(
-				(property) => [property, computed.getPropertyValue(property)] as const
-			);
-		});
-		elements.forEach((element, index) => {
-			for (const [property, value] of resolved[index]!) {
-				if (value) element.setAttribute(property, value.replaceAll('px', ''));
-			}
-			element.removeAttribute('class');
-			element.removeAttribute('style');
-		});
-		svg.querySelectorAll('style').forEach((styleElement) => styleElement.remove());
-		svg.removeAttribute('style');
-		return svg.outerHTML;
-	} finally {
-		host.remove();
-	}
-}
-
 /**
  * Render every mermaid block so the server can embed diagrams.
  *
@@ -162,29 +111,26 @@ export async function renderDiagrams(
 	// Diagrams follow the export's own palette, never the reader's colour mode: the
 	// document lands somewhere we do not control, and a dark-mode render is unusable
 	// on paper. Defaults to light for the same reason.
-	const mermaid = initializeMermaid({
+	const theme: MermaidTheme = {
 		base: settings.diagramTheme?.base ?? 'light',
 		...(settings.diagramTheme?.colors ? { palette: settings.diagramTheme.colors } : {})
-	});
-	try {
-		for (const source of sources) {
-			try {
-				const { svg } = await mermaid.render(`export-diagram-${crypto.randomUUID()}`, source);
-				// Inline before sanitizing: the sanitizer strips the <style> block the
-				// computed styles are read from.
-				const markup = sanitizeMermaidSvg(inlineSvgStyles(svg));
-				const hash = await sha256hex(source);
-				const size = svgViewBoxSize(markup);
-				if (size) sizes[hash] = size;
-				const png = await rasterizeSvg(markup);
-				if (png) pngs[hash] = png;
-				else svgs[hash] = markup;
-			} catch (error) {
-				throw new Error('A diagram could not be rendered for export', { cause: error });
-			}
+	};
+	for (const source of sources) {
+		try {
+			const markup = await mermaidDiagrams.renderDocument(
+				`export-diagram-${crypto.randomUUID()}`,
+				source,
+				theme
+			);
+			const hash = await sha256hex(source);
+			const size = svgViewBoxSize(markup);
+			if (size) sizes[hash] = size;
+			const png = await rasterizeSvg(markup);
+			if (png) pngs[hash] = png;
+			else svgs[hash] = markup;
+		} catch (error) {
+			throw new Error('A diagram could not be rendered for export', { cause: error });
 		}
-	} finally {
-		initializeMermaid(mode.current === 'dark');
 	}
 	return { svgs, pngs, sizes };
 }

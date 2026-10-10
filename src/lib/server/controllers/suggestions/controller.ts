@@ -1,7 +1,7 @@
 import type { TodoCreationRules } from '$lib/services/todos/edits';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import { searchableDrawioText } from '$lib/services/diagrams/labels';
+import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
@@ -146,6 +146,7 @@ export interface SuggestionsDependencies {
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	drawioLabels: DrawioLabels;
+	readonly diagramLabelPresentation: DiagramLabelPresentation;
 	now: () => DateTime;
 	transactionRunner: TransactionRunner;
 }
@@ -232,7 +233,9 @@ export class Suggestions implements SuggestionsController {
 				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(
 					input.drawioReview.renderedSvg
 				);
-				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
+				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				);
 				const diagram = await this.dependencies.diagramWriter.persistContent(actor, {
 					kind: 'drawio',
 					diagramId: created.after.value.id,
@@ -356,7 +359,9 @@ export class Suggestions implements SuggestionsController {
 			source,
 			searchableText:
 				suggestion.payload.kind === 'drawio'
-					? searchableDrawioText(this.dependencies.drawioLabels.read(source))
+					? this.dependencies.diagramLabelPresentation.searchText(
+							this.dependencies.drawioLabels.read(source)
+						)
 					: source,
 			sourceAnchorId: suggestion.sourceAnchorId,
 			provenanceId: suggestion.provenanceId,

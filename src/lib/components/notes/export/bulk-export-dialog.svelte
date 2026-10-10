@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+	const mermaidDiagrams = createMermaidDiagrams();
+
 	import { loadExportSettings } from './load-settings';
 	import { accessMessage } from '$lib/services/sync/state';
 	import { Form } from '$lib/components/ui/form';
@@ -14,7 +17,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
+
 	import { mermaidSourcesIn, renderDiagrams } from './render-diagrams';
 	import ExportSettingsFields from './export-settings-fields.svelte';
 	import { generateBundle, generateDocument } from '$lib/remote/deliverables/deliverables.remote';
@@ -99,7 +102,9 @@
 		mermaidSourcesIn(documents.filter((entry) => selected.has(entry.id)))
 	);
 	const hasDiagrams = $derived(mermaidSources.length > 0);
-	const hasSelfStyledDiagrams = $derived(mermaidSources.some(diagramKeepsOwnColours));
+	const hasSelfStyledDiagrams = $derived(
+		mermaidSources.some((source) => mermaidDiagrams.keepsOwnColours(source))
+	);
 
 	const indent = (depth: number): string =>
 		['pl-3', 'pl-8', 'pl-13', 'pl-18', 'pl-23'][depth] ?? 'pl-23';

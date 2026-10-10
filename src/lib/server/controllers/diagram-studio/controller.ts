@@ -1,7 +1,7 @@
 import type { IconSearch } from '$lib/server/services/diagrams/icons';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
-import { searchableDrawioText } from '$lib/services/diagrams/labels';
+import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
 import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
 import type { DiagramRevisionChange } from '$lib/models/diagrams';
 import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
@@ -216,6 +216,7 @@ export interface DiagramStudioDependencies {
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
 	drawioLabels: DrawioLabels;
+	readonly diagramLabelPresentation: DiagramLabelPresentation;
 	iconSearch: IconSearch;
 	canvasSource: CanvasSourceReader;
 	/** Injected so the write path has one clock, the way the services do. */
@@ -317,7 +318,9 @@ export class DiagramStudio implements DiagramStudioController {
 				source,
 				// No preview yet. Only the draw.io embed can draw one, so the gallery says
 				// "No preview yet" until the canvas opens this and exports it.
-				searchableText: searchableDrawioText(this.dependencies.drawioLabels.read(source)),
+				searchableText: this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				),
 				currentRevision: 1,
 				publishedRevision: 0,
 				createdAt: timestamp,
@@ -392,7 +395,9 @@ export class DiagramStudio implements DiagramStudioController {
 			...(diagram.title ? { title: diagram.title } : {}),
 			labels:
 				diagram.kind === 'drawio'
-					? searchableDrawioText(this.dependencies.drawioLabels.read(diagram.source))
+					? this.dependencies.diagramLabelPresentation.searchText(
+							this.dependencies.drawioLabels.read(diagram.source)
+						)
 					: diagram.source
 		};
 	}
@@ -441,7 +446,9 @@ export class DiagramStudio implements DiagramStudioController {
 		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
 			this.dependencies.transactionRunner.run(async () => {
 				const source = this.dependencies.drawioXmlValidator.validate(input.source);
-				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
+				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				);
 				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
 					kind: 'save',
 					source,
@@ -461,7 +468,9 @@ export class DiagramStudio implements DiagramStudioController {
 			this.dependencies.transactionRunner.run(async () => {
 				const source = this.dependencies.drawioXmlValidator.validate(input.source);
 				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
+				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				);
 				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
 					kind: 'publish',
 					source,

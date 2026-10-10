@@ -1,3 +1,4 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { expect, it, vi } from 'vitest';
@@ -58,6 +59,7 @@ it.each([
 				diagramTrash: library.lifecycle,
 				diagramDraftWriter: library.draftWriter,
 				drawioXmlValidator: { validate: (source) => source },
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => [diagram.searchableText] },
 				diagramIndexer: new InMemoryDiagrams(),
 				transactionRunner,

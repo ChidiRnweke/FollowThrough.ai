@@ -398,6 +398,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			drawioXmlValidator: diagramCapability.xmlValidator,
 			drawioSvgSanitizer: diagramCapability.svgSanitizer,
 			drawioLabels: diagramCapability.labels,
+			diagramLabelPresentation: diagramCapability.labelPresentation,
 			iconSearch: diagramCapability.iconSearch,
 			canvasSource: diagramCapability.canvasSource,
 			now: diagramCapability.now
@@ -424,6 +425,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			drawioXmlValidator: diagramCapability.xmlValidator,
 			drawioSvgSanitizer: diagramCapability.svgSanitizer,
 			drawioLabels: diagramCapability.labels,
+			diagramLabelPresentation: diagramCapability.labelPresentation,
 			now: diagramCapability.now,
 			transactionRunner,
 			suggestionRejecter: suggestions.rejecter,
@@ -521,6 +523,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteLister: notes.treeReader,
 			diagramReader: diagrams.finder,
 			diagramRenderer: deliverables.diagramRenderer,
+			mermaidThemes: deliverables.mermaidThemes,
 			docxGenerator: deliverables.docxGenerator,
 			pdfGenerator: deliverables.pdfGenerator,
 			zipPacker: deliverables.zipPacker,

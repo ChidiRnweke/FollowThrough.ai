@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+	const mermaidDiagrams = createMermaidDiagrams();
+
 	import { loadExportSettings } from './load-settings';
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
@@ -12,7 +15,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
+
 	import {
 		type DiagramRenders,
 		mergeDiagramRenders,
@@ -90,7 +93,9 @@
 	// palette caveat only when a diagram ignores the palette.
 	const mermaidSources = $derived(mermaidSourcesIn(documents));
 	const hasDiagrams = $derived(mermaidSources.length > 0);
-	const hasSelfStyledDiagrams = $derived(mermaidSources.some(diagramKeepsOwnColours));
+	const hasSelfStyledDiagrams = $derived(
+		mermaidSources.some((source) => mermaidDiagrams.keepsOwnColours(source))
+	);
 
 	// draw.io diagrams travel as the SVG their editor exported, rasterized here the
 	// same way a mermaid render is. Only the ones the documents actually reference.

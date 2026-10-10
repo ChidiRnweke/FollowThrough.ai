@@ -145,7 +145,7 @@ export default defineConfig({
 						'src/lib/client/sync/database.svelte.spec.ts',
 						'src/lib/client/clipboard/transfer.svelte.spec.ts',
 						'src/lib/client/markdown/rendering.svelte.spec.ts',
-						'src/lib/client/diagrams/mermaid-rendering.svelte.spec.ts',
+						'src/lib/controllers/diagrams/mermaid.svelte.spec.ts',
 						'src/lib/components/edra/commands/cut-editor.svelte.spec.ts',
 						'src/lib/components/edra/commands/table-editing.svelte.spec.ts',
 						'src/lib/client/sync/workspace-local-repository.svelte.spec.ts',

@@ -908,3 +908,36 @@ Every service module below has a planned disposition. This is routing, not compl
   38 files / 234 tests. Isolated database contracts pass: 27 files / 153 tests before the shared
   editing extraction. Architecture remains incomplete at 58 prohibited imports and 10 missing
   interfaces; topology/source/test-quality checks pass. Final whole-application checks remain pending.
+
+## Diagram presentation and browser rendering — 2026-10-10
+
+- DiagramLabelPresentationService owns visible-label normalization, search text and comparison.
+  DiagramReviews coordinates browser XML decoding and comparison; components no longer decode
+  and compare the labels themselves. Server publication invokes the same normalization capability.
+- MermaidThemeService supplies one palette/configuration rule. MermaidDiagrams coordinates complete
+  SVG rendering, PNG preparation and image downloads. Browser adapters own vendor rendering, DOM
+  style inlining, sanitization, rasterization and object URL cleanup. Document render calls receive
+  their own resolved palette instead of changing global configuration around the whole export.
+- Chat drawings now have an explicit generation store and controller. Each mounted copy gets its
+  own SVG identity. Closing or replacing a drawing prevents late success or failure from replacing
+  the current result. The component retains reactive source/theme observation and DOM rendering.
+- Type check and lint pass. Focused node tests pass: 23 files / 145 tests. Browser diagram/chat/export
+  tests pass: 16 files / 95 tests. Isolated diagram/suggestion contracts pass: 11 files / 63 tests.
+  Architecture remains incomplete at 55 prohibited imports and 10 missing interfaces; topology,
+  source and test-quality checks pass. Broader diagram editing, export and approval workflows
+  remain pending; this does not complete a whole implementation phase.
+
+## Server diagram rendering resources — 2026-10-10
+
+- DiagramExportRendering coordinates a local resource reader and disposable browser renderer.
+  The renderer is an infrastructure adapter receiving immutable font/script resources. Its
+  retained font field is removed. A process store owns resolved resources and the outstanding read.
+  Failure clears that read for retry. Network blocking, dimensions, timeout and browser cleanup
+  retain their existing behavior.
+- Real browser raster tests retain PNG dimensions, invalid-source failures and network isolation.
+  Additional tests cover shared outstanding reads, reuse after file access becomes unavailable
+  and successful retry after a failed read. Focused rendering tests pass: 13 files / 68 tests,
+  plus the three resource-lifetime cases. Full unit verification passes: 544 files / 4,324 tests /
+  one existing skip. Type check and lint pass. Architecture remains incomplete at 55 prohibited
+  imports and nine missing interfaces; topology/source/test-quality pass. Final verification and
+  the remaining artifact/template/export capabilities are still pending.

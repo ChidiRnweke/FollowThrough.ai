@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DiagramRasterizer } from './diagram-rendering';
-import { createMermaidConfig } from '$lib/services/diagrams/mermaid-theme';
+import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
+import { MermaidThemeService } from '$lib/services/diagrams/mermaid-theme';
+const themes = new MermaidThemeService();
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -14,7 +15,7 @@ describe('server diagram rasterization', () => {
 		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 		try {
 			const port = (server.address() as AddressInfo).port;
-			await new DiagramRasterizer().render(
+			await createDiagramExportRenderer().render(
 				[
 					{
 						kind: 'svg',
@@ -22,7 +23,7 @@ describe('server diagram rasterization', () => {
 						source: `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/><image href="http://127.0.0.1:${port}/private" width="20" height="20"/></svg>`
 					}
 				],
-				createMermaidConfig(false)
+				themes.resolve(false).config
 			);
 			expect(requests).toEqual([]);
 		} finally {
@@ -32,9 +33,9 @@ describe('server diagram rasterization', () => {
 		}
 	}, 30_000);
 	it('renders Mermaid source as a PNG with its diagram dimensions', async () => {
-		const result = await new DiagramRasterizer().render(
+		const result = await createDiagramExportRenderer().render(
 			[{ kind: 'mermaid', key: 'flow', source: 'flowchart LR\n A[Source] --> B[Document]' }],
-			createMermaidConfig(false)
+			themes.resolve(false).config
 		);
 		const raster = result.get('flow');
 		if (!raster) throw new Error('Diagram was not rendered');
@@ -50,7 +51,7 @@ describe('server diagram rasterization', () => {
 		});
 	}, 30_000);
 	it('renders saved SVG diagrams without requiring a browser-supplied PNG', async () => {
-		const result = await new DiagramRasterizer().render(
+		const result = await createDiagramExportRenderer().render(
 			[
 				{
 					kind: 'svg',
@@ -59,15 +60,15 @@ describe('server diagram rasterization', () => {
 						'<svg xmlns="http://www.w3.org/2000/svg" width="180" height="80"><rect width="180" height="80" fill="red"/></svg>'
 				}
 			],
-			createMermaidConfig(false)
+			themes.resolve(false).config
 		);
 		expect(result.get('drawio')?.size).toEqual({ width: 180, height: 80 });
 	}, 30_000);
 	it('fails explicitly for invalid Mermaid source', async () => {
 		await expect(
-			new DiagramRasterizer().render(
+			createDiagramExportRenderer().render(
 				[{ kind: 'mermaid', key: 'invalid', source: 'this is not a Mermaid diagram' }],
-				createMermaidConfig(false)
+				themes.resolve(false).config
 			)
 		).rejects.toThrow('A diagram could not be rendered for export');
 	}, 30_000);

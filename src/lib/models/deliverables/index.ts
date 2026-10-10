@@ -312,3 +312,9 @@ export interface RegenerateArtifactOutput {
 	readonly artifact: Artifact;
 	readonly downloadUrl: string;
 }
+
+/** Immutable local assets supplied to a disposable rendering browser. */
+export interface DiagramRenderResources {
+	readonly mermaidScript: string;
+	readonly fontData: string;
+}

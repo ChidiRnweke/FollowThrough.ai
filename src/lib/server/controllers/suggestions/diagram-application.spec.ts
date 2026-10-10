@@ -1,3 +1,4 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
@@ -55,6 +56,7 @@ const setup = (source = VALID_DRAWIO_XML) => {
 			sourceNotes: notes,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			diagramLabelPresentation: new DiagramLabelPresentationService(),
 			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, suggestions, effects])

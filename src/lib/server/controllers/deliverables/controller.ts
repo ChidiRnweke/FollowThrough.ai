@@ -28,9 +28,9 @@ import type {
 	exportWidgetReferences
 } from '$lib/services/deliverables/export-preparation';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
-import type { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
+import type { DiagramExportRenderer } from './diagram-rendering';
 import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
-import { createMermaidConfig } from '$lib/services/diagrams/mermaid-theme';
+import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
 import { attachmentIdFromSrc } from '$lib/services/deliverables/export-preparation';
 import type {
 	DeliverableMutationRequest,
@@ -199,7 +199,8 @@ export interface DeliverablesDependencies {
 		list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
 	};
 	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
-	diagramRenderer: Pick<DiagramRasterizer, 'render'>;
+	diagramRenderer: DiagramExportRenderer;
+	readonly mermaidThemes: MermaidThemeRules;
 	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
 	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
 	zipPacker: (files: readonly { path: string; bytes: Uint8Array }[]) => Buffer;
@@ -428,10 +429,10 @@ export class Deliverables implements DeliverablesController {
 		const renderedDiagrams = pendingDiagrams.size
 			? await this.dependencies.diagramRenderer.render(
 					[...pendingDiagrams.values()],
-					createMermaidConfig({
+					this.dependencies.mermaidThemes.resolve({
 						base: settings.diagramTheme?.base ?? 'light',
 						...(settings.diagramTheme?.colors ? { palette: settings.diagramTheme.colors } : {})
-					})
+					}).config
 				)
 			: new Map<string, ExportDiagramRaster>();
 		const diagramPngs = { ...input.diagramPngs };

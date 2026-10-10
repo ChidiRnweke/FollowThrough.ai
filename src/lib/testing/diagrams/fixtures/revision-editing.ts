@@ -1,3 +1,4 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import {
@@ -46,6 +47,7 @@ export const diagramRevisionFixture = () => {
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
 			diagramIndexer: index,
 			drawioXmlValidator: { validate: (source) => source },
+			diagramLabelPresentation: new DiagramLabelPresentationService(),
 			drawioLabels: { read: () => ['labels'] },
 			drawioSvgSanitizer: { sanitize: (svg) => svg }
 		})

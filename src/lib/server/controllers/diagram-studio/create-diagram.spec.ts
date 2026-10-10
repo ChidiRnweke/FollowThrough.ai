@@ -1,3 +1,4 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { describe, expect, it } from 'vitest';
@@ -60,6 +61,7 @@ const setup = (
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: { index },
 				drawioXmlValidator: { validate: (source: string) => source },
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => ['Ingest Index Answer'] }
 			})
 		)

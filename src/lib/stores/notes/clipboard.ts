@@ -1,17 +1,18 @@
+import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+const mermaidDiagrams = createMermaidDiagrams();
 import { toast } from 'svelte-sonner';
 import type { ClipboardSource, ClipboardTransferReport } from '$lib/models/clipboard';
 import { ClipboardTransfer } from '$lib/controllers/notes/clipboard';
 import { BrowserClipboardDocument } from '$lib/client/clipboard/document';
 import { BrowserClipboardWriter } from '$lib/client/clipboard/writer';
 import { readClipboardImage } from '$lib/client/clipboard/images';
-import { mermaidPngBlob } from '$lib/client/diagrams/mermaid-export';
 
 const transfer = new ClipboardTransfer({
 	writer: new BrowserClipboardWriter(),
 	document: (content) => new BrowserClipboardDocument(content),
 	readImage: readClipboardImage,
 	renderDiagram: (source) =>
-		mermaidPngBlob(source, {
+		mermaidDiagrams.png(source, {
 			base: document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 		})
 });

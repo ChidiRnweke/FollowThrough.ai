@@ -1,9 +1,12 @@
+import type { DiagramRasterRendering } from '$lib/server/controllers/deliverables/diagram-rendering';
 import { chromium } from 'playwright';
-import { createRequire } from 'node:module';
-import { readFile } from 'node:fs/promises';
 import type { Mermaid } from 'mermaid';
 import type { MermaidRenderConfig } from '$lib/models/diagrams/mermaid-theme';
-import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
+import type {
+	DiagramRenderResources,
+	ExportDiagramSource,
+	ExportDiagramRaster
+} from '$lib/models/deliverables';
 
 declare global {
 	interface Window {
@@ -11,15 +14,12 @@ declare global {
 	}
 }
 
-const require = createRequire(import.meta.url);
-const mermaidScript = require.resolve('mermaid/dist/mermaid.js');
-
 /** Render local diagram sources in a disposable browser with no account session or network. */
-export class DiagramRasterizer {
-	private fontData?: string;
+export class BrowserDiagramRasterizer implements DiagramRasterRendering {
 	async render(
 		sources: readonly ExportDiagramSource[],
-		config: MermaidRenderConfig
+		config: MermaidRenderConfig,
+		resources: DiagramRenderResources
 	): Promise<ReadonlyMap<string, ExportDiagramRaster>> {
 		const result = new Map<string, ExportDiagramRaster>();
 		if (!sources.length) return result;
@@ -34,17 +34,13 @@ export class DiagramRasterizer {
 			await page.setContent(
 				'<!doctype html><html><body style="margin:0;background:white"><div id="drawing"></div></body></html>'
 			);
-			this.fontData ??= (
-				await readFile(
-					require.resolve('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')
-				)
-			).toString('base64');
+
 			await page.addStyleTag({
-				content: `@font-face {font-family: 'Inter Variable'; font-style: normal; font-weight: 100 900; src: url(data:font/woff2;base64,${this.fontData}) format('woff2');}`
+				content: `@font-face {font-family: 'Inter Variable'; font-style: normal; font-weight: 100 900; src: url(data:font/woff2;base64,${resources.fontData}) format('woff2');}`
 			});
 			await page.evaluate(() => document.fonts.load('14px "Inter Variable"'));
 			if (sources.some((source) => source.kind === 'mermaid')) {
-				await page.addScriptTag({ path: mermaidScript });
+				await page.addScriptTag({ path: resources.mermaidScript });
 				await page.evaluate((configuration) => window.mermaid.initialize(configuration), config);
 			}
 			const render = async () => {
