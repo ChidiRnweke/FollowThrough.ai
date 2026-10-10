@@ -42,6 +42,75 @@ older examples; correct conflicting examples in all three skill copies.
 - Dependencies installed; ignored .env linked to main checkout configuration.
 - Implementation and verification are incomplete. No completion claim or PR yet.
 
+## Paused implementation handoff — 2026-10-10
+
+The user requested a pause and a draft PR containing the full plan and current implementation.
+This changes the immediate delivery milestone, not the architecture's completion criteria. The
+refactor is **incomplete and not ready to merge**. Resume from this branch; preserve its prerequisite
+changes and completed migrations. The last implementation commit is `93cea77b`.
+
+### Implemented areas
+
+The commits and detailed evidence below cover these migrated portions; they do not establish
+that every boundary in each family is complete:
+
+- Workspace command preparation, atomic cache/outbox coordination, account synchronization and
+  editor lifetime contracts; shared widget patch/validation/semantic-edit coordination.
+- Explicit server capability contracts across notes, projects, todos, skills, memory, suggestions,
+  references, relationships, attachments, diagrams and deliverables; shared domain rule classes.
+- Browser operations for project actions, note editing/history/actions/submissions, search,
+  uploads, archive imports, diagram previews, exports and artifact lifecycle actions.
+- Document conversion and rendering boundaries; explicit token counting, maintenance, admission,
+  conversation, execution, stream, tool-review and discovery state ownership.
+- Agent execution, research, approval preparation/replay, MCP dispatch/discovery, registry startup,
+  catalog/preferences, run status and transcript reconstruction behind named contracts.
+- Partial architecture enforcement and guidance updates. Current checks still do not cover every
+  forbidden indirect dependency, mutable exposure, service function or factory/store workflow.
+
+### Latest verified evidence
+
+These results apply to implementation commit `93cea77b`, before this documentation-only handoff:
+
+| Check                                | Observed result                                                                                                      |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                         | Passed; zero errors and warnings                                                                                     |
+| `pnpm lint`                          | Passed                                                                                                               |
+| Full unit verification               | 558 files; 4,370 passed; one existing skip                                                                           |
+| Focused agent tests                  | 68 files; 632 passed                                                                                                 |
+| Selected isolated database contracts | 21 files; 108 passed                                                                                                 |
+| `pnpm test:architecture`             | Failed with 51 prohibited imports; topology, source and test-quality checks passed; chained UI audit was not reached |
+
+No live LLM calls were used. Unit output includes a Svelte `derived_inert` warning; a passing
+suite is not evidence that the warning has been resolved. Earlier browser/PWA runs had failures.
+Only the palette/approval failures were reproduced against the untouched baseline; other failures
+remain unresolved or unclassified. Earlier docs/build/browser/contract results recorded below
+are not final verification of this head. The full verification sequence, authenticated browser
+coverage, production build/output audit and required PR checks remain outstanding.
+
+### Remaining implementation and restart point
+
+1. **Browser chat:** separate session-scoped reactive state from hydration, submission, approval,
+   reconnect, cancellation and teardown. Extract transcript models and boundary readers first;
+   then put rules behind cohesive service contracts and complete operations behind controllers.
+   Preserve reactive entry identity, durable cursors, exact saved reviews and account-generation
+   guards. Chat inspection after `93cea77b` was read-only; there are no unfinished chat edits.
+2. **Remaining browser surfaces:** complete workbench/shell, note editor/publication/review,
+   todo/skill/memory/suggestion, widget/canvas, settings and feedback boundaries. Remove raw drafts,
+   mutable stores, resources and indirect service/remote access from components and adjacent code.
+3. **Remaining server/composition boundaries:** remove application callbacks and authority workflows
+   from agent tool definition factories; finish agent-file helpers, identity/startup coordination,
+   concrete dependency leaks and any retained service state. Preserve tool coverage registration.
+4. **Remaining shared rules:** finish chat/context/mentions/model presentation, payload handling,
+   workspace/sync/proofreading and every unresolved inventory entry. Some older inventory rows
+   predate later migrations; reconcile them against code instead of treating them as completion.
+5. **Enforcement and verification:** finish symbol-based indirect dependency/state/workflow checks,
+   remove contradictory permissions, align all three skill copies, resolve the inventory and all
+   failures, then run every completion check above. Do not introduce migration allowances.
+
+Keep the worktree and branch while the draft PR is paused. The full original implementation
+checklist follows, with unverified items left unchecked. Do not mark the draft ready or remove
+this execution plan until the original completion conditions are met.
+
 ## A. Inventory and regression evidence
 
 Planning baseline: 63 shared-service modules, 191 exported functions, no exported classes;
