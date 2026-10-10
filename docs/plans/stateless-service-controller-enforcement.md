@@ -788,7 +788,7 @@ the diagram SDK mismatch remain outside this slice. Do not mark the overall refa
 ## Conversation SDK boundary — 2026-10-11
 
 This slice stacks on draft PR #370 at `85def21d534c7278283d0e3d8e6f6f1a999a6acc`.
-Application revision: `527857e2` (full SHA in the complete JSON inventory). The analyzers are unchanged.
+Application revision: `f7638e1b` (full SHA in the complete JSON inventory). The analyzers are unchanged.
 Before implementation, the baseline reproduced all 362 semantic findings with provenance and all
 47 expanded Chisel messages and locations exactly.
 
@@ -800,9 +800,10 @@ adapter. Its exhaustive conversion switch is unchanged. A dedicated factory retu
 conversation and agent capability factories inject it into the SDK adapter and PostgreSQL repository.
 The repository helper is removed. Production consumers do not construct a hidden implementation.
 
-The SDK adapter no longer imports the repository or controller modules. Its session-operation and
-JSON-reader contracts live in models. The SDK-specific BufferedConversationSession interface stays
-with the adapter. Parsing remains in SDK addItems, existing JSON readers and database mappers.
+The SDK adapter no longer imports the repository module. ConversationSessionController stays
+beside its controller implementation; the adapter imports that operation interface directly.
+The serialization and JSON-reader boundary contracts live in models. The SDK-specific
+BufferedConversationSession interface stays with the adapter. Parsing remains in SDK addItems, existing JSON readers and database mappers.
 ConversationSessions keeps operations and replay sequencing, services keep history/virtualization
 rules, and the session store keeps its buffers and cached presentation. No service composition,
 controller chain, workflow move, suppression or new limit was added.

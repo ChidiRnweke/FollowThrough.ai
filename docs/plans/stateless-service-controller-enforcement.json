@@ -1,6 +1,6 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "527857e2f6d39f0f5e568d39a672c00c786ccb2c",
+	"applicationRevision": "f7638e1be8575895ef156c48f3cf26d0e5cc28b8",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
@@ -4853,13 +4853,13 @@
 			"subject": "Session-item protocol serialization and model-owned boundary contracts",
 			"status": "corrected",
 			"previousDependency": "ConversationSessionAdapter imported toStoredSessionItem directly from a repository module. PostgreSQL append/replace, in-memory rollback snapshots, model tests and replay fixtures used the same exported helper. The older plan described SDK serialization as moved, but reusable wire serialization remained repository-owned.",
-			"currentOwner": "SessionItemSerialization in models/agent/session-item.ts declares serialize over the existing domain and wire types. SessionItemSerializationAdapter owns the unchanged protocol conversion switch; its helpers are private. A dedicated factory exposes the interface. ConversationSessionController and ConversationJsonReader are model-owned contracts; the SDK Session extension stays adapter-owned.",
+			"currentOwner": "SessionItemSerialization in models/agent/session-item.ts declares serialize over the existing domain and wire types. SessionItemSerializationAdapter owns the unchanged protocol conversion switch; its helpers are private. A dedicated factory exposes the interface. ConversationSessionController stays with its controller implementation. ConversationJsonReader is a model-owned boundary contract; the SDK Session extension stays adapter-owned.",
 			"evidence": [
 				"src/lib/models/agent/session-item.ts",
-				"src/lib/models/agent/index.ts",
 				"src/lib/server/adapters/agent/session-item-serialization.ts",
 				"src/lib/server/adapters/agent/conversation.ts",
-				"src/lib/server/factories/agent/session-item-serialization-factory.ts"
+				"src/lib/server/factories/agent/session-item-serialization-factory.ts",
+				"src/lib/server/controllers/agent/conversation.ts"
 			],
 			"inventoryNote": "Serialization is protocol adaptation, not a history service or persistence operation. No service composition, controller chain, new parsing location, suppression or persisted-format change was introduced."
 		},
