@@ -71,7 +71,7 @@ import {
 } from '$lib/server/services/agent-files/virtual-files';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/contracts';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
@@ -266,7 +266,7 @@ export interface AgentDependencies {
 
 	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 
-	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
+	readonly contextMemory: MemoryEntryLister;
 
 	readonly contextProjects: ProjectReader;
 

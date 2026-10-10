@@ -1,3 +1,4 @@
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { afterAll, expect, it } from 'vitest';
@@ -48,6 +49,7 @@ const setup = () => {
 		skills: new Skills(capabilityDependencies<SkillsDependencies>(dependencies)),
 		workspace: new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
+				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,
 				syncChanges: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)
 			})

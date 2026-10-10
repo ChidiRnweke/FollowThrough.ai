@@ -1,7 +1,9 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -33,14 +35,16 @@ const setup = async (suffix: string) => {
 		provenance,
 		new SourceAnchorRecords(database)
 	);
-	const library = new MemoryLibrary(
+	const library = createMemoryServices(
 		new MemoryRecords(database),
 		new ProjectRecords(database),
 		provenance
 	);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
-			memoryChanges: library,
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryChanges: library.changes,
 			suggestionCreator: inbox,
 			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(),
 			transactionRunner

@@ -207,7 +207,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		db,
 		projects: projectRepository,
 		provenance: provenanceRepository
-	}).library;
+	});
 	const agentCapability = createAgentCapability({
 		tokens: knowledgeSearch.tokenizer,
 		db,
@@ -275,7 +275,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const diagramCapability = createDiagramsCapability({
 		contextNotes: notes,
 		contextSkills: skills,
-		contextMemory: memory,
+		contextMemory: memory.lister,
 		apiKey: openRouterApiKey,
 		baseURL: openRouterBaseURL,
 		appURL,
@@ -406,7 +406,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoCreator: todos,
 			relationshipCreator: relationships,
 			referenceCreator: references,
-			memoryChanges: memory,
+			memoryChanges: memory.changes,
 			sourceNotes: notes,
 			memoryIndexer,
 			diagramIndexer,
@@ -449,7 +449,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			contextDiagrams: diagrams,
 			contextAttachments: attachments,
 			builtInSkills: skillCapability.builtIns,
-			contextMemory: memory,
+			contextMemory: memory.lister,
 			contextProjects: projects,
 			contextConversations: conversationJournal,
 			provenance
@@ -542,6 +542,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
+			memoryPresentation: memory.presentation,
 			syncChanges: synchronization.changes,
 			writeRecovery: synchronization.mutations,
 			syncObjects: synchronization.objects,
@@ -600,16 +601,18 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		memory: {
+			editing: memory.editing,
+			presentation: memory.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			memoryLister: memory,
-			memoryCreator: memory,
-			memoryEditor: memory,
-			memoryDeleter: memory,
-			memoryChanges: memory,
+			memoryLister: memory.lister,
+			memoryCreator: memory.creator,
+			memoryEditor: memory.editor,
+			memoryDeleter: memory.deleter,
+			memoryChanges: memory.changes,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: suggestionCapability.effects,
@@ -659,7 +662,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			knowledgeLookup,
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
-			memory,
+			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.

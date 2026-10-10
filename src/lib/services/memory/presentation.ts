@@ -1,9 +1,10 @@
+import type { MemoryEntry } from '$lib/models/memory';
 import type { PendingMemoryNotification } from '$lib/models/memory';
 import type { Project } from '$lib/models/projects';
 import type { Suggestion } from '$lib/models/suggestions';
 
 /** Profile attention is independent of project inventory; project rows require a visible project. */
-export function pendingMemoryNotifications(
+function pendingMemoryNotifications(
 	projects: readonly Pick<Project, 'id' | 'name' | 'archivedAt'>[],
 	suggestions: readonly Suggestion[]
 ): readonly PendingMemoryNotification[] {
@@ -30,4 +31,23 @@ export function pendingMemoryNotifications(
 				: [];
 		})
 	];
+}
+
+export interface IMemoryPresentationService {
+	sharedEntries(entries: readonly MemoryEntry[]): readonly MemoryEntry[];
+	pendingNotifications(
+		projects: readonly Pick<Project, 'id' | 'name' | 'archivedAt'>[],
+		suggestions: readonly Suggestion[]
+	): readonly PendingMemoryNotification[];
+}
+export class MemoryPresentationService implements IMemoryPresentationService {
+	sharedEntries(entries: readonly MemoryEntry[]): readonly MemoryEntry[] {
+		return entries.filter((entry) => entry.shareWithAgents);
+	}
+	pendingNotifications(
+		projects: readonly Pick<Project, 'id' | 'name' | 'archivedAt'>[],
+		suggestions: readonly Suggestion[]
+	): readonly PendingMemoryNotification[] {
+		return pendingMemoryNotifications(projects, suggestions);
+	}
 }

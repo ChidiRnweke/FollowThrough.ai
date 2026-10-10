@@ -248,3 +248,44 @@ it('keeps shared input adapters from executing services', () => {
 		})
 	).toContain('import-boundary:banned-layer-import');
 });
+
+it('accepts explicit capability names without imposing class-derived interface names', () => {
+	expect(
+		inspect({
+			'src/lib/services/notes/reading.ts':
+				'export interface NoteReader { read(): string; } export class NoteReadingService implements NoteReader { read(): string { return "note"; } }'
+		})
+	).not.toContain('structural:missing-service-interface');
+});
+it('rejects a matching interface that the service never implements', () => {
+	expect(
+		inspect({
+			'src/lib/services/notes/reading.ts':
+				'export interface INoteReadingService { read(): string; } export class NoteReadingService { read(): string { return "note"; } }'
+		})
+	).toContain('structural:missing-service-interface');
+});
+it('checks public service classes whose names do not end in Service', () => {
+	expect(
+		inspect({
+			'src/lib/services/notes/reading.ts':
+				'export class NoteReading { read(): string { return "note"; } }'
+		})
+	).toContain('structural:missing-service-interface');
+});
+it('does not treat implementing another class as an interface contract', () => {
+	expect(
+		inspect({
+			'src/lib/services/notes/reading.ts':
+				'class ReadingBase { read(): string { return "note"; } } export class NoteReading implements ReadingBase { read(): string { return "note"; } }'
+		})
+	).toContain('structural:missing-service-interface');
+});
+it('leaves operation-private evaluators private to the service implementation', () => {
+	expect(
+		inspect({
+			'src/lib/services/notes/reading.ts':
+				'class Evaluator { readonly parts: string[] = []; } export interface NoteReader { read(): string; } export class NoteReading implements NoteReader { read(): string { const evaluator = new Evaluator(); evaluator.parts.push("note"); return evaluator.parts.join(""); } }'
+		})
+	).not.toContain('structural:missing-service-interface');
+});

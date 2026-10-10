@@ -1,3 +1,5 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -18,7 +20,7 @@ const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
-	const { library } = createMemoryCapability({
+	const memory = createMemoryCapability({
 		db: database,
 		projects: new ProjectRecords(database),
 		provenance: new ProvenanceRecords(database)
@@ -27,11 +29,13 @@ const setup = async (suffix: string) => {
 	const indexWriter = createContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			memoryCreator: library,
-			memoryEditor: library,
-			memoryDeleter: library,
+			memoryCreator: memory.creator,
+			memoryEditor: memory.editor,
+			memoryDeleter: memory.deleter,
 			transactionRunner,
 			memoryIndexer: indexWriter.memories,
 			indexEmbeddings,

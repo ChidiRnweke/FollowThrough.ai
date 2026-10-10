@@ -32,7 +32,7 @@ import type { DiagramGenerator } from '$lib/server/services/diagrams/generation'
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -178,7 +178,7 @@ export interface DiagramAgentDependencies {
 	readonly contextFormatter: IAgentContext;
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
-	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
+	readonly contextMemory: MemoryEntryLister;
 	readonly conversations: Pick<
 		ConversationArchive,
 		'createWorkflow' | 'recordUserPrompt' | 'recordAssistantText' | 'recordToolActivity'

@@ -1,14 +1,11 @@
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import {
-	sharedMemoryEntries,
-	decideMemoryCreation,
-	decideMemoryEdit
-} from '$lib/services/memory/edits';
+import type { IMemoryEditingService } from '$lib/services/memory/edits';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import { ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
+import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
 import type { Suggestion } from '$lib/models/suggestions';
@@ -36,7 +33,7 @@ import type {
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
 	MemoryEntryLister
-} from '$lib/server/services/memory/contracts';
+} from '$lib/server/services/memory/library';
 import type {
 	SuggestionAccepter,
 	SuggestionCreator
@@ -81,6 +78,8 @@ export interface MemoryController {
 }
 
 export interface MemoryDependencies {
+	readonly editing: IMemoryEditingService;
+	readonly presentation: IMemoryPresentationService;
 	indexEmbeddings: IEmbeddings;
 	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
@@ -144,7 +143,7 @@ export class Memory implements MemoryController {
 			projectId: input.projectId
 		});
 		return {
-			entries: input.sharedOnly ? sharedMemoryEntries(entries) : entries
+			entries: input.sharedOnly ? this.dependencies.presentation.sharedEntries(entries) : entries
 		};
 	}
 
@@ -153,7 +152,7 @@ export class Memory implements MemoryController {
 		input: CreateMemoryEntryInput
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const decision = decideMemoryCreation(input, {
+			const decision = this.dependencies.editing.create(input, {
 				id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
 				userId: actor.userId,
 				timestamp: new Date().toISOString() as DateTime
@@ -171,7 +170,11 @@ export class Memory implements MemoryController {
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.memoryEditor.getForEdit(actor, input.memoryEntryId);
-			const decision = decideMemoryEdit(current, input, new Date().toISOString() as DateTime);
+			const decision = this.dependencies.editing.edit(
+				current,
+				input,
+				new Date().toISOString() as DateTime
+			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const entry = await this.dependencies.memoryEditor.update(actor, decision.entry);
 			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));

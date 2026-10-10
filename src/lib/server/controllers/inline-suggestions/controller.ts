@@ -14,7 +14,7 @@ import type { InlineCompletionGenerator } from '$lib/server/services/agent/runs/
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import { traceWorkflow } from '$lib/server/services/telemetry';
 import type { OperationObserver } from '$lib/models/telemetry';
-import type { MemoryEntryLister } from '$lib/server/services/memory/contracts';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';

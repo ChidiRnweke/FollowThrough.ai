@@ -1,3 +1,4 @@
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { Workspace, type WorkspaceDependencies } from './controller';
@@ -72,6 +73,7 @@ it('shows the same profile and visible-project memory attention from server and 
 	);
 	const server = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			memoryPresentation: new MemoryPresentationService(),
 			...builtInSkillsFixture(),
 			userReader: new UserDirectory(users),
 			projectLister: projects,

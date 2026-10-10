@@ -12,7 +12,7 @@ import type { ConversationArchive } from '$lib/server/services/agent/conversatio
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import type {
 	AgentModelCatalog,
@@ -47,7 +47,7 @@ export interface DiagramsCapabilityInput {
 	readonly context: IAgentContext;
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
-	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
+	readonly contextMemory: MemoryEntryLister;
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;

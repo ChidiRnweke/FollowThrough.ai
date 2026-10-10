@@ -6,7 +6,7 @@ import { decideNoteCreation } from '$lib/services/notes/creation';
 import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
-import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
+import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
 
 import { widgetCatalog, type Widget, type WidgetEditResult } from '$lib/models/widgets';
@@ -125,18 +125,20 @@ const newMemory = (
 	id: MemoryEntryId,
 	userId: UserId,
 	input: CreateMemoryEntryInput,
-	timestamp: DateTime
+	timestamp: DateTime,
+	editing: IMemoryEditingService
 ): MemoryEntry => {
-	const decision = decideMemoryCreation(input, { id, userId, timestamp });
+	const decision = editing.create(input, { id, userId, timestamp });
 	if (decision.kind === 'invalid') throw new Error(decision.message);
 	return decision.entry;
 };
 
 const memoryWrite = (
 	entry: MemoryEntry,
-	patch: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>
+	patch: Omit<UpdateMemoryEntryInput, 'memoryEntryId'>,
+	editing: IMemoryEditingService
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => {
-	const decision = decideMemoryEdit(entry, patch, entry.updatedAt);
+	const decision = editing.edit(entry, patch, entry.updatedAt);
 	if (decision.kind === 'invalid') throw new Error(decision.message);
 	return {
 		command: { kind: 'updateMemory', memoryEntryId: entry.id, ...patch },
@@ -234,7 +236,8 @@ export interface WorkspaceCommandController {
 export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
 		private readonly widgetEditing: WidgetEditingController,
-		private readonly widgetLifecycle: IWidgetLifecycleService
+		private readonly widgetLifecycle: IWidgetLifecycleService,
+		private readonly memoryEditing: IMemoryEditingService
 	) {}
 	async prepare(
 		command: PreparedWorkspaceCommand,
@@ -399,14 +402,17 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			}
 			case 'createMemory':
 				return content(
-					{ type: 'memory_entries', value: newMemory(command.id, userId, command, now) },
+					{
+						type: 'memory_entries',
+						value: newMemory(command.id, userId, command, now, this.memoryEditing)
+					},
 					command.projectId ? [projectKey(command.projectId)] : []
 				);
 			case 'updateMemory': {
 				const { kind, memoryEntryId, ...patch } = command;
 				void kind;
 				void memoryEntryId;
-				return memoryWrite(value('memory_entries'), patch);
+				return memoryWrite(value('memory_entries'), patch, this.memoryEditing);
 			}
 			case 'deleteTodo':
 			case 'deleteMemory':

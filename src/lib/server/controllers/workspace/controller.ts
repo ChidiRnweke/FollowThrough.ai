@@ -18,7 +18,7 @@ import type {
 	TodayView as AggregateTodayView
 } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
-import { pendingMemoryNotifications } from '$lib/services/memory/attention';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import { assembleToday } from '$lib/services/workspace/today';
 import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
 import type { ProjectLister } from '$lib/server/services/projects/contracts';
@@ -57,6 +57,7 @@ export interface WorkspaceController {
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
+	readonly memoryPresentation: IMemoryPresentationService;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	transactionRunner: TransactionRunner;
 	writeRecovery: SyncWriteRecovery;
@@ -110,7 +111,10 @@ export class Workspace implements WorkspaceController {
 			noteTree,
 			skills,
 			pendingSuggestionCount: pendingSuggestions.length,
-			pendingMemoryNotifications: pendingMemoryNotifications(projects, pendingSuggestions)
+			pendingMemoryNotifications: this.dependencies.memoryPresentation.pendingNotifications(
+				projects,
+				pendingSuggestions
+			)
 		};
 	}
 	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {

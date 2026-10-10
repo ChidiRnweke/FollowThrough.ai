@@ -87,7 +87,7 @@ Before concluding any implementation task, copy this checklist into your respons
 - `structural:store-should-use-derived` — `$effect` syncing `data`/`$props` into `$state` (use `$derived`).
 - `structural:derived-calls-fetch` — `$derived` calling `fetch` or a service method.
 - `structural:raw-fetch` — Raw `fetch` in `services/` (use the `openapi-fetch` client). Suppress with `// noqa: raw-fetch — <reason>`.
-- `structural:missing-service-interface` — Concrete service without `I<ServiceName>` interface.
+- `structural:missing-service-interface` — Public service class without an explicitly implemented capability interface.
 - `structural:factory-static-only` — `AppFactory` (and any `*Factory.ts` / `/factories/` file) must use static methods only.
 - `structural:hooks-locals-limited` — `hooks.server.ts` may set only `locals.user`.
 

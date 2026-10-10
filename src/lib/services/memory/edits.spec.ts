@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { decideMemoryCreation } from './edits';
+import { MemoryEditingService } from './edits';
+const editing = new MemoryEditingService();
 import {
 	testActor,
 	testMemoryEntryId,
@@ -8,7 +9,7 @@ import {
 
 it('defaults a new profile memory to sharing when the creation request omits that choice', () => {
 	expect(
-		decideMemoryCreation(
+		editing.create(
 			{ content: '  Remember this  ' },
 			{ id: testMemoryEntryId(), userId: testActor().userId, timestamp: testNow }
 		)

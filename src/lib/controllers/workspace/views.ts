@@ -44,7 +44,7 @@ import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 import type { WorkspaceSkill } from '$lib/models/workspace-views';
 import { assembleToday } from '$lib/services/workspace/today';
-import { pendingMemoryNotifications } from '$lib/services/memory/attention';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 
 /** Coordinates feature views from the normalized records, including local write overlays. */
 export interface WorkspaceViewsController {
@@ -97,7 +97,10 @@ export interface WorkspaceViewsController {
 }
 
 export class WorkspaceViews implements WorkspaceViewsController {
-	constructor(private readonly state: WorkspaceViewState) {}
+	constructor(
+		private readonly state: WorkspaceViewState,
+		private readonly memoryPresentation: IMemoryPresentationService
+	) {}
 	private get records() {
 		return this.state.records;
 	}
@@ -200,7 +203,10 @@ export class WorkspaceViews implements WorkspaceViewsController {
 			noteTree: this.notes.filter((note) => note.kind !== 'skill'),
 			skills: this.skills().filter((skill) => skill.isEnabled),
 			pendingSuggestionCount: suggestions.length,
-			pendingMemoryNotifications: pendingMemoryNotifications(projects, suggestions)
+			pendingMemoryNotifications: this.memoryPresentation.pendingNotifications(
+				projects,
+				suggestions
+			)
 		};
 	}
 	private get pendingSuggestions() {

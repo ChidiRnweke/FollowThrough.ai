@@ -1,9 +1,11 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it } from 'vitest';
 import type { ActorContext } from '$lib/models/identity';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
 import { Memory, type MemoryDependencies } from './controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
@@ -82,7 +84,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 		}
 	];
 	const entries = new InMemoryMemoryEntryRepository();
-	const library = new MemoryLibrary(entries, new InMemoryProjectRepository(), provenance);
+	const library = createMemoryServices(entries, new InMemoryProjectRepository(), provenance);
 	const records = new InMemorySuggestionRepository();
 	const inbox = new SuggestionInbox(
 		records,
@@ -98,7 +100,9 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 	const index = createContentIndex(search, embeddings.model);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
-			memoryChanges: library,
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryChanges: library.changes,
 			suggestionCreator: inbox,
 			suggestionAccepter: inbox,
 			trustPolicyEvaluator: trust,
@@ -122,7 +126,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 		status: stored?.status,
 		autoAccepted: stored?.isAutoAccepted,
 		applied: result.appliedEntry,
-		entries: await library.list(actor, {}),
+		entries: await library.lister.list(actor, {}),
 		effectCount: effects.repository.effects.size
 	}).toEqual({
 		returned: stored,

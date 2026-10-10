@@ -17,7 +17,7 @@ import type {
 import type { AppliedRecord } from '$lib/server/services/suggestions/contracts';
 import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
-import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
+import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
 import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
@@ -27,7 +27,7 @@ import type { MemoryEntry } from '$lib/models/memory';
 import type { TodoCreator } from '$lib/server/services/todos/contracts';
 import type { RelationshipCreator } from '$lib/server/services/relationships/contracts';
 import type { ReferenceCreator } from '$lib/server/services/references/contracts';
-import type { MemoryChanges } from '$lib/server/services/memory/contracts';
+import type { MemoryChanges } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/contracts';
 import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
 import type { ActorContext } from '$lib/models/identity';

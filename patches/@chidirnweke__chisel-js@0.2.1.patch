@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c7d9fbdd15647b54560cecb82593e3d81414afdf 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..5662af7604b7ff1fbab349024cdbb4b6e51b122a 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -101,7 +101,41 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c7d9fbdd15647b54560cecb82593e3d8
  class LayoutService {
    ruleIdPrefix = "structure";
    check(project) {
-@@ -10244,7 +10262,6 @@ class TestStructureService {
+@@ -9375,8 +9393,8 @@ class StructuralSvelteService {
+       {
+         id: "structural:missing-service-interface",
+         category: "structural",
+-        description: "Concrete service without a matching I<ServiceName> interface",
+-        fixGuidance: "Declare an I<ServiceName> interface in the same file. Controllers " + "depend on the interface and the factory supplies the implementation. It has to " + "be the same file — a sibling contracts.ts is a same-layer import, which the " + "boundary rules ban."
++        description: "Public service class without an explicitly implemented capability interface",
++        fixGuidance: "Declare a narrow capability interface beside its service and explicitly implement it. Controllers depend on that interface; factories supply the implementation."
+       },
+       {
+         id: "structural:factory-contains-logic",
+@@ -9445,16 +9463,19 @@ class StructuralSvelteService {
+         if (!ts3.isClassDeclaration(statement) || statement.name === undefined)
+           continue;
+         const name = statement.name.text;
+-        if (!name.endsWith("Service"))
++        if (!statement.modifiers?.some((modifier) => modifier.kind === ts3.SyntaxKind.ExportKeyword))
+           continue;
+-        if (interfaces.has(`I${name}`))
++        const implemented = statement.heritageClauses?.filter((clause) => clause.token === ts3.SyntaxKind.ImplementsKeyword)
++          .flatMap((clause) => clause.types) ?? [];
++        if (implemented.length > 0 && implemented.every((type) =>
++            ts3.isIdentifier(type.expression) && interfaces.has(type.expression.text)))
+           continue;
+         violations.push(createViolation({
+           file: file.path,
+           line: lineOf(file.source, offset + statement.getStart(sf)),
+           severity: Severity.ERROR,
+           ruleId: "structural:missing-service-interface",
+-          message: `Service "${name}" has no I${name} interface in this file. Controllers ` + `depend on the interface; the factory supplies the implementation.`
++          message: `Service "${name}" must explicitly implement its locally declared capability interfaces. Controllers depend on those interfaces; factories supply the implementation.`
+         }));
+       }
+     }
+@@ -10244,7 +10265,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -109,7 +143,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c7d9fbdd15647b54560cecb82593e3d8
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10308,6 @@ class TestStructureService {
+@@ -10291,29 +10311,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -139,7 +173,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c7d9fbdd15647b54560cecb82593e3d8
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10364,6 @@ class TestStructureService {
+@@ -10370,7 +10367,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

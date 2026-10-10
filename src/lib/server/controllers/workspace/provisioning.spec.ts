@@ -1,3 +1,4 @@
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import { Workspace, type WorkspaceDependencies } from './controller';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
@@ -17,6 +18,7 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 	const suggestions = new InMemorySuggestionReader();
 	const workspace = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			memoryPresentation: new MemoryPresentationService(),
 			...state,
 			userReader: new UserDirectory(users),
 			projectLister: new ProjectCatalog(state.projects, state.projects),

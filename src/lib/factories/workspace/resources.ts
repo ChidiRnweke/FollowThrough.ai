@@ -1,3 +1,4 @@
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { createWorkspaceCommands } from '$lib/factories/workspace/commands';
 import { BrowserWorkspaceEditingEnvironment } from '$lib/client/workspace/editing-environment.svelte';
 import type { WorkspaceResourceType, WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
@@ -38,7 +39,7 @@ export const assembleWorkspaceResources = (
 		dependencies,
 		new WorkspaceResourceStore(),
 		projection,
-		new WorkspaceViews(projection),
+		new WorkspaceViews(projection, new MemoryPresentationService()),
 		{
 			view: <K extends WorkspaceResourceType>(
 				resources: WorkspaceResourcesController,

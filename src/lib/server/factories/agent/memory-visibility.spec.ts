@@ -1,9 +1,11 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -56,9 +58,13 @@ const setup = (scope: 'user' | 'project') => {
 	];
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const library = new MemoryLibrary(entries, projects, new InMemoryProvenanceRepository());
+	const library = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
 	const controller = new Memory(
-		capabilityDependencies<MemoryDependencies>({ memoryLister: library })
+		capabilityDependencies<MemoryDependencies>({
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryLister: library.lister
+		})
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
 	const tools = new AgentTools(

@@ -1,3 +1,4 @@
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
@@ -52,6 +53,7 @@ const setup = async (suffix: string) => {
 		...seeded,
 		workspace: new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
+				memoryPresentation: new MemoryPresentationService(),
 				writeRecovery: synchronization.mutations,
 				transactionRunner
 			})

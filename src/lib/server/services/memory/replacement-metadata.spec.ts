@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { MemoryLibrary } from './library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -28,13 +28,13 @@ const replace = async (type?: MemoryEntryType) => {
 			metadata: { scope: 'full' }
 		}
 	];
-	const library = new MemoryLibrary(entries, projects, provenance);
-	const original = await library.create(
+	const library = createMemoryServices(entries, projects, provenance);
+	const original = await library.creator.create(
 		testActor(),
 		memoryEntryBuilder({ type, content: 'Original convention' })
 	);
 	if (!original.projectId) throw new Error('The fixture must have a project');
-	const { entry } = await library.apply(
+	const { entry } = await library.changes.apply(
 		testActor(),
 		{
 			scope: 'project',

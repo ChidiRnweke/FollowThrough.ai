@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { pendingMemoryNotifications } from './attention';
+import { MemoryPresentationService } from './presentation';
+const presentation = new MemoryPresentationService();
 import {
 	memorySuggestionBuilder,
 	projectBuilder,
@@ -20,7 +21,7 @@ describe('Pending memory notification invariants', () => {
 				projectId: project.id
 			}
 		});
-		expect(pendingMemoryNotifications([project], [suggestion])).toEqual([]);
+		expect(presentation.pendingNotifications([project], [suggestion])).toEqual([]);
 	});
 	it('keeps profile attention when the project inventory is incomplete', () => {
 		const projectSuggestion = memorySuggestionBuilder({
@@ -32,13 +33,13 @@ describe('Pending memory notification invariants', () => {
 				projectId: testProjectId()
 			}
 		});
-		expect(pendingMemoryNotifications([], [memorySuggestionBuilder(), projectSuggestion])).toEqual([
-			{ label: 'Profile memory', href: '/profile', count: 1 }
-		]);
+		expect(
+			presentation.pendingNotifications([], [memorySuggestionBuilder(), projectSuggestion])
+		).toEqual([{ label: 'Profile memory', href: '/profile', count: 1 }]);
 	});
 	it('groups profile and project memories into their destinations', () => {
 		const project = projectBuilder();
-		const notifications = pendingMemoryNotifications(
+		const notifications = presentation.pendingNotifications(
 			[project],
 			[
 				memorySuggestionBuilder(),
@@ -66,7 +67,7 @@ describe('Pending memory notification invariants', () => {
 	});
 
 	it('ignores non-memory and decided suggestions', () => {
-		const notifications = pendingMemoryNotifications(
+		const notifications = presentation.pendingNotifications(
 			[],
 			[
 				suggestionBuilder(),

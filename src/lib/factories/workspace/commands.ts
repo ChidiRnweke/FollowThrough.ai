@@ -1,3 +1,4 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
 import {
 	WorkspaceCommands,
 	type WorkspaceCommandController
@@ -5,4 +6,8 @@ import {
 import { WidgetLifecycleService } from '$lib/services/widgets/trash';
 import { createWidgetEditingController } from '$lib/factories/widgets/editing';
 export const createWorkspaceCommands = (): WorkspaceCommandController =>
-	new WorkspaceCommands(createWidgetEditingController(), new WidgetLifecycleService());
+	new WorkspaceCommands(
+		createWidgetEditingController(),
+		new WidgetLifecycleService(),
+		new MemoryEditingService()
+	);

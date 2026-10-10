@@ -1,3 +1,4 @@
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
 import type { NoteMutationRequest } from '$lib/models/workspace-mutations';
@@ -46,6 +47,7 @@ const setup = () => {
 	);
 	const workspace = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			memoryPresentation: new MemoryPresentationService(),
 			writeRecovery: mutations,
 			transactionRunner
 		})
