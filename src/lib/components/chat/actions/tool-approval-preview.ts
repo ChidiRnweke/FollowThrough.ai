@@ -17,7 +17,8 @@ import {
 import type { UserId } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
 import type { DateTime } from '$lib/models/workspace';
-import { applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
+import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+const widgetEditing = createWidgetEditingController();
 import { readJsonText } from '$lib/client/widgets/json-text';
 
 /**
@@ -221,7 +222,7 @@ const widgetChange = (
 					...(data.kind === 'failure' ? data.issues : [])
 				])
 			};
-		const created = createWidget(
+		const created = widgetEditing.createWidget(
 			{ title: text(args.title) || 'Widget', layout: layout.value, data: data.value },
 			{
 				id: '00000000-0000-4000-8000-000000000000' as WidgetId,
@@ -245,7 +246,7 @@ const widgetChange = (
 		name === 'edit_widget_data'
 			? { kind: 'data', patch: patch.value, expectedDataRevision: revision }
 			: { kind: 'layout', patch: patch.value, expectedLayoutRevision: layoutRevision };
-	const result = applyWidgetEdit(baseline.widget, edit, widgetCatalog, now);
+	const result = widgetEditing.applyWidgetEdit(baseline.widget, edit, widgetCatalog, now);
 	switch (result.kind) {
 		case 'applied':
 			return { kind: 'edited', before: baseline.widget, after: result.widget };

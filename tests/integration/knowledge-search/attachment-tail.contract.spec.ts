@@ -1,3 +1,4 @@
+import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -84,7 +85,8 @@ describe('attachment search tail in PostgreSQL', () => {
 		await new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			client,
-			transaction.transactionRunner
+			transaction.transactionRunner,
+			new EmbeddingProgressStore()
 		).run();
 		const matches = await repository.searchByEmbedding(owner, vector(true), 1, project.id);
 		expect(

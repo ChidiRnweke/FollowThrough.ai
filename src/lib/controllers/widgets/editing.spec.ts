@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { widgetCatalog, widgetTemplates, type WidgetEdit } from '$lib/models/widgets';
-import {
-	applyWidgetChange,
-	applyWidgetChanges,
-	applyWidgetEdit,
-	createWidget,
-	diffWidgetData,
-	rebaseWidgetParts,
-	widgetChangesBetween
-} from './edits';
+import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+const widgetEditing = createWidgetEditingController();
+import { WidgetPatchService } from '$lib/services/widgets/patches';
+const widgetPatches = new WidgetPatchService();
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -22,7 +17,7 @@ const tickFirst: Extract<WidgetEdit, { kind: 'data' }> = {
 describe('creating a widget', () => {
 	it('accepts the checklist template', () => {
 		expect(
-			createWidget(
+			widgetEditing.createWidget(
 				widgetTemplates.checklist,
 				{
 					id: testWidgetId(),
@@ -36,7 +31,7 @@ describe('creating a widget', () => {
 	});
 	it('rejects a component outside the catalog', () => {
 		expect(
-			createWidget(
+			widgetEditing.createWidget(
 				{
 					title: 'Frame',
 					layout: { root: 'x', elements: { x: { type: 'Iframe', props: {}, children: [] } } },
@@ -59,7 +54,7 @@ describe('creating a widget', () => {
 
 describe('editing widget data', () => {
 	it('applies the patch and advances only the data revision', () => {
-		const result = applyWidgetEdit(widgetBuilder(), tickFirst, widgetCatalog, later);
+		const result = widgetEditing.applyWidgetEdit(widgetBuilder(), tickFirst, widgetCatalog, later);
 		expect(
 			result.kind === 'applied' && [
 				result.widget.data,
@@ -80,17 +75,27 @@ describe('editing widget data', () => {
 	});
 	it('reports a stale data revision without applying it', () => {
 		expect(
-			applyWidgetEdit(widgetBuilder({ dataRevision: 3 }), tickFirst, widgetCatalog, later)
+			widgetEditing.applyWidgetEdit(
+				widgetBuilder({ dataRevision: 3 }),
+				tickFirst,
+				widgetCatalog,
+				later
+			)
 		).toEqual({ kind: 'stale', part: 'data', currentRevision: 3 });
 	});
 	it('ignores the layout revision for a data edit', () => {
 		expect(
-			applyWidgetEdit(widgetBuilder({ layoutRevision: 7 }), tickFirst, widgetCatalog, later).kind
+			widgetEditing.applyWidgetEdit(
+				widgetBuilder({ layoutRevision: 7 }),
+				tickFirst,
+				widgetCatalog,
+				later
+			).kind
 		).toBe('applied');
 	});
 	it('reports a path that does not exist as an issue', () => {
 		expect(
-			applyWidgetEdit(
+			widgetEditing.applyWidgetEdit(
 				widgetBuilder(),
 				{ ...tickFirst, patch: [{ op: 'replace', path: '/missing/0', value: 1 }] },
 				widgetCatalog,
@@ -100,7 +105,7 @@ describe('editing widget data', () => {
 	});
 	it('rejects data that no longer matches a repeated list', () => {
 		expect(
-			applyWidgetEdit(
+			widgetEditing.applyWidgetEdit(
 				widgetBuilder(),
 				{ ...tickFirst, patch: [{ op: 'replace', path: '/items', value: 'none' }] },
 				widgetCatalog,
@@ -113,7 +118,7 @@ describe('editing widget data', () => {
 describe('editing widget layout', () => {
 	it('rejects props that the component does not accept', () => {
 		expect(
-			applyWidgetEdit(
+			widgetEditing.applyWidgetEdit(
 				widgetBuilder(),
 				{
 					kind: 'layout',
@@ -127,7 +132,7 @@ describe('editing widget layout', () => {
 	});
 	it('rejects a child key with no element', () => {
 		expect(
-			applyWidgetEdit(
+			widgetEditing.applyWidgetEdit(
 				widgetBuilder(),
 				{
 					kind: 'layout',
@@ -140,7 +145,7 @@ describe('editing widget layout', () => {
 		).toBe('invalid');
 	});
 	it('applies a cataloged addition and advances only the layout revision', () => {
-		const result = applyWidgetEdit(
+		const result = widgetEditing.applyWidgetEdit(
 			widgetBuilder(),
 			{
 				kind: 'layout',
@@ -165,7 +170,7 @@ describe('editing widget layout', () => {
 
 describe('renaming a widget', () => {
 	it('trims the new title', () => {
-		const result = applyWidgetEdit(
+		const result = widgetEditing.applyWidgetEdit(
 			widgetBuilder(),
 			{ kind: 'rename', title: '  Launch  ' },
 			widgetCatalog,
@@ -182,12 +187,14 @@ describe('diffing widget data', () => {
 			...before,
 			items: [{ ...before.items[0], done: true }, ...before.items.slice(1)]
 		};
-		expect(diffWidgetData(before, after)).toEqual([
+		expect(widgetPatches.diffData(before, after)).toEqual([
 			{ op: 'replace', path: '/items/0/done', value: true }
 		]);
 	});
 	it('escapes keys that contain a slash', () => {
-		expect(diffWidgetData({}, { 'a/b': 1 })).toEqual([{ op: 'add', path: '/a~1b', value: 1 }]);
+		expect(widgetPatches.diffData({}, { 'a/b': 1 })).toEqual([
+			{ op: 'add', path: '/a~1b', value: 1 }
+		]);
 	});
 });
 
@@ -201,7 +208,7 @@ describe('replaying a widget onto a newer one', () => {
 			}
 		});
 	it('merges ticks of different items', () => {
-		expect(rebaseWidgetParts(widgetBuilder(), ticked(0), ticked(1))).toEqual({
+		expect(widgetPatches.rebaseParts(widgetBuilder(), ticked(0), ticked(1))).toEqual({
 			data: ticked(0, 1).data,
 			dataRevision: 2,
 			layoutRevision: 1,
@@ -209,7 +216,7 @@ describe('replaying a widget onto a newer one', () => {
 		});
 	});
 	it('does not count the same tick on both sides as a collision', () => {
-		expect(rebaseWidgetParts(widgetBuilder(), ticked(0), ticked(0)).overlaps).toBe(false);
+		expect(widgetPatches.rebaseParts(widgetBuilder(), ticked(0), ticked(0)).overlaps).toBe(false);
 	});
 	it('collides when both sides change one value differently', () => {
 		const renamed = (label: string) =>
@@ -219,21 +226,21 @@ describe('replaying a widget onto a newer one', () => {
 					items: [{ ...items[0], label }, ...items.slice(1)]
 				}
 			});
-		expect(rebaseWidgetParts(widgetBuilder(), renamed('Mine'), renamed('Theirs')).overlaps).toBe(
-			true
-		);
+		expect(
+			widgetPatches.rebaseParts(widgetBuilder(), renamed('Mine'), renamed('Theirs')).overlaps
+		).toBe(true);
 	});
 	it('collides when the other side changed the length of the list it edits', () => {
 		const shorter = widgetBuilder({
 			data: { ...widgetTemplates.checklist.data, items: items.slice(1) }
 		});
-		expect(rebaseWidgetParts(widgetBuilder(), ticked(0), shorter).overlaps).toBe(true);
+		expect(widgetPatches.rebaseParts(widgetBuilder(), ticked(0), shorter).overlaps).toBe(true);
 	});
 	it('takes the newer data when only the layout changed locally', () => {
 		const relaid = widgetBuilder({
 			layout: { ...widgetTemplates.checklist.layout, root: 'items' }
 		});
-		expect(rebaseWidgetParts(widgetBuilder(), relaid, ticked(2))).toEqual({
+		expect(widgetPatches.rebaseParts(widgetBuilder(), relaid, ticked(2))).toEqual({
 			data: ticked(2).data,
 			dataRevision: 1,
 			layoutRevision: 2,
@@ -244,7 +251,7 @@ describe('replaying a widget onto a newer one', () => {
 
 describe('applying a change without a revision', () => {
 	it('applies to the widget as it is now, whatever its revision', () => {
-		const result = applyWidgetChange(
+		const result = widgetEditing.applyWidgetChange(
 			widgetBuilder({ dataRevision: 7 }),
 			{ kind: 'data', patch: tickFirst.patch },
 			widgetCatalog,
@@ -257,7 +264,7 @@ describe('applying a change without a revision', () => {
 describe('templates and catalog version 2', () => {
 	it.each(Object.keys(widgetTemplates))('accepts the %s template', (name) => {
 		expect(
-			createWidget(
+			widgetEditing.createWidget(
 				widgetTemplates[name as keyof typeof widgetTemplates],
 				{
 					id: testWidgetId(),
@@ -271,7 +278,7 @@ describe('templates and catalog version 2', () => {
 	});
 	it('rejects a badge tone outside the catalog', () => {
 		expect(
-			applyWidgetEdit(
+			widgetEditing.applyWidgetEdit(
 				widgetBuilder({ layout: widgetTemplates.status.layout, data: widgetTemplates.status.data }),
 				{
 					kind: 'layout',
@@ -285,7 +292,7 @@ describe('templates and catalog version 2', () => {
 	});
 	it('rejects a visibility rule json-render does not understand', () => {
 		expect(
-			applyWidgetEdit(
+			widgetEditing.applyWidgetEdit(
 				widgetBuilder(),
 				{
 					kind: 'layout',
@@ -319,15 +326,15 @@ describe('changes from edited content', () => {
 		data: { ...widgetTemplates.checklist.data, notes: [{ id: 'n1', text: 'Remember' }] }
 	};
 	it('sends a new list and its array as one combined change', () => {
-		expect(widgetChangesBetween(widgetBuilder(), withList).map((change) => change.kind)).toEqual([
-			'parts'
-		]);
+		expect(
+			widgetPatches.changesBetween(widgetBuilder(), withList).map((change) => change.kind)
+		).toEqual(['parts']);
 	});
 	it('applies a combined change that is only valid as a pair', () => {
 		expect(
-			applyWidgetChanges(
+			widgetEditing.applyWidgetChanges(
 				widgetBuilder(),
-				widgetChangesBetween(widgetBuilder(), withList),
+				widgetPatches.changesBetween(widgetBuilder(), withList),
 				widgetCatalog,
 				later
 			).kind
@@ -335,7 +342,7 @@ describe('changes from edited content', () => {
 	});
 	it('sends only a rename when only the title changed', () => {
 		expect(
-			widgetChangesBetween(widgetBuilder(), {
+			widgetPatches.changesBetween(widgetBuilder(), {
 				title: ' Launch ',
 				layout: widgetTemplates.checklist.layout,
 				data: widgetTemplates.checklist.data
@@ -346,7 +353,7 @@ describe('changes from edited content', () => {
 
 describe('formulas in a layout', () => {
 	const addDerived = (derived: Record<string, string>) =>
-		applyWidgetChange(
+		widgetEditing.applyWidgetChange(
 			widgetBuilder(),
 			{ kind: 'layout', patch: [{ op: 'add', path: '/derived', value: derived }] },
 			widgetCatalog,
@@ -380,7 +387,7 @@ describe('formulas in a layout', () => {
 	});
 	it('refuses a control bound to a computed value', () => {
 		expect(
-			applyWidgetChange(
+			widgetEditing.applyWidgetChange(
 				widgetBuilder(),
 				{
 					kind: 'layout',
@@ -407,7 +414,7 @@ describe('formulas in a layout', () => {
 	});
 	it('refuses data that claims the computed root', () => {
 		expect(
-			applyWidgetChange(
+			widgetEditing.applyWidgetChange(
 				widgetBuilder(),
 				{ kind: 'data', patch: [{ op: 'add', path: '/derived', value: {} }] },
 				widgetCatalog,
@@ -418,4 +425,18 @@ describe('formulas in a layout', () => {
 			issues: [{ path: '/data/derived', message: '"derived" is reserved for computed values' }]
 		});
 	});
+});
+
+it('reports invalid data before an invalid layout patch in a combined edit', () => {
+	const result = widgetEditing.applyWidgetChange(
+		widgetBuilder(),
+		{
+			kind: 'parts',
+			data: [{ op: 'replace', path: '', value: [] }],
+			layout: [{ op: 'remove', path: '/missing' }]
+		},
+		widgetCatalog,
+		later
+	);
+	expect(result.kind === 'invalid' && result.issues.map((issue) => issue.path)).toEqual(['/data']);
 });

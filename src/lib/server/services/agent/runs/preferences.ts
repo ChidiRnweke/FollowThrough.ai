@@ -1,4 +1,4 @@
-import { OpenRouter } from '@openrouter/sdk';
+import type { AgentCatalogMetadata } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentExecutionMode,
@@ -20,7 +20,13 @@ export interface AgentModelCatalog {
 	list(): Promise<readonly AgentModel[]>;
 }
 
-export class AgentPreferenceCatalog implements AgentPreferencesStore {
+export interface AgentPreferenceEditor extends AgentPreferencesStore {
+	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences;
+	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined>;
+	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences>;
+}
+
+export class AgentPreferenceCatalog implements AgentPreferencesStore, AgentPreferenceEditor {
 	constructor(private readonly repository: AgentPreferencesRepository) {}
 
 	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences {
@@ -45,51 +51,43 @@ export class AgentPreferenceCatalog implements AgentPreferencesStore {
 	}
 }
 
-export class AgentModels implements AgentModelCatalog {
-	private cached: readonly AgentModel[] | undefined;
-	private refreshedAt = 0;
+export interface AgentModelReader {
+	list(): Promise<{ readonly data: readonly AgentCatalogMetadata[] }>;
+}
 
+export class AgentModels implements AgentModelCatalog {
 	constructor(
-		private readonly client: OpenRouter,
-		private readonly recommended: ReadonlySet<string>,
-		private readonly ttlMs = 5 * 60 * 1000
+		private readonly client: AgentModelReader,
+		private readonly recommended: ReadonlySet<string>
 	) {}
 
 	async list(): Promise<readonly AgentModel[]> {
-		if (this.cached && Date.now() - this.refreshedAt < this.ttlMs) return this.cached;
-		try {
-			const response = await this.client.models.list();
-			this.cached = response.data
-				.map((model): AgentModel => {
-					const supportsTools = model.supportedParameters.includes('tools');
-					const supportsVision = model.architecture?.inputModalities.includes('image') ?? false;
-					const capabilities = [
-						supportsTools ? 'tools' : undefined,
-						model.supportedParameters.includes('structured_outputs')
-							? 'structured output'
-							: undefined,
-						model.supportedParameters.includes('reasoning') ? 'reasoning' : undefined
-					].filter((value): value is string => value !== undefined);
-					return {
-						id: model.id,
-						name: model.name,
-						provider: model.id.split('/')[0] ?? 'OpenRouter',
-						...(model.contextLength ? { contextLength: model.contextLength } : {}),
-						supportsTools,
-						supportsVision,
-						recommended: this.recommended.has(model.id),
-						capabilities
-					};
-				})
-				.sort(
-					(a, b) => Number(b.recommended) - Number(a.recommended) || a.name.localeCompare(b.name)
-				);
-			this.refreshedAt = Date.now();
-			return this.cached;
-		} catch (error) {
-			if (this.cached) return this.cached;
-			throw error;
-		}
+		const response = await this.client.list();
+		return response.data
+			.map((model): AgentModel => {
+				const supportsTools = model.supportedParameters.includes('tools');
+				const supportsVision = model.architecture?.inputModalities.includes('image') ?? false;
+				const capabilities = [
+					supportsTools ? 'tools' : undefined,
+					model.supportedParameters.includes('structured_outputs')
+						? 'structured output'
+						: undefined,
+					model.supportedParameters.includes('reasoning') ? 'reasoning' : undefined
+				].filter((value): value is string => value !== undefined);
+				return {
+					id: model.id,
+					name: model.name,
+					provider: model.id.split('/')[0] ?? 'OpenRouter',
+					...(model.contextLength ? { contextLength: model.contextLength } : {}),
+					supportsTools,
+					supportsVision,
+					recommended: this.recommended.has(model.id),
+					capabilities
+				};
+			})
+			.sort(
+				(a, b) => Number(b.recommended) - Number(a.recommended) || a.name.localeCompare(b.name)
+			);
 	}
 }
 

@@ -1,7 +1,11 @@
+import { widgetCatalog } from '$lib/models/widgets';
+import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+const widgetEditing = createWidgetEditingController();
 import type { WriteRebase } from '$lib/models/outbox';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { rebaseFields } from '$lib/services/sync/rebase';
-import { rebaseWidgetParts } from '$lib/services/widgets/edits';
+import { WidgetPatchService } from '$lib/services/widgets/patches';
+const widgetPatches = new WidgetPatchService();
 
 /**
  * Fields the server reassigns on every accepted write. Two edits that both touch them have not
@@ -25,10 +29,16 @@ export const rebaseWorkspaceRecord: WriteRebase<WorkspaceRecord> = (observed, lo
 	if (observed.type !== onto.type || local.type !== onto.type) return null;
 	if (observed.type === 'widgets' && local.type === 'widgets' && onto.type === 'widgets') {
 		const fields = rebaseFields(observed.value, local.value, onto.value, widgetParts);
-		const { overlaps, ...parts } = rebaseWidgetParts(observed.value, local.value, onto.value);
+		const { overlaps, ...parts } = widgetPatches.rebaseParts(
+			observed.value,
+			local.value,
+			onto.value
+		);
+		const candidate = { ...fields.value, ...parts };
+		const validation = widgetEditing.validate(candidate, widgetCatalog);
 		return {
-			value: { type: 'widgets', value: { ...fields.value, ...parts } },
-			overlaps: fields.overlaps || overlaps
+			value: { type: 'widgets', value: candidate },
+			overlaps: fields.overlaps || overlaps || validation.kind !== 'applied'
 		};
 	}
 	const rebased = rebaseFields(observed.value, local.value, onto.value, bookkeeping);

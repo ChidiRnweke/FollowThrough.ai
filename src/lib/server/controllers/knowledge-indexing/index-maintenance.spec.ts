@@ -1,3 +1,4 @@
+import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
@@ -15,14 +16,20 @@ const deferredIndexer = (repository: InMemorySearchRepository, client: InMemoryE
 	new ContentIndex(repository, client.model, new TokenAwareChunker(200, 0), true).notes;
 
 const backfill = (repository: InMemorySearchRepository, client: InMemoryEmbeddingClient) =>
-	new EmbeddingMaintenance(new IndexBacklog(repository), client, immediateTransactions, {
-		logger: {
-			error: (_message, error: Error) => {
-				throw error;
-			},
-			log: () => {}
+	new EmbeddingMaintenance(
+		new IndexBacklog(repository),
+		client,
+		immediateTransactions,
+		new EmbeddingProgressStore(),
+		{
+			logger: {
+				error: (_message, error: Error) => {
+					throw error;
+				},
+				log: () => {}
+			}
 		}
-	});
+	);
 
 describe('Deferred embedding write path', () => {
 	it('stages deferred text for lexical but not semantic search', async () => {

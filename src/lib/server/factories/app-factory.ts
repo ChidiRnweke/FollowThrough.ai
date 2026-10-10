@@ -1,7 +1,7 @@
 import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { AgentEventBus } from '../services/agent/runs/events';
+import type { AgentEventBus } from '../stores/agent/events';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
 import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
 import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';

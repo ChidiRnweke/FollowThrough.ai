@@ -3,7 +3,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { LocalDate } from '$lib/models/workspace';
 import type { Widget } from '$lib/models/widgets';
 import { widgetReferencesIn } from '$lib/services/notes/references';
-import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 import type { Lab } from '../../lab/application';
 
 /**

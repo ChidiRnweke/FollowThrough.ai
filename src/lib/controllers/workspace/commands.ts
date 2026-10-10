@@ -1,3 +1,5 @@
+import { WidgetLifecycleService } from '$lib/services/widgets/trash';
+const widgetLifecycle = new WidgetLifecycleService();
 import { decideNoteRestore, noteTrashChange } from '$lib/services/notes/trash';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
@@ -6,8 +8,9 @@ import { decideProjectDetails } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
 import { decideMemoryCreation, decideMemoryEdit } from '$lib/services/memory/edits';
-import { applyWidgetChange, createWidget } from '$lib/services/widgets/edits';
-import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
+import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+const widgetEditing = createWidgetEditingController();
+
 import { widgetCatalog, type Widget, type WidgetEditResult } from '$lib/models/widgets';
 import type {
 	MemoryEntry,
@@ -469,7 +472,7 @@ export const prepareWorkspaceCommand = (
 				{
 					type: 'widgets',
 					value: appliedWidget(
-						createWidget(
+						widgetEditing.createWidget(
 							command.draft,
 							{
 								id: command.id,
@@ -488,12 +491,12 @@ export const prepareWorkspaceCommand = (
 			return content({
 				type: 'widgets',
 				value: appliedWidget(
-					applyWidgetChange(value('widgets'), command.change, widgetCatalog, now)
+					widgetEditing.applyWidgetChange(value('widgets'), command.change, widgetCatalog, now)
 				)
 			});
 		case 'archiveWidget':
 		case 'restoreWidget': {
-			const change = widgetTrashChange(
+			const change = widgetLifecycle.change(
 				command.kind === 'archiveWidget' ? 'archive' : 'restore',
 				value('widgets'),
 				now
@@ -502,7 +505,7 @@ export const prepareWorkspaceCommand = (
 			return content({ type: 'widgets', value: change.widget });
 		}
 		case 'deleteWidget': {
-			const decision = decideWidgetTrash('delete', value('widgets'));
+			const decision = widgetLifecycle.decide('delete', value('widgets'));
 			if (decision.kind === 'invalid') throw new Error(decision.message);
 			return content(null);
 		}

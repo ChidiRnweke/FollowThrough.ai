@@ -1,64 +1,68 @@
 import { describe, expect, it } from 'vitest';
-import { parseFormula } from '$lib/services/widgets/edits';
+import { WidgetEvaluationService } from './edits';
+import type { WidgetData, WidgetState } from '$lib/models/widgets';
 
-describe('parseFormula', () => {
+const evaluation = new WidgetEvaluationService();
+const evaluate = (
+	source: string,
+	data: WidgetData = {},
+	derived: Record<string, string> = {}
+): WidgetState =>
+	evaluation.resolve(
+		{
+			root: 'text',
+			elements: { text: { type: 'Text', props: { text: 'x' }, children: [] } },
+			derived: { ...derived, result: source }
+		},
+		data,
+		{}
+	);
+
+describe('formula syntax through widget evaluation', () => {
 	it('binds a power tighter than a leading minus', () => {
-		expect(parseFormula('-2 ^ 2')).toEqual({
-			kind: 'parsed',
-			formula: {
-				kind: 'unary',
-				operator: '-',
-				operand: {
-					kind: 'binary',
-					operator: '^',
-					left: { kind: 'number', value: 2 },
-					right: { kind: 'number', value: 2 }
-				}
-			},
-			references: []
-		});
+		expect(evaluate('-2 ^ 2').state.derived).toEqual({ result: -4 });
 	});
-	it('lists every state pointer the formula reads', () => {
-		const parsed = parseFormula('@/principal * (1 + @/derived/rate) ^ @/years');
-		expect(parsed.kind === 'parsed' && parsed.references).toEqual([
-			'/principal',
-			'/derived/rate',
-			'/years'
-		]);
+	it('resolves every state pointer a formula reads', () => {
+		expect(
+			evaluate(
+				'@/principal * (1 + @/derived/rate) ^ @/years',
+				{ principal: 100, years: 2 },
+				{ rate: '0.1' }
+			).state.derived
+		).toEqual({ rate: 0.1, result: 121.00000000000001 });
 	});
 	it('reads a field of a referenced row with a dot', () => {
-		expect(parseFormula('@/rows/0.amount')).toEqual({
-			kind: 'parsed',
-			formula: {
-				kind: 'member',
-				target: { kind: 'reference', pointer: '/rows/0' },
-				field: 'amount'
-			},
-			references: ['/rows/0']
+		expect(evaluate('@/rows/0.amount', { rows: [{ amount: 12 }] }).state.derived).toEqual({
+			result: 12
 		});
 	});
 	it('lets a series body use its index', () => {
-		expect(parseFormula('series(1, 3, { year: i })').kind).toBe('parsed');
+		expect(evaluate('series(1, 3, { year: i })').state.derived).toEqual({
+			result: [{ year: 1 }, { year: 2 }, { year: 3 }]
+		});
 	});
 	it('refuses the index outside the body that binds it', () => {
-		expect(parseFormula('i + 1')).toEqual({
-			kind: 'failure',
-			message: 'Unknown name "i". Read data with @/path (at character 1)'
-		});
+		expect(evaluate('i + 1').issues).toEqual([
+			{
+				path: '/layout/derived/result',
+				message: 'Unknown name "i". Read data with @/path (at character 1)'
+			}
+		]);
 	});
 	it('refuses a function the language does not have', () => {
-		expect(parseFormula('fetch(@/url)').kind).toBe('failure');
+		expect(evaluate('fetch(@/url)').issues.length).toBe(1);
 	});
 	it('names the arguments a function takes when the count is wrong', () => {
-		expect(parseFormula('if(true, 1)')).toEqual({
-			kind: 'failure',
-			message: 'Wrong number of arguments. Use `if(condition, then, else)` (at character 1)'
-		});
+		expect(evaluate('if(true, 1)').issues).toEqual([
+			{
+				path: '/layout/derived/result',
+				message: 'Wrong number of arguments. Use `if(condition, then, else)` (at character 1)'
+			}
+		]);
 	});
 	it('says where an unfinished formula stops', () => {
-		expect(parseFormula('1 +')).toEqual({
-			kind: 'failure',
-			message: 'The formula ends too early (at character 4)'
-		});
+		expect(evaluate('1 +').issues).toEqual([
+			{ path: '/layout/derived/result', message: 'The formula ends too early (at character 4)' }
+		]);
 	});
 });

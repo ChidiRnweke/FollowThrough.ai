@@ -7,7 +7,7 @@ import type {
 import type {
 	AttachmentStorage,
 	UploadRetentionRepository
-} from '$lib/server/services/attachments/retention';
+} from '$lib/server/controllers/attachments/retention';
 
 export class InMemoryUploadReservations implements UploadRetentionRepository {
 	deleted: string[] = [];

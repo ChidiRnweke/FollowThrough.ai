@@ -64,8 +64,8 @@ import {
 	type NoteActionRequests
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 /**
  * Application boundary for todos: tracking, filtering, and the promise-extraction
@@ -341,7 +341,8 @@ export class Todos implements TodosController {
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
-		const active = registerActiveRun(runId);
+		const active = new AbortController();
+		activeRunStore.register(runId, active);
 		try {
 			const input = run.contextSnapshot;
 			await this.dependencies.selectionOrigins.validate(actor, input.selection);
@@ -395,7 +396,7 @@ export class Todos implements TodosController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId, active);
+			activeRunStore.release(runId, active);
 		}
 	}
 

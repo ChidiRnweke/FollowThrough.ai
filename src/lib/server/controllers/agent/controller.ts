@@ -58,18 +58,14 @@ import {
 	resolveDefaultAgentModel,
 	resolveDefaultVisionModel
 } from '$lib/services/agent/model-selection';
-import {
-	abortActiveRun,
-	registerActiveRun,
-	releaseActiveRun
-} from '$lib/server/services/agent/runs/active-runs';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
 import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import { AgentProviderFailure } from '$lib/errors';
 import type { AgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
-import type { WidgetReader } from '$lib/server/services/widgets/contracts';
+import type { WidgetReader } from '$lib/server/services/widgets/library';
 import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import type { AttachmentLibrary } from '$lib/server/services/attachments/library';
 import {
@@ -92,7 +88,7 @@ import type {
 import type { AgentRunExecutionOutcome } from '$lib/models/agent';
 import type { AgentRunner, AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 /** Grace period the executor gets to settle a cancelled run before the backstop does it. */
@@ -522,7 +518,9 @@ export class Agent implements AgentController {
 		});
 		// The abort waits for the commit above: the executor settles the run out of
 		// `cancelling`, which has to be durable before it can read it.
-		if (abortActiveRun(runId)) {
+		const activeHandle = activeRunStore.get(runId);
+		if (activeHandle) {
+			activeHandle.abort();
 			this.settleCancellationAfterGrace(runId);
 			return this.snapshot(actor, run);
 		}
@@ -603,8 +601,9 @@ export class Agent implements AgentController {
 	}
 
 	private executeInBackground(runId: AgentRunId): void {
-		const controller = registerActiveRun(runId);
-		const cleanup = () => releaseActiveRun(runId, controller);
+		const controller = new AbortController();
+		activeRunStore.register(runId, controller);
+		const cleanup = () => activeRunStore.release(runId, controller);
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
 		void this.execute(runId, controller.signal)
 			.then(cleanup, async (error) => {

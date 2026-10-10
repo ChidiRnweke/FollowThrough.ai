@@ -7,7 +7,7 @@ import type { ProjectRepository } from '$lib/server/repositories/projects/projec
 import type { WidgetRepository, WidgetRevisions } from '$lib/server/repositories/widgets';
 
 /** Storage rules for widgets: ownership and project scope. The edit rule is shared (ADR 0043). */
-export class WidgetLibrary {
+export class WidgetLibrary implements WidgetReader, WidgetLister, WidgetWriter {
 	constructor(
 		private readonly widgets: WidgetRepository,
 		private readonly projects: ProjectRepository,
@@ -58,4 +58,18 @@ export class WidgetLibrary {
 		if (!(await this.projects.findById(actor, projectId)))
 			throw new NotFoundError('Widget project was not found', { projectId });
 	}
+}
+
+export interface WidgetReader {
+	get(actor: ActorContext, widgetId: WidgetId): Promise<Widget>;
+}
+export interface WidgetLister {
+	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly Widget[]>;
+}
+export interface WidgetWriter {
+	/** The current widget, locked until the transaction ends. */
+	getForEdit(actor: ActorContext, widgetId: WidgetId): Promise<Widget>;
+	create(actor: ActorContext, widget: Widget): Promise<Widget>;
+	update(actor: ActorContext, widget: Widget, from: WidgetRevisions): Promise<Widget>;
+	deleteArchived(actor: ActorContext, widgetId: WidgetId): Promise<void>;
 }

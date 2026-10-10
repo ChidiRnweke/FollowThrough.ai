@@ -8,7 +8,7 @@
  */
 import { createProductionFactory } from '$lib/server/factories/production-factory';
 import { hydrateEnvironment } from '$lib/server/config';
-import { startScheduler } from '$lib/server/services/scheduler';
+import { createScheduler } from '$lib/server/factories/scheduler';
 import {
 	drainBeforeTelemetryShutdown,
 	shutdownTelemetry
@@ -21,7 +21,8 @@ const main = async (): Promise<void> => {
 	const application = createProductionFactory();
 	const tasks = application.backgroundTasks;
 
-	const scheduler = startScheduler(tasks, { runOnStart: true });
+	const scheduler = createScheduler(tasks, { runOnStart: true });
+	scheduler.start();
 	drainBeforeTelemetryShutdown(async () => {
 		await scheduler.stop();
 		console.log('[worker] stopped');

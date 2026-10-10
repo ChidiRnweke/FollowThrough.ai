@@ -2020,3 +2020,26 @@ export interface RunSettlementPlan {
 export type RunSettlementClaim =
 	| { readonly kind: 'claimed'; readonly run: AgentRun; readonly events: readonly AgentEvent[] }
 	| { readonly kind: 'lost' };
+
+/** Provider metadata consumed when presenting the available model catalog. */
+export interface AgentCatalogMetadata {
+	readonly id: string;
+	readonly name: string;
+	readonly contextLength?: number | null;
+	readonly supportedParameters: readonly string[];
+	readonly architecture?: { readonly inputModalities: readonly string[] } | null;
+}
+
+export type InlineSuggestionAdmission =
+	| { readonly allowed: true }
+	| {
+			readonly allowed: false;
+			readonly reason: 'busy' | 'rate_limited';
+			readonly retryAfterMs: number;
+	  };
+
+export interface InlineSuggestionThrottle {
+	admit(userId: string): InlineSuggestionAdmission;
+	consume(userId: string): InlineSuggestionAdmission;
+	release(userId: string): void;
+}

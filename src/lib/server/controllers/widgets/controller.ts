@@ -1,9 +1,11 @@
+import type { WidgetCatalogReader } from '$lib/models/widgets';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
-import { applyWidgetChange, applyWidgetEdit, createWidget } from '$lib/services/widgets/edits';
-import { decideWidgetTrash, widgetTrashChange } from '$lib/services/widgets/trash';
-import { widgetCatalogPrompt } from '$lib/services/widgets/catalog-prompt';
-import { widgetSearchText } from '$lib/services/widgets/search-text';
+import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
+import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
+import type { IWidgetCatalogService } from '$lib/services/widgets/catalog-prompt';
+import type { IWidgetSearchService } from '$lib/services/widgets/search-text';
+
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
@@ -27,7 +29,7 @@ import type {
 	WidgetLister,
 	WidgetReader,
 	WidgetWriter
-} from '$lib/server/services/widgets/contracts';
+} from '$lib/server/services/widgets/library';
 
 /**
  * Application boundary for widgets (ADR 0043). Every change, from the workspace queue or an
@@ -60,6 +62,11 @@ export interface WidgetsController {
 }
 
 export interface WidgetsDependencies {
+	catalogReader: WidgetCatalogReader;
+	editing: WidgetEditingController;
+	lifecycle: IWidgetLifecycleService;
+	catalog: IWidgetCatalogService;
+	search: IWidgetSearchService;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	widgetReader: WidgetReader;
@@ -110,7 +117,12 @@ export class Widgets implements WidgetsController {
 							break;
 						case 'editWidget':
 							await this.write(actor, command.widgetId, (current) =>
-								applyWidgetChange(current, command.change, widgetCatalog, now())
+								this.dependencies.editing.applyWidgetChange(
+									current,
+									command.change,
+									widgetCatalog,
+									now()
+								)
 							);
 							break;
 						case 'archiveWidget':
@@ -142,7 +154,12 @@ export class Widgets implements WidgetsController {
 
 	async catalog(actor: ActorContext): Promise<{ catalogVersion: number; reference: string }> {
 		void actor;
-		return { catalogVersion: widgetCatalog.version, reference: widgetCatalogPrompt(widgetCatalog) };
+		return {
+			catalogVersion: widgetCatalog.version,
+			reference: this.dependencies.catalog.describe(
+				this.dependencies.catalogReader.readCatalog(widgetCatalog)
+			)
+		};
 	}
 
 	async list(
@@ -155,7 +172,7 @@ export class Widgets implements WidgetsController {
 	async create(actor: ActorContext, input: CreateWidgetInput): Promise<{ widget: Widget }> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const widget = decided(
-				createWidget(
+				this.dependencies.editing.createWidget(
 					input.draft,
 					{
 						id: input.id,
@@ -176,7 +193,7 @@ export class Widgets implements WidgetsController {
 	async edit(actor: ActorContext, input: EditWidgetInput): Promise<{ widget: Widget }> {
 		return {
 			widget: await this.write(actor, input.widgetId, (current) =>
-				applyWidgetEdit(current, input.edit, widgetCatalog, now())
+				this.dependencies.editing.applyWidgetEdit(current, input.edit, widgetCatalog, now())
 			)
 		};
 	}
@@ -198,7 +215,7 @@ export class Widgets implements WidgetsController {
 	async delete(actor: ActorContext, input: { readonly widgetId: WidgetId }): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.widgetWriter.getForEdit(actor, input.widgetId);
-			const decision = decideWidgetTrash('delete', current);
+			const decision = this.dependencies.lifecycle.decide('delete', current);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			await this.dependencies.widgetWriter.deleteArchived(actor, input.widgetId);
 		});
@@ -210,7 +227,7 @@ export class Widgets implements WidgetsController {
 		action: 'archive' | 'restore'
 	): Promise<Widget> {
 		return this.write(actor, widgetId, (current) => {
-			const change = widgetTrashChange(action, current, now());
+			const change = this.dependencies.lifecycle.change(action, current, now());
 			return change.kind === 'change'
 				? { kind: 'applied', widget: change.widget }
 				: { kind: 'invalid', issues: [{ path: '/archivedAt', message: change.message }] };
@@ -239,7 +256,7 @@ export class Widgets implements WidgetsController {
 		const result: IndexingResult = await this.dependencies.widgetIndexer.index(
 			actor,
 			widget,
-			widgetSearchText(widget)
+			this.dependencies.search.text(widget)
 		);
 		if (result.kind === 'stored') return;
 		const batch = await this.dependencies.indexEmbeddings.embed(

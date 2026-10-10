@@ -16,7 +16,7 @@ import type { MemoryLibrary } from '$lib/server/services/memory/library';
 import type { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import type {
 	AgentModelCatalog,
-	AgentPreferenceCatalog
+	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
 import { resolveAgentModel } from '$lib/services/agent/model-selection';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
@@ -49,7 +49,7 @@ export interface DiagramsCapabilityInput {
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
 	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
 	readonly conversations: ConversationArchive;
-	readonly preferences: AgentPreferenceCatalog;
+	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
 	readonly runs: AgentRunLedger;
 	readonly builtInSkills: BuiltInSkills;

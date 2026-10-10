@@ -1,3 +1,6 @@
+import type { LocalDate } from '$lib/models/workspace';
+import type { NoteSummary } from '$lib/models/notes';
+import type { Todo } from '$lib/models/todos';
 import { z } from 'zod';
 import { formulaSourceSchema } from '$lib/models/widget-formulas';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
@@ -1327,3 +1330,92 @@ export interface WidgetExport {
 	readonly title: string;
 	readonly blocks: readonly WidgetExportBlock[];
 }
+
+export interface WidgetPartsRebase {
+	readonly data: WidgetData;
+	readonly dataRevision: number;
+	readonly layoutRevision: number;
+	readonly overlaps: boolean;
+}
+
+export interface WidgetContent {
+	readonly title: string;
+	readonly layout: WidgetLayout;
+	readonly data: WidgetData;
+}
+
+export interface WidgetState {
+	readonly state: WidgetData;
+	readonly issues: readonly WidgetIssue[];
+}
+
+/** A patch result before the write-input boundary has validated its shape. */
+export type WidgetCandidate = Omit<Widget, 'layout' | 'data'> & {
+	readonly layout: JsonValue;
+	readonly data: JsonValue;
+};
+export type WidgetProposal =
+	| { readonly kind: 'candidate'; readonly change: 'rename'; readonly widget: Widget }
+	| {
+			readonly kind: 'candidate';
+			readonly change: 'data' | 'layout';
+			readonly widget: WidgetCandidate;
+	  }
+	| { readonly kind: 'invalid'; readonly issues: readonly WidgetIssue[] };
+export type WidgetCandidateRead =
+	| { readonly kind: 'read'; readonly widget: Widget; readonly issues: readonly WidgetIssue[] }
+	| { readonly kind: 'invalid'; readonly issues: readonly WidgetIssue[] };
+export interface WidgetCandidateReader {
+	read(candidate: WidgetCandidate, catalog: WidgetCatalog): WidgetCandidateRead;
+}
+
+export type WidgetEditorRead =
+	| { readonly kind: 'read'; readonly content: WidgetContent }
+	| { readonly kind: 'invalid'; readonly issues: readonly WidgetIssue[] };
+export interface WidgetEditorReader {
+	read(title: string, layoutText: string, dataText: string): WidgetEditorRead;
+}
+export type WidgetEditorPreview =
+	| { readonly kind: 'ready'; readonly changes: readonly WidgetChange[]; readonly preview: Widget }
+	| { readonly kind: 'invalid'; readonly issues: readonly WidgetIssue[] };
+
+/** Schema text resolved at the catalog boundary before domain presentation. */
+export interface WidgetCatalogDescription {
+	readonly version: number;
+	readonly components: Readonly<
+		Record<
+			string,
+			{
+				readonly description: string;
+				readonly slots: readonly string[];
+				readonly propsSchema: string;
+			}
+		>
+	>;
+}
+export interface WidgetCatalogReader {
+	readCatalog(catalog: WidgetCatalog): WidgetCatalogDescription;
+}
+
+export interface WidgetSourceRecords {
+	readonly projectId: ProjectId;
+	readonly today: LocalDate;
+	readonly todos: readonly Pick<
+		Todo,
+		| 'id'
+		| 'projectId'
+		| 'title'
+		| 'status'
+		| 'responsibility'
+		| 'priority'
+		| 'category'
+		| 'dueDate'
+		| 'deletedAt'
+	>[];
+	readonly notes: readonly Pick<
+		NoteSummary,
+		'id' | 'projectId' | 'title' | 'kind' | 'isPinned' | 'archivedAt' | 'updatedAt'
+	>[];
+}
+
+export type WidgetTrashAction = 'archive' | 'restore' | 'delete';

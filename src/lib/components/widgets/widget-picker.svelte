@@ -13,7 +13,8 @@
 	import type { UserId } from '$lib/models/identity';
 	import type { DateTime } from '$lib/models/workspace';
 	import { widgetCatalog, widgetTemplates, type Widget } from '$lib/models/widgets';
-	import { createWidget } from '$lib/services/widgets/edits';
+	import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+	const widgetEditing = createWidgetEditingController();
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
@@ -36,7 +37,7 @@
 	// A preview is the template as `createWidget` would save it, so what is shown is what is made.
 	const previews = (Object.keys(widgetTemplates) as WidgetTemplateName[]).flatMap(
 		(template, index) => {
-			const result = createWidget(
+			const result = widgetEditing.createWidget(
 				widgetTemplates[template],
 				{
 					id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}` as WidgetId,

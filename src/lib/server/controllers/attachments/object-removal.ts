@@ -1,7 +1,8 @@
+import type { ScheduledTask } from '$lib/models/maintenance';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 
 /** Only committed queue entries are visible; storage removal is idempotent. */
-export class AttachmentObjectRemoval {
+export class AttachmentObjectRemoval implements ScheduledTask {
 	readonly name = 'attachment-object-removal';
 	readonly intervalMs = 60_000;
 	constructor(

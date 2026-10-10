@@ -1,3 +1,4 @@
+import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import {
@@ -48,6 +49,7 @@ describe('complete attachment search', () => {
 			new IndexBacklog(repository),
 			client,
 			new InMemoryTransactionRunner([repository]),
+			new EmbeddingProgressStore(),
 			{
 				logger: {
 					log: () => {},

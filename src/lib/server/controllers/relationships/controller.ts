@@ -30,9 +30,9 @@ import {
 	type NoteActionRequests
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
 import type { RelationshipRules } from '$lib/server/services/relationships/rules';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 /**
  * Application boundary for relationship (backlink) suggestions between notes: find notes
@@ -121,7 +121,8 @@ export class Relationships implements RelationshipsController {
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
-		const active = registerActiveRun(runId);
+		const active = new AbortController();
+		activeRunStore.register(runId, active);
 		try {
 			const input = run.contextSnapshot;
 			const note = await this.dependencies.selectionOrigins.validate(actor, input.selection);
@@ -172,7 +173,7 @@ export class Relationships implements RelationshipsController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId, active);
+			activeRunStore.release(runId, active);
 		}
 	}
 

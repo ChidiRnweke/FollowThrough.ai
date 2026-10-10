@@ -1,3 +1,5 @@
+import type { ScheduledTask } from '$lib/models/maintenance';
+import type { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import type { ActorContext } from '$lib/models/identity';
 import type { EmbeddedChunk, IndexSource, PendingIndexSource } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -6,12 +8,6 @@ import { InvalidGeneratedContentError } from '$lib/errors';
 
 interface TransactionRunner {
 	run<T>(work: () => Promise<T>): Promise<T>;
-}
-
-interface ScheduledTask {
-	readonly name: string;
-	readonly intervalMs: number;
-	run(): Promise<void>;
 }
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
@@ -35,12 +31,12 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	readonly intervalMs: number;
 	private readonly maxSourcesPerTick: number;
 	private readonly logger: Pick<Console, 'error' | 'log'>;
-	private after: string | undefined;
 
 	constructor(
 		private readonly backlog: IndexBacklog,
 		private readonly embeddingClient: IEmbeddings,
 		private readonly transactions: TransactionRunner,
+		private readonly progress: EmbeddingProgressStore,
 		options: EmbeddingBackfillOptions = {}
 	) {
 		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -49,9 +45,9 @@ export class EmbeddingMaintenance implements ScheduledTask {
 	}
 
 	async run(): Promise<void> {
-		let pending = await this.backlog.listSources(this.maxSourcesPerTick, this.after);
-		if (!pending.length && this.after !== undefined) {
-			this.after = undefined;
+		let pending = await this.backlog.listSources(this.maxSourcesPerTick, this.progress.read());
+		if (!pending.length && this.progress.read() !== undefined) {
+			this.progress.update(undefined);
 			pending = await this.backlog.listSources(this.maxSourcesPerTick);
 		}
 		if (!pending.length) return;
@@ -70,7 +66,7 @@ export class EmbeddingMaintenance implements ScheduledTask {
 				);
 			} finally {
 				// Failed sources stay pending, but cannot monopolize the next tick.
-				this.after = entry.cursor;
+				this.progress.update(entry.cursor);
 			}
 		}
 		this.logger.log(

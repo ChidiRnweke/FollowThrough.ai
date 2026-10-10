@@ -2,7 +2,7 @@ import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
 } from '$lib/server/controllers/inline-suggestions/controller';
-import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
+import { createInlineAdmission } from '$lib/server/factories/inline-admission';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import {
@@ -26,7 +26,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 	const reranker = new InMemoryReranker();
 	const generator = new InMemoryInlineCompletion();
 	const preferences = new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository());
-	const admission = new InlineSuggestionAdmission();
+	const admission = createInlineAdmission();
 	const controller = new InlineSuggestions(
 		capabilityDependencies<InlineSuggestionsDependencies>({
 			noteReader: notes,

@@ -16,7 +16,7 @@ const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
-	const { library } = createWidgetsCapability({
+	const widgets = createWidgetsCapability({
 		db: database,
 		projects: new ProjectRecords(database),
 		notes: new NoteRecords(database)
@@ -25,14 +25,19 @@ const setup = async (suffix: string) => {
 	const index = new ContentIndex(new KnowledgeIndexRecords(database), 'contract', undefined, true);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
+			catalogReader: widgets.catalogReader,
+			editing: widgets.editing,
+			lifecycle: widgets.lifecycle,
+			catalog: widgets.catalog,
+			search: widgets.search,
 			widgetIndexer: index.widgets,
 			indexEmbeddings: new InMemoryEmbeddingClient(),
 			indexWriter: index,
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			widgetReader: library,
-			widgetLister: library,
-			widgetWriter: library,
+			widgetReader: widgets.reader,
+			widgetLister: widgets.lister,
+			widgetWriter: widgets.writer,
 			transactionRunner
 		})
 	);

@@ -25,8 +25,8 @@ import {
 	type NoteActionRequests
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 /**
  * Application boundary for reference suggestions: given a text selection, find and rank
@@ -112,7 +112,8 @@ export class References implements ReferencesController {
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
-		const active = registerActiveRun(runId);
+		const active = new AbortController();
+		activeRunStore.register(runId, active);
 		try {
 			const input = run.contextSnapshot;
 			const ranked = await this.findCandidates(actor, input, {
@@ -159,7 +160,7 @@ export class References implements ReferencesController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId, active);
+			activeRunStore.release(runId, active);
 		}
 	}
 

@@ -1,42 +1,13 @@
+import { InMemorySchedulerClock } from '$lib/testing/maintenance/fakes/in-memory-scheduler-clock';
 import { describe, expect, it } from 'vitest';
-import {
-	startScheduler,
-	type SchedulerClock,
-	type ScheduledTask,
-	type TimerHandle
-} from '$lib/server/services/scheduler';
+import type { ScheduledTask, SchedulerOptions } from '$lib/models/maintenance';
+import { createScheduler } from '$lib/server/factories/scheduler';
 
-/**
- * Runs queued callbacks on demand so tests drive ticks instead of waiting on
- * real timers.
- */
-class ManualClock implements SchedulerClock {
-	private queue = new Map<TimerHandle, () => void>();
-	private nextHandle = 1;
-
-	setTimeout(callback: () => void): TimerHandle {
-		const handle = this.nextHandle++;
-		this.queue.set(handle, callback);
-		return handle;
-	}
-
-	clearTimeout(handle: TimerHandle): void {
-		this.queue.delete(handle);
-	}
-
-	/** Fires everything currently queued, then lets the resulting promises settle. */
-	async advance(): Promise<void> {
-		const due = [...this.queue.entries()];
-		this.queue.clear();
-		for (const [, callback] of due) callback();
-		await Promise.resolve();
-		await Promise.resolve();
-	}
-
-	get pending(): number {
-		return this.queue.size;
-	}
-}
+const startScheduler = (tasks: readonly ScheduledTask[], options: SchedulerOptions) => {
+	const scheduler = createScheduler(tasks, options);
+	scheduler.start();
+	return scheduler;
+};
 
 const silent = { error: () => {}, info: () => {} };
 
@@ -51,7 +22,7 @@ const countingTask = (name = 'counter'): ScheduledTask & { runs: number } => ({
 
 describe('Worker scheduler', () => {
 	it('reschedules itself after each tick', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		const task = countingTask();
 		startScheduler([task], { clock, logger: silent });
 		const beforeFirstTick = task.runs;
@@ -66,7 +37,7 @@ describe('Worker scheduler', () => {
 	});
 
 	it('runs immediately when asked to start eagerly', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		const task = countingTask();
 
 		startScheduler([task], { clock, logger: silent, runOnStart: true });
@@ -76,7 +47,7 @@ describe('Worker scheduler', () => {
 	});
 
 	it('does not start a second tick while one is still running', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		let started = 0;
 		let release = () => {};
 		const blocked: ScheduledTask = {
@@ -99,7 +70,7 @@ describe('Worker scheduler', () => {
 	});
 
 	it('keeps running after a task throws', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		let attempts = 0;
 		const flaky: ScheduledTask = {
 			name: 'flaky',
@@ -118,7 +89,7 @@ describe('Worker scheduler', () => {
 	});
 
 	it('schedules every task it is given', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		const first = countingTask('first');
 		const second = countingTask('second');
 		startScheduler([first, second], { clock, logger: silent });
@@ -129,7 +100,7 @@ describe('Worker scheduler', () => {
 	});
 
 	it('stops scheduling once stopped', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		const task = countingTask();
 		const handle = startScheduler([task], { clock, logger: silent });
 
@@ -140,7 +111,7 @@ describe('Worker scheduler', () => {
 	});
 
 	it('waits for an in-flight tick before reporting stopped', async () => {
-		const clock = new ManualClock();
+		const clock = new InMemorySchedulerClock();
 		let finished = false;
 		let release = () => {};
 		const slow: ScheduledTask = {
@@ -163,4 +134,23 @@ describe('Worker scheduler', () => {
 
 		expect(finished).toBe(true);
 	});
+});
+
+it('starts each task once when start is repeated', async () => {
+	const clock = new InMemorySchedulerClock();
+	const task = countingTask();
+	const scheduler = createScheduler([task], { clock, logger: silent, runOnStart: true });
+	scheduler.start();
+	scheduler.start();
+	await scheduler.stop();
+	expect(task.runs).toBe(1);
+});
+it('cannot restart after shutdown', async () => {
+	const clock = new InMemorySchedulerClock();
+	const task = countingTask();
+	const scheduler = createScheduler([task], { clock, logger: silent, runOnStart: true });
+	await scheduler.stop();
+	scheduler.start();
+	await clock.advance();
+	expect(task.runs).toBe(0);
 });

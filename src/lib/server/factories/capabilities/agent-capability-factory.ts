@@ -1,3 +1,5 @@
+import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
+import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { getEncoding } from 'js-tiktoken';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -28,11 +30,12 @@ import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trus
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
-import { AgentEvents } from '$lib/server/services/agent/runs/events';
+import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import {
 	AgentModels,
 	AgentPreferenceCatalog,
+	type AgentPreferenceEditor,
 	type AgentModelCatalog
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
@@ -65,7 +68,7 @@ export interface AgentCapability {
 	readonly webSearchDefaults: WebResearchSettings;
 	readonly agentAvailable: boolean;
 	readonly conversations: ConversationArchive;
-	readonly preferences: AgentPreferenceCatalog;
+	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
 	readonly toolPreferences: ToolAccess;
 	readonly trust: ToolTrust;
@@ -82,7 +85,7 @@ export interface AgentCapability {
 	readonly runner: AgentReasoning;
 	readonly settlements: RunSettlements;
 	readonly noteActionRequests: NoteActionRequests;
-	readonly eventBus: AgentEvents;
+	readonly eventBus: AgentEventBus;
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
@@ -93,13 +96,16 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	);
 	const models =
 		input.modelCatalog ??
-		new AgentModels(
-			new OpenRouter({
-				apiKey: input.openRouterApiKey,
-				httpReferer: input.appURL,
-				xTitle: 'FollowThrough'
-			}),
-			new Set(input.recommendedModels.map(normalizeLanguageModelId))
+		new CachedAgentModels(
+			new AgentModels(
+				new OpenRouter({
+					apiKey: input.openRouterApiKey,
+					httpReferer: input.appURL,
+					xTitle: 'FollowThrough'
+				}).models,
+				new Set(input.recommendedModels.map(normalizeLanguageModelId))
+			),
+			new ModelCatalogStore()
 		);
 	const runs = new AgentRunRecords(input.db);
 	const runLedger = new AgentRunLedger(runs);
@@ -107,7 +113,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const settlements = new RunSettlements(runs, runEvents);
 	const runDecisions = new AgentRunDecisionRecords(input.db);
 	const sessions = new AgentSessionRecords(input.db);
-	const eventBus = new AgentEvents();
+	const eventBus = new AgentEventStore();
 	const context = new AgentContext();
 	const runner = new AgentReasoning(
 		agentToolRegistry(input.controllers, input.toolRetriever),

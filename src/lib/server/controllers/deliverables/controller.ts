@@ -1,6 +1,11 @@
-import { widgetExport } from '$lib/services/widgets/export-blocks';
-import { resolveWidgetState } from '$lib/services/widgets/edits';
-import { widgetSourceRows } from '$lib/services/widgets/sources';
+import { WidgetExportService } from '$lib/services/widgets/export-blocks';
+const widgetExporting = new WidgetExportService();
+import { WidgetSourceService } from '$lib/services/widgets/sources';
+const widgetSourcesRule = new WidgetSourceService();
+
+import { WidgetEvaluationService } from '$lib/services/widgets/edits';
+const widgetEvaluation = new WidgetEvaluationService();
+
 import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
 import type { Todo, TodoListFilter } from '$lib/models/todos';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -445,7 +450,10 @@ export class Deliverables implements DeliverablesController {
 				const sources = await this.widgetSources(actor, widget);
 				widgets.set(
 					widgetId,
-					widgetExport(widget, resolveWidgetState(widget.layout, widget.data, sources).state)
+					widgetExporting.prepare(
+						widget,
+						widgetEvaluation.resolve(widget.layout, widget.data, sources).state
+					)
 				);
 			}
 		const exportInput: ExportInput = {
@@ -583,7 +591,7 @@ export class Deliverables implements DeliverablesController {
 			this.dependencies.todoLister.list(actor, { projectId: widget.projectId }),
 			this.dependencies.noteLister.list(actor, widget.projectId)
 		]);
-		return widgetSourceRows(widget.layout.sources, {
+		return widgetSourcesRule.rows(widget.layout.sources, {
 			projectId: widget.projectId,
 			today: new Date().toISOString().slice(0, 10) as LocalDate,
 			todos,

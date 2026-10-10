@@ -75,8 +75,8 @@ import {
 	type NoteActionResult
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
 
@@ -390,7 +390,8 @@ export class Diagrams implements DiagramsController {
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
-		const active = registerActiveRun(runId);
+		const active = new AbortController();
+		activeRunStore.register(runId, active);
 		try {
 			const input = run.contextSnapshot.input;
 			const task: DiagramTask =
@@ -445,7 +446,7 @@ export class Diagrams implements DiagramsController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId, active);
+			activeRunStore.release(runId, active);
 		}
 	}
 

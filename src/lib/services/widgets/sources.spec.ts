@@ -1,9 +1,11 @@
+import { WidgetSourceService } from '$lib/services/widgets/sources';
+const widgetSourcesRule = new WidgetSourceService();
 import { describe, expect, it } from 'vitest';
 import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { widgetSourceRows, type WidgetSourceRecords } from './sources';
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 
 const projectId = testProjectId();
 const elsewhere = testProjectId(2);
@@ -35,14 +37,14 @@ const records = (fields: Partial<WidgetSourceRecords>): WidgetSourceRecords => (
 
 describe('widget source rows', () => {
 	it('marks an open todo due before today as overdue', () => {
-		const rows = widgetSourceRows(
+		const rows = widgetSourcesRule.rows(
 			{ todos: { kind: 'todos' } },
 			records({ todos: [todo('Ship', { dueDate: '2026-10-03' as LocalDate })] })
 		);
 		expect(rows.todos?.[0]).toMatchObject({ open: true, overdue: true, statusLabel: 'Open' });
 	});
 	it('keeps only the live todos of the widget project, soonest due first', () => {
-		const rows = widgetSourceRows(
+		const rows = widgetSourcesRule.rows(
 			{ todos: { kind: 'todos' } },
 			records({
 				todos: [
@@ -61,7 +63,7 @@ describe('widget source rows', () => {
 		]);
 	});
 	it('lists notes, not folders or skills, most recently updated first', () => {
-		const rows = widgetSourceRows(
+		const rows = widgetSourcesRule.rows(
 			{ recent: { kind: 'notes' } },
 			records({
 				notes: [

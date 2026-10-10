@@ -288,6 +288,8 @@ const weakRecordGuard = (node: ts.Node): boolean => {
  */
 const STRICT_LAYERS = [
 	'src/lib/models/',
+	'src/lib/services/',
+	'src/lib/controllers/',
 	'src/lib/server/services/',
 	'src/lib/server/controllers/'
 ] as const;

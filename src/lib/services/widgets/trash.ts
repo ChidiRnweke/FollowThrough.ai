@@ -1,10 +1,8 @@
-import type { Widget } from '$lib/models/widgets';
+import type { Widget, WidgetTrashAction } from '$lib/models/widgets';
 import type { DateTime } from '$lib/models/workspace';
 
-export type WidgetTrashAction = 'archive' | 'restore' | 'delete';
-
 /** A widget moves to the trash once, comes back once, and is deleted only from the trash. */
-export function decideWidgetTrash(
+function decideWidgetTrash(
 	action: WidgetTrashAction,
 	current: Pick<Widget, 'archivedAt'>
 ): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
@@ -20,7 +18,7 @@ export function decideWidgetTrash(
 }
 
 /** The widget after it moves to or from the trash. Its layout and data are kept as they are. */
-export function widgetTrashChange(
+function widgetTrashChange(
 	action: 'archive' | 'restore',
 	current: Widget,
 	timestamp: DateTime
@@ -37,4 +35,31 @@ export function widgetTrashChange(
 			...(action === 'archive' ? { archivedAt: timestamp } : {})
 		}
 	};
+}
+
+export interface IWidgetLifecycleService {
+	decide(
+		action: WidgetTrashAction,
+		current: Pick<Widget, 'archivedAt'>
+	): { kind: 'allowed' } | { kind: 'invalid'; message: string };
+	change(
+		action: 'archive' | 'restore',
+		current: Widget,
+		timestamp: DateTime
+	): { kind: 'invalid'; message: string } | { kind: 'change'; widget: Widget };
+}
+export class WidgetLifecycleService implements IWidgetLifecycleService {
+	decide(
+		action: WidgetTrashAction,
+		current: Pick<Widget, 'archivedAt'>
+	): { kind: 'allowed' } | { kind: 'invalid'; message: string } {
+		return decideWidgetTrash(action, current);
+	}
+	change(
+		action: 'archive' | 'restore',
+		current: Widget,
+		timestamp: DateTime
+	): { kind: 'invalid'; message: string } | { kind: 'change'; widget: Widget } {
+		return widgetTrashChange(action, current, timestamp);
+	}
 }

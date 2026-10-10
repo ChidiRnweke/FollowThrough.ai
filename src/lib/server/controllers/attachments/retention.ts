@@ -1,7 +1,8 @@
+import type { ScheduledTask } from '$lib/models/maintenance';
+import type { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentRepository,
-	UploadRetentionCursor,
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
 export interface AttachmentStorage {
@@ -11,11 +12,6 @@ export type UploadRetentionRepository = Pick<
 	AttachmentRepository,
 	'listExpiredUploads' | 'deleteUpload'
 >;
-interface ScheduledTask {
-	readonly name: string;
-	readonly intervalMs: number;
-	run(): Promise<void>;
-}
 
 const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_PER_TICK = 500;
@@ -48,11 +44,11 @@ export class UploadRetention implements ScheduledTask {
 	private readonly graceMs: number;
 	private readonly now: () => Date;
 	private readonly logger: Pick<Console, 'error' | 'log'>;
-	private traversal: { cutoff: Date; after: UploadRetentionCursor } | undefined;
 
 	constructor(
 		private readonly repository: UploadRetentionRepository,
 		private readonly storage: AttachmentStorage,
+		private readonly state: UploadRetentionStore,
 		options: UploadRetentionOptions = {}
 	) {
 		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -65,14 +61,15 @@ export class UploadRetention implements ScheduledTask {
 	async run(): Promise<void> {
 		// Finish a bounded pass before including newly expired rows. Persistent failures
 		// cannot monopolize the first page or be starved by a stream of new uploads.
-		let cutoff = this.traversal?.cutoff ?? new Date(this.now().getTime() - this.graceMs);
+		const traversal = this.state.read();
+		let cutoff = traversal?.cutoff ?? new Date(this.now().getTime() - this.graceMs);
 		let expired = await this.repository.listExpiredUploads(
 			cutoff,
 			this.maxPerTick,
-			this.traversal?.after
+			traversal?.after
 		);
-		if (!expired.length && this.traversal) {
-			this.traversal = undefined;
+		if (!expired.length && traversal) {
+			this.state.update(undefined);
 			cutoff = new Date(this.now().getTime() - this.graceMs);
 			expired = await this.repository.listExpiredUploads(cutoff, this.maxPerTick);
 		}
@@ -89,10 +86,11 @@ export class UploadRetention implements ScheduledTask {
 			}
 		}
 		const last = expired[expired.length - 1]!;
-		this.traversal =
+		this.state.update(
 			expired.length === this.maxPerTick
 				? { cutoff, after: { expiresAt: last.upload.expiresAt, id: last.upload.id } }
-				: undefined;
+				: undefined
+		);
 		this.logger.log(`[expired-upload-sweep] reclaimed ${swept} of ${expired.length} upload(s)`);
 	}
 

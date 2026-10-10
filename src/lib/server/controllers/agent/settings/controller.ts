@@ -24,7 +24,7 @@ import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 import { ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
-	AgentPreferenceCatalog
+	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
 
 /**
@@ -70,7 +70,7 @@ export interface AgentSettingsDependencies {
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
-	preferences: Pick<AgentPreferenceCatalog, 'get' | 'getForWrite' | 'defaults' | 'persist'>;
+	preferences: AgentPreferenceEditor;
 	now: () => DateTime;
 	models: AgentModelCatalog;
 	/** Deployment fallback chat model when the user has not chosen one. */

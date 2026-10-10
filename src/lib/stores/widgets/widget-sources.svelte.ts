@@ -1,5 +1,7 @@
+import { WidgetSourceService } from '$lib/services/widgets/sources';
+const widgetSourcesRule = new WidgetSourceService();
 import type { Widget, WidgetSources } from '$lib/models/widgets';
-import { widgetSourceRows } from '$lib/services/widgets/sources';
+
 import { todayLocalDate } from '$lib/client/todos/local-date';
 import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 
@@ -15,7 +17,7 @@ export const widgetSources = (widget: Widget): WidgetSources => {
 	if (!views) return { kind: 'unavailable' };
 	return {
 		kind: 'rows',
-		rows: widgetSourceRows(widget.layout.sources, {
+		rows: widgetSourcesRule.rows(widget.layout.sources, {
 			projectId: widget.projectId,
 			today: todayLocalDate(),
 			todos: views.all('todos'),

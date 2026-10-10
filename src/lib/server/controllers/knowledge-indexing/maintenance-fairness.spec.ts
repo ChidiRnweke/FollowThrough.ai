@@ -1,3 +1,4 @@
+import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { expect, it } from 'vitest';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
@@ -28,6 +29,7 @@ const setup = async () => {
 		new IndexBacklog(repository),
 		client,
 		new InMemoryTransactionRunner([repository]),
+		new EmbeddingProgressStore(),
 		{ maxSourcesPerTick: 2, logger: { error: () => {}, log: () => {} } }
 	);
 	return { repository, client, worker };

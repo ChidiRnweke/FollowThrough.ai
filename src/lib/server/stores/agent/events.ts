@@ -6,7 +6,7 @@ export interface AgentEventBus {
 	subscribe(runId: AgentRunId, listener: () => void): () => void;
 }
 
-export class AgentEvents implements AgentEventBus {
+export class AgentEventStore implements AgentEventBus {
 	private readonly emitter = new EventEmitter();
 
 	constructor() {

@@ -1,11 +1,13 @@
-import { AttachmentObjectRemoval } from '$lib/server/services/attachments/object-removal';
+import type { ScheduledTask } from '$lib/models/maintenance';
+import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
+import { AttachmentObjectRemoval } from '$lib/server/controllers/attachments/object-removal';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import type { AttachmentClaims } from '$lib/server/services/attachments/contracts';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
-import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
 import { AttachmentContent } from '$lib/server/services/attachments/content';
 import {
 	ImageDescription,
@@ -13,7 +15,7 @@ import {
 } from '$lib/server/services/attachments/image-description';
 import { AttachmentLibrary } from '$lib/server/services/attachments/library';
 import { MistralOcr, type ITextRecognition } from '$lib/server/services/attachments/mistral-ocr';
-import { UploadRetention } from '$lib/server/services/attachments/retention';
+import { UploadRetention } from '$lib/server/controllers/attachments/retention';
 import {
 	AttachmentParserRegistry,
 	AttachmentStorage,
@@ -35,7 +37,7 @@ export interface AttachmentsCapabilityInput {
 	readonly transactionRunner: AtomicOperation;
 	readonly visionModel: string;
 	readonly notes: NoteRepository;
-	readonly preferences: AgentPreferenceCatalog;
+	readonly preferences: AgentPreferenceEditor;
 	readonly indexer: ContentIndex['attachments'];
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
@@ -53,8 +55,8 @@ export interface AttachmentsCapability {
 	readonly repository: AttachmentRecords;
 	readonly storage: IAttachmentStorage;
 	readonly library: AttachmentLibrary;
-	readonly retention: UploadRetention;
-	readonly objectRemoval: AttachmentObjectRemoval;
+	readonly retention: ScheduledTask;
+	readonly objectRemoval: ScheduledTask;
 	readonly processing: AttachmentProcessing;
 }
 
@@ -106,7 +108,7 @@ export const createAttachmentsCapability = (
 			logger: console
 		}),
 		objectRemoval: new AttachmentObjectRemoval(repository, storage),
-		retention: new UploadRetention(repository, storage, {
+		retention: new UploadRetention(repository, storage, new UploadRetentionStore(), {
 			...optionalProperty('intervalMs', positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')),
 			...optionalProperty('maxPerTick', positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK'))
 		})

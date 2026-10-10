@@ -1,3 +1,6 @@
+import type { ScheduledTask } from '$lib/models/maintenance';
+import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
+import type { InlineSuggestionThrottle } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
@@ -25,8 +28,8 @@ import {
 	type ToolRetriever
 } from '$lib/server/controllers/tool-discovery/controller';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
-import { InlineSuggestionAdmission } from '$lib/server/services/inline-suggestions/inline-admission';
+import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
+import { createInlineAdmission } from '$lib/server/factories/inline-admission';
 import { InlineSuggestionCompletion } from '$lib/server/services/inline-suggestions/inline-completion';
 
 export interface KnowledgeSearchCapabilityInput {
@@ -53,20 +56,20 @@ export interface KnowledgeSearchCapability {
 	readonly memoryIndexer: ContentIndex['memories'];
 	readonly widgetIndexer: ContentIndex['widgets'];
 	readonly lookup: KnowledgeLookup;
-	readonly maintenance: EmbeddingMaintenance;
+	readonly maintenance: ScheduledTask;
 	readonly toolRetriever: ToolRetriever;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
 
 export interface KnowledgeSearchFinalizeInput {
-	readonly preferences: AgentPreferenceCatalog;
+	readonly preferences: AgentPreferenceEditor;
 }
 
 export interface KnowledgeSearchFinalized {
-	readonly preferences: AgentPreferenceCatalog;
+	readonly preferences: AgentPreferenceEditor;
 	readonly inlineCompletion: InlineSuggestionCompletion;
 	readonly observer: typeof operationObserver;
-	readonly inlineAdmission: InlineSuggestionAdmission;
+	readonly inlineAdmission: InlineSuggestionThrottle;
 }
 
 export const createKnowledgeSearchCapability = (
@@ -119,7 +122,7 @@ export const createKnowledgeSearchCapability = (
 				observer: operationObserver
 			}),
 			observer: operationObserver,
-			inlineAdmission: new InlineSuggestionAdmission()
+			inlineAdmission: createInlineAdmission()
 		}),
 		reranker,
 		queryGenerator,
@@ -133,6 +136,7 @@ export const createKnowledgeSearchCapability = (
 			new IndexBacklog(repository),
 			embeddingClient,
 			input.transactionRunner,
+			new EmbeddingProgressStore(),
 			{
 				...optionalProperty(
 					'intervalMs',

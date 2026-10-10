@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeSource } from './audit-source-rules';
 const violations = (source: string) => analyzeSource('example.ts', source);
-/** A path inside one of the three layers ADR 0037 keeps total. */
+/** A path inside one of the layers ADR 0037 keeps total. */
 const strict = (source: string) =>
 	analyzeSource('src/lib/server/services/notes/example.ts', source);
 const model = (source: string) => analyzeSource('src/lib/models/notes/example.ts', source);
@@ -412,4 +412,17 @@ describe('data-only models', () => {
 	])('allows schema construction and data: %s', (source) => {
 		expect(model(source)).toEqual([]);
 	});
+});
+
+describe('shared strict layers', () => {
+	it.each(['src/lib/services/notes/edits.ts', 'src/lib/controllers/notes/editing.ts'])(
+		'rejects unknown inputs in %s',
+		(file) => {
+			expect(
+				analyzeSource(file, 'export interface Editing { edit(input: unknown): void }').map(
+					(violation) => violation.rule
+				)
+			).toEqual(['no-unknown-type']);
+		}
+	);
 });

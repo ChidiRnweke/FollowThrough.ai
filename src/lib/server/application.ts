@@ -16,8 +16,8 @@ import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
 import type { IAttachmentStorage, ObjectStorageConfig } from './services/attachments/storage';
-import type { AgentEventBus } from './services/agent/runs/events';
-import type { ScheduledTask } from './services/scheduler';
+import type { AgentEventBus } from './stores/agent/events';
+import type { ScheduledTask } from '$lib/models/maintenance';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
 import { createSyncCapability } from './factories/capabilities/sync-capability-factory';
@@ -199,7 +199,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		db,
 		projects: projectRepository,
 		notes: noteRepository
-	}).library;
+	});
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
@@ -439,7 +439,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			contextFormatter: agentContext,
 			contextNotes: notes,
 			contextSkills: skills,
-			contextWidgets: widgets,
+			contextWidgets: widgets.reader,
 			contextDiagrams: diagrams,
 			contextAttachments: attachments,
 			builtInSkills: skillCapability.builtIns,
@@ -495,7 +495,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			exportImageSources: deliverables.exportImageSources,
 			exportDiagramReferences: deliverables.exportDiagramReferences,
 			exportWidgetReferences: deliverables.exportWidgetReferences,
-			widgetReader: widgets,
+			widgetReader: widgets.reader,
 			todoLister: todos,
 			noteLister: notes,
 			diagramReader: diagrams,
@@ -609,11 +609,16 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		widgets: {
+			catalogReader: widgets.catalogReader,
+			editing: widgets.editing,
+			lifecycle: widgets.lifecycle,
+			catalog: widgets.catalog,
+			search: widgets.search,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			widgetReader: widgets,
-			widgetLister: widgets,
-			widgetWriter: widgets,
+			widgetReader: widgets.reader,
+			widgetLister: widgets.lister,
+			widgetWriter: widgets.writer,
 			widgetIndexer: knowledgeSearch.widgetIndexer,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,

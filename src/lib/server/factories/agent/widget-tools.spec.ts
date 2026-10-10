@@ -1,3 +1,4 @@
+import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { describe, expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
@@ -38,6 +39,7 @@ const setup = () => {
 	const index = new ContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
+			...createWidgetRules(),
 			widgetReader: library,
 			widgetLister: library,
 			widgetWriter: library,

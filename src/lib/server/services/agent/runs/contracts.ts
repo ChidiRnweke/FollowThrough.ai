@@ -79,19 +79,6 @@ export interface InlineCompletionGenerator {
  * queue behind another. `admit` refuses a second concurrent request for one
  * user and anything past the per-minute budget.
  */
-export type InlineSuggestionAdmission =
-	| { readonly allowed: true }
-	| {
-			readonly allowed: false;
-			readonly reason: 'busy' | 'rate_limited';
-			readonly retryAfterMs: number;
-	  };
-
-export interface InlineSuggestionThrottle {
-	admit(userId: string): InlineSuggestionAdmission;
-	consume(userId: string): InlineSuggestionAdmission;
-	release(userId: string): void;
-}
 
 /**
  * The seam every tool call crosses between the SDK adapter and the run.

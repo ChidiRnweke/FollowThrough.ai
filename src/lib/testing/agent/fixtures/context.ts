@@ -10,7 +10,7 @@ import type { ProvenanceId } from '$lib/models/provenance';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { AgentContext } from '$lib/server/services/agent/runs/context';
-import { AgentEvents } from '$lib/server/services/agent/runs/events';
+import { AgentEventStore } from '$lib/server/stores/agent/events';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { InMemoryAgentRunner, InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -63,7 +63,7 @@ export const agentContextFixture = () => {
 		provenance: new InMemoryProvenanceRecorder(),
 		conversationJournal: journal,
 		runner: new InMemoryAgentRunner(),
-		eventBus: new AgentEvents()
+		eventBus: new AgentEventStore()
 	};
 	const controller = new Agent(capabilityDependencies<AgentDependencies>(dependencies));
 	const builder = {
