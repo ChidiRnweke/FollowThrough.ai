@@ -1,3 +1,5 @@
+import type { LocalIdentityController } from '../controllers/identity/local-identity';
+import type { StartupController } from '../controllers/startup/controller';
 import type { ControllerFactory } from './controller-factory';
 import type { ControllerSurface } from '../controllers/instrumentation';
 
@@ -27,6 +29,7 @@ export const controllerSurfaces = {
 		move: true
 	},
 	notes: {
+		getForAgent: true,
 		importMarkdownArchive: true,
 		prepareChange: true,
 		applyReviewedChange: true,
@@ -242,4 +245,12 @@ export const controllerSurfaces = {
 	}
 } satisfies {
 	[K in keyof ControllerFactory]: ControllerSurface<ReturnType<ControllerFactory[K]>>;
+};
+
+export const internalControllerSurfaces = {
+	localIdentity: { localActor: true },
+	startup: { recoverInterruptedRuns: true }
+} satisfies {
+	localIdentity: ControllerSurface<LocalIdentityController>;
+	startup: ControllerSurface<StartupController>;
 };

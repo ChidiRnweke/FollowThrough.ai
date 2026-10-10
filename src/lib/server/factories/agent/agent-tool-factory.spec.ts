@@ -1,3 +1,4 @@
+import { agentNoteViewFixture } from '$lib/testing/notes/fixtures/agent-view';
 import { RunContext } from '@openai/agents';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { AgentToolSessionInput } from '$lib/server/controllers/agent/tool-sessions';
@@ -664,21 +665,10 @@ describe('Agent tool coverage invariants', () => {
 			document: {
 				type: 'doc',
 				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello world.' }] }]
-			} as never
+			}
 		});
-		const factory = {
-			notes: () => ({
-				get: async () => ({
-					note,
-					etag: noteEtag(note.id, note.currentRevision),
-					backlinks: [{ id: 'bl' }],
-					references: [{ id: 'ref' }],
-					diagrams: [{ id: 'dg' }],
-					todos: [{ id: 'td' }],
-					pendingSuggestions: [{ id: 'sg' }]
-				})
-			})
-		} as unknown as ControllerFactory;
+		const { controller } = agentNoteViewFixture(note);
+		const factory = capabilityDependencies<ControllerFactory>({ notes: () => controller });
 		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId: testConversationId(), prompt: 'Read a note' },
@@ -691,11 +681,11 @@ describe('Agent tool coverage invariants', () => {
 			noteId: note.id,
 			title: note.title,
 			etag: noteEtag(note.id, note.currentRevision),
-			backlinks: [{ id: 'bl' }],
-			references: [{ id: 'ref' }],
-			diagrams: [{ id: 'dg' }],
-			todos: [{ id: 'td' }],
-			pendingSuggestions: [{ id: 'sg' }],
+			backlinks: [],
+			references: [],
+			diagrams: [],
+			todos: [],
+			pendingSuggestions: [],
 			body: {
 				kind: 'file',
 				file: {
@@ -707,9 +697,6 @@ describe('Agent tool coverage invariants', () => {
 				}
 			}
 		});
-		expect(result).not.toHaveProperty('document');
-		expect(result).not.toHaveProperty('note');
-		expect(result).not.toHaveProperty('plainText');
 	});
 
 	const skillFixture = (body = 'Number every finding.') => {

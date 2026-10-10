@@ -1,3 +1,4 @@
+import { LocalIdentity } from '$lib/server/controllers/identity/local-identity';
 import { expect, it } from 'vitest';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
@@ -7,7 +8,8 @@ import { actor, context, seedProvenance } from '../database-harness';
 it('establishes a local administrator before the first provenance and project writes', async () => {
 	const owner = actor('27001');
 	const users = new UserDirectory(new UserRecords(context.db));
-	await users.initializeLocal(owner);
+	const local = new LocalIdentity({ resolveActor: () => owner, users });
+	await local.localActor();
 	await seedProvenance(owner, '27001');
 	await new ProjectRecords(context.db).insert(owner, { name: 'Local workspace' });
 	expect(await users.get(owner)).toMatchObject({

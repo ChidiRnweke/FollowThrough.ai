@@ -1,3 +1,7 @@
+import {
+	AgentToolPresentationService,
+	type AgentToolPresentation
+} from '$lib/server/services/agent/runs/tool-views';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import {
 	NoteArchiveImportService,
@@ -86,6 +90,7 @@ export interface NotesCapability {
 	readonly publicationRules: NotePublicationRules;
 	readonly editingRules: NoteEditingRules;
 	readonly presentation: NotePresentation;
+	readonly agentPresentation: Pick<AgentToolPresentation, 'projectNoteView'>;
 	readonly markdown: NoteMarkdown;
 	readonly repository: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
@@ -106,6 +111,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 		patchPreparation: new NotePatchPreparationService(),
 		revisionComparison: new NoteRevisionComparisonService(),
 		presentation: new NotePresentationService(),
+		agentPresentation: new AgentToolPresentationService(),
 		references: new NoteReferenceService(),
 		textSearch: new NoteTextSearchService(),
 		sections: new NoteSectionNumberingService(),

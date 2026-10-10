@@ -95,7 +95,6 @@ import {
 const toolPresentation = new AgentToolPresentationService();
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
-import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
 
 /**
  * Tools the user cannot deselect. Without `get_workspace_context` and
@@ -267,7 +266,11 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
 		},
-		get: { kind: 'read', tools: ['get_note'] },
+		getForAgent: { kind: 'read', tools: ['get_note'] },
+		get: {
+			kind: 'excluded',
+			reason: 'Full note view for application readers; agents use getForAgent.'
+		},
 		listDocuments: {
 			kind: 'excluded',
 			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
@@ -1109,7 +1112,7 @@ export class AgentTools implements AgentToolRegistry {
 	private readonly toolAccess: ToolAccessPolicy;
 
 	constructor(
-		private readonly tokens: TokenCounter,
+		_tokens: TokenCounter,
 		controllers: ControllerFactory,
 		actor: ActorContext,
 		mode: AgentExecutionMode,
@@ -1161,7 +1164,7 @@ export class AgentTools implements AgentToolRegistry {
 		const selection = this.context.input.selection;
 		return [
 			...Object.values(
-				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId, this.tokens)
+				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId)
 			),
 			...Object.values(appToolDefinitions(this.controllers, this.actor, this.context)),
 			...(selection
@@ -1329,8 +1332,7 @@ export class AgentTools implements AgentToolRegistry {
 const sharedToolDefinitions = (
 	factory: ControllerFactory,
 	actor: ActorContext,
-	provenanceId: ProvenanceId,
-	tokens: TokenCounter
+	provenanceId: ProvenanceId
 ) => {
 	const reviews = createToolReviews(() => factory.notes(), actor);
 	const define = defineTool;
@@ -1513,15 +1515,7 @@ const sharedToolDefinitions = (
 			toolCatalogRules.description('get_note'),
 			'read',
 			z.object({ noteId: noteId }),
-			async (input) => {
-				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
-				const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
-				const markdown = noteMarkdown.write(view.note.document);
-				return toolPresentation.projectNoteView(
-					view,
-					agentFileOf(tokens, path, 'text/markdown', markdown).metadata
-				);
-			}
+			(input) => factory.notes().getForAgent(actor, { noteId: input.noteId as NoteId })
 		),
 		create_note: define(
 			'create_note',
@@ -2538,7 +2532,7 @@ type _BuildersNameNothingElse = Total<Exclude<BuiltToolName, ToolName>>;
 
 export class McpTools {
 	constructor(
-		private readonly tokens: TokenCounter,
+		_tokens: TokenCounter,
 		private readonly controllers: ControllerFactory,
 		private readonly actor: ActorContext,
 		private readonly context: McpToolContext,
@@ -2553,7 +2547,7 @@ export class McpTools {
 			: undefined;
 		return [
 			...Object.values(
-				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId, this.tokens)
+				sharedToolDefinitions(this.controllers, this.actor, this.context.provenanceId)
 			),
 			...Object.values(mcpOnlyDefinitions(this.controllers, this.actor, this.context))
 		].filter(
