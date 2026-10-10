@@ -1,9 +1,13 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
-import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
 import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
@@ -604,7 +608,10 @@ it('journals a failed tool call and its correction through the production runner
 		JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }),
 		'Too small'
 	);
-	const reasoning = new AgentReasoning(
+	const reasoning = new AgentExecution(
+		new AgentPromptService(),
+		new AgentToolRecoveryService(),
+		createAgentStream,
 		async ({ run, executor, signal }) => {
 			if (!run.inputSnapshot) throw new Error('Run input is missing');
 			return new AgentTools(
@@ -620,17 +627,21 @@ it('journals a failed tool call and its correction through the production runner
 				signal
 			);
 		},
-		new InMemoryAgentSessionRepository(),
-		'test-key',
-		'https://unused.test',
-		'https://unused.test',
-		undefined,
-		(repository, actor, conversationId) =>
-			createConversationSession(repository, actor, conversationId, {
-				virtualize: async (_actor, _id, item) => item
-			}),
-		undefined,
-		() => new InMemoryModelProvider(model)
+		{
+			create: (actor, conversationId) =>
+				createConversationSession(new InMemoryAgentSessionRepository(), actor, conversationId, {
+					virtualize: async (_actor, _id, item) => item
+				})
+		},
+		true,
+		new AgentSdkInfrastructure(
+			'test-key',
+			'https://unused.test',
+			'https://unused.test',
+			undefined,
+			() => new InMemoryModelProvider(model)
+		),
+		undefined
 	);
 	const fixture = setup(reasoning);
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));

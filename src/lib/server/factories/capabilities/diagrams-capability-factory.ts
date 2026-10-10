@@ -1,3 +1,4 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import {
 	DiagramLabelPresentationService,
 	type DiagramLabelPresentation
@@ -38,7 +39,7 @@ import type {
 	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
-import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
+
 import {
 	MermaidSubmissionValidator,
 	type MermaidSourceValidator
@@ -171,7 +172,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			defaultModel: input.defaultModel,
 			defaultVisionModel: input.defaultVisionModel,
 			modelSelection: new AgentModelSelectionService(),
-			createToolEventMapper: () => new AgentToolEventMapper(),
+			createToolEventMapper: () => createAgentStream().tools,
 			observeWorkflow: traceWorkflow,
 			generator: createDiagramGeneration(input)
 		}

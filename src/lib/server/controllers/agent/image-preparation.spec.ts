@@ -1,6 +1,10 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { AgentImagePreparationService } from './images';
+import { AgentImagePreparationService } from '$lib/server/services/agent/runs/images';
 const images = new AgentImagePreparationService();
 import { describe, expect, it } from 'vitest';
 import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
@@ -14,7 +18,7 @@ import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-fil
 import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
-import { AgentReasoning } from './reasoning';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
 
 const context: AgentRunContext = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const now = '2026-09-16T00:00:00.000Z' as DateTime;
@@ -61,7 +65,10 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 	const model = new InMemoryTextModel('The image is described.');
 	const provider = new InMemoryModelProvider(model);
 	const sessions = new InMemoryAgentSessionRepository();
-	const reasoning = new AgentReasoning(
+	const reasoning = new AgentExecution(
+		new AgentPromptService(),
+		new AgentToolRecoveryService(),
+		createAgentStream,
 		async () => {
 			await prepare();
 			return {
@@ -71,20 +78,24 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 				reviewDecision: (pending) => pending
 			};
 		},
-		sessions,
-		'test-key',
-		'https://provider.test/v1',
-		'https://app.test',
-		fetch,
-		(repository, actor, id) =>
-			createConversationSession(
-				repository,
-				actor,
-				id,
-				createReplayVirtualizer(new InMemoryAgentFiles(), tokens)
-			),
-		undefined,
-		() => provider
+		{
+			create: (actor, id) =>
+				createConversationSession(
+					sessions,
+					actor,
+					id,
+					createReplayVirtualizer(new InMemoryAgentFiles(), tokens)
+				)
+		},
+		true,
+		new AgentSdkInfrastructure(
+			'test-key',
+			'https://provider.test/v1',
+			'https://app.test',
+			fetch,
+			() => provider
+		),
+		undefined
 	);
 	const execute = async (signal = new AbortController().signal, input = request) => {
 		const updates = [];

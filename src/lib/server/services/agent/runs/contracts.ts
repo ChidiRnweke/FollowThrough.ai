@@ -86,7 +86,7 @@ export interface InlineCompletionGenerator {
  * two calls without one collided and the second settled under the first one's
  * resource.
  *
- * `AgentReasoning` declares a local copy of this port. They meet where the
+ * `AgentExecution` declares a local copy of this port. They meet where the
  * controller hands its executor to the runner, so a
  * copy that drifts fails `pnpm check` there.
  */

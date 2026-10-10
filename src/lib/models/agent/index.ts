@@ -2052,3 +2052,9 @@ export const normalizeLanguageModelId = (modelId: string): LanguageModelId => {
 	if (separator <= 0 || modelId.includes('/')) return modelId as LanguageModelId;
 	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}` as LanguageModelId;
 };
+
+/** A provider tool result after its structured failure envelope has been read. */
+export type AgentToolOutcome =
+	| Exclude<ProviderToolOutput, { readonly kind: 'value' }>
+	| { readonly kind: 'succeeded'; readonly value: AgentPayload }
+	| { readonly kind: 'reported_failure'; readonly value: AgentPayload; readonly failure: string };

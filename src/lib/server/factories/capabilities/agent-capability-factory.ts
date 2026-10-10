@@ -1,3 +1,8 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
+import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
 import {
 	ConversationHistoryService,
 	type ConversationHistory
@@ -77,7 +82,7 @@ import {
 	type AgentPreferenceEditor,
 	type AgentModelCatalog
 } from '$lib/server/services/agent/runs/preferences';
-import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
@@ -130,7 +135,7 @@ export interface AgentCapability {
 	readonly runDecisions: AgentRunDecisionRecords;
 	readonly sessions: AgentSessionRecords;
 	readonly context: IAgentContext;
-	readonly runner: AgentReasoning;
+	readonly runner: AgentRunner;
 	readonly settlements: RunSettlements;
 	readonly noteActionRequests: NoteActionSubmission;
 	readonly eventBus: AgentEventBus;
@@ -164,20 +169,28 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEventStore();
 	const context = createAgentContext(tokens);
-	const runner = new AgentReasoning(
+	const runner = new AgentExecution(
+		new AgentPromptService(),
+		new AgentToolRecoveryService(),
+		createAgentStream,
 		agentToolRegistry(input.controllers, input.toolRetriever, tokens),
-		sessions,
-		input.openRouterApiKey,
-		input.openRouterBaseURL,
-		input.appURL,
-		undefined,
-		(repository, actor, conversationId) =>
-			createConversationSession(
-				repository,
-				actor,
-				conversationId,
-				createReplayVirtualizer(input.files, tokens)
-			),
+		{
+			create: (actor, conversationId) =>
+				createConversationSession(
+					sessions,
+					actor,
+					conversationId,
+					createReplayVirtualizer(input.files, tokens)
+				)
+		},
+		Boolean(input.openRouterApiKey),
+		new AgentSdkInfrastructure(
+			input.openRouterApiKey,
+			input.openRouterBaseURL,
+			input.appURL,
+			undefined,
+			undefined
+		),
 		traceAgentTurn
 	);
 

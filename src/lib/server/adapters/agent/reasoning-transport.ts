@@ -11,7 +11,7 @@ const requestUrl = (input: string | URL | Request): URL =>
  * What OpenRouter needs before it will stream a model's thinking.
  *
  * Without it a reasoning-capable model still reasons, but the tokens never
- * appear on the wire: `AgentReasoningEventMapper` finds no `delta.reasoning` on
+ * appear on the wire: `AgentReasoningEvents` finds no `delta.reasoning` on
  * any chunk, so its per-token channel never fires and the whole turn falls to
  * the `reasoning_item_created` fallback — one block, emitted after the model
  * finishes. With tools that is once per tool round, which is why reasoning

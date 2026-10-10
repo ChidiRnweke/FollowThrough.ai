@@ -1,3 +1,4 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -13,7 +14,7 @@ import {
 } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
-import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
+
 import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
 import type { AgentEvent } from '$lib/models/agent';
 import {
@@ -73,7 +74,7 @@ const run = async (agent: Agent, state?: RunState<unknown, Agent>, events: Agent
 		state ?? 'Change launch day',
 		{ stream: true, maxTurns: 4 }
 	);
-	const mapper = new AgentToolEventMapper();
+	const mapper = createAgentStream().tools;
 	for await (const event of stream) {
 		const mapped = mapper.map(parseProviderStreamEvent(event));
 		if (mapped) events.push(mapped);

@@ -1,3 +1,4 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
@@ -8,7 +9,7 @@ import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
-import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
+
 import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
@@ -55,7 +56,7 @@ export const diagramGenerationFixture = () => {
 		defaultModel: 'test/model',
 		defaultVisionModel: 'test/vision',
 		modelSelection: new AgentModelSelectionService(),
-		createToolEventMapper: () => new AgentToolEventMapper(),
+		createToolEventMapper: () => createAgentStream().tools,
 		observeWorkflow: (_name, _context, operation) => operation(),
 		generator: provider
 	};
