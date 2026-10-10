@@ -97,10 +97,6 @@ directly.
 
 ## Observability
 
-- [2026-10-10 agent error RCA](rca-2026-10-10-agent-errors.md) records the 48-hour Phoenix and
-  Loki investigation, confirmed causes, and unresolved findings. Its temporary
-  [remediation plan](../plans/agent-error-remediation-plan.md) covers all findings.
-
 One trace id spans a user operation end to end. `ProductionControllerFactory` wraps every
 controller method through `instrumentedController` (a `domain.method` operation span plus
 info-before / debug-after logs, warn on domain errors, error otherwise), and agent runs are
