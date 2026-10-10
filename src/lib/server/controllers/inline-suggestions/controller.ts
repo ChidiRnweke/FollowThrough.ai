@@ -10,7 +10,8 @@ import type { SearchMatch } from '$lib/models/knowledge-search';
 import { type Note } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
-import type { InlineCompletionGenerator } from '$lib/server/services/agent/runs/contracts';
+import type { InlineCompletionGenerator } from '$lib/models/agent';
+import type { IInlineCompletionRules } from '$lib/server/services/inline-suggestions/completion-rules';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
 import { traceWorkflow } from '$lib/server/services/telemetry';
@@ -42,6 +43,8 @@ export interface InlineSuggestionsController {
 export interface InlineSuggestionsDependencies {
 	context: IInlineContextService;
 	inlineCompletionGenerator: InlineCompletionGenerator;
+	completionRules: IInlineCompletionRules;
+	defaultCompletionModel: string;
 	embeddings: EmbeddingClient;
 	knowledgeLookup: IKnowledgeLookup;
 	reranker: Reranker;
@@ -97,12 +100,12 @@ export class InlineSuggestions implements InlineSuggestionsController {
 					if (!budget.allowed) return { outcome: budget.reason, retryAfterMs: budget.retryAfterMs };
 					let text: string;
 					try {
-						text = await this.dependencies.inlineCompletionGenerator.complete(
+						text = await this.generate(
 							authoritativeRequest,
 							context,
 							signal,
 							preferences.inlineModel === undefined
-								? undefined
+								? this.dependencies.defaultCompletionModel
 								: normalizeLanguageModelId(preferences.inlineModel)
 						);
 					} catch (error) {
@@ -127,6 +130,35 @@ export class InlineSuggestions implements InlineSuggestionsController {
 			},
 			(result) => JSON.stringify(result)
 		);
+	}
+
+	private async generate(
+		request: InlineSuggestionRequest,
+		context: InlineCompletionContext,
+		signal: AbortSignal,
+		model: string
+	): Promise<string> {
+		const { completionRules, inlineCompletionGenerator, observer } = this.dependencies;
+		const prompt = completionRules.prepare(request, context);
+		const result = await observer.run(
+			'inline.generate',
+			{
+				input: prompt.user,
+				kind: OpenInferenceSpanKind.LLM,
+				metadata: { model },
+				tags: ['inline', 'generation']
+			},
+			async () => {
+				const completion = await inlineCompletionGenerator.complete(prompt, signal, model);
+				return {
+					text: completionRules.sanitize(request.prefix, completion.raw),
+					attributes: completion.attributes
+				};
+			},
+			(output) => output.text,
+			(output) => output.attributes
+		);
+		return result.text;
 	}
 
 	private async buildContext(

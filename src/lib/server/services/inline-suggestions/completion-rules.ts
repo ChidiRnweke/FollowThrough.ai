@@ -1,48 +1,17 @@
-import OpenAI from 'openai';
-import { getLLMAttributes } from '@arizeai/openinference-core';
-import {
-	OpenInferenceSpanKind,
-	SemanticConventions
-} from '@arizeai/openinference-semantic-conventions';
-import type { Attributes } from '@opentelemetry/api';
-import { type InlineCompletionContext, type InlineSuggestionRequest } from '$lib/models/agent';
-import type { OperationObserver } from '$lib/models/telemetry';
-const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
+import type {
+	InlineCompletionContext,
+	InlineCompletionPrompt,
+	InlineSuggestionRequest
+} from '$lib/models/agent';
 
-interface LanguageModelClientOptions {
-	readonly baseURL?: string;
-	readonly appURL?: string;
-}
-
-const createLanguageModelClient = (
-	apiKey: string,
-	options: LanguageModelClientOptions = {}
-): OpenAI =>
-	new OpenAI({
-		apiKey,
-		baseURL: options.baseURL ?? 'https://openrouter.ai/api/v1',
-		defaultHeaders: {
-			'HTTP-Referer': options.appURL ?? 'http://localhost:5173',
-			'X-OpenRouter-Title': 'FollowThrough'
-		}
-	});
-
-export interface IInlineSuggestionCompletion {
-	complete(
+export interface IInlineCompletionRules {
+	prepare(
 		request: InlineSuggestionRequest,
-		context: InlineCompletionContext,
-		signal: AbortSignal
-	): Promise<string>;
+		context: InlineCompletionContext
+	): InlineCompletionPrompt;
+	sanitize(prefix: string, raw: string): string;
 }
 
-/**
- * A single toolless completion over deterministic note, memory, and project
- * context. No model sits between retrieval and this completion call.
- */
-
-// Generation needs enough headroom for provider/model overhead. The sanitizer,
-// not this budget, owns the user-visible limit of two sentences / 240 characters.
-const MAX_COMPLETION_TOKENS = 256;
 /** Two sentences is the most ghost text a writer can evaluate at a glance. */
 const MAX_SENTENCES = 2;
 const MAX_CHARACTERS = 240;
@@ -61,50 +30,6 @@ Rules:
 - Never restate, rephrase, or echo the text before the caret.
 - No preamble, no commentary, no quotation marks, no markdown fences, no bullet syntax.
 - Match the note's voice and use only facts supplied in the workspace context. Never invent names, dates, or decisions.`;
-
-interface InlineCompletionTraceResult {
-	readonly text: string;
-	readonly raw: string;
-	readonly model: string;
-	readonly finishReason: string;
-	readonly refused: boolean;
-	readonly usage?: {
-		readonly prompt_tokens?: number;
-		readonly completion_tokens?: number;
-		readonly total_tokens?: number;
-	};
-}
-
-export const inlineCompletionTraceAttributes = (
-	prompt: string,
-	result: InlineCompletionTraceResult
-): Attributes => ({
-	...getLLMAttributes({
-		provider: 'openrouter',
-		system: 'openai',
-		modelName: result.model,
-		invocationParameters: {
-			max_tokens: MAX_COMPLETION_TOKENS,
-			reasoning: { enabled: false },
-			temperature: 0.2
-		},
-		inputMessages: [
-			{ role: 'system', content: SYSTEM_PROMPT },
-			{ role: 'user', content: prompt }
-		],
-		outputMessages: [{ role: 'assistant', content: result.raw }],
-		...(result.usage
-			? {
-					tokenCount: {
-						prompt: result.usage.prompt_tokens,
-						completion: result.usage.completion_tokens,
-						total: result.usage.total_tokens
-					}
-				}
-			: {})
-	}),
-	[SemanticConventions.LLM_FINISH_REASON]: result.finishReason
-});
 
 const contextSection = (context: InlineCompletionContext): string => {
 	const userMemory = context.userMemory.length
@@ -127,7 +52,7 @@ const contextSection = (context: InlineCompletionContext): string => {
 		.join('\n\n');
 };
 
-export const inlineCompletionPrompt = (
+const inlineCompletionPrompt = (
 	request: InlineSuggestionRequest,
 	context: InlineCompletionContext
 ): string =>
@@ -173,7 +98,7 @@ const limitSentences = (value: string): string => {
  * Everything between the raw model output and what we are willing to render as
  * ghost text. Pure, so the guardrails are testable without a provider.
  */
-export const sanitizeCompletion = (prefix: string, raw: string): string => {
+const sanitizeCompletion = (prefix: string, raw: string): string => {
 	if (!raw) return '';
 	let text = stripWrappers(raw).replace(/^\n+/, '');
 	text = stripPrefixOverlap(prefix, text);
@@ -189,68 +114,14 @@ export const sanitizeCompletion = (prefix: string, raw: string): string => {
 	return text;
 };
 
-export interface InlineCompletionOptions extends LanguageModelClientOptions {
-	readonly model: string;
-	readonly observer?: OperationObserver;
-}
-
-export class InlineSuggestionCompletion implements IInlineSuggestionCompletion {
-	private readonly client;
-	private readonly model: string;
-	private readonly observer: OperationObserver;
-
-	constructor(apiKey: string, options: InlineCompletionOptions) {
-		this.model = options.model;
-		this.client = createLanguageModelClient(apiKey, options);
-		this.observer = options.observer ?? directObserver;
-	}
-
-	async complete(
+export class InlineCompletionRules implements IInlineCompletionRules {
+	prepare(
 		request: InlineSuggestionRequest,
-		context: InlineCompletionContext,
-		signal: AbortSignal,
-		model?: string
-	): Promise<string> {
-		// The caller's per-user model wins; `this.model` is the environment
-		// default and stays the fallback for anyone who has not chosen one.
-		// Normalised here rather than at the call site so both branches get it.
-		const selected = model ?? this.model;
-		const prompt = inlineCompletionPrompt(request, context);
-		const result = await this.observer.run(
-			'inline.generate',
-			{
-				input: prompt,
-				kind: OpenInferenceSpanKind.LLM,
-				metadata: { model: selected },
-				tags: ['inline', 'generation']
-			},
-			async () => {
-				const completion = await this.client.chat.completions.create(
-					{
-						model: selected,
-						max_tokens: MAX_COMPLETION_TOKENS,
-						temperature: 0.2,
-						messages: [
-							{ role: 'system', content: SYSTEM_PROMPT },
-							{ role: 'user', content: prompt }
-						]
-					},
-					{ signal }
-				);
-				const choice = completion.choices[0];
-				const raw = choice?.message.content ?? '';
-				return {
-					text: sanitizeCompletion(request.prefix, raw),
-					raw,
-					model: completion.model || selected,
-					finishReason: choice?.finish_reason ?? 'missing',
-					refused: Boolean(choice?.message.refusal),
-					usage: completion.usage
-				};
-			},
-			(output) => output.text,
-			(output) => inlineCompletionTraceAttributes(prompt, output)
-		);
-		return result.text;
+		context: InlineCompletionContext
+	): InlineCompletionPrompt {
+		return { system: SYSTEM_PROMPT, user: inlineCompletionPrompt(request, context) };
+	}
+	sanitize(prefix: string, raw: string): string {
+		return sanitizeCompletion(prefix, raw);
 	}
 }

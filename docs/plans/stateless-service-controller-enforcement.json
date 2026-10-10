@@ -1,21 +1,21 @@
 {
-	"recordedAt": "2026-10-10",
-	"applicationRevision": "fad8258997f88c4d79e2d258415d468f23936d2b",
+	"recordedAt": "2026-10-11",
+	"applicationRevision": "49cd5c82c64709f896ce511c19d88e8d2c276331",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "a9e6e285590e00b5b435d471e872c5c77b1fda73",
+		"applicationBase": "ab83ff5c8fe2f152082ccec32af356086cda2eb0",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "Read-only baseline verification on draft #356 matched all 375 semantic diagnostics, including locations and provenance, and all 47 expanded Chisel diagnostics exactly. The unchanged analyzers now remove the four knowledge-search public-helper findings and the concrete chunker dependency. No diagnostic identities were added. Bound capability surfaces, controller consumers, evaluation construction/cache identity and trace-script dependencies were also reviewed manually.",
+		"method": "Baseline verification on draft #358 matched all 370 semantic diagnostics with provenance and all 47 expanded Chisel diagnostics exactly. The unchanged analyzers remove the three inline-completion public helper findings. No diagnostic identities were added. Constructors, factory outputs, the shared completion contract, controller consumers and evaluation dependencies were reviewed separately.",
 		"semanticCounts": {
-			"concrete-dependency": 2,
+			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 20,
+			"public-service-helper": 16,
 			"store-workflow": 55
 		},
-		"semanticTotal": 375,
+		"semanticTotal": 370,
 		"chiselCounts": {
 			"import-boundary:banned-layer-import": 47
 		},
@@ -29,7 +29,7 @@
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 16,
+			"public-service-helper": 13,
 			"store-workflow": 55
 		},
 		"violations": [
@@ -3656,30 +3656,6 @@
 				"provenance": ["src/lib/server/services/agent/conversations/tool-activity.ts:1"]
 			},
 			{
-				"file": "src/lib/server/services/inline-suggestions/inline-completion.ts",
-				"line": 78,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/inline-suggestions/inline-completion.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/inline-suggestions/inline-completion.ts",
-				"line": 130,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/inline-suggestions/inline-completion.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/inline-suggestions/inline-completion.ts",
-				"line": 176,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/inline-suggestions/inline-completion.ts:1"]
-			},
-			{
 				"file": "src/lib/server/services/telemetry.ts",
 				"line": 43,
 				"column": 14,
@@ -3727,7 +3703,7 @@
 				"message": "services must not invoke or expose controllers behavior. Move the operation to a controller.",
 				"provenance": [
 					"src/lib/server/services/telemetry.ts:187",
-					"src/lib/server/controllers/inline-suggestions/controller.ts:128"
+					"src/lib/server/controllers/inline-suggestions/controller.ts:131"
 				]
 			},
 			{
@@ -4752,6 +4728,23 @@
 				"scripts/phoenix-trace-validation.js"
 			],
 			"inventoryNote": "Production and evaluation constructors, provider consumers and cache/trace imports were reviewed. Cache key fields and position payloads are unchanged. Telemetry architecture and the diagram SDK mismatch remain outside this slice."
+		},
+		{
+			"subject": "Inline completion rules, provider construction, shared model selection contract and tracing",
+			"status": "corrected",
+			"previousDependency": "InlineSuggestionCompletion constructed its own SDK client and mixed prompt/sanitization rules with provider execution and public trace helpers. Its factory-facing interface omitted the model override present in the controller-facing interface.",
+			"currentOwner": "InlineSuggestions selects the preference or environment model, prepares prompts, invokes the provider and sanitizes text through direct collaborators. InlineCompletionRules owns stateless rules. The adapter owns SDK protocol and private trace mapping. Factories construct the SDK and adapter and expose the one model-owned completion contract. The existing generation span stays around the complete generation sequence.",
+			"evidence": [
+				"src/lib/server/controllers/inline-suggestions/controller.ts",
+				"src/lib/server/services/inline-suggestions/completion-rules.ts",
+				"src/lib/server/adapters/inline-suggestions/completion.ts",
+				"src/lib/server/factories/inline-completion.ts",
+				"src/lib/server/factories/capabilities/knowledge-search-capability-factory.ts",
+				"src/lib/models/agent/index.ts",
+				"src/lib/server/controllers/inline-suggestions/tracing.spec.ts",
+				"src/evals/cases/inline-suggestion.ts"
+			],
+			"inventoryNote": "Production constructors, factory output annotations, application wiring, InMemory fakes and evaluations were reviewed. Evaluations still invoke the owning controller after setting their model through preferences. No live evaluation or provider was run. Authorization, context isolation, throttling, cancellation, errors and controller-owned ADR 0036 fallback remain unchanged. No service dependency is hidden behind an adapter contract."
 		}
 	]
 }

@@ -750,6 +750,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteReader: notes.reader,
 			preferences: finalizedKnowledgeSearch.preferences,
 			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
+			completionRules: finalizedKnowledgeSearch.completionRules,
+			defaultCompletionModel: finalizedKnowledgeSearch.defaultCompletionModel,
 			knowledgeLookup,
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,

@@ -1511,3 +1511,33 @@ This resolves the earlier pending chunker, diagram helper and ranking entries. I
 compliance for the whole knowledge-search family or complete the application refactor. Browser
 migrations, synchronization behavior, preference writes, unrelated helpers, telemetry restructuring
 and the diagram SDK mismatch were not changed. Keep the stacked PR draft while migration gates fail.
+
+## Inline-suggestion completion continuation — 2026-10-11
+
+Application revision `49cd5c82c64709f896ce511c19d88e8d2c276331`, based on draft #358 at
+`ab83ff5c8fe2f152082ccec32af356086cda2eb0`. Both complete baseline inventories matched #358.
+
+- [x] Move completion SDK execution and private trace mapping into a provider adapter. Construct the
+      SDK client and adapter in factories and expose the shared model-owned completion contract.
+- [x] Put prompt preparation and sanitization in one stateless rule service with private helpers.
+      Keep the complete sequence in InlineSuggestions, with direct collaborators and no service chain.
+- [x] Preserve preference/default model selection, authorization, context isolation, throttling,
+      prompt/output behavior, cancellation, errors, tracing and controller-owned ADR 0036 fallback.
+- [x] Verify constructors, factory output types, application/controller consumers, InMemory fakes and
+      evaluation dependencies. Evaluations retain their controller and preference-model path.
+- [x] Run focused/local-provider units, affected isolated contracts, full units, lint, type/docs checks
+      and every architecture stage. Refresh the complete inventory and manual dependency review.
+- [ ] Complete the wider migration and satisfy the semantic and Chisel gates.
+
+Focused units passed: 15 files, 109 tests. Full units passed: 577 files, 4,536 tests and one existing
+skip. Affected isolated PostgreSQL contracts passed: 21 files, 100 tests. Local SDK fixtures and an
+in-memory OpenTelemetry exporter verify protocol, model selection, raw/sanitized trace outputs,
+parentage, cancellation and admission release without a live provider.
+Lint, type checking and docs checking passed. Topology, source, test quality and UI passed. Semantic
+findings decreased from 370 to 367; Chisel retains 47 prohibited imports. The
+[enforcement report](stateless-service-controller-enforcement.md) records full evidence and limits.
+
+This resolves the inline-completion helper and construction boundaries, not the application refactor.
+Browser migrations, synchronization, preference writes, indexing, unrelated helpers, telemetry
+restructuring and the diagram SDK mismatch were not changed. Keep this stacked PR draft while
+migration gates fail. No checks, suppressions or skill guidance changed.

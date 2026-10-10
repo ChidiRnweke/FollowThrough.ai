@@ -1,3 +1,4 @@
+import { InlineCompletionRules } from '$lib/server/services/inline-suggestions/completion-rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import {
@@ -38,6 +39,8 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 			reranker,
 			knowledgeLookup: new KnowledgeLookup(search),
 			inlineCompletionGenerator: generator,
+			completionRules: new InlineCompletionRules(),
+			defaultCompletionModel: 'default-inline-model',
 			inlineSuggestionThrottle: admission,
 			preferences,
 			observer: { run: (_name, _context, body) => body() },
