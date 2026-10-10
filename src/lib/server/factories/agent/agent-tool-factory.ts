@@ -1,3 +1,4 @@
+import { createAgentToolDiscovery } from './tool-discovery-factory';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
@@ -1207,11 +1208,16 @@ export class AgentTools {
 		// the envelope's free-form `payload` renders as a property-less JSON schema,
 		// so the model was asked to fill a shape it had never been shown, and
 		// several model families answered with an empty object forever.
-		const promoted = new Set<string>(alreadyPromoted);
+		const discovery = createAgentToolDiscovery(
+			this.catalog(),
+			definitions,
+			this.toolRetriever,
+			alreadyPromoted
+		);
 		const discoverable = definitions
 			.filter((definition) => !toolCatalogRules.isFirstClass(definition.name))
 			.map((definition) =>
-				this.buildTool(definition, { isEnabled: () => promoted.has(definition.name) })
+				this.buildTool(definition, { isEnabled: () => discovery.isEnabled(definition.name) })
 			);
 
 		const searchParameters = z
@@ -1229,26 +1235,9 @@ export class AgentTools {
 			execute: (_action, _callId, run) => run(),
 			prepare: async (input) => ({
 				kind: 'ready',
-				action: bindToolArguments(searchParameters, input, async ({ query: toolQuery, limit }) => {
-					const ranked = await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5);
-					const result = agentPayloadResultSchema.parse(
-						ranked
-							.map((name) => byName.get(name))
-							.filter((definition): definition is Definition => definition !== undefined)
-							.map((definition) => {
-								promoted.add(definition.name);
-								return {
-									name: definition.name,
-									description: definition.description,
-									classification: definition.classification,
-									input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
-									callable_directly: true
-								};
-							})
-					);
-					if (result.kind === 'corrupt') throw new Error(result.message);
-					return result.value;
-				})
+				action: bindToolArguments(searchParameters, input, ({ query, limit }) =>
+					discovery.search(query, limit ?? 5)
+				)
 			})
 		});
 

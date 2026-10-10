@@ -2,12 +2,10 @@ import type { AgentPayload } from '$lib/models/agent/payload';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
-import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import type { AgentToolDiscoveryStore } from '$lib/server/stores/agent/tool-discovery';
+import type { AgentToolDiscoveryControl } from './tool-discovery';
 import type { AgentToolCallControl, PreparedAction } from './tool-calls';
 
 export interface McpToolResultReader {
-	describe(names: readonly string[]): AgentPayload;
 	failed(value: AgentPayload): boolean;
 }
 export interface McpToolSessionControl {
@@ -24,8 +22,7 @@ export interface McpToolSessionControl {
 export class McpToolSession implements McpToolSessionControl {
 	constructor(
 		private readonly catalog: readonly ToolDescriptor[],
-		private readonly state: AgentToolDiscoveryStore,
-		private readonly retriever: ToolRetriever,
+		private readonly discovery: AgentToolDiscoveryControl,
 		private readonly calls: AgentToolCallControl,
 		private readonly reader: McpToolResultReader,
 		private readonly catalogRules: Pick<AgentToolCatalog, 'isFirstClass'>
@@ -33,19 +30,12 @@ export class McpToolSession implements McpToolSessionControl {
 
 	list(): readonly string[] {
 		return this.catalog
-			.filter(({ name }) => this.catalogRules.isFirstClass(name) || this.state.has(name))
+			.filter(({ name }) => this.catalogRules.isFirstClass(name) || this.discovery.isEnabled(name))
 			.map(({ name }) => name);
 	}
 
-	async search(query: string, limit: number): Promise<AgentPayload> {
-		const catalog = this.catalog
-			.filter(({ name }) => !this.catalogRules.isFirstClass(name))
-			.map(({ name, description }) => ({ name, description }));
-		const ranked = await this.retriever.retrieve(catalog, query, limit);
-		const permitted = new Set(this.catalog.map(({ name }) => name));
-		const matches = ranked.filter((name) => permitted.has(name));
-		this.state.add(matches);
-		return this.reader.describe(matches);
+	search(query: string, limit: number): Promise<AgentPayload> {
+		return this.discovery.search(query, limit);
 	}
 
 	async invoke(

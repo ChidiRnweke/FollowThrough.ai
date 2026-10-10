@@ -2,7 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { ToolLifecycleError } from '$lib/errors';
-import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ToolClassification } from '$lib/models/agent';
 import type {
 	McpToolResultReader,
@@ -27,23 +27,6 @@ export class McpToolProtocol implements McpToolResultReader {
 
 	failed(value: AgentPayload): boolean {
 		return this.failure(value);
-	}
-
-	describe(names: readonly string[]): AgentPayload {
-		const payload = agentPayloadResultSchema.parse(
-			names.map((name) => {
-				const definition = this.definition(name);
-				return {
-					name: definition.name,
-					description: definition.description,
-					classification: definition.classification,
-					input_schema: z.toJSONSchema(definition.parameters, { io: 'input' }),
-					callable_directly: true
-				};
-			})
-		);
-		if (payload.kind === 'corrupt') throw new Error(payload.message);
-		return payload.value;
 	}
 
 	create(session: McpToolSessionControl): Server {

@@ -11,7 +11,7 @@ import { ToolCallBoundary } from '$lib/server/adapters/agent/tool-call';
 import { McpToolProtocol } from '$lib/server/adapters/agent/mcp-tools';
 import { AgentToolCalls } from '$lib/server/controllers/agent/tool-calls';
 import { McpToolSession } from '$lib/server/controllers/agent/mcp-tools';
-import { AgentToolDiscoveryStore } from '$lib/server/stores/agent/tool-discovery';
+import { createAgentToolDiscovery } from './tool-discovery-factory';
 
 export interface McpRequestContext {
 	readonly actor: ActorContext;
@@ -43,8 +43,12 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 	return protocol.create(
 		new McpToolSession(
 			permitted,
-			new AgentToolDiscoveryStore(),
-			options.toolRetriever,
+			createAgentToolDiscovery(
+				permitted.map(({ name, description }) => ({ name, description })),
+				permitted,
+				options.toolRetriever,
+				[]
+			),
 			new AgentToolCalls(new ToolCallBoundary()),
 			protocol,
 			new AgentToolCatalogService()

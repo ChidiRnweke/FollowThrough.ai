@@ -1205,3 +1205,16 @@ Every service module below has a planned disposition. This is routing, not compl
   89 server modules / 147 exports (121 classes), 12,101 rows / 13,203 resolved imports.
 - Agent registry workflows, browser migrations, stricter semantic enforcement and final checks
   remain incomplete. These results do not satisfy the whole-application completion conditions.
+
+## Agent discovery state and shared protocol presentation — 2026-10-10
+
+- AgentToolDiscovery coordinates ranking, permitted-name filtering, promotion and discovery results.
+  AgentToolDiscoveryStore retains promoted names for one constructed SDK tool surface or MCP
+  connection. The agent factory no longer closes over a mutable promotion Set or executes search.
+  MCP uses the same controller, while keeping its own dispatch and notification operations.
+- ToolCatalogBoundary converts schemas to discovery JSON for both protocols. Definitions retain
+  their real schemas and current authority; an unknown ranked name cannot become callable.
+  Static catalog membership comes from AgentToolCatalogService.
+- Type checking and lint pass. Focused agent/controller/discovery tests pass: 32 files / 369 tests.
+  Architecture remains at 51 prohibited imports; topology/source/test-quality pass. Registry
+  initialization, remaining tool operation callbacks, browser migrations and final checks remain.
