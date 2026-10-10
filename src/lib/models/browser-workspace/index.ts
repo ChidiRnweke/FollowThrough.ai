@@ -1,8 +1,10 @@
-import type { AgentRunId } from '$lib/models/agent';
+import type { AgentRunId, AgentRunReceipt } from '$lib/models/agent';
 import type { ClipboardPaste, ClipboardSource } from '$lib/models/clipboard';
-import type { DiagramId } from '$lib/models/diagrams';
+import type { DiagramId, DiagramActionInput, DiagramActionSubmission } from '$lib/models/diagrams';
 import type {
 	NoteId,
+	SelectionAction,
+	SelectionSubmission,
 	NoteRevision,
 	NoteRevisionId,
 	NoteRevisionSummary,
@@ -17,7 +19,12 @@ import type {
 	WriteReceipt,
 	WriteRecovery
 } from '$lib/models/outbox';
-import type { SuggestionId } from '$lib/models/suggestions';
+import type {
+	SuggestionId,
+	Suggestion,
+	SuggestionArtifact,
+	AcceptSuggestionOutput
+} from '$lib/models/suggestions';
 import type {
 	CachedRecord,
 	ResourceState,
@@ -215,4 +222,44 @@ export interface CacheCommitDecision<T> {
 /** Opaque mounted-editor identity; split panes receive distinct values. */
 export interface NoteEditorIdentity {
 	readonly key: symbol;
+}
+
+export interface SelectionSubmissionStorage {
+	read(accountId: string, action: SelectionAction): readonly SelectionSubmission[];
+	write(accountId: string, action: SelectionAction, requests: readonly SelectionSubmission[]): void;
+}
+export interface DiagramSubmissionStorage {
+	read(accountId: string): readonly DiagramActionSubmission[];
+	write(accountId: string, requests: readonly DiagramActionSubmission[]): void;
+	candidate(input: DiagramActionInput, requestId: string): DiagramActionSubmission;
+}
+export interface NoteSubmissionRemote {
+	selection(action: SelectionAction, request: SelectionSubmission): Promise<AgentRunReceipt>;
+	diagram(request: DiagramActionSubmission): Promise<AgentRunReceipt>;
+}
+export interface NoteSubmissionIdentity {
+	create(): string;
+}
+
+/** Captured account lifetime; never a session controller or mutable session owner. */
+export interface NoteActionBinding {
+	readonly accountId: string | null;
+	readonly generation: number;
+}
+export interface NoteActionToken {
+	readonly id: number;
+	readonly generation: number;
+	readonly review: boolean;
+}
+export interface NoteReviewRemote {
+	accept(input: {
+		suggestionId: SuggestionId;
+		drawioReview: { noteId: NoteId; source: string; renderedSvg: string };
+	}): Promise<AcceptSuggestionOutput<SuggestionArtifact>>;
+	reject(input: { suggestionId: SuggestionId }): Promise<Suggestion>;
+}
+
+/** Existing action-run binding contract; streaming lifetime remains owned by action runs. */
+export interface NoteActionSession {
+	readonly bootstrap: { readonly accountId: string };
 }

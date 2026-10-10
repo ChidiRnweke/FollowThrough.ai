@@ -1,4 +1,4 @@
-import type { NoteReviewRemote } from '$lib/controllers/notes/actions';
+import type { NoteReviewRemote } from '$lib/models/browser-workspace';
 import { acceptSuggestion, rejectSuggestion } from '$lib/remote/suggestions/suggestions.remote';
 export class RemoteNoteReviews implements NoteReviewRemote {
 	accept(input: Parameters<NoteReviewRemote['accept']>[0]) {

@@ -39,7 +39,7 @@ it.each([
 it('starts a new request after the previous receipt was acknowledged', async () => {
 	const fixture = noteSubmissionFixture(sessionStorage);
 	fixture.remote.failure = null;
-	await fixture.controller.selection('promise-test-a', 'promises', selection);
+	await fixture.submitSelection('promise-test-a', 'promises', selection);
 	const first = fixture.remote.selections[0].request;
 	const next = await noteSubmissionFixture(sessionStorage).uncertainSelection(
 		'promise-test-a',
@@ -67,7 +67,10 @@ it('reports corrupt saved identity instead of silently starting duplicate work',
 	const fixture = noteSubmissionFixture(sessionStorage);
 	await fixture.uncertainSelection('promise-test-a', 'promises', selection);
 	sessionStorage.setItem('followthrough.notes.promise-submissions.promise-test-a', 'corrupt');
-	await expect(
-		fixture.controller.selection('promise-test-a', 'promises', selection)
-	).rejects.toThrow();
+	const receipt = await fixture.submitSelection('promise-test-a', 'promises', selection);
+	expect({
+		receipt,
+		error: fixture.actions.lastError,
+		sent: fixture.remote.selections.length
+	}).toEqual({ receipt: undefined, error: expect.any(String), sent: 1 });
 });

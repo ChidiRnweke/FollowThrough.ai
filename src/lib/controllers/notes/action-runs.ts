@@ -7,7 +7,7 @@ import type {
 import type { NoteActionResult, NoteActionEventRecord } from '$lib/models/note-actions';
 import type { SessionSynchronization } from '$lib/controllers/workspace/session';
 import type { NoteId } from '$lib/models/notes';
-import type { NoteActionSession } from './actions';
+import type { NoteActionSession } from '$lib/models/browser-workspace';
 import type { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';
 
 export interface NoteActionRun extends StoredNoteActionRun {

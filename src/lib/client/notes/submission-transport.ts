@@ -1,7 +1,4 @@
-import type {
-	NoteSubmissionRemote,
-	NoteSubmissionIdentity
-} from '$lib/controllers/notes/submissions';
+import type { NoteSubmissionRemote, NoteSubmissionIdentity } from '$lib/models/browser-workspace';
 import type { SelectionAction, SelectionSubmission } from '$lib/models/notes';
 import type { DiagramActionSubmission } from '$lib/models/diagrams';
 import {

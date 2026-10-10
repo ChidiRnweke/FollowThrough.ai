@@ -6,7 +6,7 @@ import {
 	type NoteActionRunsFactory,
 	type NoteActionTrackingController
 } from '$lib/controllers/notes/action-runs';
-import type { NoteActionSession } from '$lib/controllers/notes/actions';
+import type { NoteActionSession } from '$lib/models/browser-workspace';
 import { NoteActionRunStore } from '$lib/stores/notes/note-action-runs.svelte';
 import { BrowserNoteActionRunTransport } from '$lib/client/notes/action-run-transport';
 import { SessionRunStorage } from '$lib/client/notes/action-run-storage';

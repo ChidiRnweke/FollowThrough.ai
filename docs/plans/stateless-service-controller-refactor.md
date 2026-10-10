@@ -1761,3 +1761,77 @@ Observed verification:
   flows were not run for this browser-only slice. Required CI results are reported in the PR.
 - Full browser suite: 93 files, 609 tests passed. This includes the final history reactivity tests
   and existing editor/clipboard behavior. Existing derived/rasterization warnings remain.
+
+## Browser note action independence — 2026-10-10
+
+This slice starts from #355 at `5f491f0d08ca6e0f548d18b5db8c716073145cfa` in
+`refactor/pr336-note-action-independence`. ADRs 0007, 0003, 0010, 0015, 0025, 0037,
+0040 and 0041 govern ownership, review, durable receipts and browser boundaries.
+The existing #345 inventory was checked against current source. #348, #350, #351,
+#352 and #355 retained their inspected heads. Contract coordination is recorded on
+[#348](https://github.com/ChidiRnweke/FollowThrough.ai/pull/348#issuecomment-6102253641).
+
+- [x] Move selection and diagram submission sequencing into `NoteActions`. Remove the
+      redundant submission controller and factory after confirming no other production callers.
+      Factories construct the raw storage, transport and identity collaborators directly.
+      No controller dependency is forwarded through a callback, interface or adapter.
+- [x] Reuse the existing passive `workspaceSessionState` account ID and generation.
+      The store holds only binding/status/token state and controlled updates. Shared raw
+      contracts live in browser-workspace models. `NoteActionIdentities` remains unchanged.
+- [x] Preserve account-scoped keys, normalized request identity reuse and persistence before
+      sending. Failed transport retains pending intent. A durable receipt rereads the captured
+      account's storage and removes only its request. Late acknowledgment still releases that
+      account's request, but cannot publish a receipt in a replacement session.
+- [x] Preserve concurrent current-session results and immediate draw.io acceptance/rejection.
+      Each review has a completion token; finishing one cannot clear another. Only the
+      latest-started operation owns `lastError`. Account and same-account session replacement
+      suppress stale results, failures and completion. Missing-session errors also carry the
+      existing generation, so they cannot reappear after a later login/logout cycle.
+- [x] Preserve parsing in the browser storage readers and diagram candidate boundary.
+      No storage format, public action signature, remote payload or receipt contract changes.
+      Action-run code changes only its import of the unchanged passive session type; streaming,
+      hydration, cancellation and result-delivery orchestration remain outside this slice.
+- [x] Migrate submission tests to the public action controller and add typed deferred transport
+      coverage for persistence, retries, uncertain intent, concurrent acknowledgment, review state
+      and account/session races. Real session-store browser tests verify reactive invalidation.
+
+Proofreading, server code, prompts, general workspace synchronization/review, widget internals,
+editor/clipboard operations, note history and revision comparison remain unchanged.
+
+Measured with unchanged checkers against the exact base:
+
+| Check                          | Before | After | New findings                          |
+| ------------------------------ | -----: | ----: | ------------------------------------- |
+| Global controller-import audit |     62 |    60 | None                                  |
+| Chisel prohibited imports      |     42 |    42 | No new diagnostic identities          |
+| #345 semantic checker          |    762 |   762 | No new file/rule/message combinations |
+| #350 strengthened checker      |   1297 |  1285 | No new file/rule/message combinations |
+
+The two removed imports are the submission delegation and the action-run import of the passive
+session type formerly declared in actions. The store/controller dependency and factory-injected
+workspace controller are removed in source as well. Counts do not replace that review.
+The #350 figures run its strengthened checker against this branch's source; they are not #350's
+own application inventory. No enforcement, baseline or suppression changed. Required architecture
+still fails on inherited findings, so this slice does not complete #336 or make the stack ready
+to merge.
+
+Observed verification:
+
+- Lint and type checking passed; zero type errors or warnings.
+- Full unit suite: 583 files, 4,554 passed and one existing skip.
+- Full browser suite: 96 files, 634 passed, including 25 new action/review/race cases.
+- Selected isolated database contracts: four files, 50 passed. These cover durable diagram
+  generation, run context, agent repositories and suggestion effects.
+- Source, test-quality and UI audits passed. `pnpm test:architecture` still fails on the
+  60 inherited controller imports. Later audit stages and both external semantic checkers
+  were run independently. No new diagnostic identities were found.
+- Docs check passed with zero errors/warnings and one existing hint. Generation retains
+  existing TypeDoc entry-point warnings. Browser output retains `derived_inert` and expected
+  rasterization-failure test output.
+- Before implementation, all 20 existing submission/action browser tests passed on the exact base.
+  Nine distinct authenticated E2E journeys passed across the combined note/editor run and
+  final action run. Matched captures are documented in the
+  [evidence report](../pr-evidence/pr336-note-action-independence/README.md).
+- Production builds, full PWA verification and live model execution were not run for this
+  browser-only slice. Successful draw.io acceptance is covered by typed transport tests;
+  it is not claimed as a full server acceptance/embedding journey.
