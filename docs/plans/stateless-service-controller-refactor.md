@@ -242,7 +242,7 @@ Every service module below has a planned disposition. This is routing, not compl
 | `src/lib/server/services/agent/conversations/history.ts`            | `ConversationHistoryService`                                                                                                                                                                                                               | Replay and persistence preparation rules; private image/text helpers. Session coordination moved to controller; caches to store; SDK parsing to adapter.                                                                                                                         |
 | `src/lib/server/services/agent/conversations/replay-virtualizer.ts` | `AgentReplayVirtualizer`                                                                                                                                                                                                                   | Explicit preparation/application interface, stateless file virtualization. Controller resolves serialized arguments through a boundary reader first.                                                                                                                             |
 | `src/lib/server/services/agent/conversations/rewind.ts`             | ConversationHistoryService.rewind                                                                                                                                                                                                          | Old function module deleted. History capability owns private user-ordinal traversal; agent controller owns transactional transcript/provider rewind.                                                                                                                             |
-| `src/lib/server/services/agent/conversations/tool-activity.ts`      | `toolOutcomeEvent`, `toolActivityFromEvent`                                                                                                                                                                                                | Named agent capabilities; private helpers, boundary adapters and state require semantic review. Pending.                                                                                                                                                                         |
+| `src/lib/server/services/agent/conversations/tool-activity.ts`      | `ToolActivityProjectionService`                                                                                                                                                                                                            | Corrected above #368: stateless projection with a model-owned contract and factory construction; Agent, diagrams and evaluations receive explicit dependencies. Journal ownership is unchanged. Overall migration incomplete.                                                    |
 | `src/lib/server/services/agent/runs/approvals.ts`                   | `RunApprovals`                                                                                                                                                                                                                             | Named agent capabilities; private helpers, boundary adapters and state require semantic review. Pending.                                                                                                                                                                         |
 | `src/lib/server/services/agent/runs/cancellation.ts`                | `RunCancellation`                                                                                                                                                                                                                          | Named agent capabilities; private helpers, boundary adapters and state require semantic review. Pending.                                                                                                                                                                         |
 | `src/lib/server/services/agent/runs/checkpoints.ts`                 | `RunCheckpoints`                                                                                                                                                                                                                           | Named agent capabilities; private helpers, boundary adapters and state require semantic review. Pending.                                                                                                                                                                         |
@@ -1575,3 +1575,27 @@ and its JSON companion. Three public-helper findings were removed; 364 semantic 
 47 Chisel errors remain. The original application checklist stays incomplete. Browser migrations,
 tool-activity projection, indexing redesign, telemetry restructuring and the diagram SDK mismatch
 remain outside this slice. Keep the stacked PR draft while migration gates fail.
+
+## Tool-activity projection — 2026-10-11
+
+Continues above draft #368 at `d8ad32290ce8dcb1d0993cc53910364127f19afc`.
+Application revision: `f09fd8125f2af896c9229d40c805845d76477912`.
+The two exported projection helpers are one stateless ToolActivityProjectionService with a
+model-owned contract. Factories construct it and expose interfaces. Agent, diagram generation
+and evaluation reconstruction/timing receive the capability explicitly. Controllers retain
+operations, journal writes, transactions and sequencing; parsing, persistence and journal merging
+stay in their existing owners. Event states, identifiers, optional payloads, approval reviews,
+failure outputs, ordering, authorization, cancellation, tool contracts and tracing are unchanged.
+
+Complete diagnostic inventories and dependency reviews are refreshed in the enforcement Markdown
+and JSON. Semantic findings decreased from 364 to 362 by removing only the two projection helper
+identities. Chisel remains at the same 47 errors. No checks or suppressions changed.
+Focused regressions passed 69 files/632 tests with one existing skip; isolated Agent/diagram
+contracts passed 17 files/95 tests. Full units passed 591 files/4,621 tests with one existing skip.
+Lint, type/docs checks, topology, source, test quality and UI audits passed. Semantic and Chisel
+migration gates still fail. No live providers ran. Detailed observed evidence and limitations are
+in [the enforcement record](stateless-service-controller-enforcement.md#tool-activity-projection--2026-10-11).
+
+The overall refactor remains incomplete. Keep this stacked PR draft. Browser migrations, journal
+redesign, agent-file changes, indexing, telemetry restructuring and the diagram SDK mismatch remain
+outside this slice.
