@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import type { ConversationImageInput } from '$lib/models/agent';
-import { prepareRunImages, validateRunImages } from './images';
+import { AgentImagePreparationService } from './images';
+const images = new AgentImagePreparationService();
 
 const image: ConversationImageInput = {
 	id: '40000000-0000-4000-8000-000000018001',
@@ -12,14 +13,14 @@ const image: ConversationImageInput = {
 
 it('keeps attached and app-supplied images in the same native input in that order', () => {
 	const contextImage = { ...image, id: '40000000-0000-4000-8000-000000018002' };
-	expect(prepareRunImages({ images: [image], contextImages: [contextImage] })).toEqual({
+	expect(images.prepare({ images: [image], contextImages: [contextImage] })).toEqual({
 		kind: 'native',
 		images: [image, contextImage]
 	});
 });
 
 it('resolves a saved fallback reader for app-supplied images', () => {
-	expect(prepareRunImages({ contextImages: [image], visionModelOverride: 'test/vision' })).toEqual({
+	expect(images.prepare({ contextImages: [image], visionModelOverride: 'test/vision' })).toEqual({
 		kind: 'describe',
 		images: [image],
 		model: 'test/vision'
@@ -27,19 +28,19 @@ it('resolves a saved fallback reader for app-supplied images', () => {
 });
 
 it('does not invoke an image reader on a turn without images', () => {
-	expect(prepareRunImages({ visionModelOverride: 'test/vision' })).toEqual({ kind: 'none' });
+	expect(images.prepare({ visionModelOverride: 'test/vision' })).toEqual({ kind: 'none' });
 });
 
 it('rejects a data URL that disagrees with the declared media type', () => {
 	expect(() =>
-		validateRunImages({ images: [{ ...image, dataUrl: 'data:image/jpeg;base64,aGVsbG8=' }] })
+		images.validate({ images: [{ ...image, dataUrl: 'data:image/jpeg;base64,aGVsbG8=' }] })
 	).toThrow('does not match');
 });
 
 it('accepts complete images beyond the former combined byte budget', () => {
 	const dataUrl = `data:image/png;base64,${Buffer.alloc(6 * 1024 * 1024).toString('base64')}`;
 	expect(() =>
-		validateRunImages({
+		images.validate({
 			images: [{ ...image, dataUrl }],
 			contextImages: [{ ...image, id: '40000000-0000-4000-8000-000000018002', dataUrl }]
 		})

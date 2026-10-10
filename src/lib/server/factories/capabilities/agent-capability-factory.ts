@@ -1,4 +1,8 @@
 import {
+	AgentImagePreparationService,
+	type AgentImagePreparation
+} from '$lib/server/services/agent/runs/images';
+import {
 	AgentPreferenceEditingService,
 	type AgentPreferenceEditing
 } from '$lib/services/agent/preferences';
@@ -22,7 +26,10 @@ import {
 	RunCheckpoints,
 	type RunCheckpointWriter
 } from '$lib/server/services/agent/runs/checkpoints';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import {
+	RunPreparation,
+	type ChatRunPreparation
+} from '$lib/server/services/agent/runs/preparation';
 import { RunApprovals, type RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
 import {
 	RunCancellation,
@@ -89,6 +96,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly imagePreparation: AgentImagePreparation;
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly now: () => DateTime;
@@ -105,7 +113,7 @@ export interface AgentCapability {
 	readonly runs: AgentRunRecords;
 	readonly cancellations: RunCancellationDecisions;
 	readonly approvals: RunApprovalDecisions;
-	readonly preparation: RunPreparation;
+	readonly preparation: ChatRunPreparation;
 	readonly checkpoints: RunCheckpointWriter;
 	readonly runLedger: WorkflowRunLedger;
 	readonly runEvents: AgentRunEventRecords;
@@ -171,6 +179,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				tokens,
 				toolRetriever: input.toolRetriever
 			}),
+		imagePreparation: new AgentImagePreparationService(),
 		runSettings: new AgentRunSettingsService(),
 		webSearchOverrides: webSearchOptionsFromEnvironment(process.env),
 		agentAvailable: Boolean(input.openRouterApiKey.trim()),

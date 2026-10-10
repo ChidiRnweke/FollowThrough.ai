@@ -1,6 +1,7 @@
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { prepareRunImages } from './images';
+import { AgentImagePreparationService } from './images';
+const images = new AgentImagePreparationService();
 import { describe, expect, it } from 'vitest';
 import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -91,7 +92,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 			actor: testActor(),
 			run: { ...run, inputSnapshot: input },
 			request: input,
-			imageInput: prepareRunImages(input),
+			imageInput: images.prepare(input),
 			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			context,
 			signal,

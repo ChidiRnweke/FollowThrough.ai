@@ -432,6 +432,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions.reverter
 		},
 		agent: {
+			imagePreparation: agentCapability.imagePreparation,
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
 			runSettings: agentCapability.runSettings,

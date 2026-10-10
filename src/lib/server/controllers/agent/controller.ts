@@ -4,18 +4,12 @@ import type {
 } from '$lib/services/agent/model-selection';
 import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
-import {
-	prepareRunImages,
-	validateRunImages,
-	freezeImageReader
-} from '$lib/server/services/agent/runs/images';
+import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
 import { segmentOutput } from '$lib/server/services/agent/runs/output';
 import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
 import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
-import {
-	RunPreparationCancelled,
-	type RunPreparation
-} from '$lib/server/services/agent/runs/preparation';
+import { RunPreparationCancelled } from '$lib/errors';
+import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
 import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
 import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -220,6 +214,7 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly imagePreparation: AgentImagePreparation;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
 	syncMutations: WorkspaceMutationGuard;
@@ -235,10 +230,7 @@ export interface AgentDependencies {
 	cancellations: Pick<RunCancellationDecisions, 'getForWrite' | 'plan' | 'persist'>;
 	approvals: Pick<RunApprovalDecisions, 'getForWrite' | 'plan' | 'persist'>;
 	checkpoints: Pick<RunCheckpointWriter, 'prepare' | 'persist'>;
-	preparation: Pick<
-		RunPreparation,
-		'claim' | 'getForWrite' | 'provenance' | 'context' | 'persistProvenance' | 'persistContext'
-	>;
+	preparation: ChatRunPreparation;
 	/** The append-only event log per run that clients poll via cursors. */
 	events: AgentRunEventRepository;
 	/** Recorded approvals and rejections for pending tool calls. */
@@ -663,7 +655,7 @@ export class Agent implements AgentController {
 		input: SubmitAgentRunInput,
 		preferences: AgentPreferences
 	): StagedAgentRunInput {
-		validateRunImages(input);
+		this.dependencies.imagePreparation.validate(input);
 		const contextProjectId =
 			input.appContext?.currentProject?.id ?? input.appContext?.activeResource?.projectId;
 		const contextNoteId =
@@ -761,7 +753,7 @@ export class Agent implements AgentController {
 	): Promise<RunAgentInput> {
 		// Context images need a model that can see just as much as attachments do;
 		// ignoring them here would silently drop the render on a text-only model.
-		if (prepareRunImages(runInput).kind === 'none') return runInput;
+		if (this.dependencies.imagePreparation.prepare(runInput).kind === 'none') return runInput;
 		const models = this.dependencies.modelChoices.configuredAgentModels(
 			await this.dependencies.models.list(),
 			{
@@ -775,7 +767,7 @@ export class Agent implements AgentController {
 				)
 			}
 		);
-		return freezeImageReader(
+		return this.dependencies.imagePreparation.freezeReader(
 			runInput,
 			models,
 			chatModel,
@@ -855,7 +847,7 @@ export class Agent implements AgentController {
 				actor,
 				run,
 				request,
-				imageInput: prepareRunImages(request),
+				imageInput: this.dependencies.imagePreparation.prepare(request),
 				webSearch: this.dependencies.runSettings.research(
 					request.webSearch ?? {},
 					this.dependencies.runSettings.research(

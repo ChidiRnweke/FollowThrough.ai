@@ -1,4 +1,4 @@
-import { NotFoundError, ValidationError } from '$lib/errors';
+import { NotFoundError, ValidationError, RunPreparationCancelled } from '$lib/errors';
 import type {
 	AgentContextWrite,
 	AgentProvenanceWrite,
@@ -12,14 +12,33 @@ import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
-export class RunPreparationCancelled extends Error {
-	constructor() {
-		super('The run was cancelled during preparation');
-	}
+export interface ChatRunPreparation {
+	claim(runId: AgentRunId, timestamp: DateTime): Promise<ResolvedAgentRun | undefined>;
+	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<ResolvedAgentRun>;
+	provenance(
+		current: Pick<ResolvedAgentRun, 'provenanceId'>,
+		provenanceId: ProvenanceId,
+		timestamp: DateTime
+	): AgentProvenanceWrite;
+	context(
+		current: Pick<ResolvedAgentRun, 'contextSnapshot'>,
+		context: AgentRunContext,
+		timestamp: DateTime
+	): AgentContextWrite;
+	persistProvenance(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentProvenanceWrite
+	): Promise<ResolvedAgentRun>;
+	persistContext(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: AgentContextWrite
+	): Promise<PreparedAgentRun>;
 }
 
 /** The controller owns the lock through each targeted write and the start event. */
-export class RunPreparation {
+export class RunPreparation implements ChatRunPreparation {
 	constructor(private readonly runs: AgentRunRepository) {}
 
 	claim(runId: AgentRunId, timestamp: DateTime): Promise<ResolvedAgentRun | undefined> {

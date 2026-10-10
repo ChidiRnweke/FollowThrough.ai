@@ -1089,3 +1089,16 @@ Every service module below has a planned disposition. This is routing, not compl
 - Inventory: 63 shared modules / 104 exports (47 classes), 88 server modules / 167 exports
   (120 classes), 12,049 rows and 13,111 resolved imports. Updated the recently migrated inventory
   rows; all remaining entries and final whole-application verification are still pending.
+
+## Run preparation contracts — 2026-10-10
+
+- AgentImagePreparationService owns image validation, durable reader selection and complete provider
+  image input. Helpers are private and the controller receives its interface through composition.
+  Native vision, fallback vision, attachment/context ordering and no-image behavior are unchanged.
+- RunPreparation implements ChatRunPreparation; controller/factory dependencies no longer name its
+  concrete class. The preparation cancellation error lives with application errors. Locked reads,
+  claiming, frozen provenance/context and cancellation precedence are unchanged.
+- Type checking and lint pass. Focused agent tests pass: 32 files / 314 tests. Isolated preparation,
+  session deletion and cancellation contracts pass: three files / nine tests. Architecture remains
+  incomplete at 53 prohibited imports and four missing interfaces; topology/source/test-quality
+  pass. Full unit evidence at the prior commit is not final verification of remaining migration work.
