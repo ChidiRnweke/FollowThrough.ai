@@ -97,9 +97,10 @@ coverage, production build/output audit and required PR checks remain outstandin
 2. **Remaining browser surfaces:** complete workbench/shell, note editor/publication/review,
    todo/skill/memory/suggestion, widget/canvas, settings and feedback boundaries. Remove raw drafts,
    mutable stores, resources and indirect service/remote access from components and adjacent code.
-3. **Remaining server/composition boundaries:** remove application callbacks and authority workflows
-   from agent tool definition factories; finish agent-file helpers, identity/startup coordination,
-   concrete dependency leaks and any retained service state. Preserve tool coverage registration.
+3. **Server/composition continuation:** #337 completes agent-file helpers and identity/startup.
+   The stacked tool-boundary continuation removes tool workflows and authority decisions from
+   factories, narrows the remaining verified capability leaks, and reconciles server state owners.
+   See the dated continuation below for scope, evidence and remaining application-wide work.
 4. **Remaining shared rules:** finish chat/context/mentions/model presentation, payload handling,
    workspace/sync/proofreading and every unresolved inventory entry. Some older inventory rows
    predate later migrations; reconcile them against code instead of treating them as completion.
@@ -150,9 +151,9 @@ stay pending; mechanical checks do not establish capability cohesion.
 
 ## D. Explicit state owners and lifetimes
 
-- [ ] Server process stores: active-run handles/subscriptions, model cache, per-user admission.
-- [ ] Execution/session stores: conversation buffers, stream mapping, tool-review decisions, diagram generation.
-- [ ] Worker/scheduler stores: maintenance cursors, scheduled work, outstanding executions.
+- [x] Server process stores: active-run handles/subscriptions, model cache, per-user admission. Verified against existing owners in the server continuation; no duplicate stores added.
+- [x] Execution/session stores: conversation buffers, stream mapping, tool-review decisions, diagram generation. Verified against existing owners in the server continuation; no duplicate stores added.
+- [x] Worker/scheduler stores: maintenance cursors, scheduled work, outstanding executions. Verified against existing owners in the server continuation; no duplicate stores added.
 - [ ] Controllers read state, invoke rules, apply updates. Stores never load, retry, call providers or decide workflows.
 - [ ] Preserve identity-safe release, synchronous admission before awaits, account/run isolation and shutdown.
 - [ ] Named token-counter adapter replaces tokenizer singletons and factory counting closures.
@@ -392,7 +393,10 @@ Every service module below has a planned disposition. This is routing, not compl
 - Process run subscriptions: `server/stores/agent/events.ts`; application factory exposes `AgentEventBus`.
 - Catalog models and timestamp: one snapshot in `server/stores/agent/model-catalog.ts`; refresh and existing stale-cache behavior in `server/controllers/agent/model-catalog.ts`.
 - Per-user admission and recent timestamps: `server/stores/inline-suggestions/admission.ts`; the admission controller reserves synchronously.
-- All other state fields, controller members, factory dependencies and component edges retain pending semantic-review status in the inventory. No whole subsystem is complete.
+- Server retained-state review is reconciled in the tool-boundary continuation below. Conversation,
+  stream, review, invocation, discovery, diagram and worker state already have explicit stores.
+  Controller public surfaces, shared/browser boundaries and comprehensive enforcement still need
+  their separate review; this does not complete the application-wide refactor.
 
 ### Verification observed so far
 
@@ -1343,3 +1347,60 @@ Every service module below has a planned disposition. This is routing, not compl
   architecture command retains exactly the 51 inherited prohibited imports measured before the
   changes; topology, source and test-quality audits pass. This stacked change completes only these
   two server areas. The wider #336 migration remains incomplete.
+
+## Tool operations and server composition continuation — 2026-10-10
+
+This continuation is based on #337 at `5c777eca3bab61c44010e2333e8e8348812ae13a`.
+Worktree: `artifacts/worktrees/pr336-tool-boundaries`; branch: `refactor/pr336-tool-boundaries`.
+Target `refactor/pr336-server-boundaries` while #337 remains open. Browser code is outside this PR.
+The original application-wide completion checklist above remains authoritative for later work.
+
+- [x] Move application callbacks into typed tool-operation controllers grouped by capability.
+      Project-required recovery, preferences before/after reads, projections, widget guidance,
+      selection context and provenance retain their existing operation order and result shapes.
+      Schemas live in models; adapters parse arguments and serialize protocol results. Widget parse
+      failures are explicit values until project choice has been checked, preserving failure order.
+- [x] Move surface/selection eligibility and authority into controllers. Factories assemble
+      interface-typed registries, operation families, SDK adapters and existing review/discovery owners.
+      Preserve keyed definition coverage, output-map totality and controller tool coverage. Existing
+      instrumented product operations remain the tracing boundaries; internal tool coordinators add
+      no duplicate boundary spans, remote endpoints or public product-controller methods.
+- [x] Replace the knowledge-search repository and inline-completion concrete output types with
+      `RetrievalIndexRepository` and `IInlineSuggestionCompletion`. Agent composition receives
+      `AgentToolControllerProvider`, whose method contracts cover only the consumed controller methods,
+      instead of `ProductionControllerFactory`. Registry factories return surface interfaces.
+- [x] Verify stale state entries against code. AST inspection of server-service field initializers,
+      module variables and assignments found no remaining mutable application state in that layer.
+      Static allowlists, immutable configuration, provider clients and operation-local collections are
+      not outstanding application-state migrations. Existing owners are retained:
+
+  | Lifetime                    | Existing owners under `src/lib/server/stores/`                                                                                                        |
+  | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Process                     | `agent/active-runs`, `agent/events`, `agent/model-catalog`, `inline-suggestions/admission`                                                            |
+  | Conversation/run/connection | `agent/conversation`, `agent/stream`, `agent/tool-reviews`, `agent/tool-invocation`, `agent/tool-discovery`, `diagrams/generation`                    |
+  | Worker/resources            | `maintenance/scheduler`, `maintenance/embedding-progress`, `attachments/upload-retention`, `deliverables/diagram-resources`, `deliverables/pdf-fonts` |
+
+- [x] Preserve #337's agent-file reader/reference interfaces, `Notes.getForAgent`, local identity
+      operation and ordered startup recovery. Their earlier pending entries are historical, not new
+      work. No schemas, migrations, read limits, persistence formats or browser behavior change.
+- [x] Record local validation below; required CI checks remain pending at publication. The inherited architecture failures
+      keep this continuation draft; do not weaken audits or mark the entire refactor complete.
+
+### Continuation verification
+
+Source review confirmed that all 85 extracted tool-schema expressions match the base revision
+apart from whitespace/comments. Review/checkpoint lifetimes and tool-authority filtering match
+that revision. Tests exercise actual tool invocation and persisted effects, not helper call counts.
+
+- `pnpm lint` and `pnpm check`: passed; type checking reports zero errors and warnings.
+- Full unit suite: 565 files, 4,410 passed and one existing skip.
+- Full browser suite: 86 files, 575 passed. Existing `derived_inert` and rasterization warnings
+  remain; passing tests do not establish that those warnings are resolved.
+- Selected isolated agent, identity, knowledge-search and reviewed-note database contracts:
+  17 files, 91 passed.
+- Docs check, production web/worker builds and build-output audit: passed.
+- `pnpm test:architecture`: failed on exactly the same 51 prohibited imports as the untouched
+  #337 base, compared by source location and rule. Topology, source and test-quality stages pass;
+  the UI audit was run separately and passes. No checker, baseline or allowance was weakened.
+- No browser implementation or persisted format changed. Authenticated e2e/PWA and live-provider
+  runs were not performed for this server-only continuation. Required CI checks are pending.
