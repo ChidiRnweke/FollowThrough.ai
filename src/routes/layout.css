@@ -1461,36 +1461,142 @@
 	[data-slot='breadcrumb-link'] {
 		color: var(--color-brand);
 	}
+}
 
-	/* Read-only note comparison. Changed blocks are painted through a ProseMirror
-	   decoration that adds `diff-block` plus a side class, so the wash rides the
-	   editor's own DOM rather than a parallel render. Removed reads as destructive,
-	   added as the live teal — the same two accents the rest of the product uses.
-	   The wash alone carries it: an accent bar down every changed block turns a
-	   quiet document into a striped one. */
-	/* The wash bleeds to the pane's own gutter so a changed block reads as a full-width
-	   band rather than a floating rectangle. A pane with no gutter sets the bleed to
-	   zero — pulled outward inside a scrollport, the wash is simply clipped away and the
-	   change goes unmarked. */
-	.note-diff-pane .tiptap .diff-block {
-		margin-inline: calc(var(--note-diff-bleed, 1rem) * -1);
-		padding-inline: var(--note-diff-bleed, 1rem);
-		border-radius: 0.25rem;
-	}
-	.note-diff-pane .tiptap .diff-removed {
-		background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
-		text-decoration: line-through;
-		text-decoration-thickness: 1px;
-	}
-	.note-diff-pane .tiptap .diff-added {
-		background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
-	}
-	.dark .note-diff-pane .tiptap .diff-removed {
-		background-color: color-mix(in oklab, var(--color-destructive) 12%, transparent);
-	}
-	.dark .note-diff-pane .tiptap .diff-added {
-		background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
-	}
+/* Read-only note comparison — unlayered, like the shimmer above: node views carry their own
+   `bg-*` and `p-*` utilities (code blocks, callouts), and a layered wash lost to them, so a
+   changed code block showed no change at all.
+
+   Changed blocks are painted through a ProseMirror
+   decoration that adds `diff-block` plus a side class, so the wash rides the
+   editor's own DOM rather than a parallel render. Removed reads as destructive,
+   added as the live teal — the same two accents the rest of the product uses.
+   The wash alone carries it: an accent bar down every changed block turns a
+   quiet document into a striped one. */
+/* The wash bleeds to the pane's own gutter so a changed block reads as a full-width
+   band rather than a floating rectangle. A pane with no gutter sets the bleed to
+   zero — pulled outward inside a scrollport, the wash is simply clipped away and the
+   change goes unmarked. */
+/* An overlay block keeps its own geometry: a node view sized to its column overflows it
+   once pulled outward. */
+.note-diff-pane .tiptap .diff-block:not(.diff-overlay) {
+	margin-inline: calc(var(--note-diff-bleed, 1rem) * -1);
+	padding-inline: var(--note-diff-bleed, 1rem);
+	border-radius: 0.25rem;
+}
+.note-diff-pane .tiptap .diff-removed {
+	background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
+	text-decoration: line-through;
+	text-decoration-thickness: 1px;
+}
+.note-diff-pane .tiptap .diff-added {
+	background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+}
+.dark .note-diff-pane .tiptap .diff-removed {
+	background-color: color-mix(in oklab, var(--color-destructive) 12%, transparent);
+}
+.dark .note-diff-pane .tiptap .diff-added {
+	background-color: color-mix(in oklab, var(--color-brand) 15%, transparent);
+}
+/* A focused pane's fold: the line that stands in for unchanged blocks it left out.
+   No wash, because it is not content — it reads as a gap in the document, not a
+   change to it. */
+.note-diff-pane .tiptap .diff-elided {
+	margin-block: 0.25rem;
+	border-block: 1px dashed var(--color-border);
+	padding-block: 0.125rem;
+	color: var(--color-muted-foreground);
+	font-size: 0.75rem;
+	line-height: 1rem;
+	text-align: center;
+}
+
+/* A paragraph the editor inserts on load (beside a diagram, at the end) is not part of
+   either version, so the comparison does not show it. */
+.note-diff-pane .tiptap .diff-spacer {
+	display: none;
+}
+
+/* A block drawn by a node view — a diagram, a code block, a callout, a table — has its own
+   opaque fills under which a background wash disappears. It takes the tint as an overlay
+   on top instead, ringed in the side's colour so the edge reads at a glance. A ring, not a
+   bar: it outlines the block rather than striping one side of it. */
+.note-diff-pane .tiptap .diff-overlay {
+	position: relative;
+	background-color: transparent;
+	box-shadow: 0 0 0 1px var(--color-brand);
+}
+.note-diff-pane .tiptap .diff-overlay.diff-removed {
+	box-shadow: 0 0 0 1px var(--color-destructive);
+}
+.note-diff-pane .tiptap .diff-overlay::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+	background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+}
+.note-diff-pane .tiptap .diff-overlay.diff-removed::after {
+	background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
+}
+
+/* Changes inside an edited block mark the words that moved. Colour is never the only cue:
+   removed words are struck through, added words underlined, as the proofreading marks
+   pair a hue with a line. */
+.note-diff-pane .tiptap .diff-text {
+	border-radius: 0.125rem;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+.note-diff-pane .tiptap .diff-text-removed {
+	background-color: color-mix(in oklab, var(--color-destructive) 16%, transparent);
+	text-decoration-line: line-through;
+}
+.note-diff-pane .tiptap .diff-text-added {
+	background-color: color-mix(in oklab, var(--color-brand) 20%, transparent);
+	text-decoration-line: underline;
+}
+.dark .note-diff-pane .tiptap .diff-text-removed {
+	background-color: color-mix(in oklab, var(--color-destructive) 24%, transparent);
+}
+.dark .note-diff-pane .tiptap .diff-text-added {
+	background-color: color-mix(in oklab, var(--color-brand) 28%, transparent);
+}
+
+/* A table cell holding a change is tinted, so a wide table's change is found before it is
+   read. The tint replaces a header cell's own muted fill on purpose. */
+.note-diff-pane .tiptap .diff-cell-removed {
+	background-color: color-mix(in oklab, var(--color-destructive) 8%, transparent);
+}
+.note-diff-pane .tiptap .diff-cell-added {
+	background-color: color-mix(in oklab, var(--color-brand) 10%, transparent);
+}
+
+/* The source line diff under an edited diagram: code, so mono, and quiet until opened. */
+.note-diff-pane .note-diff-source-widget {
+	margin-block: 0.25rem 0.75rem;
+}
+.note-diff-pane .note-diff-source-lines {
+	margin: 0.25rem 0 0;
+	padding: 0.5rem 0;
+	overflow-x: auto;
+	background-color: transparent;
+	font-size: 0.75rem;
+	line-height: 1.125rem;
+}
+.note-diff-pane .note-diff-source-line {
+	display: block;
+	padding-inline: 0.5rem;
+	white-space: pre;
+}
+.note-diff-pane .note-diff-source-removed {
+	background-color: color-mix(in oklab, var(--color-destructive) 10%, transparent);
+	color: var(--color-destructive);
+}
+.note-diff-pane .note-diff-source-added {
+	background-color: color-mix(in oklab, var(--color-brand) 12%, transparent);
+	color: var(--color-brand);
 }
 
 /* An inline preview of a change, in a 384px column beside a conversation. The editor

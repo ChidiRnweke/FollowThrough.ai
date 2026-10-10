@@ -270,6 +270,7 @@
 				candidateLabel="Proposed change"
 				layout={compact ? 'stacked' : 'split'}
 				frame={compact ? 'bare' : 'box'}
+				focus={compact}
 				{compact}
 			/>
 			<p class="text-sm text-muted-foreground">

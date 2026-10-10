@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import type { DiffSideBlock } from '$lib/models/notes/note-diff';
+	import type { DiffTone, FocusedSideBlock, SourceLine } from '$lib/models/notes/note-diff';
+	import { paintDiff } from './note-diff-decorations';
+	import NoteDiffSource from './note-diff-source.svelte';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { createEditor } from '$lib/components/edra/commands/editor';
@@ -12,15 +14,17 @@
 	import { WidgetNodeView } from '$lib/components/widgets';
 	import TodoNodeView from '../todos/todo-node.svelte';
 	import { Plugin, PluginKey } from '@tiptap/pm/state';
-	import { Decoration, DecorationSet } from '@tiptap/pm/view';
+	import { DecorationSet } from '@tiptap/pm/view';
 	import { cn } from '$lib/utils';
-	import { untrack } from 'svelte';
+	import { mount, unmount, untrack } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import '../edra/editor.css';
 
 	let {
 		document,
 		kinds,
 		label,
+		tone,
 		sublabel,
 		showLabel = true,
 		compact = false,
@@ -31,8 +35,13 @@
 	}: {
 		document: ProseMirrorDocument;
 		/** Classification of each top-level block of `document`, in order. */
-		kinds: readonly DiffSideBlock[];
+		kinds: readonly FocusedSideBlock[];
 		label: string;
+		/**
+		 * Which side of the comparison this pane is. Its label carries the side's sign, so
+		 * the label and the washes beneath it say the same thing without leaning on colour.
+		 */
+		tone: DiffTone;
 		/** A quieter second line under the label, e.g. a date or provenance note. */
 		sublabel?: string;
 		/**
@@ -82,43 +91,54 @@
 		)
 	);
 
-	const diffKey = new PluginKey('note-diff-highlight');
+	const diffKey = new PluginKey<DecorationSet>('note-diff-highlight');
 
-	const createHighlightPlugin = (blocks: readonly DiffSideBlock[]) =>
-		new Plugin({
+	/** A plugin holding one computed set, mapped through any later transaction. */
+	const createHighlightPlugin = (initial: DecorationSet) =>
+		new Plugin<DecorationSet>({
 			key: diffKey,
+			state: {
+				init: () => initial,
+				apply: (transaction, set) => set.map(transaction.mapping, transaction.doc)
+			},
 			props: {
-				decorations(state) {
-					// `setContent` may normalise the document, so only paint when the
-					// block count matches the classification we were given; a mismatch
-					// degrades to no highlight rather than a mislabelled one.
-					//
-					// One normalisation is expected and must not cost the reader the whole
-					// diff: the schema keeps a trailing empty paragraph, so a faithfully
-					// classified document routinely renders with one block more than it was
-					// classified with. Left strict, that silently unpaints every change on a
-					// side whose last block is not a paragraph — and the wash is the only
-					// signal there is.
-					const trailing = state.doc.childCount - blocks.length;
-					const last = state.doc.lastChild;
-					const paddedByEmptyParagraph =
-						trailing === 1 && last?.type.name === 'paragraph' && last.content.size === 0;
-					if (trailing !== 0 && !paddedByEmptyParagraph) return null;
-					const decorations: Decoration[] = [];
-					state.doc.forEach((node, offset, index) => {
-						const kind = blocks[index]?.kind;
-						if (kind && kind !== 'context') {
-							decorations.push(
-								Decoration.node(offset, offset + node.nodeSize, {
-									class: `diff-block diff-${kind}`
-								})
-							);
-						}
-					});
-					return DecorationSet.create(state.doc, decorations);
-				}
+				decorations: (state) => diffKey.getState(state)
 			}
 		});
+
+	const mountedSources = new WeakMap<HTMLElement, () => void>();
+	/**
+	 * Whether each diagram's source disclosure is open, by widget key. ProseMirror may
+	 * rebuild a widget when the blocks around it redraw, and a disclosure the reader
+	 * opened must not snap shut under them.
+	 */
+	const openSources = new SvelteMap<string, boolean>();
+
+	const sourceWidget = (lines: readonly SourceLine[], key: string): HTMLElement => {
+		const element = globalThis.document.createElement('div');
+		element.className = 'note-diff-source-widget';
+		element.contentEditable = 'false';
+		const component = mount(NoteDiffSource, {
+			target: element,
+			props: {
+				lines,
+				open: openSources.get(key) ?? false,
+				onOpenChange: (open: boolean) => openSources.set(key, open)
+			}
+		});
+		mountedSources.set(element, () => void unmount(component));
+		return element;
+	};
+
+	const destroyWidget = (element: HTMLElement) => {
+		mountedSources.get(element)?.();
+		mountedSources.delete(element);
+	};
+
+	/** Bumped once the document is in the editor, so painting reads the rendered blocks. */
+	let rendered = $state(0);
+	/** The rendered document could not be matched to its classification. */
+	let unmarked = $state(false);
 
 	let rootEl: HTMLDivElement | undefined = $state();
 
@@ -132,23 +152,42 @@
 		editor.createNodeViews();
 	});
 
-	// Three separate effects, because `setContent` resets the pane's scroll: a
-	// reader mid-comparison must not be thrown back to the top because the other
-	// side's classification changed. Re-registering the plugin dispatches its own
-	// state update, so decorations still repaint without touching the document.
+	// Separate effects, because `setContent` resets the pane's scroll: a reader
+	// mid-comparison must not be thrown back to the top because the other side's
+	// classification changed. Re-registering the plugin dispatches its own state
+	// update, so decorations still repaint without touching the document.
 	$effect(() => {
 		if (editor) editor.perNote = perNote;
 	});
 
+	// Painting reads the rendered document, not the stored one: the editor inserts spacer
+	// paragraphs on load, and `paintDiff` maps them out before it marks anything.
 	$effect(() => {
-		if (!editor) return;
+		if (!editor || rendered === 0) return;
+		const paint = paintDiff({
+			doc: editor.state.doc,
+			stored: document.content ?? [],
+			kinds,
+			nodeViews: new Set(Object.keys(editor.extensionManager.nodeViews)),
+			sourceWidget,
+			destroyWidget
+		});
+		unmarked = paint.kind === 'failure';
 		editor.unregisterPlugin(diffKey);
-		editor.registerPlugin(createHighlightPlugin(kinds));
+		editor.registerPlugin(
+			createHighlightPlugin(
+				DecorationSet.create(
+					editor.state.doc,
+					paint.kind === 'painted' ? [...paint.decorations] : []
+				)
+			)
+		);
 	});
 
 	$effect(() => {
 		if (!editor) return;
 		editor.commands.setContent(toEditorContent(document));
+		rendered = untrack(() => rendered) + 1;
 	});
 </script>
 
@@ -159,16 +198,23 @@
 	{#if showLabel}
 		<header
 			class={cn(
-				'flex min-w-0 shrink-0 items-baseline justify-between gap-2 border-b border-border',
+				'flex min-w-0 shrink-0 items-baseline justify-between gap-2',
 				// A compact pane has no gutter, so neither does its header — otherwise the label
 				// sits inset from the content it heads. It also scrolls its own body, so the
 				// header sits above the scroller instead of sticking inside it: it has no fill to
 				// match an unknown surface, and a transparent sticky label let the text scrolling
-				// under it print straight through.
-				compact ? 'px-0 py-1' : 'sticky top-0 z-10 bg-background px-3 py-1.5'
+				// under it print straight through. Compact, the label binds to its content by a
+				// 4px gap and nothing else: a hairline under it drew the same line as the one
+				// between the two halves, and the halves ran together.
+				compact ? 'px-0 pb-1' : 'sticky top-0 z-10 border-b border-border bg-background px-3 py-1.5'
 			)}
 		>
-			<span class="truncate text-xs font-semibold">{label}</span>
+			<span class="truncate text-xs font-semibold">
+				<span aria-hidden="true" class={tone === 'removed' ? 'text-destructive' : 'text-brand'}
+					>{tone === 'removed' ? '−' : '+'}</span
+				>
+				{label}
+			</span>
 			{#if sublabel}
 				<span class="provenance-caption truncate">{sublabel}</span>
 			{/if}
@@ -180,6 +226,11 @@
 			compact ? 'prose-sm min-h-0 overflow-y-auto px-0 pt-0 pb-2' : 'px-4 pt-2 pb-4'
 		)}
 	>
+		{#if unmarked}
+			<p class="mt-0 mb-2 text-xs text-muted-foreground">
+				Changes could not be marked in this view.
+			</p>
+		{/if}
 		<div bind:this={rootEl} class="tiptap note-diff-content"></div>
 	</div>
 </div>

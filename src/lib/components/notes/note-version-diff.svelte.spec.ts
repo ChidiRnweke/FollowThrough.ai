@@ -41,7 +41,36 @@ const base = {
 };
 
 describe('NoteVersionDiff', () => {
-	it('shows a paired title change without marking the unchanged body', async () => {
+	it('folds unchanged stretches out of a focused comparison', async () => {
+		const before = Array.from({ length: 8 }, (_, index) => para(`unchanged ${index + 1}`));
+		const after = before.map((block, index) => (index === 4 ? para('the edit') : block));
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(...before),
+			candidate: doc(...after),
+			focus: true
+		});
+		const text = screen.container.textContent ?? '';
+		expect({
+			edit: text.includes('the edit'),
+			neighbour: text.includes('unchanged 4'),
+			distant: text.includes('unchanged 1'),
+			folds: screen.container.querySelectorAll('.diff-elided').length
+		}).toEqual({ edit: true, neighbour: true, distant: false, folds: 4 });
+	});
+
+	it('keeps every block of an unfocused comparison', async () => {
+		const before = Array.from({ length: 8 }, (_, index) => para(`unchanged ${index + 1}`));
+		const after = before.map((block, index) => (index === 4 ? para('the edit') : block));
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(...before),
+			candidate: doc(...after)
+		});
+		expect(screen.container.querySelectorAll('.diff-elided')).toHaveLength(0);
+	});
+
+	it('marks the changed word of a paired title without marking the unchanged body', async () => {
 		const unchanged = doc(para('Unchanged body'));
 		const screen = await render(NoteVersionDiff, {
 			...base,
@@ -50,21 +79,37 @@ describe('NoteVersionDiff', () => {
 			titles: { base: 'Old title', candidate: 'New title' }
 		});
 		expect(
-			Array.from(screen.container.querySelectorAll('.diff-block'), (block) => block.textContent)
-		).toEqual(['Old title', 'New title']);
+			Array.from(screen.container.querySelectorAll('.diff-text'), (mark) => mark.textContent)
+		).toEqual(['Old', 'New']);
 	});
 
-	it('adds the diff class only to blocks the model flagged', async () => {
+	it('marks only the words an edit added to a paragraph', async () => {
 		const screen = await render(NoteVersionDiff, base);
-		const blocks = Array.from(screen.container.querySelectorAll('.diff-block'));
-		expect(blocks).toHaveLength(2);
-		expect(await screen.getByText('1 added · 1 removed').all()).not.toHaveLength(0);
-		expect(screen.container.querySelectorAll('.diff-added')).toHaveLength(1);
-		expect(screen.container.querySelectorAll('.diff-removed')).toHaveLength(1);
-		expect(await screen.getByText('rewritten differently').all()).not.toHaveLength(0);
-		expect(await screen.getByText('The note now').all()).not.toHaveLength(0);
-		expect(await screen.getByText('Version 2').all()).not.toHaveLength(0);
-		expect(blocks.some((block) => block.textContent?.includes('kept'))).toBe(false);
+		expect({
+			added: Array.from(screen.container.querySelectorAll('.diff-text-added'), (mark) =>
+				mark.textContent?.trim()
+			),
+			removed: screen.container.querySelectorAll('.diff-text-removed').length,
+			blocks: screen.container.querySelectorAll('.diff-block').length,
+			summary: (await screen.getByText('1 added · 1 removed').all()).length
+		}).toEqual({ added: ['differently'], removed: 0, blocks: 0, summary: 1 });
+	});
+
+	it('washes a whole paragraph when a rewrite keeps none of its words', async () => {
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(para('kept'), para('gone entirely')),
+			candidate: doc(para('kept'), para('fresh text'))
+		});
+		expect(
+			Array.from(screen.container.querySelectorAll('.diff-block'), (block) => [
+				block.classList.contains('diff-removed') ? 'removed' : 'added',
+				block.textContent
+			])
+		).toEqual([
+			['removed', 'gone entirely'],
+			['added', 'fresh text']
+		]);
 	});
 
 	it('does not flag any block when the documents are identical', async () => {
@@ -119,4 +164,99 @@ describe('NoteVersionDiff', () => {
 			}).toEqual({ fontSize, lineHeight, fontWeight });
 		}
 	);
+});
+
+const mermaid = (source: string): ProseMirrorNode => ({
+	type: 'mermaid',
+	content: [{ type: 'text', text: source }]
+});
+const tableOf = (...rows: string[][]): ProseMirrorNode => ({
+	type: 'table',
+	content: rows.map((cells) => ({
+		type: 'tableRow',
+		content: cells.map((text) => ({ type: 'tableCell', content: [para(text)] }))
+	}))
+});
+const sectionHeading = (text: string): ProseMirrorHeadingNode => ({
+	type: 'heading',
+	attrs: { level: 2 },
+	content: [{ type: 'text', text }]
+});
+
+/**
+ * The editor inserts a spacer paragraph between a heading and a diagram. Painting by raw
+ * block index then gave up on the whole side, and an edit beneath a diagram showed no mark.
+ */
+describe('NoteVersionDiff marks changes the editor normalised around', () => {
+	it('still marks an edit in a note where a heading sits on a diagram', async () => {
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(sectionHeading('Flow'), mermaid('graph TD\n  A --> B'), para('Owner is Ada')),
+			candidate: doc(sectionHeading('Flow'), mermaid('graph TD\n  A --> B'), para('Owner is Grace'))
+		});
+		expect(
+			Array.from(screen.container.querySelectorAll('.diff-text'), (mark) => mark.textContent)
+		).toEqual(['Ada', 'Grace']);
+	});
+
+	it('hides the spacer paragraphs the editor inserts around a diagram', async () => {
+		const note = doc(sectionHeading('Flow'), mermaid('graph TD\n  A --> B'));
+		const screen = await render(NoteVersionDiff, { ...base, base: note, candidate: note });
+		const spacers = Array.from(screen.container.querySelectorAll('.diff-spacer'));
+		expect({
+			present: spacers.length > 0,
+			hidden: spacers.every((spacer) => getComputedStyle(spacer).display === 'none')
+		}).toEqual({ present: true, hidden: true });
+	});
+
+	it('marks only the table cell an edit changed', async () => {
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(tableOf(['Owner', 'Due'], ['Ada', 'Monday'])),
+			candidate: doc(tableOf(['Owner', 'Due'], ['Ada', 'Tuesday']))
+		});
+		expect(
+			Array.from(screen.container.querySelectorAll('.diff-cell'), (marked) => marked.textContent)
+		).toEqual(['Monday', 'Tuesday']);
+	});
+
+	it('offers the source line diff under an edited diagram', async () => {
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(mermaid('graph TD\n  A --> B')),
+			candidate: doc(mermaid('graph TD\n  A --> C'))
+		});
+		const trigger = screen.getByRole('button', { name: 'Source changes' });
+		await trigger.click();
+		await expect.element(trigger).toHaveAttribute('aria-expanded', 'true');
+		await expect.element(screen.getByText('A --> C', { exact: false })).toBeVisible();
+	});
+
+	it('overlays the mark on a code block, whose own fill hid a plain wash', async () => {
+		const code = (text: string): ProseMirrorNode => ({
+			type: 'codeBlock',
+			content: [{ type: 'text', text }]
+		});
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: doc(code('const one = 1;')),
+			candidate: doc(para('No code any more'))
+		});
+		expect(screen.container.querySelectorAll('.diff-removed.diff-overlay')).toHaveLength(1);
+	});
+
+	it('says so when a side could not be marked rather than showing it unmarked', async () => {
+		const unreadable = doc(para('kept'), {
+			type: 'paragraph',
+			content: [{ type: 'text', text: '' }]
+		});
+		const screen = await render(NoteVersionDiff, {
+			...base,
+			base: unreadable,
+			candidate: doc(para('kept'), para('fresh'))
+		});
+		await expect
+			.element(screen.getByText('Changes could not be marked in this view.'))
+			.toBeVisible();
+	});
 });
