@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import type { TodoId } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
@@ -15,7 +18,7 @@ const setup = async (suffix: string) => {
 	const sync = createSyncCapability({ db: database });
 	const projects = new ProjectRecords(database);
 	const notes = createNotesCapability({ db: database, projects });
-	const { catalog } = createTodosCapability({
+	const { services: catalog } = createTodosCapability({
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -24,14 +27,18 @@ const setup = async (suffix: string) => {
 	});
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
-			todoCreator: catalog,
-			todoReader: catalog,
-			todoEditor: catalog,
-			todoContextReader: catalog,
-			todoDeleter: catalog
+			todoCreator: catalog.creator,
+			todoReader: catalog.reader,
+			todoEditor: catalog.editor,
+			todoContextReader: catalog.context,
+			todoDeleter: catalog.deleter
 		})
 	);
 	return { ...seeded, controller, sync };

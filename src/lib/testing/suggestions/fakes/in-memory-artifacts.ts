@@ -2,7 +2,7 @@ import { InMemoryApplicationEffects } from './in-memory-application-effects';
 import type { ActorContext } from '$lib/models/identity';
 import type { Todo } from '$lib/models/todos';
 import { ExternalServiceError, OwnershipError } from '$lib/errors';
-import type { TodoCreator } from '$lib/server/services/todos/contracts';
+import type { TodoCreator } from '$lib/server/services/todos/catalog';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant

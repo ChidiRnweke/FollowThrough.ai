@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
@@ -77,6 +80,10 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = true;
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		boardExport: new TodoBoardExportService(),
+		todoPresentation: new TodoPresentationService(),
+		todoEditingRules: new TodoEditingRulesService(),
+		todoCreationRules: new TodoEditingRulesService(),
 		transactionRunner,
 		noteActionRequests: requests,
 		promiseExtractor: extractor,
@@ -88,7 +95,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		suggestionCreator: suggestions.creator,
 		suggestionAccepter: suggestions.accepter,
 		suggestionEffects: suggestions.effects,
-		todoCreator: todo.catalog,
+		todoCreator: todo.services.creator,
 		trustPolicyEvaluator: trust
 	});
 	const agent = new Agent(

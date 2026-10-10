@@ -1,12 +1,8 @@
 <script lang="ts">
 	import type { ProjectId } from '$lib/models/projects';
-	import type { TodoResponsibility, TodoView } from '$lib/models/todos';
-	import {
-		boardExportDate,
-		boardExportSlug,
-		boardMarkdown
-	} from '$lib/services/todos/board-export';
-	import { exportBoardPdf } from '$lib/remote/todos/todos.remote';
+	import type { TodoView } from '$lib/models/todos';
+	import { createTodoBoardExports } from '$lib/factories/todos/board-export';
+	import { onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 	import { buttonVariants } from '$lib/components/ui/button/button.svelte';
@@ -23,54 +19,15 @@
 		projectNames?: ReadonlyMap<ProjectId, string>;
 	} = $props();
 
-	let generatingPdf = $state(false);
-
-	function download(content: Blob, filename: string): void {
-		const url = URL.createObjectURL(content);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = filename;
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}
-
-	/* The Markdown export is the board exactly as seen — title search included — so it
-	   is built from the todos the workspace passes in. The PDF is generated server-side,
-	   where the title search cannot reach, so it reflects only the shareable URL filters. */
+	const exports = createTodoBoardExports();
+	const generatingPdf = $derived(exports.generatingPdf);
+	onDestroy(() => exports.close());
 	function exportMarkdown(): void {
-		const generatedAt = new Date();
-		const markdown = boardMarkdown(todos, {
-			title: 'Todos',
-			generatedAt,
-			...(projectNames ? { projectNames } : {})
-		});
-		const filename = `kanban-${boardExportSlug(projectId ? 'project' : 'all')}-${boardExportDate(generatedAt)}.md`;
-		download(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), filename);
+		exports.markdown(todos, projectId, projectNames);
 	}
-
 	async function exportPdf(): Promise<void> {
-		generatingPdf = true;
-		try {
-			const responsibility = page.url.searchParams.get(
-				'responsibility'
-			) as TodoResponsibility | null;
-			const category = page.url.searchParams.get('category');
-			const filterProjectId = projectId ?? page.url.searchParams.get('projectId');
-			const result = await exportBoardPdf({
-				...(filterProjectId ? { projectId: filterProjectId } : {}),
-				...(responsibility === 'mine' || responsibility === 'waiting_on' ? { responsibility } : {}),
-				...(category ? { category } : {})
-			});
-			const bytes = Uint8Array.from(atob(result.data), (char) => char.charCodeAt(0));
-			download(new Blob([bytes], { type: 'application/pdf' }), result.filename);
-			// audit-allow: silent-catch — PDF generation failure is reported and no download is claimed.
-		} catch {
-			toast.error('Could not generate the PDF. Try again.');
-		} finally {
-			generatingPdf = false;
-		}
+		const result = await exports.pdf(page.url, projectId);
+		if (result.kind === 'failure') toast.error(result.message);
 	}
 </script>
 

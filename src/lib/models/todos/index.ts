@@ -253,3 +253,21 @@ export interface TodoContext {
 	readonly linked: NoteRef | null;
 	readonly provenance: Provenance | null;
 }
+
+export interface PreparedBoardExport {
+	readonly markdown: string;
+	readonly filename: string;
+}
+export type BoardDownloadOutcome =
+	| { readonly kind: 'superseded' }
+	| { readonly kind: 'downloaded' }
+	| { readonly kind: 'failure'; readonly message: string };
+export const todoBoardFilterSchema = z.object({
+	projectId: z
+		.string()
+		.uuid()
+		.transform((value) => value as ProjectId)
+		.optional(),
+	responsibility: z.enum(['mine', 'waiting_on']).optional(),
+	category: z.string().trim().optional()
+});

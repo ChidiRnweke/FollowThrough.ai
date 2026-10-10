@@ -1,3 +1,4 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
@@ -27,6 +28,7 @@ const setup = () => {
 	);
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionExpirer: proposals,
 			suggestionLister: proposals,

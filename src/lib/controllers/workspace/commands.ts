@@ -1,8 +1,7 @@
 import type { NoteCreationRules, NoteTrashRules } from '$lib/services/notes/lifecycle';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
-import { decideTodoCreation } from '$lib/services/todos/creation';
-import { applyTodoEdit } from '$lib/services/todos/edits';
+import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
 import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
@@ -34,12 +33,13 @@ import type {
 	WorkspaceCommandContext
 } from '$lib/models/workspace-mutations';
 const todoWrite = (
+	rules: TodoEditingRules,
 	todo: Todo,
 	patch: Omit<UpdateTodoInput, 'todoId'>,
 	timestamp: Todo['updatedAt']
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
 	command: { kind: 'updateTodo', todoId: todo.id, ...patch },
-	local: { type: 'todos', value: applyTodoEdit(todo, patch, timestamp) },
+	local: { type: 'todos', value: rules.edit(todo, patch, timestamp) },
 	coalesce: null,
 	references: patch.linkedNoteId
 		? [workspaceResourceKey({ type: 'notes', id: [patch.linkedNoteId] })]
@@ -243,6 +243,8 @@ export interface WorkspaceCommandController {
 /** Resolve required inventory and prepare the complete optimistic command from observed facts. */
 export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
+		private readonly todoCreation: TodoCreationRules,
+		private readonly todoEditing: TodoEditingRules,
 		private readonly widgetEditing: WidgetEditingController,
 		private readonly widgetLifecycle: IWidgetLifecycleService,
 		private readonly memoryEditing: IMemoryEditingService,
@@ -407,7 +409,11 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 					now
 				);
 			case 'createTodo': {
-				const decision = decideTodoCreation(command, { id: command.id, userId, timestamp: now });
+				const decision = this.todoCreation.create(command, {
+					id: command.id,
+					userId,
+					timestamp: now
+				});
 				if (decision.kind === 'invalid') throw new Error(decision.message);
 				return content({ type: 'todos', value: decision.todo }, [projectKey(command.projectId)]);
 			}
@@ -415,7 +421,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				const { kind, todoId, ...patch } = command;
 				void kind;
 				void todoId;
-				return todoWrite(value('todos'), patch, now);
+				return todoWrite(this.todoEditing, value('todos'), patch, now);
 			}
 			case 'createMemory':
 				return content(

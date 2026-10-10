@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
@@ -19,6 +20,7 @@ it('counts pending proposals after expiry when assembling Today', async () => {
 	const tasks = new InMemoryTodos();
 	const controller = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			suggestionExpirer: proposals,
 			suggestionLister: proposals,
@@ -39,6 +41,7 @@ it('reports expiry failure before returning shell attention', async () => {
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			...builtInSkillsFixture(),
 			suggestionExpirer: proposals

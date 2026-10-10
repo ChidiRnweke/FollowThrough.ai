@@ -1,8 +1,11 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { Todos, type TodosDependencies } from './controller';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
@@ -27,12 +30,16 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const provenance = new InMemoryProvenanceRepository();
 	projects.projects = [projectBuilder()];
-	const service = new TodoCatalog(todos, projects, anchors, notes, provenance);
+	const service = createTodoServices(todos, projects, anchors, notes, provenance);
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoCreator: service,
-			todoEditor: service,
-			todoContextReader: service,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: service.creator,
+			todoEditor: service.editor,
+			todoContextReader: service.context,
 			transactionRunner: new InMemoryTransactionRunner([todos])
 		})
 	);

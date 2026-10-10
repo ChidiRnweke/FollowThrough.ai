@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
 import { Workspace, type WorkspaceDependencies } from './controller';
@@ -64,6 +65,7 @@ describe('Today projection parity', () => {
 		);
 		const server = new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
+				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				todoLister: tasks,
 				waitingOnFinder: tasks,

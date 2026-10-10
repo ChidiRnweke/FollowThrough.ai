@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 import { prepareExport } from '$lib/services/deliverables/export-preparation';
@@ -30,6 +33,10 @@ const setup = () => {
 	};
 	const service = new Todos(
 		capabilityDependencies<TodosDependencies>({
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
 			todoLister: todos,
 			todoContextReader: todos,
 			projectLister: projects,

@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
@@ -44,6 +45,7 @@ export const assembleWorkspaceResources = (
 		new WorkspaceResourceStore(),
 		projection,
 		new WorkspaceViews(
+			new TodoPresentationService(),
 			projection,
 			new SuggestionPresentationService(),
 			new MemoryPresentationService(),

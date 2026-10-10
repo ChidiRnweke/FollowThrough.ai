@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
@@ -24,6 +25,7 @@ export async function saveNoteDraft(
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			todoPresentation: new TodoPresentationService(),
 			textSearch: new NoteTextSearchService(),
 			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),

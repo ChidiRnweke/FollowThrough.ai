@@ -3,7 +3,7 @@ import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-vi
 import type { Project } from '$lib/models/projects';
 import type { Note } from '$lib/models/notes';
 import type { WorkspaceViewState } from '$lib/models/workspace-views';
-import { assembleTodoView } from '$lib/services/todos/presentation';
+import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import type { NotePresentation } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
@@ -94,6 +94,7 @@ export interface WorkspaceViewsController {
 
 export class WorkspaceViews implements WorkspaceViewsController {
 	constructor(
+		private readonly todoPresentation: TodoPresentation,
 		private readonly state: WorkspaceViewState,
 		private readonly suggestionPresentation: ISuggestionPresentationService,
 		private readonly memoryPresentation: IMemoryPresentationService,
@@ -573,7 +574,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		const origin = anchor ? this.get('notes', anchor.noteId) : undefined;
 		const linked = todo.linkedNoteId ? this.get('notes', todo.linkedNoteId) : undefined;
 		const provenance = todo.provenanceId ? this.get('provenance', todo.provenanceId) : undefined;
-		return assembleTodoView(todo, {
+		return this.todoPresentation.view(todo, {
 			anchor: anchor ?? null,
 			origin: origin ?? null,
 			linked: linked ?? null,

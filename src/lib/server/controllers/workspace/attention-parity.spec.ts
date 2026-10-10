@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
@@ -73,6 +74,7 @@ it('shows the same profile and visible-project memory attention from server and 
 	);
 	const server = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			...builtInSkillsFixture(),
 			userReader: new UserDirectory(users),

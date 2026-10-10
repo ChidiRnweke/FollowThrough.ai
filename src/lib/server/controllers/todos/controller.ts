@@ -1,19 +1,17 @@
+import type { TodoPresentation } from '$lib/services/todos/presentation';
+import type { TodoEditingRules } from '$lib/services/todos/edits';
+import type { TodoCreationRules } from '$lib/services/todos/edits';
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import { promisesForResponsibility } from '$lib/server/services/todos/promise-discovery';
-import { hasTodoEdits } from '$lib/services/todos/edits';
-import { decideTodoCreation } from '$lib/services/todos/creation';
-import { applyTodoEdit } from '$lib/services/todos/edits';
-import { assembleTodoView } from '$lib/services/todos/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { TodoSuggestion } from '$lib/models/suggestions';
-import type { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
+import type { TodoBatchReceiptService } from '$lib/server/services/todos/batch-receipts';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
 import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { Project } from '$lib/models/projects';
 import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
-import { boardExportDate, boardExportSlug, boardMarkdown } from '$lib/services/todos/board-export';
+import type { TodoBoardExport } from '$lib/services/todos/board-export';
 import type { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import type { prepareExport } from '$lib/services/deliverables/export-preparation';
 import type {
@@ -42,7 +40,7 @@ import {
 } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
-import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
+import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
 import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
 import type { DateTime } from '$lib/models/workspace';
 import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
@@ -53,7 +51,7 @@ import type {
 	TodoLister,
 	TodoReader,
 	TodoContextReader
-} from '$lib/server/services/todos/contracts';
+} from '$lib/server/services/todos/catalog';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
 import type { SelectionGeneration } from '$lib/models/agent';
@@ -117,6 +115,10 @@ export interface TodosController {
 	recoverQueuedPromiseRuns(): Promise<number>;
 }
 export interface TodosDependencies {
+	readonly boardExport: TodoBoardExport;
+	readonly todoPresentation: TodoPresentation;
+	readonly todoEditingRules: TodoEditingRules;
+	readonly todoCreationRules: TodoCreationRules;
 	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
 	syncRetry: 'database-only' | 'never';
 	todoLister: TodoLister;
@@ -129,7 +131,7 @@ export interface TodosDependencies {
 	suggestionCreator: SuggestionCreator;
 	trustPolicyEvaluator: TrustPolicyEvaluator;
 	todoCreator: TodoCreator;
-	todoBatchReceipts: Pick<TodoBatchReceipts, 'findForUpdate' | 'save'>;
+	todoBatchReceipts: TodoBatchReceiptService;
 	suggestionAccepter: SuggestionAccepter;
 	suggestionEffects: SuggestionEffectService;
 	transactionRunner: TransactionRunner;
@@ -194,13 +196,17 @@ export class Todos implements TodosController {
 	async get(actor: ActorContext, input: GetTodoViewInput): Promise<TodoView> {
 		const todo = await this.dependencies.todoReader.get(actor, input.todoId);
 		const context = await this.dependencies.todoContextReader.readContext(actor, todo);
-		const view = assembleTodoView(todo, context);
+		const view = this.dependencies.todoPresentation.view(todo, context);
 		return view;
 	}
 	async list(actor: ActorContext, filter: TodoListFilter): Promise<ListTodosOutput> {
 		const todos = await this.dependencies.todoLister.list(actor, filter);
 		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
-		return { todos: contexts.map((context) => assembleTodoView(context.todo, context)) };
+		return {
+			todos: contexts.map((context) =>
+				this.dependencies.todoPresentation.view(context.todo, context)
+			)
+		};
 	}
 	async count(actor: ActorContext, filter: TodoListFilter): Promise<number> {
 		return this.dependencies.todoLister.count(actor, filter);
@@ -218,12 +224,18 @@ export class Todos implements TodosController {
 		if (filter.projectId && projectName === undefined)
 			throw new NotFoundError('Todo project was not found');
 		const contexts = await this.dependencies.todoContextReader.readContexts(actor, todos);
-		const views = contexts.map((context) => assembleTodoView(context.todo, context));
+		const views = contexts.map((context) =>
+			this.dependencies.todoPresentation.view(context.todo, context)
+		);
 		const generatedAt = new Date();
 		const title = projectName !== undefined ? `${projectName} todos` : 'Todos';
-		const { document } = this.dependencies.markdownToContent(
-			boardMarkdown(views, { title, generatedAt, projectNames })
+		const board = this.dependencies.boardExport.prepare(
+			views,
+			{ title, generatedAt, projectNames },
+			projectName ?? 'all',
+			'pdf'
 		);
+		const { document } = this.dependencies.markdownToContent(board.markdown);
 		const prepared = this.dependencies.exportPreparer({
 			title,
 			notes: [{ title, document }],
@@ -232,11 +244,11 @@ export class Todos implements TodosController {
 		const pdf = await this.dependencies.pdfGenerator(prepared);
 		return {
 			data: pdf.toString('base64'),
-			filename: `kanban-${boardExportSlug(projectName ?? 'all')}-${boardExportDate(generatedAt)}.pdf`
+			filename: board.filename
 		};
 	}
 	async create(actor: ActorContext, input: CreateTodoInput): Promise<{ todo: Todo }> {
-		const decision = decideTodoCreation(input, {
+		const decision = this.dependencies.todoCreationRules.create(input, {
 			id: input.id ?? (crypto.randomUUID() as TodoId),
 			userId: actor.userId,
 			timestamp: this.clock()
@@ -245,7 +257,7 @@ export class Todos implements TodosController {
 		return { todo: await this.dependencies.todoCreator.create(actor, decision.todo) };
 	}
 	async update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput> {
-		if (!hasTodoEdits(input)) {
+		if (!this.dependencies.todoEditingRules.hasEdits(input)) {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
 		return this.dependencies.transactionRunner.run(async () => {
@@ -257,10 +269,10 @@ export class Todos implements TodosController {
 					current.projectId
 				);
 			}
-			const edited = applyTodoEdit(current, input, this.clock());
+			const edited = this.dependencies.todoEditingRules.edit(current, input, this.clock());
 			const todo = await this.dependencies.todoEditor.update(actor, edited);
 			const context = await this.dependencies.todoContextReader.readContext(actor, todo);
-			return { todo, view: assembleTodoView(todo, context) };
+			return { todo, view: this.dependencies.todoPresentation.view(todo, context) };
 		});
 	}
 	createBatch(actor: ActorContext, input: CreateTodoBatchInput): Promise<CreateTodoBatchOutput> {
@@ -453,7 +465,7 @@ export class Todos implements TodosController {
 		const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
 		const { anchor } = source;
 		const candidates = input.responsibility
-			? promisesForResponsibility(extracted, input.responsibility)
+			? this.dependencies.promiseRules.select(extracted, input.responsibility)
 			: extracted;
 		const origin = await this.dependencies.selectionOrigins.record(actor, source, {
 			producerKind: 'pipeline',

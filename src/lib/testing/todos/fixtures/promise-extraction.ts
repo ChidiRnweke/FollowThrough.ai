@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
@@ -52,6 +55,10 @@ export const promiseExtractionFixture = () => {
 	const settlements = new RunSettlements(runs, runs);
 	const requests = new NoteActionRequests(runs, runs, conversations);
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		boardExport: new TodoBoardExportService(),
+		todoPresentation: new TodoPresentationService(),
+		todoEditingRules: new TodoEditingRulesService(),
+		todoCreationRules: new TodoEditingRulesService(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 		promiseExtractor: extractor,
 		promiseRules: new DeterministicPromiseExtractor(),

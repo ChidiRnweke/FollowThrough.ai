@@ -6,7 +6,8 @@ import { syncEtag } from '$lib/models/sync';
 import type { WriteOutcome } from '$lib/models/outbox';
 import type { DateTime } from '$lib/models/workspace';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';
-import { applyTodoEdit } from '$lib/services/todos/edits';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+const todoEditing = new TodoEditingRulesService();
 import { InMemorySyncTransport } from './in-memory-sync';
 
 /** Version-guarded todo edits, answering each request after the event loop turns like a network. */
@@ -37,7 +38,10 @@ export class InMemoryTodoWrites
 		if (current.value.type !== 'todos') throw new Error('Invalid todo fixture');
 		const snapshot = {
 			etag: syncEtag(BigInt(current.etag.slice(8)) + 1n),
-			value: { type: 'todos' as const, value: applyTodoEdit(current.value.value, patch, this.now) }
+			value: {
+				type: 'todos' as const,
+				value: todoEditing.edit(current.value.value, patch, this.now)
+			}
 		};
 		this.records.set(key, snapshot);
 		return {

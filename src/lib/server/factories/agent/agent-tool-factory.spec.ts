@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
@@ -912,6 +915,10 @@ describe('Agent tool coverage invariants', () => {
 		const receipts = new InMemoryTodoBatchReceipts();
 		const controller = new Todos(
 			capabilityDependencies<TodosDependencies>({
+				boardExport: new TodoBoardExportService(),
+				todoPresentation: new TodoPresentationService(),
+				todoEditingRules: new TodoEditingRulesService(),
+				todoCreationRules: new TodoEditingRulesService(),
 				todoCreator: todos,
 				todoBatchReceipts: new TodoBatchReceipts(receipts),
 				transactionRunner: new InMemoryTransactionRunner([todos, receipts])

@@ -7,11 +7,11 @@ import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
 import type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
+import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
 import type {
-	PromiseExtractor,
 	StructuredPromiseClient,
 	StructuredPromiseResult
-} from '$lib/server/services/todos/promise-extraction/contracts';
+} from '$lib/server/repositories/todos/classification';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { ReferenceFinder } from '$lib/server/services/references/discovery';
 import type { WebReferenceClient } from '$lib/server/repositories/references/web-research';

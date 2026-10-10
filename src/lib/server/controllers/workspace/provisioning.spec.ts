@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import { Workspace, type WorkspaceDependencies } from './controller';
@@ -18,6 +19,7 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 	const suggestions = new InMemorySuggestionReader();
 	const workspace = new Workspace(
 		capabilityDependencies<WorkspaceDependencies>({
+			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			...state,
 			userReader: new UserDirectory(users),

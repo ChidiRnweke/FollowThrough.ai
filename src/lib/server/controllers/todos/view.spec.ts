@@ -1,7 +1,10 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
@@ -29,7 +32,7 @@ it('clearing a linked note restores the extraction origin in the returned task v
 	tasks.todos = [task];
 	notes.notes = [origin, linked];
 	anchors.anchors = [anchor];
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
 		tasks,
 		new InMemoryProjectRepository(),
 		anchors,
@@ -38,8 +41,12 @@ it('clearing a linked note restores the extraction origin in the returned task v
 	);
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoEditor: catalog,
-			todoContextReader: catalog,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoEditor: catalog.editor,
+			todoContextReader: catalog.context,
 			transactionRunner: new InMemoryTransactionRunner([tasks])
 		})
 	);

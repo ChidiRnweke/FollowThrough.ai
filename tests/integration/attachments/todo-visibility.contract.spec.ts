@@ -5,7 +5,7 @@ import {
 	type AttachmentsDependencies
 } from '$lib/server/controllers/attachments/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -32,7 +32,7 @@ const setup = async (identity: number) => {
 			projectId: seeded.project.id
 		})
 	);
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
 		records,
 		new ProjectRecords(database),
 		new SourceAnchorRecords(database),
@@ -52,7 +52,7 @@ const setup = async (identity: number) => {
 			uploads: attachments,
 			reader: attachments,
 			lifecycle: attachments,
-			todoReader: catalog,
+			todoReader: catalog.reader,
 			transactionRunner
 		})
 	);

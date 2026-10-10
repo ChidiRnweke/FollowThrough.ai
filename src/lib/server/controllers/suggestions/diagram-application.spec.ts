@@ -1,3 +1,4 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import { describe, expect, it } from 'vitest';
@@ -44,6 +45,7 @@ const setup = (source = VALID_DRAWIO_XML) => {
 	suggestions.suggestions = [suggestion];
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,

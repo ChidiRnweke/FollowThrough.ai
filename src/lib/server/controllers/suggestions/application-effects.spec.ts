@@ -1,3 +1,4 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
@@ -58,6 +59,7 @@ describe('Proposal effect coordination', () => {
 		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionAccepter: suggestions,
@@ -120,6 +122,7 @@ describe('Proposal effect coordination', () => {
 		await indexer.index(testActor(), replacement);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionReverter: suggestions,

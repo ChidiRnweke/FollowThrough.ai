@@ -1,7 +1,7 @@
+import type { TodoCreationRules } from '$lib/services/todos/edits';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import { searchableDrawioText } from '$lib/services/diagrams/labels';
-import { decideTodoCreation } from '$lib/services/todos/creation';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
@@ -15,7 +15,7 @@ import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
-import type { TodoCreator } from '$lib/server/services/todos/contracts';
+import type { TodoCreator } from '$lib/server/services/todos/catalog';
 import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
 import type { ReferenceCreator } from '$lib/server/services/references/library';
 import type { MemoryChanges } from '$lib/server/services/memory/library';
@@ -117,6 +117,7 @@ export interface SuggestionsController {
 }
 /** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
+	readonly todoCreationRules: TodoCreationRules;
 	readonly suggestionPresentation: ISuggestionPresentationService;
 	suggestionLister: SuggestionLister;
 	suggestionExpirer: SuggestionExpirer;
@@ -279,7 +280,7 @@ export class Suggestions implements SuggestionsController {
 		});
 	}
 	private async createTodo(actor: ActorContext, input: CreateTodoInput): Promise<Todo> {
-		const decision = decideTodoCreation(input, {
+		const decision = this.dependencies.todoCreationRules.create(input, {
 			id: input.id ?? (crypto.randomUUID() as TodoId),
 			userId: actor.userId,
 			timestamp: this.dependencies.now()

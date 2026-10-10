@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
@@ -49,6 +50,7 @@ const setup = () => {
 		skills: new Skills(capabilityDependencies<SkillsDependencies>(dependencies)),
 		workspace: new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
+				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,
 				syncChanges: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)

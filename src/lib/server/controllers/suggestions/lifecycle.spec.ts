@@ -1,3 +1,4 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
 import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
@@ -43,6 +44,7 @@ describe('Pending memory review invariants', () => {
 		);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionLister: reader,
 				suggestionExpirer: reader,
@@ -81,6 +83,7 @@ describe('Pending memory review invariants', () => {
 		);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionLister: reader,
 				suggestionExpirer: reader,
@@ -98,6 +101,7 @@ const setup = () => {
 	const transactionRunner = new InMemoryTransactionRunner([suggestions, artifacts]);
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,

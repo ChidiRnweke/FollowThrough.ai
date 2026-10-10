@@ -173,7 +173,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const provenanceRepository = noteCapability.provenanceRepository;
 	const notes = noteCapability.services;
 	const provenance = noteCapability.provenance;
-	const todos = todoCapability.catalog;
+	const todos = todoCapability.services;
 	const knowledgeSearch = createKnowledgeSearchCapability({
 		db,
 		transactionRunner,
@@ -302,19 +302,23 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
+			boardExport: todoCapability.boardExport,
+			todoPresentation: todoCapability.presentation,
+			todoEditingRules: todoCapability.editingRules,
+			todoCreationRules: todoCapability.creationRules,
 			todoBatchReceipts: todoCapability.batchReceipts,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			todoLister: todos,
-			todoContextReader: todos,
-			todoReader: todos,
-			todoEditor: todos,
-			todoDeleter: todos,
+			todoLister: todos.lister,
+			todoContextReader: todos.context,
+			todoReader: todos.reader,
+			todoEditor: todos.editor,
+			todoDeleter: todos.deleter,
 			selectionOrigins: noteCapability.selectionOrigins,
 			promiseExtractor: todoCapability.promiseExtractor,
 			suggestionCreator: suggestions.creator,
 			trustPolicyEvaluator: trust,
-			todoCreator: todos,
+			todoCreator: todos.creator,
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
@@ -397,6 +401,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			now: diagramCapability.now
 		},
 		suggestions: {
+			todoCreationRules: todoCapability.creationRules,
 			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
@@ -406,7 +411,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionFinder: suggestions.finder,
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
-			todoCreator: todos,
+			todoCreator: todos.creator,
 			relationshipCreator: relationships.creator,
 			referenceCreator: references.creator,
 			memoryChanges: memory.changes,
@@ -489,7 +494,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			reader: attachmentCapability.reader,
 			downloads: attachmentCapability.downloads,
 			lifecycle: attachmentCapability.lifecycle,
-			todoReader: todos,
+			todoReader: todos.reader,
 			transactionRunner,
 			attachmentIndexer: knowledgeSearch.attachmentIndexer
 		},
@@ -510,7 +515,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			exportDiagramReferences: deliverables.exportDiagramReferences,
 			exportWidgetReferences: deliverables.exportWidgetReferences,
 			widgetReader: widgets.reader,
-			todoLister: todos,
+			todoLister: todos.lister,
 			noteLister: notes.treeReader,
 			diagramReader: diagrams,
 			diagramRenderer: deliverables.diagramRenderer,
@@ -551,6 +556,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
+			todoPresentation: todoCapability.presentation,
 			memoryPresentation: memory.presentation,
 			syncChanges: synchronization.changes,
 			writeRecovery: synchronization.mutations,
@@ -563,11 +569,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner,
 			suggestionLister: suggestions.lister,
 			suggestionExpirer: suggestions.expirer,
-			todoLister: todos,
-			waitingOnFinder: todos,
-			todoContextReader: todos
+			todoLister: todos.lister,
+			waitingOnFinder: todos.waitingOn,
+			todoContextReader: todos.context
 		},
 		notes: {
+			todoPresentation: todoCapability.presentation,
 			textSearch: noteCapability.textSearch,
 			sections: noteCapability.sections,
 			noteReferences: noteCapability.references,
@@ -595,8 +602,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceLister: references.lister,
 			referenceContextReader: references.contexts,
 			diagramLister: diagrams,
-			todoLister: todos,
-			todoContextReader: todos,
+			todoLister: todos.lister,
+			todoContextReader: todos.context,
 			suggestionLister: suggestions.lister,
 			suggestionExpirer: suggestions.expirer,
 			suggestionContextReader: suggestions.context,

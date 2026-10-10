@@ -1,3 +1,4 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
@@ -19,6 +20,7 @@ it('returns the same memory review view from server and downloaded records', asy
 	reader.contexts = [context];
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionLister: reader,
 			suggestionExpirer: reader,

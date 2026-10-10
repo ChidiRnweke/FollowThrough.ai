@@ -4,7 +4,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { TodoReader } from '$lib/server/services/todos/contracts';
+import type { TodoReader } from '$lib/server/services/todos/catalog';
 import type {
 	AttachmentUploads,
 	AttachmentReader,

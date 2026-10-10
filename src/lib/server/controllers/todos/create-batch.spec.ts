@@ -1,6 +1,9 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
@@ -24,7 +27,7 @@ const setup = () => {
 	const receipts = new InMemoryTodoBatchReceipts();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
 		records,
 		projects,
 		new InMemoryAnchorRepository(),
@@ -33,7 +36,11 @@ const setup = () => {
 	);
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoCreator: catalog,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: catalog.creator,
 			todoBatchReceipts: new TodoBatchReceipts(receipts),
 			transactionRunner: new InMemoryTransactionRunner([records, receipts])
 		})

@@ -1,7 +1,10 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -14,7 +17,7 @@ const archivedLink = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const records = new TodoRecords(database);
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
 		records,
 		new ProjectRecords(database),
 		new SourceAnchorRecords(database),
@@ -23,9 +26,13 @@ const archivedLink = async (suffix: string) => {
 	);
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoCreator: catalog,
-			todoEditor: catalog,
-			todoContextReader: catalog,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: catalog.creator,
+			todoEditor: catalog.editor,
+			todoContextReader: catalog.context,
 			transactionRunner
 		})
 	);

@@ -1,3 +1,4 @@
+import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
@@ -10,6 +11,7 @@ export const createWorkspaceViews = (
 	records: ReadonlyMap<string, WorkspaceRecord>
 ): WorkspaceViewsController =>
 	new WorkspaceViews(
+		new TodoPresentationService(),
 		new WorkspaceProjectionStore(records),
 		new SuggestionPresentationService(),
 		new MemoryPresentationService(),

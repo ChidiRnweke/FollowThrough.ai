@@ -1,3 +1,4 @@
+import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type {
 	NoteCreationRules,
@@ -12,7 +13,6 @@ import type {
 	NoteDeletion
 } from '$lib/server/services/notes/catalog';
 import type { DateTime } from '$lib/models/workspace';
-import { assembleTodoView } from '$lib/services/todos/presentation';
 import type { NotePresentation } from '$lib/services/notes/presentation';
 import { noteEtag } from '$lib/models/notes';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
@@ -128,7 +128,7 @@ import type {
 	SuggestionExpirer,
 	SuggestionContextReader
 } from '$lib/server/services/suggestions/inbox';
-import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/contracts';
+import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/catalog';
 import type {
 	NoteAttachmentRestorer,
 	NoteEditor,
@@ -326,6 +326,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly todoPresentation: TodoPresentation;
 	readonly textSearch: NoteTextSearch;
 	readonly noteReferences: NoteReferences;
 	readonly sections: NoteSectionNumbering;
@@ -605,7 +606,9 @@ export class Notes implements NotesController {
 				assembleReferenceView(reference, { anchor })
 			),
 			diagrams,
-			todos: todoContexts.map((context) => assembleTodoView(context.todo, context)),
+			todos: todoContexts.map((context) =>
+				this.dependencies.todoPresentation.view(context.todo, context)
+			),
 			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>
 				this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
 					note,
