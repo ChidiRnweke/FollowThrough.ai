@@ -1,3 +1,4 @@
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import type { WebResearchOptions, ToolActivityProjection } from '$lib/models/agent';
 import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { normalizeLanguageModelId } from '$lib/models/agent';
@@ -188,7 +189,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const runEvents = new AgentRunEventRecords(input.db);
 	const settlements = new RunSettlements(runs, runEvents);
 	const runDecisions = new AgentRunDecisionRecords(input.db);
-	const sessions = new AgentSessionRecords(input.db);
+	const sessions = new AgentSessionRecords(input.db, createSessionItemSerialization());
 	const eventBus = new AgentEventStore();
 	const context = createAgentContext(tokens);
 	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(input.db));

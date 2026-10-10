@@ -1,3 +1,4 @@
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
@@ -39,7 +40,7 @@ const setup = async (suffix: string) => {
 	});
 	const runs = new AgentRunRecords(transaction.database);
 	const events = new AgentRunEventRecords(transaction.database);
-	const sessions = new AgentSessionRecords(transaction.database);
+	const sessions = new AgentSessionRecords(transaction.database, createSessionItemSerialization());
 	const decisions = new AgentRunDecisionRecords(transaction.database);
 	const provenance = await seedProvenance(owner, suffix);
 	const run = await runs.insert(owner, {

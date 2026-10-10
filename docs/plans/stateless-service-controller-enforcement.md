@@ -206,7 +206,8 @@ findings and 53 Chisel imports. The JSON now contains every diagnostic for this 
 ### Corrected dependencies
 
 - Conversation snapshots coordinate replay preparation, JSON reading and virtualization directly.
-  The SDK session adapter owns serialization; its factory no longer executes a repository mapper.
+  The SDK session adapter invokes serialization; its factory no longer executes a repository mapper.
+  The mapper itself remained repository-owned until the conversation SDK boundary continuation below.
 - Agent execution and diagram generation coordinate stream readers, stateless correlation rules
   and fresh stream state. Tool identity, event order, reasoning deduplication and checkpoint order
   remain under the owning operation.
@@ -783,3 +784,75 @@ not a suppression input. The overall application migration is incomplete.
 
 Browser migrations, journal redesign, agent-file changes, indexing, telemetry restructuring and
 the diagram SDK mismatch remain outside this slice. Do not mark the overall refactor complete.
+
+## Conversation SDK boundary — 2026-10-11
+
+This slice stacks on draft PR #370 at `85def21d534c7278283d0e3d8e6f6f1a999a6acc`.
+Application revision: `f7638e1b` (full SHA in the complete JSON inventory). The analyzers are unchanged.
+Before implementation, the baseline reproduced all 362 semantic findings with provenance and all
+47 expanded Chisel messages and locations exactly.
+
+### Corrected ownership
+
+Session-item serialization restores the provider wire format for both SDK replay and database
+writes. It now has a model-owned SessionItemSerialization contract and a stateless protocol
+adapter. Its exhaustive conversion switch is unchanged. A dedicated factory returns the interface;
+conversation and agent capability factories inject it into the SDK adapter and PostgreSQL repository.
+The repository helper is removed. Production consumers do not construct a hidden implementation.
+
+The SDK adapter no longer imports the repository module. ConversationSessionController stays
+beside its controller implementation; the adapter imports that operation interface directly.
+The serialization and JSON-reader boundary contracts live in models. The SDK-specific
+BufferedConversationSession interface stays with the adapter. Parsing remains in SDK addItems, existing JSON readers and database mappers.
+ConversationSessions keeps operations and replay sequencing, services keep history/virtualization
+rules, and the session store keeps its buffers and cached presentation. No service composition,
+controller chain, workflow move, suppression or new limit was added.
+
+All consumers were updated, including PostgreSQL append/replace, contract constructors, in-memory
+snapshot/reparse rollback, model writer tests and replay fixtures. The fake retains its existing
+no-argument fixture API and uses factory-created serialization. Writer tests now live with the
+protocol adapter. Provider metadata, omitted optionals, normalized call IDs and unrecognised raw
+payloads are preserved. The captured provider corpus round-trips unchanged.
+
+Session regressions cover SDK add/get/pop/clear, cache invalidation, existing limit semantics,
+buffer-only writes and snapshot isolation from persistence. Existing replay tests retain image
+handling, diagram elision and failed-call source preservation. New PostgreSQL contracts verify exact
+replacement wire payloads and ordered tails after replacement/append. Authorization, cancellation,
+transactions, public operations, tool contracts and tracing remain with their existing owners.
+
+### Complete inventory and diagnostic identities
+
+Semantic findings remain **362**: 277 controller-orchestration, 55 store-workflow, 12 factory-workflow,
+eight public-service-helper, nine indirect-dependency and one concrete-dependency. Every semantic
+finding matches the base exactly, including locations and provenance.
+
+Chisel prohibited imports fall from **47 to 46**. The only removed identity is
+`import-boundary:banned-layer-import` at `src/lib/server/adapters/agent/conversation.ts:1`, reporting
+its import of `src/lib/server/repositories/agent/session-items.ts`. No identities were added.
+All remaining Chisel diagnostics match exactly; there are no location-only changes. The complete
+JSON inventory includes every remaining diagnostic and separate ownership/consumer reviews.
+It is evidence, never suppression input. The older claim that serialization ownership was already
+resolved has been corrected. The overall refactor remains incomplete.
+
+### Observed verification
+
+- Focused regressions: **57 files, 508 passed, one existing skip**. Coverage includes the SDK and
+  serialization adapters, model schemas, corpus, conversation/history/replay, Agent lifecycle,
+  cancellation, diagram session protocol and controller instrumentation.
+- Full units: **593 files, 4,640 passed, one existing skip**. Passing browser output retains the
+  existing Svelte `derived_inert` warnings and chart rendering error.
+- Affected isolated PostgreSQL contracts: **17 files, 97 passed**, using
+  `pnpm test:contracts:isolated tests/integration/agent tests/integration/diagrams`.
+- Lint and type checking passed; type checking reports zero errors and warnings. Docs checking
+  passed with zero errors/warnings and one existing hint; TypeDoc entry-point warnings remain.
+- Every architecture stage ran. Topology, source, test quality and UI passed. The architecture
+  chain stopped at the same **362** semantic findings. Standalone Chisel failed with **46**
+  remaining prohibited imports. No checker or suppression changed.
+- Initial validation caught a missing `eq` import in the new database test and an unused type
+  import after moving the contracts. Both were fixed before the final passing checks.
+- No live provider, live evaluation, Phoenix round-trip, E2E, PWA or production-build validation
+  ran. Evaluation cache unit messages labelled “live” use local fakes. Local results do not imply
+  CI success; required PR checks are reported separately.
+
+Browser migrations, journal redesign, indexing, telemetry restructuring and the diagram SDK
+mismatch remain outside this slice. Keep the stacked PR draft while migration gates fail.

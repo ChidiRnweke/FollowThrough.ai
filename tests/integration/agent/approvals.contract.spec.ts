@@ -1,3 +1,4 @@
+import { createSessionItemSerialization } from '$lib/server/factories/agent/session-item-serialization-factory';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
@@ -73,7 +74,7 @@ const approvalController = (db: typeof context.db) => {
 			runs,
 			approvals: new RunApprovals(runs),
 			runner,
-			sessions: new AgentSessionRecords(database),
+			sessions: new AgentSessionRecords(database, createSessionItemSerialization()),
 			conversationMessages: new ConversationArchive(new ConversationRecords(database)),
 			conversationSessions: new ConversationArchive(new ConversationRecords(database)),
 			events,

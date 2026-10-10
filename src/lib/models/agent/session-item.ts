@@ -423,3 +423,15 @@ export type ReplayPreparation =
 export type ReplayContent =
 	| { readonly kind: 'arguments'; readonly item: ReplayCall; readonly value: SessionJson }
 	| { readonly kind: 'record'; readonly item: ReplayRecord };
+
+/** Restores provider wire shapes for SDK replay and persisted JSON. */
+export interface SessionItemSerialization {
+	serialize(item: PersistedSessionItem): StoredSessionItem;
+}
+
+/** Reads serialized replay payloads at the conversation boundary. */
+export interface ConversationJsonReader {
+	value(text: string): SessionJson;
+	failure(text: string): string | undefined;
+	object(text: string): SessionJsonObject | undefined;
+}
