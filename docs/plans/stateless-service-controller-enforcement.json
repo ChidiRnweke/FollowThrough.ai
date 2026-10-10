@@ -1,12 +1,12 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "f9904532f104d03c8e519fb7d604de48361dddcd",
+	"applicationRevision": "aae492b65190314fab5ea679f6a881c996628aeb",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "71baf694ed1fade904113a06561928fd3012dfa7",
+		"applicationBase": "77eb9d29498c1a0a406ca3ec2c970fbf5be4eb52",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "Baseline verification on draft #360 matched all 367 semantic diagnostics with provenance and all 47 expanded Chisel diagnostics exactly. The unchanged analyzers report the same diagnostic identities and counts after this slice; source locations and provenance are refreshed. Provider constructors, factory outputs, batching owners, shared contracts, consumers, evaluation caches and seeding were reviewed separately.",
+		"method": "Baseline verification on draft #364 matched all 367 semantic diagnostics with provenance and all 47 expanded Chisel messages and locations exactly. The unchanged analyzers remove the three exported agent-file helper diagnostics and add none; all 47 Chisel diagnostics match the base exactly. Complete remaining source locations and provenance are refreshed. Constructor, factory-output, repository parsing/persistence, consumer, tool-surface and evaluation dependencies were reviewed separately.",
 		"semanticCounts": {
 			"concrete-dependency": 1,
 			"controller-orchestration": 277,
@@ -29,7 +29,7 @@
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 13,
+			"public-service-helper": 10,
 			"store-workflow": 55
 		},
 		"violations": [
@@ -3616,30 +3616,6 @@
 				]
 			},
 			{
-				"file": "src/lib/server/services/agent-files/virtual-files.ts",
-				"line": 61,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/agent-files/virtual-files.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/agent-files/virtual-files.ts",
-				"line": 65,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/agent-files/virtual-files.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/agent-files/virtual-files.ts",
-				"line": 68,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/agent-files/virtual-files.ts:1"]
-			},
-			{
 				"file": "src/lib/server/services/agent/conversations/tool-activity.ts",
 				"line": 10,
 				"column": 14,
@@ -4780,6 +4756,55 @@
 				"src/seed-tool-embeddings.ts"
 			],
 			"inventoryNote": "Existing search-query-v2 keys, trimmed string payloads, counters, record mode and failure exclusion remain. Evaluation query observers preserve previous trace suppression. Query generation still has no cancellation parameter. CachedEmbeddingClient still does not forward cancellation, matching its pre-existing evaluation behavior. ADR 0004 legacy condensation remains unchanged. No live provider or evaluation ran; the overall migration remains incomplete."
+		},
+		{
+			"subject": "Agent-file command ownership, stateless rules and typed recovery",
+			"status": "corrected",
+			"previousDependency": "AgentFiles forwarded complete commands to AgentVirtualFiles, which combined repository sequencing with paths, metadata, RE2 matching, range reads and recovery rules. Exported helpers were imported by Agent and Notes.",
+			"currentOwner": "AgentFiles owns exact resolution and enumeration for ls, grep and sed. Path, virtual metadata and command rule services consume narrow values. Agent receives paths directly for attached resources; Notes receives paths and file materialization for inspection. All shared capability and source-read contracts live in models.",
+			"evidence": [
+				"src/lib/server/controllers/agent-files/controller.ts",
+				"src/lib/server/services/agent-files/paths.ts",
+				"src/lib/server/services/agent-files/metadata.ts",
+				"src/lib/server/services/agent-files/commands.ts",
+				"src/lib/models/agent-files/index.ts",
+				"src/lib/server/controllers/agent/controller.ts",
+				"src/lib/server/controllers/notes/controller.ts",
+				"src/lib/server/controllers/agent-files/file-commands.spec.ts"
+			],
+			"inventoryNote": "Stored precedence applies to exact reads; listing and grep retain duplicate paths and ordering. Authorization, project checks, revisions, extension matching, RE2 behavior, inclusive reads and exact recovery are preserved. Existing end-past-EOF reads end at EOF; starts after EOF and reversed ranges still fail. No caps, controller chains, service composition or test-only helpers were added."
+		},
+		{
+			"subject": "Agent-file boundary parsing, persistence and exact content measurement",
+			"status": "corrected",
+			"previousDependency": "The virtual-file service imported repository path parsing directly and duplicated physical content measurement with persistence. Injecting the new metadata service into persistence would create an indirect service dependency from replay.",
+			"currentOwner": "AgentResourcePaths keeps schema parsing in the existing repository boundary and exposes a model-owned read port. AgentFileRecords retains queries, mapping, upserts and database identifiers. A factory-owned content measurement adapter shares exact UTF-8 bytes, token counts, newline counts and checksums with the virtual metadata service and InMemory storage. The metadata service owns path-derived virtual identity and diagram media types.",
+			"evidence": [
+				"src/lib/server/repositories/agent-files/agent-files.ts",
+				"src/lib/server/repositories/agent-files/postgres/agent-files.ts",
+				"src/lib/server/adapters/agent-files/content-measurement.ts",
+				"src/lib/testing/agent/fakes/in-memory-agent-files.ts",
+				"tests/integration/agent/files.contract.spec.ts"
+			],
+			"inventoryNote": "Real PostgreSQL contracts verify persisted Unicode measurements, stable stored identifiers on overwrite, stored precedence, cross-account denial and mismatched projects. Repository and fake storage call a technical adapter, not a service; replay retains no new indirect service dependency. Shared model signatures also supply local service capability member types to satisfy both interface and lint checks without duplicate signatures or suppressions."
+		},
+		{
+			"subject": "Agent-file factory outputs, public tools, tracing and evaluation construction",
+			"status": "reviewed",
+			"previousDependency": "The capability factory constructed AgentVirtualFiles and returned its service-local reader interface. Test fixtures and two contract suites constructed the old reader directly.",
+			"currentOwner": "The capability factory constructs adapters, repositories and rule services and exposes declared model interfaces. Application wiring supplies direct collaborators to AgentFiles, Agent and Notes. The existing production controller factory still instruments the same six AgentFiles operations.",
+			"evidence": [
+				"src/lib/server/factories/capabilities/agent-files-capability-factory.ts",
+				"src/lib/server/application.ts",
+				"src/lib/server/factories/production-controller-factory.ts",
+				"src/lib/server/factories/controller-surfaces.ts",
+				"src/lib/server/factories/agent/tool-coverage.ts",
+				"src/lib/testing/agent/fixtures/files.ts",
+				"tests/integration/attachments/processing.contract.spec.ts",
+				"tests/integration/notes/history-reads.contract.spec.ts",
+				"src/evals/lab/application.ts"
+			],
+			"inventoryNote": "All production constructors are factory-owned; outputs are interface-typed. Tool schemas, errors, recovery envelopes and tracing registrations are unchanged. Evaluations use production createApplication with no direct dependency on the removed service. Local cache tests use supplied fakes; no live provider or evaluation suite ran. The overall application migration remains incomplete."
 		}
 	]
 }
