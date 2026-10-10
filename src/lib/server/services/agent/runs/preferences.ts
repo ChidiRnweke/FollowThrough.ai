@@ -1,6 +1,6 @@
 import type { AgentCatalogMetadata } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
-import type { AgentModel, AgentPreferences } from '$lib/models/agent';
+import type { AgentModel, AgentPreferences, ModelCatalogCache } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
@@ -50,13 +50,34 @@ export interface AgentModelReader {
 	list(): Promise<{ readonly data: readonly AgentCatalogMetadata[] }>;
 }
 
+/**
+ * The provider catalog, refreshed at most once per `ttlMs`. A failed refresh serves the last
+ * successful catalog; with none retained, the provider failure propagates.
+ */
 export class AgentModels implements AgentModelCatalog {
 	constructor(
 		private readonly client: AgentModelReader,
-		private readonly recommended: ReadonlySet<string>
+		private readonly recommended: ReadonlySet<string>,
+		private readonly cache: ModelCatalogCache,
+		private readonly ttlMs = 5 * 60 * 1000,
+		private readonly clock: () => number = Date.now
 	) {}
 
 	async list(): Promise<readonly AgentModel[]> {
+		const cached = this.cache.current;
+		if (cached && this.clock() - cached.refreshedAt < this.ttlMs) return cached.models;
+		try {
+			const models = await this.read();
+			this.cache.replace({ models, refreshedAt: this.clock() });
+			return models;
+		} catch (error) {
+			const retained = this.cache.current;
+			if (retained) return retained.models;
+			throw error;
+		}
+	}
+
+	private async read(): Promise<readonly AgentModel[]> {
 		const response = await this.client.list();
 		return response.data
 			.map((model): AgentModel => {

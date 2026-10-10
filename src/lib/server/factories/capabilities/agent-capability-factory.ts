@@ -4,7 +4,6 @@ import type { TokenCounter } from '$lib/models/tokenization';
 import type { DateTime } from '$lib/models/workspace';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
-import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
 import type { Database } from '$lib/server/db';
 import { createAgentContext } from '$lib/server/factories/agent-context';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
@@ -176,15 +175,13 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(input.db));
 	const models =
 		input.modelCatalog ??
-		new CachedAgentModels(
-			new AgentModels(
-				new OpenRouter({
-					apiKey: input.openRouterApiKey,
-					httpReferer: input.appURL,
-					xTitle: 'FollowThrough'
-				}).models,
-				new Set(input.recommendedModels.map(normalizeLanguageModelId))
-			),
+		new AgentModels(
+			new OpenRouter({
+				apiKey: input.openRouterApiKey,
+				httpReferer: input.appURL,
+				xTitle: 'FollowThrough'
+			}).models,
+			new Set(input.recommendedModels.map(normalizeLanguageModelId)),
 			new ModelCatalogStore()
 		);
 	const tokens = input.tokens;

@@ -1,12 +1,7 @@
-import type { AgentModel } from '$lib/models/agent';
+import type { ModelCatalogCache, ModelCatalogSnapshot } from '$lib/models/agent';
 
-export interface ModelCatalogSnapshot {
-	readonly models: readonly AgentModel[];
-	readonly refreshedAt: number;
-}
-
-/** One snapshot per application catalog. A timestamp never exists without its models. */
-export class ModelCatalogStore {
+/** One snapshot per application catalog. Refresh policy belongs to the catalog service. */
+export class ModelCatalogStore implements ModelCatalogCache {
 	private value: ModelCatalogSnapshot | undefined;
 	get current(): ModelCatalogSnapshot | undefined {
 		return this.value;
