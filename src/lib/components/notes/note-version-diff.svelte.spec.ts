@@ -199,6 +199,16 @@ describe('NoteVersionDiff marks changes the editor normalised around', () => {
 		).toEqual(['Ada', 'Grace']);
 	});
 
+	it('hides the spacer paragraphs the editor inserts around a diagram', async () => {
+		const note = doc(sectionHeading('Flow'), mermaid('graph TD\n  A --> B'));
+		const screen = await render(NoteVersionDiff, { ...base, base: note, candidate: note });
+		const spacers = Array.from(screen.container.querySelectorAll('.diff-spacer'));
+		expect({
+			present: spacers.length > 0,
+			hidden: spacers.every((spacer) => getComputedStyle(spacer).display === 'none')
+		}).toEqual({ present: true, hidden: true });
+	});
+
 	it('marks only the table cell an edit changed', async () => {
 		const screen = await render(NoteVersionDiff, {
 			...base,

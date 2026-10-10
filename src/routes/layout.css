@@ -1511,6 +1511,12 @@
 	text-align: center;
 }
 
+/* A paragraph the editor inserts on load (beside a diagram, at the end) is not part of
+   either version, so the comparison does not show it. */
+.note-diff-pane .tiptap .diff-spacer {
+	display: none;
+}
+
 /* A block drawn by a node view — a diagram, a code block, a callout, a table — has its own
    opaque fills under which a background wash disappears. It takes the tint as an overlay
    on top instead, ringed in the side's colour so the edge reads at a glance. A ring, not a

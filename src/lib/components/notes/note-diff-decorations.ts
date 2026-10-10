@@ -152,7 +152,12 @@ export const paintDiff = (input: DiffPaintInput): DiffPaint => {
 	const decorations: Decoration[] = [];
 	doc.forEach((node, offset, index) => {
 		const storedIndex = alignment.storedIndex[index];
-		if (storedIndex === null) return;
+		// A spacer the editor inserted is not in the note, and in a 160px preview it cost a
+		// diagram its place on screen; the pane hides it.
+		if (storedIndex === null) {
+			decorations.push(Decoration.node(offset, offset + node.nodeSize, { class: 'diff-spacer' }));
+			return;
+		}
 		const block = kinds[storedIndex];
 		const end = offset + node.nodeSize;
 		switch (block.kind) {
