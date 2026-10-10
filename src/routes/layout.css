@@ -1326,11 +1326,14 @@
 
 	/* In-document accept/dismiss blocks rendered below anchored suggestions,
 	   styled like a diff insertion. */
+	/* The spacing is padding on the host, not margin on the block: the block is the
+	   host's only child, and the editor's `:first-child` / `:last-child` resets zero
+	   its margins, which left stacked suggestions touching. */
 	.suggestion-inline-widget-host {
 		user-select: none;
+		padding-block: 0.375rem;
 	}
 	.suggestion-inline-widget {
-		margin: 0.25rem 0 0.5rem;
 		border-radius: 0.375rem;
 		background-color: color-mix(in oklab, var(--color-success) 8%, transparent);
 		padding: 0.375rem 0.625rem;
