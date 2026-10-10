@@ -1,6 +1,7 @@
 import { AgentProviderFailure } from '$lib/errors';
 import {
 	providerItemSchema,
+	providerRejectionSchema,
 	providerToolEventHeaderSchema,
 	runItemStreamEventSchema,
 	rawModelStreamEventSchema,
@@ -118,4 +119,20 @@ export const parseProviderToolCall = (
 	const call = providerCall(parsed.data);
 	const { arguments: args } = call;
 	return args.kind === 'value' ? { ...call, arguments: args } : undefined;
+};
+
+/**
+ * Who rejected which request, as a suffix for the failure message: `" (provider OpenAI,
+ * request req-1)"`, or `""` when the error carries neither. An operator needs both to find
+ * the rejection in the provider's own records.
+ */
+export const providerRejectionContext = (error: unknown): string => {
+	const read = providerRejectionSchema.safeParse(error);
+	if (!read.success) return '';
+	const parts = [
+		read.data.error?.metadata?.provider_name &&
+			`provider ${read.data.error.metadata.provider_name}`,
+		read.data.requestID && `request ${read.data.requestID}`
+	].filter((part): part is string => Boolean(part));
+	return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 };

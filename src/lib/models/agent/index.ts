@@ -2081,3 +2081,15 @@ export interface RunSettlementPlan {
 export type RunSettlementClaim =
 	| { readonly kind: 'claimed'; readonly run: AgentRun; readonly events: readonly AgentEvent[] }
 	| { readonly kind: 'lost' };
+
+/**
+ * What identifies a rejected provider request, read off the provider client's error: the
+ * upstream provider OpenRouter routed to, and the request id. Neither carries user content.
+ * The upstream body in `error.metadata.raw` may echo the prompt and is deliberately not read.
+ */
+export const providerRejectionSchema = z.object({
+	requestID: z.string().min(1).nullish(),
+	error: z
+		.object({ metadata: z.object({ provider_name: z.string().min(1).optional() }).nullish() })
+		.nullish()
+});

@@ -594,8 +594,13 @@ describe('Durable note approval publication', () => {
 	});
 });
 
-/** The production runner against a scripted model, over one note that says "Launch Monday." */
-const productionRun = async (model: (note: Note) => Model) => {
+/**
+ * The production runner over one note that says "Launch Monday.", against a scripted model or,
+ * with `fetch`, against the real provider client and a scripted HTTP transport.
+ */
+const productionRun = async (
+	model: ((note: Note) => Model) | { readonly fetch: typeof globalThis.fetch }
+) => {
 	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
 	const notes = reviewedNoteFixture(note);
 	const reasoning = new AgentReasoning(
@@ -617,19 +622,23 @@ const productionRun = async (model: (note: Note) => Model) => {
 		'test-key',
 		'https://unused.test',
 		'https://unused.test',
-		undefined,
+		typeof model === 'function' ? undefined : model.fetch,
 		(repository, actor, conversationId) =>
 			new ConversationBuffer(repository, actor, conversationId, {
 				virtualize: async (_actor, _id, item) => item
 			}),
 		undefined,
-		() => new InMemoryModelProvider(model(note))
+		...(typeof model === 'function' ? [() => new InMemoryModelProvider(model(note))] : [])
 	);
 	const fixture = setup(reasoning);
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));
-	await fixture.lifecycle.execute(testRunId, new AbortController().signal);
+	// As the background executor does: a run whose execution threw is settled as failed.
+	await fixture.lifecycle
+		.execute(testRunId, new AbortController().signal)
+		.catch((error: Error) => fixture.lifecycle.failRun(testRunId, error));
 	return {
 		status: currentRun(fixture.runs).status,
+		failure: fixture.runs.events.find((record) => record.event.type === 'failed')?.event,
 		body: notes.content.notes[0].plainText,
 		rows: fixture.toolRows
 			.filter((row) => row.status !== 'running')
@@ -721,5 +730,36 @@ describe('A call the SDK recovers from does not end the run', () => {
 			status: 'completed',
 			body: 'Launch Tuesday.'
 		});
+	});
+});
+
+/**
+ * Six OpenRouter rejections in the agent error RCA (E1) kept only "400 Provider returned error":
+ * nothing said which upstream provider rejected the request or which request it was. The
+ * provider's name and request id identify it; its raw upstream body may echo user content and
+ * is not kept.
+ */
+it('settles a provider rejection as failed and keeps who rejected which request', async () => {
+	const rejection = async () =>
+		new Response(
+			JSON.stringify({
+				error: {
+					message: 'Provider returned error',
+					code: 400,
+					metadata: { raw: 'echoed private prompt', provider_name: 'OpenAI' }
+				}
+			}),
+			{ status: 400, headers: { 'content-type': 'application/json', 'x-request-id': 'req-e1' } }
+		);
+	const { status, failure } = await productionRun({ fetch: rejection });
+	expect({ status, failure }).toEqual({
+		status: 'failed',
+		failure: {
+			type: 'failed',
+			runId: testRunId,
+			code: '400',
+			message: '400 Provider returned error (provider OpenAI, request req-e1)',
+			retryable: false
+		}
 	});
 });

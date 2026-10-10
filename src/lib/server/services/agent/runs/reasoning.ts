@@ -37,7 +37,8 @@ import {
 } from '$lib/models/agent/tool-catalog';
 import {
 	parseProviderStreamEvent,
-	parseProviderToolCall
+	parseProviderToolCall,
+	providerRejectionContext
 } from '$lib/server/repositories/agent/provider-events';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import { AgentProviderFailure, ValidationError } from '$lib/errors';
@@ -773,7 +774,7 @@ export class AgentReasoning {
 			// Already classified where it was raised; rewrapping would erase that code.
 			if (error instanceof AgentProviderFailure) throw error;
 			throw new AgentProviderFailure(
-				error instanceof Error ? error.message : String(error),
+				`${error instanceof Error ? error.message : String(error)}${providerRejectionContext(error)}`,
 				this.providerErrorCode(error) ?? 'EXTERNAL_SERVICE',
 				this.isRetryable(error),
 				{ cause: error }
