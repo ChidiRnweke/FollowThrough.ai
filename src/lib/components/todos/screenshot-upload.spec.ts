@@ -92,7 +92,7 @@ describe('uploadTodoScreenshot', () => {
 		}
 		expect({ error, completed }).toEqual({
 			error: expect.objectContaining({
-				message: 'Object storage rejected the screenshot: Entity too large'
+				message: 'File storage rejected the screenshot: Entity too large'
 			}),
 			completed: []
 		});

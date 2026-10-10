@@ -575,6 +575,18 @@ export class WorkspaceDraft<K extends WorkspaceResourceType> {
 			? this.valueOf(snapshot.value)
 			: null;
 	}
+	/**
+	 * The server's copy, once no local write for this resource is outstanding.
+	 *
+	 * A local save keeps the revision the editor observed, and only the server
+	 * advances it. A command that names a revision (a selection action) must
+	 * read it here, or it sends the revision before the acknowledged save.
+	 */
+	get confirmed(): WorkspaceValues[K] | null {
+		if (this.entries.length) return null;
+		const snapshot = this.resources.snapshot(this.identity);
+		return snapshot ? this.valueOf(snapshot.value) : null;
+	}
 	/** Move the observed base to what the workspace holds now. Performs no read. */
 	adopt(): WorkspaceValues[K] {
 		this.current = this.resources.editBase(this.identity);

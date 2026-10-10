@@ -1,3 +1,4 @@
+import { storeUploadBytes } from '$lib/client/attachments/object-storage';
 import type { NoteId } from '$lib/models/notes';
 import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 import {
@@ -51,15 +52,7 @@ export const uploadNoteAttachment = async (
 		byteSize: file.size,
 		checksumSha256: await fileChecksumSha256(file)
 	});
-	const stored = await transport.put(intent, file);
-	if (!stored.ok) {
-		const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
-		throw new Error(
-			detail
-				? `Object storage rejected the upload: ${detail}`
-				: `Object storage rejected the upload (${stored.status})`
-		);
-	}
+	await storeUploadBytes(() => transport.put(intent, file), 'image');
 	const uploaded = await transport.complete(intent.upload.id);
 	return `/api/attachments/${uploaded.attachment.id}/content`;
 };

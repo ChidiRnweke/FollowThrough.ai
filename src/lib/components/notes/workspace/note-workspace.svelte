@@ -362,8 +362,15 @@
 			toast.error('Select some text first.');
 			return;
 		}
-		if (!(await ensureSynchronized('Sync the note before running an AI action.'))) return;
-		const selection = { ...capturedSelection, revision: note.currentRevision };
+		if (!(await ensureSynchronized('Sync the note before running an agent action.'))) return;
+		// The editor's copy keeps the revision it observed; the server advanced it on
+		// the last acknowledged save, and the action is checked against the server.
+		const confirmed = draft.confirmed;
+		if (!confirmed) {
+			toast.error('Sync the note before running an agent action.');
+			return;
+		}
+		const selection = { ...capturedSelection, revision: confirmed.currentRevision };
 		const receipt =
 			action === 'promises'
 				? await noteActions.extractPromises(selection)

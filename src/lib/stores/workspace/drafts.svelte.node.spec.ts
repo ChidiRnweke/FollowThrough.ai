@@ -133,6 +133,21 @@ describe('note editor using shared resource writes', () => {
 	});
 });
 
+describe('the revision a selection action names', () => {
+	it('is the server revision after an acknowledged save, not the one the editor observed', async () => {
+		const { note, store, resources } = await setup();
+		await store.read();
+		await store.stage(noteCommand({ ...note, plainText: 'Edited' }));
+		resources.setOnline(true);
+		await resources.synchronize();
+		expect({
+			status: store.status,
+			editor: store.value?.currentRevision,
+			confirmed: store.confirmed?.currentRevision
+		}).toEqual({ status: 'synced', editor: 1, confirmed: 2 });
+	});
+});
+
 describe('shared note conflict decisions', () => {
 	it('does not resubmit a conflict when retrying synchronization', async () => {
 		const { note, key, store, transport, resources } = await setup();
