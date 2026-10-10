@@ -354,7 +354,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows SDK construction in its designated adapter', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/factories/agent/sdk-tool-adapter.ts',
+				'src/lib/server/repositories/agent/sdk-tool.ts',
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);
@@ -375,12 +375,12 @@ describe('tool lifecycle ownership', () => {
 			)
 		).toEqual([]);
 	});
-	it('allows the separate diagram submission protocol', () => {
+	it('rejects SDK construction in the diagram service, which builds through sdkTool', () => {
 		expect(
 			analyzeSource(
 				'src/lib/server/services/diagrams/generation.ts',
 				"import { tool } from '@openai/agents';"
-			)
-		).toEqual([]);
+			).map((item) => item.rule)
+		).toEqual(['tool-boundary']);
 	});
 });

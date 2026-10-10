@@ -175,7 +175,13 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 			{ type: 'tool_succeeded', callId: 'call-corrected' }
 		]);
 	});
-	it('stops on persistence failure after a write rather than feeding back retry advice', async () => {
+	/**
+	 * Only cancellation ends a run from inside a tool. A failure after the write
+	 * is feedback like any other: the model hears that the fault is ours and is
+	 * told not to retry, and the write itself is applied exactly once. ADR 0003
+	 * promises no exactly-once execution; ADR 0010 makes a repeat a no-op.
+	 */
+	it('reports a persistence failure after a write as feedback without writing twice', async () => {
 		const fixture = scenario(0, 'auto_accept', {
 			executor: {
 				execute: async (_call, action) => {
@@ -184,19 +190,16 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 				}
 			}
 		});
-		const outcome = await run(fixture.agent).catch((error) => ({
-			kind: 'failure',
-			message: error.message
-		}));
+		const events: AgentEvent[] = [];
+		await run(fixture.agent, undefined, events);
 		expect({
-			outcome,
+			failures: events
+				.filter((event) => event.type === 'tool_reported_failure')
+				.map((event) => event.failure),
 			body: fixture.content.notes[0].plainText,
 			revision: fixture.content.notes[0].currentRevision
 		}).toEqual({
-			outcome: {
-				kind: 'failure',
-				message: 'Failed to run function tools: Error: journal unavailable'
-			},
+			failures: [expect.any(String), expect.stringContaining('ours')],
 			body: 'Launch Tuesday.',
 			revision: 2
 		});

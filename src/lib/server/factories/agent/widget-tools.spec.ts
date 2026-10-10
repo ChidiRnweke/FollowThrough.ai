@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
-import { jsonObjectSchema } from './tool-call-boundary';
+import { jsonObjectSchema } from '$lib/server/repositories/agent/sdk-tool';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';

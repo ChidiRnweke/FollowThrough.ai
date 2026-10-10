@@ -81,6 +81,9 @@ const catalog: Record<AgentToolName, { readonly family: ToolFamily; readonly kin
 	list_user_memory: { family: 'collection', kind: 'memory' },
 	list_project_memory: { family: 'collection', kind: 'memory' },
 	search_tools: { family: 'collection', kind: 'plain' },
+	// The Diagram Agent's submission: its result is the diagram the workflow saves.
+	submit_mermaid_diagram: { family: 'none', kind: 'diagram' },
+	submit_drawio_diagram: { family: 'none', kind: 'diagram' },
 	get_workspace_context: { family: 'collection', kind: 'project' },
 	load_skill: { family: 'link', kind: 'skill' },
 	list_tool_preferences: { family: 'collection', kind: 'setting' },

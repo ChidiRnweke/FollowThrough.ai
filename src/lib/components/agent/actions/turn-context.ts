@@ -185,6 +185,8 @@ const strongerVerb = (left: Verb, right: Verb): Verb =>
  */
 const verbs: Record<Exclude<AgentToolName, MechanismTool>, Verb> = {
 	get_project: 'read',
+	submit_mermaid_diagram: 'created',
+	submit_drawio_diagram: 'created',
 	create_project: 'created',
 	rename_project: 'renamed',
 	archive_project: 'archived',

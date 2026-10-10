@@ -79,6 +79,8 @@ const labels: Record<AgentToolName, string> = {
 
 	// Mechanism: the agent finding its footing, named all the same.
 	search_tools: 'Look up available tools',
+	submit_mermaid_diagram: 'Submit diagram',
+	submit_drawio_diagram: 'Submit diagram',
 	get_workspace_context: 'Read workspace context',
 	load_skill: 'Read skill',
 	list_tool_preferences: 'Read tool availability',
@@ -172,6 +174,8 @@ const completedLabels: Record<AgentToolName, string> = {
 
 	// Mechanism: the agent finding its footing, named all the same.
 	search_tools: 'Looked up available tools',
+	submit_mermaid_diagram: 'Submitted diagram',
+	submit_drawio_diagram: 'Submitted diagram',
 	get_workspace_context: 'Read workspace context',
 	load_skill: 'Read skill',
 	list_tool_preferences: 'Read tool availability',

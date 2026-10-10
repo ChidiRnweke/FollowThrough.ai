@@ -15,13 +15,8 @@ import {
 	type AgentToolDefinition,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
-import {
-	ToolLifecycleError,
-	jsonObjectSchema,
-	bindToolArguments,
-	executeToolAction,
-	prepareToolCall
-} from './tool-call-boundary';
+import { bindToolArguments, prepareToolCall, runToolAction } from './tool-call-boundary';
+import { jsonObjectSchema, withToolFeedback } from '$lib/server/repositories/agent/sdk-tool';
 
 export interface McpToolSurfaceOptions {
 	readonly controllers: ControllerFactory;
@@ -88,7 +83,9 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 	}));
 	server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 		const { name, arguments: input = {} } = request.params;
-		if (name !== 'search_tools' && !registered.has(name))
+		// Every registered name has a permitted definition; `search_tools` has none.
+		const definition = registered.has(name) ? byName.get(name) : undefined;
+		if (name !== 'search_tools' && definition === undefined)
 			return result(
 				toolFailure(
 					'TOOL_NOT_AVAILABLE',
@@ -97,7 +94,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 				)
 			);
 		const prepared = await prepareToolCall(async () => {
-			if (name === 'search_tools')
+			if (definition === undefined)
 				return {
 					kind: 'ready',
 					action: bindToolArguments(searchParameters, input, async ({ query, limit }) => {
@@ -122,13 +119,11 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 						return payload.value;
 					})
 				};
-			const definition = byName.get(name);
-			if (!definition)
-				throw new ToolLifecycleError('Registered MCP tool is absent from its permitted catalog');
 			return { kind: 'ready', action: definition.prepare(input) };
 		}, extra.signal);
-		if (prepared.kind === 'failure') return result(prepared.failure);
-		const output = await executeToolAction(prepared.action, extra.signal);
+		if (prepared.kind === 'failure') return result(prepared);
+		const { action } = prepared;
+		const output = await withToolFeedback(extra.signal, () => runToolAction(action, extra.signal));
 		if (name === 'search_tools' && readToolOutput(output).kind === 'success')
 			await server.sendToolListChanged();
 		return result(output);
