@@ -8,7 +8,7 @@ is not merge-ready while the architecture gates fail.
 ## Revisions and reproducibility
 
 - Application source: `5af62eb5fab1d922c5fa1a8fc2a544d065007062`, the head of #336.
-- Checker implementation: `a911c3fbf1da3f6da1afc80b810b58148c8f8fe5`.
+- Checker implementation: `af1d2e93ff0a2e283f2003c65805a80c9d841a33`.
 - Recorded on 2026-10-10 with Node `v24.21.0` and pnpm `10.30.1`.
 - [Complete diagnostic inventory](stateless-service-controller-enforcement.json): file, line,
   rule, message, and semantic provenance. This file is evidence only; no checker reads it.
@@ -36,7 +36,7 @@ comments, migration baselines, ignore entries, or application fixes.
 | `concrete-dependency`     |       55 | Replace concrete dependency/public result types with narrow declared contracts                                         |
 | `store-workflow`          |       41 | Keep state updates in stores and move transport, decisions and coordination into controllers                           |
 | Semantic total            |      802 | Continue the application refactor; findings can overlap at a source location                                           |
-| Chisel prohibited imports |       53 | Correct the imports and their ownership; do not route them through a barrel to evade the check                         |
+| Chisel prohibited imports |       51 | Correct the imports and their ownership; do not route them through a barrel to evade the check                         |
 
 Representative findings include public functions in `services/relationships/presentation.ts`,
 workflow calls in `stores/agent/chat.svelte.ts`, and operation callbacks in the agent tool factory.
@@ -51,8 +51,8 @@ Semantic review and application corrections remain owned by the existing refacto
 
 ## Verification
 
-- Focused analyzer, CLI, Chisel-layer and source-audit fixtures: **221 passed** in four files.
-- `pnpm test:unit`: **560 files, 4,451 passed, one existing skip**. The existing Svelte
+- Focused analyzer, CLI, Chisel-layer and source-audit fixtures: **224 passed** in four files.
+- `pnpm test:unit`: **560 files, 4,454 passed, one existing skip**. The existing Svelte
   `derived_inert` warning remains in browser output.
 - Analyzer implementation also passed a standalone strict TypeScript check.
 - `pnpm lint`: passed.
@@ -61,8 +61,9 @@ Semantic review and application corrections remain owned by the existing refacto
   reported existing TypeDoc entry-point warnings.
 - Topology, source, test-quality and standalone UI audits: passed.
 - `pnpm test:architecture`: failed on the 802 semantic findings above.
-- Standalone Chisel: failed on 53 prohibited imports. The #336 handoff's 51 was historical
-  evidence, not an allowance; the narrower type-only controller permission exposes two more.
+- Standalone Chisel: failed on 51 prohibited imports, freshly measured. The narrower type-only
+  permission rejects concrete classes while preserving forwarded operation interfaces. The
+  historical count in #336 is not a migration allowance.
 - Changed SvelteKit and QA skill files match byte-for-byte across `.agents`, `.claude`, and
   `.opencode`. Other agents' worktrees and application files were not changed.
 

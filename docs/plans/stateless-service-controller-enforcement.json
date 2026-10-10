@@ -1,7 +1,7 @@
 {
 	"recordedAt": "2026-10-10",
 	"applicationRevision": "5af62eb5fab1d922c5fa1a8fc2a544d065007062",
-	"toolingRevision": "a911c3fbf1da3f6da1afc80b810b58148c8f8fe5",
+	"toolingRevision": "af1d2e93ff0a2e283f2003c65805a80c9d841a33",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors.",
 	"semantic": {
 		"command": "node --experimental-strip-types scripts/audit-architecture.ts --json",
@@ -9246,7 +9246,7 @@
 		"command": "pnpm exec chisel-js check . --json",
 		"exitStatus": 1,
 		"counts": {
-			"import-boundary:banned-layer-import": 53
+			"import-boundary:banned-layer-import": 51
 		},
 		"violations": [
 			{
@@ -9272,18 +9272,6 @@
 				"line": 2,
 				"rule": "import-boundary:banned-layer-import",
 				"message": "client must not import services (src/lib/services/workspace/sidebar-width.ts). Components invoke controller operations. Stores retain state and adapters handle I/O; move domain decisions and workflow coordination to services and controllers."
-			},
-			{
-				"file": "src/lib/client/sync/contracts.ts",
-				"line": 8,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "client must not import controllers (src/lib/controllers/sync/cache.ts). Components invoke controller operations. Stores retain state and adapters handle I/O; move domain decisions and workflow coordination to services and controllers."
-			},
-			{
-				"file": "src/lib/client/sync/outbox-contracts.ts",
-				"line": 2,
-				"rule": "import-boundary:banned-layer-import",
-				"message": "client must not import controllers (src/lib/controllers/sync/submission.ts). Components invoke controller operations. Stores retain state and adapters handle I/O; move domain decisions and workflow coordination to services and controllers."
 			},
 			{
 				"file": "src/lib/client/sync/route-access.ts",

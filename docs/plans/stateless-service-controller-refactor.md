@@ -1329,6 +1329,6 @@ is unchanged.
 
 [The enforcement report](stateless-service-controller-enforcement.md) records the exact source and
 checker revisions, verification and the complete unsuppressed inventory: 802 semantic findings and
-53 Chisel prohibited imports. The inventory is evidence, not a checker baseline. The remaining
+51 Chisel prohibited imports. The inventory is evidence, not a checker baseline. The remaining
 application migration, semantic inventory review and full-refactor acceptance items above stay
 incomplete. Do not mark this original plan complete because the checker fixtures pass.
