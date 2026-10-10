@@ -328,3 +328,20 @@ one missing space after a semicolon; after reading the exact text with `sed`, th
 call applied. `6f49595f…` shows the same recovery. The matcher does not treat a missing space as a
 match, by design. Disposition: model quoting error; the safeguard worked and nothing applied
 partially.
+
+### O1 follow-up: Loki on 2026-10-10 at 13:40 UTC
+
+Read-only Loki queries through Grafana. The collector configuration has one unfiltered logs
+pipeline for every service, and every web span in Phoenix passed the collector's OpenInference
+filter, so the web process reaches the collector.
+
+- The web service `followthrough` now delivers logs: 24 to 44 records an hour, mostly `[workspace]`
+  controller logs with trace ids. Its process started as PID 1 at 10:19:55 UTC.
+- Loki holds no record before about 10:00 UTC for any service, including unrelated applications. At
+  06:43 UTC the RCA counted 18,688 worker records over the preceding 48 hours, so that history
+  existed and has since been lost.
+
+Disposition: not reproducible. The web process started at 10:19 logs normally. The process that
+ran during the RCA window, and its records, are gone, so the original gap cannot be explained.
+New finding for the operator: Loki loses its history across a restart or keeps it only briefly,
+which makes any future gap disappear before it can be investigated.
