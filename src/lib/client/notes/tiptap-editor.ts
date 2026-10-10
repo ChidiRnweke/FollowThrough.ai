@@ -1,24 +1,24 @@
+import type { ClipboardPaste, EditorRange, NoteEditorPort } from '$lib/models/browser-workspace';
+import type { DiagramId } from '$lib/models/diagrams';
+import { proseMirrorDocumentSchema, type ProseMirrorDocument } from '$lib/models/notes';
+import type { SuggestionId } from '$lib/models/suggestions';
 import type { Editor, JSONContent } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
-import type { DiagramId } from '$lib/models/diagrams';
-import type { SuggestionId } from '$lib/models/suggestions';
-import { proseMirrorDocumentSchema, type ProseMirrorDocument } from '$lib/models/notes';
-import type { EditorRange, NoteEditorPort } from '$lib/controllers/notes/editor-operations';
-import type { ClipboardPaste } from '$lib/controllers/notes/clipboard-operations';
-import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion';
-import { completePendingConversion } from '$lib/components/edra/commands/diagram-references';
+
 import {
-	selectRange,
-	clipboardSource,
-	selectionMarkdown,
-	selectionPlainText
-} from '$lib/components/edra/commands/clipboard-payload';
-import {
-	holdPendingInsertion,
 	getPendingInsertion,
+	holdPendingInsertion,
 	releasePendingInsertion
 } from '$lib/client/notes/pending-insertions-plugin';
 import { selectionActionKey } from '$lib/client/notes/selection-action-plugin';
+import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion';
+import {
+	clipboardSource,
+	selectionMarkdown,
+	selectionPlainText,
+	selectRange
+} from '$lib/components/edra/commands/clipboard-payload';
+import { completePendingConversion } from '$lib/components/edra/commands/diagram-references';
 export class TiptapNoteEditor implements NoteEditorPort {
 	constructor(private readonly editor: Editor) {}
 	get active(): boolean {

@@ -1,23 +1,27 @@
-import type { JSONContent } from '@tiptap/core';
-import type { DiagramId } from '$lib/models/diagrams';
-import type { SuggestionId } from '$lib/models/suggestions';
 import type { AgentRunId } from '$lib/models/agent';
-import type { ProseMirrorDocument } from '$lib/models/notes';
-import type { ClipboardSource } from '$lib/models/clipboard';
 import type {
-	ClipboardPaste,
-	NoteClipboardOperations,
-	ClipboardFeedback
-} from './clipboard-operations';
+	NoteEditorEvents,
+	NoteEditorIdentity,
+	NoteEditorPort,
+	NoteEditorState
+} from '$lib/models/browser-workspace';
+import type { DiagramId } from '$lib/models/diagrams';
+import type { ProseMirrorDocument } from '$lib/models/notes';
+import type { SuggestionId } from '$lib/models/suggestions';
+import type { ClipboardFeedback, NoteClipboardOperations } from './clipboard-operations';
 import type { NoteDocumentsController } from './document-presentation';
-export interface EditorRange {
-	readonly from: number;
-	readonly to: number;
-}
+export type {
+	EditorRange,
+	NoteEditorEvents,
+	NoteEditorPort,
+	NoteEditorState
+} from '$lib/models/browser-workspace';
+
 export interface NoteEditorView {
 	readonly canCopy: boolean;
 }
 export interface NoteEditorOperations {
+	readonly identity: NoteEditorIdentity;
 	getDocument(): ProseMirrorDocument;
 	getPlainText(): string;
 	replaceDocument(document: ProseMirrorDocument, previous?: ProseMirrorDocument): void;
@@ -31,34 +35,7 @@ export interface NoteEditorOperations {
 	completeDrawioConversion(suggestion: SuggestionId, diagram: DiagramId): void;
 }
 /** Vendor mechanics only; the application never receives the Tiptap instance. */
-export interface NoteEditorPort extends Omit<
-	NoteEditorOperations,
-	'replaceDocument' | 'focusStart' | 'focusEnd'
-> {
-	readonly active: boolean;
-	initializeDocument(document: JSONContent): void;
-	setDocument(document: JSONContent): void;
-	focus(at: 'start' | 'end'): void;
-	selection(): EditorRange | undefined;
-	copySource(range: EditorRange | undefined): ClipboardSource | undefined;
-	markdown(range: EditorRange | undefined): string | undefined;
-	paste(content: ClipboardPaste, range: EditorRange | undefined): void;
-	collapseSelection(): void;
-}
-export interface NoteEditorState {
-	readonly active: boolean;
-	readonly initialized: boolean;
-	readonly holdingSelection: boolean;
-	readonly contextRange: EditorRange | undefined;
-	readonly reportedInsertions: Readonly<Record<string, number>>;
-	initialize(): void;
-	setInitialized(value: boolean): void;
-	setHoldingSelection(value: boolean): void;
-	rememberRange(range: EditorRange | undefined): void;
-	reportInsertion(runId: string, position: number): void;
-	releaseInsertion(runId: string): void;
-	release(): void;
-}
+
 export interface NoteEditorLifecycle {
 	initialize(document: ProseMirrorDocument): void;
 	release(): void;
@@ -69,11 +46,7 @@ export interface NoteEditorLifecycle {
 	blur(actionRunning: boolean): void;
 	reportInsertions(points: Readonly<Record<string, number | 'lost'>>): void;
 }
-export interface NoteEditorEvents {
-	changed(): void;
-	shimmer(previous: ProseMirrorDocument, next: ProseMirrorDocument): void;
-	insertionMoved(runId: AgentRunId, position: number): void;
-}
+
 export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 	constructor(
 		private readonly state: NoteEditorState,
@@ -81,7 +54,8 @@ export class NoteEditor implements NoteEditorOperations, NoteEditorLifecycle {
 		private readonly documents: NoteDocumentsController,
 		private readonly clipboard: NoteClipboardOperations,
 		private readonly events: NoteEditorEvents,
-		private readonly feedback: Pick<ClipboardFeedback, 'error'>
+		private readonly feedback: Pick<ClipboardFeedback, 'error'>,
+		readonly identity: NoteEditorIdentity = { key: Symbol('note-editor') }
 	) {}
 	initialize(document: ProseMirrorDocument): void {
 		this.editor.initializeDocument(this.documents.editorContent(document));

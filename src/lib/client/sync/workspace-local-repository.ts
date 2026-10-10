@@ -1,12 +1,13 @@
-import type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources';
-export type { WorkspaceLocalRepository } from '$lib/controllers/workspace/resources';
+import type { WorkspaceLocalRepository } from '$lib/models/browser-workspace';
+import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 import { liveQuery } from 'dexie';
 import type { z } from 'zod';
-import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
-export type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 import { WorkspaceDatabase } from './database';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 import { IndexedDbOutbox } from './indexeddb-outbox';
+
+export type { WorkspaceLocalRepository } from '$lib/models/browser-workspace';
+export type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 
 /** Dexie observes the actual readonly projection, including changes made by another tab. */
 export class DexieWorkspaceRepository<C, T>

@@ -1,5 +1,6 @@
+import type { WorkspaceEditingEnvironment } from '$lib/models/browser-workspace';
 import { SvelteDate, createSubscriber } from 'svelte/reactivity';
-import type { WorkspaceEditingEnvironment } from '$lib/controllers/workspace/resources';
+
 import type { DateTime } from '$lib/models/workspace';
 /** Svelte proxies cannot cross IndexedDB's structured-clone boundary. */
 export class BrowserWorkspaceEditingEnvironment implements WorkspaceEditingEnvironment {

@@ -1,17 +1,19 @@
+import type { CacheCheckpoint, CacheCommitDecision } from '$lib/models/browser-workspace';
 import type {
 	OutboxEntry,
-	WriteDraft,
-	WriteReceipt,
-	WriteOutcome,
+	ServerResource,
 	WriteBaseResolution,
-	ServerResource
+	WriteDraft,
+	WriteOutcome,
+	WriteReceipt
 } from '$lib/models/outbox';
 import type {
-	SyncEtag,
-	ResourceState,
-	ResourceDeletion,
-	SyncSnapshot,
 	CacheAccess,
+	CacheCommit,
+	ResourceDeletion,
+	ResourceState,
+	SyncEtag,
+	SyncSnapshot,
 	TransferState
 } from '$lib/models/sync';
 
@@ -492,5 +494,46 @@ export class OutboxDeliveryService implements IOutboxDeliveryService {
 	}
 	authoritativeResource<T>(outcome: WriteOutcome<T>): WriteReceipt<T>['resource'] | null {
 		return authoritativeWriteResource(outcome);
+	}
+}
+
+export interface ICacheCommitService {
+	decide<T>(
+		previous: ReadonlyMap<string, ResourceState<T> | undefined>,
+		checkpoint: CacheCheckpoint | null,
+		changes: CacheCommit<T>
+	): CacheCommitDecision<T>;
+}
+/** A cache transaction reads first, then applies this monotonic merge decision atomically. */
+export class CacheCommitService implements ICacheCommitService {
+	decide<T>(
+		previous: ReadonlyMap<string, ResourceState<T> | undefined>,
+		checkpoint: CacheCheckpoint | null,
+		changes: CacheCommit<T>
+	): CacheCommitDecision<T> {
+		const keys = [...changes.put.map((row) => row.key), ...changes.remove.map((row) => row.key)];
+		if (new Set(keys).size !== keys.length)
+			throw new Error('A cache commit must touch each resource only once');
+		return {
+			put: changes.put.map((row) => ({
+				key: row.key,
+				entry: mergeResourceStates(previous.get(row.key), row.entry)
+			})),
+			remove: changes.remove
+				.filter(
+					(row) =>
+						previous.get(row.key) === undefined ||
+						resourceVersion(previous.get(row.key)) === row.etag
+				)
+				.map((row) => row.key),
+			checkpoint:
+				changes.cursor !== undefined &&
+				(checkpoint === null || BigInt(changes.cursor) >= BigInt(checkpoint.cursor))
+					? {
+							cursor: changes.cursor,
+							inventoryComplete: checkpoint?.inventoryComplete || changes.inventoryComplete === true
+						}
+					: null
+		};
 	}
 }

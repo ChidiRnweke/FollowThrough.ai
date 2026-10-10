@@ -5,7 +5,13 @@ interface WorkspaceDraftState {
 	readonly error: string | null;
 }
 /** One editor's observed base and pending local persistence. */
-export class WorkspaceDraftStore {
+export interface WorkspaceDraftStateAccess {
+	read(): WorkspaceDraftState;
+	update(change: Partial<WorkspaceDraftState>): void;
+	readonly staging: Promise<void>;
+	setStaging(pending: Promise<void>): void;
+}
+export class WorkspaceDraftStore implements WorkspaceDraftStateAccess {
 	private value = $state.raw<WorkspaceDraftState>({ current: null, savingLocal: 0, error: null });
 	private pending: Promise<void> = Promise.resolve();
 	read(): WorkspaceDraftState {

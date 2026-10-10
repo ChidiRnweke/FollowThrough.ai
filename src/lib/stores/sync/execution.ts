@@ -1,7 +1,21 @@
 import type { SyncLane, SyncLaneState, SyncWriteRetry } from '$lib/models/sync';
 
 /** One account lifetime; this store never starts work or invokes retained callbacks. */
-export class SyncExecutionStore {
+export interface SyncExecutionStateAccess {
+	readonly wakeVersion: number;
+	readonly online: boolean;
+	readonly stopped: boolean;
+	setOnline(value: boolean): void;
+	stop(): void;
+	lane(name: SyncLane): SyncLaneState;
+	updateLane(name: SyncLane, changes: Partial<SyncLaneState>): void;
+	writeRetries(): ReadonlyMap<string, SyncWriteRetry>;
+	setWriteRetry(id: string, retry: SyncWriteRetry): void;
+	deleteWriteRetry(id: string): void;
+	setWake(wake: (() => void) | null): void;
+	takeWake(): (() => void) | null;
+}
+export class SyncExecutionStore implements SyncExecutionStateAccess {
 	private readonly lanes: Record<SyncLane, SyncLaneState> = {
 		pull: { requested: false, running: null, retry: null, failures: 0, result: { kind: 'idle' } },
 		writes: { requested: false, running: null, retry: null, failures: 0, result: { kind: 'idle' } }
@@ -10,6 +24,10 @@ export class SyncExecutionStore {
 	private connected = true;
 	private closed = false;
 	private wake: (() => void) | null = null;
+	private wakeGeneration = 0;
+	get wakeVersion(): number {
+		return this.wakeGeneration;
+	}
 	get online(): boolean {
 		return this.connected;
 	}
@@ -50,6 +68,7 @@ export class SyncExecutionStore {
 		this.wake = wake;
 	}
 	takeWake(): (() => void) | null {
+		this.wakeGeneration++;
 		const wake = this.wake;
 		this.wake = null;
 		return wake;

@@ -1,25 +1,25 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { afterEach, expect, it } from 'vitest';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { syncEtag } from '$lib/models/sync';
-import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { syncEtag } from '$lib/models/sync';
+import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { afterEach, expect, it } from 'vitest';
 
 const cleanup: (() => void)[] = [];
 afterEach(() => {

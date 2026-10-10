@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { rebaseWorkspaceRecord } from './rebase';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
 import { widgetTemplates } from '$lib/models/widgets';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
+import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 
 const todo = todoBuilder();
 const record = (value: Partial<typeof todo>): WorkspaceRecord => ({

@@ -1,16 +1,16 @@
-import type {
-	IAgentModelSelectionService,
-	IAgentModelChoiceService
-} from '$lib/services/agent/model-selection';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 import type { DateTime } from '$lib/models/workspace';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
-import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+import type {
+	IAgentModelChoiceService,
+	IAgentModelSelectionService
+} from '$lib/services/agent/model-selection';
 
-import type { ShellContext } from '$lib/models/workspace-views';
-import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
-import type { WorkspaceBootstrap, StoredBootstrap } from '$lib/models/workspace-bootstrap';
 import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
-import type { WorkspaceSessionStore } from '$lib/stores/workspace/session.svelte';
+import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
+import type { StoredBootstrap, WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
+import type { ShellContext } from '$lib/models/workspace-views';
+import type { WorkspaceSessionStateAccess } from '$lib/stores/workspace/session.svelte';
 export interface WorkspaceSession {
 	readonly resources: WorkspaceResourcesController;
 	readonly bootstrap: WorkspaceBootstrap;
@@ -63,7 +63,7 @@ export interface WorkspaceResourceFactory {
 /** One account binding; late work cannot publish into a replacement session. */
 export class WorkspaceSessions implements WorkspaceSessionController {
 	constructor(
-		private readonly state: WorkspaceSessionStore,
+		private readonly state: WorkspaceSessionStateAccess,
 		private readonly environment: WorkspaceSessionEnvironment,
 		private readonly resources: WorkspaceResourceFactory,
 		private readonly recovery: WorkspaceRecovery,

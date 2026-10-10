@@ -1,21 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import type { UpdateTodoInput } from '$lib/models/todos';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/models/sync';
-import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { InMemoryTodoWrites } from '$lib/testing/sync/fakes/in-memory-todo-writes';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { syncEtag } from '$lib/models/sync';
+import type { UpdateTodoInput } from '$lib/models/todos';
+import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
+import { InMemoryTodoWrites } from '$lib/testing/sync/fakes/in-memory-todo-writes';
+import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 
 const setup = async () => {
 	const todo = todoBuilder();

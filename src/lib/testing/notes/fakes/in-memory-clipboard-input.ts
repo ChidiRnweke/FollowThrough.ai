@@ -1,8 +1,8 @@
 import type {
 	ClipboardFeedback,
-	ClipboardPaste,
 	ClipboardReader
 } from '$lib/controllers/notes/clipboard-operations';
+import type { ClipboardPaste } from '$lib/models/browser-workspace';
 import type { ClipboardTransferReport } from '$lib/models/clipboard';
 export class InMemoryClipboardInput implements ClipboardReader, ClipboardFeedback {
 	content: ClipboardPaste = { kind: 'text', text: 'replacement' };

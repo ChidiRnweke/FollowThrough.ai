@@ -1,8 +1,9 @@
-import { OutboxEditingService, OutboxDeliveryService } from '$lib/services/sync/state';
-import { createWriteAncestry } from './ancestry';
-import type { WriteRebase } from '$lib/models/outbox';
-import { DurableOutbox, type OutboxStorage } from '$lib/controllers/sync/durable-outbox';
+import { DurableOutbox } from '$lib/controllers/sync/durable-outbox';
 import type { DurableWriteController } from '$lib/controllers/sync/submission';
+import type { OutboxStorage } from '$lib/models/browser-workspace';
+import type { WriteRebase } from '$lib/models/outbox';
+import { OutboxDeliveryService, OutboxEditingService } from '$lib/services/sync/state';
+import { createWriteAncestry } from './ancestry';
 export const createDurableOutbox = <C, T>(
 	storage: OutboxStorage<C, T>,
 	rebase: WriteRebase<T>

@@ -1,5 +1,6 @@
 import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
+import { controllerImportViolations } from './controller-independence.ts';
 
 const root = resolve(import.meta.dirname, '..');
 const failures: string[] = [];
@@ -52,6 +53,15 @@ const collect = (directory: string): void => {
 	}
 };
 collect(resolve(root, 'src'));
+failures.push(
+	...controllerImportViolations(
+		new Map(
+			sourceFiles
+				.filter((file) => file.endsWith('.ts'))
+				.map((file) => [relative(root, file), readFileSync(file, 'utf8')])
+		)
+	)
+);
 
 for (const absolute of sourceFiles) {
 	const file = relative(root, absolute);

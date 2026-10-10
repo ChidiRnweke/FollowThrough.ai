@@ -1,31 +1,25 @@
-import type { ResourceCacheStore } from '$lib/stores/sync/cache';
-import type { SyncPage, SyncObjectRead } from '$lib/models/sync';
+import type { SyncReadTransport } from '$lib/models/browser-workspace';
+import type { CacheCommit, StoredCache, SynchronizationResult } from '$lib/models/sync';
 import {
-	type ResourceDeletion,
 	initialSyncCursor,
-	type SyncCursor,
-	type SyncEtag,
-	type ResourceState,
 	type CacheAccess,
-	type TransferState,
-	type SyncSnapshot
+	type ResourceDeletion,
+	type ResourceState,
+	type SyncSnapshot,
+	type TransferState
 } from '$lib/models/sync';
 import {
 	accessCache,
 	receiveResource,
-	resourceVersion,
-	resourceCurrent
+	resourceCurrent,
+	resourceVersion
 } from '$lib/services/sync/state';
-import type { CacheCommit, StoredCache, SynchronizationResult } from '$lib/models/sync';
+import type { ResourceCacheStore } from '$lib/stores/sync/cache';
+export type { SyncReadTransport } from '$lib/models/browser-workspace';
 
 export interface SyncCacheRepository<T> {
 	load(accountId: string): Promise<StoredCache<T>>;
 	commit(accountId: string, changes: CacheCommit<T>): Promise<void>;
-}
-
-export interface SyncReadTransport<T> {
-	pull(since: SyncCursor): Promise<SyncPage<T>>;
-	read(key: string, etag: SyncEtag | null): Promise<SyncObjectRead<T>>;
 }
 
 export interface ResourceCacheDependencies<T> {

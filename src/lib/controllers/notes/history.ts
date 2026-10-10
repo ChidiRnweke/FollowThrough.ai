@@ -1,17 +1,16 @@
+import type { NoteHistoryReader } from '$lib/models/browser-workspace';
 import type {
+	NoteHistoryReadState,
 	NoteId,
 	NoteRevision,
 	NoteRevisionId,
-	NoteRevisionSummary,
-	NoteHistoryReadState
+	NoteRevisionSummary
 } from '$lib/models/notes';
-import type { NoteActionWorkspace } from './actions';
-import type { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
 import type { NotePresentation } from '$lib/services/notes/presentation';
-export interface NoteHistoryReader {
-	list(noteId: NoteId): Promise<readonly NoteRevisionSummary[]>;
-	read(noteId: NoteId, revisionId: NoteRevisionId): Promise<NoteRevision>;
-}
+import type { NoteHistoryStore } from '$lib/stores/notes/history.svelte';
+import type { NoteActionWorkspace } from './actions';
+export type { NoteHistoryReader } from '$lib/models/browser-workspace';
+
 export interface NoteHistoryController {
 	readonly revisions: readonly NoteRevisionSummary[];
 	readonly selectedId: NoteRevisionId | undefined;

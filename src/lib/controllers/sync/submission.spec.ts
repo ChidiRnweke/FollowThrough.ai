@@ -1,13 +1,14 @@
+import type { OutboxTransport } from '$lib/models/browser-workspace';
+import type { WriteDraft } from '$lib/models/outbox';
+import { syncEtag } from '$lib/models/sync';
 import { wholeValueRebase } from '$lib/services/sync/rebase';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/models/sync';
-import type { WriteDraft } from '$lib/models/outbox';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import type { OutboxTransport } from './submission';
+
 import { createMutationQueue } from '$lib/factories/sync/submission';
 import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 

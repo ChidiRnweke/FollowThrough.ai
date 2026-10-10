@@ -1,7 +1,16 @@
 import type { OutboxProjection } from '$lib/models/outbox';
 
 /** Readonly projection and observation lifetime for one account's durable outbox. */
-export class MutationQueueStore<C, T> {
+export interface MutationQueueStateAccess<C, T> {
+	read(): OutboxProjection<C, T>;
+	readonly reloadGeneration: number;
+	advanceGeneration(): number;
+	replace(projection: OutboxProjection<C, T>): void;
+	clear(): void;
+	subscribe(listener: () => void): () => void;
+	listeners(): ReadonlySet<() => void>;
+}
+export class MutationQueueStore<C, T> implements MutationQueueStateAccess<C, T> {
 	private projection: OutboxProjection<C, T> = { entries: [], receipts: new Map() };
 	private generation = 0;
 	private readonly subscriptions = new Set<() => void>();

@@ -1,26 +1,25 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { describe, expect, it } from 'vitest';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { noteCommand } from '$lib/services/workspace/commands';
-import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import { syncEtag } from '$lib/models/sync';
+import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { noteCommand, workspaceResourceKey } from '$lib/services/workspace/commands';
+import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	noteBuilder,
 	projectBuilder,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
-import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
-import { createResourceCache } from '$lib/factories/sync/cache';
-import { createMutationQueue } from '$lib/factories/sync/submission';
-import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { describe, expect, it } from 'vitest';
 const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });

@@ -1,21 +1,21 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { expect, it } from 'vitest';
-import { render } from 'vitest-browser-svelte';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/models/sync';
-import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
-import {
-	InMemoryOutbox,
-	InMemoryAccountWriterLock
-} from '$lib/testing/sync/fakes/in-memory-outbox';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
+import { syncEtag } from '$lib/models/sync';
+import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import {
+	InMemoryAccountWriterLock,
+	InMemoryOutbox
+} from '$lib/testing/sync/fakes/in-memory-outbox';
+import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
+import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
+import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { render } from 'vitest-browser-svelte';
 import WorkspaceWriteReview from './workspace-write-review.svelte';
 
 const setup = async (

@@ -1,12 +1,12 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
+import { rebaseWorkspaceRecord } from '$lib/factories/workspace/rebase';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { InMemorySyncCache, InMemorySyncTransport } from '../fakes/in-memory-sync';
-import { InMemoryOutbox, InMemoryAccountWriterLock } from '../fakes/in-memory-outbox';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import { InMemoryAccountWriterLock, InMemoryOutbox } from '../fakes/in-memory-outbox';
 import { InMemorySyncScheduler } from '../fakes/in-memory-scheduler';
+import { InMemorySyncCache, InMemorySyncTransport } from '../fakes/in-memory-sync';
 
 export const workspaceResourcesFixture = (accountId: string) => {
 	const transport = new InMemorySyncTransport<WorkspaceRecord>();

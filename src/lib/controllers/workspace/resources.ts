@@ -1,68 +1,73 @@
-import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
-import type { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
 import type {
-	WorkspaceDraftStore,
-	ResourceObservationStore
-} from '$lib/stores/workspace/draft.svelte';
-import type { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
+	WorkspaceEditingEnvironment,
+	WorkspaceLocalRepository
+} from '$lib/models/browser-workspace';
+import type { ResourceState, SubmissionResult, SynchronizationResult } from '$lib/models/sync';
 import type {
 	StagedWrite,
 	WorkspaceEditContext,
 	WorkspaceSave
 } from '$lib/models/workspace-editing';
+import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 import type { WorkspaceReadiness } from '$lib/models/workspace-startup';
-import type { ResourceState, SynchronizationResult } from '$lib/models/sync';
-import type { SubmissionResult } from '$lib/models/sync';
+import type { IWorkspaceDraftService } from '$lib/services/workspace/draft';
+import type {
+	ResourceObservationStore,
+	WorkspaceDraftStore
+} from '$lib/stores/workspace/draft.svelte';
+import type { WorkspaceProjectionStore } from '$lib/stores/workspace/projection.svelte';
+import type { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
+export type {
+	WorkspaceEditingEnvironment,
+	WorkspaceLocalRepository
+} from '$lib/models/browser-workspace';
 
-import type { MutationQueueController } from '$lib/controllers/sync/submission';
 import type { ResourceCacheController } from '$lib/controllers/sync/cache';
+import type { MutationQueueController } from '$lib/controllers/sync/submission';
 import { workspaceReadiness } from '$lib/services/workspace/startup';
 
 import type { WorkspaceSynchronizationController } from '$lib/controllers/sync/execution';
 
-import type { DateTime } from '$lib/models/workspace';
+import type { WorkspaceCommandController } from '$lib/controllers/workspace/commands';
+import type { WorkspaceViewsController } from '$lib/controllers/workspace/views';
 import type { NoteRevision } from '$lib/models/notes';
 import {
-	type WriteDraft,
-	type WriteContent,
-	type OutboxEntry,
 	type DraftStatus,
+	type OutboxEntry,
 	type WriteConflictView,
-	type WriteBase
+	type WriteContent,
+	type WriteDraft
 } from '$lib/models/outbox';
-import {
-	visibleResources,
-	localResource,
-	accessCache,
-	accessMessage,
-	cachedSnapshot,
-	compareSyncEtags
-} from '$lib/services/sync/state';
-import { type WorkspaceValues, type WorkspaceRecord } from '$lib/models/workspace-records';
-import { isWorkspaceRecord } from '$lib/services/workspace/commands';
-import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
+import type { DateTime } from '$lib/models/workspace';
 import {
 	type PreparedWorkspaceCommand,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
-import { mutationResource, assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
-import type { WorkspaceCommandController } from '$lib/controllers/workspace/commands';
+import { type WorkspaceRecord, type WorkspaceValues } from '$lib/models/workspace-records';
 import {
-	type WorkspaceResourceType,
-	type WorkspaceResourceIdentity
+	type WorkspaceResourceIdentity,
+	type WorkspaceResourceType
 } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import type { WorkspaceViewsController } from '$lib/controllers/workspace/views';
+import {
+	accessCache,
+	accessMessage,
+	cachedSnapshot,
+	compareSyncEtags,
+	localResource,
+	visibleResources
+} from '$lib/services/sync/state';
+import {
+	assertWorkspaceWriteIdentity,
+	isWorkspaceRecord,
+	mutationResource,
+	workspaceRecordIdentity,
+	workspaceResourceKey
+} from '$lib/services/workspace/commands';
 
 import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';
 
 /** Framework mechanics at the browser input/observation boundary. */
-export interface WorkspaceEditingEnvironment {
-	now(): DateTime;
-	operationId(): string;
-	snapshot<T>(value: T): T;
-	observe(start: () => void): () => void;
-}
+
 export interface WorkspaceResourcesController {
 	readonly accountId: string;
 	readonly active: boolean;
@@ -167,14 +172,6 @@ export interface WorkspaceSurfaceFactory {
 		identity: WorkspaceResourceIdentity & { type: K }
 	): WorkspaceDraftController<K>;
 }
-export interface WorkspaceLocalRepository<C, T> {
-	read(accountId: string): Promise<WorkspaceLocalProjection<C, T>>;
-	observe(
-		accountId: string,
-		changed: (projection: WorkspaceLocalProjection<C, T>) => void,
-		failed: (error: Error) => void
-	): () => void;
-}
 
 export interface WorkspaceResourcesDependencies {
 	dispose?(): void;
@@ -232,7 +229,8 @@ export class WorkspaceResources
 		private readonly projections: WorkspaceViewsController,
 		private readonly surfaces: WorkspaceSurfaceFactory,
 		private readonly environment: WorkspaceEditingEnvironment,
-		private readonly commands: WorkspaceCommandController
+		private readonly commands: WorkspaceCommandController,
+		private readonly draftRules: IWorkspaceDraftService
 	) {}
 	private observe(): void {
 		this.data.addSubscriptions(
@@ -410,25 +408,12 @@ export class WorkspaceResources
 	}
 
 	/** Capture the version the editor actually sees, before its first change. */
-	editBase(identity: WorkspaceResourceIdentity): {
-		base: WriteBase<WorkspaceRecord> | null;
-		basedOn: string | null;
-		local: WorkspaceRecord;
-	} {
-		void this.revision;
-		const key = workspaceResourceKey(identity);
-		const pending = this.pending.findLast((entry) => entry.intent.key === key);
-		if (pending) {
-			if (!pending.intent.local) throw new Error('A locally deleted resource cannot be edited');
-			return {
-				base: pending.intent.base,
-				basedOn: pending.intent.operationId,
-				local: pending.intent.local
-			};
-		}
-		const snapshot = this.snapshot(identity);
-		if (!snapshot) throw new Error('Open the resource before editing it');
-		return { base: snapshot, basedOn: null, local: snapshot.value };
+	editBase(identity: WorkspaceResourceIdentity): WorkspaceEditContext {
+		return this.draftRules.editBase(
+			this.pending,
+			workspaceResourceKey(identity),
+			this.snapshot(identity)
+		);
 	}
 	state(identity: WorkspaceResourceIdentity) {
 		void this.revision;
@@ -458,11 +443,10 @@ export class WorkspaceResources
 			: receipt.resource.etag;
 	}
 	uncertainWrite(key: string, operationId: string | null): boolean {
-		void this.revision;
-		return (
-			operationId !== null &&
-			!this.pending.some((entry) => entry.intent.operationId === operationId) &&
-			this.local?.writes.receipts.get(key)?.operationId !== operationId
+		return this.draftRules.uncertain(
+			this.pending,
+			this.local?.writes.receipts.get(key) ?? null,
+			operationId
 		);
 	}
 	async discard(operationIds: readonly string[]): Promise<void> {
@@ -642,7 +626,8 @@ export class WorkspaceDraft<
 		private readonly resources: WorkspaceEditorCoordinator,
 		readonly identity: WorkspaceResourceIdentity & { type: K },
 		private readonly data: WorkspaceDraftStore,
-		private readonly environment: WorkspaceEditingEnvironment
+		private readonly environment: WorkspaceEditingEnvironment,
+		private readonly rules: IWorkspaceDraftService
 	) {
 		this.key = workspaceResourceKey(identity);
 	}
@@ -690,42 +675,28 @@ export class WorkspaceDraft<
 	}
 	get value(): WorkspaceValues[K] | null {
 		if (!this.resources.active) return null;
-		const creation = this.current?.base === null && this.current.basedOn === null;
-		if (
-			!creation &&
-			!this.entries.length &&
+		const record = this.rules.value(
+			this.current,
+			this.entries,
 			this.resources.state(this.identity)?.kind === 'deleted'
-		)
-			return null;
-		const last = this.entries.at(-1);
-		const record = last ? last.intent.local : this.current?.local;
+		);
 		return record ? this.valueOf(record) : null;
 	}
 	get status(): DraftStatus {
-		if (this.error || this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
-			return 'error';
-		if (!this.current) return 'loading';
-		if (this.savingLocal) return 'saving';
-		if (this.entries.some((entry) => entry.delivery.kind === 'conflict')) return 'conflict';
-		if (
-			this.entries.some(
-				(entry) => entry.delivery.kind === 'rejected' || entry.delivery.kind === 'retry'
-			)
-		)
-			return 'error';
-		if (this.entries.some((entry) => entry.delivery.kind === 'sending')) return 'saving';
-		return this.entries.length ? 'pending' : 'synced';
+		return this.rules.status(
+			this.error,
+			this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null),
+			this.current !== null,
+			this.savingLocal,
+			this.entries
+		);
 	}
 	get lastError(): string | undefined {
-		if (this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null))
-			return 'This item changed elsewhere. Save your edits to review the versions.';
-		if (this.error) return this.error;
-		const failed = this.entries.find(
-			(entry) => entry.delivery.kind === 'rejected' || entry.delivery.kind === 'retry'
+		return this.rules.lastError(
+			this.error,
+			this.resources.uncertainWrite(this.key, this.current?.basedOn ?? null),
+			this.entries
 		);
-		return failed && (failed.delivery.kind === 'rejected' || failed.delivery.kind === 'retry')
-			? failed.delivery.message
-			: undefined;
 	}
 	get conflict(): WriteConflictView<WorkspaceValues[K]> | undefined {
 		const entry = this.entries.find((entry) => entry.delivery.kind === 'conflict');

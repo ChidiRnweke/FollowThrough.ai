@@ -1,17 +1,18 @@
-import { Editor } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
-import { TableKit } from '@tiptap/extension-table';
-import { TiptapNoteEditor } from '$lib/client/notes/tiptap-editor';
-import { NoteEditor, type NoteEditorEvents } from '$lib/controllers/notes/editor-operations';
-import { NoteClipboard } from '$lib/controllers/notes/clipboard-operations';
-import { ClipboardTransfer, type ClipboardDependencies } from '$lib/controllers/notes/clipboard';
-import { NoteEditorOperationStore } from '$lib/stores/notes/editor-operations.svelte';
-import { noteDocuments } from '$lib/factories/notes/document-presentation';
 import { BrowserClipboardDocument } from '$lib/client/clipboard/document';
+import { createSelectionActionPlugin } from '$lib/client/notes/selection-action-plugin';
+import { TiptapNoteEditor } from '$lib/client/notes/tiptap-editor';
+import { ClipboardTransfer, type ClipboardDependencies } from '$lib/controllers/notes/clipboard';
+import { NoteClipboard } from '$lib/controllers/notes/clipboard-operations';
+import { NoteEditor } from '$lib/controllers/notes/editor-operations';
+import { noteDocuments } from '$lib/factories/notes/document-presentation';
+import type { NoteEditorEvents } from '$lib/models/browser-workspace';
+import { NoteEditorOperationStore } from '$lib/stores/notes/editor-operations.svelte';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { Editor } from '@tiptap/core';
+import { TableKit } from '@tiptap/extension-table';
+import StarterKit from '@tiptap/starter-kit';
 import { InMemoryClipboard } from '../fakes/in-memory-clipboard';
 import { InMemoryClipboardInput } from '../fakes/in-memory-clipboard-input';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { createSelectionActionPlugin } from '$lib/client/notes/selection-action-plugin';
 export const editorOperationsFixture = () => {
 	const editor = new Editor({
 		element: document.createElement('div'),

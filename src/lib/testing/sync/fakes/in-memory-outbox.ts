@@ -1,24 +1,30 @@
-import { OutboxDeliveryService, OutboxEditingService } from '$lib/services/sync/state';
-import { createWriteAncestry } from '$lib/factories/sync/ancestry';
 import type { WriteAncestryController } from '$lib/controllers/sync/ancestry';
+import { createWriteAncestry } from '$lib/factories/sync/ancestry';
+import type {
+	AccountWriterLock,
+	OutboxStorage,
+	OutboxTable,
+	OutboxTransaction
+} from '$lib/models/browser-workspace';
 import {
-	type WriteReceipt,
-	type WriteBaseResolution,
 	type OutboxEntry,
+	type WriteBaseResolution,
 	type WriteDraft,
 	type WriteOutcome,
-	type WriteRebase
+	type WriteRebase,
+	type WriteReceipt
 } from '$lib/models/outbox';
+import { OutboxDeliveryService, OutboxEditingService } from '$lib/services/sync/state';
 
+import type { SyncCacheRepository } from '$lib/client/sync/contracts';
 import type {
 	WorkspaceLocalProjection,
 	WorkspaceLocalRepository
 } from '$lib/client/sync/workspace-local-repository';
-import { InMemorySyncCache } from './in-memory-sync';
-import type { SyncCacheRepository } from '$lib/client/sync/contracts';
-import type { AccountWriterLock } from '$lib/controllers/sync/submission';
 
-export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
+import { InMemorySyncCache } from './in-memory-sync';
+
+export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T>, OutboxStorage<C, T> {
 	private readonly delivery = new OutboxDeliveryService();
 	private readonly editing = new OutboxEditingService();
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
@@ -47,6 +53,70 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 			commit: (accountId, changes) => this.cache.commit(accountId, changes)
 		};
 	}
+	readDraft(draft: WriteDraft<C, T>): WriteDraft<C, T> {
+		return structuredClone(draft);
+	}
+	private transactionFlight: Promise<void | { kind: 'failure' }> = Promise.resolve();
+	transaction<R>(
+		accountId: string,
+		_tables: readonly OutboxTable[],
+		work: (tx: OutboxTransaction<C, T>) => Promise<R>
+	): Promise<R> {
+		const operation = this.transactionFlight.then(async () => {
+			let entries = [...this.entries(accountId)];
+			const receipts = new Map(this.receipts.get(accountId));
+			const cached = await this.cache.load(accountId);
+			const resources = new Map(cached.records.map((row) => [row.key, row.entry]));
+			const touched = new Set<string>();
+			let sequence = this.sequence;
+			const result = await work({
+				entries: async () => entries,
+				receipt: async (key) => receipts.get(key) ?? null,
+				resource: async (key) => resources.get(key),
+				allocate: async (draft) => {
+					const gate = this.appendGate;
+					if (gate) {
+						this.appendGate = null;
+						gate.entered();
+						await gate.wait;
+					}
+					if (this.appendFailure) throw new Error(this.appendFailure);
+					const failure = this.appendFailures.get(draft.key);
+					if (failure) throw new Error(failure);
+					return ++sequence;
+				},
+				removeAllocated: async () => undefined,
+				replace: async (_previous, next) => {
+					entries = [...next];
+				},
+				putReceipt: async (key, receipt) => {
+					receipts.set(key, receipt);
+				},
+				putResource: async (key, resource) => {
+					resources.set(key, resource);
+					touched.add(key);
+				}
+			});
+			const put = [...touched].map((key) => {
+				const entry = resources.get(key);
+				if (!entry) throw new Error('The transaction lost a cached resource');
+				return { key, entry };
+			});
+			await this.cache.commit(accountId, { put, remove: [] });
+			this.accounts.set(accountId, entries);
+			this.receipts.set(accountId, receipts);
+			this.sequence = sequence;
+			return result;
+		});
+		this.transactionFlight = operation.then(
+			() => undefined,
+			(): { kind: 'failure' } => {
+				return { kind: 'failure' };
+			}
+		);
+		return operation;
+	}
+
 	private appendGate: { readonly entered: () => void; readonly wait: Promise<void> } | null = null;
 	pauseAppend(): { readonly started: Promise<void>; readonly release: () => void } {
 		const started = Promise.withResolvers<void>();

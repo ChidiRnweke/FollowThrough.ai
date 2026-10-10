@@ -1,20 +1,21 @@
-import {
-	type SyncSnapshot,
-	type SyncCursor,
-	type SyncPage,
-	type ResourceChange
-} from '$lib/models/sync';
-import { mergeResourceStates, resourceVersion } from '$lib/services/sync/state';
 import type {
 	CacheCommit,
 	CachedRecord,
+	ObjectRead,
 	StoredCache,
 	SyncCacheRepository,
-	SyncReadTransport,
-	ObjectRead
+	SyncReadTransport
 } from '$lib/client/sync/contracts';
+import type { CacheStorage, CacheTransaction } from '$lib/models/browser-workspace';
+import {
+	type ResourceChange,
+	type SyncCursor,
+	type SyncPage,
+	type SyncSnapshot
+} from '$lib/models/sync';
+import { mergeResourceStates, resourceVersion } from '$lib/services/sync/state';
 
-export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
+export class InMemorySyncCache<T> implements SyncCacheRepository<T>, CacheStorage<T> {
 	private readonly accounts = new Map<string, Map<string, CachedRecord<T>>>();
 	private readonly cursors = new Map<string, SyncCursor>();
 	private readonly inventories = new Map<string, boolean>();
@@ -40,6 +41,41 @@ export class InMemorySyncCache<T> implements SyncCacheRepository<T> {
 			await paused.ready;
 		}
 		return stored;
+	}
+
+	private transactionFlight: Promise<void | { kind: 'failure' }> = Promise.resolve();
+	transaction<R>(accountId: string, work: (tx: CacheTransaction<T>) => Promise<R>): Promise<R> {
+		const operation = this.transactionFlight.then(async () => {
+			if (this.writeFailure) throw new Error(this.writeFailure);
+			const records = new Map(this.accounts.get(accountId));
+			let cursor = this.cursors.get(accountId);
+			let inventoryComplete = this.inventories.get(accountId) ?? false;
+			const result = await work({
+				resources: async (keys) => new Map(keys.map((key) => [key, records.get(key)?.entry])),
+				checkpoint: async () => (cursor === undefined ? null : { cursor, inventoryComplete }),
+				put: async (rows) => {
+					for (const row of rows) records.set(row.key, row);
+				},
+				remove: async (keys) => {
+					for (const key of keys) records.delete(key);
+				},
+				putCheckpoint: async (checkpoint) => {
+					cursor = checkpoint.cursor;
+					inventoryComplete = checkpoint.inventoryComplete;
+				}
+			});
+			this.accounts.set(accountId, records);
+			if (cursor !== undefined) this.cursors.set(accountId, cursor);
+			this.inventories.set(accountId, inventoryComplete);
+			return result;
+		});
+		this.transactionFlight = operation.then(
+			() => undefined,
+			(): { kind: 'failure' } => {
+				return { kind: 'failure' };
+			}
+		);
+		return operation;
 	}
 
 	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
