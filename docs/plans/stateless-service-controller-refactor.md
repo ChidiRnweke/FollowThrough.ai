@@ -415,7 +415,8 @@ Every service module below has a planned disposition. This is routing, not compl
 
 ## Maintenance ownership and current verification
 
-- Scheduler execution moved to `server/controllers/maintenance/scheduler.ts`. Its factory only
+- Scheduler execution moved to `server/controllers/maintenance/scheduler.ts`, and later to the timer
+  adapter `server/adapters/maintenance/scheduler.ts`, because it ran other controllers' tasks. Its factory only
   constructs it; the worker starts it explicitly. Timers, executions and lifecycle live in
   `server/stores/maintenance/scheduler.ts`. Shutdown remains permanent and drains active work.
 - Upload retention and durable attachment-object removal moved to attachment controllers.

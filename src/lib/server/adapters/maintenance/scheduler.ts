@@ -1,17 +1,21 @@
 import { SpanStatusCode, trace } from '@opentelemetry/api';
-import type { ScheduledTask, SchedulerClock, SchedulerHandle } from '$lib/models/maintenance';
-import type { SchedulerStore } from '$lib/server/stores/maintenance/scheduler';
+import type {
+	ScheduledTask,
+	Scheduler,
+	SchedulerClock,
+	SchedulerState
+} from '$lib/models/maintenance';
 
-export interface SchedulerController extends SchedulerHandle {
-	start(): void;
-}
 const tracer = trace.getTracer('followthrough-worker');
 
-/** Each task reschedules only after it settles; stop drains every active task. */
-export class WorkerScheduler implements SchedulerController {
+/**
+ * Timer protocol for the worker. Each tick runs exactly one task, and a task reschedules only
+ * after it settles; stop drains every active task. The worker entry point owns which tasks run.
+ */
+export class WorkerScheduler implements Scheduler {
 	constructor(
 		private readonly tasks: readonly ScheduledTask[],
-		private readonly state: SchedulerStore,
+		private readonly state: SchedulerState,
 		private readonly clock: SchedulerClock,
 		private readonly logger: Pick<Console, 'error' | 'info'>,
 		private readonly runOnStart: boolean

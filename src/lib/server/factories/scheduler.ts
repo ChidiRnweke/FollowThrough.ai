@@ -1,8 +1,10 @@
-import type { ScheduledTask, SchedulerClock, SchedulerOptions } from '$lib/models/maintenance';
-import {
-	WorkerScheduler,
-	type SchedulerController
-} from '$lib/server/controllers/maintenance/scheduler';
+import type {
+	ScheduledTask,
+	Scheduler,
+	SchedulerClock,
+	SchedulerOptions
+} from '$lib/models/maintenance';
+import { WorkerScheduler } from '$lib/server/adapters/maintenance/scheduler';
 import { SchedulerStore } from '$lib/server/stores/maintenance/scheduler';
 
 const clock: SchedulerClock = {
@@ -12,7 +14,7 @@ const clock: SchedulerClock = {
 export const createScheduler = (
 	tasks: readonly ScheduledTask[],
 	options: SchedulerOptions = {}
-): SchedulerController =>
+): Scheduler =>
 	new WorkerScheduler(
 		tasks,
 		new SchedulerStore(),
