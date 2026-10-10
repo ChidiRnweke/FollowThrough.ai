@@ -1,8 +1,7 @@
 import { liveQuery } from 'dexie';
 import type { z } from 'zod';
-import type { WriteRebase } from '$lib/models/outbox';
 import type { StoredCache } from './contracts';
-import type { OutboxProjection, OutboxRepository } from './outbox-contracts';
+import type { OutboxProjection } from './outbox-contracts';
 import { WorkspaceDatabase } from './database';
 import { IndexedDbSyncCache } from './indexeddb-cache';
 import { IndexedDbOutbox } from './indexeddb-outbox';
@@ -11,7 +10,7 @@ export interface WorkspaceLocalProjection<C, T> {
 	readonly cache: StoredCache<T>;
 	readonly writes: OutboxProjection<C, T>;
 }
-export interface WorkspaceLocalRepository<C, T> extends OutboxRepository<C, T> {
+export interface WorkspaceLocalRepository<C, T> {
 	read(accountId: string): Promise<WorkspaceLocalProjection<C, T>>;
 	observe(
 		accountId: string,
@@ -30,11 +29,10 @@ export class DexieWorkspaceRepository<C, T>
 		accountId: string,
 		command: z.ZodType<C>,
 		value: z.ZodType<T>,
-		rebase: WriteRebase<T>,
 		name = 'followthrough-workspace-sync'
 	) {
 		const database = new WorkspaceDatabase(accountId, name);
-		super(command, value, rebase, database);
+		super(command, value, database);
 		this.cache = new IndexedDbSyncCache(value, database);
 	}
 	async read(accountId: string): Promise<WorkspaceLocalProjection<C, T>> {

@@ -1,3 +1,5 @@
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
+import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,8 +13,8 @@ import { InMemoryAccountWriterLock } from '$lib/testing/sync/fakes/in-memory-out
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
 import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
 import { requestValue } from '$lib/client/sync/database';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {
@@ -23,14 +25,14 @@ const setup = async () => {
 		note.userId,
 		workspaceCommandSchema,
 		workspaceRecordSchema,
-		rebaseWorkspaceRecord,
 		newName
 	);
-	const repository = outbox.cache;
+	const outboxWrites = createDurableOutbox(outbox, rebaseWorkspaceRecord);
+	const repository = createCachePersistence(outbox.cache);
 	const transport = new InMemoryNoteWrites();
 	const key = workspaceResourceKey({ type: 'notes', id: [note.id] });
 	transport.records.set(key, { etag: syncEtag(1n), value: { type: 'notes', value: note } });
-	await outbox.append(note.userId, {
+	await outboxWrites.append(note.userId, {
 		operationId: crypto.randomUUID(),
 		key,
 		command: noteCommand(local),
@@ -40,15 +42,15 @@ const setup = async () => {
 		coalesce: 'document',
 		references: []
 	});
-	const cache = new ResourceCache(note.userId, {
+	const cache = createResourceCache(note.userId, {
 		transport,
 		repository: {
 			load: async (accountId) => (await outbox.read(accountId)).cache,
 			commit: (accountId, changes) => repository.commit(accountId, changes)
 		}
 	});
-	const writes = new MutationQueue(note.userId, {
-		repository: outbox,
+	const { writes, execution } = createMutationQueue(note.userId, {
+		repository: outboxWrites,
 		transport,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
@@ -57,7 +59,8 @@ const setup = async () => {
 	const resources = new WorkspaceResources(note.userId, {
 		repository: outbox,
 		cache,
-		writes
+		writes,
+		execution
 	});
 	const unsubscribe = outbox.observe(
 		note.userId,
@@ -71,11 +74,10 @@ const setup = async () => {
 	cleanups.push(async () => {
 		unsubscribe();
 		resources.stop();
-		await repository.close();
 		await outbox.close();
 		await requestValue(indexedDB.deleteDatabase(outbox.database.name));
 	});
-	return { note, local, key, transport, resources, store, outbox };
+	return { note, local, key, transport, resources, store, outbox, outboxWrites };
 };
 afterEach(async () => {
 	for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -115,9 +117,9 @@ it('does not label an editor buffer synced after its saved edit is discarded els
 });
 
 it('retains the editor buffer with an error after a discard committed outside this app instance', async () => {
-	const { store, resources, local, outbox, note } = await setup();
+	const { store, resources, local, outbox, outboxWrites, note } = await setup();
 	await store.read();
-	await outbox.discard(
+	await outboxWrites.discard(
 		note.userId,
 		(await outbox.list(note.userId)).map((entry) => entry.intent.operationId)
 	);
@@ -131,16 +133,16 @@ it('retains the editor buffer with an error after a discard committed outside th
 });
 
 it('recognizes a durable acknowledgement from another writer while this tab remains offline', async () => {
-	const { store, resources, outbox, note, transport } = await setup();
+	const { store, resources, outboxWrites, note, transport } = await setup();
 	await store.read();
-	const sent = await outbox.take(note.userId);
+	const sent = await outboxWrites.take(note.userId);
 	if (!sent || !sent.intent.base?.etag) throw new Error('The persisted edit must retain its base');
 	const result = await transport.send({
 		operationId: sent.intent.operationId,
 		baseEtag: sent.intent.base.etag,
 		command: sent.intent.command
 	});
-	await outbox.settle(note.userId, sent, result);
+	await outboxWrites.settle(note.userId, sent, result);
 	await resources.synchronize();
 	await expect.poll(() => store.status).toBe('synced');
 });

@@ -1,12 +1,14 @@
+import { CacheSynchronization } from './cache';
+import { ResourceCacheStore } from '$lib/stores/sync/cache';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/services/sync/versions';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
-import { ResourceCache } from './resource-cache';
+import { createResourceCache } from '$lib/factories/sync/cache';
 
 const setup = () => {
 	const repository = new InMemorySyncCache<string>();
 	const transport = new InMemorySyncTransport<string>();
-	const cache = new ResourceCache('user-a', { repository, transport });
+	const cache = createResourceCache('user-a', { repository, transport });
 	return { repository, transport, cache };
 };
 const first = { etag: syncEtag(1n), value: 'First copy' };
@@ -38,7 +40,7 @@ describe('complete resource replication', () => {
 		const { repository, transport, cache } = setup();
 		transport.records.set('note:1', first);
 		await cache.refresh();
-		const restarted = new ResourceCache('user-a', { repository, transport });
+		const restarted = createResourceCache('user-a', { repository, transport });
 		restarted.setOnline(false);
 		const opened = await restarted.open('note:1');
 		expect({ opened, accessed: restarted.access('note:1') }).toEqual({
@@ -117,5 +119,31 @@ describe('complete resource replication', () => {
 		const { cache } = setup();
 		await cache.open('note:1');
 		expect(cache.access('note:1')).toEqual({ kind: 'unavailable' });
+	});
+});
+
+it('does not retain a delayed targeted-read failure after account teardown', async () => {
+	const repository = new InMemorySyncCache<string>();
+	const transport = new InMemorySyncTransport<string>();
+	const state = new ResourceCacheStore<string>();
+	const cache = new CacheSynchronization('account', { repository, transport }, state);
+	const gate = transport.pause('note');
+	const opening = cache.open('note');
+	await gate.started;
+	const reading = state.fetching('note');
+	cache.stop();
+	transport.readFailure = 'Disconnected';
+	gate.release();
+	await reading;
+	expect({
+		opened: await opening,
+		failures: cache.failedDownloads,
+		records: cache.records.size,
+		status: cache.status
+	}).toEqual({
+		opened: { kind: 'unavailable' },
+		failures: 0,
+		records: 0,
+		status: { kind: 'stopped' }
 	});
 });

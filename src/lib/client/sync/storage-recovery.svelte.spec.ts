@@ -1,5 +1,5 @@
-import { wholeValueRebase } from '$lib/services/sync/rebase';
-import { ResourceCache } from './resource-cache';
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
+import { createResourceCache } from '$lib/factories/sync/cache';
 import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import { afterEach, expect, it } from 'vitest';
 import { Dexie } from 'dexie';
@@ -12,13 +12,7 @@ import { receiveResource } from '$lib/services/sync/state';
 
 const databases: WorkspaceDatabase[] = [];
 const setup = (account = 'alice', prefix = `recovery-${crypto.randomUUID()}`) => {
-	const repository = new DexieWorkspaceRepository(
-		account,
-		z.string(),
-		z.string(),
-		wholeValueRebase<string>(),
-		prefix
-	);
+	const repository = new DexieWorkspaceRepository(account, z.string(), z.string(), prefix);
 	databases.push(repository.database);
 	return { repository, recovery: new IndexedDbStorageRecovery(prefix), prefix };
 };
@@ -49,14 +43,14 @@ it('rejects later writes through a storage instance stopped by corruption', asyn
 	const { repository } = setup();
 	await damage(repository);
 	await repository.read('alice').catch(() => ({ kind: 'failure' }));
-	await expect(repository.cache.commit('alice', { put: [], remove: [] })).rejects.toThrow(
-		'Export a copy'
-	);
+	await expect(
+		createCachePersistence(repository.cache).commit('alice', { put: [], remove: [] })
+	).rejects.toThrow('Export a copy');
 });
 it('exports only the selected account database', async () => {
 	const { repository, recovery, prefix } = setup();
 	const other = setup('bob', prefix).repository;
-	await repository.cache.commit('alice', {
+	await createCachePersistence(repository.cache).commit('alice', {
 		put: [
 			{
 				key: 'note',
@@ -65,7 +59,7 @@ it('exports only the selected account database', async () => {
 		],
 		remove: []
 	});
-	await other.cache.commit('bob', {
+	await createCachePersistence(other.cache).commit('bob', {
 		put: [
 			{
 				key: 'note',
@@ -85,7 +79,9 @@ it('cannot reopen an old instance after another tab resets the account', async (
 	const other = setup('alice', prefix).repository;
 	await Promise.all([repository.read('alice'), other.read('alice')]);
 	await recovery.resetAccount('alice');
-	await expect(other.cache.commit('alice', { put: [], remove: [] })).rejects.toThrow('another tab');
+	await expect(
+		createCachePersistence(other.cache).commit('alice', { put: [], remove: [] })
+	).rejects.toThrow('another tab');
 });
 it('starts a clean instance only after reset has completed', async () => {
 	const { repository, recovery, prefix } = setup();
@@ -100,7 +96,7 @@ it('leaves another account intact when resetting this account', async () => {
 	const { repository, recovery, prefix } = setup();
 	const other = setup('bob', prefix).repository;
 	await repository.read('alice');
-	await other.cache.commit('bob', {
+	await createCachePersistence(other.cache).commit('bob', {
 		put: [
 			{ key: 'note', entry: receiveResource(undefined, { etag: syncEtag(1n), value: 'Keep me' }) }
 		],
@@ -119,7 +115,10 @@ it('cannot restore a reset account from an earlier network response', async () =
 	const { repository, recovery, prefix } = setup();
 	const transport = new InMemorySyncTransport<string>();
 	transport.records.set('note', { etag: syncEtag(1n), value: 'Old network response' });
-	const cache = new ResourceCache('alice', { repository: repository.cache, transport });
+	const cache = createResourceCache('alice', {
+		repository: createCachePersistence(repository.cache),
+		transport
+	});
 	await cache.initialize();
 	const paused = transport.pause('changes');
 	const pending = cache.refresh();

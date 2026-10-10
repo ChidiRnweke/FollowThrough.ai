@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest';
 import { syncEtag } from '$lib/services/sync/versions';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
-import { ResourceCache } from './resource-cache';
+import { createResourceCache } from '$lib/factories/sync/cache';
 
 const setup = () => {
 	const repository = new InMemorySyncCache<string>();
 	const transport = new InMemorySyncTransport<string>();
-	const cache = new ResourceCache('account', { repository, transport });
+	const cache = createResourceCache('account', { repository, transport });
 	return { repository, transport, cache };
 };
 const first = { etag: syncEtag(1n), value: 'Original' };

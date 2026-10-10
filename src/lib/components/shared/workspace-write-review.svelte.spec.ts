@@ -13,8 +13,8 @@ import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
 } from '$lib/testing/sync/fakes/in-memory-outbox';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import WorkspaceWriteReview from './workspace-write-review.svelte';
 
@@ -27,11 +27,11 @@ const setup = async (
 	const identity: WorkspaceResourceIdentity = { type: 'projects', id: [project.id] };
 	const key = workspaceResourceKey(identity);
 	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(rebaseWorkspaceRecord);
-	const cache = new ResourceCache(project.userId, {
+	const cache = createResourceCache(project.userId, {
 		repository: repository.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()
 	});
-	const writes = new MutationQueue(project.userId, {
+	const { writes, execution } = createMutationQueue(project.userId, {
 		repository,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
@@ -45,7 +45,8 @@ const setup = async (
 	const resources = new WorkspaceResources(project.userId, {
 		repository: repository,
 		cache,
-		writes
+		writes,
+		execution
 	});
 	repository.observe(project.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);

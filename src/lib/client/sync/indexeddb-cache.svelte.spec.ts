@@ -1,3 +1,4 @@
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { cacheRepositoryContract } from '$lib/testing/sync/contracts/cache-contract';
 import { WorkspaceDatabase } from './database';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,9 +12,10 @@ const openRepositories: IndexedDbSyncCache<string>[] = [];
 const setup = (name = `workspace-sync-test-${crypto.randomUUID()}`, accountId = 'user-a') => {
 	const database = new WorkspaceDatabase(accountId, name);
 	if (!databases.includes(database.name)) databases.push(database.name);
-	const repository = new IndexedDbSyncCache(z.string(), database);
-	openRepositories.push(repository);
-	return { name, repository };
+	const repositoryStorage = new IndexedDbSyncCache(z.string(), database);
+	const repository = createCachePersistence(repositoryStorage);
+	openRepositories.push(repositoryStorage);
+	return { name, repository, repositoryStorage };
 };
 
 const entry: ResourceState<string> = {
@@ -65,14 +67,14 @@ describe('durable workspace cache', () => {
 		expect((await repository.load('user-a')).records).toEqual([{ key: 'note:1', entry }]);
 	});
 	it('retains the deletion and acknowledged cursor together after reopening storage', async () => {
-		const { name, repository } = setup();
+		const { name, repository, repositoryStorage } = setup();
 		await repository.commit('user-a', {
 			put: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
 			remove: [],
 			cursor: initialSyncCursor,
 			inventoryComplete: true
 		});
-		await repository.close();
+		await repositoryStorage.close();
 		expect(await setup(name).repository.load('user-a')).toEqual({
 			inventoryComplete: true,
 			records: [{ key: 'note:1', entry: { kind: 'deleted', etag: syncEtag(1n) } }],
@@ -105,9 +107,9 @@ describe('durable workspace cache', () => {
 	});
 
 	it('retains cached content after reopening storage', async () => {
-		const { name, repository } = setup();
+		const { name, repository, repositoryStorage } = setup();
 		await repository.commit('user-a', { put: [{ key: 'note:1', entry }], remove: [] });
-		await repository.close();
+		await repositoryStorage.close();
 		const reopened = setup(name).repository;
 		expect((await reopened.load('user-a')).records).toEqual([{ key: 'note:1', entry }]);
 	});

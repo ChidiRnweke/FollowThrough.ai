@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965c26f84e1 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c7d9fbdd15647b54560cecb82593e3d81414afdf 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -20,7 +20,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965
    [/^src\/routes\//, Layer.COMPONENTS],
    [/^src\/lib\/server\/(repositories|db)\//, Layer.REPOSITORIES],
    [/^src\/lib\/server\/services\//, Layer.SERVICES],
-+  [/^src\/lib\/server\/adapters\//, Layer.ADAPTERS],
++  [/^src\/lib\/(server\/)?adapters\//, Layer.ADAPTERS],
 +  [/^src\/lib\/server\/stores\//, Layer.STORES],
    [/^src\/lib\/server\/controllers\//, Layer.CONTROLLERS],
    [/^src\/lib\/server\/config\.(ts|js)$/, Layer.CONFIG],
@@ -49,20 +49,42 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965
  var PACKAGE_RULES = [
    {
      match: (s) => s === "drizzle-orm" || s.startsWith("drizzle-orm/"),
-@@ -9087,6 +9099,12 @@ class ImportBoundaryService {
+@@ -9087,6 +9099,16 @@ class ImportBoundaryService {
      const importedLayer = layers.get(edge.imported);
      if (importedLayer === undefined)
        return [];
-+    // Shared services/controllers keep their real layer. Browser-facing code may
-+    // call them without routing a local decision through the server. The separate
-+    // server-leak check still rejects any server-only dependency they acquire.
-+    if ([Layer.CLIENT, Layer.STORES, Layer.COMPONENTS].includes(importerLayer) &&
-+        /^src\/lib\/(services|controllers)\//.test(edge.imported))
++    // ADR 0007: browser components invoke controller operations and compose their
++    // interface-typed browser capabilities. Services and mutable stores are not entry points.
++    if (importerLayer === Layer.COMPONENTS &&
++        /^src\/lib\/(controllers|factories)\//.test(edge.imported))
++      return [];
++    // Contracts are declared with their operation owner. Boundary adapters implement
++    // those contracts, and coordinators receive them from factories; no construction leaks.
++    if (edge.isTypeOnly && importedLayer === Layer.CONTROLLERS &&
++        [Layer.CONTROLLERS, Layer.CLIENT, Layer.STORES].includes(importerLayer))
 +      return [];
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9205,11 +9223,9 @@ function fixFor(importer, imported) {
+@@ -9190,30 +9212,26 @@ function fixFor(importer, imported) {
+     return "One service never imports another. If you need a shared type, it is domain " + "data — move it to $lib/models. Service-local data is fine, but no other " + "service may reach for it. If you need the behaviour, orchestrate both " + "services from a controller.";
+   }
+   if (importer === Layer.CONTROLLERS && imported === Layer.CONTROLLERS) {
+-    return "Controllers do not chain. Compose the services they need instead, and put " + "any shared type in $lib/models.";
++    return "Receive operation contracts through type-only imports and factory injection. " + "Do not construct another controller implementation inside a controller.";
+   }
+   if (imported === Layer.REPOSITORIES) {
+     return "Depend on the repository interface and let the factory inject the implementation.";
+   }
+   if (imported === Layer.SERVICES || imported === Layer.CONTROLLERS) {
+-    return "Go through the factory: routes and remote functions are the only entry points.";
++    return "Components invoke controller operations. Stores retain state and adapters handle I/O; " + "move domain decisions and workflow coordination to services and controllers.";
+   }
+   if (imported === Layer.FACTORY) {
+-    return "Only routes and remote functions build from the factory.";
++    return "Keep dependency construction in capability factories and application composition. " + "Do not construct application capabilities inside stores, services or controllers.";
+   }
+   return "Move the dependency to a layer that is allowed to hold it.";
  }
  
  // src/chisel/checker/services/architecture/layout.ts
@@ -73,9 +95,13 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965
 -  [/^src\/lib\/services\//, "src/lib/services/", "src/lib/server/services/"],
 -  [/^src\/lib\/controllers\//, "src/lib/controllers/", "src/lib/server/controllers/"],
    [/^src\/lib\/repositories\//, "src/lib/repositories/", "src/lib/server/repositories/"],
-   [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
+-  [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
  ];
-@@ -10244,7 +10260,6 @@ class TestStructureService {
+-
+ class LayoutService {
+   ruleIdPrefix = "structure";
+   check(project) {
+@@ -10244,7 +10262,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -83,7 +109,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10306,6 @@ class TestStructureService {
+@@ -10291,29 +10308,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -113,7 +139,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..04dc2ed69145cd8d6586f7b65dec9965
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10362,6 @@ class TestStructureService {
+@@ -10370,7 +10364,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

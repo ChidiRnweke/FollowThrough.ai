@@ -1,4 +1,4 @@
-import { CatalogWidgetCandidateReader } from '$lib/remote/widgets/candidate-reader';
+import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
 import { WidgetCatalogService } from '$lib/services/widgets/catalog-prompt';
 const widgetCatalogRule = new WidgetCatalogService();
 import { describe, expect, it } from 'vitest';

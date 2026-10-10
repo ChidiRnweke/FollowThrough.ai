@@ -245,3 +245,6 @@ export class AgentProviderFailure extends Error {
 		this.name = 'AgentProviderFailure';
 	}
 }
+
+/** The server authenticated a different account during an outbox request. */
+export class OutboxAccountChangedError extends Error {}

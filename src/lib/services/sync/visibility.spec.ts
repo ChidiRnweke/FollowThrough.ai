@@ -1,8 +1,10 @@
+import { OutboxEditingService } from '$lib/services/sync/state';
 import { describe, expect, it } from 'vitest';
 import { type ResourceState } from '$lib/models/sync';
 import { syncEtag } from '$lib/services/sync/versions';
 import { type WriteDraft } from '$lib/models/outbox';
-import { appendWrite, localResource, visibleResources } from '$lib/services/sync/state';
+import { localResource, visibleResources } from '$lib/services/sync/state';
+const editing = new OutboxEditingService();
 
 const draft: WriteDraft<string, string> = {
 	operationId: 'a0000000-0000-4000-8000-000000000001',
@@ -23,17 +25,17 @@ describe('local resource visibility', () => {
 		expect([...visibleResources(records, [])]).toEqual([['note:1', 'Saved']]);
 	});
 	it('shows a newly created object without requiring a server representation', () => {
-		expect([...visibleResources(new Map(), appendWrite([], draft, 1))]).toEqual([
+		expect([...visibleResources(new Map(), editing.append([], draft, 1))]).toEqual([
 			['note:1', 'Offline note']
 		]);
 	});
 	it('hides a locally deleted object while preserving its server base', () => {
-		expect([...visibleResources(records, appendWrite([], { ...draft, local: null }, 1))]).toEqual(
-			[]
-		);
+		expect([
+			...visibleResources(records, editing.append([], { ...draft, local: null }, 1))
+		]).toEqual([]);
 	});
 	it('lets the latest local edit remain usable while its base refreshes', () => {
-		expect(localResource(appendWrite([], draft, 1), 'note:1')).toEqual({
+		expect(localResource(editing.append([], draft, 1), 'note:1')).toEqual({
 			kind: 'ready',
 			value: 'Offline note'
 		});

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { WorkspaceSyncRuntime, type WorkspaceSyncRuntimeDependencies } from './workspace-runtime';
+import { createWorkspaceSynchronization } from '$lib/factories/sync/execution';
+import type { WorkspaceSynchronizationDependencies } from './execution';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 
-const setup = (operations: Pick<WorkspaceSyncRuntimeDependencies, 'pull' | 'writes'>) => {
+const setup = (operations: Pick<WorkspaceSynchronizationDependencies, 'pull' | 'writes'>) => {
 	const scheduler = new InMemorySyncScheduler();
-	const runtime = new WorkspaceSyncRuntime({
+	const runtime = createWorkspaceSynchronization({
 		scheduler,
 		failed: () => undefined,
 		...operations
@@ -124,7 +125,7 @@ it('clears the retry deadline after startup storage recovers', async () => {
 	const scheduler = new InMemorySyncScheduler();
 	let unavailable = true;
 	let state: string;
-	const runtime = new WorkspaceSyncRuntime({
+	const runtime = createWorkspaceSynchronization({
 		scheduler,
 		pull: async () => ({ kind: 'complete' }),
 		writes: async () => {
@@ -147,7 +148,7 @@ it('clears an error after its automatic retry succeeds', async () => {
 	const scheduler = new InMemorySyncScheduler();
 	let unavailable = true;
 	const reported: (string | null)[] = [];
-	const runtime = new WorkspaceSyncRuntime({
+	const runtime = createWorkspaceSynchronization({
 		scheduler,
 		pull: async () => {
 			if (unavailable) throw new Error('Unavailable');
@@ -188,4 +189,55 @@ it('backs off storage failures when an operation deadline has already expired', 
 	await scheduler.advance(10_000);
 	runtime.stop();
 	expect(delivered).toBe(true);
+});
+
+it('does not publish delayed lane results after the account stops', async () => {
+	const scheduler = new InMemorySyncScheduler();
+	const gate = Promise.withResolvers<void>();
+	const reported: (string | null)[] = [];
+	const runtime = createWorkspaceSynchronization({
+		scheduler,
+		pull: async () => {
+			await gate.promise;
+			return { kind: 'complete' };
+		},
+		writes: async () => {
+			await gate.promise;
+			return { kind: 'complete' };
+		},
+		failed: (message) => {
+			reported.push(message);
+		}
+	});
+	const synchronization = runtime.synchronize();
+	runtime.stop();
+	gate.resolve();
+	await synchronization;
+	await scheduler.advance(60000);
+	expect({ status: runtime.writeStatus, reported }).toEqual({
+		status: { kind: 'stopped' },
+		reported: []
+	});
+});
+
+it('releases retry records and ignores delayed write failure after account teardown', async () => {
+	const gate = Promise.withResolvers<void>();
+	const { runtime, scheduler } = setup({
+		pull: async () => ({ kind: 'complete' }),
+		writes: async () => {
+			runtime.deferWrite('before-stop');
+			await gate.promise;
+			runtime.deferWrite('after-stop');
+			return { kind: 'failure', message: 'Response lost' };
+		}
+	});
+	const flushing = runtime.flushWrites();
+	runtime.stop();
+	gate.resolve();
+	await flushing;
+	await scheduler.advance(60000);
+	expect({ status: runtime.writeStatus, retries: [...runtime.excludedWrites()] }).toEqual({
+		status: { kind: 'stopped' },
+		retries: []
+	});
 });

@@ -14,6 +14,12 @@ state ownership and controller boundary. ADRs 0037 and 0041 define parsing and s
 | `factories/`, `server/factories/` | Construction and dependency wiring with interface-typed results | Running application operations |
 | Components and adjacent TypeScript | Rendering, focus, DOM interaction and local form state | Service/remote/repository access or application workflows |
 
+Browser components may obtain interface-typed capabilities from browser factories. Server factories
+remain server-only. Controllers receive collaborating operation contracts through type-only imports
+and factory injection; they do not construct other controller implementations. Boundary adapters
+may implement controller-owned storage or transport contracts. This does not permit adapters or
+stores to initiate application workflows. Shared write-input readers live under `adapters/`.
+
 Components invoke controllers for local and remote behavior and observe readonly application state.
 An upload operation includes reservation, transfer and completion. Do not make a component assemble
 those steps. Presentation controllers should return useful feature results; do not make one

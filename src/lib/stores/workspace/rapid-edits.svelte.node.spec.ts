@@ -12,8 +12,8 @@ import {
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { InMemoryTodoWrites } from '$lib/testing/sync/fakes/in-memory-todo-writes';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { WorkspaceResources } from './resources.svelte';
 
@@ -27,18 +27,23 @@ const setup = async () => {
 		rebaseWorkspaceRecord,
 		new InMemorySyncCache()
 	);
-	const cache = new ResourceCache(todo.userId, {
+	const cache = createResourceCache(todo.userId, {
 		repository: outbox.projectedCache,
 		transport: server
 	});
-	const writes = new MutationQueue(todo.userId, {
+	const { writes, execution } = createMutationQueue(todo.userId, {
 		repository: outbox,
 		transport: server,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(todo.userId, { repository: outbox, cache, writes });
+	const resources = new WorkspaceResources(todo.userId, {
+		repository: outbox,
+		cache,
+		writes,
+		execution
+	});
 	outbox.observe(todo.userId, (state) => resources.applyLocal(state));
 	await cache.accept(key, snapshot);
 	/** Each quick action opens its own editor, as the todo list and menus do. */

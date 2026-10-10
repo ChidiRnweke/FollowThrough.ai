@@ -5,8 +5,8 @@ import {
 	InMemoryAccountWriterLock
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -25,11 +25,11 @@ export async function replacementWorkspace() {
 		rebaseWorkspaceRecord,
 		repository
 	);
-	const cache = new ResourceCache(account, {
+	const cache = createResourceCache(account, {
 		repository: outbox.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()
 	});
-	const writes = new MutationQueue<WorkspaceCommand, WorkspaceRecord>(account, {
+	const { writes, execution } = createMutationQueue<WorkspaceCommand, WorkspaceRecord>(account, {
 		repository: outbox,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
@@ -40,7 +40,12 @@ export async function replacementWorkspace() {
 		},
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(account, { repository: outbox, cache, writes });
+	const resources = new WorkspaceResources(account, {
+		repository: outbox,
+		cache,
+		writes,
+		execution
+	});
 	resources.setOnline(false);
 	const stopObserving = outbox.observe(account, (state) => resources.applyLocal(state));
 	const project = projectBuilder();

@@ -5,8 +5,8 @@ import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { syncEtag } from '$lib/services/sync/versions';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { InMemorySyncCache, InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,
@@ -37,11 +37,11 @@ it('retains the observed note when offline restoration needs unavailable parent 
 		rebaseWorkspaceRecord,
 		repository
 	);
-	const cache = new ResourceCache(accountId, {
+	const cache = createResourceCache(accountId, {
 		repository: outbox.projectedCache,
 		transport: new InMemorySyncTransport<WorkspaceRecord>()
 	});
-	const writes = new MutationQueue<WorkspaceCommand, WorkspaceRecord>(accountId, {
+	const { writes, execution } = createMutationQueue<WorkspaceCommand, WorkspaceRecord>(accountId, {
 		repository: outbox,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
@@ -52,7 +52,12 @@ it('retains the observed note when offline restoration needs unavailable parent 
 		},
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(accountId, { repository: outbox, cache, writes });
+	const resources = new WorkspaceResources(accountId, {
+		repository: outbox,
+		cache,
+		writes,
+		execution
+	});
 	cleanup.push(() => resources.stop());
 	cleanup.push(outbox.observe(accountId, (state) => resources.applyLocal(state)));
 	await repository.commit(accountId, {

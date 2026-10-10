@@ -1,3 +1,4 @@
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { WorkspaceDatabase } from '$lib/client/sync/database';
 import { expect, it } from 'vitest';
@@ -13,7 +14,11 @@ import { syncEtag } from '$lib/services/sync/versions';
 it('observes an offline edit from another client without a refresh', async () => {
 	const accountId = resourceDataSchemas.users.shape.id.parse(crypto.randomUUID());
 	const project = projectBuilder({ userId: accountId });
-	const cache = new IndexedDbSyncCache(workspaceRecordSchema, new WorkspaceDatabase(accountId));
+	const cacheStorage = new IndexedDbSyncCache(
+		workspaceRecordSchema,
+		new WorkspaceDatabase(accountId)
+	);
+	const cache = createCachePersistence(cacheStorage);
 	const identity = { type: 'projects', id: [project.id] } satisfies WorkspaceResourceIdentity;
 	await cache.commit(accountId, {
 		put: [
@@ -42,7 +47,7 @@ it('observes an offline edit from another client without a refresh', async () =>
 	} finally {
 		first.stop();
 		second.stop();
-		await cache.close();
+		await cacheStorage.close();
 	}
 });
 

@@ -60,7 +60,7 @@ describe('Shared service and controller placement', () => {
 			})
 		).toContain('import-boundary:banned-layer-import');
 	});
-	it('allows a browser store to call a shared controller and its shared service', () => {
+	it('rejects a browser store initiating controller work', () => {
 		expect(
 			inspect({
 				'src/lib/stores/note.ts':
@@ -71,7 +71,7 @@ describe('Shared service and controller placement', () => {
 				'src/lib/services/notes/title.spec.ts':
 					"import { expect, it } from 'vitest'; import { title } from './title'; it('trims a title', () => { expect(title(' note ')).toBe('note'); });"
 			})
-		).toEqual([]);
+		).toContain('import-boundary:banned-layer-import');
 	});
 	it('allows a server controller to use the same shared service', () => {
 		expect(
@@ -172,6 +172,79 @@ it('requires services to receive adapters through interfaces instead of construc
 				'export class Codec { count(value: string): number { return value.length; } }',
 			'src/lib/server/services/notes/title.ts':
 				"import { Codec } from '$lib/server/adapters/tokenization/codec'; export const count = (value: string) => new Codec().count(value);"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+
+it('lets browser components construct an interface-typed controller capability', () => {
+	expect(
+		inspect({
+			'src/lib/components/notes/title.ts':
+				"import { createTitle } from '$lib/factories/notes/title'; export const controller = createTitle();",
+			'src/lib/factories/notes/title.ts':
+				"import { NoteTitles, type TitleController } from '$lib/controllers/notes/title'; export const createTitle = (): TitleController => new NoteTitles();",
+			'src/lib/controllers/notes/title.ts':
+				'export interface TitleController { present(value: string): string; } export class NoteTitles implements TitleController { present(value: string): string { return value; } }'
+		})
+	).toEqual([]);
+});
+it('lets a coordinator receive another operation contract without importing its implementation', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/notes/title.ts':
+				'export interface TitleController { present(value: string): string; }',
+			'src/lib/controllers/notes/editor.ts':
+				"import type { TitleController } from './title'; export class Editor { constructor(private readonly titles: TitleController) {} present(value: string): string { return this.titles.present(value); } }"
+		})
+	).toEqual([]);
+});
+it('keeps controller implementation construction inside factories', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/notes/title.ts':
+				'export class NoteTitles { present(value: string): string { return value; } }',
+			'src/lib/controllers/notes/editor.ts':
+				"import { NoteTitles } from './title'; export class Editor { private readonly titles = new NoteTitles(); }"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('rejects component access to shared services', () => {
+	expect(
+		inspect({
+			'src/lib/components/notes/title.ts':
+				"import { TitleService } from '$lib/services/notes/title'; export const title = new TitleService().present('Draft');",
+			'src/lib/services/notes/title.ts':
+				'export interface ITitleService { present(value: string): string; } export class TitleService implements ITitleService { present(value: string): string { return value; } }'
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('rejects business rules hidden in browser transport wrappers', () => {
+	expect(
+		inspect({
+			'src/lib/client/notes/title.ts':
+				"import { TitleService } from '$lib/services/notes/title'; export const title = new TitleService().present('Draft');",
+			'src/lib/services/notes/title.ts':
+				'export interface ITitleService { present(value: string): string; } export class TitleService implements ITitleService { present(value: string): string { return value; } }'
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('classifies shared write-input readers as boundary adapters', () => {
+	expect(
+		inspect({
+			'src/lib/adapters/widgets/candidate-reader.ts':
+				'export class Reader { read(value: string): string { return value; } }',
+			'src/lib/factories/widgets/editing.ts':
+				"import { Reader } from '$lib/adapters/widgets/candidate-reader'; export const createReader = () => new Reader();"
+		})
+	).toEqual([]);
+});
+it('keeps shared input adapters from executing services', () => {
+	expect(
+		inspect({
+			'src/lib/adapters/widgets/candidate-reader.ts':
+				"import { TitleService } from '$lib/services/notes/title'; export const read = new TitleService();",
+			'src/lib/services/notes/title.ts':
+				'export interface ITitleService { present(value: string): string; } export class TitleService implements ITitleService { present(value: string): string { return value; } }'
 		})
 	).toContain('import-boundary:banned-layer-import');
 });

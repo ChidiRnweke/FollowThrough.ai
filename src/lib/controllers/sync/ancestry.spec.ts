@@ -1,8 +1,11 @@
+import { OutboxEditingService } from '$lib/services/sync/state';
+import { createWriteAncestry } from '$lib/factories/sync/ancestry';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/services/sync/versions';
 import type { OutboxEntry, WriteDraft, WriteRebase } from '$lib/models/outbox';
-import { appendWrite, rebaseConflictedWrite, rebaseDraft } from '$lib/services/sync/state';
+
 import { rebaseFields } from '$lib/services/sync/rebase';
+const editing = new OutboxEditingService();
 
 interface Task {
 	readonly title: string;
@@ -26,11 +29,11 @@ const draft = (operationId: string, local: Task): WriteDraft<string, Task> => ({
 });
 const completed = draft(firstId, { title: 'Draft', status: 'done' });
 const renamedFromOriginal = draft(secondId, { title: 'Renamed', status: 'open' });
-const queued = appendWrite([], completed, 1);
+const queued = editing.append([], completed, 1);
 
 describe('ancestry chosen by the durable queue', () => {
 	it('stacks an edit made from a superseded version on the latest local edit', () => {
-		const result = rebaseDraft(queued, renamedFromOriginal, null, rebase);
+		const result = createWriteAncestry(rebase).draft(queued, renamedFromOriginal, null);
 		expect({ basedOn: result.basedOn, local: result.local, base: result.base }).toEqual({
 			basedOn: firstId,
 			local: { title: 'Renamed', status: 'done' },
@@ -39,17 +42,15 @@ describe('ancestry chosen by the durable queue', () => {
 	});
 	it('leaves an edit made from the latest local edit unchanged', () => {
 		const current = { ...renamedFromOriginal, basedOn: firstId };
-		expect(rebaseDraft(queued, current, null, rebase)).toBe(current);
+		expect(createWriteAncestry(rebase).draft(queued, current, null)).toBe(current);
 	});
 	it('bases an edit made from a superseded version on this device’s newer acknowledged write', () => {
 		const snapshot = { etag: syncEtag(2n), value: { title: 'Draft', status: 'done' as const } };
 		expect(
-			rebaseDraft(
-				[],
-				renamedFromOriginal,
-				{ operationId: firstId, resource: { kind: 'found', snapshot } },
-				rebase
-			)
+			createWriteAncestry(rebase).draft([], renamedFromOriginal, {
+				operationId: firstId,
+				resource: { kind: 'found', snapshot }
+			})
 		).toEqual({
 			...renamedFromOriginal,
 			base: snapshot,
@@ -72,10 +73,9 @@ const renamed = found({ title: 'Renamed', status: 'open' });
 
 describe('automatic rebase of a server conflict', () => {
 	it('queues the edit again on the server version when the fields do not overlap', () => {
-		const [entry] = rebaseConflictedWrite(
+		const [entry] = createWriteAncestry(rebase).conflicted(
 			conflicted({ title: 'Draft', status: 'done' }, renamed),
-			firstId,
-			rebase
+			firstId
 		);
 		expect({
 			operationId: entry.intent.operationId,
@@ -94,22 +94,22 @@ describe('automatic rebase of a server conflict', () => {
 			{ title: 'Mine', status: 'open' },
 			found({ title: 'Theirs', status: 'open' })
 		);
-		expect(rebaseConflictedWrite(entries, firstId, rebase)).toBe(entries);
+		expect(createWriteAncestry(rebase).conflicted(entries, firstId)).toBe(entries);
 	});
 	it('keeps an edit for review when the server deleted the resource', () => {
 		const entries = conflicted(
 			{ title: 'Draft', status: 'done' },
 			{ kind: 'conflict', remote: { kind: 'deleted', etag: syncEtag(2n) } }
 		);
-		expect(rebaseConflictedWrite(entries, firstId, rebase)).toBe(entries);
+		expect(createWriteAncestry(rebase).conflicted(entries, firstId)).toBe(entries);
 	});
 	it('replays later local edits to the same resource onto the rebased edit', () => {
-		const entries = appendWrite(
+		const entries = editing.append(
 			conflicted({ title: 'Draft', status: 'done' }, renamed),
 			{ ...draft(thirdId, { title: 'Draft', status: 'open' }), basedOn: firstId },
 			2
 		);
-		expect(rebaseConflictedWrite(entries, firstId, rebase)[1].intent.local).toEqual({
+		expect(createWriteAncestry(rebase).conflicted(entries, firstId)[1].intent.local).toEqual({
 			title: 'Renamed',
 			status: 'open'
 		});

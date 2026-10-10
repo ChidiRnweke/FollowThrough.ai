@@ -1,3 +1,5 @@
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
+import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { WorkspaceDatabase } from './database';
@@ -21,12 +23,13 @@ const setup = (name = `outbox-test-${crypto.randomUUID()}`, accountId = 'alice')
 	const outbox = new IndexedDbOutbox(
 		z.string(),
 		z.string(),
-		wholeValueRebase<string>(),
 		new WorkspaceDatabase(accountId, name)
 	);
-	const cache = new IndexedDbSyncCache(z.string(), new WorkspaceDatabase(accountId, name));
-	repositories.push(outbox, cache);
-	return { name, outbox, cache };
+	const outboxWrites = createDurableOutbox(outbox, wholeValueRebase<string>());
+	const cacheStorage = new IndexedDbSyncCache(z.string(), new WorkspaceDatabase(accountId, name));
+	const cache = createCachePersistence(cacheStorage);
+	repositories.push(outbox, cacheStorage);
+	return { name, outbox, outboxWrites, cache };
 };
 const draft = (key = 'note:1', command = 'create'): WriteDraft<string, string> => ({
 	operationId: crypto.randomUUID(),
@@ -54,23 +57,23 @@ afterEach(async () => {
 
 describe('durable local writes', () => {
 	it('retains a locally created object after reopening storage', async () => {
-		const { name, outbox } = setup();
+		const { name, outbox, outboxWrites } = setup();
 		const input = draft();
-		await outbox.append('alice', input);
+		await outboxWrites.append('alice', input);
 		await outbox.close();
 		expect((await setup(name).outbox.list('alice')).map((entry) => entry.intent.local)).toEqual([
 			'create'
 		]);
 	});
 	it('isolates pending writes between accounts', async () => {
-		const { name, outbox } = setup();
-		await outbox.append('alice', draft());
+		const { name, outboxWrites } = setup();
+		await outboxWrites.append('alice', draft());
 		expect(await setup(name, 'bob').outbox.list('bob')).toEqual([]);
 	});
 	it('serializes concurrent appends from separate tabs', async () => {
-		const { name, outbox } = setup();
-		const other = setup(name).outbox;
-		await Promise.all([outbox.append('alice', draft()), other.append('alice', draft())]);
+		const { name, outbox, outboxWrites } = setup();
+		const other = setup(name).outboxWrites;
+		await Promise.all([outboxWrites.append('alice', draft()), other.append('alice', draft())]);
 		const entries = await outbox.list('alice');
 		expect(
 			entries.map((entry) => ({
@@ -83,11 +86,11 @@ describe('durable local writes', () => {
 		]);
 	});
 	it('keeps typing after submission as a separate dependent write', async () => {
-		const { outbox } = setup();
+		const { outbox, outboxWrites } = setup();
 		const first = { ...draft(), coalesce: 'document' };
-		await outbox.append('alice', first);
-		await outbox.take('alice');
-		await outbox.append('alice', { ...draft('note:1', 'edited'), coalesce: 'document' });
+		await outboxWrites.append('alice', first);
+		await outboxWrites.take('alice');
+		await outboxWrites.append('alice', { ...draft('note:1', 'edited'), coalesce: 'document' });
 		expect(
 			(await outbox.list('alice')).map((entry) => ({
 				command: entry.intent.command,
@@ -99,24 +102,24 @@ describe('durable local writes', () => {
 		]);
 	});
 	it('retries the exact submitted input after an interrupted session', async () => {
-		const { name, outbox } = setup();
-		await outbox.append('alice', draft());
-		const sent = await outbox.take('alice');
+		const { name, outbox, outboxWrites } = setup();
+		await outboxWrites.append('alice', draft());
+		const sent = await outboxWrites.take('alice');
 		await outbox.close();
-		const reopened = setup(name).outbox;
-		await reopened.recover('alice');
-		expect((await reopened.take('alice'))?.intent).toEqual(sent?.intent);
+		const reopenedWrites = setup(name).outboxWrites;
+		await reopenedWrites.recover('alice');
+		expect((await reopenedWrites.take('alice'))?.intent).toEqual(sent?.intent);
 	});
 	it('stores the authoritative value and rebases the dependent edit when acknowledging', async () => {
-		const { outbox, cache } = setup();
-		await outbox.append('alice', draft());
-		const sent = await outbox.take('alice');
+		const { outbox, outboxWrites, cache } = setup();
+		await outboxWrites.append('alice', draft());
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected a submitted write');
-		await outbox.append('alice', {
+		await outboxWrites.append('alice', {
 			...draft('note:1', 'edited'),
 			basedOn: sent.intent.operationId
 		});
-		await outbox.settle('alice', sent, {
+		await outboxWrites.settle('alice', sent, {
 			kind: 'applied',
 			receipt: { operationId: sent.intent.operationId, resource: { kind: 'found', snapshot } }
 		});
@@ -134,13 +137,13 @@ describe('durable local writes', () => {
 		});
 	});
 	it('retains the queued write when storing the receipt fails', async () => {
-		const { outbox, cache } = setup();
-		await outbox.append('alice', draft());
-		const sent = await outbox.take('alice');
+		const { outbox, outboxWrites, cache } = setup();
+		await outboxWrites.append('alice', draft());
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected a submitted write');
 		let failed = false;
 		try {
-			await outbox.settle('alice', sent, {
+			await outboxWrites.settle('alice', sent, {
 				kind: 'applied',
 				receipt: { operationId: crypto.randomUUID(), resource: { kind: 'found', snapshot } }
 			});
@@ -155,16 +158,19 @@ describe('durable local writes', () => {
 		}).toEqual({ failed: true, entries: [sent], records: [] });
 	});
 	it('preserves conflicting edits while allowing unrelated objects to synchronize', async () => {
-		const { outbox } = setup();
-		await outbox.append('alice', draft());
-		const sent = await outbox.take('alice');
+		const { outbox, outboxWrites } = setup();
+		await outboxWrites.append('alice', draft());
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected a submitted write');
-		await outbox.append('alice', draft('note:1', 'later edit'));
-		await outbox.append('alice', draft('note:2', 'unrelated'));
-		await outbox.settle('alice', sent, { kind: 'conflict', remote: { kind: 'found', snapshot } });
+		await outboxWrites.append('alice', draft('note:1', 'later edit'));
+		await outboxWrites.append('alice', draft('note:2', 'unrelated'));
+		await outboxWrites.settle('alice', sent, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
 		expect({
 			conflict: (await outbox.list('alice'))[0],
-			next: (await outbox.take('alice'))?.intent.key
+			next: (await outboxWrites.take('alice'))?.intent.key
 		}).toEqual({
 			conflict: { ...sent, delivery: { kind: 'conflict', remote: { kind: 'found', snapshot } } },
 			next: 'note:2'
@@ -174,13 +180,13 @@ describe('durable local writes', () => {
 
 describe('durable conflict resolution', () => {
 	it('queues a non-overlapping conflict again together with the server copy it rebased onto', async () => {
-		const { outbox, cache } = setup();
+		const { outbox, outboxWrites, cache } = setup();
 		const input = { ...draft('note:1', 'Edited'), base: { etag: syncEtag(1n), value: 'Original' } };
-		await outbox.append('alice', input);
-		const sent = await outbox.take('alice');
+		await outboxWrites.append('alice', input);
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected submitted edit');
 		const newer = { etag: syncEtag(2n), value: 'Original' };
-		await outbox.settle('alice', sent, {
+		await outboxWrites.settle('alice', sent, {
 			kind: 'conflict',
 			remote: { kind: 'found', snapshot: newer }
 		});
@@ -196,13 +202,16 @@ describe('durable conflict resolution', () => {
 		});
 	});
 	it('keeps the authoritative server copy after discarding a rejected local edit', async () => {
-		const { outbox, cache } = setup();
+		const { outbox, outboxWrites, cache } = setup();
 		const input = draft();
-		await outbox.append('alice', input);
-		const sent = await outbox.take('alice');
+		await outboxWrites.append('alice', input);
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected submitted edit');
-		await outbox.settle('alice', sent, { kind: 'conflict', remote: { kind: 'found', snapshot } });
-		await outbox.discard('alice', [input.operationId]);
+		await outboxWrites.settle('alice', sent, {
+			kind: 'conflict',
+			remote: { kind: 'found', snapshot }
+		});
+		await outboxWrites.discard('alice', [input.operationId]);
 		expect({
 			pending: await outbox.list('alice'),
 			records: (await cache.load('alice')).records
@@ -212,18 +221,18 @@ describe('durable conflict resolution', () => {
 		});
 	});
 	it('makes a confirmed keep-local decision durable with a new guarded operation', async () => {
-		const { outbox } = setup();
+		const { outboxWrites } = setup();
 		const input = { ...draft('note:1', 'Edited'), base: { etag: syncEtag(1n), value: 'Original' } };
-		await outbox.append('alice', input);
-		const original = await outbox.take('alice');
+		await outboxWrites.append('alice', input);
+		const original = await outboxWrites.take('alice');
 		if (!original) throw new Error('Expected queued edit');
-		await outbox.settle('alice', original, {
+		await outboxWrites.settle('alice', original, {
 			kind: 'conflict',
 			remote: { kind: 'found', snapshot }
 		});
 		const replacement = crypto.randomUUID();
-		await outbox.keepLocal('alice', input.operationId, replacement);
-		const sent = await outbox.take('alice');
+		await outboxWrites.keepLocal('alice', input.operationId, replacement);
+		const sent = await outboxWrites.take('alice');
 		expect({
 			id: sent?.intent.operationId,
 			base: sent?.intent.base,
@@ -231,17 +240,17 @@ describe('durable conflict resolution', () => {
 		}).toEqual({ id: replacement, base: snapshot, local: input.local });
 	});
 	it('preserves both creation-conflict copies when keep-local is refused', async () => {
-		const { outbox, name } = setup();
+		const { outbox, outboxWrites, name } = setup();
 		const input = draft();
-		await outbox.append('alice', input);
-		const submitted = await outbox.take('alice');
+		await outboxWrites.append('alice', input);
+		const submitted = await outboxWrites.take('alice');
 		if (!submitted) throw new Error('Expected queued creation');
-		await outbox.settle('alice', submitted, {
+		await outboxWrites.settle('alice', submitted, {
 			kind: 'conflict',
 			remote: { kind: 'found', snapshot }
 		});
 		const [original] = await outbox.list('alice');
-		const outcome = await outbox
+		const outcome = await outboxWrites
 			.keepLocal('alice', input.operationId, crypto.randomUUID())
 			.catch((error) => ({
 				kind: 'failure' as const,
@@ -258,26 +267,26 @@ describe('durable conflict resolution', () => {
 		});
 	});
 	it('stores the authoritative tombstone while retaining the offline edit', async () => {
-		const { outbox, cache } = setup();
+		const { outbox, outboxWrites, cache } = setup();
 		const input = draft();
-		await outbox.append('alice', input);
-		const sent = await outbox.take('alice');
+		await outboxWrites.append('alice', input);
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected submitted edit');
 		const remote = { kind: 'deleted' as const, etag: syncEtag(2n) };
-		await outbox.settle('alice', sent, { kind: 'conflict', remote });
+		await outboxWrites.settle('alice', sent, { kind: 'conflict', remote });
 		expect({
 			local: (await outbox.list('alice'))[0].intent.local,
 			records: (await cache.load('alice')).records
 		}).toEqual({ local: input.local, records: [{ key: input.key, entry: remote }] });
 	});
 	it('persists a refreshed conflict alongside its authoritative server copy', async () => {
-		const { outbox, cache } = setup();
+		const { outbox, outboxWrites, cache } = setup();
 		const input = { ...draft(), base: { etag: syncEtag(1n), value: 'Original' } };
-		await outbox.append('alice', input);
-		const sent = await outbox.take('alice');
+		await outboxWrites.append('alice', input);
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected queued edit');
-		await outbox.settle('alice', sent, { kind: 'conflict', remote: { kind: 'unavailable' } });
-		await outbox.resolveBase('alice', input.operationId, {
+		await outboxWrites.settle('alice', sent, { kind: 'conflict', remote: { kind: 'unavailable' } });
+		await outboxWrites.resolveBase('alice', input.operationId, {
 			kind: 'conflict',
 			remote: { kind: 'found', snapshot }
 		});
@@ -293,24 +302,24 @@ describe('durable conflict resolution', () => {
 
 describe('local write validation', () => {
 	it('rejects invalid local input without poisoning the queue or consuming a sequence', async () => {
-		const { outbox } = setup();
-		await outbox
+		const { outbox, outboxWrites } = setup();
+		await outboxWrites
 			.append('alice', { ...draft(), operationId: 'invalid' })
 			.catch(() => ({ kind: 'failure' }));
-		await outbox.append('alice', draft());
+		await outboxWrites.append('alice', draft());
 		expect((await outbox.list('alice')).map((entry) => entry.sequence)).toEqual([1]);
 	});
 });
 
 describe('durable acknowledgement ancestry', () => {
 	it('joins a late edit from another connection to its exact acknowledgement despite a newer cache body', async () => {
-		const { outbox, cache, name } = setup();
+		const { outboxWrites, cache, name } = setup();
 		const first = draft();
-		await outbox.append('alice', first);
-		const sent = await outbox.take('alice');
+		await outboxWrites.append('alice', first);
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected submitted write');
 		const later = { ...draft('note:1', 'Later typing'), basedOn: first.operationId };
-		await outbox.settle('alice', sent, {
+		await outboxWrites.settle('alice', sent, {
 			kind: 'applied',
 			receipt: { operationId: first.operationId, resource: { kind: 'found', snapshot } }
 		});
@@ -326,43 +335,43 @@ describe('durable acknowledgement ancestry', () => {
 			],
 			remove: []
 		});
-		const other = setup(name).outbox;
+		const other = setup(name).outboxWrites;
 		await other.append('alice', later);
 		expect((await other.list('alice'))[0].intent.base).toEqual(snapshot);
 	});
 	it('retains the original base after a newer local acknowledgement replaces its proof', async () => {
-		const { outbox } = setup();
+		const { outbox, outboxWrites } = setup();
 		const first = draft();
-		await outbox.append('alice', first);
-		const sent = await outbox.take('alice');
+		await outboxWrites.append('alice', first);
+		const sent = await outboxWrites.take('alice');
 		if (!sent) throw new Error('Expected submitted write');
-		await outbox.settle('alice', sent, {
+		await outboxWrites.settle('alice', sent, {
 			kind: 'applied',
 			receipt: { operationId: first.operationId, resource: { kind: 'found', snapshot } }
 		});
 		const second = { ...draft(), basedOn: first.operationId };
-		await outbox.append('alice', second);
-		const next = await outbox.take('alice');
+		await outboxWrites.append('alice', second);
+		const next = await outboxWrites.take('alice');
 		if (!next) throw new Error('Expected next submitted write');
-		await outbox.settle('alice', next, {
+		await outboxWrites.settle('alice', next, {
 			kind: 'applied',
 			receipt: {
 				operationId: second.operationId,
 				resource: { kind: 'found', snapshot: { etag: syncEtag(2n), value: 'Second edit' } }
 			}
 		});
-		await outbox.append('alice', { ...draft(), basedOn: first.operationId });
+		await outboxWrites.append('alice', { ...draft(), basedOn: first.operationId });
 		expect((await outbox.list('alice'))[0].intent.base).toBeNull();
 	});
 });
 
 it('retains a corrected rejected document as sendable after reopening storage', async () => {
-	const { name, outbox } = setup();
+	const { name, outbox, outboxWrites } = setup();
 	const original = { ...draft('note:1', 'Invalid document'), base: snapshot, coalesce: 'document' };
-	await outbox.append('alice', original);
-	const attempted = await outbox.take('alice');
+	await outboxWrites.append('alice', original);
+	const attempted = await outboxWrites.take('alice');
 	if (!attempted) throw new Error('Expected a sendable document');
-	await outbox.settle('alice', attempted, {
+	await outboxWrites.settle('alice', attempted, {
 		kind: 'rejected',
 		message: 'Invalid document'
 	});
@@ -372,9 +381,9 @@ it('retains a corrected rejected document as sendable after reopening storage', 
 		basedOn: original.operationId,
 		coalesce: 'document'
 	};
-	await outbox.append('alice', correction);
+	await outboxWrites.append('alice', correction);
 	await outbox.close();
-	const sent = await setup(name).outbox.take('alice');
+	const sent = await setup(name).outboxWrites.take('alice');
 	expect({
 		id: sent?.intent.operationId,
 		command: sent?.intent.command,
@@ -382,7 +391,7 @@ it('retains a corrected rejected document as sendable after reopening storage', 
 	}).toEqual({ id: correction.operationId, command: 'Corrected document', base: snapshot });
 });
 
-outboxRepositoryContract(() => setup().outbox);
+outboxRepositoryContract(() => setup().outboxWrites);
 
 it('retains identical normalized input for submission and uncertain cancellation', async () => {
 	const { name } = setup();
@@ -390,13 +399,13 @@ it('retains identical normalized input for submission and uncertain cancellation
 	const outbox = new IndexedDbOutbox(
 		workspaceCommandSchema,
 		workspaceRecordSchema,
-		rebaseWorkspaceRecord,
 		new WorkspaceDatabase(project.userId, name)
 	);
+	const outboxWrites = createDurableOutbox(outbox, rebaseWorkspaceRecord);
 	databases.add(outbox.database.name);
 	repositories.push(outbox);
 	const operationId = crypto.randomUUID();
-	await outbox.append(project.userId, {
+	await outboxWrites.append(project.userId, {
 		operationId,
 		key: JSON.stringify(['projects', project.id]),
 		command: { kind: 'createProject', id: project.id, name: 'Plan ' },
@@ -406,13 +415,12 @@ it('retains identical normalized input for submission and uncertain cancellation
 		coalesce: null,
 		references: []
 	});
-	const sent = await outbox.take(project.userId);
-	await outbox.retry(project.userId, operationId, 'Response lost');
+	const sent = await outboxWrites.take(project.userId);
+	await outboxWrites.retry(project.userId, operationId, 'Response lost');
 	await outbox.close();
 	const reopened = new IndexedDbOutbox(
 		workspaceCommandSchema,
 		workspaceRecordSchema,
-		rebaseWorkspaceRecord,
 		new WorkspaceDatabase(project.userId, name)
 	);
 	repositories.push(reopened);
@@ -437,16 +445,16 @@ it('requeues a widget tick replayed onto a tick of another item, with its change
 	const outbox = new IndexedDbOutbox(
 		workspaceCommandSchema,
 		workspaceRecordSchema,
-		rebaseWorkspaceRecord,
 		new WorkspaceDatabase(original.userId, name)
 	);
+	const outboxWrites = createDurableOutbox(outbox, rebaseWorkspaceRecord);
 	databases.add(outbox.database.name);
 	repositories.push(outbox);
 	const change = {
 		kind: 'data' as const,
 		patch: [{ op: 'replace' as const, path: '/items/0/done', value: true }]
 	};
-	await outbox.append(original.userId, {
+	await outboxWrites.append(original.userId, {
 		operationId: crypto.randomUUID(),
 		key: JSON.stringify(['widgets', original.id]),
 		command: { kind: 'editWidget', widgetId: original.id, change },
@@ -456,9 +464,9 @@ it('requeues a widget tick replayed onto a tick of another item, with its change
 		coalesce: null,
 		references: []
 	});
-	const sent = await outbox.take(original.userId);
+	const sent = await outboxWrites.take(original.userId);
 	if (!sent) throw new Error('Expected the submitted widget edit');
-	await outbox.settle(original.userId, sent, {
+	await outboxWrites.settle(original.userId, sent, {
 		kind: 'conflict',
 		remote: {
 			kind: 'found',

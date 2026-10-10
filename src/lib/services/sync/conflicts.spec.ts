@@ -1,7 +1,8 @@
+import { OutboxEditingService } from '$lib/services/sync/state';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/services/sync/versions';
 import { type OutboxEntry } from '$lib/models/outbox';
-import { discardWrites, dependentWrites, retryConflictedWrite } from '$lib/services/sync/state';
+const editing = new OutboxEditingService();
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
 const replacementId = 'a0000000-0000-4000-8000-000000000002';
@@ -23,7 +24,7 @@ const conflicted: OutboxEntry<string, string> = {
 
 describe('explicit conflict resolution', () => {
 	it('retains the local edit with a new identity guarded against the displayed server version', () => {
-		expect(retryConflictedWrite([conflicted], firstId, replacementId)).toEqual([
+		expect(editing.keepLocal([conflicted], firstId, replacementId)).toEqual([
 			{
 				...conflicted,
 				intent: { ...conflicted.intent, operationId: replacementId, base: remote },
@@ -33,7 +34,7 @@ describe('explicit conflict resolution', () => {
 	});
 	it('does not silently recreate a remotely deleted resource', () => {
 		expect(() =>
-			retryConflictedWrite(
+			editing.keepLocal(
 				[
 					{
 						...conflicted,
@@ -46,7 +47,7 @@ describe('explicit conflict resolution', () => {
 		).toThrow('must be explicitly recreated');
 	});
 	it('does not reuse the conflicted operation identity for changed input', () => {
-		expect(() => retryConflictedWrite([conflicted], firstId, firstId)).toThrow(
+		expect(() => editing.keepLocal([conflicted], firstId, firstId)).toThrow(
 			'requires a new operation identity'
 		);
 	});
@@ -63,9 +64,11 @@ describe('explicit conflict resolution', () => {
 			},
 			delivery: { kind: 'queued' }
 		};
-		expect(retryConflictedWrite([conflicted, dependent], firstId, replacementId)[1].intent).toEqual(
-			{ ...dependent.intent, basedOn: replacementId, dependencies: [replacementId] }
-		);
+		expect(editing.keepLocal([conflicted, dependent], firstId, replacementId)[1].intent).toEqual({
+			...dependent.intent,
+			basedOn: replacementId,
+			dependencies: [replacementId]
+		});
 	});
 });
 
@@ -76,7 +79,7 @@ describe('explicit local edit discard', () => {
 			sequence: 2,
 			intent: { ...conflicted.intent, operationId: replacementId, key: 'note:2' }
 		};
-		expect(discardWrites([conflicted, other], [firstId])).toEqual([other]);
+		expect(editing.discard([conflicted, other], [firstId])).toEqual([other]);
 	});
 	it('refuses to strand an unselected dependent edit', () => {
 		const dependent = {
@@ -90,7 +93,7 @@ describe('explicit local edit discard', () => {
 			},
 			delivery: { kind: 'queued' as const }
 		};
-		expect(() => discardWrites([conflicted, dependent], [firstId])).toThrow(
+		expect(() => editing.discard([conflicted, dependent], [firstId])).toThrow(
 			'Review dependent edits'
 		);
 	});
@@ -106,18 +109,18 @@ describe('explicit local edit discard', () => {
 			},
 			delivery: { kind: 'queued' as const }
 		};
-		expect(discardWrites([conflicted, dependent], [firstId, replacementId])).toEqual([]);
+		expect(editing.discard([conflicted, dependent], [firstId, replacementId])).toEqual([]);
 	});
 	it('requires receipt recovery before discarding an attempted write', () => {
 		expect(() =>
-			discardWrites(
+			editing.discard(
 				[{ ...conflicted, delivery: { kind: 'retry', message: 'Connection lost' } }],
 				[firstId]
 			)
 		).toThrow('Check the server receipt');
 	});
 	it('rejects a stale discard decision after an edit was replaced', () => {
-		expect(() => discardWrites([conflicted], [replacementId])).toThrow('review them again');
+		expect(() => editing.discard([conflicted], [replacementId])).toThrow('review them again');
 	});
 });
 
@@ -153,9 +156,9 @@ describe('reviewing dependent edits', () => {
 			}
 		};
 		expect(
-			dependentWrites([grandchild, independent, child, conflicted], firstId).map(
-				(entry) => entry.intent.operationId
-			)
+			editing
+				.dependents([grandchild, independent, child, conflicted], firstId)
+				.map((entry) => entry.intent.operationId)
 		).toEqual([
 			'a0000000-0000-4000-8000-000000000004',
 			'a0000000-0000-4000-8000-000000000003',
@@ -166,7 +169,7 @@ describe('reviewing dependent edits', () => {
 
 it('does not turn a conflicting creation into an update of an existing item', () => {
 	expect(() =>
-		retryConflictedWrite(
+		editing.keepLocal(
 			[{ ...conflicted, intent: { ...conflicted.intent, base: null } }],
 			firstId,
 			replacementId

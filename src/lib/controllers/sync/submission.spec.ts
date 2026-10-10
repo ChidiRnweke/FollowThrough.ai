@@ -7,8 +7,8 @@ import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
 } from '$lib/testing/sync/fakes/in-memory-outbox';
-import type { OutboxTransport } from './outbox-contracts';
-import { MutationQueue } from './mutation-queue';
+import type { OutboxTransport } from './submission';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
 
 const firstId = 'a0000000-0000-4000-8000-000000000001';
@@ -42,7 +42,12 @@ const setup = (transport: OutboxTransport<string, string>) => {
 		transport,
 		pull: async () => ({ kind: 'complete' as const })
 	};
-	return { repository, dependencies, cache, queue: new MutationQueue('alice', dependencies) };
+	return {
+		repository,
+		dependencies,
+		cache,
+		queue: createMutationQueue('alice', dependencies).writes
+	};
 };
 
 describe('shared mutation submission', () => {
@@ -245,7 +250,7 @@ describe('shared offline queue reload', () => {
 		});
 		queue.setOnline(false);
 		await queue.reload();
-		const other = new MutationQueue('alice', dependencies);
+		const other = createMutationQueue('alice', dependencies).writes;
 		other.setOnline(false);
 		await other.append(draft(firstId));
 		await queue.reload();
@@ -259,7 +264,7 @@ describe('shared offline queue reload', () => {
 		});
 		queue.setOnline(false);
 		await queue.append(draft(firstId));
-		const other = new MutationQueue('alice', dependencies);
+		const other = createMutationQueue('alice', dependencies).writes;
 		other.setOnline(false);
 		await other.discard([firstId]);
 		await queue.reload();
@@ -302,7 +307,7 @@ it('settles a failed edit at its retry deadline without another user action', as
 		}
 	});
 	const scheduler = new InMemorySyncScheduler();
-	const queue = new MutationQueue('alice', { ...dependencies, scheduler });
+	const queue = createMutationQueue('alice', { ...dependencies, scheduler }).writes;
 	await queue.append(draft(firstId));
 	await queue.flush();
 	reachable = true;
@@ -333,7 +338,7 @@ it('leaves a stopped account unchanged when a retry deadline arrives', async () 
 		}
 	});
 	const scheduler = new InMemorySyncScheduler();
-	const queue = new MutationQueue('alice', { ...dependencies, scheduler });
+	const queue = createMutationQueue('alice', { ...dependencies, scheduler }).writes;
 	await queue.append(draft(firstId));
 	await queue.flush();
 	const before = await dependencies.repository.list('alice');
@@ -359,7 +364,7 @@ it('returns a waiting state without recovering another tab’s unresolved submis
 	await queue.append(draft(firstId));
 	const sending = queue.flush();
 	await started.promise;
-	const other = new MutationQueue('alice', dependencies);
+	const other = createMutationQueue('alice', dependencies).writes;
 	const result = await Promise.race([
 		other.flush(),
 		new Promise((resolve) => setTimeout(() => resolve({ kind: 'blocked' }), 30))

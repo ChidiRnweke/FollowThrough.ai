@@ -1,6 +1,6 @@
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
@@ -15,8 +15,8 @@ export const workspaceResourcesFixture = (accountId: string) => {
 		rebaseWorkspaceRecord,
 		repository
 	);
-	const cache = new ResourceCache(accountId, { repository: outbox.projectedCache, transport });
-	const writes = new MutationQueue<WorkspaceCommand, WorkspaceRecord>(accountId, {
+	const cache = createResourceCache(accountId, { repository: outbox.projectedCache, transport });
+	const { writes, execution } = createMutationQueue<WorkspaceCommand, WorkspaceRecord>(accountId, {
 		repository: outbox,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
@@ -30,7 +30,8 @@ export const workspaceResourcesFixture = (accountId: string) => {
 	const resources = new WorkspaceResources(accountId, {
 		repository: outbox,
 		cache,
-		writes
+		writes,
+		execution
 	});
 	outbox.observe(accountId, (state) => resources.applyLocal(state));
 	return {

@@ -1,15 +1,53 @@
-import { WorkspaceSyncRuntime } from './workspace-runtime';
-import type { SynchronizationResult } from './contracts';
-import type { SyncScheduler } from './scheduler';
-import {
-	type OutboxEntry,
-	type WriteDraft,
-	type WriteReceipt,
-	type WriteOutcome
+import type { IOutboxEditingService, IOutboxDeliveryService } from '$lib/services/sync/state';
+import type { WorkspaceSynchronizationController } from '$lib/controllers/sync/execution';
+import type { SynchronizationResult, SyncEtag, SyncScheduler } from '$lib/models/sync';
+import { type OutboxEntry, type WriteDraft, type WriteOutcome } from '$lib/models/outbox';
+
+import type {
+	OutboxProjection,
+	WriteReceipt,
+	WriteBaseResolution,
+	ServerResource,
+	WriteRecovery
 } from '$lib/models/outbox';
-import { dependentWrites, nextWrite } from '$lib/services/sync/state';
-import type { OutboxProjection, OutboxRepository, OutboxTransport } from './outbox-contracts';
-import { OutboxAccountChangedError } from './outbox-contracts';
+import type { MutationQueueStore } from '$lib/stores/sync/submission';
+import { OutboxAccountChangedError } from '$lib/errors';
+
+export interface DurableWriteController<C, T> {
+	snapshot(accountId: string): Promise<OutboxProjection<C, T>>;
+	receipt(accountId: string, key: string): Promise<WriteReceipt<T> | null>;
+	list(accountId: string): Promise<readonly OutboxEntry<C, T>[]>;
+	append(accountId: string, draft: WriteDraft<C, T>): Promise<string>;
+	resolveBase(
+		accountId: string,
+		operationId: string,
+		resolution: WriteBaseResolution<T>
+	): Promise<void>;
+	keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void>;
+	discard(accountId: string, operationIds: readonly string[]): Promise<void>;
+	take(accountId: string, excluded?: ReadonlySet<string>): Promise<OutboxEntry<C, T> | null>;
+	retry(accountId: string, operationId: string, message: string): Promise<void>;
+	/** Call only after acquiring the account's exclusive writer lock. */
+	recover(accountId: string): Promise<void>;
+	/** Queue acknowledgement and the authoritative cached resource commit atomically. */
+	settle(accountId: string, sent: OutboxEntry<C, T>, outcome: WriteOutcome<T>): Promise<void>;
+}
+
+export interface OutboxTransport<C, T> {
+	readonly recovery?: {
+		observe(key: string): Promise<ServerResource<T>>;
+		cancel(input: {
+			operationId: string;
+			baseEtag: SyncEtag | null;
+			command: C;
+		}): Promise<WriteRecovery<T>>;
+	};
+	send(input: {
+		readonly operationId: string;
+		readonly baseEtag: SyncEtag | null;
+		readonly command: C;
+	}): Promise<WriteOutcome<T>>;
+}
 
 export interface AccountWriterLock {
 	tryRun<T>(
@@ -18,70 +56,95 @@ export interface AccountWriterLock {
 	): Promise<{ kind: 'acquired'; value: T } | { kind: 'busy' }>;
 	run<T>(accountId: string, work: () => Promise<T>): Promise<T>;
 }
-export type SubmissionResult = SynchronizationResult | { kind: 'waiting' };
+import type { SubmissionResult } from '$lib/models/sync';
+export type { SubmissionResult } from '$lib/models/sync';
 export interface MutationQueueDependencies<C, T> {
 	scheduler: SyncScheduler;
-	repository: OutboxRepository<C, T>;
+	repository: DurableWriteController<C, T>;
 	transport: OutboxTransport<C, T>;
 	writerLock: AccountWriterLock;
 	pull(): Promise<SynchronizationResult>;
 }
 
 /** Submissions are serialized per account; the durable queue owns ordering and recovery. */
-export class MutationQueue<C, T> {
-	private entries: readonly OutboxEntry<C, T>[] = [];
-	private reloadGeneration = 0;
-	private readonly receipts = new Map<string, WriteReceipt<T>>();
-	private readonly listeners = new Set<() => void>();
-	readonly runtime: WorkspaceSyncRuntime;
+export interface MutationQueueController<C, T> {
+	readonly accountId: string;
+	readonly pending: readonly OutboxEntry<C, T>[];
+	readonly status: SubmissionResult;
+	reviewDependents(operationId: string): readonly OutboxEntry<C, T>[];
+	acknowledged(key: string, operationId: string): boolean;
+	subscribe(listener: () => void): () => void;
+	setOnline(online: boolean): void;
+	stop(): void;
+	reload(): Promise<void>;
+	applyStored(state: OutboxProjection<C, T>, notify?: boolean): void;
+	append(draft: WriteDraft<C, T>): Promise<string>;
+	refreshConflict(operationId: string): Promise<void>;
+	keepLocal(operationId: string): Promise<string>;
+	discard(operationIds: readonly string[]): Promise<void>;
+	flush(force?: boolean): Promise<SubmissionResult>;
+	retryNow(): void;
+}
+
+export interface MutationSubmissionDependencies<C, T> {
+	readonly repository: DurableWriteController<C, T>;
+	readonly transport: OutboxTransport<C, T>;
+	readonly writerLock: AccountWriterLock;
+}
+
+export interface SubmissionLane {
+	submit(): Promise<SubmissionResult>;
+	notify(): void;
+}
+
+export class MutationSubmission<C, T> implements MutationQueueController<C, T>, SubmissionLane {
 	private get online() {
-		return this.runtime.online;
+		return this.execution.online;
 	}
 	private get stopped() {
-		return this.runtime.stopped;
+		return this.execution.stopped;
 	}
 	constructor(
 		readonly accountId: string,
-		private readonly dependencies: MutationQueueDependencies<C, T>
-	) {
-		this.runtime = new WorkspaceSyncRuntime({
-			scheduler: dependencies.scheduler,
-			pull: dependencies.pull,
-			writes: () => this.submit(),
-			failed: () => this.notify()
-		});
-	}
+		private readonly dependencies: MutationSubmissionDependencies<C, T>,
+		private readonly state: MutationQueueStore<C, T>,
+		private readonly execution: WorkspaceSynchronizationController,
+		private readonly editing: IOutboxEditingService,
+		private readonly delivery: IOutboxDeliveryService
+	) {}
+
 	get pending(): readonly OutboxEntry<C, T>[] {
-		return this.entries;
+		return this.state.read().entries;
+	}
+	reviewDependents(operationId: string): readonly OutboxEntry<C, T>[] {
+		return this.editing.dependents(this.pending, operationId);
 	}
 	acknowledged(key: string, operationId: string): boolean {
-		return this.receipts.get(key)?.operationId === operationId;
+		return this.state.read().receipts.get(key)?.operationId === operationId;
 	}
 	get status(): SubmissionResult {
-		return this.runtime.writeStatus;
+		return this.execution.writeStatus;
 	}
 	subscribe(listener: () => void): () => void {
-		this.listeners.add(listener);
-		return () => this.listeners.delete(listener);
+		return this.state.subscribe(listener);
 	}
 	setOnline(online: boolean): void {
-		this.runtime.setOnline(online);
+		this.execution.setOnline(online);
 		this.notify();
 	}
 	stop(): void {
-		this.runtime.stop();
-		this.entries = [];
-		this.receipts.clear();
+		this.execution.stop();
+		this.state.clear();
 		this.notify();
 	}
 	async reload(): Promise<void> {
-		const generation = ++this.reloadGeneration;
+		const generation = this.state.advanceGeneration();
 		const state = await this.dependencies.repository.snapshot(this.accountId);
-		if (generation === this.reloadGeneration) this.applyStored(state);
+		if (generation === this.state.reloadGeneration) this.applyStored(state);
 	}
 	applyStored(state: OutboxProjection<C, T>, notify = true): void {
 		if (this.stopped) return;
-		this.reloadGeneration++;
+
 		const retryable = new Set(
 			state.entries
 				.filter(
@@ -92,10 +155,8 @@ export class MutationQueue<C, T> {
 				)
 				.map((entry) => entry.intent.operationId)
 		);
-		this.runtime.retainWriteRetries(retryable);
-		this.entries = state.entries;
-		this.receipts.clear();
-		for (const [key, receipt] of state.receipts) this.receipts.set(key, receipt);
+		this.execution.retainWriteRetries(retryable);
+		this.state.replace(state);
 		if (notify) this.notify();
 	}
 
@@ -111,7 +172,9 @@ export class MutationQueue<C, T> {
 		const recovery = this.dependencies.transport.recovery;
 		if (!recovery) throw new Error('Conflict recovery is unavailable');
 		await this.reload();
-		const entry = this.entries.find((entry) => entry.intent.operationId === operationId);
+		const entry = this.state
+			.read()
+			.entries.find((entry) => entry.intent.operationId === operationId);
 		if (!entry || entry.delivery.kind !== 'conflict')
 			throw new Error('This change no longer needs conflict review');
 		const remote = await recovery.observe(entry.intent.key);
@@ -137,9 +200,9 @@ export class MutationQueue<C, T> {
 			const selected = all.filter((entry) => operationIds.includes(entry.intent.operationId));
 			if (
 				selected.some((entry) =>
-					dependentWrites(all, entry.intent.operationId).some(
-						(child) => !operationIds.includes(child.intent.operationId)
-					)
+					this.editing
+						.dependents(all, entry.intent.operationId)
+						.some((child) => !operationIds.includes(child.intent.operationId))
 				)
 			)
 				throw new Error('Review dependent edits before discarding their base');
@@ -163,7 +226,7 @@ export class MutationQueue<C, T> {
 						: outcome
 				);
 				if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
-					this.runtime.committed();
+					this.execution.committed();
 			}
 			const remaining = await this.dependencies.repository.list(this.accountId);
 			await this.dependencies.repository.discard(
@@ -175,12 +238,12 @@ export class MutationQueue<C, T> {
 	}
 
 	flush(force = false): Promise<SubmissionResult> {
-		return this.runtime.flushWrites(force);
+		return this.execution.flushWrites(force);
 	}
 	retryNow(): void {
-		this.runtime.retryNow();
+		this.execution.retryNow();
 	}
-	private async submit(): Promise<SubmissionResult> {
+	async submit(): Promise<SubmissionResult> {
 		if (this.stopped) return { kind: 'stopped' };
 		await this.reload();
 		if (this.stopped) return { kind: 'stopped' };
@@ -191,14 +254,16 @@ export class MutationQueue<C, T> {
 				if (this.stopped) return { kind: 'stopped' };
 				if (!this.online) return { kind: 'offline' };
 				await this.dependencies.repository.recover(this.accountId);
-				const excluded = new Set(this.runtime.excludedWrites());
+				const excluded = new Set(this.execution.excludedWrites());
 				let failure: SubmissionResult = { kind: 'complete' };
 				while (!this.stopped && this.online) {
 					const sent = await this.dependencies.repository.take(this.accountId, excluded);
 					await this.reload();
 					if (!sent) {
-						if (nextWrite(this.entries, excluded)) continue;
-						const deferred = this.entries.find((entry) => entry.delivery.kind === 'retry');
+						if (this.delivery.next(this.state.read().entries, excluded)) continue;
+						const deferred = this.state
+							.read()
+							.entries.find((entry) => entry.delivery.kind === 'retry');
 						return deferred?.delivery.kind === 'retry'
 							? { kind: 'failure', message: deferred.delivery.message }
 							: failure;
@@ -214,20 +279,20 @@ export class MutationQueue<C, T> {
 							response.message
 						);
 						await this.reload();
-						this.runtime.deferWrite(sent.intent.operationId);
+						this.execution.deferWrite(sent.intent.operationId);
 						excluded.add(sent.intent.operationId);
 						failure = { kind: 'failure', message: response.message };
 						if (response.accountChanged) {
-							this.runtime.setOnline(false);
+							this.execution.setOnline(false);
 							return failure;
 						}
 						continue;
 					}
 					const outcome = response.outcome;
 					await this.dependencies.repository.settle(this.accountId, sent, outcome);
-					this.runtime.clearWriteRetry(sent.intent.operationId);
+					this.execution.clearWriteRetry(sent.intent.operationId);
 					if ((outcome.kind === 'applied' || outcome.kind === 'proven') && !this.stopped)
-						this.runtime.committed();
+						this.execution.committed();
 					await this.reload();
 				}
 				return this.stopped ? { kind: 'stopped' } : { kind: 'offline' };
@@ -258,7 +323,7 @@ export class MutationQueue<C, T> {
 		}
 	}
 
-	private notify(): void {
-		for (const listener of this.listeners) listener();
+	notify(): void {
+		for (const listener of this.state.listeners()) listener();
 	}
 }

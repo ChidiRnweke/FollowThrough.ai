@@ -1,3 +1,7 @@
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
+import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
+import type { MutationQueueController } from '$lib/controllers/sync/submission';
+import type { ResourceCacheController } from '$lib/controllers/sync/cache';
 import { workspaceReadiness } from '$lib/services/workspace/startup';
 import { SvelteDate, SvelteMap, createSubscriber } from 'svelte/reactivity';
 import {
@@ -5,13 +9,14 @@ import {
 	type WorkspaceLocalProjection,
 	type WorkspaceLocalRepository
 } from '$lib/client/sync/workspace-local-repository';
-import type { WorkspaceSyncRuntime } from '$lib/client/sync/workspace-runtime';
+import type { WorkspaceSynchronizationController } from '$lib/controllers/sync/execution';
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { NoteRevision } from '$lib/models/notes';
 import {
 	type WriteDraft,
+	type OutboxEntry,
 	type DraftStatus,
 	type WriteConflictView,
 	type WriteBase
@@ -49,8 +54,8 @@ import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { WorkspaceViews } from '$lib/controllers/workspace/views';
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
@@ -68,14 +73,15 @@ export interface StagedWrite {
 export interface WorkspaceResourcesDependencies {
 	dispose?(): void;
 	repository: Pick<WorkspaceLocalRepository<WorkspaceCommand, WorkspaceRecord>, 'read'>;
-	cache: ResourceCache<WorkspaceRecord>;
-	writes: MutationQueue<WorkspaceCommand, WorkspaceRecord>;
+	cache: ResourceCacheController<WorkspaceRecord>;
+	writes: MutationQueueController<WorkspaceCommand, WorkspaceRecord>;
+	execution: WorkspaceSynchronizationController;
 }
 
 /** Features share resource identity, local overlays, and the same explicit-open read barrier. */
 export class WorkspaceResources {
 	private revision = $state(0);
-	private readonly runtime: WorkspaceSyncRuntime;
+	private readonly runtime: WorkspaceSynchronizationController;
 	private local = $state.raw<WorkspaceLocalProjection<WorkspaceCommand, WorkspaceRecord> | null>(
 		null
 	);
@@ -107,7 +113,7 @@ export class WorkspaceResources {
 		readonly accountId: string,
 		private readonly dependencies: WorkspaceResourcesDependencies
 	) {
-		this.runtime = dependencies.writes.runtime;
+		this.runtime = dependencies.execution;
 		this.unsubscribe = [
 			dependencies.cache.subscribe(() => {
 				this.revision++;
@@ -169,6 +175,10 @@ export class WorkspaceResources {
 	get views(): WorkspaceViews {
 		return this.projections;
 	}
+	reviewDependents(operationId: string): readonly OutboxEntry<WorkspaceCommand, WorkspaceRecord>[] {
+		return this.dependencies.writes.reviewDependents(operationId);
+	}
+
 	get pending() {
 		void this.revision;
 		return this.local?.writes.entries ?? [];
@@ -448,18 +458,19 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 	const repository = new DexieWorkspaceRepository(
 		accountId,
 		workspaceCommandSchema,
-		workspaceRecordSchema,
-		rebaseWorkspaceRecord
+		workspaceRecordSchema
 	);
-	const cache = new ResourceCache(accountId, {
+	const repositoryWrites = createDurableOutbox(repository, rebaseWorkspaceRecord);
+	const cache = createResourceCache(accountId, {
 		repository: {
 			load: async (account) => (await repository.read(account)).cache,
-			commit: (account, changes) => repository.cache.commit(account, changes)
+			commit: (account, changes) =>
+				createCachePersistence(repository.cache).commit(account, changes)
 		},
 		transport: workspaceReadTransport(accountId)
 	});
-	const writes = new MutationQueue(accountId, {
-		repository,
+	const { writes, execution } = createMutationQueue(accountId, {
+		repository: repositoryWrites,
 		transport: workspaceWriteTransport(accountId),
 		scheduler: browserSyncScheduler,
 		writerLock: browserWriterLock,
@@ -469,6 +480,7 @@ export const createWorkspaceResources = (accountId: string): WorkspaceResources 
 		repository,
 		cache,
 		writes,
+		execution,
 
 		dispose: () => {
 			unsubscribe();

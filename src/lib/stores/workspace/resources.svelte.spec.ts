@@ -21,8 +21,8 @@ import {
 	InMemoryOutbox,
 	InMemoryAccountWriterLock
 } from '$lib/testing/sync/fakes/in-memory-outbox';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { WorkspaceResources, type ResourceView } from './resources.svelte';
 
 const project = workspaceRecordSchema.parse({
@@ -58,8 +58,8 @@ const setup = (
 		rebaseWorkspaceRecord,
 		repository
 	);
-	const cache = new ResourceCache('alice', { repository: outbox.projectedCache, transport });
-	const writes = new MutationQueue<WorkspaceCommand, typeof project>('alice', {
+	const cache = createResourceCache('alice', { repository: outbox.projectedCache, transport });
+	const { writes, execution } = createMutationQueue<WorkspaceCommand, typeof project>('alice', {
 		repository: outbox,
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
@@ -69,13 +69,15 @@ const setup = (
 	const resources = new WorkspaceResources('alice', {
 		repository: outbox,
 		cache,
-		writes
+		writes,
+		execution
 	});
 	const stopObserving = outbox.observe('alice', (state) => resources.applyLocal(state));
 	activeResources.push(resources);
 	return {
 		outbox,
 		writes,
+		execution,
 		stopObserving,
 		repository,
 		transport,

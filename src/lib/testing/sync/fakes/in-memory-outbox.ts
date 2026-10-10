@@ -1,3 +1,6 @@
+import { OutboxDeliveryService, OutboxEditingService } from '$lib/services/sync/state';
+import { createWriteAncestry } from '$lib/factories/sync/ancestry';
+import type { WriteAncestryController } from '$lib/controllers/sync/ancestry';
 import {
 	type WriteReceipt,
 	type WriteBaseResolution,
@@ -6,29 +9,18 @@ import {
 	type WriteOutcome,
 	type WriteRebase
 } from '$lib/models/outbox';
-import {
-	authoritativeWriteResource,
-	retryConflictedWrite,
-	retainWriteReceipt,
-	discardWrites,
-	appendWrite,
-	beginWrite,
-	failWrite,
-	nextWrite,
-	settleWrite,
-	resolveWriteBase,
-	rebaseConflictedWrite,
-	rebaseDraft
-} from '$lib/services/sync/state';
+
 import type {
 	WorkspaceLocalProjection,
 	WorkspaceLocalRepository
 } from '$lib/client/sync/workspace-local-repository';
 import { InMemorySyncCache } from './in-memory-sync';
 import type { SyncCacheRepository } from '$lib/client/sync/contracts';
-import type { AccountWriterLock } from '$lib/client/sync/mutation-queue';
+import type { AccountWriterLock } from '$lib/controllers/sync/submission';
 
 export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
+	private readonly delivery = new OutboxDeliveryService();
+	private readonly editing = new OutboxEditingService();
 	private readonly accounts = new Map<string, readonly OutboxEntry<C, T>[]>();
 	private sequence = 0;
 	private readonly receipts = new Map<string, Map<string, WriteReceipt<T>>>();
@@ -36,11 +28,13 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		string,
 		Set<(state: WorkspaceLocalProjection<C, T>) => void>
 	>();
+	private readonly ancestry: WriteAncestryController<T>;
 	readonly projectedCache: SyncCacheRepository<T>;
 	constructor(
-		private readonly rebase: WriteRebase<T>,
+		rebase: WriteRebase<T>,
 		private readonly cache = new InMemorySyncCache<T>()
 	) {
+		this.ancestry = createWriteAncestry(rebase);
 		this.projectedCache = {
 			load: async (accountId) => (await this.read(accountId)).cache,
 			commit: (accountId, changes) => this.cache.commit(accountId, changes)
@@ -89,9 +83,9 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		if (failure) throw new Error(failure);
 		const entries = this.entries(accountId);
 		const receipt = this.receipts.get(accountId)?.get(draft.key) ?? null;
-		const next = appendWrite(
+		const next = this.editing.append(
 			entries,
-			rebaseDraft(entries, draft, receipt, this.rebase),
+			this.ancestry.draft(entries, draft, receipt),
 			++this.sequence,
 			receipt
 		);
@@ -106,7 +100,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		resolution: WriteBaseResolution<T>
 	): Promise<void> {
 		const entries = this.entries(accountId);
-		const next = resolveWriteBase(entries, operationId, resolution);
+		const next = this.editing.resolveBase(entries, operationId, resolution);
 		const original = entries.find((entry) => entry.intent.operationId === operationId);
 		const resource = resolution.remote;
 		this.accounts.set(accountId, next);
@@ -117,11 +111,11 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 	async keepLocal(accountId: string, operationId: string, replacementId: string): Promise<void> {
 		this.accounts.set(
 			accountId,
-			retryConflictedWrite(this.entries(accountId), operationId, replacementId)
+			this.editing.keepLocal(this.entries(accountId), operationId, replacementId)
 		);
 	}
 	async discard(accountId: string, operationIds: readonly string[]): Promise<void> {
-		this.accounts.set(accountId, discardWrites(this.entries(accountId), operationIds));
+		this.accounts.set(accountId, this.editing.discard(this.entries(accountId), operationIds));
 	}
 
 	async take(
@@ -129,9 +123,9 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		excluded: ReadonlySet<string> = new Set()
 	): Promise<OutboxEntry<C, T> | null> {
 		const entries = this.entries(accountId);
-		const next = nextWrite(entries, excluded);
+		const next = this.delivery.next(entries, excluded);
 		if (!next) return null;
-		const sent = beginWrite(next);
+		const sent = this.delivery.begin(next);
 		this.accounts.set(
 			accountId,
 			entries.map((entry) => (entry === next ? sent : entry))
@@ -142,7 +136,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		this.accounts.set(
 			accountId,
 			this.entries(accountId).map((entry) =>
-				entry.intent.operationId === operationId ? failWrite(entry, message) : entry
+				entry.intent.operationId === operationId ? this.delivery.fail(entry, message) : entry
 			)
 		);
 	}
@@ -150,7 +144,7 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		this.accounts.set(
 			accountId,
 			this.entries(accountId).map((entry) =>
-				failWrite(entry, 'Interrupted submission; checking its receipt')
+				this.delivery.fail(entry, 'Interrupted submission; checking its receipt')
 			)
 		);
 	}
@@ -159,22 +153,22 @@ export class InMemoryOutbox<C, T> implements WorkspaceLocalRepository<C, T> {
 		sent: OutboxEntry<C, T>,
 		outcome: WriteOutcome<T>
 	): Promise<void> {
-		const settled = settleWrite(this.entries(accountId), sent.intent.operationId, outcome);
+		const settled = this.delivery.settle(this.entries(accountId), sent.intent.operationId, outcome);
 		const next =
 			outcome.kind === 'conflict'
-				? rebaseConflictedWrite(settled, sent.intent.operationId, this.rebase)
+				? this.ancestry.conflicted(settled, sent.intent.operationId)
 				: settled;
 		const receipts = this.receipts.get(accountId) ?? new Map<string, WriteReceipt<T>>();
 		const receipt =
 			outcome.kind === 'applied'
-				? retainWriteReceipt(receipts.get(sent.intent.key) ?? null, outcome.receipt)
+				? this.delivery.retainReceipt(receipts.get(sent.intent.key) ?? null, outcome.receipt)
 				: null;
 		this.accounts.set(accountId, next);
 		if (receipt) {
 			receipts.set(sent.intent.key, receipt);
 			this.receipts.set(accountId, receipts);
 		}
-		const resource = authoritativeWriteResource(outcome);
+		const resource = this.delivery.authoritativeResource(outcome);
 		if (resource) await this.saveResource(accountId, sent.intent.key, resource);
 	}
 	private async saveResource(

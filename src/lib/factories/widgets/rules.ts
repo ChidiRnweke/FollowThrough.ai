@@ -1,4 +1,4 @@
-import { CatalogWidgetCandidateReader } from '$lib/remote/widgets/candidate-reader';
+import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
 import type { WidgetCatalogReader } from '$lib/models/widgets';
 import { WidgetLifecycleService, type IWidgetLifecycleService } from '$lib/services/widgets/trash';
 import {

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { OutboxRepository } from '$lib/client/sync/outbox-contracts';
+import type { DurableWriteController } from '$lib/client/sync/outbox-contracts';
 import type { WriteDraft } from '$lib/models/outbox';
 import { syncEtag } from '$lib/services/sync/versions';
 
@@ -14,7 +14,9 @@ const draft = (command: string): WriteDraft<string, string> => ({
 	references: []
 });
 
-export const outboxRepositoryContract = (create: () => OutboxRepository<string, string>): void => {
+export const outboxRepositoryContract = (
+	create: () => DurableWriteController<string, string>
+): void => {
 	it('never coalesces new input into an attempted operation', async () => {
 		const repository = create();
 		const first = draft('First');

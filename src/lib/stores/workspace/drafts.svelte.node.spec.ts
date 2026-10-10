@@ -18,8 +18,8 @@ import {
 	InMemoryAccountWriterLock
 } from '$lib/testing/sync/fakes/in-memory-outbox';
 import { InMemoryNoteWrites } from '$lib/testing/sync/fakes/in-memory-note-writes';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
 const setup = async () => {
 	const note = noteBuilder({ plainText: 'Original' });
@@ -32,8 +32,8 @@ const setup = async () => {
 	const transport = new InMemoryNoteWrites();
 	const snapshot = { etag: syncEtag(1n), value: { type: 'notes' as const, value: note } };
 	transport.records.set(key, snapshot);
-	const cache = new ResourceCache(note.userId, { repository: outbox.projectedCache, transport });
-	const writes = new MutationQueue(note.userId, {
+	const cache = createResourceCache(note.userId, { repository: outbox.projectedCache, transport });
+	const { writes, execution } = createMutationQueue(note.userId, {
 		repository: outbox,
 		transport,
 		scheduler: new InMemorySyncScheduler(),
@@ -43,7 +43,8 @@ const setup = async () => {
 	const resources = new WorkspaceResources(note.userId, {
 		repository: outbox,
 		cache,
-		writes
+		writes,
+		execution
 	});
 	outbox.observe(note.userId, (state) => resources.applyLocal(state));
 	resources.setOnline(false);
