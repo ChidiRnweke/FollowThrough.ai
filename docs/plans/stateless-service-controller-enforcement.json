@@ -1,12 +1,12 @@
 {
 	"recordedAt": "2026-10-10",
-	"applicationRevision": "11757be5b7e7a37241eec6d0ee43d2dfb5c1116c",
+	"applicationRevision": "fad8258997f88c4d79e2d258415d468f23936d2b",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "af8cfce7c514a47b6f4b2aeadd8726d29adb9c90",
+		"applicationBase": "a9e6e285590e00b5b435d471e872c5c77b1fda73",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "The unchanged analyzers were run against draft #354 at af8cfce7 before implementation. All 375 semantic diagnostics and their provenance matched exactly. Expanding Chisel message references reproduced all 47 recorded diagnostics. Both complete current inventories remain equal to that base; the separately reviewed WorkspaceSyncChanges composition dependency was not an analyzer finding.",
+		"method": "Read-only baseline verification on draft #356 matched all 375 semantic diagnostics, including locations and provenance, and all 47 expanded Chisel diagnostics exactly. The unchanged analyzers now remove the four knowledge-search public-helper findings and the concrete chunker dependency. No diagnostic identities were added. Bound capability surfaces, controller consumers, evaluation construction/cache identity and trace-script dependencies were also reviewed manually.",
 		"semanticCounts": {
 			"concrete-dependency": 2,
 			"controller-orchestration": 277,
@@ -25,11 +25,11 @@
 		"command": "node --experimental-strip-types scripts/audit-architecture.ts --json",
 		"exitStatus": 1,
 		"counts": {
-			"concrete-dependency": 2,
+			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 20,
+			"public-service-helper": 16,
 			"store-workflow": 55
 		},
 		"violations": [
@@ -3680,46 +3680,6 @@
 				"provenance": ["src/lib/server/services/inline-suggestions/inline-completion.ts:1"]
 			},
 			{
-				"file": "src/lib/server/services/knowledge-search/indexing.ts",
-				"line": 23,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/knowledge-search/indexing.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/knowledge-search/indexing.ts",
-				"line": 272,
-				"column": 28,
-				"rule": "concrete-dependency",
-				"message": "Expose a declared capability interface instead of a concrete implementation.",
-				"provenance": ["src/lib/server/services/knowledge-search/indexing.ts:35"]
-			},
-			{
-				"file": "src/lib/server/services/knowledge-search/ranking.ts",
-				"line": 57,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/knowledge-search/ranking.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/knowledge-search/ranking.ts",
-				"line": 94,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/knowledge-search/ranking.ts:1"]
-			},
-			{
-				"file": "src/lib/server/services/knowledge-search/ranking.ts",
-				"line": 109,
-				"column": 14,
-				"rule": "public-service-helper",
-				"message": "Public service behavior belongs on a class capability interface; keep helpers private.",
-				"provenance": ["src/lib/server/services/knowledge-search/ranking.ts:1"]
-			},
-			{
 				"file": "src/lib/server/services/telemetry.ts",
 				"line": 43,
 				"column": 14,
@@ -3767,7 +3727,7 @@
 				"message": "services must not invoke or expose controllers behavior. Move the operation to a controller.",
 				"provenance": [
 					"src/lib/server/services/telemetry.ts:187",
-					"src/lib/server/controllers/inline-suggestions/controller.ts:127"
+					"src/lib/server/controllers/inline-suggestions/controller.ts:128"
 				]
 			},
 			{
@@ -4742,6 +4702,56 @@
 				"tests/integration/sync/pull-snapshot.contract.spec.ts"
 			],
 			"inventoryNote": "Manual dependency review, separate from analyzer findings. Overall application migration remains incomplete."
+		},
+		{
+			"subject": "ContentIndex private chunking and bound capability surfaces",
+			"status": "corrected",
+			"previousDependency": "ContentIndex constructed TokenAwareChunker and exposed source-specific bound-method objects through IndexCapabilities and factory outputs. Consumers also declared duplicate indexing interfaces.",
+			"currentOwner": "ContentIndex owns private chunking, hashes and reuse. It directly implements named source-indexing and completion methods. Construction remains in factories, which provide the same instance through declared narrow interfaces. Owning controllers retain sequencing and transactions. IndexChunking is shared model data.",
+			"evidence": [
+				"src/lib/server/services/knowledge-search/indexing.ts",
+				"src/lib/server/factories/content-index.ts",
+				"src/lib/server/factories/capabilities/knowledge-search-capability-factory.ts",
+				"src/lib/server/controllers/attachment-processing/controller.ts",
+				"src/lib/server/controllers/notes/controller.ts",
+				"src/lib/server/controllers/memory/controller.ts",
+				"src/lib/server/controllers/skills/controller.ts",
+				"src/lib/server/controllers/widgets/controller.ts",
+				"tests/integration/knowledge-search/index-replacement.contract.spec.ts"
+			],
+			"inventoryNote": "The concrete chunker diagnostic is removed. Bound surfaces and complete-operation ownership were reviewed separately; the full application migration remains incomplete."
+		},
+		{
+			"subject": "Diagram indexing context selection",
+			"status": "corrected",
+			"previousDependency": "diagramIndexNoteId was an exported service function used by three controllers before reading source-note context.",
+			"currentOwner": "ContentIndex.diagramContextRequirement and diagram indexing share private eligibility rules. Diagrams, DiagramStudio and Suggestions directly resolve authorized note titles and coordinate indexing, embeddings and completion. Shared context requirements live in models.",
+			"evidence": [
+				"src/lib/models/knowledge-search/index.ts",
+				"src/lib/server/services/knowledge-search/indexing.ts",
+				"src/lib/server/controllers/diagrams/controller.ts",
+				"src/lib/server/controllers/diagram-studio/controller.ts",
+				"src/lib/server/controllers/suggestions/controller.ts",
+				"src/lib/server/controllers/diagram-studio/content-publication.spec.ts"
+			],
+			"inventoryNote": "Archived, empty and standalone diagrams avoid the source-note read. No helper-only service or controller-operation callback was introduced."
+		},
+		{
+			"subject": "Reranking provider protocol, serialization, tracing and evaluation cache",
+			"status": "corrected",
+			"previousDependency": "SearchRanking mixed provider protocol with exported serialization and tracing helpers in the services layer. Evaluation caches and the trace-validation script depended on those exports.",
+			"currentOwner": "The ranking adapter owns HTTP protocol, boundary parsing, cancellation, errors and its existing observer span. One adapter protocol serializer feeds provider documents, trace attributes and evaluation cache identity. Shared provider contracts and response schema live in models. Retrieval, inline suggestions and relationships retain controller-owned ADR 0036 fallback.",
+			"evidence": [
+				"src/lib/server/adapters/knowledge-search/ranking.ts",
+				"src/lib/server/adapters/knowledge-search/rerank-protocol.ts",
+				"src/lib/server/adapters/knowledge-search/rerank-tracing.ts",
+				"src/lib/server/factories/capabilities/knowledge-search-capability-factory.ts",
+				"src/evals/lab/application.ts",
+				"src/evals/lab/cache/cached-clients.ts",
+				"src/evals/lab/cache/cached-clients.spec.ts",
+				"scripts/phoenix-trace-validation.js"
+			],
+			"inventoryNote": "Production and evaluation constructors, provider consumers and cache/trace imports were reviewed. Cache key fields and position payloads are unchanged. Telemetry architecture and the diagram SDK mismatch remain outside this slice."
 		}
 	]
 }

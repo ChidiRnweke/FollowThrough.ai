@@ -394,3 +394,76 @@ writes, telemetry and the diagram SDK submission-tool mismatch were outside this
   retains the existing Svelte `derived_inert` warnings and chart rendering error.
 - No live-provider, E2E, PWA or production-build validation was run. CI results are separate from
   this local evidence. Keep the stacked PR draft while migration gates fail.
+
+## Knowledge-search boundaries — 2026-10-10
+
+This slice stacks on draft PR #356 at `a9e6e285590e00b5b435d471e872c5c77b1fda73`.
+Application revision: `fad8258997f88c4d79e2d258415d468f23936d2b`. The checkers are unchanged.
+Read-only baseline verification reproduced all 375 semantic findings, including provenance,
+and all 47 Chisel findings after expanding message references. The JSON now contains every
+remaining diagnostic and separate records of manually reviewed dependencies.
+
+### Corrected dependencies
+
+ContentIndex now implements real named source-indexing and completion methods. Factories expose
+the same instance through declared capability interfaces instead of bound-method objects. Chunking
+is private implementation, with the same codec, normalization, boundaries, overlap and validation.
+Hashes, model-sensitive embedding reuse, duplicate chunk identity, attachment deferral, source
+visibility and deletion rules are preserved. SQL remains in repositories; complete operations and
+transactions remain in their owning controllers.
+
+Diagram context selection belongs to the same cohesive indexing capability. Its model-owned
+requirement tells Diagrams, DiagramStudio and Suggestions whether to read an authorized source-note
+title. Archived, empty and standalone diagrams avoid that lookup. The owners still coordinate
+indexing, embedding and completion directly. There is no new service composition or controller chain.
+
+SearchRanking is a provider adapter. Its request protocol, parsing, cancellation, error normalization
+and observer span retain their behavior. One YAML serializer serves provider documents, trace
+attributes and evaluation cache identity. Shared contracts and the response schema live in models.
+Production and evaluation construction, cached clients and the trace-validation script use the new
+locations. Cache model/strategy/query/topN/document identity and position payloads are unchanged.
+Retrieval, inline-suggestion and relationship controllers retain ADR 0036's vector-order fallback.
+No controller public operation changed; instrumentation and agent-tool coverage maps remain total.
+
+### Complete remaining inventory
+
+| Rule                       | #356 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   20 |        16 |
+| `indirect-dependency`      |    9 |         9 |
+| `concrete-dependency`      |    2 |         1 |
+| Semantic total             |  375 |       370 |
+| Chisel prohibited imports  |   47 |        47 |
+
+The removed diagnostic identities are the diagram selection helper, three ranking helpers and the
+concrete chunker dependency. No diagnostic identities were added. Bound factory surfaces, controller
+consumers, evaluation construction/cache dependencies and diagnostic trace imports were also reviewed
+manually; those observations are separate from analyzer counts. The JSON is evidence, never a baseline
+or suppression input. Browser migrations and remaining factory/store workflows, public helpers,
+indirect dependencies and concrete exposures still need work. The overall refactor is incomplete.
+
+### Observed verification
+
+- Focused search, indexing, ranking-protocol and cache units: **14 files, 79 passed**. Diagram
+  context/publication regression units: **one file, 13 passed** after the three additional cases.
+- Final full units: **574 files, 4,518 passed, one existing skip**. Passing browser output retains
+  the existing Svelte `derived_inert` warnings and chart rendering error.
+- `pnpm test:contracts:isolated tests/integration/knowledge-search`: **four files, 18 passed**.
+  New real PostgreSQL contracts verify old semantic/new literal visibility, retirement after
+  completion, newer edits during embedding, deletion before late completion, atomic visibility
+  through an independent connection and rollback. Vectors are supplied locally; no provider runs.
+- Affected isolated contracts: **48 files, 224 passed**, covering notes, skills, diagrams,
+  suggestions, attachments and diagram/memory/widget synchronization.
+- The first atomic-visibility test attempt blocked on the harness's single connection and timed
+  out. It now uses an independent reader connection; the complete knowledge-search rerun passed.
+- `pnpm lint` passed. `pnpm check` passed with zero errors and warnings. `pnpm docs:check` passed
+  with zero errors/warnings and one existing hint; TypeDoc entry-point warnings remain.
+- Every architecture stage ran. Topology, source, test quality and UI passed. Semantic failed with
+  **370** findings; standalone Chisel failed with **47** prohibited imports. Checks and suppressions
+  were not changed.
+- SvelteKit, QA and PR skill copies match across all three locations. Guidance was not changed.
+- No live-provider, Phoenix round-trip, E2E, PWA or production-build validation was run.
+  Local results do not imply CI success. Keep this stacked PR draft while migration gates fail.

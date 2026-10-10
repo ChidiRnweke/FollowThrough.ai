@@ -226,10 +226,12 @@ inventory artifacts before final PR completion. Never mark blocked or unverified
 
 ## Execution inventory — current, incomplete
 
-The symbol inventory is in `artifacts/adr0007/inventory.json`; the initial snapshot is in
+The historical symbol inventory is in `artifacts/adr0007/inventory.json`; the initial snapshot is in
 `artifacts/adr0007/baseline-inventory.json`. It contains service exports, controller members,
 retained fields, factory/component imports, resolved call signatures and import edges.
-Concrete injected callback targets and transitive component boundaries still require review.
+The complete current diagnostics are in `docs/plans/stateless-service-controller-enforcement.json`.
+Later continuation sections supersede the historical routing rows below. Concrete injected callback
+targets and transitive component boundaries still require review.
 
 Every service module below has a planned disposition. This is routing, not completion.
 
@@ -1476,3 +1478,34 @@ remaining factory/store workflows, public helpers, indirect dependencies and con
 remain. Mutation/preference writes, telemetry and the diagram SDK mismatch were not changed.
 The [enforcement report](stateless-service-controller-enforcement.md) records full evidence and
 limitations. The overall refactor is incomplete; keep the stacked PR draft.
+
+## Knowledge-search boundary continuation — 2026-10-10
+
+Application revision `fad8258997f88c4d79e2d258415d468f23936d2b`, based on draft #356 at `a9e6e285590e00b5b435d471e872c5c77b1fda73`.
+Both complete analyzer inventories matched #356 during read-only baseline verification.
+Constructor, factory-output, bound-method, controller-consumer and evaluation-cache review
+supplemented the diagnostics.
+
+- [x] Fold chunking into private ContentIndex methods and replace bound capability objects with
+      real named methods. Keep hashes, reuse, deferred indexing and SQL behavior unchanged.
+- [x] Keep diagram context eligibility in the indexing capability. Diagrams, DiagramStudio and
+      Suggestions resolve authorized note context and coordinate indexing and embeddings directly.
+- [x] Move reranking HTTP protocol and trace helpers to adapters. Share one YAML serializer across
+      provider requests, traces and evaluation cache identity; keep shared contracts in models.
+- [x] Update factories, consumers and InMemory fixtures. Preserve complete controller operations,
+      public signatures, transaction ownership, cancellation and ADR 0036 fallback.
+- [x] Verify PostgreSQL replacement, rollback, stale completion and deletion without provider calls.
+      Run focused and full units, affected isolated contracts, lint, type/docs checks and all
+      architecture stages; refresh the complete diagnostic inventory.
+- [ ] Complete the wider application migration and satisfy the semantic and Chisel gates.
+
+Full units passed: 574 files, 4,518 tests and one existing skip. Knowledge-search PostgreSQL
+contracts passed: four files, 18 tests. Affected controller contracts passed: 48 files, 224 tests.
+Lint, type checking and docs checking passed. Topology, source, test-quality and UI audits passed.
+Semantic findings decreased from 375 to 370; Chisel retains all 47 prohibited imports.
+The [enforcement report](stateless-service-controller-enforcement.md) records evidence and limits.
+
+This resolves the earlier pending chunker, diagram helper and ranking entries. It does not establish
+compliance for the whole knowledge-search family or complete the application refactor. Browser
+migrations, synchronization behavior, preference writes, unrelated helpers, telemetry restructuring
+and the diagram SDK mismatch were not changed. Keep the stacked PR draft while migration gates fail.
