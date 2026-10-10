@@ -30,7 +30,8 @@ const setup = async (suffix: string) => {
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
 			...agentModelRulesFixture(),
-			conversationJournal: new ConversationArchive(records),
+			conversationMessages: new ConversationArchive(records),
+			conversationSessions: new ConversationArchive(records),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner

@@ -6,7 +6,7 @@ import type { ProjectId } from '$lib/models/projects';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
-import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
+import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
 import type { DateTime } from '$lib/models/workspace';
 
 export interface SearchKnowledgeInput {
@@ -45,7 +45,7 @@ export interface RetrievalDependencies {
 	embeddings: EmbeddingClient;
 	reranker: Reranker;
 	queryGenerator: ISearchQueryGeneration;
-	conversations: Pick<ConversationJournal, 'listMessages'>;
+	conversations: Pick<ConversationMessages, 'listMessages'>;
 }
 
 const DEFAULT_SEARCH_LIMIT = 8;

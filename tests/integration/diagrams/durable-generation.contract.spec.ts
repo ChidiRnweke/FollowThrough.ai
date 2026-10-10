@@ -73,6 +73,7 @@ const setup = async (suffix: string) => {
 			...fixture.generation,
 			contextNotes: notes.services.reader,
 			conversations: new ConversationArchive(conversations),
+			conversationMessages: new ConversationArchive(conversations),
 			runs: new AgentRunLedger(runs),
 			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance

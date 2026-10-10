@@ -45,10 +45,9 @@ import type {
 	AgentModelCatalog,
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
-import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
 
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
+import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
 import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
@@ -70,7 +69,10 @@ import type {
 import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';
-import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import type {
+	ConversationSessions,
+	ConversationMessages
+} from '$lib/server/services/agent/conversations/archive';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { AgentRunContext, ContextResourceRef, PreparedAgentRun } from '$lib/models/agent';
 import type {
@@ -214,13 +216,15 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
 	readonly imagePreparation: AgentImagePreparation;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	/** Persists conversations and their message history. */
-	conversationJournal: ConversationJournal;
+	conversationSessions: ConversationSessions;
+	conversationMessages: ConversationMessages;
 	/** Per-user agent preferences used to settle defaults when a run is frozen. */
 	preferences: AgentPreferencesStore;
 	/** The catalogue of selectable models, used to validate and resolve run models. */
@@ -266,8 +270,6 @@ export interface AgentDependencies {
 
 	readonly contextProjects: ProjectReader;
 
-	readonly contextConversations: Pick<ConversationArchive, 'get'>;
-
 	readonly provenance: ProvenanceRecorder;
 
 	readonly runner: AgentRunner;
@@ -310,7 +312,7 @@ export class Agent implements AgentController {
 		actor: ActorContext,
 		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
 	): Promise<readonly Conversation[]> {
-		return this.dependencies.conversationJournal.listConversations(actor, options);
+		return this.dependencies.conversationSessions.listConversations(actor, options);
 	}
 
 	renameSession(
@@ -318,16 +320,16 @@ export class Agent implements AgentController {
 		conversationId: ConversationId,
 		title: string
 	): Promise<Conversation> {
-		return this.dependencies.conversationJournal.rename(actor, conversationId, title);
+		return this.dependencies.conversationSessions.rename(actor, conversationId, title);
 	}
 
 	async deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.conversationJournal.getForWrite(actor, conversationId);
+			await this.dependencies.conversationSessions.getForWrite(actor, conversationId);
 			const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
 			if (active)
 				throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
-			await this.dependencies.conversationJournal.remove(actor, conversationId);
+			await this.dependencies.conversationSessions.remove(actor, conversationId);
 		});
 	}
 
@@ -359,7 +361,7 @@ export class Agent implements AgentController {
 				// whatever they have since become.
 				const preferences = await this.dependencies.preferences.get(actor);
 				const runInput = this.freezeInput(input, preferences);
-				const conversation = await this.dependencies.conversationJournal.getOrCreate(
+				const conversation = await this.dependencies.conversationSessions.getOrCreate(
 					actor,
 					runInput
 				);
@@ -403,7 +405,7 @@ export class Agent implements AgentController {
 				};
 				const inserted = await this.dependencies.runs.insertIdempotent(actor, run);
 				if (!inserted) throw new DuplicateSubmission();
-				await this.dependencies.conversationJournal.recordUserPrompt(
+				await this.dependencies.conversationMessages.recordUserPrompt(
 					actor,
 					conversation.id,
 					runInput.prompt,
@@ -638,13 +640,13 @@ export class Agent implements AgentController {
 	): Promise<void> {
 		const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
 		if (active) throw new ValidationError('Wait for the current agent run to finish first');
-		await this.dependencies.conversationJournal.truncateFromUserMessage(
+		await this.dependencies.conversationMessages.truncateFromUserMessage(
 			actor,
 			conversationId,
 			ordinal
 		);
 		const items = await this.dependencies.sessions.list(actor, conversationId);
-		const rewound = rewindToUserItem(
+		const rewound = this.dependencies.conversationHistory.rewind(
 			items.map((item) => item.item),
 			ordinal
 		);
@@ -891,7 +893,7 @@ export class Agent implements AgentController {
 							const record = await this.dependencies.events.append(run.id, 1, event);
 							const activity = toolActivityFromEvent(event);
 							if (activity)
-								await this.dependencies.conversationJournal.recordToolActivity(
+								await this.dependencies.conversationMessages.recordToolActivity(
 									actor,
 									run.conversationId,
 									activity,
@@ -1061,7 +1063,7 @@ export class Agent implements AgentController {
 				contextResources,
 				profileMemory
 			});
-		const conversation = await this.dependencies.contextConversations.get(
+		const conversation = await this.dependencies.conversationSessions.get(
 			actor,
 			input.conversationId
 		);
@@ -1170,7 +1172,7 @@ export class Agent implements AgentController {
 		if (run.pendingDecisions.length === 0) return;
 		const actor: ActorContext = { userId: run.userId };
 		for (const pending of run.pendingDecisions)
-			await this.dependencies.conversationJournal.recordToolActivity(
+			await this.dependencies.conversationMessages.recordToolActivity(
 				actor,
 				run.conversationId,
 				{
@@ -1194,7 +1196,7 @@ export class Agent implements AgentController {
 			const record = await this.dependencies.events.append(run.id, 1, event);
 			const activity = toolActivityFromEvent(event);
 			if (activity)
-				await this.dependencies.conversationJournal.recordToolActivity(
+				await this.dependencies.conversationMessages.recordToolActivity(
 					actor,
 					run.conversationId,
 					activity,
@@ -1234,7 +1236,7 @@ export class Agent implements AgentController {
 			for (const segment of segments) {
 				const provenance = { runId: run.id, eventCursor: segment.cursor };
 				if (segment.kind === 'reasoning')
-					await this.dependencies.conversationJournal.recordAssistantReasoning(
+					await this.dependencies.conversationMessages.recordAssistantReasoning(
 						actor,
 						run.conversationId,
 						segment.text,
@@ -1242,7 +1244,7 @@ export class Agent implements AgentController {
 						provenance
 					);
 				else
-					await this.dependencies.conversationJournal.recordAssistantText(
+					await this.dependencies.conversationMessages.recordAssistantText(
 						actor,
 						run.conversationId,
 						segment.text,

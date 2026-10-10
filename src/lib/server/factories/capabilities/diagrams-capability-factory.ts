@@ -23,7 +23,10 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import type {
+	ConversationSessions,
+	ConversationMessages
+} from '$lib/server/services/agent/conversations/archive';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
@@ -92,7 +95,11 @@ export interface DiagramsCapabilityInput {
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
 	readonly contextMemory: MemoryEntryLister;
-	readonly conversations: ConversationArchive;
+	readonly conversations: Pick<ConversationSessions, 'createWorkflow'>;
+	readonly conversationMessages: Pick<
+		ConversationMessages,
+		'recordUserPrompt' | 'recordAssistantText' | 'recordToolActivity'
+	>;
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
 	readonly runs: WorkflowRunLedger;
@@ -154,6 +161,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			contextSkills: input.contextSkills,
 			contextMemory: input.contextMemory,
 			conversations: input.conversations,
+			conversationMessages: input.conversationMessages,
 			preferences: input.preferences,
 			models: input.models,
 			runs: input.runs,

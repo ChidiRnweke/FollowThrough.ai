@@ -46,8 +46,8 @@ export const agentSubmissionFixture = (
 		capabilityDependencies<AgentDependencies>({
 			...agentModelRulesFixture(),
 			...dependencies,
-			conversationJournal: journal,
-			contextConversations: journal,
+			conversationMessages: journal,
+			conversationSessions: journal,
 			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 			preferences,
 			webSearchOverrides: configuration.webSearchOverrides ?? dependencies.webSearchOverrides,

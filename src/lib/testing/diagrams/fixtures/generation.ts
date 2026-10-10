@@ -45,6 +45,7 @@ export const diagramGenerationFixture = () => {
 		contextSkills: skills.skillFinder,
 		contextMemory: new InMemoryMemoryEntryRepository(),
 		conversations: new ConversationArchive(conversations),
+		conversationMessages: new ConversationArchive(conversations),
 		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
 		models,
 		runs: new AgentRunLedger(persistence),

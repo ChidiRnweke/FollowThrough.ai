@@ -65,7 +65,7 @@ describe('run recovery after restart', () => {
 			createdAt: testNow,
 			updatedAt: testNow
 		});
-		await state.dependencies.conversationJournal.recordUserPrompt(
+		await state.dependencies.conversationMessages.recordUserPrompt(
 			actor,
 			conversationId,
 			'Resume this request',

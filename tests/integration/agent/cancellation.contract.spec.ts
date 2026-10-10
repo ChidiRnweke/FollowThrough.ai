@@ -59,7 +59,8 @@ const cancellationController = (db: typeof context.db) => {
 		capabilityDependencies<AgentDependencies>({
 			...agentModelRulesFixture(),
 			runs,
-			conversationJournal: new ConversationArchive(new ConversationRecords(database)),
+			conversationMessages: new ConversationArchive(new ConversationRecords(database)),
+			conversationSessions: new ConversationArchive(new ConversationRecords(database)),
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),

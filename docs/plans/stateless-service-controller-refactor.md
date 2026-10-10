@@ -1102,3 +1102,18 @@ Every service module below has a planned disposition. This is routing, not compl
   session deletion and cancellation contracts pass: three files / nine tests. Architecture remains
   incomplete at 53 prohibited imports and four missing interfaces; topology/source/test-quality
   pass. Full unit evidence at the prior commit is not final verification of remaining migration work.
+
+## Conversation session and transcript contracts — 2026-10-10
+
+- ConversationArchive implements separate session and transcript capabilities. Agent and diagram
+  controllers receive those interfaces; factories no longer expose the concrete archive or a Pick
+  of it. The duplicate all-purpose journal contract is removed. Ownership, workflow visibility,
+  locking, message payloads and timestamps remain unchanged.
+- Provider-history rewind is part of ConversationHistoryService, with its traversal private. The
+  agent controller still coordinates transcript truncation and provider history replacement inside
+  the existing transaction. User ordinals and intervening tool activity retain their behavior.
+- Type checking and lint pass. Focused controller/history/diagram/search tests pass: 28 files /
+  202 tests. Isolated agent/diagram/conversation contracts pass: 17 files / 93 tests, including
+  deletion and submission races. Architecture remains incomplete at 53 prohibited imports and
+  three missing interfaces; topology/source/test-quality pass. Runner SDK coordination, event
+  mapping state, browser operations and final verification remain pending.

@@ -226,7 +226,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		modelCatalog: overrides.modelCatalog
 	});
 	const {
-		conversations: conversationJournal,
+		conversations: conversationSessions,
+		conversationMessages,
 		preferences,
 		models: modelCatalog,
 		toolPreferences,
@@ -288,7 +289,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		provenanceRepository,
 		provenance,
 		context: agentContext,
-		conversations: conversationJournal,
+		conversations: conversationSessions,
+		conversationMessages,
 		preferences,
 		models: modelCatalog,
 		runs: runStore,
@@ -432,6 +434,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions.reverter
 		},
 		agent: {
+			conversationHistory: agentCapability.conversationHistory,
 			imagePreparation: agentCapability.imagePreparation,
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
@@ -439,7 +442,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			webSearchOverrides: agentCapability.webSearchOverrides,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			conversationJournal,
+			conversationSessions,
+			conversationMessages,
 			preferences,
 			models: modelCatalog,
 			runs: runRepository,
@@ -465,7 +469,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			builtInSkills: skillCapability.builtIns,
 			contextMemory: memory.lister,
 			contextProjects: projects.reader,
-			contextConversations: conversationJournal,
 			provenance
 		},
 		agentSettings: {
@@ -695,7 +698,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
 			queryGenerator,
-			conversations: conversationJournal
+			conversations: conversationMessages
 		},
 		inlineSuggestions: {
 			context: finalizedKnowledgeSearch.inlineContext,

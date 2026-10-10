@@ -70,8 +70,8 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
 			sessions: new AgentSessionRecords(database),
-			conversationJournal: new ConversationArchive(conversations),
-			contextConversations: new ConversationArchive(conversations)
+			conversationMessages: new ConversationArchive(conversations),
+			conversationSessions: new ConversationArchive(conversations)
 		})
 	);
 	return { owner, run, runs, events, controller };

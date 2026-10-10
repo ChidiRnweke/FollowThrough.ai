@@ -53,6 +53,10 @@ const isDiagramWrite = (name: string): boolean =>
 const DIAGRAM_SOURCE_PLACEHOLDER =
 	'[source omitted from history; call read_canvas_diagram to read the current diagram]';
 export interface ConversationHistory {
+	rewind(
+		items: readonly PersistedSessionItem[],
+		ordinal: number
+	): readonly PersistedSessionItem[] | undefined;
 	load(
 		actor: ActorContext,
 		conversationId: ConversationId
@@ -73,6 +77,12 @@ export interface ConversationHistory {
 /** Prepares stored history for provider replay while preserving complete persisted diagrams. */
 export class ConversationHistoryService implements ConversationHistory {
 	constructor(private readonly repository: AgentSessionRepository) {}
+	rewind(
+		items: readonly PersistedSessionItem[],
+		ordinal: number
+	): readonly PersistedSessionItem[] | undefined {
+		return rewindToUserItem(items, ordinal);
+	}
 	async load(
 		actor: ActorContext,
 		conversationId: ConversationId
@@ -117,4 +127,23 @@ export class ConversationHistoryService implements ConversationHistory {
 			return 'type' in item.output ? { ...item, output: { ...item.output, text: json } } : item;
 		});
 	}
+}
+
+const isUserItem = (item: PersistedSessionItem): boolean => item.type === 'user_message';
+
+/**
+ * The prefix of `items` that precedes the `ordinal`-th user item, or `undefined`
+ * when there is no such item and nothing needs rewinding.
+ */
+function rewindToUserItem(
+	items: readonly PersistedSessionItem[],
+	ordinal: number
+): readonly PersistedSessionItem[] | undefined {
+	if (ordinal < 1) return undefined;
+	const userIndices = items.reduce<number[]>((indices, item, index) => {
+		if (isUserItem(item)) indices.push(index);
+		return indices;
+	}, []);
+	const cut = userIndices[ordinal - 1];
+	return cut === undefined ? undefined : items.slice(0, cut);
 }

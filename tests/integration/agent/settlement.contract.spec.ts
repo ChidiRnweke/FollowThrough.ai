@@ -72,7 +72,8 @@ const setup = async (suffix: string) => {
 			transactionRunner: transaction.transactionRunner,
 			decisions,
 			settlements: new RunSettlements(runs, events),
-			conversationJournal: new ConversationArchive(conversations),
+			conversationMessages: new ConversationArchive(conversations),
+			conversationSessions: new ConversationArchive(conversations),
 			runner,
 			eventBus: { notify: () => {} }
 		})

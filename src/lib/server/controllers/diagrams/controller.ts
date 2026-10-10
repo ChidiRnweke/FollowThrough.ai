@@ -25,7 +25,10 @@ import type {
 	WorkflowRunContext
 } from '$lib/models/agent';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
-import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import type {
+	ConversationSessions,
+	ConversationMessages
+} from '$lib/server/services/agent/conversations/archive';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 
 import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
@@ -178,9 +181,10 @@ export interface DiagramAgentDependencies {
 	readonly contextNotes: NoteReader;
 	readonly contextSkills: Pick<SkillFinder, 'listEnabled'>;
 	readonly contextMemory: MemoryEntryLister;
-	readonly conversations: Pick<
-		ConversationArchive,
-		'createWorkflow' | 'recordUserPrompt' | 'recordAssistantText' | 'recordToolActivity'
+	readonly conversations: Pick<ConversationSessions, 'createWorkflow'>;
+	readonly conversationMessages: Pick<
+		ConversationMessages,
+		'recordUserPrompt' | 'recordAssistantText' | 'recordToolActivity'
 	>;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
@@ -717,7 +721,7 @@ export class Diagrams implements DiagramsController {
 			requestedSkillNoteIds: [diagramming.note.id],
 			prompt: this.prompt(task)
 		};
-		await this.dependencies.generation.conversations.recordUserPrompt(
+		await this.dependencies.generation.conversationMessages.recordUserPrompt(
 			actor,
 			run.conversationId,
 			input.prompt
@@ -788,7 +792,7 @@ export class Diagrams implements DiagramsController {
 						const toolEvent = mapper.map(event);
 						const activity = toolEvent && toolActivityFromEvent(toolEvent);
 						if (activity)
-							await this.dependencies.generation.conversations.recordToolActivity(
+							await this.dependencies.generation.conversationMessages.recordToolActivity(
 								actor,
 								run.conversationId,
 								activity
@@ -799,7 +803,7 @@ export class Diagrams implements DiagramsController {
 					if (draft.kind !== (task.operation === 'convert' ? 'drawio' : 'mermaid'))
 						throw new ValidationError('The Diagram Agent submitted the wrong diagram format.');
 					if (assistantText)
-						await this.dependencies.generation.conversations.recordAssistantText(
+						await this.dependencies.generation.conversationMessages.recordAssistantText(
 							actor,
 							run.conversationId,
 							assistantText,

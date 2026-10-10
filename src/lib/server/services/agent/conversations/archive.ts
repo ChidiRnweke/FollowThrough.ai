@@ -45,7 +45,73 @@ const toolActivityOutput = (activity: ToolActivity): AgentPayload => {
 	return activity.status === 'succeeded' && activity.output !== undefined ? activity.output : null;
 };
 
-export class ConversationArchive {
+export interface ConversationSessions {
+	getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation>;
+	getForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation>;
+	listConversations(
+		actor: ActorContext,
+		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
+	): Promise<readonly Conversation[]>;
+	rename(actor: ActorContext, conversationId: ConversationId, title: string): Promise<Conversation>;
+	remove(actor: ActorContext, conversationId: ConversationId): Promise<void>;
+	createWorkflow(
+		actor: ActorContext,
+		input: {
+			title: string;
+			contextProjectId?: ProjectId;
+			contextNoteId?: NoteId;
+		}
+	): Promise<Conversation>;
+	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
+}
+export interface ConversationMessages {
+	listMessages(
+		actor: ActorContext,
+		conversationId: ConversationId
+	): Promise<readonly StoredMessage[]>;
+	truncateFromUserMessage(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		ordinal: number
+	): Promise<void>;
+	recordUserPrompt(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		prompt: string,
+		runId?: AgentRunId,
+		images?: readonly ConversationImageInput[]
+	): Promise<void>;
+	recordAssistantText(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
+	recordAssistantReasoning(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		text: string,
+		model?: string,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
+	recordToolActivity(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		activity: ToolActivity,
+		provenance?: {
+			readonly runId: AgentRunId;
+			readonly eventCursor?: string;
+		}
+	): Promise<void>;
+}
+export class ConversationArchive implements ConversationSessions, ConversationMessages {
 	constructor(private readonly repository: ConversationRepository) {}
 
 	async getForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation> {

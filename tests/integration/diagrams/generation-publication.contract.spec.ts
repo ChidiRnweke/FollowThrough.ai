@@ -72,6 +72,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 				...fixture.generation,
 				contextNotes: notes.services.reader,
 				conversations: new ConversationArchive(new ConversationRecords(database)),
+				conversationMessages: new ConversationArchive(new ConversationRecords(database)),
 				runs: new AgentRunLedger(new AgentRunRecords(database)),
 				runContext: new DiagramRunContext(new AgentRunRecords(database)),
 				provenance: notes.provenance

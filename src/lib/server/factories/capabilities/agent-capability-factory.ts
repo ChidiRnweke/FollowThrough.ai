@@ -1,4 +1,8 @@
 import {
+	ConversationHistoryService,
+	type ConversationHistory
+} from '$lib/server/services/agent/conversations/history';
+import {
 	AgentImagePreparationService,
 	type AgentImagePreparation
 } from '$lib/server/services/agent/runs/images';
@@ -59,7 +63,11 @@ import {
 } from '$lib/server/repositories/agent/postgres/agent-runs';
 import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import {
+	ConversationArchive,
+	type ConversationSessions,
+	type ConversationMessages
+} from '$lib/server/services/agent/conversations/archive';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { AgentRunLedger, type WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
@@ -96,6 +104,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
 	readonly imagePreparation: AgentImagePreparation;
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly mcpSurface: McpSurfaceFactory;
@@ -103,7 +112,8 @@ export interface AgentCapability {
 	readonly runSettings: AgentRunSettings;
 	readonly webSearchOverrides: WebResearchOptions;
 	readonly agentAvailable: boolean;
-	readonly conversations: ConversationArchive;
+	readonly conversations: ConversationSessions;
+	readonly conversationMessages: ConversationMessages;
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
 	readonly modelSelection: IAgentModelSelectionService;
@@ -185,6 +195,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		agentAvailable: Boolean(input.openRouterApiKey.trim()),
 		now: () => new Date().toISOString() as DateTime,
 		conversations,
+		conversationMessages: conversations,
+		conversationHistory: new ConversationHistoryService(sessions),
 		preferences,
 		models,
 		preferenceEditing: new AgentPreferenceEditingService(),

@@ -46,7 +46,8 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentRunner, ConversationJournal } from '$lib/server/services/agent/runs/contracts';
+import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
+import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
@@ -137,13 +138,13 @@ const setup = <T extends AgentRunner>(
 			builtInSkills: builtInSkillsFixture().builtInSkills,
 			contextProjects: new InMemoryProjects(),
 			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
-			contextConversations: new ConversationArchive(new InMemoryConversationRepository()),
+			conversationSessions: new ConversationArchive(new InMemoryConversationRepository()),
 			provenance: {
 				record: async () => {
 					throw new Error('Unexpected provenance record');
 				}
 			},
-			conversationJournal: capabilityDependencies<ConversationJournal>({
+			conversationMessages: capabilityDependencies<ConversationMessages>({
 				recordToolActivity: async (_actor, _conversationId, activity) => {
 					toolRows.push(activity);
 				},

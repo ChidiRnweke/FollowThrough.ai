@@ -1,3 +1,4 @@
+import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
@@ -40,6 +41,7 @@ export const agentContextFixture = () => {
 	const sessions = new InMemoryAgentSessionRepository();
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
 	const dependencies = {
+		conversationHistory: new ConversationHistoryService(sessions),
 		runs,
 		cancellations: new RunCancellation(runs),
 		preparation: new RunPreparation(runs),
@@ -60,9 +62,9 @@ export const agentContextFixture = () => {
 		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: projects,
 		contextMemory: memory,
-		contextConversations: journal,
+		conversationSessions: journal,
 		provenance: new InMemoryProvenanceRecorder(),
-		conversationJournal: journal,
+		conversationMessages: journal,
 		runner: new InMemoryAgentRunner(),
 		eventBus: new AgentEventStore()
 	};
