@@ -32,8 +32,17 @@ type Layer =
 	| 'adapters'
 	| 'components'
 	| 'models'
+	| 'entry'
 	| 'other';
+// The composition root constructs like any factory; process entry points may sequence controller
+// operations as the outermost caller, but must not reach services, repositories or stores.
 const layer = (file: string): Layer => {
+	if (file === 'src/lib/server/application.ts') return 'factories';
+	if (
+		/^src\/(?:hooks\.server|worker)\.ts$/.test(file) ||
+		/^src\/routes\/.*(?:\+server|\.server)\.ts$/.test(file)
+	)
+		return 'entry';
 	const match =
 		/^src\/lib\/(?:server\/)?(services|controllers|stores|factories|repositories|remote|adapters|components|models)\//.exec(
 			file
@@ -349,6 +358,8 @@ export function analyzeArchitecture(
 			return ['services', 'controllers', 'remote', 'repositories', 'adapters'].includes(target);
 		if (owner === 'factories')
 			return ['services', 'controllers', 'remote', 'repositories', 'adapters'].includes(target);
+		if (owner === 'entry' || owner === 'remote')
+			return ['services', 'repositories', 'stores'].includes(target);
 		return false;
 	};
 	const callRule = (owner: Layer): ArchitectureRule =>
@@ -366,7 +377,12 @@ export function analyzeArchitecture(
 		seen = new Set<ts.Node>(),
 		trail: readonly ts.Node[] = []
 	): void => {
-		if (!['components', 'services', 'stores', 'factories', 'controllers'].includes(owner)) return;
+		if (
+			!['components', 'services', 'stores', 'factories', 'controllers', 'entry', 'remote'].includes(
+				owner
+			)
+		)
+			return;
 		for (const origin of origins(expression)) {
 			const target = origin.declaration;
 			if (seen.has(target)) continue;
@@ -403,13 +419,19 @@ export function analyzeArchitecture(
 					callRule(owner),
 					owner === 'controllers'
 						? 'Controllers must coordinate services, not invoke another controller operation.'
-						: `${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
+						: owner === 'entry' || owner === 'remote'
+							? `${owner} must call controller operations, not ${targetLayer} behavior.`
+							: `${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
 					trace
 				);
 				continue;
 			}
 			// A controller is the intended component boundary. Do not traverse its implementation.
-			if (owner === 'components' && ['controllers', 'factories'].includes(targetLayer)) continue;
+			if (
+				['components', 'entry', 'remote'].includes(owner) &&
+				['controllers', 'factories'].includes(targetLayer)
+			)
+				continue;
 			if (owner === 'factories' && targetLayer === 'factories' && !sameFile) continue;
 			if (project(target) && executable(target) && target.body && !sameClass)
 				walkExecuted(target.body, (child) => {

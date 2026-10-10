@@ -15,7 +15,7 @@ export const listApiTokens = query(async () =>
 export const createApiToken = command(
 	z.object({ name: z.string().min(1), scope: z.enum(['read', 'full']) }),
 	async (input) => {
-		const minted = await AppFactory.accessTokens().mint(requestActor().userId, input);
+		const minted = await AppFactory.access().issueApiToken(requestActor(), input);
 		await listApiTokens().refresh();
 		return { token: minted.token, plaintext: minted.plaintext };
 	}

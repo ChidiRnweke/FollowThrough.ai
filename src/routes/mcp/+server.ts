@@ -1,7 +1,6 @@
 // chisel-ignore-file error-flow:raw-http-status -- MCP bearer authentication and JSON-RPC method negotiation require protocol-level 401 and 405 responses.
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { RequestHandler } from './$types';
-import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import { AppFactory } from '$lib/server/factories/app-factory';
 
 const unauthorized = (detail: string): Response =>
@@ -17,31 +16,15 @@ const unauthorized = (detail: string): Response =>
  * Bearer token when auth is on. With auth disabled (single-user dev) there is
  * no session token. Establish the configured local account before provenance or tool writes.
  */
-const authenticate = async (
-	request: Request
-): Promise<{ actor: ActorContext; scope: ApiTokenScope } | Response> => {
-	if (!AppFactory.isAuthEnabled()) {
-		const actor = AppFactory.actor();
-		await AppFactory.localIdentity().initializeLocal(actor);
-		return { actor, scope: 'full' };
-	}
-
-	const verified = await AppFactory.accessTokens().verify(request.headers.get('authorization'));
-	if (!verified) return unauthorized('Provide a FollowThrough API token as a Bearer credential.');
-	return { actor: { userId: verified.user.id }, scope: verified.scope };
-};
+const authenticate = (request: Request) =>
+	AppFactory.isAuthEnabled()
+		? AppFactory.access().authenticateMcp(request.headers.get('authorization'))
+		: AppFactory.access().attributeLocalMcp(AppFactory.actor());
 
 export const POST: RequestHandler = async ({ request }) => {
 	const authenticated = await authenticate(request);
-	if (authenticated instanceof Response) return authenticated;
-
-	// Every write through a tool is attributable to this request.
-	const provenance = await AppFactory.provenance().record(authenticated.actor, {
-		producerKind: 'agent',
-		producerName: 'MCP client',
-		pipeline: 'agent',
-		metadata: { scope: authenticated.scope }
-	});
+	if (!authenticated)
+		return unauthorized('Provide a FollowThrough API token as a Bearer credential.');
 
 	// An MCP client has no ambient project, so the user's workspace-wide tool
 	// selection is the whole story here; project overrides apply in-app only.
@@ -54,7 +37,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const server = AppFactory.mcpSurface({
 		actor: authenticated.actor,
 		scope: authenticated.scope,
-		provenanceId: provenance.id,
+		provenanceId: authenticated.provenanceId,
 		toolAccess: { isEnabled: (toolName) => !disabled.has(toolName) }
 	}).open();
 

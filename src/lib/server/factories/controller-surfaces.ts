@@ -211,6 +211,7 @@ export const controllerSurfaces = {
 		synchronize: true,
 		submit: true,
 		getRun: true,
+		observeRun: true,
 		listRunEvents: true,
 		isRunStreamComplete: true,
 		decide: true,
@@ -370,3 +371,10 @@ export const agentToolSessionSurface = { authority: true } satisfies ControllerS
 export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
 	import('../controllers/identity/local').LocalIdentityController
 >;
+export const accessSurface = {
+	resumeSession: true,
+	endSession: true,
+	issueApiToken: true,
+	authenticateMcp: true,
+	attributeLocalMcp: true
+} satisfies ControllerSurface<import('../controllers/identity/access').AccessController>;

@@ -136,6 +136,13 @@ export interface AgentController {
 	 * @throws NotFoundError if no run exists for `runId`.
 	 */
 	getRun(actor: ActorContext, runId: AgentRunId): Promise<AgentRunSnapshot>;
+	/**
+	 * Signal `listener` whenever the actor's run records a new event. The signal carries no
+	 * data: read the events with {@link listRunEvents}. Returns the unsubscribe function.
+	 *
+	 * @throws NotFoundError if no run exists for `runId`.
+	 */
+	observeRun(actor: ActorContext, runId: AgentRunId, listener: () => void): Promise<() => void>;
 	/** Close event delivery only after a terminal run's durable tail has been delivered. */
 	isRunStreamComplete(
 		actor: ActorContext,
@@ -287,6 +294,8 @@ export interface AgentDependencies {
 	readonly runner: AgentRunner;
 
 	readonly eventBus: Pick<AgentEventBus, 'notify'>;
+
+	readonly runObservers: Pick<AgentEventBus, 'subscribe'>;
 }
 
 /** Concrete {@link AgentController} orchestrating the run lifecycle against its injected repositories and the background execution engine. */
@@ -457,6 +466,15 @@ export class Agent implements AgentController {
 		const run = await this.dependencies.runs.findById(actor, runId);
 		if (!run) throw new NotFoundError('Agent run was not found');
 		return this.snapshot(actor, run);
+	}
+
+	async observeRun(
+		actor: ActorContext,
+		runId: AgentRunId,
+		listener: () => void
+	): Promise<() => void> {
+		await this.requireRun(actor, runId);
+		return this.dependencies.runObservers.subscribe(runId, listener);
 	}
 
 	async isRunStreamComplete(

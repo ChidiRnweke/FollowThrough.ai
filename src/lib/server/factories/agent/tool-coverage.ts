@@ -92,6 +92,10 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Chat run control belongs to the user and application lifecycle.'
 		},
+		observeRun: {
+			kind: 'excluded',
+			reason: 'Event-stream delivery belongs to the application lifecycle.'
+		},
 		isRunStreamComplete: {
 			kind: 'excluded',
 			reason: 'Event-stream delivery belongs to the application lifecycle.'
