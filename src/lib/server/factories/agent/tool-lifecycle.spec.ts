@@ -1,12 +1,11 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
 import { Agent, Runner, RunState } from '@openai/agents';
 import { AgentTools } from './agent-tool-factory';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	InMemoryToolCallingModel,
@@ -34,7 +33,7 @@ const scenario = (
 		markdown?: NotesDependencies['markdown'];
 	} = {}
 ) => {
-	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.'), title: 'Release' });
+	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
 	const fixture = reviewedNoteFixture(note, options.markdown);
 	const createRegistry = (pending: readonly PendingAgentDecision[] = []) =>
 		new AgentTools(
@@ -141,7 +140,7 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 		const fixture = scenario(0, 'approval_required');
 		const resumed = await resume(fixture);
 		fixture.content.notes = [
-			{ ...fixture.note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }
+			{ ...fixture.note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }
 		];
 		const events: AgentEvent[] = [];
 		await run(resumed.agent, resumed.state, events);
@@ -260,7 +259,7 @@ it('delivers an internal preparation fault to the model without exposing interna
 			read: () => {
 				throw new TypeError('private converter implementation');
 			},
-			write: noteMarkdownFromContent
+			write: noteMarkdown.write
 		}
 	});
 	const events: AgentEvent[] = [];

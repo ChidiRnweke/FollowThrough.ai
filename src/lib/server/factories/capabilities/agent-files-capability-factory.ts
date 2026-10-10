@@ -1,3 +1,5 @@
+import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { Database } from '$lib/server/db';
 import { AgentFileRecords } from '$lib/server/repositories/agent-files/postgres/agent-files';
@@ -5,8 +7,10 @@ import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
-import { AgentVirtualFiles } from '$lib/server/services/agent-files/virtual-files';
-import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
+import {
+	AgentVirtualFiles,
+	type AgentFileReader
+} from '$lib/server/services/agent-files/virtual-files';
 
 export interface AgentFilesCapabilityInput {
 	readonly tokens: TokenCounter;
@@ -16,8 +20,8 @@ export interface AgentFilesCapabilityInput {
 }
 
 export interface AgentFilesCapability {
-	readonly reader: AgentVirtualFiles;
-	readonly repository: AgentFileRecords;
+	readonly reader: AgentFileReader;
+	readonly repository: AgentFileRepository;
 }
 
 export const createAgentFilesCapability = (
@@ -34,7 +38,7 @@ export const createAgentFilesCapability = (
 			attachments: new AttachmentRecords(input.db),
 			diagrams: new DiagramRecords(input.db),
 			stored: repository,
-			noteMarkdown: noteMarkdownFromContent
+			noteMarkdown: new NodeNoteMarkdown()
 		})
 	};
 };

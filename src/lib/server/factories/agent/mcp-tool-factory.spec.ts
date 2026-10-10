@@ -1,13 +1,12 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { z } from 'zod';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -191,7 +190,7 @@ describe('MCP lifecycle failure contract', () => {
 	it.each([[], Array.from({ length: 6 }, () => ({ oldText: 'Monday', newText: 'Tuesday' }))])(
 		'returns application validation as a structured tool error for edits %j',
 		async (edits) => {
-			const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+			const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 			const fixture = reviewedNoteFixture(note);
 			const client = await connect('full', { factory: fixture.factory });
 			const failure = readFailure(
@@ -209,7 +208,7 @@ describe('MCP lifecycle failure contract', () => {
 		}
 	);
 	it('allows a corrected call after validation fails', async () => {
-		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+		const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 		const fixture = reviewedNoteFixture(note);
 		const client = await connect('full', { factory: fixture.factory });
 		await client.callTool({ name: 'edit_note', arguments: { noteId: note.id, edits: [] } });
@@ -220,7 +219,7 @@ describe('MCP lifecycle failure contract', () => {
 		expect(fixture.content.notes[0].plainText).toBe('Launch Tuesday.');
 	});
 	it('marks returned preparation failures as tool errors', async () => {
-		const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+		const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 		const client = await connect('full', { factory: reviewedNoteFixture(note).factory });
 		const failure = readFailure(
 			await client.callTool({
@@ -240,7 +239,7 @@ describe('MCP lifecycle failure contract', () => {
 			read: () => {
 				throw new TypeError('private converter implementation');
 			},
-			write: noteMarkdownFromContent
+			write: noteMarkdown.write
 		});
 		const client = await connect('full', { factory: fixture.factory });
 		const failure = readFailure(

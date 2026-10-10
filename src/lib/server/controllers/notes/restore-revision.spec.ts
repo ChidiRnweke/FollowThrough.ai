@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -20,7 +22,6 @@ import {
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
@@ -57,14 +58,14 @@ const setup = () => {
 describe('Note revision restore invariants', () => {
 	it('restores snapshot content, title, history, attachments, and search index together', async () => {
 		const { content, controller } = setup();
-		const originalBody = noteContentFromMarkdown('# Snapshot heading\n\nThe original **body**.');
+		const originalBody = noteMarkdown.read('# Snapshot heading\n\nThe original **body**.');
 		content.notes = [noteBuilder({ ...originalBody, title: 'First name' })];
 		const publishedNote = content.notes[0]!;
 		await controller.publish(testActor(), {
 			noteId: publishedNote.id,
 			baseEtag: noteEtag(publishedNote.id, publishedNote.currentRevision)
 		});
-		const changedBody = noteContentFromMarkdown('# Current heading\n\nThe changed *body*.');
+		const changedBody = noteMarkdown.read('# Current heading\n\nThe changed *body*.');
 		await controller.save(testActor(), {
 			note: { ...content.notes[0]!, ...changedBody, title: 'Second name' }
 		});

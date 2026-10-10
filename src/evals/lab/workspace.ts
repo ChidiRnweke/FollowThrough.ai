@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { randomUUID } from 'node:crypto';
@@ -8,7 +10,7 @@ import type { NoteId, ProseMirrorNode, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId, TodoResponsibility, TodoStatus } from '$lib/models/todos';
 import type { WidgetDraft, WidgetId } from '$lib/models/widgets';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import type { Lab } from './application';
 
 /**
@@ -213,7 +215,7 @@ export async function seedWorkspace(lab: Lab, fixture: WorkspaceFixture): Promis
 		// `raw` manifest path is not used because the fixture body is a plain
 		// instruction body, not a full SKILL.md with YAML frontmatter.
 		await lab.controllers.notes().save(actor, {
-			note: { ...skill.note, ...noteContentFromMarkdown(seedSkill.body) }
+			note: { ...skill.note, ...noteMarkdown.read(seedSkill.body) }
 		});
 	}
 

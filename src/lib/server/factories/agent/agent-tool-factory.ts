@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import type { TokenCounter } from '$lib/models/tokenization';
 import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
@@ -71,7 +73,7 @@ import type { MemoryEntryId } from '$lib/models/memory';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
+
 import {
 	noteChangeRequestSchema,
 	noteChangeReviewSchema,
@@ -1640,7 +1642,7 @@ const sharedToolDefinitions = (
 			async (input) => {
 				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
 				const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
-				const markdown = noteMarkdownFromContent(view.note.document);
+				const markdown = noteMarkdown.write(view.note.document);
 				return projectNoteView(view, agentFileOf(tokens, path, 'text/markdown', markdown).metadata);
 			}
 		),
@@ -2572,7 +2574,7 @@ const appToolDefinitions = (
 					contextNoteId: input.noteId,
 					provenanceId: context.provenanceId
 				});
-				return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
+				return projectSkillView(view, noteMarkdown.write(view.skill.note.document));
 			}
 		),
 		create_diagram: defineTool(
@@ -2647,7 +2649,7 @@ const mcpOnlyDefinitions = (
 				noteId: fields.noteId as NoteId,
 				provenanceId: context.provenanceId
 			});
-			return projectSkillView(view, noteMarkdownFromContent(view.skill.note.document));
+			return projectSkillView(view, noteMarkdown.write(view.skill.note.document));
 		}
 	)
 });

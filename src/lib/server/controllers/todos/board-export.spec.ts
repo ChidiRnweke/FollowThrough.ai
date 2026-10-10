@@ -1,3 +1,4 @@
+import { InMemoryNoteMarkdownReader } from '$lib/testing/notes/fakes/markdown-reader';
 import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
@@ -8,7 +9,7 @@ import { ExportPreparationService } from '$lib/services/deliverables/export-prep
 const preparation = new ExportPreparationService();
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 type BoardPdfGenerator = TodosDependencies['pdfGenerator']['render'];
-type MarkdownToDocument = TodosDependencies['markdownToContent'];
+type MarkdownToDocument = TodosDependencies['markdownToContent']['read'];
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
 import {
@@ -42,7 +43,7 @@ const setup = () => {
 			todoLister: todos,
 			todoContextReader: todos,
 			projectLister: projects,
-			markdownToContent: markdownToDocument,
+			markdownToContent: new InMemoryNoteMarkdownReader(markdownToDocument),
 			exportPreparer: preparation,
 			pdfGenerator: new InMemoryDocumentRenderer(pdfGenerator)
 		})

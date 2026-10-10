@@ -40,7 +40,7 @@ const reader = (body = content): AgentVirtualFiles =>
 				listForProject: async () => ({ diagrams: [], total: 0 })
 			}),
 			stored: new InMemoryAgentFiles(),
-			noteMarkdown: () => body
+			noteMarkdown: { write: () => body }
 		})
 	);
 
@@ -96,7 +96,7 @@ describe('AgentVirtualFiles ls', () => {
 					listForProject: async () => ({ diagrams: [], total: 0 })
 				}),
 				stored: new InMemoryAgentFiles(),
-				noteMarkdown: () => 'published body'
+				noteMarkdown: { write: () => 'published body' }
 			})
 		);
 

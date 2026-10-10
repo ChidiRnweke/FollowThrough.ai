@@ -31,7 +31,6 @@ import {
 	type PreparedNoteChange,
 	type ApplyReviewedNoteChangeOutput
 } from '$lib/models/notes';
-import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
 import type { Diagram } from '$lib/models/diagrams';
@@ -144,6 +143,14 @@ import type { NoteIndexer } from '$lib/server/services/notes/contracts';
  * Reads are assembled in parallel from many sources; writes go through the transaction
  * runner so a save and its link/index side effects commit atomically.
  */
+export interface NoteMarkdownReader {
+	read(markdown: string): Pick<Note, 'document' | 'plainText'>;
+}
+export interface NoteMarkdownWriter {
+	write(document: Note['document']): string;
+}
+export interface NoteMarkdown extends NoteMarkdownReader, NoteMarkdownWriter {}
+
 export interface NotesController {
 	importMarkdownArchive(
 		actor: ActorContext,

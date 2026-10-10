@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
@@ -6,7 +8,7 @@ import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import type { AgentRunId } from '$lib/models/agent';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -23,7 +25,7 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 	const note = noteBuilder({
 		kind: 'skill',
 		title: 'Compliance format',
-		...noteContentFromMarkdown(body)
+		...noteMarkdown.read(body)
 	});
 	const notes = new InMemoryNoteRepository();
 	notes.notes = [note];

@@ -30,6 +30,9 @@ import type {
 	AgentSedResult
 } from '$lib/models/agent-files';
 
+export interface AgentNoteMarkdownWriter {
+	write(document: Note['document']): string;
+}
 export interface AgentVirtualFilesDependencies {
 	readonly tokens: TokenCounter;
 	readonly projects: ProjectRepository;
@@ -37,7 +40,7 @@ export interface AgentVirtualFilesDependencies {
 	readonly attachments: AttachmentRepository;
 	readonly diagrams: DiagramRepository;
 	readonly stored: AgentFileRepository;
-	readonly noteMarkdown: (document: Note['document']) => string;
+	readonly noteMarkdown: AgentNoteMarkdownWriter;
 }
 
 const normalizePath = (input: string): string => {
@@ -100,7 +103,21 @@ const parentOf = (path: string): string => {
 	return index <= 0 ? '/' : path.slice(0, index);
 };
 
-export class AgentVirtualFiles {
+export interface AgentFileReader {
+	ls(actor: ActorContext, path?: string): Promise<AgentLsResult>;
+	grep(
+		actor: ActorContext,
+		input: {
+			readonly pattern: string;
+			readonly path: string;
+			readonly fixed: boolean;
+			readonly ignoreCase: boolean;
+		}
+	): Promise<AgentGrepResult>;
+	sed(actor: ActorContext, path: string, range: AgentSedRange): Promise<AgentSedResult>;
+}
+
+export class AgentVirtualFiles implements AgentFileReader {
 	constructor(private readonly dependencies: AgentVirtualFilesDependencies) {}
 
 	private async exactFile(actor: ActorContext, path: string): Promise<AgentFile | undefined> {
@@ -116,7 +133,7 @@ export class AgentVirtualFiles {
 				this.dependencies.tokens,
 				path,
 				'text/markdown',
-				this.dependencies.noteMarkdown(found.document)
+				this.dependencies.noteMarkdown.write(found.document)
 			);
 		}
 
@@ -131,7 +148,7 @@ export class AgentVirtualFiles {
 						this.dependencies.tokens,
 						path,
 						'text/markdown',
-						this.dependencies.noteMarkdown(revision.document)
+						this.dependencies.noteMarkdown.write(revision.document)
 					)
 				: undefined;
 		}
@@ -187,7 +204,7 @@ export class AgentVirtualFiles {
 										this.dependencies.tokens,
 										`/projects/${project.id}/notes/${note.id}/versions/${revision.revision}.md`,
 										'text/markdown',
-										this.dependencies.noteMarkdown(revision.document)
+										this.dependencies.noteMarkdown.write(revision.document)
 									)
 								)
 							)
@@ -201,7 +218,7 @@ export class AgentVirtualFiles {
 								this.dependencies.tokens,
 								`/projects/${project.id}/notes/${note.id}.md`,
 								'text/markdown',
-								this.dependencies.noteMarkdown(note.document)
+								this.dependencies.noteMarkdown.write(note.document)
 							)
 						),
 					...revisionFiles,

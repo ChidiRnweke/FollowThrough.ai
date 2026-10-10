@@ -1,3 +1,4 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import {
 	NoteArchiveImportService,
 	type NoteArchiveImportPreparation
@@ -27,11 +28,8 @@ import {
 	type NoteEditingRules
 } from '$lib/services/notes/editing';
 import { NotePresentationService, type NotePresentation } from '$lib/services/notes/presentation';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
-import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
+
+import type { NoteMarkdown } from '$lib/server/controllers/notes/controller';
 import {
 	SelectionOrigins,
 	type SelectionOriginService
@@ -115,7 +113,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 		trashRules: lifecycleRules,
 		publicationRules: lifecycleRules,
 		editingRules: new SharedNoteEditingService(),
-		markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
+		markdown: new NodeNoteMarkdown(),
 		repository,
 		anchors,
 		services,

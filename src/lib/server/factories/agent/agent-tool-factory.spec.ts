@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -21,7 +23,7 @@ import type { DeliverablesController } from '$lib/server/controllers/deliverable
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { noteEtag } from '$lib/models/notes';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import {
 	appContextBuilder,
 	noteBuilder,
@@ -1480,8 +1482,8 @@ describe('Doomed note edits never reach the approval boundary', () => {
 			id: crypto.randomUUID() as never,
 			kind,
 			title: 'Knowledge layer',
-			document: noteContentFromMarkdown(markdown).document,
-			plainText: noteContentFromMarkdown(markdown).plainText
+			document: noteMarkdown.read(markdown).document,
+			plainText: noteMarkdown.read(markdown).plainText
 		});
 
 	const notesFactory = (note: ReturnType<typeof noteBuilder>) => reviewedNoteFixture(note).factory;

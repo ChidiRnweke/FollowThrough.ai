@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { agentModelRulesFixture } from '$lib/testing/agent/fixtures/model-rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
@@ -8,7 +10,7 @@ import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-
 import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -593,7 +595,7 @@ describe('Durable note approval publication', () => {
 });
 
 it('journals a failed tool call and its correction through the production runner', async () => {
-	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 	const notes = reviewedNoteFixture(note);
 	const model = new InMemoryToolCallingModel(
 		'edit_note',

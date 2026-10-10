@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import {
@@ -12,7 +14,6 @@ import {
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
 const indexedChunks = async (content: string, targetTokens: number, overlapTokens: number) => {
 	const repository = new InMemorySearchRepository();
@@ -94,14 +95,14 @@ describe('Search indexing invariants', () => {
 	it('replaces the persisted vector when indexed content changes', async () => {
 		const repository = new InMemorySearchRepository();
 		const index = createContentIndex(repository, 'test-embedding');
-		const note = noteBuilder(noteContentFromMarkdown('architecture'));
+		const note = noteBuilder(noteMarkdown.read('architecture'));
 		const initial = await index.notes.index(testActor(), note);
 		if (initial.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await index.complete(testActor(), initial, { model: 'test-embedding', vectors: [[1, 2, 3]] });
 
 		const changed = await index.notes.index(testActor(), {
 			...note,
-			...noteContentFromMarkdown('blueprint'),
+			...noteMarkdown.read('blueprint'),
 			currentRevision: 2
 		});
 		if (changed.kind === 'needs_embeddings')

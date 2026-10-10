@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -11,10 +13,7 @@ import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -24,8 +23,8 @@ import type { Note, PreparedNoteChange, NoteChangeReview } from '$lib/models/not
 export const reviewedNoteFixture = (
 	note: Note = noteBuilder(),
 	markdown: NotesDependencies['markdown'] = {
-		read: noteContentFromMarkdown,
-		write: noteMarkdownFromContent
+		read: noteMarkdown.read,
+		write: noteMarkdown.write
 	}
 ) => {
 	const content = new InMemoryNoteContent();

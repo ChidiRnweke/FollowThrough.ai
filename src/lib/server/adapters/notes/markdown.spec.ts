@@ -1,12 +1,13 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { describe, expect, it } from 'vitest';
 import {
 	proseMirrorDocumentSchema,
 	type ProseMirrorDocument,
 	type ProseMirrorNode
 } from '$lib/models/notes';
-import { noteContentFromMarkdown, noteMarkdownFromContent } from './markdown';
 
-const formatted = noteContentFromMarkdown(
+const formatted = noteMarkdown.read(
 	'# About\n\nI build **reliable systems**.\n\n- Trace failures\n- Fix root causes'
 );
 
@@ -24,7 +25,7 @@ describe('Agent note Markdown', () => {
 	});
 
 	it('allows an empty Markdown body to clear a note', () => {
-		expect(noteContentFromMarkdown('')).toEqual({
+		expect(noteMarkdown.read('')).toEqual({
 			document: { type: 'doc', content: [] },
 			plainText: ''
 		});
@@ -41,25 +42,27 @@ describe('Agent note Markdown', () => {
  * the editor's own typing rule has always required.
  */
 describe('Dollar signs in Markdown', () => {
-	const priced = noteContentFromMarkdown('Costs $4–13 vs $30 per 1,000 pages');
+	const priced = noteMarkdown.read('Costs $4–13 vs $30 per 1,000 pages');
 
 	it('keeps a pair of prices as text rather than a formula', () => {
-		expect(JSON.stringify(priced.document)).not.toContain('inlineMath');
-
-		expect(priced.plainText).toBe('Costs $4–13 vs $30 per 1,000 pages');
+		expect({
+			containsMath: JSON.stringify(priced.document).includes('inlineMath'),
+			text: priced.plainText
+		}).toEqual({ containsMath: false, text: 'Costs $4–13 vs $30 per 1,000 pages' });
 	});
 
 	it('still reads double-delimited inline math as math', () => {
-		expect(noteContentFromMarkdown('so $$x^2$$ then').document.content?.[0]).toMatchObject({
+		expect(noteMarkdown.read('so $$x^2$$ then').document.content?.[0]).toMatchObject({
 			type: 'paragraph',
 			content: [{ type: 'text' }, { type: 'inlineMath', attrs: { latex: 'x^2' } }, { type: 'text' }]
 		});
 	});
 
 	it('still reads a formula on its own line as block math', () => {
-		expect(
-			noteContentFromMarkdown('before\n\n$$x^2$$\n\nafter').document.content?.[1]
-		).toMatchObject({ type: 'blockMath', attrs: { latex: 'x^2' } });
+		expect(noteMarkdown.read('before\n\n$$x^2$$\n\nafter').document.content?.[1]).toMatchObject({
+			type: 'blockMath',
+			attrs: { latex: 'x^2' }
+		});
 	});
 });
 
@@ -70,7 +73,7 @@ describe('Dollar signs in Markdown', () => {
  * quietly destructive.
  */
 const roundTrip = (document: ProseMirrorDocument): ProseMirrorDocument =>
-	noteContentFromMarkdown(noteMarkdownFromContent(document)).document;
+	noteMarkdown.read(noteMarkdown.write(document)).document;
 
 const docOf = (...content: readonly unknown[]): ProseMirrorDocument =>
 	({ type: 'doc', content }) as ProseMirrorDocument;
@@ -212,7 +215,7 @@ describe('Note Markdown round trip', () => {
 			type: 'paragraph',
 			content: [{ type: 'text', marks: [{ type: 'ai-highlight' }], text: 'rewritten' }]
 		});
-		expect(noteMarkdownFromContent(document).trim()).toBe('rewritten');
+		expect(noteMarkdown.write(document).trim()).toBe('rewritten');
 	});
 });
 
@@ -231,15 +234,25 @@ describe('Note links in a round trip', () => {
 
 	/** Without this, edit_note would strip every note link from a note it touched. */
 	it('keeps the link target', () => {
-		expect(JSON.stringify(roundTrip(linkedDoc))).toContain('note-42');
-
-		expect(JSON.stringify(roundTrip(linkedDoc))).toContain('noteLink');
+		expect(roundTrip(linkedDoc)).toMatchObject({
+			content: [
+				{
+					type: 'paragraph',
+					content: [
+						{ type: 'text', text: 'see ' },
+						{
+							type: 'text',
+							text: 'the decision',
+							marks: [{ type: 'noteLink', attrs: { noteId: 'note-42' } }]
+						}
+					]
+				}
+			]
+		});
 	});
 
 	it('keeps the link text', () => {
-		expect(noteMarkdownFromContent(linkedDoc)).toContain('the decision');
-
-		expect(noteMarkdownFromContent(linkedDoc)).toContain('](note:note-42)');
+		expect(noteMarkdown.write(linkedDoc).trim()).toBe('see [the decision](note:note-42)');
 	});
 
 	it('still reads an external link as an external link', () => {
@@ -343,7 +356,7 @@ describe('Markdown that carries a horizontal rule', () => {
 		['three asterisks', 'before\n\n***\n\nafter\n'],
 		['three underscores', 'before\n\n___\n\nafter\n']
 	])('parses a rule written as %s', (_label, source) => {
-		expect(noteContentFromMarkdown(source).document.content).toStrictEqual([
+		expect(noteMarkdown.read(source).document.content).toStrictEqual([
 			para('before'),
 			{ type: 'horizontalRule' },
 			para('after')

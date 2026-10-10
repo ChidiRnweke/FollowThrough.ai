@@ -1,3 +1,5 @@
+import type { NoteMarkdownReader } from '$lib/server/controllers/notes/controller';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import type { TemplateStyleReader } from '$lib/server/controllers/deliverables/controller';
 import type { DiagramExportRenderer } from '$lib/server/controllers/deliverables/diagram-rendering';
 import {
@@ -31,7 +33,6 @@ import {
 } from '$lib/services/deliverables/export-preparation';
 import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
 import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
 export interface DeliverablesCapabilityInput {
 	readonly db: Database;
@@ -53,7 +54,7 @@ export interface DeliverablesCapability {
 	readonly docxGenerator: DocxRenderer;
 	readonly pdfGenerator: PdfRenderingController;
 	readonly zipPacker: DocumentBundlePacker;
-	readonly markdownToContent: typeof noteContentFromMarkdown;
+	readonly markdownToContent: NoteMarkdownReader;
 }
 export const createDeliverablesCapability = (
 	input: DeliverablesCapabilityInput
@@ -75,5 +76,5 @@ export const createDeliverablesCapability = (
 	docxGenerator: new DocxDocumentService(),
 	pdfGenerator: createPdfRendering(),
 	zipPacker: new DocumentBundleService(),
-	markdownToContent: noteContentFromMarkdown
+	markdownToContent: new NodeNoteMarkdown()
 });

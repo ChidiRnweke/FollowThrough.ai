@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { describe, it, expect } from 'vitest';
 import {
 	reviewedNoteFixture,
@@ -9,10 +11,8 @@ import {
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
-const baseNote = () =>
-	noteBuilder({ ...noteContentFromMarkdown('Launch Monday.'), title: 'Release' });
+const baseNote = () => noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
 const setup = async () => {
 	const note = baseNote();
 	const fixture = reviewedNoteFixture(note);
@@ -47,7 +47,7 @@ describe('Reviewed note changes', () => {
 	});
 	it('refuses to apply after a different edit', async () => {
 		const { controller, change, content, note } = await setup();
-		content.notes = [{ ...note, ...noteContentFromMarkdown('Launch Friday.'), currentRevision: 2 }];
+		content.notes = [{ ...note, ...noteMarkdown.read('Launch Friday.'), currentRevision: 2 }];
 		const outcome = await controller.applyReviewedChange(testActor(), change, 'authored');
 		expect(outcome).toMatchObject({
 			kind: 'failure',

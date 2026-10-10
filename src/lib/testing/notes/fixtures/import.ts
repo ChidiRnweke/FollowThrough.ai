@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -12,10 +14,7 @@ import { SuggestionPresentationService } from '$lib/services/suggestions/present
 import AdmZip from 'adm-zip';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+
 import {
 	readMarkdownArchive,
 	parseMarkdownNote,
@@ -67,7 +66,7 @@ export const importedNotesFixture = () => {
 			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences,
-			markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
+			markdown: noteMarkdown,
 			transactionRunner: new InMemoryTransactionRunner([records, consequences])
 		})
 	);

@@ -6,19 +6,7 @@ import type {
 	AgentSedResult
 } from '$lib/models/agent-files';
 
-export interface AgentFileReader {
-	ls(actor: ActorContext, path?: string): Promise<AgentLsResult>;
-	grep(
-		actor: ActorContext,
-		input: {
-			readonly pattern: string;
-			readonly path: string;
-			readonly fixed: boolean;
-			readonly ignoreCase: boolean;
-		}
-	): Promise<AgentGrepResult>;
-	sed(actor: ActorContext, path: string, range: AgentSedRange): Promise<AgentSedResult>;
-}
+import type { AgentFileReader } from '$lib/server/services/agent-files/virtual-files';
 
 export interface AgentFilesController {
 	ls(actor: ActorContext, path?: string): Promise<AgentLsResult>;

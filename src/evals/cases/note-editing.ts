@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import * as px from '@arizeai/phoenix-client/vitest';
 import { expect } from 'vitest';
 import { seedWorkspace } from '../lab/workspace';
@@ -5,7 +7,6 @@ import { runCase } from '../lab/run-case';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { scoreToolCalling } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
-import { noteMarkdownFromContent } from '$lib/server/services/notes/markdown';
 
 /**
  * Note-tool choice: edit_note and save_note are deliberately different
@@ -71,7 +72,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const markdown = noteMarkdownFromContent(view.note.document).trim();
+			const markdown = noteMarkdown.write(view.note.document).trim();
 			const applied = markdown === 'Robin leads platform engineering at Northwind Analytics.';
 			noteEffect(view.note.plainText, 'leads platform engineering');
 
@@ -102,10 +103,9 @@ export const noteEditingCases: readonly EvalCase[] = [
 			const noteId = workspace.noteIds.get('Background');
 			if (!noteId) throw new Error('Background note was not seeded');
 			const before = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const expectedMarkdown = noteMarkdownFromContent(before.note.document).replace(
-				'Kubernetes',
-				'K8s'
-			);
+			const expectedMarkdown = noteMarkdown
+				.write(before.note.document)
+				.replace('Kubernetes', 'K8s');
 			const result = await runCase(lab, workspace.actor, {
 				prompt: this.input.prompt as string,
 				mode: 'auto_accept',
@@ -129,7 +129,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const actualMarkdown = noteMarkdownFromContent(view.note.document);
+			const actualMarkdown = noteMarkdown.write(view.note.document);
 			const changed = actualMarkdown.includes('K8s');
 			const preserved = actualMarkdown === expectedMarkdown;
 			noteEffect(view.note.plainText, 'K8s');
@@ -274,7 +274,7 @@ export const noteEditingCases: readonly EvalCase[] = [
 			});
 
 			const view = await lab.controllers.notes().get(workspace.actor, { noteId });
-			const actualBody = noteMarkdownFromContent(view.note.document).trim();
+			const actualBody = noteMarkdown.write(view.note.document).trim();
 			const exact = actualBody === expectedBody.trim();
 			noteEffect(view.note.plainText, 'event-driven scheduler');
 			px.logAnnotation({

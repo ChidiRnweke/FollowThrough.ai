@@ -1,3 +1,5 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
@@ -27,7 +29,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates } from '$lib/models/widgets';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import { NoteReferenceService } from '$lib/services/notes/references';
 const noteReferences = new NoteReferenceService();
 
@@ -138,7 +140,7 @@ describe('agent widget tools', () => {
 	};
 	it('create a widget from JSON strings and return a line that embeds it in a note', async () => {
 		const { embed, created } = await createLaunch();
-		const note = noteContentFromMarkdown(`Plan\n\n${embed}\n`);
+		const note = noteMarkdown.read(`Plan\n\n${embed}\n`);
 		expect(noteReferences.widgets([note])).toEqual([created?.id]);
 	});
 	// The agent inserts the line inside edit_note's JSON arguments; a double quote it forgets to

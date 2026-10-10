@@ -1041,3 +1041,22 @@ Every service module below has a planned disposition. This is routing, not compl
   one file / three tests. Type checking and lint pass. Architecture remains at 52 prohibited
   imports and seven missing interfaces; topology/source/test-quality pass. Full final checks,
   document conversion and the remaining application capabilities are still pending.
+
+## Markdown document boundary and virtual-file contract — 2026-10-10
+
+- NodeNoteMarkdown owns editor-schema conversion and domain-document validation at a server
+  adapter boundary. Notes and Todos receive reader/writer contracts; capability factories construct
+  the adapter. The previous editor-schema dependency exception moved with the real boundary and
+  retains that specific reason. No parsing moved into a controller or service.
+- AgentVirtualFiles implements its reading interface and receives a named Markdown encoder rather
+  than an opaque callback to a service export. Its factory exposes reading and repository interfaces.
+  Public file metadata/path helpers and broader agent-tool factory workflows still need migration.
+- Rich-document round trips remain covered at the adapter. Related workflow tests pass: 38 files /
+  405 tests. Final composition tests pass: 14 files / 199 tests. Isolated note/skill/deliverable
+  contracts pass: 31 files / 141 tests. Full unit verification passes: 551 files / 4,356 tests /
+  one existing skip. Type checking and lint pass, with type checking and the full unit run repeated
+  after the final interface/factory wiring. Architecture remains incomplete: 52 prohibited imports
+  and six missing interfaces; topology/source/test-quality pass.
+- Latest inventory: 63 shared modules / 105 exports (45 classes), 88 server modules / 169 exports
+  (120 classes), 12,043 rows and 13,105 resolved imports. Agent preference rules, execution/state
+  ownership, remaining browser operations and whole-application final verification remain pending.
