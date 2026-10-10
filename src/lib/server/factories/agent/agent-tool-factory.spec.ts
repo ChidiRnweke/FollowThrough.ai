@@ -322,44 +322,55 @@ const boundToolNames = (): string[] =>
 		.flatMap((binding) => (binding.kind === 'excluded' ? [] : binding.tools));
 
 /**
- * OpenAI documents the schemas strict function calling accepts — String, Number, Boolean,
- * Integer, Object, Array, Enum and anyOf — and answers any other schema with an error, before
- * the model runs. Every tool is sent on every generation, so one keyword outside that subset
- * would fail every request to such a model.
- * https://developers.openai.com/api/docs/guides/structured-outputs
+ * Strict function calling answers a schema keyword it does not permit with an HTTP 400 for the
+ * whole request, before the model runs (RCA finding E1: "'oneOf' is not permitted"). These are
+ * the keywords `openai/gpt-5.6-luna` accepted on 2026-10-10 across every agent tool. A keyword
+ * outside this list must be checked against the provider before it is added.
  */
 describe('The tool schemas sent to the model', () => {
-	const unsupported = new Set([
-		'oneOf',
-		'allOf',
-		'not',
-		'if',
-		'then',
-		'else',
-		'dependentRequired',
-		'dependentSchemas'
+	const accepted = new Set([
+		'additionalProperties',
+		'anyOf',
+		'const',
+		'description',
+		'enum',
+		'exclusiveMinimum',
+		'format',
+		'items',
+		'maximum',
+		'minItems',
+		'minLength',
+		'minimum',
+		'pattern',
+		'properties',
+		'required',
+		'type'
 	]);
 	/** Every keyword in a JSON Schema, at any depth. Property names are not keywords. */
 	const keywords = (schema: unknown): string[] => {
 		if (Array.isArray(schema)) return schema.flatMap(keywords);
 		if (schema === null || typeof schema !== 'object') return [];
 		return Object.entries(schema).flatMap(([key, value]) => [
-			...(unsupported.has(key) ? [key] : []),
+			key,
 			...(key === 'properties' || key === '$defs'
 				? Object.values(value ?? {}).flatMap(keywords)
 				: keywords(value))
 		]);
 	};
 
-	it('stay within the documented strict-mode subset', () => {
+	it('use only keywords strict function calling accepts', () => {
 		const offending = agentToolsFor('auto_accept', {
 			promoted: agentToolsRegistry('auto_accept', {})
 				.definitions()
 				.map(({ name }) => name)
 		})
 			.filter((tool): tool is FunctionTool => tool.type === 'function')
-			.flatMap((tool) => keywords(tool.parameters).map((keyword) => `${tool.name}: ${keyword}`));
-		expect(offending).toEqual([]);
+			.flatMap((tool) =>
+				keywords(tool.parameters)
+					.filter((keyword) => !accepted.has(keyword))
+					.map((keyword) => `${tool.name}: ${keyword}`)
+			);
+		expect([...new Set(offending)]).toEqual([]);
 	});
 });
 
