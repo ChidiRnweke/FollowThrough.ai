@@ -40,7 +40,7 @@ journal failures remain outside ordinary tool recovery.
 
 ## Work checklist
 
-- [ ] **1. Close the recovery boundary and delete competing validation (E2).**
+- [x] **1. Close the recovery boundary and delete competing validation (E2).**
       In the existing tool adapters, centralize conversion of tool-local exceptions into the
       current failure envelope. In `server/repositories/agent/provider-events.ts`, represent
       unreadable arguments explicitly instead of throwing or replacing them with `{}`.
@@ -56,7 +56,7 @@ journal failures remain outside ordinary tool recovery.
       **Verify:** the real runner completes after malformed input and a corrected call, including
       a valid sibling call. Event persistence and replay preserve each outcome and identity.
 
-- [ ] **2. Remove the second diagram recovery implementation (E2).**
+- [x] **2. Remove the second diagram recovery implementation (E2).**
       Route diagram submission through the existing SDK adapter and current failure envelope.
       Remove its legacy `{ failure: ... }` formatter and duplicated schema conversion where the
       common adapter already provides it. Preserve the diagram submission/acceptance handshake.
@@ -67,7 +67,7 @@ journal failures remain outside ordinary tool recovery.
       **Verify:** invalid JSON, schema-invalid input, and rejected content can be followed by a
       valid accepted submission. Cancellation still closes the session.
 
-- [ ] **3. Make failure observation safe (E2, E3).**
+- [x] **3. Make failure observation safe (E2, E3).**
       Replace throwing output probes in `readToolFailure` with an explicit boundary result for
       success, reported failure, or unreadable output. Do not interpret arbitrary text beginning
       with `{` as proof that it must be a valid failure envelope. Preserve correction details

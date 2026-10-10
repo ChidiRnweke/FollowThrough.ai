@@ -1,6 +1,6 @@
 # RCA: agent and observability errors, 2026-10-10
 
-Status: investigation recorded; remediation has not been implemented by this document.
+Status: investigation recorded; plan tasks 1–3 resolved (see Resolution log).
 
 This record covers **2026-10-08 06:43:09 UTC through 2026-10-10 06:43:09 UTC**.
 It preserves the evidence for the [remediation plan](../plans/agent-error-remediation-plan.md).
@@ -210,3 +210,24 @@ and [0037](../src/content/docs/decisions/0037-parse-external-data-at-the-boundar
 Resolution requires evidence for every inventory row. A passing malformed-JSON regression
 alone does not resolve provider rejection, repeated invalid calls, note conflicts, or missing
 logs. Record expected outcomes as such; do not manufacture code fixes for successful safeguards.
+
+## Resolution log
+
+### Plan tasks 1–3 (E2, E3, related defects)
+
+The observer no longer re-validates what the SDK decided. Provider arguments parse to a readable or
+corrupt value; malformed JSON and unknown tool names settle as failed tool rows under the requested
+name, and the run continues. `readToolOutput` replaces the throwing failure reader. The outer
+reasoning catch keeps an existing `AgentProviderFailure`. Every tool, including the Diagram Agent's
+submission, builds through `sdkTool`, whose `withToolFeedback` turns any tool error into feedback;
+only cancellation escapes. The diagram tool lost its `{ failure }` format and its audit exemption.
+
+Source inspection found one further defect: the diagram controller maps provider events through the
+same mapper, and `submit_*_diagram` were not agent tool names, so the first real submission would
+have thrown `UNKNOWN_TOOL_CALL`. Both names are now catalogued.
+
+Evidence: full-path runner tests for malformed JSON beside a valid sibling, an unknown tool name, and
+malformed JSON followed by a corrected call failed on the documentation-branch base and pass after
+the change. A diagram test covering invalid JSON, schema-invalid and rejected drafts before an
+accepted draft failed on the base and passes. E3 rejection remains an expected failed action. No
+live model run reproduced E2; the evidence is deterministic.
