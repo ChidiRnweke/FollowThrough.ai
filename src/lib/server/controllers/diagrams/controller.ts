@@ -36,7 +36,7 @@ import type {
 	ConversationMessages,
 	ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
-import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { ToolActivityReader } from '$lib/server/services/agent/conversations/tool-activity';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
@@ -203,6 +203,7 @@ export interface DiagramAgentDependencies {
 		ConversationMessages,
 		'recordUserPrompt' | 'recordAssistantText' | 'recordToolActivity'
 	>;
+	readonly toolActivity: ToolActivityReader;
 	readonly preferences: { get(actor: ActorContext): Promise<AgentPreferences> };
 	readonly models: { list(): Promise<readonly AgentModel[]> };
 	readonly runs: Pick<
@@ -831,7 +832,8 @@ export class Diagrams implements DiagramsController {
 						}
 						const event = item.event;
 						const toolEvent = this.mapToolEvent(stream, event);
-						const activity = toolEvent && toolActivityFromEvent(toolEvent);
+						const activity =
+							toolEvent && this.dependencies.generation.toolActivity.activity(toolEvent);
 						if (activity)
 							await this.dependencies.generation.conversationMessages.recordToolActivity(
 								actor,

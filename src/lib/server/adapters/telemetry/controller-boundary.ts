@@ -1,5 +1,5 @@
 import { DomainError } from '$lib/errors';
-import { logLevelEnabled, summarize, traceOperation } from '$lib/server/services/telemetry';
+import { logLevelEnabled, summarize, traceOperation } from '$lib/server/adapters/telemetry/tracing';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
 type BoundaryLogger = Pick<Console, 'info' | 'debug' | 'warn' | 'error'>;
 /** Runtime boundary middleware. Construction creates a facade; calls retain original receivers. */
@@ -11,7 +11,6 @@ export class ControllerBoundary<T extends object> {
 		surface: ControllerSurface<T>,
 		logger: BoundaryLogger = console
 	) {
-		// audit-allow: no-unknown-type — The boundary facade preserves heterogeneous controller method signatures.
 		const methods = new Map<PropertyKey, (...args: unknown[]) => unknown>();
 		this.controller = new Proxy(controller, {
 			get(target, name) {
@@ -20,7 +19,6 @@ export class ControllerBoundary<T extends object> {
 				const cached = methods.get(name);
 				if (cached) return cached;
 				if (!Object.hasOwn(surface, name) || !surface[name as keyof T]) return value.bind(target);
-				// audit-allow: no-unknown-type — One wrapper handles each declared capability without changing its input or output.
 				const wrapped = (...args: unknown[]): Promise<unknown> =>
 					traceOperation(`${domain}.${String(name)}`, { kind: null }, async () => {
 						const [actor, ...rest] = args;

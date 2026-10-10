@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { operationObserver } from '$lib/server/adapters/telemetry/tracing';
 import { createSearchQueryGeneration } from '$lib/server/factories/retrieval-providers';
 import { inlineCompletionProvider } from '$lib/testing/inline-suggestions/fixtures/provider';
 import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';

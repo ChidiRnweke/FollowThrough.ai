@@ -42,7 +42,8 @@ process.stdout.write(
 );
 
 const { shutdownTelemetry } = await import('./otel-instrumentation.js');
-const { traceOperation, traceWorkflow } = await import('../src/lib/server/services/telemetry.ts');
+const { traceOperation, traceWorkflow } =
+	await import('../src/lib/server/adapters/telemetry/tracing.ts');
 const { rerankerInputTraceAttributes, rerankerOutputTraceAttributes } =
 	await import('../src/lib/server/adapters/knowledge-search/rerank-tracing.ts');
 

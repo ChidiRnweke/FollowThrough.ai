@@ -7,7 +7,7 @@ import {
 	resolveLogLevel,
 	summarize,
 	traceOperation
-} from '$lib/server/services/telemetry';
+} from '$lib/server/adapters/telemetry/tracing';
 
 /**
  * Vitest loads no OTel SDK, so the global context manager is a no-op and

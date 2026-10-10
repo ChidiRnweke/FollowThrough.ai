@@ -1,3 +1,6 @@
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
+import { AgentFileReferenceService } from '$lib/server/services/agent-files/virtual-files';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
@@ -60,12 +63,15 @@ export const agentContextFixture = () => {
 		contextWidgets: resources.widgetReader,
 		contextDiagrams: resources.diagramReader,
 		contextAttachments: resources.attachmentReader,
+		contextFiles: new AgentFileReferenceService(testTokenizer),
 		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: projects,
 		contextMemory: memory,
 		conversationSessions: journal,
 		provenance: new InMemoryProvenanceRecorder(),
 		conversationMessages: journal,
+		toolActivity: new ToolActivityProjection(),
+		traceContext: { activeTraceparent: () => undefined },
 		runner: new InMemoryAgentRunner(),
 		eventBus: new AgentEventStore()
 	};

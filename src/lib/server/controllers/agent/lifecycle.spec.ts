@@ -41,6 +41,7 @@ import type {
 } from '$lib/server/services/agent/runs/contracts';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
@@ -156,6 +157,8 @@ const setup = <T extends AgentRunner>(
 					throw new Error('Unexpected provenance record');
 				}
 			},
+			toolActivity: new ToolActivityProjection(),
+			traceContext: { activeTraceparent: () => undefined },
 			conversationMessages: capabilityDependencies<ConversationMessages>({
 				recordToolActivity: async (_actor, _conversationId, activity) => {
 					toolRows.push(activity);

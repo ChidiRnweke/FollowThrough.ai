@@ -38,7 +38,7 @@ import {
 	type IAttachmentStorage,
 	type ObjectStorageConfig
 } from '$lib/server/repositories/attachments/object-storage';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { operationObserver } from '$lib/server/adapters/telemetry/tracing';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,

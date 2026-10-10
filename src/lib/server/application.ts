@@ -474,6 +474,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncRetry: synchronization.mutationRetry,
 			conversationSessions,
 			conversationMessages,
+			toolActivity: agentCapability.toolActivity,
+			traceContext: agentCapability.traceContext,
 			preferences,
 			models: modelCatalog,
 			runs: runRepository,
@@ -496,6 +498,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			contextWidgets: widgets.reader,
 			contextDiagrams: diagrams.finder,
 			contextAttachments: attachmentCapability.reader,
+			contextFiles: agentFilesCapability.references,
 			builtInSkills: skillCapability.builtIns,
 			contextMemory: memory.lister,
 			contextProjects: projects.reader,
@@ -632,7 +635,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos.context
 		},
 		notes: {
-			toolTokens: knowledgeSearch.tokenizer,
+			agentFiles: agentFilesCapability.references,
 			projectLister: projects.lister,
 			...toolResults,
 			todoPresentation: todoCapability.presentation,
@@ -774,6 +777,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			reranker: searchReranker,
 			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
+			workflow: finalizedKnowledgeSearch.workflow,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
 			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission

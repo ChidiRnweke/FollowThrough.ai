@@ -171,7 +171,7 @@ const PLATFORM_KEYS = new Set<string>([
 	   the Dockerfile sets it, docker-compose.prod.yml can override it. */
 	'BODY_SIZE_LIMIT',
 	/* Log verbosity is deployment policy (dev wants debug, prod wants info), never
-	   an application secret. Read once by resolveLogLevel in services/telemetry. */
+	   an application secret. Read once by resolveLogLevel in adapters/telemetry/tracing. */
 	'LOG_LEVEL',
 	...BOOTSTRAP_KEYS
 ]);

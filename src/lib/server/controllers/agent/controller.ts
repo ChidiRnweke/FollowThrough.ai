@@ -49,17 +49,14 @@ import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/muta
 
 import { AgentProviderFailure } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import {
-	attachmentFilePath,
-	diagramFilePath
-} from '$lib/server/services/agent-files/virtual-files';
+import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
 import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
 import type { AttachedResource, IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AttachmentLookup } from '$lib/server/services/attachments/library';
 import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
-import { activeTraceparent } from '$lib/server/services/telemetry';
+import type { TraceContextReader } from '$lib/models/telemetry';
 import type { WidgetReader } from '$lib/server/services/widgets/library';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
@@ -73,7 +70,7 @@ import type {
 	ConversationMessages,
 	ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
-import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { ToolActivityReader } from '$lib/server/services/agent/conversations/tool-activity';
 import type {
 	AgentRunner,
 	AgentToolCompletionObserver
@@ -235,6 +232,10 @@ export interface AgentDependencies {
 	/** Persists conversations and their message history. */
 	conversationSessions: ConversationSessions;
 	conversationMessages: ConversationMessages;
+	/** Reads which tool call an event opens or settles. */
+	toolActivity: ToolActivityReader;
+	/** Links a run to the operation that started it, so its turns join that trace. */
+	traceContext: TraceContextReader;
 	/** Per-user agent preferences used to settle defaults when a run is frozen. */
 	preferences: AgentPreferencesStore;
 	/** The catalogue of selectable models, used to validate and resolve run models. */
@@ -273,6 +274,7 @@ export interface AgentDependencies {
 	readonly contextDiagrams: DiagramFinder;
 
 	readonly contextAttachments: AttachmentLookup;
+	readonly contextFiles: AgentFileReferences;
 
 	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'> & BuiltInSkillSelection;
 
@@ -402,7 +404,7 @@ export class Agent implements AgentController {
 				// Seeds the run with the requesting operation's span, so the first
 				// turn joins this request's trace even though execution starts
 				// after this transaction commits. Approval parks refresh it.
-				const submittedTraceparent = activeTraceparent();
+				const submittedTraceparent = this.dependencies.traceContext.activeTraceparent();
 				const run: AgentRun = {
 					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,
@@ -590,7 +592,7 @@ export class Agent implements AgentController {
 					throw new ValidationError('Only failed or cancelled runs can be retried');
 				const submittedAt = now();
 				// Joins the retry request's trace, same as a fresh submit.
-				const retryTraceparent = activeTraceparent();
+				const retryTraceparent = this.dependencies.traceContext.activeTraceparent();
 				const retry: AgentRun = {
 					kind: 'agent',
 					id: crypto.randomUUID() as AgentRunId,
@@ -912,7 +914,7 @@ export class Agent implements AgentController {
 								...(pending.review ? { review: pending.review } : {})
 							};
 							const record = await this.dependencies.events.append(run.id, 1, event);
-							const activity = toolActivityFromEvent(event);
+							const activity = this.dependencies.toolActivity.activity(event);
 							if (activity)
 								await this.dependencies.conversationMessages.recordToolActivity(
 									actor,
@@ -1154,14 +1156,21 @@ export class Agent implements AgentController {
 					};
 				case 'diagram': {
 					const diagram = await this.dependencies.contextDiagrams.get(actor, ref.id);
-					return { kind: 'diagram', diagram, filePath: diagramFilePath(diagram) };
+					return {
+						kind: 'diagram',
+						diagram,
+						filePath: this.dependencies.contextFiles.diagramPath(diagram)
+					};
 				}
 				case 'attachment': {
 					const view = await this.dependencies.contextAttachments.get(actor, ref.id);
 					return {
 						kind: 'attachment',
 						view,
-						filePath: attachmentFilePath(view.attachment.projectId, view.attachment.id)
+						filePath: this.dependencies.contextFiles.attachmentPath(
+							view.attachment.projectId,
+							view.attachment.id
+						)
 					};
 				}
 			}
@@ -1215,7 +1224,7 @@ export class Agent implements AgentController {
 	): Promise<AgentRunEventRecord> {
 		const record = await this.dependencies.transactionRunner.run(async () => {
 			const record = await this.dependencies.events.append(run.id, 1, event);
-			const activity = toolActivityFromEvent(event);
+			const activity = this.dependencies.toolActivity.activity(event);
 			if (activity)
 				await this.dependencies.conversationMessages.recordToolActivity(
 					actor,

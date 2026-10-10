@@ -84,9 +84,10 @@ import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagra
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
-import { traceWorkflow } from '$lib/server/services/telemetry';
+import { traceWorkflow } from '$lib/server/adapters/telemetry/tracing';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 export interface DiagramsCapabilityInput {
 	readonly db: Database;
 	readonly notes: NoteRepository;
@@ -164,6 +165,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			contextMemory: input.contextMemory,
 			conversations: input.conversations,
 			conversationMessages: input.conversationMessages,
+			toolActivity: new ToolActivityProjection(),
 			preferences: input.preferences,
 			models: input.models,
 			runs: input.runs,

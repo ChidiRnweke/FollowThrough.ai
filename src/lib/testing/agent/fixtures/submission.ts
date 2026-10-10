@@ -1,3 +1,4 @@
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -49,6 +50,8 @@ export const agentSubmissionFixture = (
 			...agentRulesFixture(),
 			...dependencies,
 			conversationMessages: journal,
+			toolActivity: new ToolActivityProjection(),
+			traceContext: { activeTraceparent: () => undefined },
 			conversationSessions: journal,
 			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 			preferences,

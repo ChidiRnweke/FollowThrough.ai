@@ -51,3 +51,23 @@ export interface OperationObserver {
 		describeAttributes?: (result: T) => Attributes
 	): Promise<T>;
 }
+
+/**
+ * The seam a controller uses to open a workflow root: a trace a user would
+ * recognise as one request (an inline suggestion, a diagram generation).
+ * Unlike `OperationObserver`, it always records, nesting under an active
+ * workflow when there is one.
+ */
+export interface WorkflowObserver {
+	run<T>(
+		name: string,
+		context: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T>;
+}
+
+/** Reads the W3C traceparent of the active operation, so a run can rejoin it later. */
+export interface TraceContextReader {
+	activeTraceparent(): string | undefined;
+}

@@ -3,7 +3,7 @@ import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { APIUserAbortError } from 'openai';
-import { traceOperation, traceWorkflow } from './telemetry';
+import { traceOperation, traceWorkflow } from './tracing';
 
 const exporter = new InMemorySpanExporter();
 const provider = new NodeSDK({
