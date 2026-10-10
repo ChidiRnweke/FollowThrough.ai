@@ -184,3 +184,74 @@ The inventory is evidence only, never suppression input.
 
 The overall application refactor remains incomplete. PR #350 stays draft while migration gates
 fail. Local evidence does not imply that CI passed.
+
+## Server controller ownership repair — 2026-10-10
+
+This slice is based on draft PR #350 at `28d54ce6005c3f7f3060ec17d0a9f700246f47fd`.
+Application revision: `d43716c5` (full SHA in the JSON). The checkers are unchanged.
+Before implementation, both complete diagnostic inventories matched #350 exactly: 393 semantic
+findings and 53 Chisel imports. The JSON now contains every diagnostic for this application revision.
+
+| Rule                       | #350 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  290 |       277 |
+| `factory-workflow`         |   14 |        13 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   21 |        21 |
+| `indirect-dependency`      |   11 |        11 |
+| `concrete-dependency`      |    2 |         2 |
+| Semantic total             |  393 |       379 |
+| Chisel prohibited imports  |   53 |        47 |
+
+### Corrected dependencies
+
+- Conversation snapshots coordinate replay preparation, JSON reading and virtualization directly.
+  The SDK session adapter owns serialization; its factory no longer executes a repository mapper.
+- Agent execution and diagram generation coordinate stream readers, stateless correlation rules
+  and fresh stream state. Tool identity, event order, reasoning deduplication and checkpoint order
+  remain under the owning operation.
+- References coordinates research settings, the provider, candidate preparation and ranking before
+  its existing transactional persistence. Test injection now supplies a research client rather than
+  another application operation.
+- Diagrams owns provider execution, the event queue, validation decisions, cancellation and cleanup.
+  Its store retains pending data and continuations without executing the workflow.
+- Deliverables coordinates diagram resources, rasterization, PDF preparation and writing. Todos
+  owns the same PDF sequence for board export. The factory shares the font cache between the two
+  owners. DOCX remains a stateless document service.
+
+The low-level adapter contracts are declared by their consuming controllers. Where two owners need
+one adapter, they declare compatible transport contracts without importing each other. These ports
+are implemented by readers, writers and providers, not by controllers. Shared replay and generation
+completion data lives in models. No operation facade, controller callback injection, checker change,
+suppression or browser migration was added.
+
+Public controller methods did not change, so the existing controller surface and agent coverage maps
+remain total. Central boundary instrumentation remains in place; its tests pass. Neither analyzer
+reports a finding in the server controllers repaired here.
+
+### Observed verification and limitations
+
+- Full unit suite: **568 files, 4,491 passed, one existing skip**. Browser output still contains
+  Svelte `derived_inert` warnings and the chart rendering error recorded on #350.
+- Isolated PostgreSQL contracts: **22 files, 134 passed**. Command:
+  `pnpm test:contracts:isolated tests/integration/agent tests/integration/references tests/integration/diagrams tests/integration/deliverables tests/integration/todos/promise-runs.contract.spec.ts tests/integration/sync/diagram-mutations.contract.spec.ts`.
+- Focused regression tests cover replay files, event order, concurrent execution state, reviewed
+  tool checkpoints, diagram correction/cancellation/provider cleanup, cached rendering resources,
+  PDF/DOCX content, board exports and transaction failures.
+- `pnpm lint`: passed. `pnpm check`: zero errors and warnings. `pnpm docs:check`: zero errors
+  and warnings, one existing hint; generation retains TypeDoc entry-point warnings.
+- Topology, source and test-quality stages passed. The architecture chain stopped at **379** semantic
+  errors. Chisel and UI ran independently: **47** Chisel errors; UI passed.
+- SvelteKit, QA and PR skill copies match across all three locations. Guidance was not changed.
+- No live LLM calls, E2E, PWA or production build were run. These results do not imply CI success.
+
+Moving the diagram provider test through the owning operation exposed an existing mismatch:
+`submit_mermaid_diagram` is not accepted by the general agent tool-name reader. A regression test
+records the current failure, provider cleanup and absence of a published suggestion. Separate tests
+cover the SDK submission protocol and the owner with a controlled provider. This slice does not claim
+successful end-to-end SDK diagram generation or change that error contract.
+
+The remaining 277 controller findings are outside these server chains. Browser controller/store
+workflows, other factory workflows, public service helpers, indirect dependencies and concrete
+exposures remain in the complete inventory. The overall refactor is incomplete. Keep this stacked
+PR draft while the migration gates fail.

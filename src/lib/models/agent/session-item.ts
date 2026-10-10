@@ -410,3 +410,16 @@ type StoredReasoning = {
 };
 
 export type StoredSessionItem = StoredMessage | StoredTool | StoredReasoning | SessionJsonObject;
+
+type ReplayRecord = Extract<
+	PersistedSessionItem,
+	{ type: 'function_call_result' | 'user_message' | 'assistant_message' }
+>;
+type ReplayCall = Extract<PersistedSessionItem, { type: 'function_call' }>;
+export type ReplayPreparation =
+	| { readonly kind: 'unchanged'; readonly item: PersistedSessionItem }
+	| { readonly kind: 'arguments'; readonly item: ReplayCall }
+	| { readonly kind: 'record'; readonly item: ReplayRecord };
+export type ReplayContent =
+	| { readonly kind: 'arguments'; readonly item: ReplayCall; readonly value: SessionJson }
+	| { readonly kind: 'record'; readonly item: ReplayRecord };

@@ -1,6 +1,7 @@
+import type { ReplayPreparation, ReplayContent } from '$lib/models/agent';
 import type { TokenCounter } from '$lib/models/tokenization';
 import { createHash } from 'node:crypto';
-import type { ConversationId, PersistedSessionItem, SessionJson } from '$lib/models/agent';
+import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 
@@ -14,18 +15,6 @@ const safeSegment = (value: string): string => {
 	return safe.length > 0 ? safe : 'content';
 };
 
-type ReplayRecord = Extract<
-	PersistedSessionItem,
-	{ type: 'function_call_result' | 'user_message' | 'assistant_message' }
->;
-type ReplayCall = Extract<PersistedSessionItem, { type: 'function_call' }>;
-export type ReplayPreparation =
-	| { readonly kind: 'unchanged'; readonly item: PersistedSessionItem }
-	| { readonly kind: 'arguments'; readonly item: ReplayCall }
-	| { readonly kind: 'record'; readonly item: ReplayRecord };
-export type ReplayContent =
-	| { readonly kind: 'arguments'; readonly item: ReplayCall; readonly value: SessionJson }
-	| { readonly kind: 'record'; readonly item: ReplayRecord };
 export interface ReplayVirtualization {
 	prepare(item: PersistedSessionItem): ReplayPreparation;
 	apply(

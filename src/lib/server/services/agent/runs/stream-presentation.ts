@@ -1,7 +1,15 @@
+import { AgentProviderFailure } from '$lib/errors';
+import type { ProviderToolCall } from '$lib/models/agent';
 import type { OutputSegment, StoredAgentRunEventRecord } from '$lib/models/agent';
 import type { AgentEvent, AgentToolOutcome, ProviderStreamEvent } from '$lib/models/agent';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 export interface AgentStreamPresentation {
+	start(call: ProviderToolCall): ProviderToolCall & { readonly callId: string };
+	completed(
+		call: ProviderToolCall,
+		active: ReadonlyMap<string, ProviderToolCall>
+	): { readonly callId?: string; readonly name: string };
+
 	segments(records: readonly StoredAgentRunEventRecord[]): readonly OutputSegment[];
 	outcome(
 		identity: { readonly callId?: string; readonly name: AgentToolName },
@@ -13,6 +21,25 @@ export interface AgentStreamPresentation {
 	): { readonly event?: AgentEvent; readonly streamed: boolean };
 }
 export class AgentStreamPresentationService implements AgentStreamPresentation {
+	start(call: ProviderToolCall): ProviderToolCall & { readonly callId: string } {
+		if (call.callId === undefined)
+			throw new AgentProviderFailure(
+				`The provider opened a call to "${call.name}" without an identifier`,
+				'UNIDENTIFIED_TOOL_CALL',
+				false
+			);
+		return { ...call, callId: call.callId };
+	}
+	completed(
+		call: ProviderToolCall,
+		active: ReadonlyMap<string, ProviderToolCall>
+	): { readonly callId?: string; readonly name: string } {
+		const soleActive = active.size === 1 ? active.keys().next().value : undefined;
+		const callId = call.callId ?? soleActive;
+		const known = callId === undefined ? undefined : active.get(callId);
+		return { ...(callId === undefined ? {} : { callId }), name: known?.name ?? call.name };
+	}
+
 	outcome(
 		identity: { readonly callId?: string; readonly name: AgentToolName },
 		output: AgentToolOutcome

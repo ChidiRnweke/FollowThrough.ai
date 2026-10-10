@@ -1,9 +1,15 @@
 import type { ActorContext } from '$lib/models/identity';
-import type { ConversationId, PersistedSessionItem, SessionJsonObject } from '$lib/models/agent';
+import type {
+	ConversationId,
+	PersistedSessionItem,
+	SessionJsonObject,
+	SessionJson
+} from '$lib/models/agent';
 import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
-import type { ReplayVirtualizer } from '$lib/server/controllers/agent/replay';
+import type { ReplayVirtualization } from '$lib/server/services/agent/conversations/replay-virtualizer';
 import type { ConversationSessionStore } from '$lib/server/stores/agent/conversation';
 export interface ConversationJsonReader {
+	value(text: string): SessionJson;
 	failure(text: string): string | undefined;
 	object(text: string): SessionJsonObject | undefined;
 }
@@ -21,7 +27,7 @@ export class ConversationSessions implements ConversationSessionController {
 		private readonly state: ConversationSessionStore,
 		private readonly actor: ActorContext,
 		readonly id: ConversationId,
-		private readonly virtualizer: ReplayVirtualizer,
+		private readonly virtualizer: ReplayVirtualization,
 		private readonly reader: ConversationJsonReader
 	) {}
 	async getItems(limit?: number): Promise<readonly PersistedSessionItem[]> {
@@ -56,9 +62,18 @@ export class ConversationSessions implements ConversationSessionController {
 	}
 	async snapshot(): Promise<readonly PersistedSessionItem[]> {
 		return Promise.all(
-			this.history
-				.persistable(await this.load())
-				.map((item) => this.virtualizer.virtualize(this.actor, this.id, item))
+			this.history.persistable(await this.load()).map((item) => this.virtualize(item))
+		);
+	}
+	private async virtualize(item: PersistedSessionItem): Promise<PersistedSessionItem> {
+		const prepared = this.virtualizer.prepare(item);
+		if (prepared.kind === 'unchanged') return prepared.item;
+		return this.virtualizer.apply(
+			this.actor,
+			this.id,
+			prepared.kind === 'arguments'
+				? { ...prepared, value: this.reader.value(prepared.item.arguments) }
+				: prepared
 		);
 	}
 	private async load(): Promise<readonly PersistedSessionItem[]> {

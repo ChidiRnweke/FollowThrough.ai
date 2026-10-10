@@ -1,4 +1,4 @@
-import type { WebReferenceClient } from '$lib/server/controllers/references/search';
+import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import type { ReferenceSearchOptions } from '$lib/models/references';
 import OpenAI from 'openai';
 import {

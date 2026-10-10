@@ -11,7 +11,7 @@ const reference = (
 	tier: ReferenceCandidate['tier'],
 	confidence: number
 ): ReferenceCandidate => ({
-	url: `https://example.com/${title.toLowerCase()}` as Url,
+	url: `https://${tier === 'official' ? 'example.org' : 'example.com'}/${title.toLowerCase()}` as Url,
 	title,
 	tier,
 	relevanceNote: `${title} is relevant`,

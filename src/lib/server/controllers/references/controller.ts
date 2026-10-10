@@ -19,7 +19,10 @@ import type {
 } from '$lib/models/references';
 import type { ReferenceSuggestion } from '$lib/models/suggestions';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { ReferenceFinder } from '$lib/server/controllers/references/search';
+import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import { REFERENCE_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
+import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
@@ -67,7 +70,10 @@ export interface ReferencesDependencies {
 	readonly toolResults: ToolResultReader;
 
 	selectionOrigins: SelectionOriginService;
-	referenceFinder: ReferenceFinder;
+	referenceClient: WebReferenceClient;
+	referenceCandidates: ReferenceCandidatePreparation;
+	researchSettings: AgentRunSettings;
+	researchOverrides: WebResearchOptions;
 	referenceRanker: ReferenceRanker;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
@@ -204,7 +210,7 @@ export class References implements ReferencesController {
 		options?: ReferenceSearchOptions
 	): Promise<readonly ReferenceCandidate[]> {
 		await this.dependencies.selectionOrigins.validate(actor, input.selection);
-		const found = await this.dependencies.referenceFinder.find(actor, input.selection, {
+		const found = await this.searchReferences(input.selection, {
 			model: options?.model ?? this.dependencies.referenceModel,
 			...(options?.signal ? { signal: options.signal } : {})
 		});
@@ -212,6 +218,32 @@ export class References implements ReferencesController {
 		return this.dependencies.referenceRanker.rank(found);
 	}
 
+	private async searchReferences(
+		selection: TextSelection,
+		options: ReferenceSearchOptions
+	): Promise<readonly ReferenceCandidate[]> {
+		try {
+			const research = this.dependencies.researchSettings.research(
+				this.dependencies.researchOverrides,
+				REFERENCE_WEB_SEARCH_DEFAULTS
+			);
+			const sources = await this.dependencies.referenceClient.search(
+				selection.text,
+				research,
+				options
+			);
+			if (!sources)
+				throw new InvalidGeneratedContentError('The provider returned no usable reference output');
+			return this.dependencies.referenceCandidates.prepare(sources, selection.text);
+		} catch (error) {
+			if (options.signal?.aborted) throw error;
+			if (error instanceof InvalidGeneratedContentError || error instanceof ExternalServiceError)
+				throw error;
+			throw new ExternalServiceError('Reference search failed', {
+				cause: error instanceof Error ? error.message : String(error)
+			});
+		}
+	}
 	private async saveReferences(
 		actor: ActorContext,
 		input: FindReferencesInput,
@@ -261,4 +293,13 @@ export class References implements ReferencesController {
 			this.dependencies.toolResults.arguments(input)
 		);
 	}
+}
+
+/** Low-level adapter contract; the owning controller coordinates the application operation. */
+export interface WebReferenceClient {
+	search(
+		text: string,
+		research: import('$lib/models/agent').WebResearchSettings,
+		options?: ReferenceSearchOptions
+	): Promise<readonly import('$lib/models/references').ReferenceSource[] | undefined>;
 }

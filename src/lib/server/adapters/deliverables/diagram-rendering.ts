@@ -1,4 +1,4 @@
-import type { DiagramRasterRendering } from '$lib/server/controllers/deliverables/diagram-rendering';
+import type { DiagramRasterRendering } from '$lib/server/controllers/deliverables/controller';
 import { chromium } from 'playwright';
 import type { Mermaid } from 'mermaid';
 import type { MermaidRenderConfig } from '$lib/models/diagrams/mermaid-theme';

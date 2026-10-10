@@ -1,4 +1,4 @@
-import type { ReplayJsonReader } from '$lib/server/controllers/agent/replay';
+import { toStoredSessionItem } from '$lib/server/repositories/agent/session-items';
 import { sessionJsonSchema, type SessionJson } from '$lib/models/agent';
 import type { AgentInputItem, Session } from '@openai/agents';
 import {
@@ -16,22 +16,21 @@ export interface BufferedConversationSession extends Session {
 }
 /** The SDK's item union is parsed here before any controller sees it. */
 export class ConversationSessionAdapter implements BufferedConversationSession {
-	constructor(
-		private readonly session: ConversationSessionController,
-		private readonly encode: (item: PersistedSessionItem) => AgentInputItem
-	) {}
+	constructor(private readonly session: ConversationSessionController) {}
 	async getSessionId(): Promise<string> {
 		return this.session.id;
 	}
 	async getItems(limit?: number): Promise<AgentInputItem[]> {
-		return (await this.session.getItems(limit)).map(this.encode);
+		return (await this.session.getItems(limit)).map(
+			(item) => toStoredSessionItem(item) as AgentInputItem
+		);
 	}
 	addItems(items: AgentInputItem[]): Promise<void> {
 		return this.session.addItems(items.map((item) => persistedSessionItemSchema.parse(item)));
 	}
 	async popItem(): Promise<AgentInputItem | undefined> {
 		const item = await this.session.popItem();
-		return item && this.encode(item);
+		return item && (toStoredSessionItem(item) as AgentInputItem);
 	}
 	async clearSession(): Promise<void> {
 		this.session.clear();
@@ -40,7 +39,7 @@ export class ConversationSessionAdapter implements BufferedConversationSession {
 		return this.session.snapshot();
 	}
 }
-export class ConversationJsonBoundary implements ConversationJsonReader, ReplayJsonReader {
+export class ConversationJsonBoundary implements ConversationJsonReader {
 	value(text: string): SessionJson {
 		return sessionJsonSchema.parse(JSON.parse(text));
 	}

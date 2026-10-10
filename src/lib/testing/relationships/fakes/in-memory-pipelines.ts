@@ -14,8 +14,7 @@ import type {
 	StructuredPromiseResult
 } from '$lib/server/repositories/todos/classification';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { ReferenceFinder } from '$lib/server/controllers/references/search';
-import type { WebReferenceClient } from '$lib/server/controllers/references/search';
+import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -77,23 +76,30 @@ export class InMemoryStructuredRelationshipClient implements StructuredRelations
 	}
 }
 
-export class InMemoryReferencePipeline implements ReferenceFinder {
+export class InMemoryReferencePipeline implements WebReferenceClient {
 	candidates: ReferenceCandidate[] = [];
 	model?: string;
 	readonly started = Promise.withResolvers<void>();
 	completion: Promise<void> = Promise.resolve();
 	readonly modelCandidates = new Map<string, readonly ReferenceCandidate[]>();
-	async find(
-		_actor: ActorContext,
-		_selection: TextSelection,
+	async search(
+		_text: string,
+		_research: WebResearchSettings,
 		options: ReferenceSearchOptions = {}
-	): Promise<readonly ReferenceCandidate[]> {
-		void _actor;
-		void _selection;
+	): Promise<readonly ReferenceSource[]> {
+		void _text;
+		void _research;
 		this.model = options.model;
 		this.started.resolve();
 		await this.completion;
-		return (options.model ? this.modelCandidates.get(options.model) : undefined) ?? this.candidates;
+		return (
+			(options.model ? this.modelCandidates.get(options.model) : undefined) ?? this.candidates
+		).map((candidate) => ({
+			url: candidate.url,
+			title: candidate.title,
+			hostname: new URL(candidate.url).hostname,
+			content: candidate.relevanceNote
+		}));
 	}
 }
 

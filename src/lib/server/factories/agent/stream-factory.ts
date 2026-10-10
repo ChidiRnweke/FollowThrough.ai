@@ -1,17 +1,16 @@
-import {
-	AgentToolEvents,
-	AgentReasoningEvents,
-	type AgentStreamMappings
-} from '$lib/server/controllers/agent/stream-events';
+import type { AgentStreamState } from '$lib/server/stores/agent/stream';
+import type { AgentStreamReader } from '$lib/server/controllers/agent/execution';
+import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
 import { AgentStreamStore } from '$lib/server/stores/agent/stream';
 import { AgentStreamBoundary } from '$lib/server/adapters/agent/stream-reader';
 import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
 import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
-export const createAgentStream = (): AgentStreamMappings => {
-	const state = new AgentStreamStore();
-	const presentation = new AgentStreamPresentationService();
-	return {
-		tools: new AgentToolEvents(state, new AgentStreamBoundary(readToolFailure), presentation),
-		reasoning: new AgentReasoningEvents(state, presentation)
-	};
-};
+export const createAgentStream = (): {
+	state: AgentStreamState;
+	reader: AgentStreamReader;
+	presentation: AgentStreamPresentation;
+} => ({
+	state: new AgentStreamStore(),
+	reader: new AgentStreamBoundary(readToolFailure),
+	presentation: new AgentStreamPresentationService()
+});

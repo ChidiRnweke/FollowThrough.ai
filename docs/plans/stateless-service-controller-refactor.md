@@ -1395,3 +1395,31 @@ controller/store workflows and older server chains for conversation replay, stre
 reference search, diagram generation and PDF/document rendering. Other factory workflows,
 public service helpers and concrete exposures also remain. No overall completion box is changed;
 keep PR #350 draft while these migration gates fail.
+
+## Server controller ownership continuation — 2026-10-10
+
+Application revision `d43716c5`, based on draft #350 at `28d54ce6`. This is a server-only slice.
+The base inventory was verified against the branch before edits; both analyzers matched it exactly.
+
+- [x] Give conversation snapshots ownership of replay sequencing and move SDK serialization into
+      the session adapter.
+- [x] Give execution and diagram generation ownership of stream delivery over shared stateless
+      correlation rules and independent passive state.
+- [x] Give References ownership of provider search, preparation, ranking and persistence.
+- [x] Give Diagrams ownership of generation events, submission validation, cancellation and cleanup.
+- [x] Give Deliverables and Todos direct rendering dependencies; preserve resource cache sharing,
+      authorization, transactions, formats and failure behavior.
+- [x] Update capability construction, transport contracts and tests. Public operations remain the
+      same; existing instrumentation surfaces and tool coverage maps remain total.
+- [x] Run unit, isolated execution/rendering contracts, lint, type checking, docs checking and every
+      architecture stage. Refresh the full inventory without changing enforcement.
+- [ ] Finish the wider application migration and satisfy the semantic and Chisel gates.
+
+The full unit suite passed: 568 files, 4,491 tests, one existing skip. Isolated contracts passed:
+22 files, 134 tests. Lint, type checking, docs checking, topology, source, test-quality and UI checks
+passed. Semantic findings fell from 393 to 379; Chisel imports fell from 53 to 47. Remaining findings
+are still errors, not a baseline. Browser migrations remain out of scope.
+
+The [enforcement report](stateless-service-controller-enforcement.md) records the exact commands,
+complete inventory and limitations, including the existing SDK diagram submission-tool mismatch.
+The overall refactor remains incomplete; keep the stacked PR draft. No guidance or check was weakened.

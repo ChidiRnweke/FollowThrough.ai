@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import type { DiagramRenderResources } from '$lib/models/deliverables';
-import type { DiagramRenderResourceReader } from '$lib/server/controllers/deliverables/diagram-rendering';
+import type { DiagramRenderResourceReader } from '$lib/server/controllers/deliverables/controller';
 const require = createRequire(import.meta.url);
 export class NodeDiagramRenderResources implements DiagramRenderResourceReader {
 	async read(): Promise<DiagramRenderResources> {

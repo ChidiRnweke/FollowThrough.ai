@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { openSync } from 'fontkit';
 import { ExternalServiceError } from '$lib/errors';
 import type { PdfFontResources } from '$lib/models/deliverables';
-import type { PdfFontReader } from '$lib/server/controllers/deliverables/pdf';
+import type { PdfFontReader } from '$lib/server/controllers/deliverables/controller';
 // Repo-shipped Noto TTFs retain the existing emoji, symbol and math fallback faces.
 const FONT_FILES: Record<string, Record<string, string>> = {
 	NotoSans: {

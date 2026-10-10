@@ -7,7 +7,7 @@ const docxRendering = new DocxDocumentService();
 const generateDocx = docxRendering.render.bind(docxRendering);
 import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
 const pdfRendering = createPdfRendering();
-const generatePdf = pdfRendering.render.bind(pdfRendering);
+
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import {
 	InMemoryDiagrams,
@@ -80,7 +80,7 @@ describe('current diagram images in document exports', () => {
 		const { service, notes } = exportControllerFixture({
 			diagramRenderer: createDiagramExportRenderer(),
 			mermaidThemes: new MermaidThemeService(),
-			pdfGenerator: generatePdf
+			pdfRendering
 		});
 		notes.notes = [noteBuilder({ document: mermaidDocument('flowchart LR\n A --> B') })];
 		const result = await service.previewDocument(testActor(), input);

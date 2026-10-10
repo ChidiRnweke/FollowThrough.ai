@@ -1,6 +1,6 @@
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
 import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
-import { ReferenceSearch } from '$lib/server/controllers/references/search';
+
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type {
@@ -19,7 +19,10 @@ import type { ReferenceRepository } from '$lib/server/repositories/references/re
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
 import { ReferenceResearch } from '$lib/server/adapters/references/web-research';
 import { ReferenceRanking, type ReferenceRanker } from '$lib/server/services/references/ranking';
-import type { ReferenceFinder } from '$lib/server/controllers/references/search';
+import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
+import type { ReferenceCandidatePreparation } from '$lib/server/services/references/discovery';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import type { WebResearchOptions } from '$lib/models/agent';
 import { operationObserver } from '$lib/server/services/telemetry';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 
@@ -32,13 +35,16 @@ export interface ReferencesCapabilityInput {
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
 	readonly defaultModel: string;
-	readonly finder?: ReferenceFinder;
+	readonly client?: WebReferenceClient;
 }
 
 export interface ReferencesCapability extends ReferenceServices {
 	readonly ranking: ReferenceRanker;
 	readonly model: string;
-	readonly finder: ReferenceFinder;
+	readonly client: WebReferenceClient;
+	readonly candidates: ReferenceCandidatePreparation;
+	readonly settings: AgentRunSettings;
+	readonly overrides: WebResearchOptions;
 }
 
 export const createReferencesCapability = (
@@ -52,19 +58,17 @@ export const createReferencesCapability = (
 		input.anchors,
 		input.provenance
 	),
-	finder:
-		input.finder ??
-		new ReferenceSearch(
-			new ReferenceResearch(input.openRouterApiKey, {
-				baseURL: input.openRouterBaseURL,
-				appURL: input.appURL,
-				defaultModel: normalizeLanguageModelId(input.defaultModel),
-				observer: operationObserver
-			}),
-			new ReferenceDiscovery(),
-			new AgentRunSettingsService(),
-			webSearchOptionsFromEnvironment(process.env)
-		)
+	client:
+		input.client ??
+		new ReferenceResearch(input.openRouterApiKey, {
+			baseURL: input.openRouterBaseURL,
+			appURL: input.appURL,
+			defaultModel: normalizeLanguageModelId(input.defaultModel),
+			observer: operationObserver
+		}),
+	candidates: new ReferenceDiscovery(),
+	settings: new AgentRunSettingsService(),
+	overrides: webSearchOptionsFromEnvironment(process.env)
 });
 
 export interface ReferenceServices {

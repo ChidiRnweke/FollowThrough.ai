@@ -1,10 +1,11 @@
+import type { AgentStreamReader } from '$lib/server/controllers/agent/execution';
 import {
 	agentToolNameSchema,
 	type AgentToolOutcome,
 	type ProviderToolOutput
 } from '$lib/models/agent';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
-import type { AgentStreamReader } from '$lib/server/controllers/agent/stream-events';
+
 import type { AgentPayload } from '$lib/models/agent/payload';
 import { AgentProviderFailure } from '$lib/errors';
 export class AgentStreamBoundary implements AgentStreamReader {

@@ -1,3 +1,5 @@
+import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
+import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
 import { type AgentRunId } from '$lib/models/agent';
 import type { Url } from '$lib/models/references';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -82,7 +84,10 @@ const setup = async (suffix: string) => {
 		...agentToolResultsFixture(),
 		transactionRunner,
 		noteActionRequests: requests,
-		referenceFinder: finder,
+		referenceClient: finder,
+		referenceCandidates: new ReferenceDiscovery(),
+		researchSettings: new AgentRunSettingsService(),
+		researchOverrides: {},
 		referenceRanker: new ReferenceRanking(),
 		referenceModel: 'test/model',
 		runSettlements: settlements,
