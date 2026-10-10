@@ -30,18 +30,21 @@ export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefin
 	if (!outcome) return undefined;
 	// The arguments are not restated on an outcome, and the row that opened the
 	// call is the one that holds them; both journals key rows by `callId`.
-	const settled = {
-		...(outcome.callId === undefined ? {} : { callId: outcome.callId }),
-		name: outcome.name,
-		input: {}
-	};
-	if (outcome.type === 'tool_succeeded')
+	const callId = outcome.callId === undefined ? {} : { callId: outcome.callId };
+	if (outcome.type === 'tool_failed')
 		return {
-			...settled,
-			...(outcome.output === undefined ? {} : { output: outcome.output }),
-			status: 'succeeded'
+			...callId,
+			name: outcome.name,
+			input: {},
+			failure: outcome.failure,
+			status: 'failed'
 		};
-	return outcome.type === 'tool_failed'
-		? { ...settled, failure: outcome.failure, status: 'failed' }
+	const settled = { ...callId, name: outcome.name, input: {} };
+	return outcome.type === 'tool_succeeded'
+		? {
+				...settled,
+				...(outcome.output === undefined ? {} : { output: outcome.output }),
+				status: 'succeeded'
+			}
 		: { ...settled, failure: outcome.failure, output: outcome.output, status: 'reported_failure' };
 };

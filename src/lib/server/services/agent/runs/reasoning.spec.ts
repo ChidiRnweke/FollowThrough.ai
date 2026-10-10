@@ -601,18 +601,73 @@ describe('Agent tool event invariants', () => {
 	});
 
 	/**
-	 * The SDK resolves every call against the tools this run handed it and answers
-	 * an unknown name with its own `Tool not found` before any event is emitted, so
-	 * a name arriving here that the agent surface does not have means the registry
-	 * and the tools given to the SDK have diverged. That is a bug in this process,
-	 * not something the model did, and `tool_started` has no failure arm to settle
-	 * it into: the call did start, and inventing an outcome for it would be the
-	 * quiet wrong answer.
+	 * The SDK answers an unknown name itself: it emits the call and output items and
+	 * returns `TOOL_NOT_AVAILABLE` to the model, and the run continues. The mapper
+	 * used to throw here, which ended a turn the SDK had already recovered. The
+	 * attempt stays visible as a failed row under the name the model asked for.
 	 */
-	it('refuses a call to a name the agent surface does not have', () => {
-		const mapUnknownCall = () =>
-			new AgentToolEventMapper().map(toolCalled({ callId: 'call-1', name: 'save_notes' }));
-		expect(mapUnknownCall).toThrowError(AgentProviderFailure);
+	it('settles a call to an unknown name as failed without ending the turn', () => {
+		const mapper = new AgentToolEventMapper();
+		const events = [
+			mapper.map(toolCalled({ callId: 'call-1', name: 'save_notes' })),
+			mapper.map(
+				toolOutput({
+					callId: 'call-1',
+					name: 'save_notes',
+					output:
+						'{"kind":"failure","code":"TOOL_NOT_AVAILABLE","message":"Not available","recovery":"Search.","details":{}}'
+				})
+			)
+		];
+		expect(events).toEqual([
+			undefined,
+			{ type: 'tool_failed', callId: 'call-1', name: 'save_notes', failure: 'Not available' }
+		]);
+	});
+
+	/**
+	 * Trace `1cde38f9…`: the provider sent one malformed and one valid `search`
+	 * call in a generation. The SDK answered the malformed one with a JSON
+	 * correction, but reading its arguments threw `MALFORMED_TOOL_ARGUMENTS` and
+	 * ended the turn. The call now settles failed — the SDK's correction text is
+	 * not a failure envelope, so its output alone would read as success.
+	 */
+	it('settles a call with malformed JSON arguments as failed without ending the turn', () => {
+		const mapper = new AgentToolEventMapper();
+		const events = [
+			mapper.map(toolCalled({ callId: 'call-1', name: 'search', arguments: '{"query": "x"' })),
+			mapper.map(
+				toolOutput({
+					callId: 'call-1',
+					name: 'search',
+					output:
+						'An error occurred while parsing tool arguments. Please try again with valid JSON.'
+				})
+			)
+		];
+		expect(events).toEqual([
+			undefined,
+			{
+				type: 'tool_failed',
+				callId: 'call-1',
+				name: 'search',
+				failure: 'The tool arguments were not valid JSON, so the tool did not run.'
+			}
+		]);
+	});
+
+	it('settles a malformed failure envelope as failed rather than throwing', () => {
+		const event = new AgentToolEventMapper().map(
+			toolOutput({ callId: 'call-2', name: 'get_note', output: '{"kind":"failure","message":"x"}' })
+		);
+		expect(event).toMatchObject({ type: 'tool_failed', callId: 'call-2', name: 'get_note' });
+	});
+
+	it('settles text that only starts like JSON as a plain success', () => {
+		const event = new AgentToolEventMapper().map(
+			toolOutput({ callId: 'call-3', name: 'get_note', output: '{ not json' })
+		);
+		expect(event).toMatchObject({ type: 'tool_succeeded', callId: 'call-3' });
 	});
 
 	it('accepts search_tools, which is built rather than defined and has no catalog entry', () => {
@@ -664,7 +719,7 @@ describe('Agent tool event invariants', () => {
 			call: {
 				callId: 'call-9',
 				name: 'get_note',
-				arguments: {},
+				arguments: { kind: 'value', value: {} },
 				output: { kind: 'corrupt', message: 'root.when is a Date' }
 			}
 		});

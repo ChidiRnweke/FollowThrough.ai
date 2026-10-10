@@ -12,7 +12,7 @@ import {
 	type ChatToolActivity
 } from './chat-tools';
 
-const runningTool = (callId = 'call-1'): ChatToolActivity => ({
+const runningTool = (callId = 'call-1'): Extract<ChatToolActivity, { status: 'running' }> => ({
 	callId,
 	name: 'find_references',
 	arguments: { query: 'agent skills' },
@@ -224,6 +224,35 @@ describe('Reading a journalled tool row back into the transcript', () => {
 		expect(
 			row({ type: 'tool_activity', name: 'search', input: {}, failure: null, status: 'failed' })
 				.kind
+		).toBe('unreadable');
+	});
+
+	it('restores a failed attempt at a tool the agent does not have under the name asked for', () => {
+		expect(
+			row({
+				type: 'tool_activity',
+				callId: 'call-1',
+				name: 'save_notes',
+				input: {},
+				failure: 'Tool "save_notes" is not available.',
+				status: 'failed'
+			})
+		).toEqual({
+			kind: 'readable',
+			tool: {
+				callId: 'call-1',
+				name: 'save_notes',
+				arguments: {},
+				runId: 'run-1',
+				failure: 'Tool "save_notes" is not available.',
+				status: 'failed'
+			}
+		});
+	});
+
+	it('still refuses an unknown name on a row that claims the call ran', () => {
+		expect(
+			row({ type: 'tool_activity', name: 'save_notes', input: {}, status: 'running' }).kind
 		).toBe('unreadable');
 	});
 });

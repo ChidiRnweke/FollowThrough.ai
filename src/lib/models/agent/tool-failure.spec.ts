@@ -1,25 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { readToolFailure, toolFailure } from './tool-failure';
+import { readToolOutput, toolFailure } from './tool-failure';
 
 describe('canonical tool failure', () => {
 	it('recognizes a failure independently of key order', () => {
-		expect(
-			readToolFailure(
-				JSON.stringify({
-					details: {},
-					recovery: 'Read it again.',
-					message: 'Changed',
-					code: 'CONFLICT',
-					kind: 'failure'
-				})
-			)
-		).toBe('Changed');
+		const reading = readToolOutput(
+			JSON.stringify({
+				details: {},
+				recovery: 'Read it again.',
+				message: 'Changed',
+				code: 'CONFLICT',
+				kind: 'failure'
+			})
+		);
+		expect(reading.kind === 'failure' && reading.failure.message).toBe('Changed');
 	});
-	it('rejects a corrupt failure instead of classifying it as success', () => {
-		expect(() => readToolFailure({ kind: 'failure', message: 'Changed' })).toThrow();
+	it('reports a corrupt failure instead of classifying it as success', () => {
+		expect(readToolOutput({ kind: 'failure', message: 'Changed' }).kind).toBe('corrupt');
+	});
+	it('reads text that only looks like JSON as a plain result', () => {
+		expect(readToolOutput('{ not json').kind).toBe('success');
 	});
 	it('leaves successful domain states unchanged', () => {
-		expect(readToolFailure({ kind: 'no_matches', matches: [] })).toBeUndefined();
+		expect(readToolOutput({ kind: 'no_matches', matches: [] }).kind).toBe('success');
 	});
 	it('retains structured recovery details', () => {
 		expect(

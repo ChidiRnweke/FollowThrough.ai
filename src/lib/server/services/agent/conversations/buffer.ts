@@ -14,7 +14,7 @@ import {
 	sessionOutputText,
 	toStoredSessionItem
 } from '$lib/models/agent';
-import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { readToolOutput } from '$lib/models/agent/tool-failure';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 
 /**
@@ -137,7 +137,7 @@ const failedDiagramCalls = (items: readonly PersistedSessionItem[]): ReadonlySet
 	for (const item of items) {
 		if (item.type !== 'function_call_result' || !isDiagramWrite(item.name)) continue;
 		const text = sessionOutputText(item);
-		if (text !== undefined && readToolFailure(text) !== undefined) failed.add(item.callId);
+		if (text !== undefined && readToolOutput(text).kind !== 'success') failed.add(item.callId);
 	}
 	return failed;
 };

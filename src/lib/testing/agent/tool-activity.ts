@@ -1,5 +1,5 @@
 import type { AgentPayload } from '$lib/models/agent/payload';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import type { ChatToolActivityBase } from '$lib/stores/agent/chat-tools';
 
 /**
  * What a spec may override on a tool-activity fixture.
@@ -12,7 +12,7 @@ import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
  * who copies it.
  */
 export type ToolActivityOverrides = Partial<
-	Pick<ChatToolActivity, 'callId' | 'name' | 'arguments' | 'runId'>
+	Pick<ChatToolActivityBase, 'callId' | 'name' | 'arguments' | 'runId'>
 > &
 	(
 		| { readonly status?: 'succeeded'; readonly output?: AgentPayload }

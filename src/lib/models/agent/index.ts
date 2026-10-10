@@ -228,7 +228,11 @@ export type ToolActivity =
 			readonly failure: string;
 			readonly output: AgentPayload;
 	  })
-	| (ToolActivityBase & { readonly status: 'failed'; readonly failure: string });
+	| (Omit<ToolActivityBase, 'name'> & {
+			readonly name: string;
+			readonly status: 'failed';
+			readonly failure: string;
+	  });
 
 export type AgentExecutionMode = 'approval_required' | 'auto_accept';
 
@@ -970,7 +974,7 @@ export type AgentEvent =
 	| {
 			readonly type: 'tool_failed';
 			readonly callId?: string;
-			readonly name: AgentToolName;
+			readonly name: string;
 			readonly failure: string;
 	  }
 	| {
@@ -1156,7 +1160,7 @@ const toolOutcomeSchemas = [
 	z.object({
 		type: z.literal('tool_failed'),
 		callId: z.string().optional(),
-		name: agentToolNameSchema,
+		name: z.string(),
 		failure: z.string()
 	})
 ] as const;
@@ -1312,6 +1316,17 @@ export type ProviderToolOutput =
 	| { readonly kind: 'value'; readonly value: AgentPayload }
 	| { readonly kind: 'corrupt'; readonly message: string };
 
+/**
+ * A call's arguments: readable, or not.
+ *
+ * Unreadable is an arm rather than a throw. The Agents SDK answers malformed
+ * arguments itself — it returns a correction to the model and the run goes on —
+ * so the observer must record that call, not end the turn over it.
+ */
+export type ProviderToolArguments =
+	| { readonly kind: 'value'; readonly value: AgentPayloadObject }
+	| { readonly kind: 'corrupt'; readonly message: string };
+
 /** One tool call as the provider described it, with the three id spellings resolved. */
 export interface ProviderToolCall {
 	/**
@@ -1321,7 +1336,7 @@ export interface ProviderToolCall {
 	 */
 	readonly callId: string | undefined;
 	readonly name: string;
-	readonly arguments: AgentPayloadObject;
+	readonly arguments: ProviderToolArguments;
 	readonly output: ProviderToolOutput;
 }
 

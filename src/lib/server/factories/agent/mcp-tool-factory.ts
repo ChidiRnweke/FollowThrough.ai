@@ -7,7 +7,7 @@ import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import { readAgentPayload, type AgentPayload } from '$lib/models/agent/payload';
-import { readToolFailure, toolFailure } from '$lib/models/agent/tool-failure';
+import { readToolOutput, toolFailure } from '$lib/models/agent/tool-failure';
 import {
 	McpTools,
 	FIRST_CLASS_TOOL_NAMES,
@@ -33,7 +33,7 @@ export interface McpToolSurfaceOptions {
 }
 
 const result = (value: AgentPayload) => ({
-	...(readToolFailure(value) === undefined ? {} : { isError: true }),
+	...(readToolOutput(value).kind === 'success' ? {} : { isError: true }),
 	content: [{ type: 'text' as const, text: JSON.stringify(value) }]
 });
 
@@ -129,7 +129,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 		}, extra.signal);
 		if (prepared.kind === 'failure') return result(prepared.failure);
 		const output = await executeToolAction(prepared.action, extra.signal);
-		if (name === 'search_tools' && readToolFailure(output) === undefined)
+		if (name === 'search_tools' && readToolOutput(output).kind === 'success')
 			await server.sendToolListChanged();
 		return result(output);
 	});
