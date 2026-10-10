@@ -20,7 +20,7 @@ import type {
 	DrawioDiagramExporter,
 	MermaidDiagramRenderer
 } from '$lib/server/services/diagrams/contracts';
-import type { SkillCreator } from '$lib/server/services/skills/contracts';
+import type { SkillCreator } from '$lib/server/services/skills/library';
 import {
 	noteBuilder,
 	testActor,

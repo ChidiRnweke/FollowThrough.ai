@@ -5,8 +5,8 @@ import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import type { DateTime } from '$lib/models/workspace';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
-import { validatePortableSkill } from '$lib/services/skills/manifest';
-import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
+import type { SkillPortability } from '$lib/services/skills/manifest';
+import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
@@ -45,13 +45,13 @@ import type { SelectionOriginService } from '$lib/server/services/notes/selectio
 
 import type {
 	SkillCreator,
-	BuiltInSkillProvisioner,
 	SkillFinder,
 	SkillUsageLister,
 	SkillUsageRecorder,
-	SkillEditor,
-	SkillPinWriter
-} from '$lib/server/services/skills/contracts';
+	SkillEditor
+} from '$lib/server/services/skills/library';
+import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
+import type { SkillPinWriter } from '$lib/server/services/skills/pins';
 
 /**
  * Application boundary for skills: reading, creating, editing, and versioning the
@@ -97,6 +97,8 @@ export interface SkillsController {
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	readonly skillPortability: SkillPortability;
+	readonly skillMetadataEditing: SkillMetadataEditing;
 	readonly noteReferences: NoteReferences;
 	readonly noteEditingRules: NoteEditingRules;
 	readonly noteCreationRules: NoteCreationRules;
@@ -307,14 +309,14 @@ export class Skills implements SkillsController {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
 			await this.dependencies.skillEditor.lockCatalog(actor);
 			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
-			const metadata = applySkillMetadataEdit(current, input);
+			const metadata = this.dependencies.skillMetadataEditing.edit(current, input);
 			const prepared = await this.dependencies.skillEditor.prepareEdit(
 				actor,
 				{ ...current, ...metadata },
 				input
 			);
 			if (prepared.kind === 'document') {
-				validatePortableSkill(prepared.manifest);
+				this.dependencies.skillPortability.validate(prepared.manifest);
 				if (
 					input.content &&
 					input.content.baseRevision !== current.note.currentRevision &&

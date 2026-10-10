@@ -32,7 +32,7 @@ import {
 import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
-import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 

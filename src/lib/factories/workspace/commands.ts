@@ -1,3 +1,4 @@
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { NoteLifecycleService } from '$lib/services/notes/lifecycle';
 import { NoteEditingService } from '$lib/services/notes/editing';
@@ -11,6 +12,7 @@ import { WidgetLifecycleService } from '$lib/services/widgets/trash';
 import { createWidgetEditingController } from '$lib/factories/widgets/editing';
 export const createWorkspaceCommands = (): WorkspaceCommandController =>
 	new WorkspaceCommands(
+		new SkillMetadataEditingService(),
 		new TodoEditingRulesService(),
 		new TodoEditingRulesService(),
 		createWidgetEditingController(),

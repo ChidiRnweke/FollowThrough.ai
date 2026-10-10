@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { readSkillManifest } from './manifest-reader.server';
-import { serializeSkillManifest } from '$lib/services/skills/manifest';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
 
 it('round-trips the exported Agent Skills document through the import boundary', () => {
 	const manifest = {
@@ -12,7 +12,9 @@ it('round-trips the exported Agent Skills document through the import boundary',
 		allowImplicitInvocation: false,
 		instructions: '# Workflow\n\nRead the note before proposing changes.'
 	};
-	expect(readSkillManifest(serializeSkillManifest(manifest))).toEqual(manifest);
+	expect(readSkillManifest(new SkillPortabilityService().export(manifest).content)).toEqual(
+		manifest
+	);
 });
 
 it('rejects non-portable skill names before they reach a controller', () => {

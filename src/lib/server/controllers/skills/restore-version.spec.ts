@@ -1,9 +1,11 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -26,17 +28,19 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
-	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
+	const service = createSkillServices(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
-			skillFinder: service,
-			skillEditor: service,
-			skillUsageLister: service,
+			skillFinder: service.finder,
+			skillEditor: service.editor,
+			skillUsageLister: service.usageLister,
 			noteEditor: catalog.editor,
 			revisionReader: catalog.revisionReader,
 			revisionRecorder: catalog.revisionRecorder,

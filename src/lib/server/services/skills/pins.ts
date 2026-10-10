@@ -5,7 +5,11 @@ import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import type { SkillRepository } from '$lib/server/repositories/skills/skills';
 
-export class SkillPins {
+export interface SkillPinWriter {
+	prepare(actor: ActorContext, input: SkillPinChange): Promise<SkillPinChange>;
+	persist(actor: ActorContext, change: SkillPinChange): Promise<void>;
+}
+export class SkillPins implements SkillPinWriter {
 	constructor(
 		private readonly projects: ProjectRepository,
 		private readonly notes: NoteRepository,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SkillLibrary } from './library';
-import { serializeSkillManifest } from '$lib/services/skills/manifest';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -38,7 +38,7 @@ const setup = () => {
 	return {
 		skills,
 		notes,
-		service: new SkillLibrary(skills, notes, provenance)
+		service: createSkillServices(skills, notes, provenance)
 	};
 };
 
@@ -47,21 +47,21 @@ describe('Skill management invariants', () => {
 		const { service, notes } = setup();
 		const name = `${'a'.repeat(63)} next word`;
 		notes.notes[0] = { ...notes.notes[0], title: name };
-		await service.create(testActor(), notes.notes[0], {
+		await service.creator.create(testActor(), notes.notes[0], {
 			name,
 			description: 'Description',
 			triggerHints: []
 		});
-		const skill = await service.load(testActor(), notes.notes[0].id);
-		expect(serializeSkillManifest({ ...skill, instructions: skill.note.plainText })).toContain(
-			`name: ${'a'.repeat(63)}\n`
-		);
+		const skill = await service.finder.load(testActor(), notes.notes[0].id);
+		expect(
+			new SkillPortabilityService().export({ ...skill, instructions: skill.note.plainText }).content
+		).toContain(`name: ${'a'.repeat(63)}\n`);
 	});
 
 	it('rejects an empty skill name', async () => {
 		const { service } = setup();
 		await expect(
-			service.create(testActor(), noteBuilder(), {
+			service.creator.create(testActor(), noteBuilder(), {
 				name: '  ',
 				description: 'Description',
 				triggerHints: []
@@ -83,7 +83,7 @@ describe('Skill management invariants', () => {
 				isEnabled: true
 			}
 		];
-		await service.record(testActor(), {
+		await service.usageRecorder.record(testActor(), {
 			skillNoteId: testNoteId(),
 			contextNoteId: testNoteId(2),
 			provenanceId: testProvenanceId()
@@ -109,7 +109,7 @@ describe('Skill management invariants', () => {
 			id: testNoteId(2),
 			projectId: '00000000-0000-4000-0002-000000000002' as never
 		});
-		await service.record(testActor(), {
+		await service.usageRecorder.record(testActor(), {
 			skillNoteId: testNoteId(),
 			contextNoteId: testNoteId(2),
 			provenanceId: testProvenanceId()

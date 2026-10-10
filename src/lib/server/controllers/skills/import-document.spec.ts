@@ -1,3 +1,5 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { NoteReferenceService } from '$lib/services/notes/references';
@@ -11,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { noteEtag } from '$lib/models/notes';
 import { Skills, type SkillsDependencies } from './controller';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
 import type { SkillEditInput } from '$lib/models/skills';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -36,18 +38,20 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
-	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
+	const service = createSkillServices(skills, notes, new InMemoryProvenanceRepository());
 	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
-			skillFinder: service,
-			skillEditor: service,
-			skillUsageLister: service,
+			skillFinder: service.finder,
+			skillEditor: service.editor,
+			skillUsageLister: service.usageLister,
 			noteEditor: catalog.editor,
 			revisionReader: catalog.revisionReader,
 			revisionRecorder: catalog.revisionRecorder,
@@ -156,7 +160,7 @@ describe('Skill document imports', () => {
 			...note,
 			title: 'Release decisions'
 		});
-		expect((await service.listAll(testActor())).map((skill) => skill.name)).toEqual([
+		expect((await service.finder.listAll(testActor())).map((skill) => skill.name)).toEqual([
 			'Release decisions'
 		]);
 	});

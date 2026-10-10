@@ -1,5 +1,5 @@
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -16,6 +16,6 @@ export const builtInSkillsFixture = () => {
 		retired: RETIRED_BUILT_INS
 	});
 	const transactionRunner = new InMemoryTransactionRunner([projects, notes, skills]);
-	const skillFinder = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
+	const skillFinder = createSkillServices(skills, notes, new InMemoryProvenanceRepository()).finder;
 	return { notes, projects, skills, builtInSkills, transactionRunner, skillFinder };
 };

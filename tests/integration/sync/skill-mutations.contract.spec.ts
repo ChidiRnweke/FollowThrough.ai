@@ -1,3 +1,5 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
@@ -23,27 +25,29 @@ const setup = async (suffix: string) => {
 	});
 	const seeded = { ...source, note };
 	const sync = createSyncCapability({ db: database });
-	const { library } = createSkillsCapability({
+	const { services: library } = createSkillsCapability({
 		db: database,
 		projects: new ProjectRecords(database),
 		notes: notes.repository,
 		provenance: notes.provenanceRepository
 	});
-	await library.create(seeded.owner, seeded.note, {
+	await library.creator.create(seeded.owner, seeded.note, {
 		name: 'Writing',
 		description: 'Write clearly',
 		triggerHints: []
 	});
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
 			transactionRunner
 		})
 	);

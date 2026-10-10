@@ -24,7 +24,8 @@ import type { NoteTreeReader } from '$lib/server/services/notes/catalog';
 
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
+import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
+import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { SuggestionExpirer, SuggestionLister } from '$lib/server/services/suggestions/inbox';
 import type {
 	TodoLister,

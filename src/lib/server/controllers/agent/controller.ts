@@ -46,7 +46,6 @@ import type {
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
@@ -71,7 +70,11 @@ import {
 } from '$lib/server/services/agent-files/virtual-files';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
-import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
+import type {
+	BuiltInSkillProvisioner,
+	BuiltInSkillSelection
+} from '$lib/server/services/skills/built-ins';
+import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -265,7 +268,7 @@ export interface AgentDependencies {
 
 	readonly contextAttachments: AttachmentLookup;
 
-	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
+	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'> & BuiltInSkillSelection;
 
 	readonly contextMemory: MemoryEntryLister;
 
@@ -682,7 +685,9 @@ export class Agent implements AgentController {
 		const requestedSkillNames = [
 			...new Set([
 				...(input.requestedSkillNames ?? []),
-				...skillsForSurface(input.appContext?.surface?.kind)
+				...(input.appContext?.surface
+					? this.dependencies.builtInSkills.forSurface(input.appContext.surface.kind)
+					: [])
 			])
 		];
 		// Freeze effective settings so later deployment changes cannot alter a resumed turn.

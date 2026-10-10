@@ -1,3 +1,5 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
@@ -13,7 +15,7 @@ import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { SkillPins } from '$lib/server/services/skills/pins';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -28,12 +30,14 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const notes = new NoteRecords(database);
 	const skills = new SkillRecords(database);
 	const provenance = new ProvenanceRecords(database);
-	const library = new SkillLibrary(skills, notes, provenance);
+	const library = createSkillServices(skills, notes, provenance);
 	const catalog = createNoteServices(notes, new SourceAnchorRecords(database), projects);
 	const content = new InMemoryNoteContent();
 	const sync = createSyncCapability({ db: database });
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
@@ -45,13 +49,13 @@ export const skillController = (database: Database, transactionRunner: Transacti
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			}),
-			skillFinder: library,
-			skillCreator: library,
+			skillFinder: library.finder,
+			skillCreator: library.creator,
 			noteCreation: catalog.creator,
-			skillEditor: library,
+			skillEditor: library.editor,
 			skillPinWriter: new SkillPins(projects, notes, skills),
-			skillUsageLister: library,
-			skillUsageRecorder: library,
+			skillUsageLister: library.usageLister,
+			skillUsageRecorder: library.usageRecorder,
 			noteEditor: catalog.editor,
 			revisionReader: catalog.revisionReader,
 			revisionRecorder: catalog.revisionRecorder,

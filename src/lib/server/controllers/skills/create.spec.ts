@@ -1,10 +1,12 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -29,14 +31,16 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const notes = createNoteServices(noteRepository, new InMemoryAnchorRepository(), projects);
 	const skills = new InMemorySkillRepository(noteRepository);
-	const library = new SkillLibrary(skills, noteRepository, new InMemoryProvenanceRepository());
+	const library = createSkillServices(skills, noteRepository, new InMemoryProvenanceRepository());
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
-			skillCreator: library,
+			skillCreator: library.creator,
 			noteEditor: notes.editor,
 			anchorRepairer: notes.anchorRepairer,
 			noteLinkReconciler: content,

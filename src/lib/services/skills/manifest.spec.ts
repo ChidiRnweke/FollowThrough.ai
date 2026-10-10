@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { serializeSkillManifest } from './manifest';
+import { SkillPortabilityService } from './manifest';
 import type { SkillManifest } from '$lib/models/skills';
 
 const manifest: SkillManifest = {
@@ -19,5 +19,7 @@ it.each([
 	{ compatibility: ' ' },
 	{ compatibility: 'a'.repeat(501) }
 ])('rejects metadata that cannot be exported as portable SKILL.md: %j', (patch) => {
-	expect(() => serializeSkillManifest({ ...manifest, ...patch })).toThrow('Invalid SKILL.md');
+	expect(() => new SkillPortabilityService().export({ ...manifest, ...patch }).content).toThrow(
+		'Invalid SKILL.md'
+	);
 });

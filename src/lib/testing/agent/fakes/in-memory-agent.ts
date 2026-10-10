@@ -7,7 +7,7 @@ import type { Skill, SkillSummary } from '$lib/models/skills';
 import type { ProjectId } from '$lib/models/projects';
 import { NotFoundError } from '$lib/errors';
 import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
-import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/contracts';
+import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/library';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 

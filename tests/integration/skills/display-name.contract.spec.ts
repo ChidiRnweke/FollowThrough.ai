@@ -1,3 +1,5 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
@@ -12,7 +14,7 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -28,7 +30,7 @@ const setup = async (suffix: string) => {
 		projects: new ProjectRecords(database)
 	});
 	const records = new SkillRecords(database);
-	const library = new SkillLibrary(
+	const library = createSkillServices(
 		records,
 		new NoteRecords(database),
 		new ProvenanceRecords(database)
@@ -36,13 +38,15 @@ const setup = async (suffix: string) => {
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
 			noteEditor: catalog.editor,
 			anchorRepairer: content,
 			noteLinkReconciler: content,

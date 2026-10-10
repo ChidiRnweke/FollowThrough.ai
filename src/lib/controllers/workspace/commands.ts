@@ -4,7 +4,7 @@ import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { decideDiagramRevision } from '$lib/services/diagrams/editing';
-import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
+import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
 
@@ -157,14 +157,15 @@ const memoryWrite = (
 
 const skillMetadataWrite = (
 	entry: WorkspaceValues['skills'],
-	patch: Omit<Extract<WorkspaceCommand, { kind: 'updateSkill' }>, 'kind' | 'noteId'>
+	patch: Omit<Extract<WorkspaceCommand, { kind: 'updateSkill' }>, 'kind' | 'noteId'>,
+	editing: SkillMetadataEditing
 ): WriteContent<WorkspaceCommand, WorkspaceRecord> => ({
 	command: { kind: 'updateSkill', noteId: entry.noteId, ...patch },
 	local: {
 		type: 'skills',
 		value: {
 			...entry,
-			...applySkillMetadataEdit(entry, patch),
+			...editing.edit(entry, patch),
 			name: patch.displayName?.trim() || entry.name
 		}
 	},
@@ -243,6 +244,7 @@ export interface WorkspaceCommandController {
 /** Resolve required inventory and prepare the complete optimistic command from observed facts. */
 export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
+		private readonly skillMetadataEditing: SkillMetadataEditing,
 		private readonly todoCreation: TodoCreationRules,
 		private readonly todoEditing: TodoEditingRules,
 		private readonly widgetEditing: WidgetEditingController,
@@ -450,7 +452,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				const { kind, noteId, ...patch } = command;
 				void kind;
 				void noteId;
-				return skillMetadataWrite(value('skills'), patch);
+				return skillMetadataWrite(value('skills'), patch, this.skillMetadataEditing);
 			}
 			case 'updateAgentPreferences':
 				return agentPreferenceWrite(value('agent_preferences'), command.patch, now);

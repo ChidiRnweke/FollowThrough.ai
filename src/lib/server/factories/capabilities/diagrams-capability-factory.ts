@@ -12,7 +12,7 @@ import type { ConversationArchive } from '$lib/server/services/agent/conversatio
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
-import type { SkillFinder } from '$lib/server/services/skills/contracts';
+import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 import type {
@@ -35,7 +35,7 @@ import { IconifyIconSearch } from '$lib/server/services/diagrams/icons';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
-import type { BuiltInSkills } from '$lib/server/services/skills/built-ins';
+import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
 import { traceWorkflow } from '$lib/server/services/telemetry';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 
@@ -53,7 +53,7 @@ export interface DiagramsCapabilityInput {
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
 	readonly runs: WorkflowRunLedger;
-	readonly builtInSkills: BuiltInSkills;
+	readonly builtInSkills: BuiltInSkillProvisioner;
 	readonly defaultModel: string;
 	readonly defaultVisionModel: string;
 	readonly sessions: AgentSessionRepository;

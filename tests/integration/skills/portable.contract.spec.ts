@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
-import { serializeSkillManifest } from '$lib/services/skills/manifest';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { context, seedNote } from '../database-harness';
 import { skillController } from './edit-harness';
 
@@ -19,7 +19,10 @@ it('round-trips imported instructions and portable metadata through persisted sk
 		content: { kind: 'manifest', baseRevision: created.skill.note.currentRevision, manifest }
 	});
 	const { skill } = await controller.get(owner, { noteId: created.skill.note.id });
-	const exported = serializeSkillManifest({ ...skill, instructions: skill.note.plainText });
+	const exported = new SkillPortabilityService().export({
+		...skill,
+		instructions: skill.note.plainText
+	}).content;
 	expect({
 		manifest: readSkillManifest(exported),
 		id: skill.note.id,

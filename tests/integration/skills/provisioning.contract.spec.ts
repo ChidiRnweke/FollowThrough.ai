@@ -42,7 +42,7 @@ const setup = () => {
 	const dependencies = {
 		transactionRunner,
 		builtInSkills: capability.builtIns,
-		skillFinder: capability.library
+		skillFinder: capability.services.finder
 	};
 	return {
 		projects,

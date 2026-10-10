@@ -273,10 +273,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const references = referenceCapability;
 	const referenceFinder = referenceCapability.finder;
 	const suggestions = suggestionCapability;
-	const skills = skillCapability.library;
+	const skills = skillCapability.services;
 	const diagramCapability = createDiagramsCapability({
 		contextNotes: notes.reader,
-		contextSkills: skills,
+		contextSkills: skills.finder,
 		contextMemory: memory.lister,
 		apiKey: openRouterApiKey,
 		baseURL: openRouterBaseURL,
@@ -452,7 +452,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			eventBus,
 			contextFormatter: agentContext,
 			contextNotes: notes.reader,
-			contextSkills: skills,
+			contextSkills: skills.finder,
 			contextWidgets: widgets.reader,
 			contextDiagrams: diagrams,
 			contextAttachments: attachmentCapability.reader,
@@ -530,6 +530,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		skills: {
+			skillPortability: skillCapability.portability,
+			skillMetadataEditing: skillCapability.metadataEditing,
 			noteReferences: noteCapability.references,
 			noteCreationRules: noteCapability.creationRules,
 			noteEditingRules: noteCapability.editingRules,
@@ -537,10 +539,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			skillFinder: skills,
+			skillFinder: skills.finder,
 			builtInSkills: skillCapability.builtIns,
-			skillUsageLister: skills,
-			skillUsageRecorder: skills,
+			skillUsageLister: skills.usageLister,
+			skillUsageRecorder: skills.usageRecorder,
 			revisionRecorder: notes.revisionRecorder,
 			noteEditor: notes.editor,
 			revisionReader: notes.revisionReader,
@@ -548,10 +550,10 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			anchorRepairer: notes.anchorRepairer,
 			noteIndexer,
 			noteLinkReconciler: relationships.reconciler,
-			skillEditor: skills,
+			skillEditor: skills.editor,
 			skillPinWriter: skillCapability.pins,
 			selectionOrigins: noteCapability.selectionOrigins,
-			skillCreator: skills,
+			skillCreator: skills.creator,
 			noteCreation: notes.creator,
 			transactionRunner
 		},
@@ -564,7 +566,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			userReader: identity.userReader,
 			projectLister: projects.lister,
 			noteTreeReader: notes.treeReader,
-			skillFinder: skills,
+			skillFinder: skills.finder,
 			builtInSkills: skillCapability.builtIns,
 			transactionRunner,
 			suggestionLister: suggestions.lister,

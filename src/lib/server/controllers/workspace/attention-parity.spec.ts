@@ -6,7 +6,7 @@ import { Workspace, type WorkspaceDependencies } from './controller';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
 import { UserDirectory } from '$lib/server/services/identity/users';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
@@ -82,11 +82,11 @@ it('shows the same profile and visible-project memory attention from server and 
 			noteTreeReader: new InMemoryNoteContent(),
 			suggestionLister: suggestions,
 			suggestionExpirer: suggestions,
-			skillFinder: new SkillLibrary(
+			skillFinder: createSkillServices(
 				new InMemorySkillRepository(new InMemoryNoteRepository()),
 				new InMemoryNoteRepository(),
 				new InMemoryProvenanceRepository()
-			)
+			).finder
 		})
 	);
 	const actual = await server.getShellContext(actor);
