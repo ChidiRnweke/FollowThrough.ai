@@ -497,9 +497,22 @@
 	margin: 0;
 	margin: 0.5rem 0;
 	/* `clip`, not `auto`: any scrollable overflow makes the wrapper a scroll
-	   container, which would trap the sticky header cells below. The trade-off
-	   is that over-wide tables are cut off instead of scrolling horizontally. */
+	   container, which would trap the sticky header cells below. Over-wide
+	   tables are the exception; see `.is-overflowing`. */
 	overflow-x: clip;
+}
+
+/* The table plugin (commands/table.ts) marks a wrapper whose table is wider
+   than the pane. That table scrolls horizontally instead of being cut off, and
+   its header cells stop sticking, because the wrapper is now their nearest
+   scroll container. Tables that fit keep sticky headers. */
+.tiptap .tableWrapper.is-overflowing {
+	overflow-x: auto;
+}
+
+.tiptap .tableWrapper.is-overflowing table:not([data-slot='table']) th {
+	position: relative;
+	top: auto;
 }
 
 .tiptap table:not([data-slot='table']) {
@@ -549,7 +562,8 @@
    header's z-20 and the table grips' z-10.
    A sticky cell offsets against its nearest scroll container, so no box between
    a table and the pane viewport may set `overflow` to anything but `clip`;
-   otherwise the cells drop `--note-header-h` onto a body row. That is also why
+   otherwise the cells drop `--note-header-h` onto a body row. The one scrolling
+   wrapper, `.is-overflowing`, turns stickiness off for its own cells. That is also why
    every rule here skips `[data-slot='table']`: widget tables embedded in a note
    are shadcn tables inside a horizontally scrolling container, with their own
    styling. */
