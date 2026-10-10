@@ -1,8 +1,31 @@
 import type { AgentPayload } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-import { canvasDiagramId } from './canvas-subject';
+import { type ChatToolActivity } from '$lib/models/chat';
+import { ChatCanvas } from '$lib/controllers/agent/chat-canvas';
+import { BrowserChatCanvasReader } from '$lib/client/agent/chat-canvas-reader';
+import { ChatTranscriptService } from '$lib/services/chat/transcript';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import type { ChatSessionsController } from '$lib/controllers/agent/chat-sessions';
+import type { ChatSessionController } from '$lib/controllers/agent/chat-session';
+const canvasDiagramId = (tools: readonly ChatToolActivity[]) =>
+	new ChatCanvas(
+		capabilityDependencies<ChatSessionsController>({
+			peek: () =>
+				capabilityDependencies<ChatSessionController>({
+					entries: [
+						{
+							id: 'reply',
+							role: 'assistant',
+							suggestions: [],
+							parts: tools.map((tool) => ({ kind: 'tool' as const, tool }))
+						}
+					]
+				})
+		}),
+		new ChatTranscriptService(),
+		new BrowserChatCanvasReader()
+	).canvasFor('session')?.diagramId;
 
 const call = (name: AgentToolName, output: AgentPayload, index = 0): ChatToolActivity => ({
 	callId: `call-${name}-${index}`,
@@ -47,8 +70,8 @@ describe('The diagram on a conversation canvas', () => {
 	});
 
 	it('ignores a call that has not succeeded', () => {
-		const running = { ...call('create_diagram', { diagramId: DIAGRAM_ID }), status: 'running' };
-		expect(canvasDiagramId([running as never])).toBeUndefined();
+		const running: ChatToolActivity = { name: 'create_diagram', arguments: {}, status: 'running' };
+		expect(canvasDiagramId([running])).toBeUndefined();
 	});
 
 	it('says nothing when the conversation has drawn nothing', () => {

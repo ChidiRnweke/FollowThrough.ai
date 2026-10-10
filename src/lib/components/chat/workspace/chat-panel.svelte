@@ -9,46 +9,36 @@
 		AgentPreferenceValues,
 		ContextResourceRef,
 		ConversationImageInput,
-		Conversation,
-		RunAgentInput
+		Conversation
 	} from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 	import type { NoteId } from '$lib/models/notes';
 	import type { ProjectId } from '$lib/models/projects';
 
-	import {
-		entryText,
-		type ChatEntry,
-		type ChatStore,
-		type ContextChip,
-		type ResourceChip
-	} from '$lib/stores/agent/chat.svelte';
+	import { chatPresentation } from '$lib/factories/agent/presentation';
+	import { type ChatEntry } from '$lib/models/chat';
+	import type { ChatSessionController } from '$lib/controllers/agent/chat-session';
+	import { type ContextChip, type ResourceChip } from '$lib/models/chat';
 	import { agentSelectionContext } from '$lib/factories/agent/selection-context';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { toast } from 'svelte-sonner';
 
-	import { consumeChatHandoff, type ChatHandoff } from '$lib/stores/agent/chat-handoff';
-	import {
-		chatRegistry,
-		MAX_CONCURRENT_STREAMS
-	} from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { canvasFor, latestDiagramWrite } from '$lib/stores/diagrams/canvas.svelte';
+	import { chatCanvas } from '$lib/factories/agent/chat-canvas';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { slide } from 'svelte/transition';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
-	import { takeCanvasRender } from '$lib/stores/diagrams/canvas-render.svelte';
 	import { StudioHandoff } from '$lib/components/diagrams';
 	import { Button } from '$lib/components/ui/button';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
 	import { agentContext } from '$lib/factories/agent/context';
 
-	import type { ComposerSelection, MentionHistory } from '$lib/models/chat';
+	import type { ComposerSelection } from '$lib/models/chat';
 	import { readMentionInput } from '$lib/client/agent/mention-input';
 	import { MENTION_PATTERN } from '$lib/models/chat';
-	import { chipKeyOf, contextResourceRefOf } from '$lib/services/chat/chips';
+	import { createChatComposer } from '$lib/factories/agent/chat-composer';
 
 	let {
 		chat,
@@ -70,7 +60,7 @@
 		 * conversations run at once, each with its own store, and a module
 		 * singleton would make every mounted panel share one transcript.
 		 */
-		chat: ChatStore;
+		chat: ChatSessionController;
 		shell?: ShellContext;
 		sessions: readonly Conversation[];
 		activeNoteId?: NoteId;
@@ -107,6 +97,7 @@
 	const session = untrack(() => workspaceSession.current);
 	if (!session) throw new Error('Open the workspace before opening a chat');
 	const resources = session.resources;
+	const composer = untrack(() => createChatComposer(chat));
 	$effect(() => {
 		const online = resources.online;
 		untrack(() => {
@@ -114,12 +105,12 @@
 		});
 	});
 
-	const canvas = $derived(canvasFor(chat.sessionKey));
+	const canvas = $derived(chatCanvas.canvasFor(chat.sessionKey));
 	const canvasOnScreen = $derived(canvas !== undefined && workbench.openTabs.includes(canvas.tab));
 	/** Pull journal changes after an agent applies a diagram edit. */
 	let refreshedRevisionCallId = $state<string | undefined>(undefined);
 	$effect(() => {
-		const applied = latestDiagramWrite(chat.sessionKey);
+		const applied = chatCanvas.latestDiagramWrite(chat.sessionKey);
 		if (!applied || applied.callId === refreshedRevisionCallId) return;
 		refreshedRevisionCallId = applied.callId;
 		void workspaceSession.synchronize();
@@ -150,9 +141,9 @@
 		} else if (initialConversationId)
 			void openConversation(chat.switchToConversation(initialConversationId, resources));
 		else void openConversation(chat.hydrate(resources));
-		const staged = consumeChatHandoff();
-		if (staged) prefill(staged);
-		else replacePrompt(sessionStorage.getItem(draftKey()) ?? '');
+		const restored = composer.restore(shell?.noteTree ?? []);
+		prompt = restored.text;
+		if (restored.source === 'handoff') focusPrefill();
 		return () => releaseComposerFocus?.();
 	});
 
@@ -161,8 +152,8 @@
 	$effect(() => {
 		const request = chat.staged;
 		if (!request) return;
-		chat.staged = undefined;
-		prefill(request);
+		prompt = composer.consumeStaged(shell?.noteTree ?? []) ?? prompt;
+		focusPrefill();
 	});
 
 	/**
@@ -170,19 +161,7 @@
 	 * sending. Reading the prompt is how the invocation points teach what the agent
 	 * can be asked for, and an edit is always one keystroke away.
 	 */
-	function prefill(request: ChatHandoff): void {
-		replacePrompt(request.prompt);
-		handoff = request;
-		// A selection arrives as a chip rather than as hidden request state, so the composer
-		// shows the passage the question is about before the question is asked. Pinning the
-		// same passage twice is a no-op: the chip's id is its range.
-		if (request.selection) {
-			const title = shell?.noteTree.find((entry) => entry.id === request.selection?.noteId)?.title;
-			chat.addChip(agentSelectionContext.pin(request.selection, title ?? 'Untitled note'));
-		}
-		saveDraft();
-		// The textarea may not be bound yet on the mount path, so go through the tick
-		// rather than `textareaRef` directly.
+	function focusPrefill(): void {
 		void tick().then(() => {
 			const node = textareaRef;
 			if (!node) return;
@@ -192,7 +171,6 @@
 	}
 
 	let prompt = $state('');
-	let handoff = $state<ChatHandoff | undefined>(undefined);
 	let viewport = $state<HTMLElement | null>(null);
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
 	let selectedImages = $state<ConversationImageInput[]>([]);
@@ -261,12 +239,8 @@
 	// Keyed by session, not conversation: the id only arrives once the first
 	// message is sent, so a conversation-keyed draft moved out from under the
 	// user mid-compose.
-	const draftKey = (): string => `followthrough.chat.draft.${chat.sessionKey}`;
-
 	function saveDraft(): void {
-		if (typeof sessionStorage === 'undefined') return;
-		if (prompt) sessionStorage.setItem(draftKey(), prompt);
-		else sessionStorage.removeItem(draftKey());
+		composer.save(prompt);
 	}
 
 	$effect(() => {
@@ -322,8 +296,8 @@
 	// Copilot's current file.
 	const autoChip = $derived.by((): ResourceChip | undefined => {
 		const candidate = openResourceChip() ?? openNoteChip();
-		if (!candidate || chat.autoChipDismissedFor === chipKeyOf(candidate)) return undefined;
-		if (chat.chips.some((chip) => chipKeyOf(chip) === chipKeyOf(candidate))) return undefined;
+		if (!candidate || chat.autoChipDismissedFor === composer.key(candidate)) return undefined;
+		if (chat.chips.some((chip) => composer.key(chip) === composer.key(candidate))) return undefined;
 		return candidate;
 	});
 
@@ -407,23 +381,11 @@
 
 	/** The tag stays in the sentence; the chip is the same choice, shown as a badge. */
 	function pick(candidate: ResourceChip): void {
-		replacePrompt(prompt);
-		chat.mentionDraft = agentContext.add(chat.mentionDraft, candidate);
-		prompt = chat.mentionDraft.present.text;
-		chat.addChip(candidate);
-		saveDraft();
+		prompt = composer.pick(prompt, candidate);
 		textareaRef?.focus();
 	}
-
 	function unpick(chip: ContextChip): void {
-		// A pinned selection put no token in the sentence, so there is nothing to take back
-		// out of it — and its name is a note title the user may well have typed themselves.
-		if (chip.kind !== 'selection') {
-			chat.mentionDraft = agentContext.remove(chat.mentionDraft, chip);
-			prompt = chat.mentionDraft.present.text;
-		}
-		chat.removeChip(chip);
-		saveDraft();
+		prompt = composer.unpick(chip);
 	}
 
 	/**
@@ -438,39 +400,25 @@
 		beforeInput = { from: target.selectionStart, to: target.selectionEnd };
 	}
 	function replacePrompt(text: string): void {
-		prompt = text;
-		if (chat.mentionDraft.present.text !== text) {
-			chat.mentionDraft = agentContext.start(text);
-			chat.chips = chat.chips.filter((chip) => chip.kind === 'selection');
-		}
+		prompt = composer.replace(text);
 	}
 	function handleInput(event: Event): void {
 		const target = event.currentTarget;
 		if (!(target instanceof HTMLTextAreaElement)) throw new Error('Expected the chat textarea');
-		const text = target.value;
 		const inputType = event instanceof InputEvent ? event.inputType : '';
-		let next: MentionHistory | undefined;
-		if (inputType === 'historyUndo' || inputType === 'historyRedo') {
-			const restored = agentContext.restore(
-				chat.mentionDraft,
-				text,
-				inputType === 'historyUndo' ? 'undo' : 'redo'
-			);
-			if (restored.kind === 'restored') next = restored.history;
-		} else if (beforeInput) {
-			const change = readMentionInput(chat.mentionDraft.present.text, text, beforeInput, inputType);
-			if (change.kind === 'edit') next = agentContext.edit(chat.mentionDraft, change.edit);
-		} else if (text === chat.mentionDraft.present.text) next = chat.mentionDraft;
+		const change =
+			inputType === 'historyUndo'
+				? { kind: 'undo' as const }
+				: inputType === 'historyRedo'
+					? { kind: 'redo' as const }
+					: beforeInput
+						? readMentionInput(chat.mentionDraft.present.text, target.value, beforeInput, inputType)
+						: { kind: 'untracked' as const };
 		beforeInput = undefined;
-		if (!next && chat.mentionDraft.present.references.length)
+		const result = composer.edit(target.value, change);
+		prompt = result.text;
+		if (result.mentionsCleared)
 			toast.info('Context mentions were cleared by this edit. Add them again before sending.');
-		chat.mentionDraft = next ?? agentContext.start(text);
-		prompt = text;
-		const mentioned = new Map(
-			chat.mentionDraft.present.references.map(({ chip }) => [`${chip.kind}:${chip.id}`, chip])
-		);
-		chat.chips = [...chat.chips.filter((chip) => chip.kind === 'selection'), ...mentioned.values()];
-		saveDraft();
 	}
 
 	/**
@@ -483,97 +431,34 @@
 	 * editor's own selection is never read at this point, so what the agent gets is what the
 	 * composer showed — including the case where the user dismissed the chip and gets nothing.
 	 */
-	function requestFor(
-		text: string
-	):
-		| { kind: 'ready'; request: Omit<RunAgentInput, 'conversationId'> }
-		| { kind: 'unavailable'; message: string } {
-		const folderIds = chat.chips.flatMap((chip) => (chip.kind === 'folder' ? [chip.id] : []));
-		const folders = agentContext.folders(
-			shell?.noteTree ?? [],
-			folderIds,
-			shell ? resources.availability : 'unknown'
-		);
-		if (folders.kind === 'incomplete')
-			return {
-				kind: 'unavailable',
-				message: 'The workspace is still loading. Wait before sending a folder as context.'
-			};
-		if (folders.kind === 'missing')
-			return {
-				kind: 'unavailable',
-				message: 'An attached folder is no longer available. Remove it or choose another folder.'
-			};
-		const contextNoteIds = [
-			...new Set([...(autoChip?.kind === 'note' ? [autoChip.id] : []), ...folders.noteIds])
-		];
-		const contextResources = autoChip ? contextResourceRefOf(autoChip) : [];
-		const interactionNoteId = focusedNoteId;
-		const interactionProjectId = interactionNoteId
-			? shell?.noteTree.find((entry) => entry.id === interactionNoteId)?.projectId
-			: activeProjectId;
+	function requestContext(text: string) {
 		return {
-			kind: 'ready',
-			request: {
-				prompt: text,
-				...(selectedImages.length ? { images: selectedImages } : {}),
-				modelOverride: chat.modelOverride,
-				executionModeOverride: chat.executionModeOverride,
-				...(handoff?.noteId !== undefined
-					? { noteId: handoff.noteId }
-					: interactionNoteId !== undefined
-						? { noteId: interactionNoteId }
-						: {}),
-				...(handoff?.projectId !== undefined
-					? { projectId: handoff.projectId }
-					: interactionProjectId !== undefined
-						? { projectId: interactionProjectId }
-						: {}),
-				// A tagged folder rides in as the notes inside it; the store unions these
-				// with the note chips it maps itself.
-				...(contextNoteIds.length ? { contextNoteIds } : {}),
-				...(contextResources.length ? { contextResources } : {}),
-				...(liveSelectionChip ? { selections: [liveSelectionChip.selection] } : {}),
-				...(handoff?.requestedSkillNames
-					? { requestedSkillNames: [...handoff.requestedSkillNames] }
-					: {})
-			}
+			text,
+			images: selectedImages,
+			noteTree: shell?.noteTree ?? [],
+			availability: shell ? resources.availability : ('unknown' as const),
+			autoChip,
+			focusedNoteId,
+			activeProjectId,
+			liveSelectionChip
 		};
 	}
-
+	function requestFor(text: string) {
+		return composer.request(requestContext(text));
+	}
 	async function send(): Promise<void> {
 		const text = prompt.trim();
 		if ((!text && !selectedImages.length) || chat.isStreaming) return;
-		const prepared = requestFor(text);
-		if (prepared.kind === 'unavailable') {
-			toast.error(prepared.message);
+		const result = composer.send(requestContext(text));
+		if (result.kind === 'unavailable') {
+			toast.error(result.message);
 			return;
 		}
-		if (chatRegistry.atStreamLimit()) {
-			toast.error(`Only ${MAX_CONCURRENT_STREAMS} chats can run at once. Wait for one to finish.`);
-			return;
-		}
-		// A picture of what the agent last drew travels as context, so its next turn
-		// can see its own output instead of reasoning about XML it cannot look at.
-		// It goes in its own channel rather than among the attachments: it is not
-		// something the user sent, and it must not appear in their message.
-		const render = takeCanvasRender(chat.sessionKey);
-		const sentImages = selectedImages;
 		prompt = '';
 		selectedImages = [];
-		saveDraft();
-		const request = chat.send({
-			...prepared.request,
-			images: sentImages,
-			...(render ? { contextImages: [render] } : {})
-		});
-		// The tags left with the prompt, so the chips they stood for go too.
-		chat.chips = [];
-		chat.mentionDraft = agentContext.start('');
-		handoff = undefined;
 		await tick();
 		pinLatestQuestion();
-		await request;
+		await result.completion;
 	}
 
 	// --- editing a question that was already asked ---
@@ -583,7 +468,7 @@
 
 	function startEditing(entry: ChatEntry): void {
 		editingId = entry.id;
-		editDraft = entryText(entry);
+		editDraft = chatPresentation.entryText(entry);
 	}
 
 	function cancelEditing(): void {
@@ -622,7 +507,7 @@
 			toast.error('The question behind this answer is no longer in the thread.');
 			return;
 		}
-		void resubmit(question, entryText(question));
+		void resubmit(question, chatPresentation.entryText(question));
 	}
 
 	function handleEditKeydown(event: KeyboardEvent, entry: ChatEntry): void {
@@ -638,7 +523,7 @@
 	}
 
 	async function copyMessage(entry: ChatEntry): Promise<void> {
-		await navigator.clipboard.writeText(entryText(entry));
+		await navigator.clipboard.writeText(chatPresentation.entryText(entry));
 		toast.success('Copied to clipboard.');
 	}
 
@@ -664,7 +549,7 @@
 				event.preventDefault();
 				const match = MENTION_PATTERN.exec(prompt);
 				if (match) {
-					chat.mentionDraft = agentContext.edit(chat.mentionDraft, {
+					prompt = composer.editMention({
 						from: match.index + match[1]!.length,
 						to: prompt.length,
 						text: ''
@@ -710,8 +595,9 @@
 	}
 
 	function toggleExecutionMode(): void {
-		chat.executionModeOverride =
-			chat.executionModeOverride === 'auto_accept' ? 'approval_required' : 'auto_accept';
+		chat.chooseExecutionMode(
+			chat.executionModeOverride === 'auto_accept' ? 'approval_required' : 'auto_accept'
+		);
 	}
 </script>
 
@@ -820,14 +706,14 @@
 				defaultModelId={agentDefaults.chatModelId}
 				visionModelOverride={chat.visionModelOverride}
 				defaultVisionModelId={agentDefaults.visionModelId}
-				onmodelchange={(value) => (chat.modelOverride = value)}
-				onvisionmodelchange={(value) => (chat.visionModelOverride = value)}
+				onmodelchange={(value) => chat.chooseModel(value)}
+				onvisionmodelchange={(value) => chat.chooseVisionModel(value)}
 				onremovechip={(chip, automatic) => {
 					// Two chips arrive automatic — the open note, widget or diagram, and the live
 					// selection — and neither is held in `chat.chips`, so dismissing them is
 					// remembering not to offer them again rather than removing anything.
-					if (automatic && chip.kind === 'selection') chat.dismissedSelectionId = chip.id;
-					else if (automatic) chat.autoChipDismissedFor = chipKeyOf(chip);
+					if (automatic && chip.kind === 'selection') chat.dismissSelection(chip.id);
+					else if (automatic) chat.dismissAutoChip(composer.key(chip));
 					else unpick(chip);
 				}}
 				onpinselection={(chip) => chat.addChip(chip)}

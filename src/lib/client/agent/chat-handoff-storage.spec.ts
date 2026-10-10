@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { consumeChatHandoff, stageChatHandoff } from './chat-handoff';
+import { consumeChatHandoff, stageChatHandoff } from '$lib/client/agent/chat-handoff-storage';
 
 class MemoryStorage implements Storage {
 	private readonly values = new Map<string, string>();

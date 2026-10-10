@@ -1,5 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity';
-import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+import { type ChatSessionKey } from '$lib/models/chat';
 import { markCanvasShown, shouldOpenCanvas, type CanvasOpening } from './canvas-opening';
 
 /**

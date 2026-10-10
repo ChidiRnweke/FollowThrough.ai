@@ -2,7 +2,7 @@ import type { ShellContext } from '$lib/models/workspace-views';
 import { describe, expect, it } from 'vitest';
 import type { NoteSummary } from '$lib/models/notes';
 
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { type ChatToolActivity } from '$lib/models/chat';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import { passLabelText, readDoorLabel, runningSteps, turnContext } from './turn-context';
 

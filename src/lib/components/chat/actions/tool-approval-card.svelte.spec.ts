@@ -5,7 +5,7 @@ import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { type ChatToolActivity } from '$lib/models/chat';
 import type { NoteSummary } from '$lib/models/notes';
 import type { Project } from '$lib/models/projects';
 

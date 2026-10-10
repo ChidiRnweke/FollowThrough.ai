@@ -1,6 +1,6 @@
 import { submitAgentRunInputSchema, type AgentRunId } from '$lib/models/agent';
 import { RunEventSubscription } from './subscription';
-import type { AgentRunTransport } from './contracts';
+import type { AgentRunTransport } from '$lib/controllers/agent/run-transport';
 import {
 	cancelAgentRun,
 	decideAgentRunBatch,

@@ -1,3 +1,4 @@
+import { chatRunSnapshot } from '$lib/testing/agent/fixtures/run-snapshot';
 import { describe, expect, it } from 'vitest';
 import { flushSync } from 'svelte';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
@@ -14,21 +15,17 @@ import type {
 	AgentRunTransport,
 	StoredAgentRunClientState,
 	StoredAgentRunClientStateResult
-} from '$lib/client/agent/runs/contracts';
+} from '$lib/controllers/agent/run-transport';
 import type { NoteId } from '$lib/models/notes';
-import {
-	ChatStore,
-	entryText,
-	entryTools,
-	type ChatEntry,
-	type ContextChip,
-	type SelectionChip
-} from './chat.svelte';
+import { createChatFixture } from '$lib/testing/agent/chat-session';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { type ChatEntry } from '$lib/models/chat';
+import { type ContextChip, type SelectionChip } from '$lib/models/chat';
 
 const runId = '10000000-0000-4000-8000-000000000001' as AgentRunId;
 
 /** The turn's tool rows as they stand now — never a copy taken before a decision. */
-const toolsOf = (entry: ChatEntry) => entryTools(entry);
+const toolsOf = (entry: ChatEntry) => chatPresentation.entryTools(entry);
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
 
 class MemoryStorage implements AgentRunClientStorage {
@@ -105,10 +102,7 @@ class DecidingTransport extends FakeAgentRunTransport {
 	}
 	override async decideMany(input: Parameters<AgentRunTransport['decideMany']>[0]) {
 		this.record(input);
-		return {
-			run: { id: runId, status: 'queued', conversationId },
-			pendingDecisions: []
-		} as unknown as AgentRunSnapshot;
+		return chatRunSnapshot(runId, conversationId, 'queued');
 	}
 }
 
@@ -130,10 +124,7 @@ class StoppableTransport implements AgentRunTransport {
 	}
 	async cancel(id: AgentRunId): Promise<AgentRunSnapshot> {
 		this.cancelled.push(id);
-		return {
-			run: { id: runId, status: 'cancelling', conversationId },
-			pendingDecisions: []
-		} as unknown as AgentRunSnapshot;
+		return chatRunSnapshot(runId, conversationId, 'cancelling');
 	}
 	async retry(): Promise<Awaited<ReturnType<AgentRunTransport['retry']>>> {
 		throw new Error('Unexpected retry');
@@ -191,7 +182,7 @@ const streamedEvents: AgentEvent[] = [
 ];
 
 const sendWith = async (events: AgentEvent[]) => {
-	const store = new ChatStore(
+	const { chat: store } = createChatFixture(
 		'test-session',
 		new FakeAgentRunTransport(events),
 		new MemoryStorage()
@@ -219,7 +210,7 @@ describe('chat event projection', () => {
 	});
 
 	it('notifies reactive observers when the streamed reply completes', async () => {
-		const store = new ChatStore(
+		const { chat: store } = createChatFixture(
 			'test-session',
 			new FakeAgentRunTransport(streamedEvents),
 			new MemoryStorage()
@@ -291,7 +282,7 @@ describe('chat event projection', () => {
 				}
 			}
 		]);
-		expect(entryTools(reply)).toEqual([
+		expect(chatPresentation.entryTools(reply)).toEqual([
 			{
 				callId: 'call-9',
 				name: 'edit_note',
@@ -314,7 +305,7 @@ describe('chat event projection', () => {
 			{ type: 'tool_started', callId: 'call-3', name: 'save_note', arguments: { title: 'A' } },
 			{ type: 'tool_failed', callId: 'call-3', name: 'save_note', failure: 'Denied' }
 		]);
-		expect(entryTools(reply)).toEqual([
+		expect(chatPresentation.entryTools(reply)).toEqual([
 			{
 				callId: 'call-3',
 				name: 'save_note',
@@ -337,12 +328,12 @@ describe('chat event projection', () => {
 				review: { kind: 'note_change', content: JSON.stringify(review) }
 			}
 		]);
-		expect(entryTools(reply)).toMatchObject([{ noteReview: review }]);
+		expect(chatPresentation.entryTools(reply)).toMatchObject([{ noteReview: review }]);
 	});
 
 	it('answers every parked call in one decision', async () => {
 		const decided: { callIds: readonly string[]; decision: string }[] = [];
-		const store = new ChatStore(
+		const { chat: store } = createChatFixture(
 			'test-session',
 			new DecidingTransport(
 				[
@@ -379,7 +370,7 @@ describe('chat event projection', () => {
 	});
 
 	it('leaves a failed decision visible on every card it covered', async () => {
-		const store = new ChatStore(
+		const { chat: store } = createChatFixture(
 			'test-session',
 			new FailingTransport([
 				{ type: 'approval_required', runId, callId: 'call-a', name: 'create_todo', arguments: {} },
@@ -399,14 +390,14 @@ describe('chat event projection', () => {
 			{ type: 'reasoning_delta', text: 'Thinking.' },
 			{ type: 'text_delta', text: 'The answer.' }
 		]);
-		expect(entryText(reply)).toBe('The answer.');
+		expect(chatPresentation.entryText(reply)).toBe('The answer.');
 	});
 });
 
 describe('stopping a streaming turn', () => {
 	const streaming = async () => {
 		const transport = new StoppableTransport();
-		const store = new ChatStore('test-session', transport, new MemoryStorage());
+		const { chat: store } = createChatFixture('test-session', transport, new MemoryStorage());
 		await store.send({ prompt: 'take your time' });
 		await Promise.resolve();
 		return { transport, store, reply: store.entries.at(-1)! };
@@ -435,24 +426,21 @@ describe('stopping a streaming turn', () => {
 		const { transport, store, reply } = await streaming();
 		await store.stop();
 		await transport.deliver({ type: 'cancelled', runId, message: 'Generation stopped' });
-		expect(entryText(reply)).toBe('Working on it');
+		expect(chatPresentation.entryText(reply)).toBe('Working on it');
 	});
 });
 
 describe('a stop the server never confirms', () => {
 	const unconfirmed = async (snapshot?: AgentRunSnapshot) => {
 		const transport = new UnconfirmedCancelTransport(snapshot);
-		const store = new ChatStore('test-session', transport, new MemoryStorage());
+		const { chat: store } = createChatFixture('test-session', transport, new MemoryStorage());
 		await store.send({ prompt: 'take your time' });
 		await Promise.resolve();
 		return { store, reply: store.entries.at(-1)! };
 	};
 
 	it('reconciles the settled run when the cancel request failed', async () => {
-		const { store } = await unconfirmed({
-			run: { id: runId, status: 'cancelled', conversationId },
-			pendingDecisions: []
-		} as unknown as AgentRunSnapshot);
+		const { store } = await unconfirmed(chatRunSnapshot(runId, conversationId, 'cancelled'));
 		await store.stop();
 		expect(store.isStreaming).toBe(false);
 	});
@@ -496,8 +484,12 @@ describe('the context a send carries', () => {
 
 	const sentWith = async (chips: ContextChip[], live?: SelectionChip) => {
 		const transport = new RecordingTransport();
-		const store = new ChatStore('test-session', transport, new MemoryStorage());
-		store.chips = chips;
+		const { chat: store, state } = createChatFixture(
+			'test-session',
+			transport,
+			new MemoryStorage()
+		);
+		state.chips = chips;
 		// The passage still following the caret is not a chip the store holds: the panel
 		// derives it and hands it over on the request, exactly as it does here.
 		await store.send({

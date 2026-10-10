@@ -1,32 +1,8 @@
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import { z } from 'zod';
+import { chatHandoffSchema, type ChatHandoff } from '$lib/models/chat';
 
 const KEY = 'followthrough.chat.handoff';
-
-export interface ChatHandoff {
-	readonly prompt: string;
-	readonly noteId?: NoteId;
-	readonly projectId?: ProjectId;
-	readonly selection?: TextSelection;
-	readonly requestedSkillNames?: readonly string[];
-}
-
-const chatHandoffSchema = z.object({
-	prompt: z.string(),
-	noteId: z.string().min(1).optional(),
-	projectId: z.string().min(1).optional(),
-	selection: z
-		.object({
-			noteId: z.string().min(1),
-			revision: z.number().int().nonnegative(),
-			from: z.number().int().nonnegative(),
-			to: z.number().int().nonnegative(),
-			text: z.string()
-		})
-		.optional(),
-	requestedSkillNames: z.array(z.string().min(1)).optional()
-});
 
 const parseChatHandoff = (value: string): ChatHandoff => {
 	const parsed = chatHandoffSchema.parse(JSON.parse(value));

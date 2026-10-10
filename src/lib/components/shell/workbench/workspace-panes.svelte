@@ -14,7 +14,7 @@
 		noteIdOf,
 		type TabId
 	} from '$lib/stores/workbench/tab-ref';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
@@ -25,7 +25,7 @@
 	import { FtClose as X } from '$lib/components/icons';
 	import WorkspacePane from './workspace-pane.svelte';
 	import WorkspaceSplitResizer from './workspace-split-resizer.svelte';
-	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { appContext } from '$lib/factories/agent/app-context';
 	import { hasInternalTabDrag, readActiveTabDrag } from '$lib/client/workbench/tab-drag';
 
 	let {

@@ -24,7 +24,7 @@
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { workspaceSession } from '$lib/factories/workspace/session';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, diagramTab } from '$lib/stores/workbench/tab-ref';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';

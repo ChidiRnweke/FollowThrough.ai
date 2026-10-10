@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+import { type ChatSessionKey } from '$lib/models/chat';
 import { canvasOpenings } from './canvas-opening.svelte';
 
 let counter = 0;

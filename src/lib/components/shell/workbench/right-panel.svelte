@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { chatPanel } from '$lib/factories/agent/chat-handoff';
 	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type {
@@ -19,7 +20,7 @@
 	import { FtPlus as Plus, FtClose as X, FtExternal as ExternalLink } from '$lib/components/icons';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, searchTab } from '$lib/stores/workbench/tab-ref';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -113,7 +114,7 @@
 				variant="ghost"
 				size="icon-sm"
 				aria-label="New chat"
-				onclick={() => rightPanel.newChat()}
+				onclick={() => chatPanel.newChat()}
 			>
 				<Plus data-icon />
 			</Button>

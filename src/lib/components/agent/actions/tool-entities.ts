@@ -1,7 +1,8 @@
 import type { ShellContext } from '$lib/models/workspace-views';
 import type { EntityKind, EntityRef } from '$lib/models/tool-display';
 
-import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { type ChatToolActivity } from '$lib/models/chat';
 import { type AgentPayload } from '$lib/models/agent/payload';
 import { agentPayloadItems } from '$lib/services/agent/payload';
 import { isAgentPayloadObject } from '$lib/services/agent/payload';
@@ -117,7 +118,7 @@ export function entityFrom(value: AgentPayload, kind: EntityKind, shell?: ShellC
 /** Reused by the call log and the turn summary. Newly created targets come from the receipt. */
 export function toolEntity(tool: ChatToolActivity, shell?: ShellContext): EntityRef {
 	const kind = toolPresentationKind(tool.name)?.kind ?? 'plain';
-	const output = toolOutput(tool);
+	const output = chatPresentation.toolOutput(tool);
 	const returned = output !== undefined && isAgentPayloadObject(output) ? output : undefined;
 	if (
 		tool.name === 'accept_suggestion' &&

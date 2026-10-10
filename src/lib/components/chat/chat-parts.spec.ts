@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatPart } from '$lib/stores/agent/chat.svelte';
-import type { ChatToolActivity, ChatToolStatus } from '$lib/stores/agent/chat-tools';
+import { type ChatPart } from '$lib/models/chat';
+import { type ChatToolActivity, type ChatToolStatus } from '$lib/models/chat';
 import { groupChatParts } from './chat-parts';
 
 const toolPart = (callId: string, status: ChatToolStatus): ChatPart => ({

@@ -3,7 +3,8 @@ import type { EntityRef } from '$lib/models/tool-display';
 export type { EntityKind, EntityRef } from '$lib/models/tool-display';
 import { toolPresentationKind, type ToolFamily } from './tool-catalog-presentation';
 
-import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { type ChatToolActivity } from '$lib/models/chat';
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
 import { explainToolFailure } from './tool-result';
 import { entityFrom, toolEntity, fileEntity } from './tool-entities';
@@ -114,7 +115,7 @@ const displayValue = (value: AgentPayload): string => {
 };
 
 const changesFrom = (tool: ChatToolActivity): readonly FieldChange[] => {
-	const output = toolOutput(tool);
+	const output = chatPresentation.toolOutput(tool);
 	const previous =
 		output !== undefined && isAgentPayloadObject(output) && isAgentPayloadObject(output.previous)
 			? output.previous
@@ -152,7 +153,7 @@ const changesFrom = (tool: ChatToolActivity): readonly FieldChange[] => {
 };
 
 const shapeGuess = (tool: ChatToolActivity): Family => {
-	const output = toolOutput(tool);
+	const output = chatPresentation.toolOutput(tool);
 	if (collectionOf(output)) return 'collection';
 	if (output !== undefined && isAgentPayloadObject(output) && Object.keys(output).length > 0)
 		return 'record';
@@ -167,7 +168,7 @@ const shapeGuess = (tool: ChatToolActivity): Family => {
  * "disclosure is earned" rule the rest of this file follows.
  */
 const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosure => {
-	const output = toolOutput(tool);
+	const output = chatPresentation.toolOutput(tool);
 	if (output === undefined || !isAgentPayloadObject(output)) return { kind: 'none' };
 
 	if (output.kind === 'error')
@@ -248,7 +249,7 @@ const fileOutput = (tool: ChatToolActivity, shell?: ShellContext): ToolDisclosur
 export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): ToolDisclosure {
 	// A failure outranks the family. Whatever the call was going to show, what it has to say now
 	// is that it did not happen, and what the reader can do about that.
-	const failure = toolFailure(tool);
+	const failure = chatPresentation.toolFailure(tool);
 	if (failure) return { kind: 'failure', explanation: explainToolFailure(failure) };
 
 	const definition = toolPresentationKind(tool.name);
@@ -278,7 +279,7 @@ export function toolDisclosure(tool: ChatToolActivity, shell?: ShellContext): To
 		}
 
 		case 'created': {
-			const items = collectionOf(toolOutput(tool));
+			const items = collectionOf(chatPresentation.toolOutput(tool));
 			return {
 				kind: 'created',
 				entities: items

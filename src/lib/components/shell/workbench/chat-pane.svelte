@@ -5,15 +5,15 @@
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';
 	import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 
-	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { type ChatSessionKey } from '$lib/models/chat';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';
-	import { canvasFor } from '$lib/stores/diagrams/canvas.svelte';
+	import { chatCanvas } from '$lib/factories/agent/chat-canvas';
 	import { conversationProjectId } from '$lib/stores/diagrams/chat-project';
 	import { canvasOpenings } from '$lib/stores/diagrams/canvas-opening.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab } from '$lib/stores/workbench/tab-ref';
-	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { appContext } from '$lib/factories/agent/app-context';
 	import { ChatPanel } from '$lib/components/chat';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
@@ -66,7 +66,7 @@
 	// There is one tab it could be: the diagram's own. This used to choose between
 	// that and a draft canvas, and choosing wrong is what let the agent report a
 	// diagram changed while the user looked at the version before it.
-	const canvas = $derived(canvasFor(sessionKey));
+	const canvas = $derived(chatCanvas.canvasFor(sessionKey));
 	$effect(() => {
 		if (workbench.focusedTabId !== chatTab(sessionKey)) return;
 		if (!canvas) return;

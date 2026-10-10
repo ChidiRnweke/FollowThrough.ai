@@ -2,7 +2,7 @@ import type { ContextResourceRef } from '$lib/models/agent';
 import type { DiagramId } from '$lib/models/diagrams';
 import type { NoteId } from '$lib/models/notes';
 import type { WidgetId } from '$lib/models/widgets';
-import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+import { type ChatSessionKey } from '$lib/models/chat';
 
 /**
  * What a workbench tab holds.

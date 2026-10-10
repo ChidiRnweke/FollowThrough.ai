@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ProjectId } from '$lib/models/projects';
-	import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+	import { type ChatSessionKey } from '$lib/models/chat';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { chatTab, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { diagramRegistry } from '$lib/stores/diagrams/registries/diagram-registry.svelte';

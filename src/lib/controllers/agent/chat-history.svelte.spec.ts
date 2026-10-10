@@ -29,9 +29,10 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import type { AgentRunTransport } from '$lib/client/agent/runs/contracts';
+import type { AgentRunTransport } from '$lib/controllers/agent/run-transport';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
-import { ChatStore, entryTools } from './chat.svelte';
+import { createChatFixture } from '$lib/testing/agent/chat-session';
+import { chatPresentation } from '$lib/factories/agent/presentation';
 
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
 const runId = '40000000-0000-4000-8000-000000000001' as AgentRunId;
@@ -116,12 +117,12 @@ const setup = async (
 		await cache.accept(key, snapshot);
 	}
 	resources.setOnline(false);
-	const store = new ChatStore(
+	const { chat: store, state } = createChatFixture(
 		crypto.randomUUID(),
 		capabilityDependencies<AgentRunTransport>(options.live ?? {})
 	);
-	store.conversationId = conversationId;
-	return { store, resources, cache, transport };
+	state.conversationId = conversationId;
+	return { store, state, resources, cache, transport };
 };
 
 const parked = () =>
@@ -201,7 +202,7 @@ describe('shared cached chat history', () => {
 		await store.hydrate(resources);
 		expect({
 			parts: store.entries[0].parts.map((part) => part.kind),
-			tools: entryTools(store.entries[0])
+			tools: chatPresentation.entryTools(store.entries[0])
 		}).toEqual({ parts: ['unreadable'], tools: [] });
 	});
 	it('keeps reasoning, tools, and text in event order within one assistant turn', async () => {
@@ -223,7 +224,10 @@ describe('shared cached chat history', () => {
 			run: run('awaiting_approval')
 		});
 		await store.hydrate(resources);
-		expect({ status: entryTools(store.entries[0])[0].status, enabled: store.canExecute }).toEqual({
+		expect({
+			status: chatPresentation.entryTools(store.entries[0])[0].status,
+			enabled: store.canExecute
+		}).toEqual({
 			status: 'approval_required',
 			enabled: false
 		});
@@ -235,8 +239,8 @@ describe('shared cached chat history', () => {
 		});
 		await store.hydrate(resources);
 		const entry = store.entries[0];
-		await store.decideAll(entry, entryTools(entry), 'approve');
-		expect(entryTools(entry)[0].status).toBe('approval_required');
+		await store.decideAll(entry, chatPresentation.entryTools(entry), 'approve');
+		expect(chatPresentation.entryTools(entry)[0].status).toBe('approval_required');
 	});
 	it('marks a parked call abandoned when the saved run is no longer waiting', async () => {
 		const { store, resources } = await setup({
@@ -244,7 +248,7 @@ describe('shared cached chat history', () => {
 			run: { ...run('failed'), failure: 'Run stopped' }
 		});
 		await store.hydrate(resources);
-		expect(entryTools(store.entries[0])[0].status).toBe('failed');
+		expect(chatPresentation.entryTools(store.entries[0])[0].status).toBe('failed');
 	});
 	it('keeps execution disabled until the reconnected run has been checked', async () => {
 		const pending = Promise.withResolvers<AgentRunSnapshot>();
@@ -275,7 +279,7 @@ describe('shared cached chat history', () => {
 		expect({
 			before: enabledBefore,
 			after: store.canExecute,
-			tool: entryTools(store.entries[0])[0].status
+			tool: chatPresentation.entryTools(store.entries[0])[0].status
 		}).toEqual({
 			before: false,
 			after: true,
@@ -342,11 +346,11 @@ describe('saved conversation choices', () => {
 		expect(store[field]).toBe(value);
 	});
 	it('clears previous overrides when switching to a conversation with no overrides', async () => {
-		const { store, resources } = await setup();
-		store.conversationId = '20000000-0000-4000-8000-000000000002' as ConversationId;
-		store.modelOverride = 'old/model';
-		store.visionModelOverride = 'old/vision';
-		store.executionModeOverride = 'auto_accept';
+		const { store, state, resources } = await setup();
+		state.conversationId = '20000000-0000-4000-8000-000000000002' as ConversationId;
+		state.modelOverride = 'old/model';
+		state.visionModelOverride = 'old/vision';
+		state.executionModeOverride = 'auto_accept';
 		await store.switchToConversation(conversationId, resources);
 		expect({
 			model: store.modelOverride,
@@ -381,9 +385,9 @@ it('retains a new streaming turn when its conversation moves into a tab', async 
 it.each(['accept', 'reject'] as const)(
 	'removes a suggestion card after a successful %s decision',
 	async (decision) => {
-		const { store, resources } = await setup();
+		const { store, state, resources } = await setup();
 		const suggestion = suggestionBuilder();
-		store.entries = [
+		state.entries = [
 			{
 				id: crypto.randomUUID(),
 				role: 'assistant',
@@ -398,9 +402,9 @@ it.each(['accept', 'reject'] as const)(
 	}
 );
 it('preserves a suggestion card when its decision fails', async () => {
-	const { store, resources } = await setup();
+	const { store, state, resources } = await setup();
 	const suggestion = suggestionBuilder();
-	store.entries = [
+	state.entries = [
 		{
 			id: crypto.randomUUID(),
 			role: 'assistant',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import ChatComposer from './chat-composer.svelte';
-import type { ContextChip, SelectionChip } from '$lib/stores/agent/chat.svelte';
+import { type ContextChip, type SelectionChip } from '$lib/models/chat';
 import type { AgentModel } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 

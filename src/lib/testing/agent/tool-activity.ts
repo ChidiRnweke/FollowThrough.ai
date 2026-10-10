@@ -1,5 +1,5 @@
 import type { AgentPayload } from '$lib/models/agent/payload';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { type ChatToolActivity } from '$lib/models/chat';
 
 /**
  * What a spec may override on a tool-activity fixture.

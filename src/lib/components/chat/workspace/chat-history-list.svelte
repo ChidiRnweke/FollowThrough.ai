@@ -19,7 +19,7 @@
 	import { NameDialog } from '$lib/components/projects';
 	import { deleteSession } from '$lib/remote/agent/chat.remote';
 	import { toast } from 'svelte-sonner';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 
 	let {

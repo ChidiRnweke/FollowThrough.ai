@@ -1,5 +1,5 @@
-import type { ChatPart } from '$lib/stores/agent/chat.svelte';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { type ChatPart } from '$lib/models/chat';
+import { type ChatToolActivity } from '$lib/models/chat';
 
 /**
  * A turn, in the order it happened.
