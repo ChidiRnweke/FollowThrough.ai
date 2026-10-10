@@ -380,7 +380,7 @@ describe('tool lifecycle ownership', () => {
 	it('allows the separate diagram submission protocol', () => {
 		expect(
 			analyzeSource(
-				'src/lib/server/services/diagrams/generation.ts',
+				'src/lib/server/adapters/diagrams/generation.ts',
 				"import { tool } from '@openai/agents';"
 			)
 		).toEqual([]);

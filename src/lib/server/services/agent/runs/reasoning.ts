@@ -37,7 +37,7 @@ import { type AgentToolName, type ToolName } from '$lib/models/agent/tool-catalo
 import {
 	parseProviderStreamEvent,
 	parseProviderToolCall
-} from '$lib/server/repositories/agent/provider-events';
+} from '$lib/server/adapters/agent/provider-events';
 import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
 import { AgentProviderFailure, ValidationError } from '$lib/errors';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';

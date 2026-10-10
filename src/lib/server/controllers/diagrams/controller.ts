@@ -28,7 +28,7 @@ import {
 	assertRenderedPng,
 	diagramRevisionModel
 } from '$lib/server/services/diagrams/submission-validation';
-import type { DiagramGenerator } from '$lib/server/services/diagrams/generation';
+import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';

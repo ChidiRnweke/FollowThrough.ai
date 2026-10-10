@@ -289,3 +289,24 @@ it('leaves operation-private evaluators private to the service implementation', 
 		})
 	).not.toContain('structural:missing-service-interface');
 });
+
+it('lets an SDK adapter implement a controller-owned protocol contract', () => {
+	expect(
+		inspect({
+			'src/lib/server/controllers/diagrams/generation.ts':
+				'export interface DiagramProvider { run(): Promise<string>; }',
+			'src/lib/server/adapters/diagrams/generation.ts':
+				"import type { DiagramProvider } from '$lib/server/controllers/diagrams/generation'; export class Provider implements DiagramProvider { async run(): Promise<string> { return 'diagram'; } }"
+		})
+	).not.toContain('import-boundary:banned-layer-import');
+});
+it('keeps SDK adapters from constructing controller implementations', () => {
+	expect(
+		inspect({
+			'src/lib/server/controllers/diagrams/generation.ts':
+				'export class Diagrams { run(): string { return "diagram"; } }',
+			'src/lib/server/adapters/diagrams/generation.ts':
+				"import { Diagrams } from '$lib/server/controllers/diagrams/generation'; export const generation = new Diagrams();"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});

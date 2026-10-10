@@ -9,7 +9,7 @@ import type {
 import type { Note, TextSelection } from '$lib/models/notes';
 import { relatedNoteMatches, relatedNoteCandidate } from '$lib/services/relationships/candidates';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { RelationshipClassifier } from '$lib/server/services/relationships/contracts';
+import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
@@ -27,7 +27,7 @@ import {
 } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
-import type { RelationshipRules } from '$lib/server/services/relationships/rules';
+import type { RelationshipRuleClassifier } from '$lib/server/services/relationships/rules';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 /**
@@ -65,7 +65,7 @@ export interface RelationshipsDependencies {
 	noteActionRequests: NoteActionRequests;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
-	relationshipRules: RelationshipRules;
+	relationshipRules: RelationshipRuleClassifier;
 	relationshipGeneration: SelectionGeneration;
 }
 

@@ -21,7 +21,7 @@ import type {
 import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
 import { MermaidSubmissionValidator } from '$lib/server/services/diagrams/submission-validation';
-import { DiagramGeneration } from '$lib/server/services/diagrams/generation';
+import { createDiagramGeneration } from './diagram-generation-factory';
 import type { DiagramAgentDependencies } from '$lib/server/controllers/diagrams/controller';
 import { DiagramContent } from '$lib/server/services/diagrams/content';
 import {
@@ -113,7 +113,7 @@ export const createDiagramsCapability = (input: DiagramsCapabilityInput): Diagra
 			modelSelection: new AgentModelSelectionService(),
 			createToolEventMapper: () => new AgentToolEventMapper(),
 			observeWorkflow: traceWorkflow,
-			generator: new DiagramGeneration(input)
+			generator: createDiagramGeneration(input)
 		}
 	};
 };

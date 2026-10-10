@@ -109,7 +109,7 @@ import type {
 	BacklinkContextReader,
 	NoteLinkReconciler,
 	RelationshipFinder
-} from '$lib/server/services/relationships/contracts';
+} from '$lib/server/services/relationships/graph';
 import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
 import type {
 	NoteReader,
@@ -119,7 +119,7 @@ import type {
 import type {
 	ReferenceLister,
 	ReferenceContextReader
-} from '$lib/server/services/references/contracts';
+} from '$lib/server/services/references/library';
 import type {
 	SuggestionLister,
 	SuggestionExpirer,

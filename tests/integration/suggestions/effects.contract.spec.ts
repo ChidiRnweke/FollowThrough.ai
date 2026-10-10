@@ -19,7 +19,7 @@ import { RelationshipRecords } from '$lib/server/repositories/relationships/post
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -57,7 +57,8 @@ const application = (
 			suggestionEffects: new SuggestionEffects(repository),
 			memoryChanges: createMemoryServices(entries, new ProjectRecords(database), provenance)
 				.changes,
-			relationshipCreator: new RelationshipGraph(relationships, notes, anchors, provenance),
+			relationshipCreator: createRelationshipServices(relationships, notes, anchors, provenance)
+				.creator,
 			memoryIndexer: index.memories,
 			indexWriter: index,
 			indexEmbeddings: embeddings,

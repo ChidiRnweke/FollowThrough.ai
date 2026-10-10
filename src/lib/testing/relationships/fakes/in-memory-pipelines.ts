@@ -6,18 +6,16 @@ import { provenanceSchema, type Provenance, type ProvenanceRequest } from '$lib/
 import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
-import type { StructuredRelationshipClient } from '$lib/server/services/relationships/contracts';
+import type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
 import type {
 	PromiseExtractor,
 	StructuredPromiseClient,
 	StructuredPromiseResult
 } from '$lib/server/services/todos/promise-extraction/contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type {
-	ReferenceFinder,
-	ReferenceSearchOptions,
-	WebReferenceClient
-} from '$lib/server/services/references/contracts';
+import type { ReferenceFinder } from '$lib/server/services/references/discovery';
+import type { WebReferenceClient } from '$lib/server/repositories/references/web-research';
+import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {

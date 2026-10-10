@@ -1,10 +1,8 @@
 import type { ActorContext } from '$lib/models/identity';
 import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { TextSelection } from '$lib/models/notes';
-import type {
-	WebReferenceClient,
-	ReferenceSearchOptions
-} from '$lib/server/repositories/references/web-research';
+import type { WebReferenceClient } from '$lib/server/repositories/references/web-research';
+import type { ReferenceSearchOptions } from '$lib/models/references';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 
 const STANDARD_HOSTS = [
@@ -58,7 +56,14 @@ const candidateFromCitation = (
 };
 
 /** Domain ranking metadata for sources returned by the web provider. */
-export class ReferenceDiscovery {
+export interface ReferenceFinder {
+	find(
+		actor: ActorContext,
+		selection: TextSelection,
+		options?: ReferenceSearchOptions
+	): Promise<readonly ReferenceCandidate[]>;
+}
+export class ReferenceDiscovery implements ReferenceFinder {
 	constructor(private readonly client: WebReferenceClient) {}
 	async find(
 		_actor: ActorContext,

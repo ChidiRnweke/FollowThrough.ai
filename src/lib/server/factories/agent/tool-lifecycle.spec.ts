@@ -15,7 +15,7 @@ import {
 import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import { AgentToolEventMapper } from '$lib/server/services/agent/runs/reasoning';
-import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
+import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
 import type { AgentEvent } from '$lib/models/agent';
 import {
 	noteBuilder,

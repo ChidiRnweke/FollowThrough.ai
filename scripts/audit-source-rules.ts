@@ -534,7 +534,7 @@ export const analyzeSource = (
 	};
 	const sdkAdapter = 'src/lib/server/factories/agent/sdk-tool-adapter.ts';
 	const mcpAdapter = 'src/lib/server/factories/agent/mcp-tool-factory.ts';
-	const diagramProtocol = 'src/lib/server/services/diagrams/generation.ts';
+	const diagramProtocol = 'src/lib/server/adapters/diagrams/generation.ts';
 	const toolBoundaryImport = (node: ts.Node): boolean => {
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
 			const clause = node.importClause;

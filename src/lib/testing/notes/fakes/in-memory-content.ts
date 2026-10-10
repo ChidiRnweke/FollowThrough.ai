@@ -30,7 +30,7 @@ import type {
 	NoteRevisionRecorder,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/contracts';
-import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
+import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant

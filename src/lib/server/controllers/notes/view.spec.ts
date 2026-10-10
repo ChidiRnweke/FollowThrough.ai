@@ -9,8 +9,8 @@ import {
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
 import type { Url } from '$lib/models/references';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
-import { ReferenceLibrary } from '$lib/server/services/references/library';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
+import { createReferenceServices } from '$lib/server/factories/capabilities/references-capability-factory';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryNoteRepository,
@@ -53,24 +53,26 @@ describe('note view assembly', () => {
 		projects.projects = [projectBuilder()];
 		const anchors = new InMemoryAnchorRepository();
 		const provenance = new InMemoryProvenanceRepository();
-		const graph = new RelationshipGraph(
+		const graph = createRelationshipServices(
 			new InMemoryRelationshipRepository(),
 			notes,
 			anchors,
 			provenance
 		);
-		const library = new ReferenceLibrary(
+		const library = createReferenceServices(
 			new InMemoryReferenceRepository(),
 			notes,
 			anchors,
 			provenance
 		);
-		const relationship = await graph.create(actor, {
-			sourceNoteId: note.id,
-			targetNoteId: target.id,
-			kind: 'mentions'
-		});
-		const reference = await library.create(actor, {
+		const relationship = await graph.creator
+			.createWithChange(actor, {
+				sourceNoteId: note.id,
+				targetNoteId: target.id,
+				kind: 'mentions'
+			})
+			.then((change) => change.after);
+		const reference = await library.creator.create(actor, {
 			noteId: note.id,
 			title: 'Source',
 			url: 'https://example.com' as Url,
@@ -108,10 +110,10 @@ describe('note view assembly', () => {
 				noteReader: content,
 				projectReader: projects,
 				userPreferences: new InMemoryUserPreferencesRepository(),
-				relationshipFinder: graph,
-				backlinkContextReader: graph,
-				referenceLister: library,
-				referenceContextReader: library,
+				relationshipFinder: graph.finder,
+				backlinkContextReader: graph.contexts,
+				referenceLister: library.lister,
+				referenceContextReader: library.contexts,
 				diagramLister: new InMemoryDiagramRepository(),
 				todoLister: todos,
 				todoContextReader: todos,

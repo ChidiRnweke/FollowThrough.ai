@@ -12,7 +12,7 @@ import type { AttachmentClaims } from './services/attachments/contracts';
 import type { EmbeddingClient } from './services/knowledge-search/contracts';
 import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
 import type { Reranker } from './services/knowledge-search/contracts';
-import type { ReferenceFinder } from './services/references/contracts';
+import type { ReferenceFinder } from '$lib/server/services/references/discovery';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
@@ -267,8 +267,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	});
 	const templates = deliverables.templates;
 	const artifacts = deliverables.artifacts;
-	const relationships = relationshipCapability.graph;
-	const references = referenceCapability.library;
+	const relationships = relationshipCapability;
+	const references = referenceCapability;
 	const referenceFinder = referenceCapability.finder;
 	const suggestions = suggestionCapability;
 	const skills = skillCapability.library;
@@ -405,8 +405,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			todoCreator: todos,
-			relationshipCreator: relationships,
-			referenceCreator: references,
+			relationshipCreator: relationships.creator,
+			referenceCreator: references.creator,
 			memoryChanges: memory.changes,
 			sourceNotes: notes,
 			memoryIndexer,
@@ -534,7 +534,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			attachmentRestorer: notes,
 			anchorRepairer: notes,
 			noteIndexer,
-			noteLinkReconciler: relationships,
+			noteLinkReconciler: relationships.reconciler,
 			skillEditor: skills,
 			skillPinWriter: skillCapability.pins,
 			selectionOrigins: noteCapability.selectionOrigins,
@@ -573,11 +573,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteSectionNumbering: notes,
 			projectReader: projects,
 			userPreferences: identity.userPreferences,
-			relationshipFinder: relationships,
-			backlinkContextReader: relationships,
-			noteLinkReconciler: relationships,
-			referenceLister: references,
-			referenceContextReader: references,
+			relationshipFinder: relationships.finder,
+			backlinkContextReader: relationships.contexts,
+			noteLinkReconciler: relationships.reconciler,
+			referenceLister: references.lister,
+			referenceContextReader: references.contexts,
 			diagramLister: diagrams,
 			todoLister: todos,
 			todoContextReader: todos,

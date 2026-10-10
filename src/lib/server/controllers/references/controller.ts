@@ -7,11 +7,9 @@ import type {
 	ReferenceCandidate
 } from '$lib/models/references';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type {
-	ReferenceFinder,
-	ReferenceRanker,
-	ReferenceSearchOptions
-} from '$lib/server/services/references/contracts';
+import type { ReferenceFinder } from '$lib/server/services/references/discovery';
+import type { ReferenceRanker } from '$lib/server/services/references/ranking';
+import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {

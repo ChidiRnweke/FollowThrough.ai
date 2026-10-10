@@ -1,3 +1,4 @@
+import type { ReferenceSearchOptions } from '$lib/models/references';
 import OpenAI from 'openai';
 import {
 	openRouterReferenceOutputSchema,
@@ -8,11 +9,6 @@ import type { WebResearchTool } from '$lib/models/agent';
 import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
 import type { OperationObserver } from '$lib/models/telemetry';
 import { ExternalServiceError } from '$lib/errors';
-
-export interface ReferenceSearchOptions {
-	readonly model?: string;
-	readonly signal?: AbortSignal;
-}
 
 export interface WebReferenceClient {
 	search(

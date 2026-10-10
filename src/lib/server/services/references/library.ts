@@ -16,7 +16,10 @@ import type {
 import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export class ReferenceLibrary {
+export interface ReferenceCreator {
+	create(actor: ActorContext, input: CreateReferenceInput): Promise<ExternalReference>;
+}
+export class ReferenceWritingService implements ReferenceCreator {
 	constructor(
 		private readonly references: ReferenceRepository,
 		private readonly notes: NoteRepository,
@@ -40,9 +43,22 @@ export class ReferenceLibrary {
 			createdAt: now()
 		});
 	}
-	delete(actor: ActorContext, referenceId: ReferenceId): Promise<void> {
-		return this.references.delete(actor, referenceId);
-	}
+}
+export interface ReferenceLister {
+	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]>;
+}
+export interface ReferenceContextReader {
+	readContexts(
+		actor: ActorContext,
+		references: readonly ExternalReference[]
+	): Promise<readonly ReferenceView[]>;
+}
+export class ReferenceReadingService implements ReferenceLister, ReferenceContextReader {
+	constructor(
+		private readonly references: ReferenceRepository,
+		private readonly notes: NoteRepository,
+		private readonly anchors: SourceAnchorRepository
+	) {}
 	async listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly ExternalReference[]> {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.references.listForNote(actor, noteId);

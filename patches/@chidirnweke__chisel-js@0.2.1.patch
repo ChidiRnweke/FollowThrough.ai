@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..5662af7604b7ff1fbab349024cdbb4b6e51b122a 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..725f9ec942da15300c1a90a4b227e0dabc16a348 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -61,7 +61,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..5662af7604b7ff1fbab349024cdbb4b6
 +    // Contracts are declared with their operation owner. Boundary adapters implement
 +    // those contracts, and coordinators receive them from factories; no construction leaks.
 +    if (edge.isTypeOnly && importedLayer === Layer.CONTROLLERS &&
-+        [Layer.CONTROLLERS, Layer.CLIENT, Layer.STORES].includes(importerLayer))
++        [Layer.CONTROLLERS, Layer.CLIENT, Layer.ADAPTERS, Layer.STORES].includes(importerLayer))
 +      return [];
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)

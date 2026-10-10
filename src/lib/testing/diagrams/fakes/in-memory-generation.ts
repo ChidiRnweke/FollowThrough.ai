@@ -7,7 +7,7 @@ import type {
 	DiagramGenerationEvent,
 	DiagramGenerator,
 	DiagramGenerationSession
-} from '$lib/server/services/diagrams/generation';
+} from '$lib/server/controllers/diagrams/generation';
 import { ValidationError } from '$lib/errors';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 

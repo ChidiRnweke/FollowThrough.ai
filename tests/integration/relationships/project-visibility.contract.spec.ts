@@ -6,7 +6,7 @@ import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { context, seedUser } from '../database-harness';
 
@@ -29,21 +29,30 @@ it('hides a retained backlink after built-in recovery moves its source out of an
 		})
 	);
 	const relationships = new RelationshipRecords(tx.database);
-	const graph = new RelationshipGraph(
+	const graph = createRelationshipServices(
 		relationships,
 		notes,
 		new SourceAnchorRecords(tx.database),
 		provenance
 	);
 	const edge = await tx.transactionRunner.run(() =>
-		graph.create(owner, { sourceNoteId: source.id, targetNoteId: target.id, kind: 'mentions' })
+		graph.creator
+			.createWithChange(owner, {
+				sourceNoteId: source.id,
+				targetNoteId: target.id,
+				kind: 'mentions'
+			})
+			.then((change) => change.after)
 	);
 	await projects.archive(owner, source.projectId);
 	await tx.transactionRunner.run(() => builtIns.ensure(owner));
 	const recovered = await notes.findById(owner, source.id);
 	expect({
 		recoveredElsewhere: recovered !== undefined && recovered.projectId !== source.projectId,
-		contexts: await graph.readContexts(owner, await graph.findForNote(owner, source.id)),
+		contexts: await graph.contexts.readContexts(
+			owner,
+			await graph.finder.findForNote(owner, source.id)
+		),
 		retained: (await relationships.listForNote(owner, source.id)).map((item) => item.id)
 	}).toEqual({ recoveredElsewhere: true, contexts: [], retained: [edge.id] });
 });

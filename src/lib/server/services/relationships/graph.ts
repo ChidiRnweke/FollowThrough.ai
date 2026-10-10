@@ -16,16 +16,19 @@ import type {
 } from '$lib/server/repositories/provenance';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export class RelationshipGraph {
+export interface RelationshipCreator {
+	createWithChange(
+		actor: ActorContext,
+		input: CreateRelationshipInput
+	): Promise<AppliedChange<NoteRelationship>>;
+}
+export class RelationshipWritingService implements RelationshipCreator {
 	constructor(
 		private readonly relationships: NoteRelationshipRepository,
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
 		private readonly provenance: ProvenanceRepository
 	) {}
-	async create(actor: ActorContext, input: CreateRelationshipInput): Promise<NoteRelationship> {
-		return (await this.createWithChange(actor, input)).after;
-	}
 	async createWithChange(
 		actor: ActorContext,
 		input: CreateRelationshipInput
@@ -47,7 +50,7 @@ export class RelationshipGraph {
 		if (input.provenanceId && !(await this.provenance.findById(actor, input.provenanceId)))
 			throw new NotFoundError('Relationship provenance was not found');
 		const timestamp = now();
-		return this.write(actor, {
+		return writeRelationship(this.relationships, actor, {
 			id: crypto.randomUUID() as RelationshipId,
 			userId: actor.userId,
 			...input,
@@ -55,40 +58,15 @@ export class RelationshipGraph {
 			updatedAt: timestamp
 		});
 	}
-
-	/** The caller owns the transaction that retains the semantic-edge lock through persistence. */
-	private async write(
-		actor: ActorContext,
-		incoming: NoteRelationship
-	): Promise<AppliedChange<NoteRelationship>> {
-		const current = await this.relationships.findForWrite(actor, incoming);
-		if (!current)
-			return { kind: 'created', after: await this.relationships.insert(actor, incoming) };
-		if (current.justification === incoming.justification)
-			return { kind: 'unchanged', after: current };
-		const after = await this.relationships.update(actor, {
-			...current,
-			justification: incoming.justification,
-			updatedAt: incoming.updatedAt
-		});
-		return { kind: 'modified', before: current, after };
-	}
-	delete(actor: ActorContext, relationshipId: RelationshipId): Promise<void> {
-		return this.relationships.delete(actor, relationshipId);
-	}
-
-	/**
-	 * Make the note's `mentions` rows match the links in its document.
-	 *
-	 * Only `mentions` is touched. `prior_decision`, `contradicts` and `elaborates` come from
-	 * the AI suggestion pipeline and have no representation in the document, so treating an
-	 * absent link as a reason to delete them would quietly wipe inferred relationships on
-	 * the next save.
-	 *
-	 * A target outside the note's project is skipped rather than thrown: the picker already
-	 * scopes to the project, so reaching this means the document outlived a note that moved,
-	 * and losing one link is better than making the note unsaveable.
-	 */
+}
+export interface NoteLinkReconciler {
+	reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void>;
+}
+export class NoteLinkReconciliationService implements NoteLinkReconciler {
+	constructor(
+		private readonly relationships: NoteRelationshipRepository,
+		private readonly notes: NoteRepository
+	) {}
 	async reconcile(actor: ActorContext, note: Note, targets: readonly NoteId[]): Promise<void> {
 		const existing = (await this.relationships.listForNote(actor, note.id)).filter(
 			(relationship) => relationship.kind === 'mentions' && relationship.sourceNoteId === note.id
@@ -105,7 +83,7 @@ export class RelationshipGraph {
 			const targetNote = await this.notes.findById(actor, target);
 			if (!targetNote || targetNote.projectId !== note.projectId) continue;
 			const timestamp = now();
-			await this.write(actor, {
+			await writeRelationship(this.relationships, actor, {
 				id: crypto.randomUUID() as RelationshipId,
 				userId: actor.userId,
 				sourceNoteId: note.id,
@@ -116,6 +94,21 @@ export class RelationshipGraph {
 			});
 		}
 	}
+}
+export interface RelationshipFinder {
+	findForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]>;
+}
+export interface BacklinkContextReader {
+	readContexts(
+		actor: ActorContext,
+		relationships: readonly NoteRelationship[]
+	): Promise<readonly BacklinkContext[]>;
+}
+export class RelationshipReadingService implements RelationshipFinder, BacklinkContextReader {
+	constructor(
+		private readonly relationships: NoteRelationshipRepository,
+		private readonly notes: NoteRepository
+	) {}
 	async findForNote(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRelationship[]> {
 		if (!(await this.notes.findById(actor, noteId))) throw new NotFoundError('Note was not found');
 		return this.relationships.listForNote(actor, noteId);
@@ -135,4 +128,20 @@ export class RelationshipGraph {
 		);
 		return contexts.flat();
 	}
+}
+async function writeRelationship(
+	relationships: NoteRelationshipRepository,
+	actor: ActorContext,
+	incoming: NoteRelationship
+): Promise<AppliedChange<NoteRelationship>> {
+	const current = await relationships.findForWrite(actor, incoming);
+	if (!current) return { kind: 'created', after: await relationships.insert(actor, incoming) };
+	if (current.justification === incoming.justification)
+		return { kind: 'unchanged', after: current };
+	const after = await relationships.update(actor, {
+		...current,
+		justification: incoming.justification,
+		updatedAt: incoming.updatedAt
+	});
+	return { kind: 'modified', before: current, after };
 }

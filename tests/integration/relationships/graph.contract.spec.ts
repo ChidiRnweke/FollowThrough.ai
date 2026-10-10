@@ -5,7 +5,7 @@ import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-contex
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { context, seedNote } from '../database-harness';
 
 const graphFor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
@@ -14,7 +14,7 @@ const graphFor = (connection: ReturnType<typeof connectPostgresTestDatabase>) =>
 	return {
 		transactionRunner,
 		records,
-		graph: new RelationshipGraph(
+		graph: createRelationshipServices(
 			records,
 			new NoteRecords(database),
 			new SourceAnchorRecords(database),
@@ -45,8 +45,8 @@ describe('Stored relationship decisions', () => {
 			const left = graphFor(first);
 			const right = graphFor(second);
 			const changes = await Promise.all([
-				left.transactionRunner.run(() => left.graph.createWithChange(owner, input)),
-				right.transactionRunner.run(() => right.graph.createWithChange(owner, input))
+				left.transactionRunner.run(() => left.graph.creator.createWithChange(owner, input)),
+				right.transactionRunner.run(() => right.graph.creator.createWithChange(owner, input))
 			]);
 			expect({
 				kinds: changes.map((change) => change.kind).sort(),
@@ -63,9 +63,11 @@ describe('Stored relationship decisions', () => {
 		const { owner, input } = await setup('16002');
 		const { graph, transactionRunner, records } = graphFor(context);
 		const original = await transactionRunner.run(() =>
-			graph.create(owner, { ...input, justification: 'Original' })
+			graph.creator
+				.createWithChange(owner, { ...input, justification: 'Original' })
+				.then((change) => change.after)
 		);
-		const change = await transactionRunner.run(() => graph.createWithChange(owner, input));
+		const change = await transactionRunner.run(() => graph.creator.createWithChange(owner, input));
 		expect({ kind: change.kind, stored: await records.findById(owner, original.id) }).toEqual({
 			kind: 'modified',
 			stored: { ...original, justification: undefined, updatedAt: change.after.updatedAt }

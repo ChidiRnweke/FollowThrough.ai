@@ -12,7 +12,7 @@ import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddin
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/services/notes/references';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
+import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult

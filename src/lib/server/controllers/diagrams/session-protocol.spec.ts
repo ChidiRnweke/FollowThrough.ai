@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DiagramProviderSession } from './generation';
+import { DiagramSessions } from './generation';
+import { AgentSdkDiagramProvider } from '$lib/server/adapters/diagrams/generation';
+import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import { InMemoryDiagramModel } from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
 import type { DiagramGenerationRequest, DiagramSubmission } from '$lib/models/diagrams/generation';
@@ -13,7 +15,12 @@ const request: DiagramGenerationRequest = {
 const draft: DiagramSubmission = { kind: 'mermaid', source: 'flowchart LR\nA --> B' };
 const setup = (candidates = [draft]) => {
 	const provider = new InMemoryModelProvider(new InMemoryDiagramModel(candidates));
-	return { provider, session: new DiagramProviderSession(provider, request) };
+	const session = new DiagramSessions(
+		new AgentSdkDiagramProvider(provider),
+		new DiagramGenerationStore()
+	);
+	session.start(request);
+	return { provider, session };
 };
 
 describe('Diagram provider submission protocol', () => {
@@ -60,4 +67,38 @@ describe('Diagram provider submission protocol', () => {
 			await session.close();
 		}
 	});
+});
+
+it('reports a provider failure and releases its lease', async () => {
+	const { session, provider } = setup([]);
+	const outcome = await session.result().then(
+		() => 'unexpected success',
+		(error: Error) => error.message
+	);
+	expect({ outcome, closed: provider.closed }).toEqual({
+		outcome: 'No diagram candidates remain.',
+		closed: true
+	});
+});
+
+it('cancels one pending submission without closing another generation', async () => {
+	const left = setup();
+	const right = setup();
+	try {
+		for await (const event of left.session.events) {
+			if (event.kind === 'submission') break;
+		}
+		await left.session.close();
+		for await (const event of right.session.events) {
+			if (event.kind === 'submission')
+				right.session.respond(event.id, { kind: 'accepted', draft: event.draft });
+		}
+		expect({
+			cancelledLeaseClosed: left.provider.closed,
+			result: await right.session.result(),
+			completedLeaseClosed: right.provider.closed
+		}).toEqual({ cancelledLeaseClosed: true, result: draft, completedLeaseClosed: true });
+	} finally {
+		await Promise.all([left.session.close(), right.session.close()]);
+	}
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExternalReference, ReferenceId, Url } from '$lib/models/references';
-import { ReferenceLibrary } from './library';
+import { createReferenceServices } from '$lib/server/factories/capabilities/references-capability-factory';
 import { InMemoryReferenceRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -28,7 +28,7 @@ const setup = () => {
 		references,
 		anchors,
 		provenance,
-		service: new ReferenceLibrary(references, notes, anchors, provenance)
+		service: createReferenceServices(references, notes, anchors, provenance)
 	};
 };
 
@@ -48,7 +48,7 @@ describe('Reference management invariants', () => {
 			createdAt: testNow
 		};
 		references.references = [reference];
-		const views = await service.readContexts(testActor(), references.references);
+		const views = await service.contexts.readContexts(testActor(), references.references);
 		expect(views[0]?.anchor?.id).toBe(testAnchorId());
 	});
 
@@ -65,14 +65,14 @@ describe('Reference management invariants', () => {
 			sourceAnchorId: testAnchorId(2),
 			createdAt: testNow
 		};
-		const views = await service.readContexts(testActor(), [reference]);
+		const views = await service.contexts.readContexts(testActor(), [reference]);
 		expect(views[0]?.anchor).toBeUndefined();
 	});
 
 	it('rejects an anchor owned by another note', async () => {
 		const { service } = setup();
 		await expect(
-			service.create(testActor(), {
+			service.creator.create(testActor(), {
 				noteId: testNoteId(),
 				sourceAnchorId: testAnchorId(),
 				url: 'https://example.com' as Url,
@@ -98,7 +98,7 @@ describe('Reference management invariants', () => {
 				createdAt: testNow
 			}
 		];
-		const reference = await service.create(testActor(), {
+		const reference = await service.creator.create(testActor(), {
 			noteId: testNoteId(),
 			sourceAnchorId: testAnchorId(),
 			provenanceId: testProvenanceId(),
