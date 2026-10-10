@@ -1,25 +1,24 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
-import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { describe, expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
+import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
+import { widgetTemplates } from '$lib/models/widgets';
 import { jsonObjectSchema } from '$lib/server/adapters/agent/tool-call';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
-import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-widget-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testWidgetId, widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
@@ -27,8 +26,9 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { widgetTemplates } from '$lib/models/widgets';
-import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
+import { describe, expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
 import { NoteReferenceService } from '$lib/services/notes/references';
 const noteReferences = new NoteReferenceService();
@@ -53,7 +53,7 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
 	);
-	const tools = new AgentTools(
+	const tools = createAgentToolSurface(
 		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ widgets: () => controller }),
 		testActor(),

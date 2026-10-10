@@ -1,15 +1,13 @@
-import { MemoryEditingService } from '$lib/services/memory/edits';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	memoryEntryBuilder,
@@ -21,6 +19,8 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
 
 const setup = (scope: 'user' | 'project') => {
 	const projectId = scope === 'project' ? testProjectId() : undefined;
@@ -67,7 +67,7 @@ const setup = (scope: 'user' | 'project') => {
 		})
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
-	const tools = new AgentTools(
+	const tools = createAgentToolSurface(
 		testTokenizer,
 		factory,
 		testActor(),

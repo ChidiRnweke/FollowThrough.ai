@@ -1,3 +1,5 @@
+import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
+import type { IInlineSuggestionCompletion } from '$lib/server/services/inline-suggestions/inline-completion';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import type { TokenCodec } from '$lib/models/tokenization';
 import {
@@ -62,7 +64,7 @@ export interface KnowledgeSearchCapabilityInput {
 
 export interface KnowledgeSearchCapability {
 	readonly tokenizer: TokenCodec;
-	readonly repository: KnowledgeIndexRecords;
+	readonly repository: RetrievalIndexRepository;
 	readonly indexWriter: IndexCompletion;
 	readonly embeddingClient: EmbeddingClient;
 	readonly reranker: Reranker;
@@ -84,7 +86,7 @@ export interface KnowledgeSearchFinalizeInput {
 
 export interface KnowledgeSearchFinalized {
 	readonly preferences: AgentPreferenceEditor;
-	readonly inlineCompletion: InlineSuggestionCompletion;
+	readonly inlineCompletion: IInlineSuggestionCompletion;
 	readonly inlineContext: IInlineContextService;
 	readonly observer: typeof operationObserver;
 	readonly inlineAdmission: InlineSuggestionThrottle;

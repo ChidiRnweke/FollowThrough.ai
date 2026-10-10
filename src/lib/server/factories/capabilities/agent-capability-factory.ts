@@ -107,14 +107,14 @@ import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/contr
 import { traceAgentTurn } from '$lib/server/services/telemetry';
 import { AgentToolCatalogService, type AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
-import type { ProductionControllerFactory } from '$lib/server/factories/production-controller-factory';
+import type { AgentToolControllerProvider } from '$lib/server/controllers/agent/tool-provider';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
 
 export interface AgentCapabilityInput {
 	readonly tokens: TokenCounter;
 	readonly db: Database;
-	readonly controllers: () => ProductionControllerFactory;
+	readonly controllers: () => AgentToolControllerProvider;
 	readonly toolRetriever: ToolRetriever;
 	readonly files: AgentFileRepository;
 	readonly openRouterApiKey: string;

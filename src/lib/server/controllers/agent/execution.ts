@@ -24,7 +24,7 @@ import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload
 import { AgentProviderFailure } from '$lib/errors';
 import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
 
-interface AgentToolExecutor {
+export interface AgentToolExecutor {
 	execute(
 		input: {
 			readonly callId?: string;

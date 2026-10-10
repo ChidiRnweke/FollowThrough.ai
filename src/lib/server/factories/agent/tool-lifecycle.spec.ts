@@ -1,30 +1,29 @@
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { describe, it, expect } from 'vitest';
-import { Agent, Runner, RunState } from '@openai/agents';
-import { AgentTools } from './agent-tool-factory';
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { Agent, Runner, RunState } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import {
-	InMemoryToolCallingModel,
-	InMemoryToolBatchModel
-} from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import {
+	InMemoryToolBatchModel,
+	InMemoryToolCallingModel
+} from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 
+import type { AgentEvent, AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
-import type { AgentEvent } from '$lib/models/agent';
 import {
 	noteBuilder,
 	testActor,
-	testProvenanceId,
-	testConversationId
+	testConversationId,
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 
 const scenario = (
 	count: number,
@@ -38,7 +37,7 @@ const scenario = (
 	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
 	const fixture = reviewedNoteFixture(note, options.markdown);
 	const createRegistry = (pending: readonly PendingAgentDecision[] = []) =>
-		new AgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
 			testActor(),

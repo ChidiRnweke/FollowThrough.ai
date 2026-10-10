@@ -1,15 +1,13 @@
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
-import { ProjectDetailService } from '$lib/services/projects/details';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { expect, it } from 'vitest';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import { AgentTools } from './agent-tool-factory';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	projectBuilder,
@@ -18,6 +16,8 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
 
 const toolsFor = (hasProject: boolean) => {
 	const projects = new InMemoryProjectRepository();
@@ -33,7 +33,7 @@ const toolsFor = (hasProject: boolean) => {
 			projectLister: catalog.lister
 		})
 	);
-	return new AgentTools(
+	return createAgentToolSurface(
 		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ projects: () => controller }),
 		testActor(),
@@ -53,6 +53,16 @@ const toolsFor = (hasProject: boolean) => {
 	).definitions();
 };
 const requests: { name: string; action: string; input: AgentPayloadObject }[] = [
+	{ name: 'list_widgets', action: 'list widgets', input: {} },
+	{
+		name: 'create_widget',
+		action: 'create a widget',
+		input: {
+			title: 'New widget',
+			layout: '{"root":"main","elements":{"main":{"type":"Stack","props":{},"children":[]}}}',
+			data: '{}'
+		}
+	},
 	{ name: 'create_note', action: 'create a note', input: { title: 'New note' } },
 	{ name: 'create_skill', action: 'create a skill', input: { name: 'New skill' } },
 	{ name: 'create_diagram', action: 'create a diagram', input: { source: 'flowchart LR\nA --> B' } }
@@ -77,3 +87,11 @@ it.each(requests)(
 		);
 	}
 );
+
+it('asks for project choice before reporting malformed widget data', async () => {
+	const tool = toolsFor(true).find((tool) => tool.name === 'create_widget');
+	if (!tool) throw new Error('Missing create_widget');
+	await expect(
+		tool.prepare({ title: 'Widget', layout: 'invalid', data: 'invalid' }).execute()
+	).rejects.toThrow('projectId is required to create a widget');
+});

@@ -1,23 +1,23 @@
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { describe, expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	testActor,
 	testConversationId,
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
 
 describe('agent export settings', () => {
 	it('persists the full palette and title choice supplied by the tool', async () => {
 		const { service } = exportControllerFixture();
 		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => service });
-		const tools = new AgentTools(
+		const tools = createAgentToolSurface(
 			testTokenizer,
 			factory,
 			testActor(),
