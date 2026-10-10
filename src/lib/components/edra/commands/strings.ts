@@ -47,7 +47,7 @@ const strings = {
 	},
 	editor: {
 		headingPlaceholder: "What's the title?",
-		paragraphPlaceholder: 'Start writing…',
+		paragraphPlaceholder: 'Start writing, or type / for a table, diagram or widget.',
 		contentErrorTitle: 'Unable to load the content',
 		contentErrorDescription: 'The content of this page might be corrupted.'
 	},
