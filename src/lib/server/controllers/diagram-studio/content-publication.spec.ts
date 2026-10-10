@@ -1,38 +1,38 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { expect, it } from 'vitest';
-import { DiagramStudio, type DiagramStudioDependencies } from './controller';
-import { type DiagramWriteOutcome } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/models/diagrams';
+import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
-	DrawioXmlValidator,
+	DrawioLabelReader,
 	DrawioSvgSanitizer,
-	DrawioLabelReader
+	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
-import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
-import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteBuilder, testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { VALID_DRAWIO_XML, RICH_DRAWIO_LABELS_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { RICH_DRAWIO_LABELS_XML, VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import {
+	InMemoryEmbeddingClient,
+	InMemorySearchRepository
+} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { noteBuilder, testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 
 const setup = () => {
 	const notes = new InMemoryNoteContent();
@@ -57,6 +57,7 @@ const setup = () => {
 	const controller = new DiagramStudio(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
+			...agentToolResultsFixture(),
 			diagramEditing: new DiagramEditingService(),
 			diagramLifecycle: new DiagramLifecycleService(),
 			diagramSourceNotes: notes,

@@ -1,13 +1,14 @@
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { describe, expect, it } from 'vitest';
-import { RunContext } from '@openai/agents';
-import { AgentTools } from './agent-tool-factory';
 import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { RunContext } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import type { AgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
@@ -28,7 +29,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 		pending: readonly PendingAgentDecision[] = [],
 		mode: AgentExecutionMode = 'approval_required'
 	) =>
-		new AgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
 			testActor(),
@@ -38,7 +39,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 				input: { conversationId: testConversationId(), prompt: 'Change release day' },
 				model: 'test-model'
 			},
-			{ execute: (_call, action) => action() },
+			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			restoredToolReviews(fixture.factory, testActor(), pending)
@@ -51,12 +52,12 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 				? { noteId: note.id, markdown: 'Check releases on Tuesday.' }
 				: { noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }
 	};
-	const select = (tools: AgentTools) => {
+	const select = (tools: AgentToolSurface) => {
 		const tool = tools.tools().find((item) => item.name === call.toolName);
 		if (!tool || tool.type !== 'function') throw new Error('Expected the skill content tool');
 		return tool;
 	};
-	const invoke = (tools: AgentTools) =>
+	const invoke = (tools: AgentToolSurface) =>
 		select(tools).invoke(new RunContext(), JSON.stringify(call.arguments), {
 			toolCall: {
 				type: 'function_call',

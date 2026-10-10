@@ -1,122 +1,124 @@
-import type {
-	AgentRunRepository,
-	AgentRunEventRepository,
-	AgentRunDecisionRepository,
-	AgentSessionRepository
-} from '$lib/server/repositories/agent';
-import { AgentRunStatusService, type AgentRunStatusRules } from '$lib/services/agent/run-status';
-import {
-	AgentStreamPresentationService,
-	type AgentStreamPresentation
-} from '$lib/server/services/agent/runs/stream-presentation';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import type { WebResearchOptions } from '$lib/models/agent';
+import { normalizeLanguageModelId } from '$lib/models/agent';
+import type { TokenCounter } from '$lib/models/tokenization';
+import type { DateTime } from '$lib/models/workspace';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
-import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
-import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
-import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
+import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
+import type { Database } from '$lib/server/db';
+import { createAgentContext } from '$lib/server/factories/agent-context';
+import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
 import {
-	ConversationHistoryService,
-	type ConversationHistory
-} from '$lib/server/services/agent/conversations/history';
-import {
-	AgentImagePreparationService,
-	type AgentImagePreparation
-} from '$lib/server/services/agent/runs/images';
-import {
-	AgentPreferenceEditingService,
-	type AgentPreferenceEditing
-} from '$lib/services/agent/preferences';
-import {
-	AgentModelSelectionService,
-	AgentModelChoiceService,
-	type IAgentModelSelectionService,
-	type IAgentModelChoiceService
-} from '$lib/services/agent/model-selection';
+	createConversationSession,
+	createReplayVirtualizer
+} from '$lib/server/factories/agent/conversation-factory';
 import {
 	createMcpToolSurface,
 	type McpSurfaceFactory
 } from '$lib/server/factories/agent/mcp-tool-factory';
-import type { IAgentContext } from '$lib/server/services/agent/runs/context';
-import { createAgentContext } from '$lib/server/factories/agent-context';
-import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
-import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const identity = new WorkspaceCommandRulesService();
-import type { TokenCounter } from '$lib/models/tokenization';
-import {
-	RunCheckpoints,
-	type RunCheckpointWriter
-} from '$lib/server/services/agent/runs/checkpoints';
-import {
-	RunPreparation,
-	type ChatRunPreparation
-} from '$lib/server/services/agent/runs/preparation';
-import { RunApprovals, type RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
-import {
-	RunCancellation,
-	type RunCancellationDecisions
-} from '$lib/server/services/agent/runs/cancellation';
-import type { DateTime } from '$lib/models/workspace';
-import { RunSettlements, type RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import {
-	NoteActionRequests,
-	type NoteActionSubmission
-} from '$lib/server/services/agent/runs/note-action-requests';
-import { OpenRouter } from '@openrouter/sdk';
-import type { WebResearchOptions } from '$lib/models/agent';
-import { normalizeLanguageModelId } from '$lib/models/agent';
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
-import { AgentRunSettingsService, type AgentRunSettings } from '$lib/services/agent/run-settings';
-import type { Database } from '$lib/server/db';
-import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import type {
+	AgentRunDecisionRepository,
+	AgentRunEventRepository,
+	AgentRunRepository,
+	AgentSessionRepository
+} from '$lib/server/repositories/agent';
+import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
+import {
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
+} from '$lib/server/repositories/agent/postgres/agent-runs';
 import {
 	AgentPreferenceRecords,
 	AgentRunRecords,
 	AgentSessionRecords
 } from '$lib/server/repositories/agent/postgres/agent-settings';
-import {
-	AgentRunDecisionRecords,
-	AgentRunEventRecords
-} from '$lib/server/repositories/agent/postgres/agent-runs';
+import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
 import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
 import {
 	ConversationArchive,
-	type ConversationSessions,
-	type ConversationMessages
+	type ConversationMessages,
+	type ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
-import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
-import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
+import {
+	ConversationHistoryService,
+	type ConversationHistory
+} from '$lib/server/services/agent/conversations/history';
+import { RunApprovals, type RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
+import {
+	RunCancellation,
+	type RunCancellationDecisions
+} from '$lib/server/services/agent/runs/cancellation';
+import {
+	RunCheckpoints,
+	type RunCheckpointWriter
+} from '$lib/server/services/agent/runs/checkpoints';
+import type { IAgentContext } from '$lib/server/services/agent/runs/context';
+import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
+import {
+	AgentImagePreparationService,
+	type AgentImagePreparation
+} from '$lib/server/services/agent/runs/images';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
 import { AgentRunLedger, type WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
+import {
+	NoteActionRequests,
+	type NoteActionSubmission
+} from '$lib/server/services/agent/runs/note-action-requests';
 import {
 	AgentModels,
 	AgentPreferenceCatalog,
-	type AgentPreferenceEditor,
-	type AgentModelCatalog
+	type AgentModelCatalog,
+	type AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
-import { AgentExecution } from '$lib/server/controllers/agent/execution';
+import {
+	RunPreparation,
+	type ChatRunPreparation
+} from '$lib/server/services/agent/runs/preparation';
+import { RunSettlements, type RunSettlement } from '$lib/server/services/agent/runs/settlement';
+import {
+	AgentStreamPresentationService,
+	type AgentStreamPresentation
+} from '$lib/server/services/agent/runs/stream-presentation';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
 import {
 	ToolTrust,
-	type TrustPolicyStore,
-	type TrustPolicyEvaluator
+	type TrustPolicyEvaluator,
+	type TrustPolicyStore
 } from '$lib/server/services/agent/runs/tool-trust';
 import {
 	ToolAccess,
 	type ToolPreferenceCapability
 } from '$lib/server/services/agent/tools/preferences';
-import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 import { traceAgentTurn } from '$lib/server/services/telemetry';
+import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
+import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
+import {
+	AgentModelChoiceService,
+	AgentModelSelectionService,
+	type IAgentModelChoiceService,
+	type IAgentModelSelectionService
+} from '$lib/services/agent/model-selection';
+import {
+	AgentPreferenceEditingService,
+	type AgentPreferenceEditing
+} from '$lib/services/agent/preferences';
+import { AgentRunSettingsService, type AgentRunSettings } from '$lib/services/agent/run-settings';
+import { AgentRunStatusService, type AgentRunStatusRules } from '$lib/services/agent/run-status';
 import { AgentToolCatalogService, type AgentToolCatalog } from '$lib/services/agent/tool-catalog';
-import { agentToolRegistry } from '$lib/server/factories/agent/agent-tool-factory';
-import type { ProductionControllerFactory } from '$lib/server/factories/production-controller-factory';
-import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
-import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { OpenRouter } from '@openrouter/sdk';
+const identity = new WorkspaceCommandRulesService();
 
 export interface AgentCapabilityInput {
 	readonly tokens: TokenCounter;
 	readonly db: Database;
-	readonly controllers: () => ProductionControllerFactory;
-	readonly toolRetriever: ToolRetriever;
+	readonly controllers: () => ControllerFactory;
+	readonly toolRetriever: AgentToolDiscoveryServices;
 	readonly files: AgentFileRepository;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
@@ -191,11 +193,12 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const sessions = new AgentSessionRecords(input.db);
 	const eventBus = new AgentEventStore();
 	const context = createAgentContext(tokens);
+	const toolPreferences = new ToolAccess(new ToolPreferenceRecords(input.db));
 	const runner = new AgentExecution(
 		new AgentPromptService(),
 		new AgentToolRecoveryService(),
 		createAgentStream,
-		agentToolRegistry(input.controllers, input.toolRetriever, tokens),
+		agentToolRegistry(input.controllers, input.toolRetriever, tokens, toolPreferences),
 		{
 			create: (actor, conversationId) =>
 				createConversationSession(
@@ -239,7 +242,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		preferenceEditing: new AgentPreferenceEditingService(),
 		modelSelection: new AgentModelSelectionService(),
 		modelChoices: new AgentModelChoiceService(),
-		toolPreferences: new ToolAccess(new ToolPreferenceRecords(input.db)),
+		toolPreferences,
 		toolCatalog: new AgentToolCatalogService(),
 		trust: new ToolTrust(new TrustPolicyRecords(input.db)),
 		runs,

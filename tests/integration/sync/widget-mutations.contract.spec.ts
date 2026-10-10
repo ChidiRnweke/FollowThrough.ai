@@ -1,16 +1,17 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { describe, expect, it } from 'vitest';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { createWidgetsCapability } from '$lib/server/factories/capabilities/widgets-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -32,8 +33,11 @@ const setup = async (suffix: string) => {
 	const controller = new Widgets(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
+			...agentToolResultsFixture(),
 			catalogReader: widgets.catalogReader,
-			editing: widgets.editing,
+			widgetEditingRules: widgets.widgetEditingRules,
+			widgetPatches: widgets.widgetPatches,
+			widgetCandidateReader: widgets.widgetCandidateReader,
 			lifecycle: widgets.lifecycle,
 			catalog: widgets.catalog,
 			search: widgets.search,

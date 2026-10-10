@@ -1,32 +1,33 @@
-import { TodayPresentationService } from '$lib/services/workspace/today';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { describe, expect, it } from 'vitest';
-import { Workspace, type WorkspaceDependencies } from './controller';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import type { LocalDate } from '$lib/models/workspace';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
-	todoRecordSchema,
 	resourceDataSchemas,
+	todoRecordSchema,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
+	memorySuggestionBuilder,
 	noteBuilder,
 	projectBuilder,
-	todoBuilder,
 	suggestionBuilder,
-	memorySuggestionBuilder,
 	testActor,
 	testNoteId,
+	testSuggestionId,
 	testTodoId,
-	testSuggestionId
+	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Workspace, type WorkspaceDependencies } from './controller';
 
 describe('Today projection parity', () => {
 	it('shows the same due groups, waiting work, notes and pending count from server and cached facts', async () => {
@@ -67,6 +68,7 @@ describe('Today projection parity', () => {
 		const server = new Workspace(
 			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
+				...agentToolResultsFixture(),
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				todoLister: tasks,

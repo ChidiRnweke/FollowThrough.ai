@@ -1,20 +1,20 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { describe, expect, it } from 'vitest';
-import { RunContext } from '@openai/agents';
 import { ToolLifecycleError } from '$lib/errors';
 import type { PendingAgentDecision } from '$lib/models/agent';
-import type { AgentToolSessionInput } from '$lib/server/controllers/agent/tool-sessions';
+import type { AgentToolSessionInput } from '$lib/models/agent-tool-session';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import {
 	ToolPreferences,
 	type ToolPreferencesDependencies
 } from '$lib/server/controllers/agent/tool-preferences/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
-import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	noteBuilder,
@@ -23,7 +23,8 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { RunContext } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
 import { agentToolRegistry } from './agent-tool-factory';
 
 const setup = () => {
@@ -33,6 +34,7 @@ const setup = () => {
 	const settings = new ToolPreferences(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ToolPreferencesDependencies>({
+			...agentToolResultsFixture(),
 			preferences: new ToolAccess(preferences),
 			catalog: new AgentToolCatalogService()
 		})
@@ -41,7 +43,12 @@ const setup = () => {
 		notes: () => fixture.controller,
 		toolPreferences: () => settings
 	});
-	const open = agentToolRegistry(() => factory, new InMemoryToolRetriever(), testTokenizer);
+	const open = agentToolRegistry(
+		() => factory,
+		new InMemoryToolRetriever(),
+		testTokenizer,
+		new ToolAccess(preferences)
+	);
 	const input = (
 		pendingDecisions: readonly PendingAgentDecision[] = []
 	): AgentToolSessionInput => ({
@@ -57,7 +64,7 @@ const setup = () => {
 			provenanceId: testProvenanceId(),
 			pendingDecisions
 		},
-		executor: { execute: (_call, action) => action() },
+		executor: { completed: async () => {} },
 		signal: new AbortController().signal
 	});
 	return { ...fixture, note, preferences, open, input };

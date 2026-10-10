@@ -1,10 +1,9 @@
 import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { describe, expect, it } from 'vitest';
-import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
-import { Suggestions, type SuggestionsDependencies } from './controller';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	memorySuggestionBuilder,
@@ -12,6 +11,8 @@ import {
 	testNow,
 	testSuggestionId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 const setup = () => {
 	const proposals = new InMemorySuggestionReader();
@@ -30,6 +31,7 @@ const setup = () => {
 	const controller = new Suggestions(
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionExpirer: proposals,

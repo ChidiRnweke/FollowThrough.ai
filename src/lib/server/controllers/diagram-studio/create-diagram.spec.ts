@@ -1,33 +1,34 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
-import { describe, expect, it } from 'vitest';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import {
+	drawioBuilder,
+	mermaidBuilder
+} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
+	noteBuilder,
 	projectBuilder,
 	testActor,
 	testConversationId,
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import {
-	drawioBuilder,
-	mermaidBuilder
-} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { describe, expect, it } from 'vitest';
+import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 
 const setup = (
 	index: DiagramStudioDependencies['diagramIndexer']['index'] = async () => ({ kind: 'stored' })
@@ -51,6 +52,7 @@ const setup = (
 		controller: new DiagramStudio(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
+				...agentToolResultsFixture(),
 				diagramEditing: new DiagramEditingService(),
 				diagramLifecycle: new DiagramLifecycleService(),
 				diagramSourceNotes: sourceNotes,
@@ -111,6 +113,7 @@ describe('Creating a diagram', () => {
 		const controller = new DiagramStudio(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
+				...agentToolResultsFixture(),
 				diagramEditing: new DiagramEditingService(),
 				diagramLifecycle: new DiagramLifecycleService(),
 				drawioXmlValidator: {

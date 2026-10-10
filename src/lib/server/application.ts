@@ -1,46 +1,48 @@
+import type { ScheduledTask } from '$lib/models/maintenance';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
+import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import {
 	ProductionControllerFactory,
 	type ProductionControllerDependencies
 } from '$lib/server/factories/production-controller-factory';
-import type { AgentModelCatalog } from './services/agent/runs/preferences';
-import type { ProvenanceRecorder } from './services/notes/provenance';
-import type { ToolRetriever } from './controllers/tool-discovery/controller';
-import type { ITextRecognition } from './controllers/attachment-processing/controller';
-import type { IImageDescription } from './controllers/attachment-processing/controller';
-import type { AttachmentClaims } from './services/attachments/contracts';
-import type { EmbeddingClient } from './services/knowledge-search/contracts';
-import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
-import type { Reranker } from './services/knowledge-search/contracts';
-import type { ReferenceFinder } from '$lib/server/controllers/references/search';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import type { Database } from './db';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
+import type {
+	IImageDescription,
+	ITextRecognition
+} from './controllers/attachment-processing/controller';
+import type { ToolRetriever } from './controllers/tool-discovery/controller';
+import type { Database } from './db';
+import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
+import { createAgentCapability } from './factories/capabilities/agent-capability-factory';
+import { createAgentFilesCapability } from './factories/capabilities/agent-files-capability-factory';
+import { createAttachmentsCapability } from './factories/capabilities/attachments-capability-factory';
+import { createDeliverablesCapability } from './factories/capabilities/deliverables-capability-factory';
+import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
+import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
+import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
+import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
+import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
+import { createNotesCapability } from './factories/capabilities/notes-capability-factory';
+import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
+import { createReferencesCapability } from './factories/capabilities/references-capability-factory';
+import { createRelationshipsCapability } from './factories/capabilities/relationships-capability-factory';
+import { createSkillsCapability } from './factories/capabilities/skills-capability-factory';
+import { createSuggestionsCapability } from './factories/capabilities/suggestions-capability-factory';
+import { createSyncCapability } from './factories/capabilities/sync-capability-factory';
+import { createTodosCapability } from './factories/capabilities/todos-capability-factory';
+import { createWidgetsCapability } from './factories/capabilities/widgets-capability-factory';
 import type {
 	IAttachmentStorage,
 	ObjectStorageConfig
 } from './repositories/attachments/object-storage';
+import type { AgentModelCatalog } from './services/agent/runs/preferences';
+import type { AttachmentClaims } from './services/attachments/contracts';
+import type { EmbeddingClient, Reranker } from './services/knowledge-search/contracts';
+import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
+import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { AgentEventBus } from './stores/agent/events';
-import type { ScheduledTask } from '$lib/models/maintenance';
-import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
-import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
-import { createSyncCapability } from './factories/capabilities/sync-capability-factory';
-import { createNotesCapability } from './factories/capabilities/notes-capability-factory';
-import { createReferencesCapability } from './factories/capabilities/references-capability-factory';
-import { createRelationshipsCapability } from './factories/capabilities/relationships-capability-factory';
-import { createTodosCapability } from './factories/capabilities/todos-capability-factory';
-import { createSuggestionsCapability } from './factories/capabilities/suggestions-capability-factory';
-import { createKnowledgeSearchCapability } from './factories/capabilities/knowledge-search-capability-factory';
-import { createSkillsCapability } from './factories/capabilities/skills-capability-factory';
-import { createMemoryCapability } from './factories/capabilities/memory-capability-factory';
-import { createWidgetsCapability } from './factories/capabilities/widgets-capability-factory';
-import { createAttachmentsCapability } from './factories/capabilities/attachments-capability-factory';
-import { createDeliverablesCapability } from './factories/capabilities/deliverables-capability-factory';
-import { createDiagramsCapability } from './factories/capabilities/diagrams-capability-factory';
-import { createAgentCapability } from './factories/capabilities/agent-capability-factory';
-import { createFeedbackCapability } from './factories/capabilities/feedback-capability-factory';
-import { createAgentFilesCapability } from './factories/capabilities/agent-files-capability-factory';
 
 /**
  * Collaborators that reach outside the process and are therefore worth
@@ -216,7 +218,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		tokens: knowledgeSearch.tokenizer,
 		db,
 		controllers: () => controllerFactory,
-		toolRetriever,
+		toolRetriever: knowledgeSearch.toolDiscovery,
 		files: agentFilesCapability.repository,
 		openRouterApiKey,
 		openRouterBaseURL,
@@ -301,9 +303,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		projects: projectRepository
 	});
 	const diagrams = diagramCapability.services;
+	const toolResults = createAgentToolResults();
 	const dependencies: ProductionControllerDependencies = {
-		agentFiles: { reader: agentFilesCapability.reader },
+		agentFiles: {
+			...toolResults,
+			reader: agentFilesCapability.reader
+		},
 		todos: {
+			...toolResults,
 			boardExport: todoCapability.boardExport,
 			todoPresentation: todoCapability.presentation,
 			todoEditingRules: todoCapability.editingRules,
@@ -335,6 +342,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			promiseRules: todoCapability.promiseRules
 		},
 		relationships: {
+			...toolResults,
 			selectionOrigins: noteCapability.selectionOrigins,
 			knowledgeLookup,
 			embeddings: searchEmbeddings,
@@ -349,6 +357,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			relationshipRules: relationshipCapability.rules
 		},
 		references: {
+			...toolResults,
 			selectionOrigins: noteCapability.selectionOrigins,
 			referenceFinder,
 			referenceRanker: referenceCapability.ranking,
@@ -360,6 +369,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceModel: referenceCapability.model
 		},
 		diagrams: {
+			...toolResults,
 			generationRules: diagramCapability.generationRules,
 			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
@@ -381,6 +391,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			runEvents: eventBus
 		},
 		diagramStudio: {
+			projectLister: projects.lister,
+			...toolResults,
 			diagramEditing: diagramCapability.editingRules,
 			diagramLifecycle: diagramCapability.lifecycleRules,
 			diagramSourceNotes: notes.reader,
@@ -407,6 +419,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			now: diagramCapability.now
 		},
 		suggestions: {
+			...toolResults,
 			todoCreationRules: todoCapability.creationRules,
 			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
@@ -475,6 +488,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			provenance
 		},
 		agentSettings: {
+			...toolResults,
 			preferenceEditing: agentCapability.preferenceEditing,
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
@@ -496,8 +510,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner
 		},
-		apiTokens: { tokens: identity.apiTokens },
+		apiTokens: {
+			...toolResults,
+			tokens: identity.apiTokens
+		},
 		toolPreferences: {
+			...toolResults,
 			preferences: toolPreferences,
 			catalog: agentCapability.toolCatalog,
 			syncMutations: synchronization.mutations,
@@ -505,6 +523,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		attachments: {
+			...toolResults,
 			uploads: attachmentCapability.uploads,
 			reader: attachmentCapability.reader,
 			downloads: attachmentCapability.downloads,
@@ -514,6 +533,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			attachmentIndexer: knowledgeSearch.attachmentIndexer
 		},
 		deliverables: {
+			...toolResults,
 			exportSettingsRules: deliverables.exportSettingsRules,
 			artifactFiles: deliverables.artifactFiles,
 			syncMutations: synchronization.mutations,
@@ -545,6 +565,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		skills: {
+			markdown: noteCapability.markdown,
+			projectLister: projects.lister,
+			...toolResults,
 			skillPortability: skillCapability.portability,
 			skillMetadataEditing: skillCapability.metadataEditing,
 			noteReferences: noteCapability.references,
@@ -573,6 +596,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		workspace: {
+			...toolResults,
 			todoPresentation: todoCapability.presentation,
 			memoryPresentation: memory.presentation,
 			syncChanges: synchronization.changes,
@@ -591,6 +615,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos.context
 		},
 		notes: {
+			toolTokens: knowledgeSearch.tokenizer,
+			projectLister: projects.lister,
+			...toolResults,
 			todoPresentation: todoCapability.presentation,
 			textSearch: noteCapability.textSearch,
 			sections: noteCapability.sections,
@@ -640,12 +667,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		trustPolicies: {
+			...toolResults,
 			trustPolicyStore: trust,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner
 		},
 		memory: {
+			...toolResults,
 			editing: memory.editing,
 			presentation: memory.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
@@ -665,8 +694,12 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		widgets: {
+			projectLister: projects.lister,
+			...toolResults,
 			catalogReader: widgets.catalogReader,
-			editing: widgets.editing,
+			widgetEditingRules: widgets.widgetEditingRules,
+			widgetPatches: widgets.widgetPatches,
+			widgetCandidateReader: widgets.widgetCandidateReader,
 			lifecycle: widgets.lifecycle,
 			catalog: widgets.catalog,
 			search: widgets.search,
@@ -681,6 +714,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		projects: {
+			...toolResults,
 			noteCreationRules: noteCapability.creationRules,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
@@ -698,6 +732,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		retrieval: {
+			...toolResults,
 			knowledgeLookup,
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,

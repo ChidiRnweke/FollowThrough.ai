@@ -1,38 +1,38 @@
-import type { NoteMarkdownReader } from '$lib/server/controllers/notes/controller';
+import type { NoteMarkdownReader } from '$lib/models/note-markdown';
+import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import type { TemplateStyleReader } from '$lib/server/controllers/deliverables/controller';
 import type { DiagramExportRenderer } from '$lib/server/controllers/deliverables/diagram-rendering';
+import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
+import type { Database } from '$lib/server/db';
+import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
+import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
+import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
+import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
+import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
+import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
+import {
+	DocumentBundleService,
+	type DocumentBundlePacker
+} from '$lib/server/services/deliverables/bundle';
+import { DocxDocumentService, type DocxRenderer } from '$lib/server/services/deliverables/docx';
+import { ArtifactFileService, type ArtifactFiles } from '$lib/services/deliverables/artifact-files';
+import {
+	ExportPreparationService,
+	type ExportPreparation
+} from '$lib/services/deliverables/export-preparation';
 import {
 	ExportSettingsRuleService,
 	type ExportSettingsRules
 } from '$lib/services/deliverables/settings';
-import { ArtifactFileService, type ArtifactFiles } from '$lib/services/deliverables/artifact-files';
 import { MermaidThemeService, type MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
-import type { Database } from '$lib/server/db';
-import { ArtifactRecords } from '$lib/server/repositories/deliverables/postgres/artifacts';
-import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
-import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
-import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
-import type { IAttachmentStorage } from '$lib/server/repositories/attachments/object-storage';
 import {
 	createArtifactServices,
 	createTemplateServices,
 	type ArtifactServices,
 	type TemplateServices
 } from './deliverable-storage-factory';
-import {
-	DocumentBundleService,
-	type DocumentBundlePacker
-} from '$lib/server/services/deliverables/bundle';
-import { DocxDocumentService, type DocxRenderer } from '$lib/server/services/deliverables/docx';
 import { createPdfRendering } from './pdf-rendering-factory';
-import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
-import {
-	ExportPreparationService,
-	type ExportPreparation
-} from '$lib/services/deliverables/export-preparation';
-import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
-import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 
 export interface DeliverablesCapabilityInput {
 	readonly db: Database;

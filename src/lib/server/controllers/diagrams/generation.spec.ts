@@ -1,20 +1,22 @@
+import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
+import { durableDiagramFixture } from '$lib/testing/diagrams/fixtures/durable-generation';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Diagrams, type DiagramsDependencies } from './controller';
-import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { testActor, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { durableDiagramFixture } from '$lib/testing/diagrams/fixtures/durable-generation';
 
 const setup = () => {
 	const fixture = diagramGenerationFixture();
 	const suggestions = new InMemorySuggestions();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
 			drawioXmlValidator: new DrawioXmlValidator(),

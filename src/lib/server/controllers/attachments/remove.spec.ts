@@ -1,12 +1,13 @@
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { view } from '$lib/testing/attachments/fakes/processing';
+import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
+import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { Attachments, type AttachmentsDependencies } from './controller';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
-import { view } from '$lib/testing/attachments/fakes/processing';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 describe('attachment search removal', () => {
 	it('removes the attachment and its indexed content together', async () => {
 		const { uploads, reader, downloads, lifecycle, repository, search, process } =
@@ -15,6 +16,7 @@ describe('attachment search removal', () => {
 		await process(attachment);
 		const controller = new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
+				...agentToolResultsFixture(),
 				uploads,
 				reader,
 				downloads,
@@ -38,6 +40,7 @@ it('keeps attachment bytes when index removal rolls back', async () => {
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
+			...agentToolResultsFixture(),
 			uploads,
 			reader,
 			downloads,
@@ -75,6 +78,7 @@ it('commits physical cleanup intent without deleting bytes inside the transactio
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
+			...agentToolResultsFixture(),
 			uploads,
 			reader,
 			downloads,

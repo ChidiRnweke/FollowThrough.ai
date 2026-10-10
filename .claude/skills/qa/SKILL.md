@@ -53,7 +53,8 @@ do not weaken checks or claim untested results passed.
 
 For ADR 0007 enforcement, exercise the analyzer with small source projects and the CLI with real
 temporary directories. Check both forbidden and valid patterns: alias/barrel dependencies versus
-controller operations, concrete types versus declared interfaces, retained mutable state versus
+controller operations versus forbidden controller chains, independent adapter handlers versus
+sequenced controller calls (including callback producers and private helpers), concrete types versus declared interfaces, retained mutable state versus
 operation-local evaluators, and workflows versus construction or controlled state updates.
 
 Expected diagnostics must come from the ADR, not from the analyzer's current output. Check source

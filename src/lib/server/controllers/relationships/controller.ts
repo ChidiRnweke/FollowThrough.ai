@@ -1,33 +1,38 @@
-import type { RelationshipCandidates } from '$lib/services/relationships/candidates';
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import type { BacklinkSuggestion } from '$lib/models/suggestions';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	RelateSelectionInput,
-	StartRelateSelectionInput,
-	RelateSelectionOutput,
-	LinkCandidate
-} from '$lib/models/relationships';
 import type { Note, TextSelection } from '$lib/models/notes';
+import type {
+	LinkCandidate,
+	RelateSelectionInput,
+	RelateSelectionOutput,
+	StartRelateSelectionInput
+} from '$lib/models/relationships';
+import type { BacklinkSuggestion } from '$lib/models/suggestions';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { RelationshipCandidates } from '$lib/services/relationships/candidates';
 
+import type {
+	AgentRunId,
+	AgentRunReceipt,
+	NoteActionRequest,
+	RunSettlementOutcome,
+	SelectionGeneration
+} from '$lib/models/agent';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
+import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
-import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import type {
-	AgentRunReceipt,
-	AgentRunId,
-	RunSettlementOutcome,
-	NoteActionRequest,
-	SelectionGeneration
-} from '$lib/models/agent';
-import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
-import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { RelationshipRuleClassifier } from '$lib/server/services/relationships/rules';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
 
 /**
  * Application boundary for relationship (backlink) suggestions between notes: find notes
@@ -51,9 +56,19 @@ export interface RelationshipsController {
 	): Promise<AgentRunReceipt>;
 	executeRelatedNoteRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
 	recoverQueuedRelatedNoteRuns(): Promise<number>;
+
+	agentRelateSelection(
+		actor: ActorContext,
+		selection: TextSelection,
+		input: AgentToolInput<'relate_selection'>
+	): Promise<AgentPayload>;
 }
 
 export interface RelationshipsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	selectionOrigins: SelectionOriginService;
 	knowledgeLookup: IKnowledgeLookup;
 	embeddings: EmbeddingClient;
@@ -275,6 +290,24 @@ export class Relationships implements RelationshipsController {
 				signal?.throwIfAborted();
 				return this.relationshipCandidates.relatedNoteCandidate(match, classification);
 			})
+		);
+	}
+
+	async agentRelateSelection(
+		actor: ActorContext,
+		selection: TextSelection,
+		input: AgentToolInput<'relate_selection'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				...(await this.suggestFromSelection(actor, { selection: selection })),
+				sourceNoteId: selection.noteId
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
 		);
 	}
 }

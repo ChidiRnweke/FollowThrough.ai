@@ -1,141 +1,116 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { RunContext } from '@openai/agents';
-import type { ProvenanceId } from '$lib/models/provenance';
-import type { AgentToolSessionInput } from '$lib/server/controllers/agent/tool-sessions';
-import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
-import { describe, expect, it } from 'vitest';
-import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
-import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
-import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import type { FunctionTool, Tool } from '@openai/agents';
+import { createWidgetRules } from '$lib/factories/widgets/rules';
+import type { AgentToolSessionInput } from '$lib/models/agent-tool-session';
 import type { TextSelection } from '$lib/models/notes';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { DiagramStudioController } from '$lib/server/controllers/diagram-studio/controller';
-import type { ProjectsController } from '$lib/server/controllers/projects/controller';
-import type { SkillsController } from '$lib/server/controllers/skills/controller';
-import type { ApiTokensController } from '$lib/server/controllers/api-tokens/controller';
-import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { noteEtag } from '$lib/models/notes';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { ApiTokens } from '$lib/server/controllers/api-tokens/controller';
+import {
+	DiagramStudio,
+	type DiagramStudioDependencies
+} from '$lib/server/controllers/diagram-studio/controller';
+import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
+import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
+import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
+import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
+import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
+import { agentProjectsFixture } from '$lib/testing/agent/fixtures/projects';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { resultItem } from '$lib/testing/agent/session-items';
+import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
+import {
+	InMemoryDiagrams,
+	drawioBuilder
+} from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import {
+	InMemoryApiTokenRepository,
+	testTokenUser
+} from '$lib/testing/identity/fakes/in-memory-api-tokens';
+import { searchControllerFixture } from '$lib/testing/knowledge-search/fixtures/controller';
+import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
+import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { noteViewFixture } from '$lib/testing/notes/fixtures/view';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import {
+	referenceSearchFixture,
+	referenceSelection
+} from '$lib/testing/references/fixtures/search';
+import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
+import { diagramSuggestionFixture } from '$lib/testing/suggestions/fixtures/diagram-application';
+import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { projectBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
+import type { FunctionTool, Tool } from '@openai/agents';
+import { RunContext } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import type { AgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
+import type { AgentToolContractBinding } from '$lib/models/agent';
+import { LOCKED_TOOL_NAMES, TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
+import { toolFailureSchema } from '$lib/models/agent/tool-failure';
+import type { AgentToolCompletionObserver } from '$lib/server/services/agent/runs/contracts';
 import {
 	appContextBuilder,
 	noteBuilder,
-	testProjectId,
+	testActor,
 	testConversationId,
 	testDiagramId,
-	testActor,
+	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
-	AgentTools,
-	McpTools,
 	agentToolCoverage,
 	agentToolRegistry,
-	type ToolAccessPolicy,
-	type AgentToolDefinition
+	createAgentToolSurface,
+	createMcpToolDefinitions,
+	type ToolAccessPolicy
 } from './agent-tool-factory';
-import type { AgentToolContractBinding } from '$lib/models/agent';
-import type { ToolClassification } from '$lib/models/agent';
-import { toolFailureSchema } from '$lib/models/agent/tool-failure';
-import {
-	TOOL_DESCRIPTIONS,
-	LOCKED_TOOL_NAMES,
-	type ToolName
-} from '$lib/models/agent/tool-catalog';
-import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 
-const executeDirectly: AgentToolExecutor = {
-	execute: (_input, action) => action()
+const executeDirectly: AgentToolCompletionObserver = {
+	completed: async () => {}
 };
 const allTools: ToolAccessPolicy = { isEnabled: () => true };
 
 const createAgentTools = (
-	controllers: ConstructorParameters<typeof AgentTools>[1],
-	actor: ConstructorParameters<typeof AgentTools>[2],
-	mode: ConstructorParameters<typeof AgentTools>[3],
-	context: ConstructorParameters<typeof AgentTools>[4],
-	executor: AgentToolExecutor = executeDirectly,
+	controllers: Parameters<typeof createAgentToolSurface>[1],
+	actor: Parameters<typeof createAgentToolSurface>[2],
+	mode: Parameters<typeof createAgentToolSurface>[3],
+	context: Parameters<typeof createAgentToolSurface>[4],
+	executor: AgentToolCompletionObserver = executeDirectly,
 	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
 	access: ToolAccessPolicy = allTools
-): AgentTools =>
-	new AgentTools(testTokenizer, controllers, actor, mode, context, executor, retriever, access);
+): AgentToolSurface =>
+	createAgentToolSurface(
+		testTokenizer,
+		controllers,
+		actor,
+		mode,
+		context,
+		executor,
+		retriever,
+		access
+	);
 
 let freshKeyCounter = 0;
 const freshKey = (): string => `fresh:${freshKeyCounter++}`;
-
-const definitionsCacheKey = (options: { classifications?: readonly ToolClassification[] } = {}) =>
-	JSON.stringify(options.classifications ?? null);
-
-const memoizedResult = <Args extends unknown[], Result>(
-	cache: Map<string, Result>,
-	args: Args,
-	build: () => Result
-): Result => {
-	const key = JSON.stringify(args);
-	const hit = cache.get(key);
-	if (hit !== undefined) return hit;
-	const value = build();
-	cache.set(key, value);
-	return value;
-};
-
-/**
- * The registry is pure and deterministic for a given set of constructor args, so
- * a whole test file can share one built instance and one set of method results.
- * Custom factory/retriever args and any test that invokes `search_tools` must
- * stay fresh: the former capture per-test state, the latter mutates a promotion
- * set that every subsequent test on that registry would otherwise inherit.
- */
-class MemoizedAgentTools extends AgentTools {
-	private readonly definitionsResults = new Map<string, AgentToolDefinition[]>();
-	private readonly toolsResults = new Map<string, Tool<unknown>[]>();
-	private readonly agentToolsResults = new Map<string, Tool<unknown>[]>();
-	private readonly offeredResults = new Map<string, ToolName[]>();
-
-	constructor(...args: ConstructorParameters<typeof AgentTools>) {
-		super(...args);
-	}
-
-	override definitions(
-		options: { classifications?: readonly ToolClassification[] } = {}
-	): AgentToolDefinition[] {
-		return memoizedResult(this.definitionsResults, [definitionsCacheKey(options)], () =>
-			super.definitions(options)
-		);
-	}
-
-	override tools(
-		options: { classifications?: readonly ToolClassification[] } = {}
-	): Tool<unknown>[] {
-		return memoizedResult(this.toolsResults, [definitionsCacheKey(options)], () =>
-			super.tools(options)
-		);
-	}
-
-	override agentTools(alreadyPromoted: readonly string[] = []): Tool<unknown>[] {
-		return memoizedResult(this.agentToolsResults, [alreadyPromoted.join('\u0000')], () =>
-			super.agentTools(alreadyPromoted)
-		);
-	}
-
-	override offeredToolNames(alreadyPromoted: readonly string[] = []): ToolName[] {
-		return memoizedResult(this.offeredResults, [alreadyPromoted.join('\u0000')], () =>
-			super.offeredToolNames(alreadyPromoted)
-		);
-	}
-}
 
 const memoizeAgentTools = <Args extends unknown[], Result>(
 	keyOf: (...args: Args) => string,
@@ -164,7 +139,7 @@ const registry = memoizeAgentTools(
 	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
 		options.factory ? freshKey() : `registry:${mode}`,
 	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
-		new MemoizedAgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
@@ -224,7 +199,7 @@ const agentToolsRegistry = memoizeAgentTools(
 		mode: 'approval_required' | 'auto_accept',
 		options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
 	) =>
-		new MemoizedAgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
@@ -272,42 +247,28 @@ const directToolFor = (
 	) as FunctionTool;
 
 describe('Accepting a suggestion on the user\u2019s behalf', () => {
-	/** Records which acceptance the tool reached for, without a mocking library. */
-	const recordingSuggestions = () => {
-		const called: string[] = [];
-		const factory = {
-			suggestions: () => ({
-				accept: async () => {
-					called.push('accept');
-					return {};
-				},
-				acceptReviewed: async () => {
-					called.push('acceptReviewed');
-					return {};
-				}
-			})
-		} as unknown as ControllerFactory;
-		return { called, factory };
-	};
-
-	const acceptWith = async (factory: ControllerFactory): Promise<void> => {
-		const tool = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Accept it' },
-			model: 'openai/gpt-5.6'
-		})
-			.definitions()
-			.find((definition) => definition.name === 'accept_suggestion');
-		await tool?.prepare({ suggestionId: '9f1c2f18-0b1a-4a5e-9c3d-2f7b8e4a1d55' }).execute();
-	};
-
-	// Bound to the raw `accept`, this tool was the only caller in the system that
-	// could mint a draw.io diagram with no preview: the guard that refuses one
-	// lives in `acceptReviewed`, and the UI has always gone through it.
 	it('goes through the reviewed acceptance that guards draw.io', async () => {
-		const { called, factory } = recordingSuggestions();
-		await acceptWith(factory);
-		expect(called).toEqual(['acceptReviewed']);
+		const { controller, diagrams, suggestions, input } = diagramSuggestionFixture();
+		const factory = capabilityDependencies<ControllerFactory>({ suggestions: () => controller });
+		const tool = registry('auto_accept', { factory })
+			.definitions()
+			.find((tool) => tool.name === 'accept_suggestion');
+		const outcome = await tool!
+			.prepare({ suggestionId: input.suggestionId })
+			.execute()
+			.then(
+				() => 'unexpected success',
+				(error: Error) => error.message
+			);
+		expect({
+			outcome,
+			diagrams: diagrams.diagrams,
+			status: suggestions.suggestions[0].status
+		}).toEqual({
+			outcome: 'A draw.io diagram must be accepted through its review.',
+			diagrams: [],
+			status: 'proposed'
+		});
 	});
 });
 
@@ -380,12 +341,13 @@ describe('Agent tool coverage invariants', () => {
 	 * lands in a window an external host cannot see.
 	 */
 	it('builds every contract on the MCP surface except the app-surface tools', () => {
-		const mcp = new McpTools(
+		const mcp = createMcpToolDefinitions(
 			testTokenizer,
 			{} as ControllerFactory,
 			testActor(),
 			{ provenanceId: testProvenanceId() },
-			allTools
+			allTools,
+			new InMemoryToolRetriever()
 		);
 		const appSurface: readonly string[] = TOOL_DESCRIPTIONS.filter(
 			(entry) => 'surface' in entry
@@ -511,58 +473,49 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('search_note scopes retrieval to the given note', async () => {
-		const noteId = crypto.randomUUID();
-		let received: unknown;
-		const factory = {
-			retrieval: () => ({
-				search: async (_actor: unknown, input: unknown) => {
-					received = input;
-					return [];
-				}
-			})
-		} as unknown as ControllerFactory;
-		const searchNote = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Find in this note' },
-			model: 'openai/gpt-5.6'
-		})
+		const { controller, repository } = searchControllerFixture();
+		const selected = searchDocumentBuilder({ noteId: testNoteId() });
+		repository.documents = [selected, searchDocumentBuilder({ noteId: testNoteId(2) })].map(
+			(document) => ({ userId: testActor().userId, document })
+		);
+		const factory = capabilityDependencies<ControllerFactory>({ retrieval: () => controller });
+		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((definition) => definition.name === 'search_note');
-		await searchNote?.prepare({ noteId, query: 'messaging' }).execute();
-		expect(received).toEqual({ query: 'messaging', noteId });
+			.find((tool) => tool.name === 'search_note');
+		expect(
+			await tool?.prepare({ noteId: testNoteId(), query: 'messaging' }).execute()
+		).toMatchObject([{ noteId: testNoteId() }]);
 	});
 
 	it('read_canvas_diagram uses the resolved run conversation', async () => {
 		const conversationId = testConversationId(7);
-		const diagramStudio = capabilityDependencies<DiagramStudioController>({
-			readCanvasDiagram: async (_actor, input) =>
-				input.conversationId === conversationId
-					? {
-							kind: 'present',
-							diagramId: testDiagramId(),
-							source: '<mxfile />',
-							title: 'Current'
-						}
-					: {
-							kind: 'empty',
-							message: 'Empty',
-							nextActions: [{ tool: 'create_diagram', reason: 'Create one' }]
-						}
-		});
-		const factory = capabilityDependencies<ControllerFactory>({
-			diagramStudio: () => diagramStudio
-		});
+		const sessions = new InMemoryAgentSessionRepository();
+		const diagrams = new InMemoryDiagrams();
+		const diagram = drawioBuilder({ id: testDiagramId(), title: 'Current' });
+		diagrams.diagrams = [diagram];
+		await sessions.append(testActor(), conversationId, [
+			resultItem('create_diagram', 'call-1', JSON.stringify({ diagramId: diagram.id }))
+		]);
+		const controller = new DiagramStudio(
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<DiagramStudioDependencies>({
+				...agentToolResultsFixture(),
+				canvasSource: new PresentedCanvasSource(sessions),
+				diagramFinder: diagrams
+			})
+		);
+		const factory = capabilityDependencies<ControllerFactory>({ diagramStudio: () => controller });
 		const tool = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: { conversationId, prompt: 'Read the canvas' },
 			model: 'openai/gpt-5.6'
 		})
 			.definitions()
-			.find((definition) => definition.name === 'read_canvas_diagram');
+			.find((tool) => tool.name === 'read_canvas_diagram');
 		expect(await tool?.prepare({}).execute()).toEqual({
 			kind: 'present',
-			diagramId: testDiagramId(),
-			source: '<mxfile />',
+			diagramId: diagram.id,
+			source: diagram.source,
 			title: 'Current'
 		});
 	});
@@ -660,46 +613,27 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('returns note content and related context without leaking storage fields', async () => {
-		const note = noteBuilder({
-			id: crypto.randomUUID() as never,
-			document: {
-				type: 'doc',
-				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello world.' }] }]
-			} as never
-		});
-		const factory = {
-			notes: () => ({
-				get: async () => ({
-					note,
-					etag: noteEtag(note.id, note.currentRevision),
-					backlinks: [{ id: 'bl' }],
-					references: [{ id: 'ref' }],
-					diagrams: [{ id: 'dg' }],
-					todos: [{ id: 'td' }],
-					pendingSuggestions: [{ id: 'sg' }]
-				})
-			})
-		} as unknown as ControllerFactory;
-		const getNote = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Read a note' },
-			model: 'openai/gpt-5.6'
-		})
+		const note = noteBuilder({ ...noteMarkdown.read('Hello world.') });
+		const { controller } = noteViewFixture(note);
+		const factory = capabilityDependencies<ControllerFactory>({ notes: () => controller });
+		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((definition) => definition.name === 'get_note');
-		const result = await getNote?.prepare({ noteId: note.id }).execute();
-		expect(result).toMatchObject({
+			.find((tool) => tool.name === 'get_note');
+		expect(await tool?.prepare({ noteId: note.id }).execute()).toEqual({
 			noteId: note.id,
 			title: note.title,
 			etag: noteEtag(note.id, note.currentRevision),
-			backlinks: [{ id: 'bl' }],
-			references: [{ id: 'ref' }],
-			diagrams: [{ id: 'dg' }],
-			todos: [{ id: 'td' }],
-			pendingSuggestions: [{ id: 'sg' }],
+			backlinks: [],
+			references: [],
+			diagrams: [],
+			todos: [],
+			pendingSuggestions: [],
 			body: {
 				kind: 'file',
 				file: {
+					kind: 'file',
+					id: expect.any(String),
+					checksumSha256: 'aa3ec16e6acc809d8b2818662276256abfd2f1b441cb51574933f3d4bd115d11',
 					path: `/projects/${note.projectId}/notes/${note.id}.md`,
 					mediaType: 'text/markdown',
 					byteSize: expect.any(Number),
@@ -708,9 +642,6 @@ describe('Agent tool coverage invariants', () => {
 				}
 			}
 		});
-		expect(result).not.toHaveProperty('document');
-		expect(result).not.toHaveProperty('note');
-		expect(result).not.toHaveProperty('plainText');
 	});
 
 	const skillFixture = (body = 'Number every finding.') => {
@@ -762,28 +693,8 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
-		let receivedProvenanceId: ProvenanceId | undefined;
-		const note = noteBuilder({ kind: 'skill', title: 'Compliance format' });
-		const loadForAgent: SkillsController['loadForAgent'] = async (_actor, input) => {
-			receivedProvenanceId = input.provenanceId;
-			return {
-				skill: {
-					note,
-					slug: 'compliance-format',
-					description: 'Formats responses for compliance review',
-					triggerHints: ['compliance'],
-					metadata: {},
-					allowImplicitInvocation: true,
-					isEnabled: true
-				},
-				usages: []
-			};
-		};
-		const factory = capabilityDependencies<ControllerFactory>({
-			toolPreferences: () =>
-				capabilityDependencies<ToolPreferencesController>({ list: async () => [] }),
-			skills: () => capabilityDependencies<SkillsController>({ loadForAgent })
-		});
+		const { note, controller, skills } = loadedSkillFixture();
+		const factory = capabilityDependencies<ControllerFactory>({ skills: () => controller });
 		const run: AgentToolSessionInput['run'] = {
 			executionMode: 'auto_accept',
 			model: 'openai/gpt-5.6',
@@ -793,67 +704,49 @@ describe('Agent tool coverage invariants', () => {
 		const registry = await agentToolRegistry(
 			() => factory,
 			new InMemoryToolRetriever(),
-			testTokenizer
+			testTokenizer,
+			new ToolAccess(new InMemoryToolPreferenceRepository())
 		)({
 			actor: testActor(),
 			request: { prompt: 'Help', conversationId: testConversationId() },
 			run,
-			executor: { execute: async (_input, action) => action() },
+			executor: { completed: async () => {} },
 			signal: new AbortController().signal
 		});
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
 		if (!loadSkill || loadSkill.type !== 'function')
 			throw new Error('Expected load_skill function tool');
 		await loadSkill.invoke(new RunContext(), JSON.stringify({ noteId: note.id }));
-		expect(receivedProvenanceId).toBe(run.provenanceId);
+		expect(skills.usages.map((usage) => usage.provenanceId)).toEqual([run.provenanceId]);
 	});
 
 	it('dispatches an exact long-tail tool name to its controller', async () => {
-		// Mirrors the real ListProjectsOutput shape. The agent-facing payload is a
-		// projection of it: id and name only, without the userId and audit stamps
-		// the model cannot use.
-		const factory = {
-			projects: () => ({
-				list: async () => ({
-					projects: [
-						{
-							id: 'project-1',
-							userId: 'user-1',
-							name: 'General',
-							createdAt: '2026-01-01T00:00:00.000Z',
-							updatedAt: '2026-01-01T00:00:00.000Z'
-						}
-					]
-				})
-			})
-		} as unknown as ControllerFactory;
+		const project = projectBuilder({ name: 'General' });
+		const { factory } = agentProjectsFixture([project]);
 		const selected = directToolFor('auto_accept', 'list_projects', { factory });
-		const result = await selected.invoke({} as never, JSON.stringify({}));
-		expect(result).toEqual({
-			projects: [{ id: 'project-1', name: 'General', createdAt: '2026-01-01T00:00:00.000Z' }]
+		expect(await selected.invoke({} as never, '{}')).toEqual({
+			projects: [{ id: project.id, name: 'General', createdAt: project.createdAt }]
 		});
 	});
 
 	it('filters list results inclusively by creation time', async () => {
-		const factory = {
-			projects: () => ({
-				list: async () => ({
-					projects: [
-						{ id: 'first', name: 'First', createdAt: '2026-01-01T00:00:00.000Z' },
-						{ id: 'second', name: 'Second', createdAt: '2026-02-01T00:00:00.000Z' }
-					]
-				})
-			})
-		} as unknown as ControllerFactory;
+		const first = projectBuilder({
+			id: testProjectId(1),
+			name: 'First',
+			createdAt: '2026-01-01T00:00:00.000Z' as never
+		});
+		const second = projectBuilder({
+			id: testProjectId(2),
+			name: 'Second',
+			createdAt: '2026-02-01T00:00:00.000Z' as never
+		});
+		const { factory } = agentProjectsFixture([first, second]);
 		const result = await directToolFor('auto_accept', 'list_projects', { factory }).invoke(
 			{} as never,
-			JSON.stringify({
-				createdAfter: '2026-02-01T00:00:00.000Z',
-				createdBefore: '2026-02-01T00:00:00.000Z'
-			})
+			JSON.stringify({ createdAfter: second.createdAt, createdBefore: second.createdAt })
 		);
 		expect(result).toEqual({
-			projects: [{ id: 'second', name: 'Second', createdAt: '2026-02-01T00:00:00.000Z' }]
+			projects: [{ id: second.id, name: second.name, createdAt: second.createdAt }]
 		});
 	});
 
@@ -874,42 +767,27 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('treats blank optional search scope fields as omitted', async () => {
-		let received: unknown;
-		const factory = {
-			retrieval: () => ({
-				search: async (_actor: unknown, input: unknown) => {
-					received = input;
-					return [];
-				}
-			})
-		} as unknown as ControllerFactory;
-		await directToolFor('auto_accept', 'search', { factory }).invoke(
-			{} as never,
-			JSON.stringify({
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((tool) => tool.name === 'search');
+		expect(
+			definition?.prepare({
 				query: 'deployment procedures',
 				projectId: '',
 				createdAfter: '',
 				createdBefore: ''
-			})
-		);
-		expect(received).toEqual({ query: 'deployment procedures' });
+			}).arguments
+		).toEqual({ query: 'deployment procedures' });
 	});
 
 	it('treats blank optional todo filters as omitted', async () => {
-		let received: unknown;
-		const projectId = crypto.randomUUID();
-		const noteId = crypto.randomUUID();
-		const factory = {
-			todos: () => ({
-				list: async (_actor: unknown, input: unknown) => {
-					received = input;
-					return { todos: [] };
-				}
-			})
-		} as unknown as ControllerFactory;
-		await directToolFor('auto_accept', 'list_todos', { factory }).invoke(
-			{} as never,
-			JSON.stringify({
+		const projectId = testProjectId();
+		const noteId = testNoteId();
+		const definition = registry('auto_accept')
+			.definitions()
+			.find((tool) => tool.name === 'list_todos');
+		expect(
+			definition?.prepare({
 				projectId,
 				noteId,
 				status: '',
@@ -917,9 +795,8 @@ describe('Agent tool coverage invariants', () => {
 				dueBefore: '',
 				createdAfter: '',
 				createdBefore: ''
-			})
-		);
-		expect(received).toEqual({ projectId, noteId });
+			}).arguments
+		).toEqual({ projectId, noteId });
 	});
 
 	it('shares the saved task batch across agent and MCP retries', async () => {
@@ -928,6 +805,7 @@ describe('Agent tool coverage invariants', () => {
 		const controller = new Todos(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TodosDependencies>({
+				...agentToolResultsFixture(),
 				boardExport: new TodoBoardExportService(),
 				todoPresentation: new TodoPresentationService(),
 				todoEditingRules: new TodoEditingRulesService(),
@@ -950,12 +828,13 @@ describe('Agent tool coverage invariants', () => {
 		const input = JSON.stringify(payload);
 		const first = await selected.invoke({} as never, input);
 		const retry = await selected.invoke({} as never, input);
-		const mcp = new McpTools(
+		const mcp = createMcpToolDefinitions(
 			testTokenizer,
 			factory,
 			testActor(),
 			{ provenanceId: testProvenanceId() },
-			allTools
+			allTools,
+			new InMemoryToolRetriever()
 		)
 			.definitions()
 			.find((definition) => definition.name === 'create_todos');
@@ -1059,32 +938,29 @@ describe('Agent tool coverage invariants', () => {
 	// model that answers an argument-free tool with "" — there is nothing to fill
 	// in — used to die on InvalidToolInputError without the tool ever running. One
 	// production trace spun through thirteen such calls and hit the token ceiling.
-	const groundingFixture = () => {
-		let reached = false;
-		const factory = {
-			workspace: () => ({
-				getShellContext: async () => {
-					reached = true;
-					return { projects: [], notes: [] };
-				}
-			})
-		} as unknown as ControllerFactory;
-		return {
-			reached: () => reached,
-			tool: directToolFor('auto_accept', 'get_workspace_context', { factory })
-		};
-	};
 
 	it('treats a blank call to an argument-free tool as an empty object', async () => {
-		const fixture = groundingFixture();
-		await fixture.tool.invoke({} as never, '');
-		expect(fixture.reached()).toBe(true);
+		const controller = new Widgets(
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<WidgetsDependencies>({
+				...agentToolResultsFixture(),
+				...createWidgetRules()
+			})
+		);
+		const factory = capabilityDependencies<ControllerFactory>({ widgets: () => controller });
+		expect(
+			await directToolFor('auto_accept', 'read_widget_catalog', { factory }).invoke({} as never, '')
+		).toMatchObject({ catalogVersion: 3, reference: expect.stringContaining('Text') });
 	});
-
 	it('still rejects malformed non-empty arguments', async () => {
-		const fixture = groundingFixture();
-		await fixture.tool.invoke({} as never, '{"noteId":');
-		expect(fixture.reached()).toBe(false);
+		const failure = await directToolFor('auto_accept', 'read_widget_catalog').invoke(
+			{} as never,
+			'{"noteId":'
+		);
+		expect(typeof failure === 'string' ? JSON.parse(failure) : failure).toMatchObject({
+			kind: 'failure',
+			code: 'VALIDATION'
+		});
 	});
 
 	it('saves Markdown with a compact receipt and preserves server-owned note fields', async () => {
@@ -1239,64 +1115,55 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('executes agent actions through the actor-scoped controller factory', async () => {
-		let received: unknown;
-		const factory = {
-			notes: () => ({
-				create: async (actor: unknown, input: unknown) => {
-					received = { actor, input };
-					return { note: { id: 'note-1' } };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const selected = createAgentTools(factory, testActor(), 'auto_accept', {
-			provenanceId: testProvenanceId(),
-			input: { conversationId: testConversationId(), prompt: 'Create a note' },
-			model: 'openai/gpt-5.6'
-		})
-			.tools()
-			.find((candidate) => candidate.name === 'create_note') as FunctionTool;
-		await selected.invoke(
+		const records = new InMemoryNoteRepository();
+		const projects = new InMemoryProjectRepository(records);
+		projects.projects = [projectBuilder()];
+		const { notes } = noteCreationControllers(
+			createNoteServices(records, new InMemoryAnchorRepository(), projects).creator,
+			new InMemoryTransactionRunner([records, projects])
+		);
+		const factory = capabilityDependencies<ControllerFactory>({ notes: () => notes });
+		const result = await directToolFor('auto_accept', 'create_note', { factory }).invoke(
 			{} as never,
 			JSON.stringify({ title: 'Agent draft', projectId: testProjectId() })
 		);
-		expect(received).toEqual({
-			actor: testActor(),
-			input: { title: 'Agent draft', projectId: testProjectId() }
+		expect({
+			result,
+			saved: records.notes.map((note) => ({
+				id: note.id,
+				userId: note.userId,
+				projectId: note.projectId,
+				title: note.title
+			}))
+		}).toEqual({
+			result: { noteId: records.notes[0].id, title: 'Agent draft', currentRevision: 1 },
+			saved: [
+				{
+					id: records.notes[0].id,
+					userId: testActor().userId,
+					projectId: testProjectId(),
+					title: 'Agent draft'
+				}
+			]
 		});
 	});
 
 	it('uses the effective conversation model for reference search', async () => {
-		let receivedModel: string | undefined;
-		let receivedInput: unknown;
-		const factory = {
-			references: () => ({
-				suggestFromSelection: async (
-					_actor: unknown,
-					input: unknown,
-					options?: { model?: string }
-				) => {
-					receivedInput = input;
-					receivedModel = options?.model;
-					return { outcome: 'nothing_relevant' };
-				}
-			})
-		} as unknown as ControllerFactory;
+		const { reference, references } = referenceSearchFixture();
+		const factory = capabilityDependencies<ControllerFactory>({ references: () => reference });
 		const selected = createAgentTools(factory, testActor(), 'auto_accept', {
 			provenanceId: testProvenanceId(),
 			input: {
 				conversationId: testConversationId(),
 				prompt: 'Find references',
-				selection: authoritativeSelection
+				selection: referenceSelection
 			},
 			model: 'anthropic/claude-sonnet-4.5'
 		})
 			.tools()
-			.find((candidate) => candidate.name === 'find_references') as FunctionTool;
+			.find((tool) => tool.name === 'find_references') as FunctionTool;
 		await selected.invoke({} as never, '{}');
-		expect({ receivedModel, receivedInput }).toEqual({
-			receivedModel: 'anthropic/claude-sonnet-4.5',
-			receivedInput: { selection: authoritativeSelection }
-		});
+		expect(references.model).toBe('anthropic/claude-sonnet-4.5');
 	});
 
 	it('offers actor scoping for extracted commitments', () => {
@@ -1372,29 +1239,25 @@ describe('Agent tool coverage invariants', () => {
  */
 describe('The provider call id', () => {
 	const recordedCallIds = (): {
-		executor: AgentToolExecutor;
+		executor: AgentToolCompletionObserver;
 		seen: { readonly callId?: string }[];
 	} => {
 		const seen: { readonly callId?: string }[] = [];
 		return {
 			seen,
 			executor: {
-				execute: async (input, action) => {
+				completed: async (input) => {
 					seen.push(input);
-					return action();
 				}
 			}
 		};
 	};
 
 	const invokeListProjects = async (
-		executor: AgentToolExecutor,
+		executor: AgentToolCompletionObserver,
 		details?: Parameters<FunctionTool['invoke']>[2]
 	): Promise<void> => {
-		const factory = capabilityDependencies<ControllerFactory>({
-			projects: () =>
-				capabilityDependencies<ProjectsController>({ list: async () => ({ projects: [] }) })
-		});
+		const { factory } = agentProjectsFixture();
 		const selected = createAgentTools(
 			factory,
 			testActor(),
@@ -1426,61 +1289,65 @@ describe('The provider call id', () => {
 
 describe('Explicit mutation receipts', () => {
 	it('reports the pinned skill state after saving it', async () => {
-		const skills = capabilityDependencies<SkillsController>({ setPinned: async () => undefined });
-		const factory = capabilityDependencies<ControllerFactory>({ skills: () => skills });
+		const { controller, note, skills } = loadedSkillFixture();
+		const factory = capabilityDependencies<ControllerFactory>({ skills: () => controller });
 		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((definition) => definition.name === 'set_skill_pinned');
-		const input = {
-			noteId: '9f1c2f18-0b1a-4a5e-9c3d-2f7b8e4a1d55',
-			projectId: '8e0b1a27-9c2d-4f18-8a5e-1d55b3c7f902',
-			pinned: true
-		};
-		expect(await tool?.prepare(input).execute()).toEqual(input);
+			.find((tool) => tool.name === 'set_skill_pinned');
+		const input = { noteId: note.id, projectId: note.projectId, pinned: true };
+		const receipt = await tool?.prepare(input).execute();
+		expect({ receipt, pins: skills.pins }).toEqual({
+			receipt: input,
+			pins: [{ skillNoteId: note.id, projectId: note.projectId }]
+		});
 	});
 
 	it('reports the revoked token id', async () => {
-		const apiTokens = capabilityDependencies<ApiTokensController>({
-			revoke: async (_actor, id) => ({ id, name: 'Local integration' })
+		const tokens = new AccessTokens(
+			new InMemoryApiTokenRepository([testTokenUser(testActor().userId)])
+		);
+		const minted = await tokens.mint(testActor().userId, {
+			name: 'Local integration',
+			scope: 'read'
 		});
+		const apiTokens = new ApiTokens({ ...agentToolResultsFixture(), tokens });
 		const factory = capabilityDependencies<ControllerFactory>({ apiTokens: () => apiTokens });
 		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((definition) => definition.name === 'revoke_api_token');
-		expect(
-			await tool?.prepare({ tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013' }).execute()
-		).toEqual({
-			tokenId: '7d9a0b16-8c3e-4f27-9b5a-2e66c4d8a013',
-			name: 'Local integration',
-			revoked: true
+			.find((tool) => tool.name === 'revoke_api_token');
+		const receipt = await tool?.prepare({ tokenId: minted.token.id }).execute();
+		expect({ receipt, verified: await tokens.verify(`Bearer ${minted.plaintext}`) }).toEqual({
+			receipt: { tokenId: minted.token.id, name: 'Local integration', revoked: true },
+			verified: null
 		});
 	});
 
 	it('reports the deleted artifact id', async () => {
-		const deliverables = capabilityDependencies<DeliverablesController>({
-			deleteArtifact: async (_actor, id) => ({ id, title: 'Report' })
+		const { service, notes, artifacts } = exportControllerFixture();
+		notes.notes = [noteBuilder()];
+		const { artifact } = await service.generateDocument(testActor(), {
+			projectId: testProjectId(),
+			noteIds: [testNoteId()],
+			title: 'Report',
+			format: 'pdf'
 		});
-		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => deliverables });
+		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => service });
 		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((definition) => definition.name === 'delete_artifact');
-		expect(
-			await tool?.prepare({ artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124' }).execute()
-		).toEqual({
-			artifactId: '6c8f9a05-7b4d-4e36-8a59-3f77d5e9b124',
-			title: 'Report',
-			deleted: true
+			.find((tool) => tool.name === 'delete_artifact');
+		const receipt = await tool?.prepare({ artifactId: artifact.id }).execute();
+		expect({ receipt, artifacts: artifacts.artifacts }).toEqual({
+			receipt: { artifactId: artifact.id, title: 'Report', deleted: true },
+			artifacts: []
 		});
 	});
 
 	it('fails visibly when an artifact does not exist', async () => {
-		const deliverables = capabilityDependencies<DeliverablesController>({
-			getArtifact: async () => undefined
-		});
-		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => deliverables });
+		const { service } = exportControllerFixture();
+		const factory = capabilityDependencies<ControllerFactory>({ deliverables: () => service });
 		const tool = registry('auto_accept', { factory })
 			.definitions()
-			.find((definition) => definition.name === 'get_artifact');
+			.find((tool) => tool.name === 'get_artifact');
 		await expect(
 			tool?.prepare({ artifactId: '5b7e8904-6a3c-4d25-9f48-4a88e6f0c235' }).execute()
 		).rejects.toThrow('Artifact not found');
@@ -1555,9 +1422,9 @@ describe('Doomed note edits never reach the approval boundary', () => {
 describe('Deselected tools', () => {
 	const without = memoizeAgentTools(
 		(...disabled: string[]) => `without:${disabled.join(',')}`,
-		(...disabled: string[]): AgentTools => {
+		(...disabled: string[]): AgentToolSurface => {
 			const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
-			return new MemoizedAgentTools(
+			return createAgentToolSurface(
 				testTokenizer,
 				{} as ControllerFactory,
 				testActor(),
@@ -1631,4 +1498,30 @@ it('retains the fifteen-tool discovery ceiling for the agent', async () => {
 		}
 	});
 	expect(result).toMatchObject({ code: 'VALIDATION' });
+});
+
+it('keeps promotions inside the SDK tool set that discovered them', async () => {
+	const retriever = new InMemoryToolRetriever();
+	retriever.names = ['create_note'];
+	const available = createAgentTools(
+		capabilityDependencies<ControllerFactory>({}),
+		testActor(),
+		'auto_accept',
+		{
+			provenanceId: testProvenanceId(),
+			input: { conversationId: testConversationId(), prompt: 'Create a note' },
+			model: 'openai/gpt-5.6'
+		},
+		executeDirectly,
+		retriever
+	);
+	const first = available.agentTools();
+	const second = available.agentTools();
+	const search = first.find((tool) => tool.name === 'search_tools');
+	if (!search || search.type !== 'function') throw new Error('Missing search_tools');
+	await search.invoke(new RunContext(), JSON.stringify({ query: 'create a note' }));
+	expect({
+		first: (await enabledToolNames(first)).includes('create_note'),
+		second: (await enabledToolNames(second)).includes('create_note')
+	}).toEqual({ first: true, second: false });
 });

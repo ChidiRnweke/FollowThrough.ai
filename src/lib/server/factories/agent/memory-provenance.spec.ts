@@ -1,34 +1,35 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { MemoryEditingService } from '$lib/services/memory/edits';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { expect, it } from 'vitest';
-import { AgentTools, McpTools } from './agent-tool-factory';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import type { AgentRunId } from '$lib/models/agent';
+import type { Provenance } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import {
+	InMemoryEmbeddingClient,
+	InMemorySearchRepository
+} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryTrustPolicyEvaluator } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { InMemoryTrustPolicyEvaluator } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	testActor,
 	testConversationId,
 	testNow,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { AgentRunId } from '$lib/models/agent';
-import type { Provenance } from '$lib/models/provenance';
+import { expect, it } from 'vitest';
+import { createAgentToolSurface, createMcpToolDefinitions } from './agent-tool-factory';
 
 const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const actor = testActor();
@@ -65,6 +66,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
+			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			memoryChanges: library.changes,
@@ -81,7 +83,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
 	const tools =
 		surface === 'agent'
-			? new AgentTools(
+			? createAgentToolSurface(
 					testTokenizer,
 					factory,
 					actor,
@@ -91,16 +93,17 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 						input: { conversationId: testConversationId(), prompt: 'Remember this' },
 						model: 'test/model'
 					},
-					{ execute: (_input, action) => action() },
+					{ completed: async () => {} },
 					new InMemoryToolRetriever(),
 					{ isEnabled: () => true }
 				)
-			: new McpTools(
+			: createMcpToolDefinitions(
 					testTokenizer,
 					factory,
 					actor,
 					{ provenanceId: origin.id },
-					{ isEnabled: () => true }
+					{ isEnabled: () => true },
+					new InMemoryToolRetriever()
 				);
 	const tool = tools.definitions().find((item) => item.name === 'propose_memory_change');
 	if (!tool) throw new Error('Memory proposal tool is missing');

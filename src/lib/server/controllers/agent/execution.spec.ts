@@ -59,7 +59,7 @@ it('fails clearly when no API key is configured', async () => {
 		request: { conversationId: run.conversationId, prompt: 'Help' },
 		context: run.contextSnapshot!,
 		signal: new AbortController().signal,
-		toolExecutor: { execute: async (_input, action) => action() }
+		toolExecutor: { completed: async () => {} }
 	});
 	await expect(updates[Symbol.asyncIterator]().next()).rejects.toThrow('OPENROUTER_API_KEY');
 });
@@ -170,7 +170,7 @@ describe('Agent turn span lifecycle', () => {
 				request: { conversationId: run.conversationId, prompt: 'Save this note' },
 				context: run.contextSnapshot!,
 				signal: new AbortController().signal,
-				toolExecutor: { execute: async (_input, action) => action() }
+				toolExecutor: { completed: async () => {} }
 			});
 			for await (const update of updates) {
 				if (update.type === 'approval_checkpoint') break;
@@ -223,7 +223,7 @@ describe('Agent turn span lifecycle', () => {
 			request: { conversationId: run.conversationId, prompt: 'Save this note' },
 			context: parked.contextSnapshot!,
 			signal: new AbortController().signal,
-			toolExecutor: { execute: async (_input, action) => action() }
+			toolExecutor: { completed: async () => {} }
 		});
 		for await (const update of updates) {
 			if (update.type === 'approval_checkpoint') break;

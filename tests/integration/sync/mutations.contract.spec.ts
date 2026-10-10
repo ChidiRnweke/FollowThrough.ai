@@ -1,36 +1,37 @@
-import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
-import { ReferencePresentationService } from '$lib/services/references/presentation';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { TodayPresentationService } from '$lib/services/workspace/today';
-import { NoteArchiveImportService } from '$lib/server/services/notes/import';
-import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
-import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
-import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { NotePresentationService } from '$lib/services/notes/presentation';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import type { NoteId } from '$lib/models/notes';
+import { workspaceMutationRequestSchema } from '$lib/models/workspace-mutations';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import {
 	Workspace,
 	type WorkspaceDependencies
 } from '$lib/server/controllers/workspace/controller';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { sql } from 'drizzle-orm';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -48,6 +49,7 @@ const setup = async (suffix: string) => {
 		new WorkspaceCommandRulesService(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),
@@ -87,6 +89,7 @@ const setup = async (suffix: string) => {
 		workspace: new Workspace(
 			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
+				...agentToolResultsFixture(),
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				writeRecovery: synchronization.mutations,

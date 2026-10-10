@@ -1,21 +1,24 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import {
 	Relationships,
 	type RelationshipsDependencies
 } from '$lib/server/controllers/relationships/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import { RelationshipRules } from '$lib/server/services/relationships/rules';
-import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
+import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
-	InMemorySearchRepository,
 	InMemoryEmbeddingClient,
-	InMemoryReranker
+	InMemoryReranker,
+	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
@@ -24,10 +27,8 @@ import {
 	InMemoryStructuredRelationshipClient
 } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
-import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 export const relatedSelection = {
@@ -63,6 +64,7 @@ export const relatedNoteFixture = () => {
 	const settlements = new RunSettlements(runs, runs);
 	const requests = new NoteActionRequests(runs, runs, conversations);
 	const dependencies: RelationshipsDependencies = {
+		...agentToolResultsFixture(),
 		selectionOrigins: new InMemorySelectionOrigins(content, provenance),
 		knowledgeLookup: new KnowledgeLookup(repository),
 		embeddings,

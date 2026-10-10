@@ -1,90 +1,97 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type {
-	IAgentModelSelectionService,
-	IAgentModelChoiceService
-} from '$lib/services/agent/model-selection';
-import type { AgentRunSettings } from '$lib/services/agent/run-settings';
-import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
-import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
-import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
-import type { AgentRunStatusRules } from '$lib/services/agent/run-status';
-import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparationCancelled } from '$lib/errors';
-import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
 import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
 import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
-
+import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
+import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
+import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
+import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
 import type {
-	ConversationMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
-import type { ActorContext } from '$lib/models/identity';
+	IAgentModelChoiceService,
+	IAgentModelSelectionService
+} from '$lib/services/agent/model-selection';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import type { AgentRunStatusRules } from '$lib/services/agent/run-status';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
+import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentEvent,
 	AgentPreferences,
 	AgentRun,
+	AgentRunEventRecord,
 	AgentRunId,
 	AgentRunReceipt,
-	AgentRunEventRecord,
 	AgentRunSnapshot,
-	PersistedSessionItem,
 	Conversation,
 	ConversationId,
 	DecideAgentRunBatchInput,
 	DecideAgentRunInput,
-	RunAgentInput,
+	PersistedSessionItem,
 	ResolvedAgentRun,
+	RunAgentInput,
 	StagedAgentRunInput,
 	StoredAgentRunEventRecord,
 	SubmitAgentRunInput
 } from '$lib/models/agent';
+import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { NotFoundError, ValidationError } from '$lib/errors';
+import type {
+	ConversationMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
 import type {
 	AgentModelCatalog,
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
-import { activeTraceparent } from '$lib/server/services/telemetry';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import { AgentProviderFailure } from '$lib/errors';
-import type { IAgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
-import type { WidgetReader } from '$lib/server/services/widgets/library';
-import type { DiagramFinder } from '$lib/server/services/diagrams/library';
-import type { AttachmentLookup } from '$lib/server/services/attachments/library';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import {
 	attachmentFilePath,
 	diagramFilePath
 } from '$lib/server/services/agent-files/virtual-files';
+import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
+import type { AttachedResource, IAgentContext } from '$lib/server/services/agent/runs/context';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
+import type { AttachmentLookup } from '$lib/server/services/attachments/library';
+import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
+import { activeTraceparent } from '$lib/server/services/telemetry';
+import type { WidgetReader } from '$lib/server/services/widgets/library';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 import type {
-	BuiltInSkillProvisioner,
-	BuiltInSkillSelection
-} from '$lib/server/services/skills/built-ins';
-import type { SkillFinder } from '$lib/server/services/skills/library';
-import type { MemoryEntryLister } from '$lib/server/services/memory/library';
-import type { ProjectReader } from '$lib/server/services/projects/catalog';
+	AgentRunContext,
+	AgentRunExecutionOutcome,
+	ContextResourceRef,
+	PreparedAgentRun
+} from '$lib/models/agent';
 import type {
-	ConversationSessions,
-	ConversationMessages
+	ConversationMessages,
+	ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
-import type { AgentRunContext, ContextResourceRef, PreparedAgentRun } from '$lib/models/agent';
+import type {
+	AgentRunner,
+	AgentToolCompletionObserver
+} from '$lib/server/services/agent/runs/contracts';
 import type {
 	AgentRunDecisionRepository,
 	AgentRunEventRepository,
 	AgentRunRepository,
 	AgentSessionRepository
 } from '$lib/server/services/agent/runs/execution-contracts';
-import type { AgentRunExecutionOutcome } from '$lib/models/agent';
-import type { AgentRunner, AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import type { ProjectReader } from '$lib/server/services/projects/catalog';
+import type {
+	BuiltInSkillProvisioner,
+	BuiltInSkillSelection
+} from '$lib/server/services/skills/built-ins';
+import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
@@ -847,15 +854,13 @@ export class Agent implements AgentController {
 			const actor: ActorContext = { userId: run.userId };
 			const request = run.inputSnapshot;
 			const decisions = await this.dependencies.decisions.loadUnconsumed(run.id);
-			const toolExecutor: AgentToolExecutor = {
-				execute: async (input, action) => {
-					const output = await action();
-					if (input.classification !== 'mutation') return output;
+			const toolExecutor: AgentToolCompletionObserver = {
+				completed: async (input, _output) => {
+					if (input.classification !== 'mutation') return;
 					await this.persistEvent(run, actor, {
 						type: 'resources_stale',
 						resources: ['workspace']
 					});
-					return output;
 				}
 			};
 			for await (const update of this.dependencies.runner.execute({

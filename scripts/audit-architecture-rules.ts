@@ -1,6 +1,6 @@
 import { dirname, relative, resolve } from 'node:path';
-import ts from 'typescript';
 import { parse } from 'svelte/compiler';
+import ts from 'typescript';
 
 export type ArchitectureRule =
 	| 'unresolved-source'
@@ -9,6 +9,8 @@ export type ArchitectureRule =
 	| 'service-interface'
 	| 'concrete-dependency'
 	| 'controller-collaborator'
+	| 'controller-orchestration'
+	| 'adapter-orchestration'
 	| 'retained-service-state'
 	| 'store-workflow'
 	| 'factory-workflow';
@@ -230,6 +232,21 @@ export function analyzeArchitecture(
 		if (seen.has(value)) return;
 		seen.add(value);
 		if (!ts.isObjectLiteralExpression(value)) {
+			// A model-owned port cannot erase a statically supplied controller implementation.
+			// Bind declared members as well as object literals; do not infer from local names.
+			const supplied = checker.getTypeAtLocation(value);
+			for (const property of target.getProperties()) {
+				const implementation = supplied.getProperty(property.name);
+				if (!implementation || implementation === property) continue;
+				for (const member of implementation.declarations ?? []) {
+					if (
+						(ts.isMethodDeclaration(member) || ts.isMethodSignature(member)) &&
+						ts.isIdentifier(member.name)
+					) {
+						injected.set(property, [...(injected.get(property) ?? []), member.name]);
+					}
+				}
+			}
 			for (const declaration of declarations(value))
 				if (ts.isVariableDeclaration(declaration) && declaration.initializer)
 					bindProperties(target, declaration.initializer, seen);
@@ -324,6 +341,7 @@ export function analyzeArchitecture(
 		return result;
 	};
 	const forbidden = (owner: Layer, target: Layer): boolean => {
+		if (owner === 'controllers') return target === 'controllers';
 		if (owner === 'components') return ['services', 'repositories', 'remote'].includes(target);
 		if (owner === 'services')
 			return ['services', 'controllers', 'remote', 'factories'].includes(target);
@@ -334,11 +352,13 @@ export function analyzeArchitecture(
 		return false;
 	};
 	const callRule = (owner: Layer): ArchitectureRule =>
-		owner === 'stores'
-			? 'store-workflow'
-			: owner === 'factories'
-				? 'factory-workflow'
-				: 'indirect-dependency';
+		owner === 'controllers'
+			? 'controller-orchestration'
+			: owner === 'stores'
+				? 'store-workflow'
+				: owner === 'factories'
+					? 'factory-workflow'
+					: 'indirect-dependency';
 	const inspectDependency = (
 		site: ts.Node,
 		expression: ts.Node,
@@ -346,7 +366,7 @@ export function analyzeArchitecture(
 		seen = new Set<ts.Node>(),
 		trail: readonly ts.Node[] = []
 	): void => {
-		if (!['components', 'services', 'stores', 'factories'].includes(owner)) return;
+		if (!['components', 'services', 'stores', 'factories', 'controllers'].includes(owner)) return;
 		for (const origin of origins(expression)) {
 			const target = origin.declaration;
 			if (seen.has(target)) continue;
@@ -381,7 +401,9 @@ export function analyzeArchitecture(
 				report(
 					site,
 					callRule(owner),
-					`${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
+					owner === 'controllers'
+						? 'Controllers must coordinate services, not invoke another controller operation.'
+						: `${owner} must not invoke or expose ${targetLayer} behavior. Move the operation to a controller.`,
 					trace
 				);
 				continue;
@@ -395,6 +417,50 @@ export function analyzeArchitecture(
 						inspectDependency(site, child.expression, owner, seen, trace);
 				});
 		}
+	};
+
+	const adapterOperations = (
+		body: ts.Node,
+		seen = new Set<ts.Node>()
+	): { operations: Map<ts.Node, readonly ts.Node[]>; workflow: boolean } => {
+		const operations = new Map<ts.Node, readonly ts.Node[]>();
+		const groups: Map<ts.Node, readonly ts.Node[]>[] = [];
+		let workflow = false;
+		walkExecuted(body, (child) => {
+			if (!ts.isCallExpression(child)) return;
+			const group = new Map<ts.Node, readonly ts.Node[]>();
+			for (const origin of origins(child.expression)) {
+				const target = origin.declaration;
+				if (seen.has(target)) continue;
+				if (
+					layer(pathOf(target)) === 'controllers' &&
+					(ts.isMethodDeclaration(target) || ts.isMethodSignature(target))
+				) {
+					group.set(target, origin.trail);
+				} else if (project(target) && executable(target) && target.body) {
+					const nested = adapterOperations(target.body, new Set([...seen, target]));
+					workflow ||= nested.workflow;
+					for (const [operation, trail] of nested.operations)
+						group.set(operation, [...origin.trail, ...trail]);
+				}
+			}
+			if (group.size) groups.push(group);
+			for (const [operation, trail] of group) operations.set(operation, trail);
+		});
+		// Different producers of one callback are alternatives, not a sequence. A producer
+		// that itself coordinates operations is checked recursively in its own body.
+		return { operations, workflow: workflow || (groups.length > 1 && operations.size > 1) };
+	};
+	const inspectAdapterWorkflow = (root: ts.Node): void => {
+		if (!executable(root) || !root.body) return;
+		const result = adapterOperations(root.body, new Set([root]));
+		if (result.workflow)
+			report(
+				root,
+				'adapter-orchestration',
+				'An adapter operation must delegate one complete controller operation, not coordinate controller operations.',
+				[...result.operations.values()].flat()
+			);
 	};
 
 	const classOrigins = (type: ts.Type, seen = new Set<ts.Type>()): ts.ClassLikeDeclaration[] => {
@@ -892,6 +958,7 @@ export function analyzeArchitecture(
 	for (const source of projectFiles) {
 		const owner = layer(pathOf(source));
 		walk(source, (node) => {
+			if (owner === 'adapters') inspectAdapterWorkflow(node);
 			if (ts.isCallExpression(node)) {
 				inspectDependency(node, node.expression, owner);
 			}

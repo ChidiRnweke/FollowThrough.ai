@@ -1,15 +1,15 @@
+import { ToolLifecycleError } from '$lib/errors';
+import type { ToolClassification } from '$lib/models/agent';
+import type { ToolDiscoveryPlan } from '$lib/models/agent-tool-authority';
+import type { AgentToolCallControl, PreparedAction } from '$lib/models/agent-tool-protocol';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { ApiTokenScope } from '$lib/models/identity';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { ToolLifecycleError } from '$lib/errors';
-import type { AgentPayload } from '$lib/models/agent/payload';
-import type { ToolClassification } from '$lib/models/agent';
-import type {
-	McpToolResultReader,
-	McpToolSessionControl
-} from '$lib/server/controllers/agent/mcp-tools';
-import type { PreparedAction } from '$lib/server/controllers/agent/tool-calls';
-import { jsonObjectSchema, bindToolArguments } from './tool-call';
+import { bindToolArguments, jsonObjectSchema } from './tool-call';
+import type { AgentToolDefinition } from './tool-definitions';
+import type { McpToolSurface } from './tool-registry';
 
 export interface McpToolDefinition {
 	readonly name: string;
@@ -19,17 +19,23 @@ export interface McpToolDefinition {
 	readonly prepare: (input: unknown) => PreparedAction;
 }
 
-export class McpToolProtocol implements McpToolResultReader {
+export interface McpToolConnection {
+	open(): Server;
+}
+export class McpToolProtocol implements McpToolConnection {
 	constructor(
-		private readonly definitions: readonly McpToolDefinition[],
-		private readonly failure: (value: AgentPayload) => boolean
+		private readonly registry: McpToolSurface,
+		private readonly scope: ApiTokenScope,
+		private readonly readFailure: (value: AgentPayload) => string | undefined,
+		private readonly calls: AgentToolCallControl
 	) {}
 
 	failed(value: AgentPayload): boolean {
-		return this.failure(value);
+		return this.readFailure(value) !== undefined;
 	}
 
-	create(session: McpToolSessionControl): Server {
+	open(): Server {
+		const { definitions, plan } = this.registry.open(this.scope);
 		const server = new Server(
 			{ name: 'followthrough', version: '1.0.0' },
 			{
@@ -45,8 +51,8 @@ export class McpToolProtocol implements McpToolResultReader {
 			'Find more FollowThrough tools. Every match becomes a top-level tool; call its exact name with flat arguments matching input_schema.';
 		server.setRequestHandler(ListToolsRequestSchema, async () => ({
 			tools: [
-				...session.list().map((name) => {
-					const definition = this.definition(name);
+				...this.registry.offered(plan).map((name) => {
+					const definition = this.definition(definitions, name);
 					return {
 						name: definition.name,
 						description: definition.description,
@@ -67,14 +73,15 @@ export class McpToolProtocol implements McpToolResultReader {
 		}));
 		server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 			const { name, arguments: input = {} } = request.params;
-			const response = await session.invoke(
+			const response = await this.invoke(
+				plan,
 				name,
 				() =>
 					name === 'search_tools'
 						? bindToolArguments(searchParameters, input, ({ query, limit }) =>
-								session.search(query, limit ?? 5)
+								this.registry.search(plan, definitions, query, limit ?? 5)
 							)
-						: this.definition(name).prepare(input),
+						: this.definition(definitions, name).prepare(input),
 				extra.signal
 			);
 			if (response.listChanged) await server.sendToolListChanged();
@@ -86,10 +93,27 @@ export class McpToolProtocol implements McpToolResultReader {
 		return server;
 	}
 
-	private definition(name: string): McpToolDefinition {
-		const definition = this.definitions.find((definition) => definition.name === name);
+	private definition(definitions: readonly AgentToolDefinition[], name: string): McpToolDefinition {
+		const definition = definitions.find((definition) => definition.name === name);
 		if (!definition)
 			throw new ToolLifecycleError('Registered MCP tool is absent from its permitted catalog');
 		return definition;
+	}
+
+	private async invoke(
+		plan: ToolDiscoveryPlan,
+		name: string,
+		prepare: () => PreparedAction,
+		signal: AbortSignal
+	): Promise<{ readonly value: AgentPayload; readonly listChanged: boolean }> {
+		const refusal = this.registry.authorize(plan, name);
+		if (refusal) return { value: refusal, listChanged: false };
+		const prepared = await this.calls.prepare(
+			async () => ({ kind: 'ready', action: prepare() }),
+			signal
+		);
+		if (prepared.kind === 'failure') return { value: prepared.failure, listChanged: false };
+		const value = await this.calls.execute(prepared.action, signal);
+		return { value, listChanged: name === 'search_tools' && !this.failed(value) };
 	}
 }

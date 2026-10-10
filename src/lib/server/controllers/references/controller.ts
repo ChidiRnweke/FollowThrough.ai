@@ -1,28 +1,34 @@
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import type { ReferenceSuggestion } from '$lib/models/suggestions';
+import type {
+	AgentRunId,
+	AgentRunReceipt,
+	NoteActionRequest,
+	RunSettlementOutcome
+} from '$lib/models/agent';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { ActorContext } from '$lib/models/identity';
+import type { TextSelection } from '$lib/models/notes';
 import type {
 	FindReferencesInput,
 	FindReferencesOutput,
-	StartFindReferencesInput,
-	ReferenceCandidate
+	ReferenceCandidate,
+	ReferenceSearchOptions,
+	StartFindReferencesInput
 } from '$lib/models/references';
+import type { ReferenceSuggestion } from '$lib/models/suggestions';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { ReferenceFinder } from '$lib/server/controllers/references/search';
-import type { ReferenceRanker } from '$lib/server/services/references/ranking';
-import type { ReferenceSearchOptions } from '$lib/models/references';
-import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
-import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import type {
-	AgentRunReceipt,
-	AgentRunId,
-	RunSettlementOutcome,
-	NoteActionRequest
-} from '$lib/models/agent';
 import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
+import type { ReferenceRanker } from '$lib/server/services/references/ranking';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 
 /**
  * Application boundary for reference suggestions: given a text selection, find and rank
@@ -46,9 +52,20 @@ export interface ReferencesController {
 	): Promise<AgentRunReceipt>;
 	executeReferenceRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
 	recoverQueuedReferenceRuns(): Promise<number>;
+
+	agentFindReferences(
+		actor: ActorContext,
+		selection: TextSelection,
+		model: string,
+		input: AgentToolInput<'find_references'>
+	): Promise<AgentPayload>;
 }
 
 export interface ReferencesDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	selectionOrigins: SelectionOriginService;
 	referenceFinder: ReferenceFinder;
 	referenceRanker: ReferenceRanker;
@@ -224,5 +241,24 @@ export class References implements ReferencesController {
 			)
 		);
 		return { outcome: 'found', anchorId: anchor.id, suggestions };
+	}
+
+	async agentFindReferences(
+		actor: ActorContext,
+		selection: TextSelection,
+		model: string,
+		input: AgentToolInput<'find_references'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				...(await this.suggestFromSelection(actor, { selection: selection }, { model: model })),
+				sourceNoteId: selection.noteId
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

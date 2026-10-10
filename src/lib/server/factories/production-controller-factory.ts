@@ -54,7 +54,7 @@ import {
 } from '../controllers/user-settings/controller';
 import { Workspace, type WorkspaceDependencies } from '../controllers/workspace/controller';
 import type { ControllerFactory } from './controller-factory';
-import { instrumentedController } from '../controllers/instrumentation';
+import { instrumentedController } from './controller-instrumentation';
 
 export interface ProductionControllerDependencies {
 	agentFiles: AgentFilesDependencies;

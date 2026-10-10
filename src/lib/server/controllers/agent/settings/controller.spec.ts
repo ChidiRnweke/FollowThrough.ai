@@ -1,16 +1,17 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { describe, expect, it } from 'vitest';
 import type { DateTime } from '$lib/models/workspace';
-import { agentPreferenceWrite } from '$lib/testing/workspace/fixtures/commands';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { agentPreferenceWrite } from '$lib/testing/workspace/fixtures/commands';
+import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 import { AgentSettings, type AgentSettingsDependencies } from './controller';
 /** What the deployment falls back to when the user has chosen nothing. */
 const DEPLOYMENT_CHAT_MODEL = 'deepseek/deepseek-v4-flash';
@@ -45,6 +46,7 @@ const setup = () => {
 		controller: new AgentSettings(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
+				...agentToolResultsFixture(),
 				preferenceEditing: new AgentPreferenceEditingService(),
 				...agentRulesFixture(),
 				preferences,

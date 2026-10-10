@@ -1358,3 +1358,40 @@ remaining finding. Server public helpers, factory workflows, store coordination 
 construction still need migration. The private indexing chunker finding also needs review.
 The chat store's new controller-factory imports remain prohibited and explicitly unresolved.
 Unrelated workflows stay outside this slice. The overall plan and final acceptance remain incomplete.
+
+## Agent tool orchestration repair — 2026-10-10
+
+PR #350 remains stacked on #348. Repair implementation and strengthened checks:
+`8e3e72fbf88dc9affb5980476134dad35c6a27ba`. The earlier tool-controller extraction was invalid: its controllers invoked other
+controllers, and the type-only import exception concealed that violation. Its 100-finding
+measurement and claim of completed ownership migration are superseded.
+
+- [x] Remove tool-operation controller wrappers and their provider. Put complete tool operations,
+      project choice, projections and read filtering in the existing owning controllers.
+- [x] Make `Notes` own reviewed preparation/application. Keep protocol caches and serialization in
+      adapters. Replace the action-taking executor with a data-only completion observer.
+- [x] Coordinate discovery through embedding/index capabilities and live authorization through
+      the preference service. Preserve SDK/MCP promotion lifetime, locked tools and scope checks.
+- [x] Remove the touched server widget controller's editing-controller dependency. Retain the
+      shared editing rules and keep browser store workflows out of this slice.
+- [x] Put shared tool/Markdown contracts in models. Update capability wiring, public boundary
+      instrumentation, coverage maps and tests using existing InMemory fakes.
+- [x] Reject controller chains through imports and injection, including model-owned ports. Add
+      adapter workflow checks with positive fixtures for independent protocol handlers. Align
+      SvelteKit and QA guidance across `.agents`, `.claude` and `.opencode`.
+- [x] Run unit tests, tool-policy/execution contracts, lint, type checking and every architecture
+      stage. Refresh the complete inventory without suppressions.
+- [ ] Continue the wider application migration and satisfy the blocking semantic/Chisel gates.
+
+The final unit suite passes: 566 files, 4,485 tests, one existing skip. Selected isolated PostgreSQL
+contracts pass: 13 files, 81 tests. Lint, type checking, docs checking, topology, source, test-quality
+and UI checks pass. The current analyzer finds 772 violations on #348 source and 393 after this
+repair. Chisel still reports 53 prohibited imports. The stronger checks make the former 340/100
+counts unsuitable for comparison.
+
+The [complete inventory and enforcement report](stateless-service-controller-enforcement.md)
+record every remaining finding and verification command. Remaining work includes browser
+controller/store workflows and older server chains for conversation replay, stream mapping,
+reference search, diagram generation and PDF/document rendering. Other factory workflows,
+public service helpers and concrete exposures also remain. No overall completion box is changed;
+keep PR #350 draft while these migration gates fail.

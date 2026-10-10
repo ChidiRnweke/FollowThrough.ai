@@ -1,19 +1,19 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
-import type { ProjectPlacement } from '$lib/services/projects/placement';
-import type { NoteCreator } from '$lib/server/services/notes/catalog';
-import type { DateTime } from '$lib/models/workspace';
-import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
-import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { NotFoundError, ValidationError } from '$lib/errors';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { DateTime } from '$lib/models/workspace';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { NoteCreator } from '$lib/server/services/notes/catalog';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
+import type { ProjectDetailRules } from '$lib/services/projects/details';
+import type { ProjectPlacement } from '$lib/services/projects/placement';
+import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
-import type { Note, NoteId } from '$lib/models/notes';
-import type {
-	ProjectMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
+import type { Note, NoteId } from '$lib/models/notes';
 import type {
 	ArchiveProjectInput,
 	ArchiveProjectOutput,
@@ -31,16 +31,21 @@ import type {
 	SetProjectSectionNumberingInput,
 	SetProjectSectionNumberingOutput
 } from '$lib/models/projects';
+import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
-	ProjectLifecycle,
+	ProjectMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type {
 	ProjectCreator,
 	ProjectEditor,
-	ProjectTreeWriter,
+	ProjectLifecycle,
 	ProjectLister,
 	ProjectReader,
-	ProjectTreeReader
+	ProjectTreeReader,
+	ProjectTreeWriter
 } from '$lib/server/services/projects/catalog';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for projects and their folder tree: listing, loading, creating,
@@ -68,9 +73,39 @@ export interface ProjectsController {
 	createFolder(actor: ActorContext, input: CreateFolderInput): Promise<CreateFolderOutput<Note>>;
 	/** Move a note or folder to a new parent and position, atomically. */
 	move(actor: ActorContext, input: MoveProjectEntryInput): Promise<MoveProjectEntryOutput<Note>>;
+
+	agentListProjects(
+		actor: ActorContext,
+		input: AgentToolInput<'list_projects'>
+	): Promise<AgentPayload>;
+	agentGetProject(actor: ActorContext, input: AgentToolInput<'get_project'>): Promise<AgentPayload>;
+	agentCreateProject(
+		actor: ActorContext,
+		input: AgentToolInput<'create_project'>
+	): Promise<AgentPayload>;
+	agentRenameProject(
+		actor: ActorContext,
+		input: AgentToolInput<'rename_project'>
+	): Promise<AgentPayload>;
+	agentArchiveProject(
+		actor: ActorContext,
+		input: AgentToolInput<'archive_project'>
+	): Promise<AgentPayload>;
+	agentCreateFolder(
+		actor: ActorContext,
+		input: AgentToolInput<'create_folder'>
+	): Promise<AgentPayload>;
+	agentMoveProjectEntry(
+		actor: ActorContext,
+		input: AgentToolInput<'move_project_entry'>
+	): Promise<AgentPayload>;
 }
 
 export interface ProjectsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly noteCreationRules: NoteCreationRules;
 	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
@@ -229,5 +264,109 @@ export class Projects implements ProjectsController {
 				entry: { ...decision.entry, parentId: decision.parentId, position: decision.position }
 			};
 		});
+	}
+
+	async agentListProjects(
+		actor: ActorContext,
+		input: AgentToolInput<'list_projects'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				projects: (await this.list(actor)).projects.map((value) =>
+					this.dependencies.toolPresentation.projectProject(value)
+				)
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentGetProject(
+		actor: ActorContext,
+		input: AgentToolInput<'get_project'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.get(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentCreateProject(
+		actor: ActorContext,
+		input: AgentToolInput<'create_project'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.dependencies.toolPresentation.projectProject(
+				(await this.create(actor, input)).project
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentRenameProject(
+		actor: ActorContext,
+		input: AgentToolInput<'rename_project'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.dependencies.toolPresentation.projectProject(
+				(await this.rename(actor, input)).project
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentArchiveProject(
+		actor: ActorContext,
+		input: AgentToolInput<'archive_project'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.dependencies.toolPresentation.projectProject(
+				(await this.archive(actor, input)).project
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentCreateFolder(
+		actor: ActorContext,
+		input: AgentToolInput<'create_folder'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.dependencies.toolPresentation.projectNoteWrite(
+				(await this.createFolder(actor, input)).folder
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentMoveProjectEntry(
+		actor: ActorContext,
+		input: AgentToolInput<'move_project_entry'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.move(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

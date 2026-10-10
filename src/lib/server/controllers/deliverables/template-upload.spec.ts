@@ -1,17 +1,18 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
-import { Document, Packer, Paragraph } from 'docx';
-import { Deliverables, type DeliverablesDependencies } from './controller';
-import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
 import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAttachmentStorage,
 	InMemoryTemplateRepository
 } from '$lib/testing/attachments/fakes/in-memory-deliverables';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { Document, Packer, Paragraph } from 'docx';
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { Deliverables, type DeliverablesDependencies } from './controller';
 
 const setup = async () => {
 	const storage = new InMemoryAttachmentStorage();
@@ -19,6 +20,7 @@ const setup = async () => {
 	const controller = new Deliverables(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
+			...agentToolResultsFixture(),
 			...createTemplateServices(repository, () => testNow),
 			templateStorage: storage,
 			templateStyles: new DocxTemplateStyleReader(),

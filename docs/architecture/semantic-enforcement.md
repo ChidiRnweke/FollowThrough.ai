@@ -12,23 +12,33 @@ not an empty result. No baseline, suppression comment or migration allowance hid
 
 ## Rules and corrections
 
-| Rule                      | Rejects                                                                                                                  | Correction                                                                    |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `indirect-dependency`     | Prohibited behavior reached through aliases, barrels, namespace imports, wrappers or statically connected function ports | Put application operations in controllers; inject the narrow capability there |
-| `public-service-helper`   | Exported service functions, callable objects and public members outside an implemented contract                          | Expose a cohesive class capability; keep implementation helpers private       |
-| `service-interface`       | Public service classes without explicit interface contracts, including alias and default exports                         | Declare and implement the capability callers need                             |
-| `concrete-dependency`     | Concrete implementations used as dependency types, including aliases, utility types and inferred factory results         | Use declared contracts at injection and public composition boundaries         |
-| `controller-collaborator` | Controller results exposing services, transports, repositories or writable store APIs                                    | Return operation results or readonly state views                              |
-| `retained-service-state`  | Mutable service fields, module state and captured state that survive an operation                                        | Move state to a store with an explicit lifetime                               |
-| `store-workflow`          | Stores invoking capabilities or transport, directly or through traced callbacks                                          | Let a controller coordinate work and write the resulting state                |
-| `factory-workflow`        | Factories executing capabilities, including operations inside returned callbacks                                         | Construct and connect dependencies; put execution in a controller             |
-| `unresolved-source`       | Source or local modules the analyzer cannot inspect                                                                      | Repair the source or resolution; do not treat an incomplete scan as success   |
+| Rule                       | Rejects                                                                                                                  | Correction                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `indirect-dependency`      | Prohibited behavior reached through aliases, barrels, namespace imports, wrappers or statically connected function ports | Put application operations in controllers; inject the narrow capability there |
+| `public-service-helper`    | Exported service functions, callable objects and public members outside an implemented contract                          | Expose a cohesive class capability; keep implementation helpers private       |
+| `service-interface`        | Public service classes without explicit interface contracts, including alias and default exports                         | Declare and implement the capability callers need                             |
+| `concrete-dependency`      | Concrete implementations used as dependency types, including aliases, utility types and inferred factory results         | Use declared contracts at injection and public composition boundaries         |
+| `controller-orchestration` | Controllers invoking other controllers through interfaces, aliases, getters or callbacks                                 | Coordinate the underlying service capabilities in the owning controller       |
+| `adapter-orchestration`    | One adapter operation sequencing multiple controller operations, including through helpers                               | Delegate one complete operation and keep protocol work in the adapter         |
+| `controller-collaborator`  | Controller results exposing services, transports, repositories or writable store APIs                                    | Return operation results or readonly state views                              |
+| `retained-service-state`   | Mutable service fields, module state and captured state that survive an operation                                        | Move state to a store with an explicit lifetime                               |
+| `store-workflow`           | Stores invoking capabilities or transport, directly or through traced callbacks                                          | Let a controller coordinate work and write the resulting state                |
+| `factory-workflow`         | Factories executing capabilities, including operations inside returned callbacks                                         | Construct and connect dependencies; put execution in a controller             |
+| `unresolved-source`        | Source or local modules the analyzer cannot inspect                                                                      | Repair the source or resolution; do not treat an incomplete scan as success   |
 
 A type-only import does not turn a concrete class into an interface. `Pick<ConcreteService, ...>`
 and an interface extending a concrete implementation still couple the caller to that implementation.
 Factories must annotate their public results with interfaces; `satisfies` alone preserves an
 inferred concrete type. Factories may expose interface-typed bundles for composition, but controller
-operations may not return those collaborators to components.
+operations may not return those collaborators to components. A controller interface is not a
+permitted controller dependency. Private calls within the same controller implementation remain
+valid. Chisel also rejects type-only controller-to-controller imports.
+
+Adapters may parse, delegate one complete operation, and serialize its result. Separate protocol
+handlers are separate boundaries. The semantic audit follows private helper calls and injected
+callbacks, but treats different producers of a single callback as alternatives rather than a
+sequence. Review must still check policy and lifecycle ownership: moving an application coordinator
+into an adapter is not a correction.
 
 ## Valid ownership
 

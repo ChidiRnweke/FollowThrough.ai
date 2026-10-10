@@ -1,36 +1,37 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { AgentRunStatusService } from '$lib/services/agent/run-status';
-const runStatus = new AgentRunStatusService();
-import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { type AgentRunId, type DiagramActionInput } from '$lib/models/agent';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -69,6 +70,7 @@ const setup = async (suffix: string) => {
 	const requests = new NoteActionRequests(runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		...agentToolResultsFixture(),
 		generationRules: new DiagramGenerationRuleService(),
 		...fixture,
 		generation: {

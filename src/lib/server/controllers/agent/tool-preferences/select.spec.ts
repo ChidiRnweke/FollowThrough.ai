@@ -1,12 +1,13 @@
+import { ValidationError } from '$lib/errors';
+import type { ResolvedToolCatalogEntry } from '$lib/models/agent/tool-catalog';
+import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolCatalog } from '$lib/testing/agent/fakes/in-memory-tool-catalog';
-import type { ResolvedToolCatalogEntry } from '$lib/models/agent/tool-catalog';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { describe, expect, it } from 'vitest';
-import { ValidationError } from '$lib/errors';
-import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
 import { InMemoryToolPreferenceRepository } from '$lib/testing/agent/fakes/in-memory-tool-preferences';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { testActor, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 import { ToolPreferences, type ToolPreferencesDependencies } from './controller';
 
 const catalog: readonly ResolvedToolCatalogEntry[] = [
@@ -23,6 +24,7 @@ const controller = () =>
 	new ToolPreferences(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ToolPreferencesDependencies>({
+			...agentToolResultsFixture(),
 			preferences: new ToolAccess(new InMemoryToolPreferenceRepository()),
 			catalog: new InMemoryToolCatalog(catalog)
 		})

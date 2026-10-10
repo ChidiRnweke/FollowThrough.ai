@@ -1,26 +1,27 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { SkillPortabilityService } from '$lib/services/skills/manifest';
-import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
-import { NoteReferenceService } from '$lib/services/notes/references';
+import type { NoteId, NoteRevisionId } from '$lib/models/notes';
+import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
+import type { Database } from '$lib/server/db';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
+import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
+import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import type { Database } from '$lib/server/db';
-import type { NoteId, NoteRevisionId } from '$lib/models/notes';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
-import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
-import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
-import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
-import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { seedUser, replaceNoteFixture, context, now } from '../database-harness';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
+import { context, now, replaceNoteFixture, seedUser } from '../database-harness';
 
 const currentDefinitions = { active: BUILT_INS, retired: RETIRED_BUILT_INS };
 const controller = (
@@ -35,6 +36,7 @@ const controller = (
 	return new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),

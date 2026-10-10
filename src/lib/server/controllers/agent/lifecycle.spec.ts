@@ -1,38 +1,22 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
-import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
-import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
-import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
+import { createAgentToolSurface } from '$lib/server/factories/agent/agent-tool-factory';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const noteMarkdown = new NodeNoteMarkdown();
 
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
-import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
-import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
-import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
-import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-gated-memory';
-import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
-import { describe, expect, it } from 'vitest';
 import { AgentProviderFailure } from '$lib/errors';
 import type {
 	AgentExecutionUpdate,
@@ -42,18 +26,39 @@ import type {
 	ConversationId,
 	ToolActivity
 } from '$lib/models/agent';
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
-import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { DateTime } from '$lib/models/workspace';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
+import type {
+	AgentRunner,
+	AgentToolCompletionObserver
+} from '$lib/server/services/agent/runs/contracts';
+import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
 import { InMemoryAgentRunPersistence } from '$lib/testing/agent/fakes/in-memory-agent-runs';
 import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { InMemoryConversationRepository } from '$lib/testing/agent/fakes/in-memory-conversations';
+import { InMemoryGatedMemoryEntries } from '$lib/testing/memory/fakes/in-memory-gated-memory';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
+import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
-import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	noteBuilder,
+	testActor,
+	testProvenanceId
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
@@ -479,12 +484,12 @@ describe('settling a run whose execution threw', () => {
 /** Each successful mutation requests workspace synchronization. */
 const mutatingRunner = (calls: readonly { toolName: ToolName; callId?: string }[]) => ({
 	execute: async function* (input: {
-		readonly toolExecutor: AgentToolExecutor;
+		readonly toolExecutor: AgentToolCompletionObserver;
 	}): AsyncIterable<AgentExecutionUpdate> {
 		for (const call of calls)
-			await input.toolExecutor.execute(
+			await input.toolExecutor.completed(
 				{ ...call, arguments: {}, classification: 'mutation' },
-				async () => ({ ok: true })
+				{ ok: true }
 			);
 		for (const call of calls)
 			if (call.callId !== undefined)
@@ -617,7 +622,7 @@ it('journals a failed tool call and its correction through the production runner
 		createAgentStream,
 		async ({ run, executor, signal }) => {
 			if (!run.inputSnapshot) throw new Error('Run input is missing');
-			return new AgentTools(
+			return createAgentToolSurface(
 				testTokenizer,
 				notes.factory,
 				testActor(),

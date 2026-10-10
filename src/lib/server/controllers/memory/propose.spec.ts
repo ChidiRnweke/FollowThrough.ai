@@ -1,36 +1,35 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { ValidationError } from '$lib/errors';
+import type { ProposeMemoryChangeInput } from '$lib/models/memory';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import {
-	memoryEntryBuilder,
-	testMemoryEntryId
-} from '$lib/testing/workspace/fixtures/domain-builders';
-import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { MemoryDependencies } from './controller';
-import { describe, expect, it } from 'vitest';
-import type { ProposeMemoryChangeInput } from '$lib/models/memory';
-import { ValidationError } from '$lib/errors';
-import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
-import { Memory } from './controller';
-import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemoryTrustPolicyEvaluator } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryTrustPolicyEvaluator } from '$lib/testing/relationships/fakes/in-memory-pipelines';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
+	memoryEntryBuilder,
 	projectBuilder,
 	testActor,
+	testMemoryEntryId,
+	testNow,
 	testProjectId,
-	testProvenanceId,
-	testNow
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import type { MemoryDependencies } from './controller';
+import { Memory } from './controller';
 
 type ProjectAddition = Extract<ProposeMemoryChangeInput, { scope: 'project'; operation: 'add' }>;
 const addInput = (overrides: Partial<ProjectAddition> = {}): ProjectAddition => ({
@@ -69,6 +68,7 @@ const setup = () => {
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
+			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			memoryLister: memory.lister,

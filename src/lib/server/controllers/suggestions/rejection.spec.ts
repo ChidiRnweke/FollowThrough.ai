@@ -1,22 +1,23 @@
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { expect, it } from 'vitest';
-import { Suggestions, type SuggestionsDependencies } from './controller';
 import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	suggestionBuilder,
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 const setup = () => {
 	const records = new InMemorySuggestionRepository();
@@ -30,6 +31,7 @@ const setup = () => {
 	const controller = new Suggestions(
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: inbox.finder,

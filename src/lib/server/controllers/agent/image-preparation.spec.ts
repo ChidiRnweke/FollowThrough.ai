@@ -1,24 +1,26 @@
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
-import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
-import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
-import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { AgentImagePreparationService } from '$lib/server/services/agent/runs/images';
-const images = new AgentImagePreparationService();
-import { describe, expect, it } from 'vitest';
 import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
+import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
+import {
+	createConversationSession,
+	createReplayVirtualizer
+} from '$lib/server/factories/agent/conversation-factory';
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentImagePreparationService } from '$lib/server/services/agent/runs/images';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
 import {
 	InMemoryModelProvider,
 	InMemoryTextModel
 } from '$lib/testing/agent/fakes/in-memory-model-provider';
-import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
-import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
-import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
-import { AgentExecution } from '$lib/server/controllers/agent/execution';
+import { describe, expect, it } from 'vitest';
+const images = new AgentImagePreparationService();
 
 const context: AgentRunContext = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const now = '2026-09-16T00:00:00.000Z' as DateTime;
@@ -107,7 +109,7 @@ const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
 			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
 			context,
 			signal,
-			toolExecutor: { execute: async (_input, action) => action() }
+			toolExecutor: { completed: async () => {} }
 		}))
 			updates.push(update);
 		return updates;

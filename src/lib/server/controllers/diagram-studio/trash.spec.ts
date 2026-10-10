@@ -1,33 +1,34 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { describe, expect, it } from 'vitest';
-import { DiagramStudio, type DiagramStudioDependencies } from './controller';
+import type { DateTime } from '$lib/models/workspace';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
-import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
-import {
-	InMemoryAnchorRepository,
-	InMemoryNoteRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	InMemoryDiagrams
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import {
-	testNow,
+	noteBuilder,
+	testActor,
+	testConversationId,
 	testNoteId,
-	testConversationId
+	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { DateTime } from '$lib/models/workspace';
+import { describe, expect, it } from 'vitest';
+import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
 const setup = () => {
 	const sourceNotes = new InMemoryNoteContent();
@@ -45,6 +46,7 @@ const setup = () => {
 	const controller = new DiagramStudio(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
+			...agentToolResultsFixture(),
 			diagramEditing: new DiagramEditingService(),
 			diagramLifecycle: new DiagramLifecycleService(),
 			diagramSourceNotes: sourceNotes,

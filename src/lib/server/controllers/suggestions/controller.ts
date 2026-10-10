@@ -1,54 +1,58 @@
-import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
-import type { TodoCreationRules } from '$lib/services/todos/edits';
-import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
-import type { DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type {
-	DrawioXmlContentValidator,
-	DrawioSvgPreviewSanitizer
+	DrawioSvgPreviewSanitizer,
+	DrawioXmlContentValidator
 } from '$lib/server/services/diagrams/drawio';
+import type { DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
+import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import type { TodoCreationRules } from '$lib/services/todos/edits';
 
-import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import type { AppliedChange } from '$lib/models/proposal-effects';
-import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
-import type { TodoCreator } from '$lib/server/services/todos/catalog';
-import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
-import type { ReferenceCreator } from '$lib/server/services/references/library';
-import type { MemoryChanges } from '$lib/server/services/memory/library';
+import type { CreateTodoInput, Todo, TodoId } from '$lib/models/todos';
+import type { MemoryChanges, MemoryIndexer } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
+import type { ReferenceCreator } from '$lib/server/services/references/library';
+import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
+import type { TodoCreator } from '$lib/server/services/todos/catalog';
 
-import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
-import type { ActorContext } from '$lib/models/identity';
+import { InvalidTransitionError, ValidationError } from '$lib/errors';
 import type { Diagram } from '$lib/models/diagrams';
+import type { ActorContext } from '$lib/models/identity';
+import type { ListPendingMemoryInput } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type {
 	AcceptSuggestionInput,
 	AcceptSuggestionOutput,
+	ListPendingMemoryOutput,
 	ListSuggestionsInput,
 	ListSuggestionsOutput,
-	SuggestionView,
 	RejectSuggestionInput,
 	RevertSuggestionInput,
-	Suggestion
+	Suggestion,
+	SuggestionView
 } from '$lib/models/suggestions';
-import type { ListPendingMemoryInput } from '$lib/models/memory';
-import type { ListPendingMemoryOutput } from '$lib/models/suggestions';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
-import { InvalidTransitionError, ValidationError } from '$lib/errors';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type {
 	SuggestionAccepter,
+	SuggestionContextReader,
+	SuggestionExpirer,
 	SuggestionFinder,
 	SuggestionLister,
-	SuggestionExpirer,
 	SuggestionRejecter,
-	SuggestionReverter,
-	SuggestionContextReader
+	SuggestionReverter
 } from '$lib/server/services/suggestions/inbox';
 
 import type { SuggestionArtifact } from '$lib/models/suggestions';
@@ -115,9 +119,30 @@ export interface SuggestionsController {
 	 * what was applied.
 	 */
 	revert(actor: ActorContext, input: RevertSuggestionInput): Promise<Suggestion>;
+
+	agentListSuggestions(
+		actor: ActorContext,
+		input: AgentToolInput<'list_suggestions'>
+	): Promise<AgentPayload>;
+	agentAcceptSuggestion(
+		actor: ActorContext,
+		input: AgentToolInput<'accept_suggestion'>
+	): Promise<AgentPayload>;
+	agentRejectSuggestion(
+		actor: ActorContext,
+		input: AgentToolInput<'reject_suggestion'>
+	): Promise<AgentPayload>;
+	agentRevertSuggestion(
+		actor: ActorContext,
+		input: AgentToolInput<'revert_suggestion'>
+	): Promise<AgentPayload>;
 }
 /** Everything the {@link SuggestionsController} needs, injected so it can be built and tested without real stores. */
 export interface SuggestionsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly todoCreationRules: TodoCreationRules;
 	readonly suggestionPresentation: ISuggestionPresentationService;
 	suggestionLister: SuggestionLister;
@@ -413,6 +438,65 @@ export class Suggestions implements SuggestionsController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+
+	async agentListSuggestions(
+		actor: ActorContext,
+		input: AgentToolInput<'list_suggestions'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				suggestions: (await this.list(actor, input)).groups.flatMap((group) =>
+					group.suggestions.map((view) =>
+						this.dependencies.toolPresentation.projectSuggestion(view.suggestion)
+					)
+				)
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentAcceptSuggestion(
+		actor: ActorContext,
+		input: AgentToolInput<'accept_suggestion'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.acceptReviewed(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentRejectSuggestion(
+		actor: ActorContext,
+		input: AgentToolInput<'reject_suggestion'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.reject(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentRevertSuggestion(
+		actor: ActorContext,
+		input: AgentToolInput<'revert_suggestion'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.revert(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }
 

@@ -1,26 +1,27 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { InMemoryNoteMarkdownReader } from '$lib/testing/notes/fakes/markdown-reader';
-import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
-import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { describe, expect, it } from 'vitest';
-import { Todos, type TodosDependencies } from './controller';
 import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
-const preparation = new ExportPreparationService();
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-type BoardPdfGenerator = TodosDependencies['pdfGenerator']['render'];
-type MarkdownToDocument = TodosDependencies['markdownToContent']['read'];
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
+import { InMemoryNoteMarkdownReader } from '$lib/testing/notes/fakes/markdown-reader';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	projectBuilder,
 	testActor,
-	testProjectId,
 	testNow,
+	testProjectId,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from './controller';
+const preparation = new ExportPreparationService();
+type BoardPdfGenerator = TodosDependencies['pdfGenerator']['render'];
+type MarkdownToDocument = TodosDependencies['markdownToContent']['read'];
 
 const setup = () => {
 	const todos = new InMemoryTodos();
@@ -38,6 +39,7 @@ const setup = () => {
 	const service = new Todos(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),

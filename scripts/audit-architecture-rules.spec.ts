@@ -584,3 +584,120 @@ it('does not label server route handlers as components', () => {
 	});
 	expect(result.filter((item) => item.message.startsWith('components '))).toEqual([]);
 });
+
+describe('controller operation ownership', () => {
+	const skill = 'src/lib/server/controllers/skills/controller.ts';
+	const tool = 'src/lib/server/controllers/agent/mcp.ts';
+	const contract = 'export interface SkillsController { loadForAgent(): Promise<string>; }';
+	it.each([
+		"import type { SkillsController } from '../skills/controller'; export class Tool { constructor(private readonly skills: SkillsController) {} run() { return this.skills.loadForAgent(); } }",
+		"import type { SkillsController } from '../skills/controller'; export class Tool { constructor(private readonly skills: Pick<SkillsController, 'loadForAgent'>) {} run() { return this.skills.loadForAgent(); } }",
+		"import type { SkillsController } from '../skills/controller'; export class Tool { constructor(private readonly controllers: {skills(): SkillsController}) {} run() { return this.controllers.skills().loadForAgent(); } }"
+	])('rejects another controller operation: %s', (source) => {
+		expect(rules({ [skill]: contract, [tool]: source })).toContain('controller-orchestration');
+	});
+	it('rejects a controller operation hidden behind a bound callback', () => {
+		expect(
+			rules({
+				[skill]: 'export class Skills { async loadForAgent() { return "skill"; } }',
+				[tool]:
+					'export interface ToolControl { run(): Promise<string>; } export class Tool implements ToolControl { constructor(private readonly load: () => Promise<string>) {} run() { return this.load(); } }',
+				'src/lib/server/factories/tools.ts':
+					"import { Skills } from '../controllers/skills/controller'; import { Tool, type ToolControl } from '../controllers/agent/mcp'; export function create(): ToolControl { const skills = new Skills(); return new Tool(skills.loadForAgent.bind(skills)); }"
+			})
+		).toContain('controller-orchestration');
+	});
+	it('allows private orchestration inside the same controller', () => {
+		expect(
+			rules({
+				[tool]:
+					'export class Tool { async run() { return this.load(); } private async load() { return "skill"; } }'
+			})
+		).toEqual([]);
+	});
+});
+
+describe('adapter operation ownership', () => {
+	const notes = 'export interface Notes { save(): Promise<void>; index(): Promise<void> }';
+	const path = 'src/lib/server/controllers/notes/controller.ts';
+	it.each([
+		'async execute() { await this.notes.save(); await this.notes.index(); }',
+		'private save() { return this.notes.save(); } async execute() { await this.save(); await this.notes.index(); }'
+	])('rejects coordination through direct calls or a private helper: %s', (body) => {
+		expect(
+			rules({
+				[path]: notes,
+				'src/lib/server/adapters/protocol.ts':
+					`import type { Notes } from './controllers/notes/controller'; export class Protocol { constructor(private notes: Notes) {} ${body} }`.replace(
+						"'./controllers/",
+						"'../controllers/"
+					)
+			})
+		).toContain('adapter-orchestration');
+	});
+	it('traces a sequence across two controllers through an injected callback', () => {
+		const violations = inspect({
+			[path]: notes,
+			'src/lib/server/controllers/search/controller.ts':
+				'export interface Search { index(): void }',
+			'src/lib/server/adapters/protocol.ts': `import type { Notes } from '../controllers/notes/controller'; import type { Search } from '../controllers/search/controller'; export class Protocol { constructor(private save: () => Promise<void>, private search: Search) {} async execute() { await this.save(); this.search.index(); } }`,
+			'src/lib/server/factories/protocol.ts': `import {Protocol} from '../adapters/protocol'; import type {Notes} from '../controllers/notes/controller'; import type {Search} from '../controllers/search/controller'; export const create = (notes: Notes, search: Search) => new Protocol(() => notes.save(), search);`
+		});
+		expect(
+			violations
+				.filter((item) => item.rule === 'adapter-orchestration')
+				.map((item) => item.provenance.join(' '))
+		).toEqual([
+			expect.stringMatching(/controllers\/notes\/controller.*controllers\/search\/controller/)
+		]);
+	});
+	it('allows separate handlers that each delegate one operation', () => {
+		expect(
+			rules({
+				[path]: notes,
+				'src/lib/server/adapters/protocol.ts': `import type {Notes} from '../controllers/notes/controller'; export class Protocol { constructor(private notes: Notes) {} handlers() { return {save: () => this.notes.save(), index: () => this.notes.index()}; } }`
+			})
+		).not.toContain('adapter-orchestration');
+	});
+	it('allows parse, one operation, and serialization', () => {
+		expect(
+			rules({
+				[path]: notes,
+				'src/lib/server/adapters/protocol.ts': `import type {Notes} from '../controllers/notes/controller'; export class Protocol { constructor(private notes: Notes) {} async handle(text: string) { JSON.parse(text); return JSON.stringify(await this.notes.save()); } }`
+			})
+		).not.toContain('adapter-orchestration');
+	});
+});
+
+it('treats independent callback producers as alternatives, not controller sequencing', () => {
+	expect(
+		rules({
+			'src/lib/server/controllers/notes/controller.ts':
+				'export interface Notes {save(): void; read(): void}',
+			'src/lib/server/adapters/protocol.ts': `import type { Notes } from '../controllers/notes/controller'; const handle = (execute: () => void) => () => execute(); export const handlers = (notes: Notes) => [handle(() => notes.save()), handle(() => notes.read())];`
+		})
+	).not.toContain('adapter-orchestration');
+});
+
+it('rejects an orchestrating callback even when the adapter calls it only once', () => {
+	expect(
+		rules({
+			'src/lib/server/controllers/notes/controller.ts':
+				'export interface Notes {save(): void; index(): void}',
+			'src/lib/server/adapters/protocol.ts':
+				'export class Protocol {constructor(private action: () => void) {} execute() {this.action();}}',
+			'src/lib/server/factories/protocol.ts': `import {Protocol} from '../adapters/protocol'; import type {Notes} from '../controllers/notes/controller'; export const create = (notes: Notes) => new Protocol(() => {notes.save(); notes.index();});`
+		})
+	).toContain('adapter-orchestration');
+});
+
+it('rejects a controller implementation supplied through a model-owned operation port', () => {
+	expect(
+		rules({
+			'src/lib/models/notes/index.ts': 'export interface WritePort {save(): void}',
+			'src/lib/server/controllers/notes/controller.ts': 'export class Notes {save() {}}',
+			'src/lib/server/controllers/editor/controller.ts': `import type {WritePort} from '$lib/models/notes'; export class Editor {constructor(private port: WritePort) {} save() {this.port.save();}}`,
+			'src/lib/server/factories/editor.ts': `import {Notes} from '../controllers/notes/controller'; import {Editor} from '../controllers/editor/controller'; export const create = () => new Editor(new Notes());`
+		})
+	).toContain('controller-orchestration');
+});

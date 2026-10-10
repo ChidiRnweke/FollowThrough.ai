@@ -1,37 +1,38 @@
-import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
-import { ReferencePresentationService } from '$lib/services/references/presentation';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import AdmZip from 'adm-zip';
-import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
 import {
-	readMarkdownArchive,
+	describeArchiveRejection,
 	parseMarkdownNote,
-	describeArchiveRejection
+	readMarkdownArchive
 } from '$lib/remote/notes/archive-reader.server';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
@@ -56,6 +57,7 @@ export const importedNotesFixture = () => {
 		new WorkspaceCommandRulesService(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),

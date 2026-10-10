@@ -1,10 +1,11 @@
-import { expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { ApiTokens } from '$lib/server/controllers/api-tokens/controller';
-import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import * as schema from '$lib/server/db/schema/identity';
 import { ApiTokenRecords } from '$lib/server/repositories/identity/postgres/api-tokens';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
-import * as schema from '$lib/server/db/schema/identity';
+import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { eq } from 'drizzle-orm';
+import { expect, it } from 'vitest';
 import { context } from '../database-harness';
 
 const setup = async () => {
@@ -14,7 +15,15 @@ const setup = async () => {
 		role: 'USER'
 	});
 	const tokens = new AccessTokens(new ApiTokenRecords(context.db));
-	return { user, actor: { userId: user.id }, tokens, controller: new ApiTokens({ tokens }) };
+	return {
+		user,
+		actor: { userId: user.id },
+		tokens,
+		controller: new ApiTokens({
+			...agentToolResultsFixture(),
+			tokens
+		})
+	};
 };
 it('stores only the credential hash and excludes it from public token records', async () => {
 	const { actor, tokens, controller } = await setup();

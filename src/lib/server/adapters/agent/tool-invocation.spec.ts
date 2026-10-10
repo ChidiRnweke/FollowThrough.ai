@@ -1,9 +1,10 @@
-import { expect, it } from 'vitest';
 import { ToolLifecycleError, ValidationError } from '$lib/errors';
+import type { ToolPreparation } from '$lib/models/agent-tool-protocol';
 import { ToolCallBoundary } from '$lib/server/adapters/agent/tool-call';
+import { AgentToolInvocation } from '$lib/server/adapters/agent/tool-invocation';
+import { AgentToolCalls } from '$lib/server/adapters/agent/tool-invocation-errors';
 import { AgentToolInvocationStore } from '$lib/server/stores/agent/tool-invocation';
-import { AgentToolCalls, type ToolPreparation } from './tool-calls';
-import { AgentToolInvocation } from './tool-invocation';
+import { expect, it } from 'vitest';
 
 const setup = (revision: () => number, gate: Promise<void> = Promise.resolve()) => {
 	const abort = new AbortController();

@@ -1,40 +1,30 @@
-import type { AgentToolRegistry } from './tool-sessions';
-import type { AgentStreamMappings } from '$lib/server/controllers/agent/stream-events';
-import type { ConversationImageInput } from '$lib/models/agent';
-import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
-import type { AgentToolRecovery } from '$lib/server/services/agent/runs/tool-recovery';
-import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
-import type { OpenAIProvider, Session, Tool } from '@openai/agents';
-import type { ActorContext } from '$lib/models/identity';
+import type { AgentToolCompletionObserver } from '$lib/models/agent-tool-protocol';
+import { AgentProviderFailure } from '$lib/errors';
+import type {
+	ConversationId,
+	ConversationImageInput,
+	PersistedSessionItem
+} from '$lib/models/agent';
 import {
 	DEFAULT_AGENT_MAX_TURNS,
 	type AgentExecutionUpdate,
 	type AgentRun,
-	type AgentRunImages,
 	type AgentRunContext,
 	type AgentRunDecisionRecord,
+	type AgentRunImages,
 	type PendingAgentDecision,
 	type ProviderStreamEvent,
 	type RunAgentInput,
-	type ToolClassification,
 	type WebResearchSettings
 } from '$lib/models/agent';
-import { type ToolName } from '$lib/models/agent/tool-catalog';
-import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload';
-import { AgentProviderFailure } from '$lib/errors';
-import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
+import type { AgentToolRegistry } from '$lib/models/agent-tool-session';
+import type { ActorContext } from '$lib/models/identity';
+import type { AgentStreamMappings } from '$lib/server/controllers/agent/stream-events';
+import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
+import type { AgentPromptPreparation } from '$lib/server/services/agent/runs/instructions';
+import type { AgentToolRecovery } from '$lib/server/services/agent/runs/tool-recovery';
+import type { OpenAIProvider, Session, Tool } from '@openai/agents';
 
-interface AgentToolExecutor {
-	execute(
-		input: {
-			readonly callId?: string;
-			readonly toolName: ToolName;
-			readonly arguments: AgentPayloadObject;
-			readonly classification: ToolClassification;
-		},
-		action: () => Promise<AgentPayload>
-	): Promise<AgentPayload>;
-}
 export interface AgentExecutionSessions {
 	create(actor: ActorContext, conversationId: ConversationId): BufferedSession;
 }
@@ -113,7 +103,7 @@ export class AgentExecution implements AgentRunner {
 			readonly request: RunAgentInput;
 			readonly context: AgentRunContext;
 			readonly run: AgentRun;
-			readonly executor: AgentToolExecutor;
+			readonly executor: AgentToolCompletionObserver;
 			readonly signal: AbortSignal;
 		}) => Promise<AgentToolRegistry>,
 		private readonly sessions: AgentExecutionSessions,
@@ -131,7 +121,7 @@ export class AgentExecution implements AgentRunner {
 		readonly context: AgentRunContext;
 		readonly decisions?: readonly AgentRunDecisionRecord[];
 		readonly signal: AbortSignal;
-		readonly toolExecutor: AgentToolExecutor;
+		readonly toolExecutor: AgentToolCompletionObserver;
 	}): AsyncIterable<AgentExecutionUpdate> {
 		const {
 			actor,

@@ -1,6 +1,3 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
-import { describe, expect, it } from 'vitest';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import {
 	Deliverables,
@@ -10,7 +7,11 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ExportSettingsRecords } from '$lib/server/repositories/deliverables/postgres/export-settings';
 import { ArtifactSettingsService } from '$lib/server/services/deliverables/artifacts';
+import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { actor, context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -22,6 +23,7 @@ const setup = async (suffix: string) => {
 	const controller = new Deliverables(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
+			...agentToolResultsFixture(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner,

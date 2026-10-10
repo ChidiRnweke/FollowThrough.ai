@@ -15,8 +15,10 @@ state ownership and controller boundary. ADRs 0037 and 0041 define parsing and s
 | Components and adjacent TypeScript | Rendering, focus, DOM interaction and local form state | Service/remote/repository access or application workflows |
 
 Browser components may obtain interface-typed capabilities from browser factories. Server factories
-remain server-only. Controllers receive collaborating operation contracts through type-only imports
-and factory injection; they do not construct other controller implementations. Boundary adapters
+remain server-only. Controllers receive service capabilities through factory injection. They must not import or call
+other controller operations, including through type-only contracts, getters, bound methods or
+injected callbacks. Shared data contracts belong in models. Same-implementation private methods
+may share orchestration; forwarding classes and renamed ports do not establish a new boundary. Boundary adapters
 may implement controller-owned storage or transport contracts. This does not permit adapters or
 stores to initiate application workflows. Shared write-input readers live under `adapters/`.
 
@@ -56,6 +58,10 @@ architecture audits and relevant behavior tests. Current checker permissions are
 to an accepted ADR; record unresolved violations and correct the implementation and checker.
 
 ## Checking indirect dependencies
+
+Adapters may parse input, delegate one complete controller operation and serialize its result.
+Independent protocol handlers can target different controllers. A single handler must not assemble
+a workflow from controller operations, and moving a coordinator into an adapter does not fix it.
 
 Run `pnpm test:architecture:semantic` as well as Chisel. It follows symbol aliases, re-exports,
 callable objects and statically connected callback ports. A service calling another service

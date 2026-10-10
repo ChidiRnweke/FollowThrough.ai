@@ -1,17 +1,22 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
+import { ValidationError } from '$lib/errors';
+import type { ToolPreference } from '$lib/models/agent';
+import type { ActorContext } from '$lib/models/identity';
+import type { ProjectId } from '$lib/models/projects';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	ToolPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
-import { ValidationError } from '$lib/errors';
-import type { ActorContext } from '$lib/models/identity';
-import type { ProjectId } from '$lib/models/projects';
-import type { ToolPreference } from '$lib/models/agent';
 import type { ToolPreferenceCapability } from '$lib/server/services/agent/tools/preferences';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /** Enables or disables a tool, either as the workspace default or as a per-project override. */
 export interface SetToolEnabledInput {
@@ -51,9 +56,22 @@ export interface ToolPreferencesController {
 		actor: ActorContext,
 		input: ClearToolOverrideInput
 	): Promise<readonly ToolPreference[]>;
+
+	agentListToolPreferences(
+		actor: ActorContext,
+		input: AgentToolInput<'list_tool_preferences'>
+	): Promise<AgentPayload>;
+	agentSetToolEnabled(
+		actor: ActorContext,
+		input: AgentToolInput<'set_tool_enabled'>
+	): Promise<AgentPayload>;
 }
 
 export interface ToolPreferencesDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
@@ -141,6 +159,37 @@ export class ToolPreferences implements ToolPreferencesController {
 			actor,
 			this.dependencies.catalog.entries(),
 			input.projectId
+		);
+	}
+
+	async agentListToolPreferences(
+		actor: ActorContext,
+		input: AgentToolInput<'list_tool_preferences'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.list(actor, input.projectId ? { projectId: input.projectId as ProjectId } : {});
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentSetToolEnabled(
+		actor: ActorContext,
+		input: AgentToolInput<'set_tool_enabled'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.setEnabled(actor, {
+				toolName: input.toolName,
+				enabled: input.enabled,
+				...(input.projectId ? { projectId: input.projectId as ProjectId } : {})
+			});
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
 		);
 	}
 }

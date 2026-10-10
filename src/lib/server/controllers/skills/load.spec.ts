@@ -1,23 +1,24 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { SkillPortabilityService } from '$lib/services/skills/manifest';
-import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
-import { NoteReferenceService } from '$lib/services/notes/references';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { expect, it } from 'vitest';
-import { Skills, type SkillsDependencies } from './controller';
-import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
 	testNow,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Skills, type SkillsDependencies } from './controller';
 
 const setup = () => {
 	const notes = new InMemoryNoteRepository();
@@ -51,6 +52,7 @@ const setup = () => {
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),

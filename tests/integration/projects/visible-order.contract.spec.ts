@@ -1,18 +1,19 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
-import { ProjectDetailService } from '$lib/services/projects/details';
-import { expect, it } from 'vitest';
+import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { expect, it } from 'vitest';
 import { context, seedUser } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -33,6 +34,7 @@ const setup = async (suffix: string) => {
 	const projects = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
+			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),

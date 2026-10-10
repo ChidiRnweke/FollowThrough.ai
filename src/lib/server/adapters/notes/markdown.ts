@@ -3,8 +3,8 @@ import {
 	noteContentFromMarkdown as editorContentFromMarkdown,
 	noteMarkdownFromContent
 } from '$lib/components/edra/commands/note-markdown';
+import type { NoteMarkdown } from '$lib/models/note-markdown';
 import { proseMirrorDocumentSchema, type ProseMirrorDocument } from '$lib/models/notes';
-import type { NoteMarkdown } from '$lib/server/controllers/notes/controller';
 /** Decode external Markdown and encode persisted notes with the application's editor schema. */
 export class NodeNoteMarkdown implements NoteMarkdown {
 	read(source: string): { readonly document: ProseMirrorDocument; readonly plainText: string } {

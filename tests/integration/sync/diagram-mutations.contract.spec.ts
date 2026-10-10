@@ -1,30 +1,31 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { describe, expect, it } from 'vitest';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
 } from '$lib/server/controllers/diagram-studio/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
-import { createProjectsCapability } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createProjectsCapability } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
 import {
-	DrawioXmlValidator,
+	DrawioLabelReader,
 	DrawioSvgSanitizer,
-	DrawioLabelReader
+	DrawioXmlValidator
 } from '$lib/server/services/diagrams/drawio';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const source =
@@ -63,6 +64,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 	const controller = new DiagramStudio(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
+			...agentToolResultsFixture(),
 			diagramEditing: new DiagramEditingService(),
 			diagramLifecycle: new DiagramLifecycleService(),
 			syncMutations: sync.mutations,

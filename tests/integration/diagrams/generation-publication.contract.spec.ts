@@ -1,43 +1,44 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
+import { DomainError } from '$lib/errors';
+import type { AgentRunId } from '$lib/models/agent';
+import type { DiagramId } from '$lib/models/diagrams';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
+import { isPermanentWriteConstraint } from '$lib/server/db/postgres-errors';
 import {
 	connectPostgresTestDatabase,
 	type PostgresDatabaseContext
 } from '$lib/server/db/postgres-test-context';
-import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
+import {
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
+} from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryDiagrams,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import type { DiagramId } from '$lib/models/diagrams';
-import { DomainError } from '$lib/errors';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { isPermanentWriteConstraint } from '$lib/server/db/postgres-errors';
-import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
-import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
-import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
-import { AgentRunLedger } from '$lib/server/services/agent/runs/ledger';
-import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
-import type { AgentRunId } from '$lib/models/agent';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
-} from '$lib/server/repositories/agent/postgres/agent-runs';
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 
 const setup = async (suffix: string, connection: PostgresDatabaseContext = context) => {
 	const seeded = await seedNote(suffix);
@@ -61,6 +62,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	const diagrams = new InMemoryDiagrams();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
 			diagramFinder: library.finder,

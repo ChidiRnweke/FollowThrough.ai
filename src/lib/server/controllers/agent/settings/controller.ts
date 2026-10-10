@@ -1,32 +1,37 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type {
-	IAgentModelSelectionService,
-	IAgentModelChoiceService
-} from '$lib/services/agent/model-selection';
-import type { AgentRunSettings } from '$lib/services/agent/run-settings';
-import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import {
-	DEFAULT_AGENT_MAX_TURNS,
 	CHAT_WEB_SEARCH_DEFAULTS,
+	DEFAULT_AGENT_MAX_TURNS,
 	type WebResearchOptions
 } from '$lib/models/agent';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type {
+	IAgentModelChoiceService,
+	IAgentModelSelectionService
+} from '$lib/services/agent/model-selection';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
 
+import { ValidationError } from '$lib/errors';
+import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
+import type { AgentModelDefaults } from '$lib/models/agent/model-label';
+import type { ActorContext } from '$lib/models/identity';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	AgentPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
-import type { ActorContext } from '$lib/models/identity';
-import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
-import type { AgentModelDefaults } from '$lib/models/agent/model-label';
-import { ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
 	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for agent preferences: reading and updating the user's defaults,
@@ -65,9 +70,26 @@ export interface AgentSettingsController {
 	 */
 	resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults>;
 	bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap>;
+
+	agentGetAgentPreferences(
+		actor: ActorContext,
+		input: AgentToolInput<'get_agent_preferences'>
+	): Promise<AgentPayload>;
+	agentUpdateAgentPreferences(
+		actor: ActorContext,
+		input: AgentToolInput<'update_agent_preferences'>
+	): Promise<AgentPayload>;
+	agentListAgentModels(
+		actor: ActorContext,
+		input: AgentToolInput<'list_agent_models'>
+	): Promise<AgentPayload>;
 }
 
 export interface AgentSettingsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
@@ -216,5 +238,47 @@ export class AgentSettings implements AgentSettingsController {
 				this.dependencies.defaultVisionModel
 			)
 		};
+	}
+
+	async agentGetAgentPreferences(
+		actor: ActorContext,
+		input: AgentToolInput<'get_agent_preferences'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.getPreferences(actor);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentUpdateAgentPreferences(
+		actor: ActorContext,
+		input: AgentToolInput<'update_agent_preferences'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const previous = await this.getPreferences(actor);
+			const updated = await this.updatePreferences(actor, input);
+			return { ...updated, previous };
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListAgentModels(
+		actor: ActorContext,
+		input: AgentToolInput<'list_agent_models'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.listModels(actor);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

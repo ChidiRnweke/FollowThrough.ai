@@ -1,18 +1,15 @@
 import { ToolLifecycleError } from '$lib/errors';
+import type {
+	AgentToolCallControl,
+	AgentToolInvocationControl,
+	PreparedAction,
+	ToolPreparation
+} from '$lib/models/agent-tool-protocol';
 import type { AgentPayload } from '$lib/models/agent/payload';
-import type { AgentToolInvocationStore } from '$lib/server/stores/agent/tool-invocation';
-import type { AgentToolCallControl, PreparedAction, ToolPreparation } from './tool-calls';
-export interface AgentToolInvocationControl {
-	prepare(
-		input: AgentPayload,
-		callId: string | undefined,
-		phase: 'approval' | 'execute'
-	): Promise<ToolPreparation>;
-	execute(action: PreparedAction): Promise<AgentPayload>;
-}
+import type { ToolInvocationState } from '$lib/models/agent-tool-protocol';
 export class AgentToolInvocation implements AgentToolInvocationControl {
 	constructor(
-		private readonly state: AgentToolInvocationStore,
+		private readonly state: ToolInvocationState,
 		private readonly calls: AgentToolCallControl,
 		private readonly prepareAction: (
 			input: AgentPayload,

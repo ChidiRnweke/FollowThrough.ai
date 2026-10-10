@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -189,7 +189,7 @@ it('lets browser components construct an interface-typed controller capability',
 		})
 	).toEqual([]);
 });
-it('lets a coordinator receive another operation contract without importing its implementation', () => {
+it('rejects controller operation injection without an implementation import', () => {
 	expect(
 		inspect({
 			'src/lib/controllers/notes/title.ts':
@@ -197,7 +197,7 @@ it('lets a coordinator receive another operation contract without importing its 
 			'src/lib/controllers/notes/editor.ts':
 				"import type { TitleController } from './title'; export class Editor { constructor(private readonly titles: TitleController) {} present(value: string): string { return this.titles.present(value); } }"
 		})
-	).toEqual([]);
+	).toContain('import-boundary:banned-layer-import');
 });
 it('keeps controller implementation construction inside factories', () => {
 	expect(
@@ -363,7 +363,7 @@ it('rejects type-only concrete controller dependencies', () => {
 		})
 	).toContain('import-boundary:banned-layer-import');
 });
-it('allows renamed controller contracts through an index barrel', () => {
+it('rejects renamed controller contracts through an index barrel', () => {
 	expect(
 		inspect({
 			'src/lib/controllers/notes/title.ts':
@@ -373,7 +373,7 @@ it('allows renamed controller contracts through an index barrel', () => {
 			'src/lib/controllers/editor/editor.ts':
 				"import type { TitleContract } from '../notes'; export class Editor { constructor(private readonly titles: TitleContract) {} }"
 		})
-	).not.toContain('import-boundary:banned-layer-import');
+	).toContain('import-boundary:banned-layer-import');
 });
 it('rejects controller class aliases through an index barrel', () => {
 	expect(

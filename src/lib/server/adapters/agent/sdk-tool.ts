@@ -1,12 +1,14 @@
-import { tool, ModelBehaviorError, type Tool } from '@openai/agents';
-import { z } from 'zod';
-import { toolFailure } from '$lib/models/agent/tool-failure';
-import { DOMAIN_ERROR_ADVICE } from '$lib/errors';
+import { DOMAIN_ERROR_ADVICE, ToolLifecycleError } from '$lib/errors';
+import type {
+	AgentToolInvocationControl,
+	PreparedAction,
+	ToolPreparation
+} from '$lib/models/agent-tool-protocol';
 import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
+import { toolFailure } from '$lib/models/agent/tool-failure';
+import { ModelBehaviorError, tool, type Tool } from '@openai/agents';
+import { z } from 'zod';
 import { jsonObjectSchema } from './tool-call';
-import { ToolLifecycleError } from '$lib/errors';
-import type { PreparedAction, ToolPreparation } from '$lib/server/controllers/agent/tool-calls';
-import type { AgentToolInvocationControl } from '$lib/server/controllers/agent/tool-invocation';
 
 /** Direct invocation also accepts a blank argument string for fieldless tools.
  * The runner's earlier JSON protocol parser remains owned by the SDK.
@@ -68,7 +70,11 @@ export interface SdkToolOptions {
 	) => Promise<AgentPayload>;
 }
 
-export class AgentSdkToolAdapter {
+export interface AgentSdkToolBuilder {
+	create(options: SdkToolOptions, invocation: AgentToolInvocationControl): Tool<unknown>;
+}
+
+export class AgentSdkToolAdapter implements AgentSdkToolBuilder {
 	create(options: SdkToolOptions, invocation: AgentToolInvocationControl): Tool<unknown> {
 		const schema = z.toJSONSchema(options.parameters, { io: 'input' });
 		const prepare = (input: unknown, callId: string | undefined, phase: 'approval' | 'execute') => {

@@ -1,23 +1,24 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { eq } from 'drizzle-orm';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { afterAll, describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
-import { Document, Packer, Paragraph } from 'docx';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
 import type { TemplateId } from '$lib/models/deliverables';
+import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import {
 	Deliverables,
 	type DeliverablesDependencies
 } from '$lib/server/controllers/deliverables/controller';
-import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
-import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
-import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryAttachmentStorage } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { Document, Packer, Paragraph } from 'docx';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { createHash } from 'node:crypto';
+import postgres from 'postgres';
+import { afterAll, describe, expect, it } from 'vitest';
 import { actor, context, now, seedNote } from '../database-harness';
 
 const clients: ReturnType<typeof postgres>[] = [];
@@ -34,6 +35,7 @@ const setup = async (suffix: string) => {
 	const controller = new Deliverables(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
+			...agentToolResultsFixture(),
 			...createTemplateServices(repository, () => now),
 			templateStorage: storage,
 			templateStyles: new DocxTemplateStyleReader(),

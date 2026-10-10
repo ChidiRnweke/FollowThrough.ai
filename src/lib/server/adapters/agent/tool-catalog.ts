@@ -1,7 +1,9 @@
-import { z } from 'zod';
-import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
 import type { ToolClassification } from '$lib/models/agent';
-import type { ToolDiscoveryPresentation } from '$lib/server/controllers/agent/tool-discovery';
+import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
+import { z } from 'zod';
+interface ToolDiscoveryPresentation {
+	describe(names: readonly string[]): AgentPayload;
+}
 
 export interface ToolSchemaDefinition {
 	readonly name: string;

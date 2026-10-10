@@ -1,45 +1,46 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
-import { ReferencePresentationService } from '$lib/services/references/presentation';
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { noteEtag } from '$lib/models/notes';
+import type { SkillEditInput } from '$lib/models/skills';
+import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
-import { SkillPortabilityService } from '$lib/services/skills/manifest';
-import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { describe, expect, it } from 'vitest';
-import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { noteEtag } from '$lib/models/notes';
-import { Skills, type SkillsDependencies } from './controller';
-import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
-import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
-import type { SkillEditInput } from '$lib/models/skills';
-import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
-import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	projectBuilder,
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Skills, type SkillsDependencies } from './controller';
 const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
@@ -52,6 +53,7 @@ const setup = () => {
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),
@@ -293,6 +295,7 @@ describe('Skill document imports', () => {
 			new WorkspaceCommandRulesService(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<NotesDependencies>({
+				...agentToolResultsFixture(),
 				archiveImport: new NoteArchiveImportService(),
 				patchPreparation: new NotePatchPreparationService(),
 				revisionComparison: new NoteRevisionComparisonService(),

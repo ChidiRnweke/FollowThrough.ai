@@ -4,10 +4,8 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
 import { ValidationError } from '$lib/errors';
-import {
-	instrumentedController,
-	type ControllerSurface
-} from '$lib/server/controllers/instrumentation';
+import { instrumentedController } from '$lib/server/factories/controller-instrumentation';
+import type { ControllerSurface } from '$lib/models/controller-boundary';
 import { traceOperation } from '$lib/server/services/telemetry';
 
 type RecordedEntry = { readonly level: string; readonly args: readonly unknown[] };

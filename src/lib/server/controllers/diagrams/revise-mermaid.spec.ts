@@ -1,17 +1,17 @@
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
-import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { describe, expect, it } from 'vitest';
-import { Diagrams, type DiagramsDependencies } from './controller';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	InMemoryDiagrams,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = (drawio = false) => {
 	const generation = diagramGenerationFixture();
@@ -25,6 +25,7 @@ const setup = (drawio = false) => {
 		provider: generation.provider,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
+				...agentToolResultsFixture(),
 				generationRules: new DiagramGenerationRuleService(),
 				transactionRunner: new InMemoryTransactionRunner([
 					diagrams,
