@@ -1501,3 +1501,64 @@ run overlapped generated-file changes and was repeated after generation finished
 repeat capture exposed the initial-load undo grouping fixed above. Final browser evidence
 uses the successful repeat. Temporary native-clipboard captures must run without a competing
 browser suite because the clipboard requires active browser focus.
+
+## Browser note-workspace contribution — 2026-10-10
+
+This slice starts from #349 at `7cd5b2a8` in `refactor/pr336-note-workspace`, in its own
+worktree. #348 retains shared-service and proofreading ownership. The coordination comment
+on #348 records the narrow `noteHasUnpublishedChanges` contract; its existing method can
+replace the function binding when the stacks combine. No shared-service implementation is
+copied or changed here. Server code, general workspace synchronization/review, widget internals,
+and AI action workflows remain outside this slice.
+
+- [x] Verify the existing plan and #345 inventory against #349; check open PRs for overlap.
+- [x] Reproduce save, publication, discard, history and both conflict choices using valid
+      synthetic local accounts. Capture the unmodified base before editing.
+- [x] Move save/autosave, publication, revision restore, published-draft discard and note conflict
+      coordination into a per-pane browser controller. Retain `NoteDraftEditing`, `EditorSessions`,
+      `WorkspaceDraft`, `NoteEditorOperations` and the existing scheduler/persistence.
+- [x] Separate retained note/publication/timer state from controller workflows. Keep factories
+      construction-only. Adapt revision access and feedback at the browser boundary.
+- [x] Guard publication before awaiting a save; invalidate old checkpoints on external adoption;
+      suppress late pane/account completions. Ordinary save and publication do not replace the
+      mounted editor document. Existing pin/numbering integrations update the same buffer.
+- [x] Reproduce #349's stale publication metadata: after publication and another saved edit,
+      Publish and Discard can stay disabled despite the database containing an unpublished revision.
+      Reconcile acknowledged metadata only when clean and synced, without replacing the editor
+      document or resetting selection/undo. External documents still use explicit adoption.
+- [x] Add behavior tests using actual draft/outbox/session controllers and in-memory dependencies.
+      Cover autosave/retry/failure, offline and duplicate publication, stale completion, external
+      adoption, restore/discard, conflict decisions, later typing and release.
+- [x] Finish matched browser evidence and final checks; exact results are recorded below.
+- [ ] Open a stacked PR on #349 and record required CI results. Inherited failing architecture
+      checks remain errors and prevent merge readiness.
+
+The broad browser/notes checklist remains incomplete. No enforcement, allowance, ignore, or
+migration baseline is changed by this contribution. #345's inventory is historical evidence,
+not a list of errors to suppress.
+
+### Observed verification for this slice
+
+- Final lint and type checking passed with zero errors/warnings. Docs check passed with one
+  existing hint. The standalone UI audit, production web/worker builds and build-output audit passed.
+- Final unit suite: 578 files, 4,500 passed and one existing skip. Full browser suite: 92 files,
+  596 passed. Focused controller cases: 31 passed. Existing `derived_inert` warnings remain.
+- Isolated note/sync contracts: 28 files, 161 passed.
+- Authenticated synthetic E2E: five journeys passed, including the existing editor/clipboard
+  scenario. Isolated production-preview offline publication and per-account tab restoration:
+  both passed. The full PWA suite and live AI/object-storage flows were not run.
+- Six inspected before/after images and reproduction details are committed under
+  `docs/pr-evidence/pr336-note-workspace/`. The disabled-publication regression was reproduced
+  in a separate checkout of #349 before validating the fix. That temporary checkout and its
+  server were removed; only scenario-owned database records were cleaned.
+- Architecture topology, source and test-quality stages passed. Chisel still fails on 43
+  inherited imports (base: 44). Fresh file/rule comparison found zero additions; the removed
+  entry was the note-workspace shared-service import.
+- #345's checker was run against both source roots: 765 findings on #349, 763 here. Fresh
+  file/rule/message comparison found zero additions. Both removed findings were component
+  access to the shared unpublished-change rule. No checker, allowance, or baseline changed.
+
+Initial browser test attempts exposed test timing assumptions around publication acknowledgement,
+undo focus, and navigation before reload. The final scenarios wait for persisted state and settled
+navigation. The stale publication metadata defect was independently reproduced on the base and
+fixed in the controller; it was not classified as a test-only failure.
