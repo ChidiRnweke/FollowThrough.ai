@@ -1,38 +1,39 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { AgentRunStatusService } from '$lib/services/agent/run-status';
-const runStatus = new AgentRunStatusService();
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { type AgentRunId } from '$lib/models/agent';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
+import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import * as schema from '$lib/server/db/schema';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
 } from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { type AgentRunId } from '$lib/models/agent';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import {
 	InMemoryPromiseExtractor,
 	InMemoryTrustPolicyEvaluator
 } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -82,6 +83,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = true;
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		...agentToolResultsFixture(),
 		boardExport: new TodoBoardExportService(),
 		todoPresentation: new TodoPresentationService(),
 		todoEditingRules: new TodoEditingRulesService(),

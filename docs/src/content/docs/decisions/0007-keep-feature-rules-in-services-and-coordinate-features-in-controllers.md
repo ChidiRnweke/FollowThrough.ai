@@ -47,6 +47,11 @@ method represents a capability a caller needs. Internal methods and helper funct
 private to the implementation. A test does not justify making a helper public. Small helpers do
 not need separate classes or interfaces of their own.
 
+Controllers coordinate service capabilities, not other controllers. This includes controller
+operations supplied through type-only interfaces, getters, bound methods and injected callbacks.
+Private methods within one controller implementation may share orchestration. Shared data types
+belong in models; changing a contract's name or location does not change its implementation's owner.
+
 Controllers expose operations such as uploading an attachment or previewing an export, rather
 than the steps callers would need to assemble those operations. Their public interfaces do not
 expose services, transports, queues or mutable workflow internals. State that must survive a

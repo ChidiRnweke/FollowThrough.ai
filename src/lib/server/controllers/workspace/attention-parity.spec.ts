@@ -1,19 +1,18 @@
-import { TodayPresentationService } from '$lib/services/workspace/today';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { expect, it } from 'vitest';
-import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { Workspace, type WorkspaceDependencies } from './controller';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
-import { UserDirectory } from '$lib/server/services/identity/users';
 import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { UserDirectory } from '$lib/server/services/identity/users';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -25,6 +24,8 @@ import {
 	testProjectId,
 	testSuggestionId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('shows the same profile and visible-project memory attention from server and cached facts', async () => {
 	const actor = testActor();
@@ -76,6 +77,7 @@ it('shows the same profile and visible-project memory attention from server and 
 	const server = new Workspace(
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
 			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			...builtInSkillsFixture(),

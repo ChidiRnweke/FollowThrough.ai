@@ -1,13 +1,14 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
-import { ProjectDetailService } from '$lib/services/projects/details';
-import { describe, expect, it } from 'vitest';
-import { Projects, type ProjectsDependencies } from './controller';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { projectBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Projects, type ProjectsDependencies } from './controller';
 
 const setup = () => {
 	const repository = new InMemoryProjectRepository();
@@ -16,6 +17,7 @@ const setup = () => {
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
+			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),

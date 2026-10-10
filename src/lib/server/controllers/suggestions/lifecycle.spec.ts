@@ -1,28 +1,29 @@
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
-import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
-import { describe, expect, it } from 'vitest';
-import { Suggestions, type SuggestionsDependencies } from './controller';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemorySuggestionArtifacts } from '$lib/testing/suggestions/fakes/in-memory-artifacts';
 import {
 	InMemorySuggestionReader,
 	InMemorySuggestions
 } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemorySuggestionArtifacts } from '$lib/testing/suggestions/fakes/in-memory-artifacts';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
-	suggestionBuilder,
 	memorySuggestionBuilder,
+	suggestionBuilder,
 	testActor,
+	testNoteId,
 	testNow,
 	testProjectId,
-	testNoteId,
 	testSuggestionId,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 describe('Pending memory review invariants', () => {
 	it('returns only profile memory suggestions for the profile scope', async () => {
@@ -46,6 +47,7 @@ describe('Pending memory review invariants', () => {
 		const controller = new Suggestions(
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionLister: reader,
@@ -86,6 +88,7 @@ describe('Pending memory review invariants', () => {
 		const controller = new Suggestions(
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionLister: reader,
@@ -105,6 +108,7 @@ const setup = () => {
 	const controller = new Suggestions(
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: suggestions,

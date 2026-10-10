@@ -126,11 +126,30 @@ export const agentToolCoverage = {
 		}
 	},
 	agentFiles: {
-		ls: { kind: 'read', tools: ['ls'] },
-		grep: { kind: 'read', tools: ['grep'] },
-		sed: { kind: 'read', tools: ['sed'] }
+		agentLs: { kind: 'read', tools: ['ls'] },
+		agentGrep: { kind: 'read', tools: ['grep'] },
+		agentSed: { kind: 'read', tools: ['sed'] },
+
+		ls: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		grep: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		sed: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	workspace: {
+		agentGetWorkspaceContext: { kind: 'read', tools: ['get_workspace_context'] },
+		agentGetTodayView: { kind: 'read', tools: ['get_today_view'] },
+
 		pullChangePage: {
 			kind: 'excluded',
 			reason: 'Browser synchronization checkpoints each journal page.'
@@ -143,27 +162,98 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Conditional resource reads are a browser persistence protocol.'
 		},
-		getShellContext: { kind: 'read', tools: ['get_workspace_context'] },
-		getTodayView: { kind: 'read', tools: ['get_today_view'] }
+		getShellContext: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		getTodayView: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	projects: {
+		agentListProjects: { kind: 'read', tools: ['list_projects'] },
+		agentGetProject: { kind: 'read', tools: ['get_project'] },
+		agentCreateProject: { kind: 'mutation', tools: ['create_project'] },
+		agentRenameProject: { kind: 'mutation', tools: ['rename_project'] },
+		agentArchiveProject: { kind: 'mutation', tools: ['archive_project'] },
+		agentCreateFolder: { kind: 'mutation', tools: ['create_folder'] },
+		agentMoveProjectEntry: { kind: 'mutation', tools: ['move_project_entry'] },
+
 		synchronize: {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
 		},
-		list: { kind: 'read', tools: ['list_projects'] },
-		get: { kind: 'read', tools: ['get_project'] },
-		create: { kind: 'mutation', tools: ['create_project'] },
-		rename: { kind: 'mutation', tools: ['rename_project'] },
-		archive: { kind: 'mutation', tools: ['archive_project'] },
-		createFolder: { kind: 'mutation', tools: ['create_folder'] },
-		move: { kind: 'mutation', tools: ['move_project_entry'] },
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		get: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		create: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		rename: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		archive: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		createFolder: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		move: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		setSectionNumberingDefault: {
 			kind: 'excluded',
 			reason: 'A viewing default for the editor; it changes nothing the agent can read.'
 		}
 	},
 	notes: {
+		prepareAgentReviewedChange: {
+			kind: 'excluded',
+			reason: 'Review preparation is an execution phase of note tools.'
+		},
+		applyAgentReviewedChange: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		agentGetNote: { kind: 'read', tools: ['get_note'] },
+		agentCreateNote: { kind: 'mutation', tools: ['create_note'] },
+		agentSaveNote: { kind: 'mutation', tools: ['save_note'] },
+		agentEditNote: { kind: 'mutation', tools: ['edit_note'] },
+		agentRenameNote: { kind: 'mutation', tools: ['rename_note'] },
+		agentArchiveNote: { kind: 'mutation', tools: ['archive_note'] },
+		agentRestoreNote: { kind: 'mutation', tools: ['restore_note'] },
+		agentListTrashedNotes: { kind: 'read', tools: ['list_trashed_notes'] },
+		agentDeleteNoteForever: { kind: 'mutation', tools: ['delete_note_forever'] },
+		agentEmptyNoteTrash: { kind: 'mutation', tools: ['empty_note_trash'] },
+		agentListNoteVersions: { kind: 'read', tools: ['list_note_versions'] },
+		agentDiffNoteVersions: { kind: 'read', tools: ['diff_note_versions'] },
+		agentRestoreNoteVersion: { kind: 'mutation', tools: ['restore_note_version'] },
+		agentPublishNote: { kind: 'mutation', tools: ['publish_note'] },
+		agentDiscardNoteDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
+		agentSaveSkill: { kind: 'mutation', tools: ['save_skill'] },
+		agentEditSkill: { kind: 'mutation', tools: ['edit_skill'] },
+
 		importMarkdownArchive: {
 			kind: 'excluded',
 			reason: 'Archive imports require a user-supplied multipart file.'
@@ -172,12 +262,20 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
 		},
-		get: { kind: 'read', tools: ['get_note'] },
+		get: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		listDocuments: {
 			kind: 'excluded',
 			reason: 'Request batching for the export dialog; the agent reads a note with get_note.'
 		},
-		create: { kind: 'mutation', tools: ['create_note'] },
+		create: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		save: {
 			kind: 'excluded',
 			reason:
@@ -188,12 +286,21 @@ export const agentToolCoverage = {
 			reason: 'Prepares the domain review carried by note write tools; does not write.'
 		},
 		applyReviewedChange: {
-			kind: 'mutation',
-			tools: ['save_note', 'edit_note', 'save_skill', 'edit_skill']
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
 		},
 
-		publish: { kind: 'mutation', tools: ['publish_note'] },
-		discardDraft: { kind: 'mutation', tools: ['discard_note_draft'] },
+		publish: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		discardDraft: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 
 		searchText: {
 			kind: 'excluded',
@@ -203,13 +310,41 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Bulk replace is a UI surface; the agent edits a note with edit_note.'
 		},
-		rename: { kind: 'mutation', tools: ['rename_note'] },
-		archive: { kind: 'mutation', tools: ['archive_note'] },
-		restore: { kind: 'mutation', tools: ['restore_note'] },
-		listTrash: { kind: 'read', tools: ['list_trashed_notes'] },
-		deleteForever: { kind: 'mutation', tools: ['delete_note_forever'] },
-		emptyTrash: { kind: 'mutation', tools: ['empty_note_trash'] },
-		listRevisions: { kind: 'read', tools: ['list_note_versions'] },
+		rename: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		archive: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		restore: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		listTrash: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		deleteForever: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		emptyTrash: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		listRevisions: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		getRevision: {
 			kind: 'excluded',
 			reason: 'Diff rendering detail; the agent reads note content with get_note.'
@@ -218,19 +353,37 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Published version bodies are mounted under the note versions directory for sed.'
 		},
-		compareRevisions: { kind: 'read', tools: ['diff_note_versions'] },
-		restoreRevision: { kind: 'mutation', tools: ['restore_note_version'] },
+		compareRevisions: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		restoreRevision: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		setSectionNumbering: {
 			kind: 'excluded',
 			reason: 'Section numbering is a visual editor preference; note content is unchanged.'
 		}
 	},
 	todos: {
+		agentExtractPromises: { kind: 'proposal', tools: ['extract_promises'] },
+		agentListTodos: { kind: 'read', tools: ['list_todos'] },
+		agentCreateTodo: { kind: 'mutation', tools: ['create_todo'] },
+		agentCreateTodos: { kind: 'mutation', tools: ['create_todos'] },
+		agentUpdateTodo: { kind: 'mutation', tools: ['update_todo'] },
+
 		synchronize: {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
 		},
-		list: { kind: 'read', tools: ['list_todos'] },
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		get: {
 			kind: 'excluded',
 			reason: 'Reading one todo adds nothing over list, which already returns the same fields.'
@@ -247,14 +400,30 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Board export is a user download; the agent reads todos through list.'
 		},
-		create: { kind: 'mutation', tools: ['create_todo'] },
-		createBatch: { kind: 'mutation', tools: ['create_todos'] },
-		update: { kind: 'mutation', tools: ['update_todo'] },
+		create: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		createBatch: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		update: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		remove: {
 			kind: 'excluded',
 			reason: 'Deleting todos stays a deliberate user action in the detail panel.'
 		},
-		extractPromises: { kind: 'proposal', tools: ['extract_promises'] },
+		extractPromises: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		executePromiseRun: {
 			kind: 'excluded',
 			reason: 'The application executes persisted promise extraction requests.'
@@ -270,7 +439,13 @@ export const agentToolCoverage = {
 		}
 	},
 	relationships: {
-		suggestFromSelection: { kind: 'proposal', tools: ['relate_selection'] },
+		agentRelateSelection: { kind: 'proposal', tools: ['relate_selection'] },
+
+		suggestFromSelection: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		executeRelatedNoteRun: {
 			kind: 'excluded',
 			reason: 'The Relationships controller executes a saved related-note request.'
@@ -286,7 +461,13 @@ export const agentToolCoverage = {
 		}
 	},
 	references: {
-		suggestFromSelection: { kind: 'proposal', tools: ['find_references'] },
+		agentFindReferences: { kind: 'proposal', tools: ['find_references'] },
+
+		suggestFromSelection: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		executeReferenceRun: {
 			kind: 'excluded',
 			reason: 'The References controller executes a stored editor request.'
@@ -302,12 +483,19 @@ export const agentToolCoverage = {
 		}
 	},
 	diagrams: {
+		agentReviseMermaidDiagram: { kind: 'mutation', tools: ['revise_mermaid_diagram'] },
+		agentPromoteDiagram: { kind: 'proposal', tools: ['promote_diagram'] },
+
 		generateMermaid: {
 			kind: 'excluded',
 			reason:
 				'Mermaid generation is the inline note editor flow; the agent presents a canvas diagram with create_diagram.'
 		},
-		reviseMermaid: { kind: 'mutation', tools: ['revise_mermaid_diagram'] },
+		reviseMermaid: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		reviseInlineMermaid: {
 			kind: 'excluded',
 			reason: 'Inline diagram revision is scoped to the editor workflow.'
@@ -316,7 +504,11 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Inline draw.io conversion is scoped to the note editor review workflow.'
 		},
-		promote: { kind: 'proposal', tools: ['promote_diagram'] },
+		promote: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		startGenerateMermaid: {
 			kind: 'excluded',
 			reason:
@@ -342,6 +534,12 @@ export const agentToolCoverage = {
 		}
 	},
 	diagramStudio: {
+		agentCreateDiagram: { kind: 'mutation', tools: ['create_diagram'] },
+		agentEditDiagram: { kind: 'mutation', tools: ['edit_diagram'] },
+		agentReadCanvasDiagram: { kind: 'read', tools: ['read_canvas_diagram'] },
+		agentSearchIcons: { kind: 'read', tools: ['search_icons'] },
+		agentReadProjectDiagram: { kind: 'read', tools: ['read_project_diagram'] },
+
 		synchronize: {
 			kind: 'excluded',
 			reason: 'Deliver version-guarded device mutations through the shared outbox.'
@@ -349,14 +547,34 @@ export const agentToolCoverage = {
 		// `read` is about approval: it stores nothing, so it raises no prompt. How it
 		// is *rendered* afterwards is a separate question, answered by the `proposal`
 		// family in `tool-disclosure.ts`.
-		createDiagram: { kind: 'mutation', tools: ['create_diagram'] },
+		createDiagram: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		// A revision writes a working revision onto the diagram it names, so it asks
 		// first. `read` would mean no prompt, which is how the agent came to change a
 		// saved diagram with neither permission asked nor anything shown.
-		editDiagram: { kind: 'mutation', tools: ['edit_diagram'] },
-		readCanvasDiagram: { kind: 'read', tools: ['read_canvas_diagram'] },
-		readProjectDiagram: { kind: 'read', tools: ['read_project_diagram'] },
-		searchDiagramIcons: { kind: 'read', tools: ['search_icons'] },
+		editDiagram: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		readCanvasDiagram: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		readProjectDiagram: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		searchDiagramIcons: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		// Everything below is a user gesture. Keeping, renaming and deleting are the
 		// user saying what the project holds; the studio and the gallery own those
 		// gates, and the agent's part is to put a version on the canvas.
@@ -397,44 +615,112 @@ export const agentToolCoverage = {
 		}
 	},
 	suggestions: {
-		list: { kind: 'read', tools: ['list_suggestions'] },
+		agentListSuggestions: { kind: 'read', tools: ['list_suggestions'] },
+		agentAcceptSuggestion: { kind: 'mutation', tools: ['accept_suggestion'] },
+		agentRejectSuggestion: { kind: 'mutation', tools: ['reject_suggestion'] },
+		agentRevertSuggestion: { kind: 'mutation', tools: ['revert_suggestion'] },
+
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		listPendingMemory: {
 			kind: 'excluded',
 			reason: 'Pending memory review is scoped to the notification and memory UI.'
 		},
-		acceptReviewed: { kind: 'mutation', tools: ['accept_suggestion'] },
+		acceptReviewed: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		accept: {
 			kind: 'excluded',
 			reason:
 				'Acceptance goes through acceptReviewed, which refuses a draw.io diagram that has no review to draw its preview.'
 		},
-		reject: { kind: 'mutation', tools: ['reject_suggestion'] },
-		revert: { kind: 'mutation', tools: ['revert_suggestion'] }
+		reject: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		revert: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	skills: {
+		agentLoadSkill: { kind: 'read', tools: ['load_skill'] },
+		agentCreateSkillFromSelection: { kind: 'mutation', tools: ['create_skill_from_selection'] },
+		agentListSkills: { kind: 'read', tools: ['list_skills'] },
+		agentCreateSkill: { kind: 'mutation', tools: ['create_skill'] },
+		agentListSkillVersions: { kind: 'read', tools: ['list_skill_versions'] },
+		agentRestoreSkillVersion: { kind: 'mutation', tools: ['restore_skill_version'] },
+		agentUpdateSkill: { kind: 'mutation', tools: ['update_skill'] },
+		agentSetSkillPinned: { kind: 'mutation', tools: ['set_skill_pinned'] },
+
 		synchronize: {
 			kind: 'excluded',
 			reason: 'Offline replay uses guarded browser mutation receipts.'
 		},
-		list: { kind: 'read', tools: ['list_skills'] },
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		get: {
 			kind: 'excluded',
 			reason:
 				'Skill reads go through load_skill; the controller method still serves the UI and the skill write tools.'
 		},
-		loadForAgent: { kind: 'read', tools: ['load_skill'] },
-		create: { kind: 'mutation', tools: ['create_skill'] },
-		createFromSelection: { kind: 'mutation', tools: ['create_skill_from_selection'] },
-		listVersions: { kind: 'read', tools: ['list_skill_versions'] },
-		restoreVersion: { kind: 'mutation', tools: ['restore_skill_version'] },
-		update: { kind: 'mutation', tools: ['update_skill'] },
-		setPinned: { kind: 'mutation', tools: ['set_skill_pinned'] }
+		loadForAgent: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		create: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		createFromSelection: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		listVersions: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		restoreVersion: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		update: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		setPinned: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	attachments: {
+		agentListAttachments: { kind: 'read', tools: ['list_attachments'] },
+
 		initiate: { kind: 'excluded', reason: 'The agent cannot upload local user files.' },
 		complete: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
 		completeForTodo: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
-		list: { kind: 'read', tools: ['list_attachments'] },
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		listForProject: {
 			kind: 'excluded',
 			reason: 'Project attachments enter agent context through semantic retrieval.'
@@ -458,18 +744,36 @@ export const agentToolCoverage = {
 		remove: { kind: 'excluded', reason: 'Bundle resources are managed by the user.' }
 	},
 	deliverables: {
+		agentExportDocument: { kind: 'mutation', tools: ['export_document'] },
+		agentListArtifacts: { kind: 'read', tools: ['list_artifacts'] },
+		agentListTemplates: { kind: 'read', tools: ['list_templates'] },
+		agentGetExportSettings: { kind: 'read', tools: ['get_export_settings'] },
+		agentUpdateExportSettings: { kind: 'mutation', tools: ['update_export_settings'] },
+		agentGetArtifact: { kind: 'read', tools: ['get_artifact'] },
+		agentDownloadArtifact: { kind: 'read', tools: ['download_artifact'] },
+		agentDeleteArtifact: { kind: 'mutation', tools: ['delete_artifact'] },
+		agentRegenerateArtifact: { kind: 'mutation', tools: ['regenerate_artifact'] },
+
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		initiateTemplateUpload: {
 			kind: 'excluded',
 			reason: 'The agent cannot upload local user files.'
 		},
 		completeTemplateUpload: { kind: 'excluded', reason: 'The agent cannot commit upload intents.' },
-		listTemplates: { kind: 'read', tools: ['list_templates'] },
+		listTemplates: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		deleteTemplate: {
 			kind: 'excluded',
 			reason: 'Template management is a deliberate user action.'
 		},
-		generateDocument: { kind: 'mutation', tools: ['export_document'] },
+		generateDocument: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		generateBundle: {
 			kind: 'excluded',
 			reason:
@@ -479,23 +783,73 @@ export const agentToolCoverage = {
 			kind: 'excluded',
 			reason: 'Preview is an interactive UI flow; the agent generates documents directly.'
 		},
-		getExportSettings: { kind: 'read', tools: ['get_export_settings'] },
-		updateExportSettings: { kind: 'mutation', tools: ['update_export_settings'] },
-		listArtifacts: { kind: 'read', tools: ['list_artifacts'] },
-		getArtifact: { kind: 'read', tools: ['get_artifact'] },
-		downloadArtifact: { kind: 'read', tools: ['download_artifact'] },
-		deleteArtifact: { kind: 'mutation', tools: ['delete_artifact'] },
-		regenerateArtifact: { kind: 'mutation', tools: ['regenerate_artifact'] }
+		getExportSettings: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		updateExportSettings: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		listArtifacts: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		getArtifact: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		downloadArtifact: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		deleteArtifact: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		regenerateArtifact: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	trustPolicies: {
+		agentListTrustPolicies: { kind: 'read', tools: ['list_trust_policies'] },
+		agentUpdateTrustPolicy: { kind: 'mutation', tools: ['update_trust_policy'] },
+
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
-		list: { kind: 'read', tools: ['list_trust_policies'] },
-		update: { kind: 'mutation', tools: ['update_trust_policy'] }
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		update: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	toolPreferences: {
+		agentListToolPreferences: { kind: 'read', tools: ['list_tool_preferences'] },
+		agentSetToolEnabled: { kind: 'mutation', tools: ['set_tool_enabled'] },
+
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
-		list: { kind: 'read', tools: ['list_tool_preferences'] },
-		setEnabled: { kind: 'mutation', tools: ['set_tool_enabled'] },
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		setEnabled: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		clearOverride: {
 			kind: 'excluded',
 			reason:
@@ -503,9 +857,21 @@ export const agentToolCoverage = {
 		}
 	},
 	memory: {
+		agentListProjectMemory: { kind: 'read', tools: ['list_project_memory'] },
+		agentListUserMemory: { kind: 'read', tools: ['list_user_memory'] },
+		agentProposeMemoryChange: { kind: 'proposal', tools: ['propose_memory_change'] },
+
 		synchronize: { kind: 'excluded', reason: 'Device mutations use the shared versioned outbox.' },
-		list: { kind: 'read', tools: ['list_project_memory', 'list_user_memory'] },
-		propose: { kind: 'proposal', tools: ['propose_memory_change'] },
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		propose: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		create: {
 			kind: 'excluded',
 			reason: 'Memory changes must flow through propose_memory_change review.'
@@ -520,28 +886,71 @@ export const agentToolCoverage = {
 		}
 	},
 	widgets: {
+		agentReadWidgetCatalog: { kind: 'read', tools: ['read_widget_catalog'] },
+		agentCreateWidget: { kind: 'mutation', tools: ['create_widget'] },
+		agentListWidgets: { kind: 'read', tools: ['list_widgets'] },
+		agentReadWidget: { kind: 'read', tools: ['read_widget'] },
+		agentEditWidgetData: { kind: 'mutation', tools: ['edit_widget_data'] },
+		agentEditWidgetLayout: { kind: 'mutation', tools: ['edit_widget_layout'] },
+
 		synchronize: { kind: 'excluded', reason: 'Device mutations use the shared versioned outbox.' },
-		get: { kind: 'read', tools: ['read_widget'] },
-		catalog: { kind: 'read', tools: ['read_widget_catalog'] },
-		list: { kind: 'read', tools: ['list_widgets'] },
-		create: { kind: 'mutation', tools: ['create_widget'] },
+		get: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		catalog: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		create: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		// Both edit tools write through one controller method and one rule, so the
 		// browser, the server and an approval decide an edit the same way (ADR 0043).
-		edit: { kind: 'mutation', tools: ['edit_widget_data', 'edit_widget_layout'] },
+		edit: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		archive: { kind: 'excluded', reason: WIDGET_GESTURE },
 		restore: { kind: 'excluded', reason: WIDGET_GESTURE },
 		delete: { kind: 'excluded', reason: WIDGET_GESTURE }
 	},
 	agentSettings: {
+		agentGetAgentPreferences: { kind: 'read', tools: ['get_agent_preferences'] },
+		agentUpdateAgentPreferences: { kind: 'mutation', tools: ['update_agent_preferences'] },
+		agentListAgentModels: { kind: 'read', tools: ['list_agent_models'] },
+
 		synchronize: { kind: 'excluded', reason: 'Version-guarded device outbox submission.' },
 		bootstrap: {
 			kind: 'excluded',
 			reason:
 				'Deployment metadata for the offline app bootstrap; user overrides are synchronized separately.'
 		},
-		getPreferences: { kind: 'read', tools: ['get_agent_preferences'] },
-		updatePreferences: { kind: 'mutation', tools: ['update_agent_preferences'] },
-		listModels: { kind: 'read', tools: ['list_agent_models'] },
+		getPreferences: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		updatePreferences: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		listModels: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
 		resolveDefaults: {
 			kind: 'excluded',
 			reason:
@@ -549,11 +958,29 @@ export const agentToolCoverage = {
 		}
 	},
 	apiTokens: {
-		list: { kind: 'read', tools: ['list_api_tokens'] },
-		revoke: { kind: 'mutation', tools: ['revoke_api_token'] }
+		agentListApiTokens: { kind: 'read', tools: ['list_api_tokens'] },
+		agentRevokeApiToken: { kind: 'mutation', tools: ['revoke_api_token'] },
+
+		list: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		},
+		revoke: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	},
 	retrieval: {
-		search: { kind: 'read', tools: ['search', 'search_note'] }
+		agentSearch: { kind: 'read', tools: ['search'] },
+		agentSearchNote: { kind: 'read', tools: ['search_note'] },
+
+		search: {
+			kind: 'excluded',
+			reason:
+				'Shared application operation; agent tools use the complete agent entrypoints on this controller.'
+		}
 	}
 } as const satisfies AgentToolCoverage;
 

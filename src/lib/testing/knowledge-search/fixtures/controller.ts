@@ -3,6 +3,7 @@ import {
 	type RetrievalDependencies
 } from '$lib/server/controllers/knowledge-search/controller';
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryEmbeddingClient,
 	InMemoryReranker,
@@ -16,6 +17,7 @@ export const searchControllerFixture = (overrides: Partial<RetrievalDependencies
 	const reranker = new InMemoryReranker();
 	const controller = new Retrieval(
 		capabilityDependencies<RetrievalDependencies>({
+			...agentToolResultsFixture(),
 			knowledgeLookup: new KnowledgeLookup(repository),
 			embeddings,
 			reranker,

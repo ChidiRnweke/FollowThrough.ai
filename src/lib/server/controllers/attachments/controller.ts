@@ -1,16 +1,21 @@
-import type { ActorContext } from '$lib/models/identity';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
+import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { TodoReader } from '$lib/server/services/todos/catalog';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type {
-	AttachmentUploads,
-	AttachmentReader,
 	AttachmentDownloads,
-	AttachmentLifecycle
+	AttachmentLifecycle,
+	AttachmentReader,
+	AttachmentUploads
 } from '$lib/server/services/attachments/library';
+import type { TodoReader } from '$lib/server/services/todos/catalog';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 
 /**
  * Application boundary for attachments: the two-phase upload lifecycle, listing, and
@@ -94,10 +99,19 @@ export interface AttachmentsController {
 	): ReturnType<AttachmentReader['read']>;
 	/** Detach an unreferenced note attachment while retaining file versions for revision restore. */
 	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<void>;
+
+	agentListAttachments(
+		actor: ActorContext,
+		input: AgentToolInput<'list_attachments'>
+	): Promise<AgentPayload>;
 }
 
 /** Everything the {@link AttachmentsController} needs: the attachment manager and a transaction runner for atomic mutations. */
 export interface AttachmentsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	uploads: AttachmentUploads;
 	reader: AttachmentReader;
 	downloads: AttachmentDownloads;
@@ -162,5 +176,19 @@ export class Attachments implements AttachmentsController {
 			const attachmentId = await this.dependencies.lifecycle.remove(actor, noteId, path);
 			if (attachmentId) await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
 		});
+	}
+
+	async agentListAttachments(
+		actor: ActorContext,
+		input: AgentToolInput<'list_attachments'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.list(actor, input.noteId as NoteId);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

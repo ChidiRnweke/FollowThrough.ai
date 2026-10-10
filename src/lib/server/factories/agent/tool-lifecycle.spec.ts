@@ -1,36 +1,35 @@
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
-import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { describe, it, expect } from 'vitest';
-import { Agent, Runner, RunState } from '@openai/agents';
-import { createAgentToolSurface } from './agent-tool-factory';
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { Agent, Runner, RunState } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
+import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
+import type { AgentToolCompletionObserver } from '$lib/server/services/agent/runs/contracts';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
-	InMemoryToolCallingModel,
-	InMemoryToolBatchModel
+	InMemoryToolBatchModel,
+	InMemoryToolCallingModel
 } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
-import type { NotesDependencies } from '$lib/server/controllers/notes/controller';
-import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 
+import type { AgentEvent, AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { parseProviderStreamEvent } from '$lib/server/adapters/agent/provider-events';
-import type { AgentEvent } from '$lib/models/agent';
 import {
 	noteBuilder,
 	testActor,
-	testProvenanceId,
-	testConversationId
+	testConversationId,
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 
 const scenario = (
 	count: number,
 	mode: AgentExecutionMode,
 	options: {
-		executor?: AgentToolExecutor;
+		executor?: AgentToolCompletionObserver;
 		signal?: AbortSignal;
 		markdown?: NotesDependencies['markdown'];
 	} = {}
@@ -48,7 +47,7 @@ const scenario = (
 				input: { conversationId: testConversationId(), prompt: 'Change launch day' },
 				model: 'test-model'
 			},
-			options.executor ?? { execute: (_call, action) => action() },
+			options.executor ?? { completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			restoredToolReviews(fixture.factory, testActor(), pending),
@@ -171,8 +170,7 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 	it('stops on persistence failure after a write rather than feeding back retry advice', async () => {
 		const fixture = scenario(0, 'auto_accept', {
 			executor: {
-				execute: async (_call, action) => {
-					await action();
+				completed: async () => {
 					throw new Error('journal unavailable');
 				}
 			}
@@ -199,9 +197,9 @@ describe('Reviewed tool recovery and terminal boundaries', () => {
 		const fixture = scenario(0, 'auto_accept', {
 			signal: cancellation.signal,
 			executor: {
-				execute: async (_call, action) => {
+				completed: async () => {
 					cancellation.abort(new Error('cancelled by user'));
-					return action();
+					cancellation.signal.throwIfAborted();
 				}
 			}
 		});

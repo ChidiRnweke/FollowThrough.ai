@@ -1,9 +1,3 @@
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { describe, expect, it } from 'vitest';
-import { sql } from 'drizzle-orm';
 import type { MemoryEntryId } from '$lib/models/memory';
 import type { NoteId } from '$lib/models/notes';
 import type { RelationshipId } from '$lib/models/relationships';
@@ -11,22 +5,29 @@ import {
 	Suggestions,
 	type SuggestionsDependencies
 } from '$lib/server/controllers/suggestions/controller';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
-import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
-import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
-import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
-import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
-import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
+import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
+import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
+import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
+import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { sql } from 'drizzle-orm';
+import { describe, expect, it } from 'vitest';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
 
 const application = (
@@ -53,6 +54,7 @@ const application = (
 	const controller = new Suggestions(
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: inbox.finder,

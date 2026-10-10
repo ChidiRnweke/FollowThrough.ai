@@ -1,11 +1,24 @@
-import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
-import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+import type { InlineSuggestionThrottle } from '$lib/models/agent';
+import { normalizeLanguageModelId } from '$lib/models/agent';
+import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
+import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
+import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import {
+	ToolDiscovery,
+	type ToolRetriever
+} from '$lib/server/controllers/tool-discovery/controller';
+import type { Database } from '$lib/server/db';
+import { createContentIndex } from '$lib/server/factories/content-index';
+import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import {
 	InlineContextService,
 	type IInlineContextService
 } from '$lib/server/services/inline-suggestions/inline-context';
-import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
+import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
+import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type {
 	AttachmentIndexing,
 	DiagramIndexing,
@@ -14,43 +27,30 @@ import type {
 	NoteIndexing,
 	WidgetIndexing
 } from '$lib/server/services/knowledge-search/indexing';
-import { createContentIndex } from '$lib/server/factories/content-index';
-import type { ScheduledTask } from '$lib/models/maintenance';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
-import type { InlineSuggestionThrottle } from '$lib/models/agent';
-import { normalizeLanguageModelId } from '$lib/models/agent';
-import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
-import type { Database } from '$lib/server/db';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
+import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
+import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
+import { createInlineAdmission } from '$lib/server/factories/inline-admission';
+import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
+import type { TransactionRunner } from '$lib/server/repositories/workspace';
+import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
+import {
+	InlineSuggestionCompletion,
+	type IInlineSuggestionCompletion
+} from '$lib/server/services/inline-suggestions/inline-completion';
+import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
+import {
+	SearchQueryGeneration,
+	type ISearchQueryGeneration
+} from '$lib/server/services/knowledge-search/query-generation';
 import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
 import {
 	KnowledgeLookup,
 	type IKnowledgeLookup
 } from '$lib/server/services/knowledge-search/semantic';
-import type { Reranker } from '$lib/server/services/knowledge-search/contracts';
-import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
-import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import { operationObserver } from '$lib/server/services/telemetry';
-import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
-import {
-	SearchQueryGeneration,
-	type ISearchQueryGeneration
-} from '$lib/server/services/knowledge-search/query-generation';
-import {
-	ToolDiscovery,
-	type ToolRetriever
-} from '$lib/server/controllers/tool-discovery/controller';
-import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
-import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
-import { createInlineAdmission } from '$lib/server/factories/inline-admission';
-import {
-	InlineSuggestionCompletion,
-	type IInlineSuggestionCompletion
-} from '$lib/server/services/inline-suggestions/inline-completion';
 
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
@@ -79,6 +79,7 @@ export interface KnowledgeSearchCapability {
 	readonly lookup: IKnowledgeLookup;
 	readonly maintenance: ScheduledTask;
 	readonly toolRetriever: ToolRetriever;
+	readonly toolDiscovery: AgentToolDiscoveryServices;
 	readonly finalize: (input: KnowledgeSearchFinalizeInput) => KnowledgeSearchFinalized;
 }
 
@@ -143,6 +144,10 @@ export const createKnowledgeSearchCapability = (
 			input.transactionRunner,
 			new AgentToolCatalogService()
 		),
+		toolDiscovery: {
+			index: new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
+			embeddings: embeddingClient
+		},
 		finalize: ({ preferences }) => ({
 			inlineContext: new InlineContextService(tokenizer),
 			preferences,

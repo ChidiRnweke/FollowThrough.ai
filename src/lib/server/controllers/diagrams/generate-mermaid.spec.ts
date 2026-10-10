@@ -1,18 +1,19 @@
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
-import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { describe, expect, it } from 'vitest';
-import { Diagrams, type DiagramsDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { InMemoryProvenanceRecorder } from '$lib/testing/relationships/fakes/in-memory-pipelines';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = () => {
 	const generation = diagramGenerationFixture();
@@ -22,6 +23,7 @@ const setup = () => {
 	const provenance = new InMemoryProvenanceRecorder();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			...agentToolResultsFixture(),
 			generationRules: new DiagramGenerationRuleService(),
 			selectionOrigins: new InMemorySelectionOrigins(notes, provenance),
 			...generation,

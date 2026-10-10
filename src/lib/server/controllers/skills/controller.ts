@@ -1,25 +1,24 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type { NoteEditingRules } from '$lib/services/notes/editing';
-import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
+import type { AgentSkillContext, ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { NoteMarkdown } from '$lib/models/note-markdown';
+import type { TextSelection } from '$lib/models/notes';
+import type { DateTime } from '$lib/models/workspace';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
-import type { DateTime } from '$lib/models/workspace';
+import type { ProjectLister } from '$lib/server/services/projects/catalog';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { NoteEditingRules } from '$lib/services/notes/editing';
+import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
+import type { AgentProjectChoiceRules } from '$lib/services/projects/agent-choice';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
-import type { IndexingResult } from '$lib/models/knowledge-search';
-import type { SkillPortability } from '$lib/services/skills/manifest';
-import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
-import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
-import type { NoteReferences } from '$lib/services/notes/references';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
-import type {
-	SkillMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
+import type { IndexingResult } from '$lib/models/knowledge-search';
+import type { CreateNoteInput, Note, NoteId, NoteRevision } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type {
 	CreateSkillFromSelectionInput,
 	CreateSkillFromSelectionOutput,
@@ -29,29 +28,39 @@ import type {
 	ListSkillsOutput,
 	LoadSkillInput,
 	RestoreSkillVersionInput,
+	SkillEditInput,
+	SkillPinChange,
 	SkillView
 } from '$lib/models/skills';
-import type { NoteRevision } from '$lib/models/notes';
-import type { ProjectId } from '$lib/models/projects';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type {
+	SkillMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type {
+	NoteAttachmentRestorer,
 	NoteEditor,
 	NoteRevisionReader,
 	NoteRevisionRecorder,
-	NoteAttachmentRestorer,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
 import type { NoteIndexer } from '$lib/server/services/notes/contracts';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
+import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
+import type { NoteReferences } from '$lib/services/notes/references';
+import type { SkillPortability } from '$lib/services/skills/manifest';
+import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 
+import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
 import type {
 	SkillCreator,
+	SkillEditor,
 	SkillFinder,
 	SkillUsageLister,
-	SkillUsageRecorder,
-	SkillEditor
+	SkillUsageRecorder
 } from '$lib/server/services/skills/library';
-import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
 import type { SkillPinWriter } from '$lib/server/services/skills/pins';
 
 /**
@@ -95,9 +104,48 @@ export interface SkillsController {
 	update(actor: ActorContext, input: SkillEditInput): Promise<SkillView<Note>>;
 	/** Pin or unpin a skill within a project so it is offered before unpinned ones. */
 	setPinned(actor: ActorContext, input: SkillPinChange): Promise<void>;
+
+	agentLoadSkill(
+		actor: ActorContext,
+		context: AgentSkillContext,
+		input: AgentToolInput<'load_skill'>
+	): Promise<AgentPayload>;
+	agentCreateSkillFromSelection(
+		actor: ActorContext,
+		selection: TextSelection,
+		input: AgentToolInput<'create_skill_from_selection'>
+	): Promise<AgentPayload>;
+	agentListSkills(actor: ActorContext, input: AgentToolInput<'list_skills'>): Promise<AgentPayload>;
+	agentCreateSkill(
+		actor: ActorContext,
+		input: AgentToolInput<'create_skill'>
+	): Promise<AgentPayload>;
+	agentListSkillVersions(
+		actor: ActorContext,
+		input: AgentToolInput<'list_skill_versions'>
+	): Promise<AgentPayload>;
+	agentRestoreSkillVersion(
+		actor: ActorContext,
+		input: AgentToolInput<'restore_skill_version'>
+	): Promise<AgentPayload>;
+	agentUpdateSkill(
+		actor: ActorContext,
+		input: AgentToolInput<'update_skill'>
+	): Promise<AgentPayload>;
+	agentSetSkillPinned(
+		actor: ActorContext,
+		input: AgentToolInput<'set_skill_pinned'>
+	): Promise<AgentPayload>;
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+	readonly toolProjectChoice: AgentProjectChoiceRules;
+	readonly projectLister: ProjectLister;
+	readonly markdown: NoteMarkdown;
+
 	readonly skillPortability: SkillPortability;
 	readonly skillMetadataEditing: SkillMetadataEditing;
 	readonly noteReferences: NoteReferences;
@@ -369,5 +417,135 @@ export class Skills implements SkillsController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+
+	async agentLoadSkill(
+		actor: ActorContext,
+		context: AgentSkillContext,
+		input: AgentToolInput<'load_skill'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const view = await this.loadForAgent(actor, {
+				noteId: input.noteId as NoteId,
+				contextNoteId: context.contextNoteId,
+				provenanceId: context.provenanceId
+			});
+			return this.dependencies.toolPresentation.projectSkillView(
+				view,
+				this.dependencies.markdown.write(view.skill.note.document)
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentCreateSkillFromSelection(
+		actor: ActorContext,
+		selection: TextSelection,
+		input: AgentToolInput<'create_skill_from_selection'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				...(await this.createFromSelection(actor, { ...input, selection: selection })),
+				sourceNoteId: selection.noteId
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListSkills(
+		actor: ActorContext,
+		input: AgentToolInput<'list_skills'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.list(actor);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentCreateSkill(
+		actor: ActorContext,
+		input: AgentToolInput<'create_skill'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const chosenProjectId =
+				input.projectId ??
+				(await this.dependencies.toolProjectChoice.requireChoice(
+					await this.dependencies.projectLister.list(actor),
+					'create a skill'
+				));
+			return this.create(actor, { ...input, projectId: chosenProjectId });
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListSkillVersions(
+		actor: ActorContext,
+		input: AgentToolInput<'list_skill_versions'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const revisions = await this.listVersions(actor, input);
+			return {
+				revisions: revisions.map((value) =>
+					this.dependencies.toolPresentation.projectNoteRevision(value)
+				)
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentRestoreSkillVersion(
+		actor: ActorContext,
+		input: AgentToolInput<'restore_skill_version'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.restoreVersion(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentUpdateSkill(
+		actor: ActorContext,
+		input: AgentToolInput<'update_skill'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.update(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentSetSkillPinned(
+		actor: ActorContext,
+		input: AgentToolInput<'set_skill_pinned'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			await this.setPinned(actor, input);
+			return input;
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

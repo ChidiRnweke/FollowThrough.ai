@@ -11,63 +11,63 @@ import {
 	NoteRevisionComparisonService,
 	type NoteRevisionComparison
 } from '$lib/server/services/notes/revision-diff';
-import { NoteTextSearchService, type NoteTextSearch } from '$lib/services/notes/text-search';
+import {
+	NoteEditingService as SharedNoteEditingService,
+	type NoteEditingRules
+} from '$lib/services/notes/editing';
+import {
+	NoteLifecycleService as SharedNoteLifecycleService,
+	type NoteCreationRules,
+	type NotePublicationRules,
+	type NoteTrashRules
+} from '$lib/services/notes/lifecycle';
+import { NotePresentationService, type NotePresentation } from '$lib/services/notes/presentation';
 import { NoteReferenceService, type NoteReferences } from '$lib/services/notes/references';
 import {
 	NoteSectionNumberingService,
 	type NoteSectionNumbering
 } from '$lib/services/notes/section-numbering';
-import {
-	NoteLifecycleService as SharedNoteLifecycleService,
-	type NoteCreationRules,
-	type NoteTrashRules,
-	type NotePublicationRules
-} from '$lib/services/notes/lifecycle';
-import {
-	NoteEditingService as SharedNoteEditingService,
-	type NoteEditingRules
-} from '$lib/services/notes/editing';
-import { NotePresentationService, type NotePresentation } from '$lib/services/notes/presentation';
+import { NoteTextSearchService, type NoteTextSearch } from '$lib/services/notes/text-search';
 
-import type { NoteMarkdown } from '$lib/server/controllers/notes/controller';
-import {
-	SelectionOrigins,
-	type SelectionOriginService
-} from '$lib/server/services/notes/selection-origin';
+import type { NoteMarkdown } from '$lib/models/note-markdown';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 import type {
-	SourceAnchorRepository,
-	ProvenanceRepository
+	ProvenanceRepository,
+	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import {
-	NoteReadingService,
-	NoteEditingService,
-	NoteLifecycleService,
-	NoteRevisionReadingService,
-	NoteRevisionWritingService,
-	NotePublicationService,
 	NoteAnchorRepairService,
 	NoteCreationService,
+	NoteEditingService,
+	NoteLifecycleService,
+	NotePublicationService,
+	NoteReadingService,
+	NoteRevisionReadingService,
+	NoteRevisionWritingService,
+	type NoteAttachmentRestorer,
 	type NoteCreator,
-	type NoteReader,
-	type NoteTreeReader,
-	type NoteTextSearcher,
+	type NoteDeletion,
 	type NoteEditor,
+	type NotePublisher,
+	type NoteReader,
+	type NoteRevisionReader,
+	type NoteRevisionRecorder,
 	type NoteSectionNumberingEditor,
+	type NoteTextSearcher,
 	type NoteTrashOperations,
 	type NoteTrashReader,
-	type NoteDeletion,
-	type NotePublisher,
-	type NoteRevisionRecorder,
-	type NoteRevisionReader,
-	type NoteAttachmentRestorer,
+	type NoteTreeReader,
 	type SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
 import { NoteProvenance, type ProvenanceRecorder } from '$lib/server/services/notes/provenance';
+import {
+	SelectionOrigins,
+	type SelectionOriginService
+} from '$lib/server/services/notes/selection-origin';
 
 export interface NotesCapabilityInput {
 	readonly db: Database;

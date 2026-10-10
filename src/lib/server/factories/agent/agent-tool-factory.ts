@@ -1,44 +1,43 @@
-import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
-import {
-	AgentReadTool,
-	type AgentReadToolController
-} from '$lib/server/controllers/agent/read-tool';
-import { ToolResultBoundary } from '$lib/server/adapters/agent/read-tool';
-import { AgentSdkToolAdapter } from '$lib/server/adapters/agent/sdk-tool';
-import { AgentToolExecution } from '$lib/server/controllers/agent/tool-execution';
+import { AgentToolApprovalRules } from '$lib/services/agent/tool-approval';
 import type { AgentExecutionMode } from '$lib/models/agent';
+import type { AgentToolReviewControl } from '$lib/models/agent-tool-reviews';
+import type { AgentToolRegistry, AgentToolSessionInput } from '$lib/models/agent-tool-session';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { TokenCounter } from '$lib/models/tokenization';
-import type { AgentToolSurface, McpToolSurface } from '$lib/server/adapters/agent/tool-registry';
+import { AgentSdkToolAdapter } from '$lib/server/adapters/agent/sdk-tool';
 import {
 	AgentToolDefinitions,
 	McpToolDefinitions as McpDefinitionSource
-} from '$lib/server/controllers/agent/tool-definitions';
-import type { AgentToolControllerProvider } from '$lib/server/factories/agent/tool-controller-provider';
-import type { AgentToolReviewControl } from '$lib/server/controllers/agent/tool-reviews';
-import {
-	AgentToolSessions,
-	type AgentToolRegistry,
-	type AgentToolSessionInput
-} from '$lib/server/controllers/agent/tool-sessions';
-import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
+} from '$lib/server/adapters/agent/tool-definition-source';
+import type { AgentToolSurface, McpToolSurface } from '$lib/server/adapters/agent/tool-registry';
+import { AgentToolSessionAdapter } from '$lib/server/adapters/agent/tool-session';
+import { AgentToolSessions } from '$lib/server/controllers/agent/tool-sessions';
+import { instrumentedController } from '../controller-instrumentation';
+import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import type { AgentToolCompletionObserver } from '$lib/server/services/agent/runs/contracts';
+import type { ToolPreferenceCapability } from '$lib/server/services/agent/tools/preferences';
+import { AgentToolDiscoveryStore } from '$lib/server/stores/agent/tool-discovery';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+import { agentToolAuthoritySurface, agentToolSessionSurface } from '../controller-surfaces';
 import { createSdkToolInvocation } from './sdk-tool-factory';
-import { createAgentToolDiscovery } from './tool-discovery-factory';
 import { createToolReviews } from './tool-review-factory';
-export type { AgentToolDefinition } from '$lib/server/adapters/agent/tool-definitions';
-export type { AgentToolSurface } from '$lib/server/adapters/agent/tool-registry';
 export type {
 	AgentToolContext,
 	McpToolContext,
 	ToolAccessPolicy
-} from '$lib/server/controllers/agent/tool-context';
-export type { AgentToolOutput } from '$lib/server/controllers/agent/tool-outputs';
+} from '$lib/models/agent-tool-context';
+export type { AgentToolDefinition } from '$lib/server/adapters/agent/tool-definitions';
+export type { AgentToolSurface } from '$lib/server/adapters/agent/tool-registry';
 export { agentToolCoverage } from './tool-coverage';
 export type { AgentToolCoverage } from './tool-coverage';
 
+import type {
+	AgentToolContext,
+	McpToolContext,
+	ToolAccessPolicy
+} from '$lib/models/agent-tool-context';
 import {
 	AppToolDefinitions,
 	McpToolDefinitions,
@@ -50,105 +49,104 @@ import {
 	McpToolRegistryAdapter
 } from '$lib/server/adapters/agent/tool-registry';
 import { AgentToolAuthorities } from '$lib/server/controllers/agent/tool-authority';
-import type {
-	AgentToolContext,
-	McpToolContext,
-	ToolAccessPolicy
-} from '$lib/server/controllers/agent/tool-context';
-import {
-	createAppToolOperations,
-	createMcpToolOperations,
-	createSelectionToolOperations,
-	createSharedToolOperations
-} from './tool-operations-factory';
-const createReadTool = <Input, Result>(
-	execute: (input: Input) => Promise<Result>
-): AgentReadToolController<Input> =>
-	new AgentReadTool(execute, new ToolResultBoundary<Result>(), new AgentPayloadInspectionService());
 export const createAgentToolSurface = (
 	tokens: TokenCounter,
-	controllers: AgentToolControllerProvider,
+	controllers: ControllerFactory,
 	actor: ActorContext,
 	mode: AgentExecutionMode,
 	context: AgentToolContext,
-	executor: AgentToolExecutor,
-	retriever: ToolRetriever,
+	executor: AgentToolCompletionObserver,
+	retriever: AgentToolDiscoveryServices,
 	access: ToolAccessPolicy,
 	reviews: AgentToolReviewControl = createToolReviews(() => controllers.notes(), actor),
 	signal: AbortSignal = new AbortController().signal
 ): AgentToolSurface => {
 	const definitions = new AgentToolDefinitions(
 		context.input,
-		new SharedToolDefinitions(createReadTool, () =>
-			createSharedToolOperations(controllers, actor, context.provenanceId, tokens)
-		),
-		new AppToolDefinitions(createReadTool, () =>
-			createAppToolOperations(controllers, actor, context)
-		),
-		(selection) =>
-			new SelectionToolDefinitions(
-				createReadTool,
-				createSelectionToolOperations(controllers, actor, selection, context.model)
-			)
+		new SharedToolDefinitions(controllers, actor, context.provenanceId),
+		new AppToolDefinitions(controllers, actor, context),
+		(selection) => new SelectionToolDefinitions(controllers, actor, selection, context.model)
 	);
 	return new AgentToolRegistryAdapter(
-		new AgentToolExecution(mode, reviews, executor),
+		reviews,
+		mode,
+		executor,
 		signal,
-		new AgentToolAuthorities(new AgentToolCatalogService(), access),
+		instrumentedController(
+			'agentToolAuthority',
+			new AgentToolAuthorities(
+				new AgentToolCatalogService(),
+				access,
+				retriever.index,
+				retriever.embeddings,
+				new AgentToolDiscoveryStore(),
+				new AgentToolApprovalRules()
+			),
+			agentToolAuthoritySurface
+		),
 		definitions,
-		(catalog, definitions, promoted) =>
-			createAgentToolDiscovery(catalog, definitions, retriever, promoted),
 		new AgentSdkToolAdapter(),
 		createSdkToolInvocation
 	);
 };
 export const createMcpToolDefinitions = (
 	tokens: TokenCounter,
-	controllers: AgentToolControllerProvider,
+	controllers: ControllerFactory,
 	actor: ActorContext,
 	context: McpToolContext,
-	access: ToolAccessPolicy
+	access: ToolAccessPolicy,
+	retriever: AgentToolDiscoveryServices
 ): McpToolSurface => {
 	return new McpToolRegistryAdapter(
-		new AgentToolAuthorities(new AgentToolCatalogService(), access),
-		new McpDefinitionSource(
-			new SharedToolDefinitions(createReadTool, () =>
-				createSharedToolOperations(controllers, actor, context.provenanceId, tokens)
+		instrumentedController(
+			'agentToolAuthority',
+			new AgentToolAuthorities(
+				new AgentToolCatalogService(),
+				access,
+				retriever.index,
+				retriever.embeddings,
+				new AgentToolDiscoveryStore(),
+				new AgentToolApprovalRules()
 			),
-			new McpToolDefinitions(createReadTool, () =>
-				createMcpToolOperations(controllers, actor, context)
-			)
+			agentToolAuthoritySurface
+		),
+		new McpDefinitionSource(
+			new SharedToolDefinitions(controllers, actor, context.provenanceId),
+			new McpToolDefinitions(controllers, actor, context)
 		)
 	);
 };
 export const agentToolRegistry = (
-	controllers: () => AgentToolControllerProvider,
-	toolRetriever: ToolRetriever,
-	tokens: TokenCounter
+	controllers: () => ControllerFactory,
+	toolRetriever: AgentToolDiscoveryServices,
+	tokens: TokenCounter,
+	preferences: ToolPreferenceCapability
 ): ((input: AgentToolSessionInput) => Promise<AgentToolRegistry>) => {
-	const sessions = new AgentToolSessions(() => {
-		const factory = controllers();
-		return {
-			preferences: factory.toolPreferences(),
-			create: ({ actor, request, run, executor, signal }, authority) => {
-				const reviews = createToolReviews(() => factory.notes(), actor);
-				return {
+	const sessions = new AgentToolSessionAdapter(
+		instrumentedController(
+			'agentToolSession',
+			new AgentToolSessions(preferences, new AgentToolCatalogService()),
+			agentToolSessionSurface
+		),
+		({ actor, request, run, executor, signal }, authority) => {
+			const factory = controllers();
+			const reviews = createToolReviews(() => factory.notes(), actor);
+			return {
+				reviews,
+				registry: createAgentToolSurface(
+					tokens,
+					factory,
+					actor,
+					run.executionMode,
+					{ provenanceId: run.provenanceId as ProvenanceId, input: request, model: run.model },
+					executor,
+					toolRetriever,
+					authority,
 					reviews,
-					registry: createAgentToolSurface(
-						tokens,
-						factory,
-						actor,
-						run.executionMode,
-						{ provenanceId: run.provenanceId as ProvenanceId, input: request, model: run.model },
-						executor,
-						toolRetriever,
-						authority,
-						reviews,
-						signal
-					)
-				};
-			}
-		};
-	});
+					signal
+				)
+			};
+		}
+	);
 	return sessions.open.bind(sessions);
 };

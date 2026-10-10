@@ -1,43 +1,44 @@
-import type { AgentToolSurface } from './agent-tool-factory';
-import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
-import { ReferencePresentationService } from '$lib/services/references/presentation';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
+import { type AgentExecutionMode, type PendingAgentDecision } from '$lib/models/agent';
+import { noteChangeReviewSchema } from '$lib/models/notes';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
+import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { describe, it, expect } from 'vitest';
-import { RunContext } from '@openai/agents';
-import { createAgentToolSurface } from './agent-tool-factory';
-import { type PendingAgentDecision, type AgentExecutionMode } from '$lib/models/agent';
-import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
-import { noteChangeReviewSchema } from '$lib/models/notes';
-import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
-import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { RunContext } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import type { AgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	noteBuilder,
 	testActor,
-	testProvenanceId,
-	testConversationId
+	testConversationId,
+	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const context = () => new RunContext();
@@ -58,7 +59,7 @@ const setup = () => {
 				input: { conversationId: testConversationId(), prompt: 'Change launch day' },
 				model: 'test-model'
 			},
-			{ execute: (_call, action) => action() },
+			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			restoredToolReviews(fixture.factory, testActor(), pending)
@@ -237,6 +238,7 @@ describe('A note change that fails while it is being prepared', () => {
 			new WorkspaceCommandRulesService(),
 			new ProvenancePresentationService(),
 			capabilityDependencies<NotesDependencies>({
+				...agentToolResultsFixture(),
 				archiveImport: new NoteArchiveImportService(),
 				patchPreparation: new NotePatchPreparationService(),
 				revisionComparison: new NoteRevisionComparisonService(),
@@ -274,7 +276,7 @@ describe('A note change that fails while it is being prepared', () => {
 				input: { conversationId: testConversationId(), prompt: 'Rewrite the note' },
 				model: 'test-model'
 			},
-			{ execute: (_call, action) => action() },
+			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			restoredToolReviews(

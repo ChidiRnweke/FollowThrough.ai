@@ -1,18 +1,19 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { SkillPortabilityService } from '$lib/services/skills/manifest';
-import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
-import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
-import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -40,6 +41,7 @@ const setup = async (suffix: string) => {
 	const controller = new Skills(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
+			...agentToolResultsFixture(),
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),
 			noteReferences: new NoteReferenceService(),

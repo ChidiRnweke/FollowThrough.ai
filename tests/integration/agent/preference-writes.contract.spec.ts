@@ -1,20 +1,21 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
-import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
 } from '$lib/server/controllers/agent/settings/controller';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
 import { context, now, seedNote } from '../database-harness';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 
 it.each([false, true])(
 	'retains concurrent independent preference edits (existing row: %s)',
@@ -37,6 +38,7 @@ it.each([false, true])(
 			return new AgentSettings(
 				new WorkspaceCommandRulesService(),
 				capabilityDependencies<AgentSettingsDependencies>({
+					...agentToolResultsFixture(),
 					preferenceEditing: new AgentPreferenceEditingService(),
 					...agentRulesFixture(),
 					preferences: new AgentPreferenceCatalog(

@@ -1,15 +1,16 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
-import { describe, expect, it } from 'vitest';
+import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { ToolPreferences } from '$lib/server/controllers/agent/tool-preferences/controller';
 import { TrustPolicies } from '$lib/server/controllers/agent/trust-policies/controller';
-import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
-import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
-import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
-import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
-import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { ToolPreferenceRecords } from '$lib/server/repositories/agent/postgres/tool-preferences';
+import { TrustPolicyRecords } from '$lib/server/repositories/agent/postgres/trust-policies';
+import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
+import { ToolAccess } from '$lib/server/services/agent/tools/preferences';
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { describe, expect, it } from 'vitest';
 import { actor, context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -18,6 +19,7 @@ const setup = async (suffix: string) => {
 	const sync = createSyncCapability({ db: database });
 	const preferences = new ToolPreferenceRecords(database);
 	const tools = new ToolPreferences(new WorkspaceCommandRulesService(), {
+		...agentToolResultsFixture(),
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,
@@ -25,6 +27,7 @@ const setup = async (suffix: string) => {
 		catalog: new AgentToolCatalogService()
 	});
 	const policies = new TrustPolicies(new WorkspaceCommandRulesService(), {
+		...agentToolResultsFixture(),
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,

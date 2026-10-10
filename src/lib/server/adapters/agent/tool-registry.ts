@@ -1,17 +1,23 @@
-import type { AgentToolInvocationControl } from '$lib/server/controllers/agent/tool-invocation';
-import type { AgentToolDefinitionSource } from '$lib/server/controllers/agent/tool-definitions';
-import type { ApiTokenScope } from '$lib/models/identity';
-import type { PendingAgentDecision, ToolClassification } from '$lib/models/agent';
+import type {
+	AgentExecutionMode,
+	PendingAgentDecision,
+	ToolClassification
+} from '$lib/models/agent';
+import type { ToolDiscoveryPlan } from '$lib/models/agent-tool-authority';
+import type { AgentToolInvocationControl } from '$lib/models/agent-tool-protocol';
+import type { AgentToolReviewControl } from '$lib/models/agent-tool-reviews';
+import type { AgentToolRegistry } from '$lib/models/agent-tool-session';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { ApiTokenScope } from '$lib/models/identity';
 import { bindToolArguments } from '$lib/server/adapters/agent/tool-call';
-import type { AgentToolExecutionControl } from '$lib/server/controllers/agent/tool-execution';
+import type { AgentToolDefinitionSource } from '$lib/server/adapters/agent/tool-definition-source';
 import type { AgentToolAuthority } from '$lib/server/controllers/agent/tool-authority';
-import type { AgentToolDiscoveryControl } from '$lib/server/controllers/agent/tool-discovery';
-import { type AgentToolRegistry } from '$lib/server/controllers/agent/tool-sessions';
+import type { AgentToolCompletionObserver } from '$lib/models/agent-tool-protocol';
 import type { Tool } from '@openai/agents';
 import { z } from 'zod';
-import type { SdkToolOptions, AgentSdkToolBuilder } from './sdk-tool';
+import type { AgentSdkToolBuilder, SdkToolOptions } from './sdk-tool';
+import { ToolCatalogBoundary } from './tool-catalog';
 import type { AgentToolDefinition } from './tool-definitions';
 export interface AgentToolSurface extends AgentToolRegistry {
 	definitions(options?: { classifications?: readonly ToolClassification[] }): AgentToolDefinition[];
@@ -20,23 +26,23 @@ export interface AgentToolSurface extends AgentToolRegistry {
 }
 type Definition = AgentToolDefinition;
 export class AgentToolRegistryAdapter implements AgentToolSurface {
+	private readonly approvalRequired: readonly ToolName[];
 	constructor(
-		private readonly execution: AgentToolExecutionControl,
+		private readonly reviews: AgentToolReviewControl,
+		private readonly mode: AgentExecutionMode,
+		private readonly observer: AgentToolCompletionObserver,
 		private readonly signal: AbortSignal,
 		private readonly authority: AgentToolAuthority,
 		private readonly source: AgentToolDefinitionSource<AgentToolDefinition>,
-		private readonly discoveryFactory: (
-			catalog: ToolDescriptor[],
-			definitions: AgentToolDefinition[],
-			promoted: readonly string[]
-		) => AgentToolDiscoveryControl,
 		private readonly sdk: AgentSdkToolBuilder,
 		private readonly invocationFactory: (options: SdkToolOptions) => AgentToolInvocationControl
-	) {}
+	) {
+		this.approvalRequired = authority.approvalRequired(mode);
+	}
 
 	/** Carry the exact preparation used by the approval gate into the durable checkpoint. */
 	reviewDecision(pending: PendingAgentDecision): PendingAgentDecision {
-		return this.execution.checkpoint(pending);
+		return this.reviews.checkpoint(pending);
 	}
 
 	tools(
@@ -57,7 +63,12 @@ export class AgentToolRegistryAdapter implements AgentToolSurface {
 	definitions(
 		options: { classifications?: readonly Definition['classification'][] } = {}
 	): AgentToolDefinition[] {
-		return this.authority.select(this.source.definitions(), options.classifications);
+		const definitions = this.source.definitions();
+		const names = this.authority.select(
+			definitions.map(({ name, classification }) => ({ name, classification })),
+			options.classifications
+		);
+		return definitions.filter((definition) => names.includes(definition.name));
 	}
 
 	/**
@@ -73,10 +84,14 @@ export class AgentToolRegistryAdapter implements AgentToolSurface {
 	 * never landed.
 	 */
 	agentTools(alreadyPromoted: readonly string[] = []): Tool<unknown>[] {
-		const definitions = this.definitions();
-		const direct = this.authority
-			.initial(definitions)
-			.map((definition) => this.buildTool(definition));
+		const source = this.source.definitions();
+		const plan = this.authority.appPlan(
+			source.map(({ name, classification }) => ({ name, classification })),
+			alreadyPromoted
+		);
+		const definitions = source.filter((definition) => plan.permitted.includes(definition.name));
+		const byName = new Map(definitions.map((definition) => [definition.name, definition]));
+		const direct = plan.initial.map((name) => this.buildTool(byName.get(name)!));
 
 		// Every long-tail tool is registered with its real flat schema but gated
 		// behind `isEnabled`. The SDK drops disabled function tools in
@@ -88,11 +103,14 @@ export class AgentToolRegistryAdapter implements AgentToolSurface {
 		// the envelope's free-form `payload` renders as a property-less JSON schema,
 		// so the model was asked to fill a shape it had never been shown, and
 		// several model families answered with an empty object forever.
-		const discovery = this.discoveryFactory(this.catalog(), definitions, alreadyPromoted);
-		const discoverable = this.authority
-			.discoverable(definitions)
+
+		const presentation = new ToolCatalogBoundary(definitions);
+		const discoverable = definitions
+			.filter((definition) => plan.discoverable.includes(definition.name))
 			.map((definition) =>
-				this.buildTool(definition, { isEnabled: () => discovery.isEnabled(definition.name) })
+				this.buildTool(definition, {
+					isEnabled: () => this.authority.isEnabled(plan.session, definition.name)
+				})
 			);
 
 		const searchParameters = z
@@ -110,8 +128,8 @@ export class AgentToolRegistryAdapter implements AgentToolSurface {
 			execute: (_action, _callId, run) => run(),
 			prepare: async (input) => ({
 				kind: 'ready',
-				action: bindToolArguments(searchParameters, input, ({ query, limit }) =>
-					discovery.search(query, limit ?? 5)
+				action: bindToolArguments(searchParameters, input, async ({ query, limit }) =>
+					presentation.describe(await this.authority.discover(plan, query, limit ?? 5))
 				)
 			})
 		});
@@ -136,7 +154,10 @@ export class AgentToolRegistryAdapter implements AgentToolSurface {
 	 * rather than defined, so it has no catalog name to report.
 	 */
 	offeredToolNames(alreadyPromoted: readonly string[] = []): ToolName[] {
-		return this.authority.offered(this.definitions(), alreadyPromoted);
+		return this.authority.offered(
+			this.source.definitions().map(({ name, classification }) => ({ name, classification })),
+			alreadyPromoted
+		);
 	}
 	catalog(): ToolDescriptor[] {
 		return this.authority.catalog();
@@ -156,13 +177,47 @@ export class AgentToolRegistryAdapter implements AgentToolSurface {
 			parameters: definition.parameters,
 			signal: this.signal,
 			...options,
-			prepare: (input, callId, phase) => this.execution.prepare(definition, input, callId, phase),
-			execute: (action, callId, run) => this.execution.execute(definition, action, callId, run)
+			prepare: (input, callId, phase) =>
+				this.reviews.prepare(
+					definition.name,
+					this.approvalRequired.includes(definition.name) ? 'approval_required' : 'ready',
+					this.mode,
+					definition.prepare(input),
+					callId,
+					phase
+				),
+			execute: async (action, callId, run) => {
+				const result = await run();
+				await this.observer.completed(
+					{
+						...(callId === undefined ? {} : { callId }),
+						toolName: definition.name,
+						arguments: action.arguments,
+						classification: definition.classification
+					},
+					result
+				);
+				return result;
+			}
 		});
 	}
 }
 export interface McpToolSurface {
-	forScope(scope: ApiTokenScope): AgentToolDefinition[];
+	open(scope: ApiTokenScope): {
+		readonly plan: ToolDiscoveryPlan;
+		readonly definitions: readonly AgentToolDefinition[];
+	};
+	offered(plan: ToolDiscoveryPlan): readonly string[];
+	authorize(
+		plan: ToolDiscoveryPlan,
+		name: string
+	): import('$lib/models/agent/tool-failure').ToolFailure | undefined;
+	search(
+		plan: ToolDiscoveryPlan,
+		definitions: readonly AgentToolDefinition[],
+		query: string,
+		limit: number
+	): Promise<import('$lib/models/agent/payload').AgentPayload>;
 	definitions(options?: { classifications?: readonly ToolClassification[] }): AgentToolDefinition[];
 }
 export class McpToolRegistryAdapter implements McpToolSurface {
@@ -170,13 +225,45 @@ export class McpToolRegistryAdapter implements McpToolSurface {
 		private readonly authority: AgentToolAuthority,
 		private readonly source: AgentToolDefinitionSource<AgentToolDefinition>
 	) {}
-	forScope(scope: ApiTokenScope): AgentToolDefinition[] {
-		return this.authority.selectMcp(this.source.definitions(), scope);
+	open(scope: ApiTokenScope) {
+		const definitions = this.source.definitions();
+		const plan = this.authority.mcpPlan(
+			definitions.map(({ name, classification, description }) => ({
+				name,
+				classification,
+				description
+			})),
+			scope
+		);
+		return {
+			plan,
+			definitions: definitions.filter((definition) => plan.permitted.includes(definition.name))
+		};
 	}
-
+	offered(plan: ToolDiscoveryPlan): readonly string[] {
+		return this.authority.available(plan);
+	}
+	authorize(plan: ToolDiscoveryPlan, name: string) {
+		return this.authority.authorize(plan, name);
+	}
+	async search(
+		plan: ToolDiscoveryPlan,
+		definitions: readonly AgentToolDefinition[],
+		query: string,
+		limit: number
+	) {
+		return new ToolCatalogBoundary(definitions).describe(
+			await this.authority.discover(plan, query, limit)
+		);
+	}
 	definitions(
 		options: { classifications?: readonly ToolClassification[] } = {}
 	): AgentToolDefinition[] {
-		return this.authority.select(this.source.definitions(), options.classifications);
+		const definitions = this.source.definitions();
+		const names = this.authority.select(
+			definitions.map(({ name, classification }) => ({ name, classification })),
+			options.classifications
+		);
+		return definitions.filter((definition) => names.includes(definition.name));
 	}
 }

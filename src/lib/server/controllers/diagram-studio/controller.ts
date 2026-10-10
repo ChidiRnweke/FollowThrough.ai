@@ -1,48 +1,47 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type { IconSearch } from '$lib/server/services/diagrams/icons';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
-import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
-import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
+import type { AgentToolContext, ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { DiagramRevisionChange } from '$lib/models/diagrams';
-import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
+import type { IconSearch } from '$lib/server/services/diagrams/icons';
 import type { DiagramLifecycle } from '$lib/server/services/diagrams/library';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type { ProjectLister } from '$lib/server/services/projects/catalog';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
+import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
+import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
+import type { AgentProjectChoiceRules } from '$lib/services/projects/agent-choice';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
-import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
-import type {
-	DiagramMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { ActorContext } from '$lib/models/identity';
+import { StaleRevisionError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 import type {
 	CountDiagramReferencesInput,
+	CreateDiagramInput,
 	DeleteProjectDiagramInput,
 	Diagram,
-	DiagramId,
 	DiagramEtag,
+	DiagramId,
 	DiagramWriteOutcome,
+	DiagramWriteOutput,
 	DrawioDiagram,
+	EditDiagramInput,
 	FindConversationDiagramInput,
 	FindConversationDiagramOutput,
 	GetDiagramRevisionInput,
 	GetDiagramRevisionOutput,
 	GetProjectDiagramInput,
+	ListDiagramRevisionsInput,
+	ListDiagramRevisionsOutput,
 	ListProjectDiagramsInput,
 	ListProjectDiagramsOutput,
 	ListTrashedDiagramsInput,
-	ListDiagramRevisionsInput,
-	ListDiagramRevisionsOutput,
 	PublishProjectDiagramInput,
 	PublishProjectDiagramOutput,
-	CreateDiagramInput,
-	DiagramWriteOutput,
-	EditDiagramInput,
 	ReadCanvasDiagramInput,
 	ReadCanvasDiagramOutput,
 	ReadProjectDiagramInput,
@@ -55,8 +54,19 @@ import type {
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
-import { StaleRevisionError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
+import type { ActorContext } from '$lib/models/identity';
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type {
+	DiagramMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { CanvasSourceReader } from '$lib/server/services/diagrams/canvas-source';
+import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
+import type {
+	DrawioSvgPreviewSanitizer,
+	DrawioXmlContentValidator
+} from '$lib/server/services/diagrams/drawio';
 import type {
 	DiagramConversationFinder,
 	DiagramDraftWriter,
@@ -66,12 +76,9 @@ import type {
 	DiagramRevisionReader,
 	DiagramWriter
 } from '$lib/server/services/diagrams/library';
-import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
-import type {
-	DrawioSvgPreviewSanitizer,
-	DrawioXmlContentValidator
-} from '$lib/server/services/diagrams/drawio';
-import type { CanvasSourceReader } from '$lib/server/services/diagrams/canvas-source';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for the project diagram studio: the canvas beside a
@@ -194,9 +201,38 @@ export interface DiagramStudioController {
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void>;
 	/** How many notes render this diagram, for the delete confirmation. */
 	countDiagramReferences(actor: ActorContext, input: CountDiagramReferencesInput): Promise<number>;
+
+	agentCreateDiagram(
+		actor: ActorContext,
+		context: AgentToolContext,
+		input: AgentToolInput<'create_diagram'>
+	): Promise<AgentPayload>;
+	agentEditDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'edit_diagram'>
+	): Promise<AgentPayload>;
+	agentReadCanvasDiagram(
+		actor: ActorContext,
+		context: AgentToolContext,
+		input: AgentToolInput<'read_canvas_diagram'>
+	): Promise<AgentPayload>;
+	agentSearchIcons(
+		actor: ActorContext,
+		input: AgentToolInput<'search_icons'>
+	): Promise<AgentPayload>;
+	agentReadProjectDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'read_project_diagram'>
+	): Promise<AgentPayload>;
 }
 
 export interface DiagramStudioDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+	readonly toolProjectChoice: AgentProjectChoiceRules;
+	readonly projectLister: ProjectLister;
+
 	readonly diagramEditing: DiagramEditingRules;
 	readonly diagramLifecycle: DiagramLifecycleRules;
 	syncMutations: WorkspaceMutationGuard;
@@ -675,5 +711,93 @@ export class DiagramStudio implements DiagramStudioController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+
+	async agentCreateDiagram(
+		actor: ActorContext,
+		context: AgentToolContext,
+		input: AgentToolInput<'create_diagram'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const chosenProjectId =
+				input.projectId ??
+				(await this.dependencies.toolProjectChoice.requireChoice(
+					await this.dependencies.projectLister.list(actor),
+					'create a diagram'
+				));
+			return this.createDiagram(actor, {
+				source: input.source,
+				projectId: chosenProjectId,
+				conversationId: context.input.conversationId,
+				...(input.title === undefined ? {} : { title: input.title })
+			});
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentEditDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'edit_diagram'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.editDiagram(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentReadCanvasDiagram(
+		actor: ActorContext,
+		context: AgentToolContext,
+		input: AgentToolInput<'read_canvas_diagram'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.readCanvasDiagram(actor, {
+				conversationId: context.input.conversationId
+			});
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentSearchIcons(
+		actor: ActorContext,
+		input: AgentToolInput<'search_icons'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.searchDiagramIcons(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentReadProjectDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'read_project_diagram'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const diagram = await this.readProjectDiagram(actor, input);
+			return {
+				id: diagram.id,
+				kind: diagram.kind,
+				...(diagram.title ? { title: diagram.title } : {}),
+				labels: diagram.labels,
+				path: `/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

@@ -1,17 +1,18 @@
+import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
-import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
-import { describe, expect, it } from 'vitest';
-import { Diagrams, type DiagramsDependencies } from './controller';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	InMemoryDiagrams,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
+import { diagramGenerationFixture } from '$lib/testing/diagrams/fixtures/generation';
 import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { DrawioXmlValidator } from '$lib/server/services/diagrams/drawio';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
+import { Diagrams, type DiagramsDependencies } from './controller';
 
 const setup = (drawio = false) => {
 	const generation = diagramGenerationFixture();
@@ -23,6 +24,7 @@ const setup = (drawio = false) => {
 		suggestions,
 		controller: new Diagrams(
 			capabilityDependencies<DiagramsDependencies>({
+				...agentToolResultsFixture(),
 				generationRules: new DiagramGenerationRuleService(),
 				diagramFinder: diagrams,
 				...generation,

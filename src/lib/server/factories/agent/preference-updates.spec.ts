@@ -1,4 +1,3 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import {
@@ -7,9 +6,11 @@ import {
 } from '$lib/server/controllers/agent/settings/controller';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryAgentPreferencesRepository } from '$lib/testing/agent/fakes/in-memory-inline-completion';
 import { InMemoryModelCatalog } from '$lib/testing/agent/fakes/in-memory-model-catalog';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -47,6 +48,7 @@ const setup = () => {
 		controller: new AgentSettings(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
+				...agentToolResultsFixture(),
 				preferenceEditing: new AgentPreferenceEditingService(),
 				...agentRulesFixture(),
 				preferences,
@@ -81,7 +83,7 @@ const settingsTool = (controller: AgentSettings) => {
 			model: 'test/model',
 			input: { conversationId: testConversationId(), prompt: 'Update settings' }
 		},
-		{ execute: (_call, action) => action() },
+		{ completed: async () => {} },
 		new InMemoryToolRetriever(),
 		{ isEnabled: () => true }
 	)

@@ -1,21 +1,19 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+import { ValidationError } from '$lib/errors';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentMemoryProposalInput, AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { ProjectId } from '$lib/models/projects';
 import type { AppliedChange } from '$lib/models/proposal-effects';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
-import { ValidationError } from '$lib/errors';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
-import type { IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { MemoryIndexer } from '$lib/server/services/memory/library';
-import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
-import type { Suggestion } from '$lib/models/suggestions';
-import type {
-	MemoryMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
+import type { IndexingResult } from '$lib/models/knowledge-search';
 import type {
 	CreateMemoryEntryInput,
 	DeleteMemoryEntryInput,
@@ -27,16 +25,25 @@ import type {
 	ProposeMemoryChangeOutput,
 	UpdateMemoryEntryInput
 } from '$lib/models/memory';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
+import type { Suggestion } from '$lib/models/suggestions';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type {
+	MemoryMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
+import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type {
 	MemoryChanges,
 	MemoryEntryCreator,
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
-	MemoryEntryLister
+	MemoryEntryLister,
+	MemoryIndexer
 } from '$lib/server/services/memory/library';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
-import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
  * Application boundary for memory: the persistent facts the agent is allowed to read,
@@ -73,9 +80,27 @@ export interface MemoryController {
 		actor: ActorContext,
 		input: ProposeMemoryChangeInput
 	): Promise<ProposeMemoryChangeOutput<Suggestion>>;
+
+	agentListProjectMemory(
+		actor: ActorContext,
+		input: AgentToolInput<'list_project_memory'>
+	): Promise<AgentPayload>;
+	agentListUserMemory(
+		actor: ActorContext,
+		input: AgentToolInput<'list_user_memory'>
+	): Promise<AgentPayload>;
+	agentProposeMemoryChange(
+		actor: ActorContext,
+		provenanceId: ProvenanceId,
+		input: AgentMemoryProposalInput
+	): Promise<AgentPayload>;
 }
 
 export interface MemoryDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly editing: IMemoryEditingService;
 	readonly presentation: IMemoryPresentationService;
 	indexEmbeddings: IEmbeddings;
@@ -243,6 +268,62 @@ export class Memory implements MemoryController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+
+	async agentListProjectMemory(
+		actor: ActorContext,
+		input: AgentToolInput<'list_project_memory'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				entries: (
+					await this.list(actor, {
+						projectId: input.projectId as ProjectId,
+						sharedOnly: true
+					})
+				).entries.map((value) => this.dependencies.toolPresentation.projectMemory(value))
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListUserMemory(
+		actor: ActorContext,
+		input: AgentToolInput<'list_user_memory'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const entries = (await this.list(actor, { sharedOnly: true })).entries.map((value) =>
+				this.dependencies.toolPresentation.projectMemory(value)
+			);
+			return { entries };
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentProposeMemoryChange(
+		actor: ActorContext,
+		provenanceId: ProvenanceId,
+		input: AgentMemoryProposalInput
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const { confidence, ...payload } = input;
+			return this.propose(actor, {
+				...payload,
+				provenanceId: provenanceId,
+				...(confidence !== undefined ? { confidence } : {})
+			});
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }
 

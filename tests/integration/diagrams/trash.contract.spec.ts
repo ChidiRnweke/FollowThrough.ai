@@ -1,26 +1,27 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { DiagramEditingService } from '$lib/services/diagrams/editing';
-import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
 import type { DiagramId } from '$lib/models/diagrams';
 import { diagramEtag } from '$lib/models/diagrams';
-import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
 } from '$lib/server/controllers/diagram-studio/controller';
+import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
 	InMemoryDiagrams
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
 import { actor, context, now, seedNote } from '../database-harness';
 
 it.each([
@@ -56,6 +57,7 @@ it.each([
 		const controller = new DiagramStudio(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
+				...agentToolResultsFixture(),
 				diagramEditing: new DiagramEditingService(),
 				diagramLifecycle: new DiagramLifecycleService(),
 				diagramTrash: library.lifecycle,

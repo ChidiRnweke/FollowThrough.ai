@@ -1,12 +1,11 @@
-import { TodayPresentationService } from '$lib/services/workspace/today';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { expect, it } from 'vitest';
-import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { Workspace, type WorkspaceDependencies } from './controller';
 import type { LocalDate } from '$lib/models/workspace';
-import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
+import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -14,6 +13,8 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Workspace, type WorkspaceDependencies } from './controller';
 
 it('counts pending proposals after expiry when assembling Today', async () => {
 	const proposals = new InMemorySuggestionReader();
@@ -22,6 +23,7 @@ it('counts pending proposals after expiry when assembling Today', async () => {
 	const controller = new Workspace(
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
 			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			suggestionExpirer: proposals,
@@ -44,6 +46,7 @@ it('reports expiry failure before returning shell attention', async () => {
 	const controller = new Workspace(
 		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
+			...agentToolResultsFixture(),
 			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),
 			...builtInSkillsFixture(),

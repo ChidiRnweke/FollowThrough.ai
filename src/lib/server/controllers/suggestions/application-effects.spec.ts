@@ -1,38 +1,39 @@
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
-import { describe, expect, it } from 'vitest';
-import { Suggestions, type SuggestionsDependencies } from './controller';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
-import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
-import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
-	testActor,
-	testSuggestionId,
-	testProvenanceId,
-	testNoteId,
-	testNow,
-	memoryEntryBuilder,
-	testMemoryEntryId,
-	memorySuggestionBuilder,
-	noteBuilder
-} from '$lib/testing/workspace/fixtures/domain-builders';
+	DrawioLabelReader,
+	DrawioSvgSanitizer,
+	DrawioXmlValidator
+} from '$lib/server/services/diagrams/drawio';
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 import {
-	DrawioXmlValidator,
-	DrawioSvgSanitizer,
-	DrawioLabelReader
-} from '$lib/server/services/diagrams/drawio';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
+	InMemoryEmbeddingClient,
+	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
+import { InMemorySuggestions } from '$lib/testing/suggestions/fakes/in-memory-automation';
+import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	memoryEntryBuilder,
+	memorySuggestionBuilder,
+	noteBuilder,
+	testActor,
+	testMemoryEntryId,
+	testNoteId,
+	testNow,
+	testProvenanceId,
+	testSuggestionId
+} from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 describe('Proposal effect coordination', () => {
 	it('records the final reviewed diagram instead of the generated preview', async () => {
@@ -62,6 +63,7 @@ describe('Proposal effect coordination', () => {
 		const controller = new Suggestions(
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
@@ -127,6 +129,7 @@ describe('Proposal effect coordination', () => {
 		const controller = new Suggestions(
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
+				...agentToolResultsFixture(),
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,

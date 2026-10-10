@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
 import { AccessTokens } from '$lib/server/services/identity/api-tokens';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryApiTokenRepository,
 	testTokenUser
 } from '$lib/testing/identity/fakes/in-memory-api-tokens';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
 import { ApiTokens } from './controller';
 
 const setup = async () => {
@@ -16,7 +17,14 @@ const setup = async () => {
 		])
 	);
 	const minted = await tokens.mint(actor.userId, { name: 'Local integration', scope: 'read' });
-	return { tokens, minted, controller: new ApiTokens({ tokens }) };
+	return {
+		tokens,
+		minted,
+		controller: new ApiTokens({
+			...agentToolResultsFixture(),
+			tokens
+		})
+	};
 };
 describe('API token controller behavior', () => {
 	it('lists only credentials owned by the actor without exposing plaintext', async () => {

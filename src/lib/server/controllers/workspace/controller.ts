@@ -1,39 +1,47 @@
-import type { TodayPresentation } from '$lib/services/workspace/today';
-import type { TodoPresentation } from '$lib/services/todos/presentation';
-import type { TodoView } from '$lib/models/todos';
-import type { SkillSummary } from '$lib/models/skills';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { ActorContext, User } from '$lib/models/identity';
 import type { NoteSummary } from '$lib/models/notes';
-import type { User } from '$lib/models/identity';
-import type { WorkspaceWriteCancellation } from '$lib/models/workspace-mutations';
-import type { ActorContext } from '$lib/models/identity';
-import type { SyncPage } from '$lib/models/sync';
-import type { WorkspaceWriteRecovery } from '$lib/models/workspace-mutations';
-import type { SyncWriteRecovery } from '$lib/server/services/workspace/contracts';
-import type { SyncCursor, SyncEtag, SyncObjectRead } from '$lib/models/sync';
-import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import type { SyncChangeReader, SyncObjectReader } from '$lib/server/services/workspace/contracts';
-import type {
-	GetTodayViewInput,
-	ShellContext as AggregateShellContext,
-	TodayView as AggregateTodayView
-} from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
+import type { SkillSummary } from '$lib/models/skills';
+import type { SyncCursor, SyncEtag, SyncObjectRead, SyncPage } from '$lib/models/sync';
+import type { TodoView } from '$lib/models/todos';
+import type {
+	ShellContext as AggregateShellContext,
+	TodayView as AggregateTodayView,
+	GetTodayViewInput
+} from '$lib/models/workspace';
+import type {
+	WorkspaceWriteCancellation,
+	WorkspaceWriteRecovery
+} from '$lib/models/workspace-mutations';
+import type { WorkspaceRecord } from '$lib/models/workspace-records';
+import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type {
+	SyncChangeReader,
+	SyncObjectReader,
+	SyncWriteRecovery
+} from '$lib/server/services/workspace/contracts';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
+import type { TodoPresentation } from '$lib/services/todos/presentation';
+import type { TodayPresentation } from '$lib/services/workspace/today';
 
 import type { NoteTreeReader } from '$lib/server/services/notes/catalog';
 
-import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { UserReader } from '$lib/server/services/identity/users';
+import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
 import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { SuggestionExpirer, SuggestionLister } from '$lib/server/services/suggestions/inbox';
 import type {
-	TodoLister,
 	TodoContextReader,
+	TodoLister,
 	WaitingOnFinder
 } from '$lib/server/services/todos/catalog';
-import type { UserReader } from '$lib/server/services/identity/users';
 
 /**
  * Application boundary for the workspace shell: the context every screen needs (profile,
@@ -55,8 +63,21 @@ export interface WorkspaceController {
 	getShellContext(actor: ActorContext): Promise<ShellContext>;
 	/** Assemble the today view: overdue/due-today todos, waiting-on items, pending suggestion count, and notes. */
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
+
+	agentGetWorkspaceContext(
+		actor: ActorContext,
+		input: AgentToolInput<'get_workspace_context'>
+	): Promise<AgentPayload>;
+	agentGetTodayView(
+		actor: ActorContext,
+		input: AgentToolInput<'get_today_view'>
+	): Promise<AgentPayload>;
 }
 export interface WorkspaceDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly todoPresentation: TodoPresentation;
 	readonly memoryPresentation: IMemoryPresentationService;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
@@ -146,6 +167,45 @@ export class Workspace implements WorkspaceController {
 			pendingSuggestionCount,
 			notes
 		});
+	}
+
+	async agentGetWorkspaceContext(
+		actor: ActorContext,
+		input: AgentToolInput<'get_workspace_context'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const shell = await this.getShellContext(actor);
+			return {
+				user: this.dependencies.toolPresentation.projectUser(shell.user),
+				projects: shell.projects.map((value) =>
+					this.dependencies.toolPresentation.projectProject(value)
+				),
+				// Structure only — the agent calls get_note for content.
+				noteTree: shell.noteTree.map((value) =>
+					this.dependencies.toolPresentation.projectNoteSummary(value)
+				),
+				skills: shell.skills,
+				pendingSuggestionCount: shell.pendingSuggestionCount
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentGetTodayView(
+		actor: ActorContext,
+		input: AgentToolInput<'get_today_view'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.getTodayView(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }
 

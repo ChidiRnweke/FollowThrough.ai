@@ -1,15 +1,15 @@
-import type { Note } from '$lib/models/notes';
-import type { ActorContext } from '$lib/models/identity';
+import { NotFoundError } from '$lib/errors';
 import type { AgentEvent, AgentExecutionUpdate, WebResearchSettings } from '$lib/models/agent';
-import type { NoteId, TextSelection } from '$lib/models/notes';
+import type { ToolDescriptor } from '$lib/models/agent/tool-index';
+import type { ActorContext } from '$lib/models/identity';
+import type { Note, NoteId, TextSelection } from '$lib/models/notes';
+import type { ProjectId } from '$lib/models/projects';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill, SkillSummary } from '$lib/models/skills';
-import type { ProjectId } from '$lib/models/projects';
-import { NotFoundError } from '$lib/errors';
+import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
+import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
 import type { AgentRunner, AgentWorkflowToolbox } from '$lib/server/services/agent/runs/contracts';
 import type { SkillFinder, SkillUsageRecorder } from '$lib/server/services/skills/library';
-import type { ToolDescriptor } from '$lib/models/agent/tool-index';
-import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 
 export class InMemoryAgentRunner implements AgentRunner {
 	events: AgentEvent[] = [];
@@ -43,7 +43,11 @@ export class InMemoryAgentRunner implements AgentRunner {
 	}
 }
 
-export class InMemoryToolRetriever implements ToolRetriever {
+export class InMemoryToolRetriever implements ToolRetriever, AgentToolDiscoveryServices {
+	readonly index: AgentToolDiscoveryServices['index'] = { rank: async () => this.names };
+	readonly embeddings: AgentToolDiscoveryServices['embeddings'] = {
+		embed: async (texts) => ({ model: 'test-model', vectors: texts.map(() => [1]) })
+	};
 	names: string[] = [];
 
 	async retrieve(

@@ -1,33 +1,49 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type { NoteMarkdownReader } from '$lib/server/controllers/notes/controller';
-import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
-import type { TodoPresentation } from '$lib/services/todos/presentation';
-import type { TodoEditingRules } from '$lib/services/todos/edits';
-import type { TodoCreationRules } from '$lib/services/todos/edits';
 import { DuplicateNoteActionRequest } from '$lib/errors';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { NoteMarkdownReader } from '$lib/models/note-markdown';
+import type { TextSelection } from '$lib/models/notes';
+import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
+import type { TodoCreationRules, TodoEditingRules } from '$lib/services/todos/edits';
+import type { TodoPresentation } from '$lib/services/todos/presentation';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 
-import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
-import type { TodoSuggestion } from '$lib/models/suggestions';
-import type { TodoBatchReceiptService } from '$lib/server/services/todos/batch-receipts';
-import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import type { ActorContext } from '$lib/models/identity';
 import type { Project } from '$lib/models/projects';
-import { defaultExportSettings } from '$lib/models/deliverables';
+import type { TodoSuggestion } from '$lib/models/suggestions';
+import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
+import type { TodoBatchReceiptService } from '$lib/server/services/todos/batch-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { TodoBoardExport } from '$lib/services/todos/board-export';
 
-import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
+import {
+	InvalidGeneratedContentError,
+	InvalidTransitionError,
+	NotFoundError,
+	ValidationError
+} from '$lib/errors';
+import type {
+	AgentRunId,
+	AgentRunReceipt,
+	RunSettlementOutcome,
+	SelectionGeneration
+} from '$lib/models/agent';
 import type {
 	BoardPdfExportResult,
-	CreateTodoInput,
 	CreateTodoBatchInput,
 	CreateTodoBatchOutput,
+	CreateTodoInput,
 	ExtractPromisesInput,
-	StartExtractPromisesInput,
-	PromiseCandidate,
 	ExtractPromisesOutput,
 	GetTodoViewInput,
 	ListTodosOutput,
+	PromiseCandidate,
+	StartExtractPromisesInput,
 	Todo,
 	TodoId,
 	TodoListFilter,
@@ -35,33 +51,25 @@ import type {
 	UpdateTodoInput,
 	UpdateTodoOutput
 } from '$lib/models/todos';
-import {
-	InvalidGeneratedContentError,
-	InvalidTransitionError,
-	NotFoundError,
-	ValidationError
-} from '$lib/errors';
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
+import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
-import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
-import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
-import type { DateTime } from '$lib/models/workspace';
 import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
+	TodoContextReader,
 	TodoCreator,
 	TodoDeleter,
 	TodoEditor,
 	TodoLister,
-	TodoReader,
-	TodoContextReader
+	TodoReader
 } from '$lib/server/services/todos/catalog';
-import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
-import type { AgentRunReceipt, AgentRunId, RunSettlementOutcome } from '$lib/models/agent';
-import type { SelectionGeneration } from '$lib/models/agent';
-import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
-import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
+import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
 
 /**
  * Application boundary for todos: tracking, filtering, and the promise-extraction
@@ -116,8 +124,25 @@ export interface TodosController {
 	): Promise<AgentRunReceipt>;
 	executePromiseRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
 	recoverQueuedPromiseRuns(): Promise<number>;
+
+	agentExtractPromises(
+		actor: ActorContext,
+		selection: TextSelection,
+		input: AgentToolInput<'extract_promises'>
+	): Promise<AgentPayload>;
+	agentListTodos(actor: ActorContext, input: AgentToolInput<'list_todos'>): Promise<AgentPayload>;
+	agentCreateTodo(actor: ActorContext, input: AgentToolInput<'create_todo'>): Promise<AgentPayload>;
+	agentCreateTodos(
+		actor: ActorContext,
+		input: AgentToolInput<'create_todos'>
+	): Promise<AgentPayload>;
+	agentUpdateTodo(actor: ActorContext, input: AgentToolInput<'update_todo'>): Promise<AgentPayload>;
 }
 export interface TodosDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly boardExport: TodoBoardExport;
 	readonly todoPresentation: TodoPresentation;
 	readonly todoEditingRules: TodoEditingRules;
@@ -522,5 +547,90 @@ export class Todos implements TodosController {
 			suggestions.push(suggestion);
 		}
 		return { anchorId: anchor.id, suggestions, createdTodos };
+	}
+
+	async agentExtractPromises(
+		actor: ActorContext,
+		selection: TextSelection,
+		input: AgentToolInput<'extract_promises'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				...(await this.extractPromises(actor, {
+					selection: selection,
+					...(input.responsibility ? { responsibility: input.responsibility } : {})
+				})),
+				sourceNoteId: selection.noteId
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListTodos(
+		actor: ActorContext,
+		input: AgentToolInput<'list_todos'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				todos: (await this.list(actor, input)).todos.map((view) =>
+					this.dependencies.toolPresentation.projectTodo(view.todo)
+				)
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentCreateTodo(
+		actor: ActorContext,
+		input: AgentToolInput<'create_todo'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.dependencies.toolPresentation.projectTodoWrite(
+				(await this.create(actor, input)).todo
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentCreateTodos(
+		actor: ActorContext,
+		input: AgentToolInput<'create_todos'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return {
+				todos: (await this.createBatch(actor, input)).todos.map((value) =>
+					this.dependencies.toolPresentation.projectTodoWrite(value)
+				)
+			};
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentUpdateTodo(
+		actor: ActorContext,
+		input: AgentToolInput<'update_todo'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.dependencies.toolPresentation.projectTodoWrite(
+				(await this.update(actor, input)).todo
+			);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

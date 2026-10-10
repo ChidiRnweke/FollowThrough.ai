@@ -1,16 +1,13 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
-import { ProjectDetailService } from '$lib/services/projects/details';
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { expect, it } from 'vitest';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import { createAgentToolSurface } from './agent-tool-factory';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import {
+	ProductionControllerFactory,
+	type ProductionControllerDependencies
+} from '$lib/server/factories/production-controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
 	projectBuilder,
@@ -19,25 +16,36 @@ import {
 	testProjectId,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { createAgentToolSurface } from './agent-tool-factory';
 
 const toolsFor = (hasProject: boolean) => {
 	const projects = new InMemoryProjectRepository();
 	if (hasProject) projects.projects = [projectBuilder({ role: 'inbox', name: 'Renamed inbox' })];
 	const catalog = createProjectServices(projects, projects);
-	const controller = new Projects(
-		new WorkspaceCommandRulesService(),
-		capabilityDependencies<ProjectsDependencies>({
-			noteCreationRules: new NoteLifecycleRulesService(),
-			details: new ProjectDetailService(),
-			presentation: new ProjectTreePresentationService(),
-			placement: catalog.placement,
-			projectLifecycle: catalog.lifecycle,
-			projectLister: catalog.lister
-		})
-	);
+
 	return createAgentToolSurface(
 		testTokenizer,
-		capabilityDependencies<ControllerFactory>({ projects: () => controller }),
+		new ProductionControllerFactory(
+			capabilityDependencies<ProductionControllerDependencies>({
+				notes: capabilityDependencies<ProductionControllerDependencies['notes']>({
+					...agentToolResultsFixture(),
+					projectLister: catalog.lister
+				}),
+				skills: capabilityDependencies<ProductionControllerDependencies['skills']>({
+					...agentToolResultsFixture(),
+					projectLister: catalog.lister
+				}),
+				diagramStudio: capabilityDependencies<ProductionControllerDependencies['diagramStudio']>({
+					...agentToolResultsFixture(),
+					projectLister: catalog.lister
+				}),
+				widgets: capabilityDependencies<ProductionControllerDependencies['widgets']>({
+					...agentToolResultsFixture(),
+					projectLister: catalog.lister
+				})
+			})
+		),
 		testActor(),
 		'auto_accept',
 		{
@@ -49,7 +57,7 @@ const toolsFor = (hasProject: boolean) => {
 				prompt: 'Create work'
 			}
 		},
-		{ execute: (_input, action) => action() },
+		{ completed: async () => {} },
 		new InMemoryToolRetriever(),
 		{ isEnabled: () => true }
 	).definitions();

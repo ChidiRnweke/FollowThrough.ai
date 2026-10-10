@@ -1,45 +1,46 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { AgentRunStatusService } from '$lib/services/agent/run-status';
-const runStatus = new AgentRunStatusService();
-import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
-import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
-import { afterAll, expect, it, vi } from 'vitest';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import * as schema from '$lib/server/db/schema';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { type AgentRunId } from '$lib/models/agent';
+import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import {
 	Relationships,
 	type RelationshipsDependencies
 } from '$lib/server/controllers/relationships/controller';
+import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
+import {
+	AgentRunDecisionRecords,
+	AgentRunEventRecords
+} from '$lib/server/repositories/agent/postgres/agent-runs';
+import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
+import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
+import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
+import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
+import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import { RelationshipDiscovery } from '$lib/server/services/relationships/discovery';
 import { RelationshipRules } from '$lib/server/services/relationships/rules';
-import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
-import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryEmbeddingClient,
 	InMemoryReranker
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
-import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
-import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createSuggestionsCapability } from '$lib/server/factories/capabilities/suggestions-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AgentRunRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
-import {
-	AgentRunEventRecords,
-	AgentRunDecisionRecords
-} from '$lib/server/repositories/agent/postgres/agent-runs';
-import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
-import { NoteActionRequests } from '$lib/server/services/agent/runs/note-action-requests';
-import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
-import { type AgentRunId } from '$lib/models/agent';
+import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { InMemoryStructuredRelationshipClient } from '$lib/testing/relationships/fakes/in-memory-pipelines';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
+const runStatus = new AgentRunStatusService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -112,6 +113,7 @@ const setup = async (suffix: string) => {
 	embeddings.model = 'contract-model';
 	embeddings.vectorsByContent.set(text, vector);
 	const dependencies: RelationshipsDependencies = {
+		...agentToolResultsFixture(),
 		transactionRunner,
 		noteActionRequests: requests,
 		knowledgeLookup: new KnowledgeLookup(index),

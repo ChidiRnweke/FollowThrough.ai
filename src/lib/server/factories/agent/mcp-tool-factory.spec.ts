@@ -1,21 +1,24 @@
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { z } from 'zod';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentFilesController } from '$lib/server/controllers/agent-files/controller';
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { agentFilesFixture } from '$lib/testing/agent/fixtures/files';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { z } from 'zod';
+const noteMarkdown = new NodeNoteMarkdown();
 
-import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { describe, expect, it } from 'vitest';
+import type { ApiTokenScope } from '$lib/models/identity';
+import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
+import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
+import {
+	noteBuilder,
+	testActor,
+	testProvenanceId
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { ApiTokenScope } from '$lib/models/identity';
-import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
+import { describe, expect, it } from 'vitest';
 
 const connect = async (
 	scope: ApiTokenScope,
@@ -289,17 +292,13 @@ it('returns an execution-time domain refusal as a canonical MCP failure', async 
 
 it('preserves the exact file recovery call in an MCP error result', async () => {
 	const nextActions = [
-		{ reason: 'List available files', tool: 'ls' as const, arguments: { path: '/' } }
+		{
+			reason: 'List / to choose an exact existing path.',
+			tool: 'ls' as const,
+			arguments: { path: '/' }
+		}
 	];
-	const files = capabilityDependencies<AgentFilesController>({
-		ls: async () => ({
-			kind: 'error',
-			code: 'path_not_found',
-			message: 'Path does not exist.',
-			requestedPath: '/missing',
-			nextActions
-		})
-	});
+	const files = agentFilesFixture();
 	const factory = capabilityDependencies<ControllerFactory>({ agentFiles: () => files });
 	const client = await connect('full', { factory });
 	expect(
@@ -307,16 +306,14 @@ it('preserves the exact file recovery call in an MCP error result', async () => 
 	).toEqual({
 		kind: 'failure',
 		code: 'path_not_found',
-		message: 'Path does not exist.',
+		message: 'No file or directory exists at /missing. The path was not changed or guessed.',
 		recovery: 'Follow the exact nextActions below.',
 		details: { requestedPath: '/missing', nextActions }
 	});
 });
 
 it('accepts omitted MCP arguments when every application field is optional', async () => {
-	const files = capabilityDependencies<AgentFilesController>({
-		ls: async () => ({ kind: 'listed', path: '/', entries: [] })
-	});
+	const files = agentFilesFixture();
 	const factory = capabilityDependencies<ControllerFactory>({ agentFiles: () => files });
 	const client = await connect('full', { factory });
 	const result = await client.callTool({ name: 'ls' });

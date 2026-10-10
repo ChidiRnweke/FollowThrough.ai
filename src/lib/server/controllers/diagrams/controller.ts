@@ -1,84 +1,89 @@
-import type { DiagramTask } from '$lib/models/diagrams';
-import type { DiagramGenerationRules } from '$lib/server/services/diagrams/generation-rules';
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
-import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
-import type { DiagramRunContexts } from '$lib/server/services/diagrams/run-context';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
+import type { DiagramTask } from '$lib/models/diagrams';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
+import type { DiagramGenerationRules } from '$lib/server/services/diagrams/generation-rules';
 import type { DiagramDraftWriter } from '$lib/server/services/diagrams/library';
+import type { DiagramRunContexts } from '$lib/server/services/diagrams/run-context';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type { IAgentModelSelectionService } from '$lib/services/agent/model-selection';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 
-import type { Note, NoteId, TextSelection } from '$lib/models/notes';
-import type { Skill } from '$lib/models/skills';
-import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type {
 	AgentEvent,
-	AgentRunContext,
 	AgentModel,
 	AgentPreferences,
 	AgentRun,
+	AgentRunContext,
 	AgentRunId,
 	DiagramActionInput,
-	RunSettlementOutcome,
 	NoteActionRequest,
 	ProviderStreamEvent,
 	RunAgentInput,
+	RunSettlementOutcome,
 	WorkflowRunContext
 } from '$lib/models/agent';
-import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
+import type { Note, NoteId, TextSelection } from '$lib/models/notes';
+import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
+import type { Skill } from '$lib/models/skills';
 import type {
-	ConversationSessions,
-	ConversationMessages
+	ConversationMessages,
+	ConversationSessions
 } from '$lib/server/services/agent/conversations/archive';
+import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';
 
-import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
 import type { DiagramSubmission } from '$lib/models/diagrams/generation';
+import type { DiagramGenerator } from '$lib/server/controllers/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
-import type { SkillFinder } from '$lib/server/services/skills/library';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
+import type { SkillFinder } from '$lib/server/services/skills/library';
 
-import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
-import type { DiagramSuggestion } from '$lib/models/suggestions';
-import type { ActorContext } from '$lib/models/identity';
+import { UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
+import type { AgentRunReceipt } from '$lib/models/agent';
 import type {
-	Diagram,
 	ConvertInlineMermaidInput,
 	ConvertInlineMermaidOutput,
+	Diagram,
 	GenerateMermaidDiagramInput,
 	GenerateMermaidDiagramOutput,
 	PromoteDiagramInput,
 	PromoteDiagramOutput,
-	ReviseMermaidDiagramInput,
-	ReviseMermaidDiagramOutput,
 	ReviseInlineMermaidInput,
 	ReviseInlineMermaidOutput,
+	ReviseMermaidDiagramInput,
+	ReviseMermaidDiagramOutput,
+	StartConvertInlineMermaidInput,
 	StartGenerateMermaidInput,
-	StartReviseInlineMermaidInput,
-	StartConvertInlineMermaidInput
+	StartReviseInlineMermaidInput
 } from '$lib/models/diagrams';
-import { UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
-import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
-import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
-import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
-import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
+import type { ActorContext } from '$lib/models/identity';
+import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
+import type { DiagramSuggestion } from '$lib/models/suggestions';
+import type { DateTime, AtomicOperation as TransactionRunner } from '$lib/models/workspace';
+import {
+	type NoteActionResult,
+	type NoteActionSubmission
+} from '$lib/server/services/agent/runs/note-action-requests';
+import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type {
 	DiagramTextExtractor,
 	MermaidDiagramRenderer
 } from '$lib/server/services/diagrams/content';
+import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
 import type { DrawioXmlContentValidator } from '$lib/server/services/diagrams/drawio';
-import type { AgentRunReceipt } from '$lib/models/agent';
-import {
-	type NoteActionSubmission,
-	type NoteActionResult
-} from '$lib/server/services/agent/runs/note-action-requests';
-import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/stores/agent/events';
-import { activeRunStore } from '$lib/server/stores/agent/active-runs';
+import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { MermaidSourceValidator } from '$lib/server/services/diagrams/submission-validation';
+import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
 
 /**
  * Application boundary for diagrams: generating and revising Mermaid diagrams from a
@@ -157,6 +162,15 @@ export interface DiagramsController {
 	): Promise<AgentRunReceipt>;
 	executeDiagramRun(actor: ActorContext, runId: AgentRunId): Promise<void>;
 	recoverQueuedDiagramRuns(): Promise<number>;
+
+	agentReviseMermaidDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'revise_mermaid_diagram'>
+	): Promise<AgentPayload>;
+	agentPromoteDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'promote_diagram'>
+	): Promise<AgentPayload>;
 }
 
 interface ToolEventMapper {
@@ -214,6 +228,10 @@ export interface DiagramAgentDependencies {
 }
 
 export interface DiagramsDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly generationRules: DiagramGenerationRules;
 	generation: DiagramAgentDependencies;
 	selectionOrigins: Pick<SelectionOriginService, 'resolve'>;
@@ -846,5 +864,32 @@ export class Diagrams implements DiagramsController {
 		if (task.operation === 'revise')
 			return `Revise this Mermaid diagram according to the instruction. Preserve correct content that the instruction does not change.\n\nInstruction: ${task.instruction}\n\nCurrent Mermaid source:\n${task.source}`;
 		return `Convert this Mermaid source into an editable draw.io diagram. Preserve every meaningful label and relationship, use normal draw.io shapes and connectors, and return uncompressed XML.${task.instruction ? `\n\nAdditional direction: ${task.instruction}` : ''}\n\nMermaid source:\n${task.source}`;
+	}
+
+	async agentReviseMermaidDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'revise_mermaid_diagram'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.reviseMermaid(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentPromoteDiagram(
+		actor: ActorContext,
+		input: AgentToolInput<'promote_diagram'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.promote(actor, input);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

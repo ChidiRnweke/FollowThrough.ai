@@ -1,17 +1,18 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { describe, expect, it } from 'vitest';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { Todos, type TodosDependencies } from './controller';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	testActor,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from './controller';
 
 const setup = () => {
 	const todos = new InMemoryTodos();
@@ -20,6 +21,7 @@ const setup = () => {
 		controller: new Todos(
 			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TodosDependencies>({
+				...agentToolResultsFixture(),
 				boardExport: new TodoBoardExportService(),
 				todoPresentation: new TodoPresentationService(),
 				todoEditingRules: new TodoEditingRulesService(),

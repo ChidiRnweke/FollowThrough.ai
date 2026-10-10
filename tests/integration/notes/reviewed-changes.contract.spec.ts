@@ -1,29 +1,30 @@
-import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
-import { ReferencePresentationService } from '$lib/services/references/presentation';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { NoteArchiveImportService } from '$lib/server/services/notes/import';
-import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
-import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
-import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { NotePresentationService } from '$lib/services/notes/presentation';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
-import { describe, it, expect } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { requirePreparedChange } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') => {
@@ -58,6 +59,7 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 		new WorkspaceCommandRulesService(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),

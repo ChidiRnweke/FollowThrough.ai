@@ -1,29 +1,29 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { TodayPresentationService } from '$lib/services/workspace/today';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { syncEtag } from '$lib/models/sync';
-
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
-import { afterAll, expect, it } from 'vitest';
-import { syncCursorSchema } from '$lib/models/sync';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import * as schema from '$lib/server/db/schema';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
+import type { NoteId } from '$lib/models/notes';
+import { syncCursorSchema, syncEtag } from '$lib/models/sync';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import {
 	Workspace,
 	type WorkspaceDependencies
 } from '$lib/server/controllers/workspace/controller';
+import * as schema from '$lib/server/db/schema';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { TodayPresentationService } from '$lib/services/workspace/today';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { seedUser, context, now } from '../database-harness';
-import type { NoteId } from '$lib/models/notes';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { afterAll, expect, it } from 'vitest';
+import { context, now, seedUser } from '../database-harness';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 
 const clients: ReturnType<typeof postgres>[] = [];
 afterAll(async () => {
@@ -57,6 +57,7 @@ const setup = () => {
 		workspace: new Workspace(
 			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
+				...agentToolResultsFixture(),
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,

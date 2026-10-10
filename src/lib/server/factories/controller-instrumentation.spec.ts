@@ -1,0 +1,328 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { context, trace } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { SemanticConventions } from '@arizeai/openinference-semantic-conventions';
+import { ValidationError } from '$lib/errors';
+import { instrumentedController } from '$lib/server/factories/controller-instrumentation';
+import type { ControllerSurface } from '$lib/models/controller-boundary';
+import { traceOperation } from '$lib/server/services/telemetry';
+
+type RecordedEntry = { readonly level: string; readonly args: readonly unknown[] };
+
+interface FakeControllerContract {
+	get(actor: { readonly userId: string }, id: string): Promise<{ readonly id: string }>;
+	domainFailure(): Promise<never>;
+	bug(): Promise<never>;
+	_helper(): Promise<string>;
+}
+
+class FakeController implements FakeControllerContract {
+	constructor(
+		private readonly greeting: string,
+		private readonly enter: () => void = () => {}
+	) {}
+
+	async get(actor: { readonly userId: string }, id: string): Promise<{ readonly id: string }> {
+		this.enter();
+		return { id: `${this.greeting}:${id}` };
+	}
+
+	async nested(): Promise<{ readonly id: string }> {
+		return this.get({ userId: 'u1' }, 'n1');
+	}
+
+	declaredAsyncFailure(): Promise<never> {
+		throw new ValidationError('failed before returning a promise');
+	}
+
+	async domainFailure(): Promise<never> {
+		throw new ValidationError('name already taken');
+	}
+
+	async bug(): Promise<never> {
+		throw new Error('database connection lost');
+	}
+
+	async _helper(): Promise<string> {
+		return 'internal';
+	}
+
+	/** Mirrors `Agent.freezeInput`: a sync helper public methods call without `await`. */
+	private freezeLike(input: string): string {
+		return `frozen:${input}`;
+	}
+
+	async submitLike(input: string): Promise<string> {
+		const frozen = this.freezeLike(input);
+		return frozen;
+	}
+
+	syncThrower(): string {
+		throw new ValidationError('sync domain failure');
+	}
+}
+
+const fakeSurface = {
+	get: true,
+	domainFailure: true,
+	bug: true,
+	_helper: false,
+	submitLike: true,
+	syncThrower: false,
+	nested: true,
+	declaredAsyncFailure: true
+} satisfies ControllerSurface<FakeController>;
+
+const recordingLogger = (entries: RecordedEntry[]) => ({
+	info: (...args: unknown[]) => {
+		entries.push({ level: 'info', args });
+	},
+	debug: (...args: unknown[]) => {
+		entries.push({ level: 'debug', args });
+	},
+	warn: (...args: unknown[]) => {
+		entries.push({ level: 'warn', args });
+	},
+	error: (...args: unknown[]) => {
+		entries.push({ level: 'error', args });
+	}
+});
+
+describe('instrumentedController', () => {
+	let savedLogLevel: string | undefined;
+
+	beforeEach(() => {
+		savedLogLevel = process.env.LOG_LEVEL;
+		process.env.LOG_LEVEL = 'debug';
+	});
+
+	afterEach(() => {
+		if (savedLogLevel === undefined) delete process.env.LOG_LEVEL;
+		else process.env.LOG_LEVEL = savedLogLevel;
+	});
+
+	test('logs info before the method body runs', async () => {
+		const sequence: string[] = [];
+		const controller = new FakeController('hello', () => {
+			sequence.push('body');
+		});
+		const wrapped = instrumentedController('fake', controller, fakeSurface, {
+			...recordingLogger([]),
+			info: () => {
+				sequence.push('info');
+			},
+			debug: () => undefined
+		});
+
+		await wrapped.get({ userId: 'u1' }, 'n1').then(() => sequence.push('after'));
+
+		expect(sequence).toEqual(['info', 'body', 'after']);
+	});
+
+	test('logs debug with a duration on success', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+
+		await wrapped.get({ userId: 'u1' }, 'n1');
+
+		expect(String(entries.find((entry) => entry.level === 'debug')?.args[0])).toMatch(
+			/\[fake\] get completed in \d+ms/
+		);
+	});
+
+	test('does not add another boundary for an internal public-method call', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+		await wrapped.nested();
+		expect(entries.filter((entry) => entry.level === 'info').map((entry) => entry.args[0])).toEqual(
+			['[fake] nested']
+		);
+	});
+
+	test('logs a synchronous throw from a declared asynchronous capability', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+		await wrapped.declaredAsyncFailure().catch(() => undefined);
+		expect(entries.map((entry) => entry.level)).toEqual(['info', 'warn']);
+	});
+
+	test('keeps the instance binding so methods see constructor state', async () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger([])
+		);
+
+		const result = await wrapped.get({ userId: 'u1' }, 'n1');
+
+		expect(result).toEqual({ id: 'hello:n1' });
+	});
+
+	test('rethrows domain failures', async () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger([])
+		);
+
+		await expect(wrapped.domainFailure()).rejects.toBeInstanceOf(ValidationError);
+	});
+
+	test('logs domain failures as warnings, not errors', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+
+		await wrapped.domainFailure().catch(() => undefined);
+
+		expect(entries.some((entry) => entry.level === 'warn')).toBe(true);
+	});
+
+	test('logs unexpected failures as errors', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+
+		await wrapped.bug().catch(() => undefined);
+
+		expect(entries.some((entry) => entry.level === 'error' && entry.args[1] instanceof Error)).toBe(
+			true
+		);
+	});
+
+	test('does not wrap underscore-prefixed helpers', async () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+
+		await wrapped._helper();
+
+		expect(entries).toHaveLength(0);
+	});
+
+	test('passes synchronous methods through without logging or changing their contract', () => {
+		const entries: RecordedEntry[] = [];
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger(entries)
+		);
+
+		const result = (wrapped as unknown as { freezeLike(input: string): string }).freezeLike('note');
+
+		expect({ result, entries }).toEqual({ result: 'frozen:note', entries: [] });
+	});
+
+	test('keeps a synchronous throw synchronous instead of becoming a rejection', () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger([])
+		);
+
+		expect(() => wrapped.syncThrower()).toThrow(ValidationError);
+	});
+
+	test('lets a public method use its synchronous helpers, as submit does freezeInput', async () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger([])
+		);
+
+		expect(await wrapped.submitLike('note')).toBe('frozen:note');
+	});
+});
+
+describe('controller-boundary span routing', () => {
+	let exporter: InMemorySpanExporter;
+	let provider: NodeSDK;
+
+	beforeAll(() => {
+		exporter = new InMemorySpanExporter();
+		provider = new NodeSDK({
+			autoDetectResources: false,
+			spanProcessors: [new SimpleSpanProcessor(exporter)],
+			logRecordProcessors: [],
+			instrumentations: []
+		});
+		provider.start();
+	});
+
+	beforeEach(() => {
+		exporter.reset();
+	});
+
+	afterAll(async () => {
+		await provider.shutdown();
+		trace.disable();
+		context.disable();
+	});
+
+	test('does not stamp openinference.span.kind on controller-boundary spans', async () => {
+		const wrapped = instrumentedController(
+			'fake',
+			new FakeController('hello'),
+			fakeSurface,
+			recordingLogger([])
+		);
+
+		await wrapped.get({ userId: 'u1' }, 'n1');
+
+		const span = exporter.getFinishedSpans().find((candidate) => candidate.name === 'fake.get');
+		expect(span?.attributes[SemanticConventions.OPENINFERENCE_SPAN_KIND]).toBeUndefined();
+	});
+
+	test('still stamps CHAIN on ordinary operation spans', async () => {
+		await traceOperation('workflow.op', {}, async () => 'done');
+
+		const span = exporter.getFinishedSpans().find((candidate) => candidate.name === 'workflow.op');
+		expect(span?.attributes[SemanticConventions.OPENINFERENCE_SPAN_KIND]).toBe('CHAIN');
+	});
+
+	test('parents work started before the first await under the controller span', async () => {
+		const controller = new FakeController('hello', () => {
+			trace.getTracer('test').startSpan('before-await').end();
+		});
+		const wrapped = instrumentedController('fake', controller, fakeSurface, recordingLogger([]));
+		await wrapped.get({ userId: 'u1' }, 'n1');
+		const spans = exporter.getFinishedSpans();
+		const boundary = spans.find((span) => span.name === 'fake.get');
+		const child = spans.find((span) => span.name === 'before-await');
+		if (!boundary || !child) throw new Error('Expected controller and child spans');
+		expect(child.parentSpanContext?.spanId).toBe(boundary.spanContext().spanId);
+	});
+});

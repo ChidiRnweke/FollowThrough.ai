@@ -1,26 +1,27 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import {
+	anchorBuilder,
+	noteBuilder,
+	testActor,
+	testNoteId,
+	todoBuilder
+} from '$lib/testing/workspace/fixtures/domain-builders';
 import { expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
-import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
-import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import {
-	todoBuilder,
-	noteBuilder,
-	anchorBuilder,
-	testActor,
-	testNoteId
-} from '$lib/testing/workspace/fixtures/domain-builders';
 
 it('clearing a linked note restores the extraction origin in the returned task view', async () => {
 	const tasks = new InMemoryTodoRepository();
@@ -43,6 +44,7 @@ it('clearing a linked note restores the extraction origin in the returned task v
 	const controller = new Todos(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),

@@ -1,11 +1,11 @@
+import type { ToolReviewReader } from '$lib/models/agent-tool-reviews';
+import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import {
 	noteChangeRequestSchema,
 	noteChangeReviewSchema,
 	type NoteChangeRequest,
 	type NoteChangeReview
 } from '$lib/models/notes';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import type { ToolReviewReader } from '$lib/server/controllers/agent/tool-reviews';
 
 export class AgentToolReviewReader implements ToolReviewReader {
 	review(content: string): NoteChangeReview {

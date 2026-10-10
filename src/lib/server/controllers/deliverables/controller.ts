@@ -1,42 +1,32 @@
-import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
-import type { DocxRenderer } from '$lib/server/services/deliverables/docx';
+import type { ToolResultReader } from '$lib/models/agent-tool-context';
+import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
+import type { AgentPayload } from '$lib/models/agent/payload';
 import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
+import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
+import type { DocxRenderer } from '$lib/server/services/deliverables/docx';
+import type { AgentPayloadInspection } from '$lib/services/agent/payload';
 import { WidgetExportService } from '$lib/services/widgets/export-blocks';
-const widgetExporting = new WidgetExportService();
 import { WidgetSourceService } from '$lib/services/widgets/sources';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+const widgetExporting = new WidgetExportService();
 const widgetSourcesRule = new WidgetSourceService();
 
 import { WidgetEvaluationService } from '$lib/services/widgets/edits';
 const widgetEvaluation = new WidgetEvaluationService();
 
-import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
 import type { Todo, TodoListFilter } from '$lib/models/todos';
+import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
 
 import { NotFoundError, ValidationError } from '$lib/errors';
-import { randomUUID, createHash } from 'node:crypto';
-import { type ExportInput, type PreparedExport } from '$lib/models/deliverables';
 import type { AttachmentId } from '$lib/models/attachments';
-import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
-import type { DateTime, LocalDate } from '$lib/models/workspace';
-import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
-import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
-import type { ArtifactFiles } from '$lib/services/deliverables/artifact-files';
-import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
-import type { Diagram, DiagramId } from '$lib/models/diagrams';
-import type { DiagramExportRenderer } from './diagram-rendering';
-import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
-import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
-import type {
-	DeliverableMutationRequest,
-	WorkspaceMutationResult
-} from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
-import type { ActorContext } from '$lib/models/identity';
 import type {
 	Artifact,
 	ArtifactId,
+	ExportDiagramRaster,
+	ExportDiagramSource,
 	ExportSettings,
+	ExtractedTemplateStyles,
 	GenerateBundleInput,
 	GenerateBundleOutput,
 	GenerateDocumentInput,
@@ -48,7 +38,21 @@ import type {
 	PreviewDocumentOutput,
 	TemplateId
 } from '$lib/models/deliverables';
+import { type ExportInput, type PreparedExport } from '$lib/models/deliverables';
+import type { Diagram, DiagramId } from '$lib/models/diagrams';
+import type { ActorContext } from '$lib/models/identity';
+import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
 import type { ProjectId, ProjectTemplate, TemplateUpload } from '$lib/models/projects';
+import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
+import type {
+	DateTime,
+	LocalDate,
+	AtomicOperation as TransactionRunner
+} from '$lib/models/workspace';
+import type {
+	DeliverableMutationRequest,
+	WorkspaceMutationResult
+} from '$lib/models/workspace-mutations';
 import type {
 	ArtifactDeleter,
 	ArtifactLister,
@@ -57,12 +61,18 @@ import type {
 	ExportSettingsWriter
 } from '$lib/server/services/deliverables/artifacts';
 import type {
-	TemplateUploadLifecycle,
+	TemplateLifecycle,
 	TemplateReader,
-	TemplateWriter,
-	TemplateLifecycle
+	TemplateUploadLifecycle,
+	TemplateWriter
 } from '$lib/server/services/deliverables/templates';
-import type { ExtractedTemplateStyles } from '$lib/models/deliverables';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
+import type { ArtifactFiles } from '$lib/services/deliverables/artifact-files';
+import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
+import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
+import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
+import { createHash, randomUUID } from 'node:crypto';
+import type { DiagramExportRenderer } from './diagram-rendering';
 export interface TemplateUploadProof {
 	readonly byteSize: number;
 	readonly checksumSha256: string;
@@ -87,7 +97,6 @@ export interface ExportObjectStorage {
 	read(objectKey: string, maximumBytes: number): Promise<Uint8Array>;
 	remove(objectKey: string): Promise<void>;
 }
-import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 
 /**
  * Application boundary for deliverables: document templates, generated artifacts, and
@@ -176,10 +185,51 @@ export interface DeliverablesController {
 	 * state. Preserve the original artifact and its stored content.
 	 */
 	regenerateArtifact(actor: ActorContext, artifactId: ArtifactId): Promise<GenerateDocumentOutput>;
+
+	agentExportDocument(
+		actor: ActorContext,
+		input: AgentToolInput<'export_document'>
+	): Promise<AgentPayload>;
+	agentListArtifacts(
+		actor: ActorContext,
+		input: AgentToolInput<'list_artifacts'>
+	): Promise<AgentPayload>;
+	agentListTemplates(
+		actor: ActorContext,
+		input: AgentToolInput<'list_templates'>
+	): Promise<AgentPayload>;
+	agentGetExportSettings(
+		actor: ActorContext,
+		input: AgentToolInput<'get_export_settings'>
+	): Promise<AgentPayload>;
+	agentUpdateExportSettings(
+		actor: ActorContext,
+		input: AgentToolInput<'update_export_settings'>
+	): Promise<AgentPayload>;
+	agentGetArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'get_artifact'>
+	): Promise<AgentPayload>;
+	agentDownloadArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'download_artifact'>
+	): Promise<AgentPayload>;
+	agentDeleteArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'delete_artifact'>
+	): Promise<AgentPayload>;
+	agentRegenerateArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'regenerate_artifact'>
+	): Promise<AgentPayload>;
 }
 
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
 export interface DeliverablesDependencies {
+	readonly toolPresentation: AgentToolPresentation;
+	readonly toolPayloads: AgentPayloadInspection;
+	readonly toolResults: ToolResultReader;
+
 	readonly exportSettingsRules: ExportSettingsRules;
 	readonly artifactFiles: ArtifactFiles;
 	syncMutations: WorkspaceMutationGuard;
@@ -645,5 +695,134 @@ export class Deliverables implements DeliverablesController {
 			todos,
 			notes
 		});
+	}
+
+	async agentExportDocument(
+		actor: ActorContext,
+		input: AgentToolInput<'export_document'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.generateDocument(actor, {
+				projectId: input.projectId as ProjectId,
+				noteIds: input.noteIds.map((noteId) => noteId as NoteId),
+				title: input.title,
+				format: input.format,
+				...(input.templateId ? { templateId: input.templateId as TemplateId } : {})
+			});
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListArtifacts(
+		actor: ActorContext,
+		input: AgentToolInput<'list_artifacts'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.listArtifacts(actor, input.projectId);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentListTemplates(
+		actor: ActorContext,
+		input: AgentToolInput<'list_templates'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.listTemplates(actor, input.projectId);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentGetExportSettings(
+		actor: ActorContext,
+		input: AgentToolInput<'get_export_settings'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.getExportSettings(actor, input.projectId);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentUpdateExportSettings(
+		actor: ActorContext,
+		input: AgentToolInput<'update_export_settings'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const { projectId, ...settings } = input;
+
+			return this.updateExportSettings(actor, projectId, settings);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentGetArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'get_artifact'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const artifact = await this.getArtifact(actor, input.artifactId);
+			if (!artifact) throw new NotFoundError('Artifact not found');
+			return artifact;
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentDownloadArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'download_artifact'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.downloadArtifact(actor, input.artifactId);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentDeleteArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'delete_artifact'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			const deleted = await this.deleteArtifact(actor, input.artifactId);
+			return { artifactId: deleted.id, title: deleted.title, deleted: true as const };
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
+	}
+	async agentRegenerateArtifact(
+		actor: ActorContext,
+		input: AgentToolInput<'regenerate_artifact'>
+	): Promise<AgentPayload> {
+		const result = await (async () => {
+			return this.regenerateArtifact(actor, input.artifactId);
+		})();
+		const payload = this.dependencies.toolResults.read(result);
+		return this.dependencies.toolPayloads.filterResult(
+			payload,
+			this.dependencies.toolResults.arguments(input)
+		);
 	}
 }

@@ -1,14 +1,14 @@
-import type { AgentToolSurface } from './agent-tool-factory';
-import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
-import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
-const noteMarkdown = new NodeNoteMarkdown();
-import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
-import { describe, expect, it } from 'vitest';
-import { RunContext } from '@openai/agents';
-import { createAgentToolSurface } from './agent-tool-factory';
 import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { RunContext } from '@openai/agents';
+import { describe, expect, it } from 'vitest';
+import type { AgentToolSurface } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
+const noteMarkdown = new NodeNoteMarkdown();
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
@@ -39,7 +39,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 				input: { conversationId: testConversationId(), prompt: 'Change release day' },
 				model: 'test-model'
 			},
-			{ execute: (_call, action) => action() },
+			{ completed: async () => {} },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
 			restoredToolReviews(fixture.factory, testActor(), pending)

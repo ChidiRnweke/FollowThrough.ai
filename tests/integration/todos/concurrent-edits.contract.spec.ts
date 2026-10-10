@@ -1,18 +1,19 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { expect, it, vi } from 'vitest';
-import postgres from 'postgres';
+import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
-import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { todoBuilder, testTodoId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import postgres from 'postgres';
+import { expect, it, vi } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
@@ -29,6 +30,7 @@ const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 	return new Todos(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),

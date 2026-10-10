@@ -1,15 +1,16 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
-import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
-import { ProjectDetailService } from '$lib/services/projects/details';
-import { expect, it } from 'vitest';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
-import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { expect, it } from 'vitest';
+import { actor, context, seedUser } from '../database-harness';
 import { treeControllers } from '../project-tree-harness';
-import { seedUser, actor, context } from '../database-harness';
 
 const setup = () => {
 	const repository = new ProjectRecords(context.db);
@@ -17,6 +18,7 @@ const setup = () => {
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
+			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),

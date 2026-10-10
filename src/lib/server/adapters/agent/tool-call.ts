@@ -1,14 +1,14 @@
-import type { PreparedAction, ToolCallReader } from '$lib/server/controllers/agent/tool-calls';
-import { trace } from '@opentelemetry/api';
-import { z } from 'zod';
 import { DomainError, ValidationError, failureReport } from '$lib/errors';
-import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
+import type { PreparedAction, ToolCallReader } from '$lib/models/agent-tool-protocol';
 import {
-	agentPayloadResultSchema,
 	agentPayloadObjectResultSchema,
+	agentPayloadResultSchema,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
+import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
+import { trace } from '@opentelemetry/api';
+import { z } from 'zod';
 
 /** Validation is owned here, before either protocol can ask for approval. */
 export const bindToolArguments = <Shape extends z.ZodRawShape>(
@@ -23,7 +23,7 @@ export const bindToolArguments = <Shape extends z.ZodRawShape>(
 		);
 	const payload = agentPayloadObjectResultSchema.parse(parsed.data);
 	if (payload.kind === 'corrupt') throw new Error(payload.message);
-	return { arguments: payload.value, execute: () => execute(parsed.data, payload.value) };
+	return { arguments: payload.value, execute: async () => execute(parsed.data, payload.value) };
 };
 
 /** Only a tool-local stage may turn an exception into model feedback. */

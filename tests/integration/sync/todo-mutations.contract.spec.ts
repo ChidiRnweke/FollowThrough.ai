@@ -1,16 +1,17 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { describe, expect, it } from 'vitest';
 import type { TodoId } from '$lib/models/todos';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { createTodosCapability } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -29,6 +30,7 @@ const setup = async (suffix: string) => {
 	const controller = new Todos(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),

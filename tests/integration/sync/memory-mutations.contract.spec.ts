@@ -1,20 +1,21 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { MemoryEditingService } from '$lib/services/memory/edits';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { describe, expect, it } from 'vitest';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { createMemoryCapability } from '$lib/server/factories/capabilities/memory-capability-factory';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { describe, expect, it } from 'vitest';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -31,6 +32,7 @@ const setup = async (suffix: string) => {
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
+			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			syncMutations: sync.mutations,

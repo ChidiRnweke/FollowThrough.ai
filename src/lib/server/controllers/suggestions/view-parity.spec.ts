@@ -1,10 +1,9 @@
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { expect, it } from 'vitest';
-import { Suggestions, type SuggestionsDependencies } from './controller';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
 import { memorySuggestionContext } from '$lib/testing/suggestions/fixtures/views';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -12,6 +11,8 @@ import {
 	memorySuggestionBuilder,
 	testActor
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Suggestions, type SuggestionsDependencies } from './controller';
 
 it('returns the same memory review view from server and downloaded records', async () => {
 	const suggestion = memorySuggestionBuilder();
@@ -22,6 +23,7 @@ it('returns the same memory review view from server and downloaded records', asy
 	const controller = new Suggestions(
 		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
+			...agentToolResultsFixture(),
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionLister: reader,

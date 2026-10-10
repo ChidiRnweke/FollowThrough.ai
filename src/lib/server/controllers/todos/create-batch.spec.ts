@@ -1,27 +1,28 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { TodoBoardExportService } from '$lib/services/todos/board-export';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { TodoEditingRulesService } from '$lib/services/todos/edits';
-import { describe, expect, it } from 'vitest';
-import { Todos, type TodosDependencies } from './controller';
+import { createTodoBatchSchema } from '$lib/models/todos';
 import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
-import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
-import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
-import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
 } from '$lib/testing/notes/fakes/in-memory-note-repositories';
+import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemoryTodoBatchReceipts } from '$lib/testing/todos/fakes/in-memory-todo-batch-receipts';
+import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	projectBuilder,
 	testActor,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createTodoBatchSchema } from '$lib/models/todos';
+import { describe, expect, it } from 'vitest';
+import { Todos, type TodosDependencies } from './controller';
 
 const setup = () => {
 	const records = new InMemoryTodoRepository();
@@ -38,6 +39,7 @@ const setup = () => {
 	const controller = new Todos(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
+			...agentToolResultsFixture(),
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),
 			todoEditingRules: new TodoEditingRulesService(),

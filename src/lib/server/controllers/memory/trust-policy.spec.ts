@@ -1,35 +1,36 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { MemoryEditingService } from '$lib/services/memory/edits';
-import { MemoryPresentationService } from '$lib/services/memory/presentation';
-import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
-import { expect, it } from 'vitest';
-import type { ActorContext } from '$lib/models/identity';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
-import { Memory, type MemoryDependencies } from './controller';
+import type { ActorContext } from '$lib/models/identity';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { ToolTrust } from '$lib/server/services/agent/runs/tool-trust';
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
+import {
+	InMemoryEmbeddingClient,
+	InMemorySearchRepository
+} from '$lib/testing/knowledge-search/fakes/in-memory-search';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
+import {
+	InMemoryAnchorRepository,
+	InMemoryNoteRepository
+} from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
-import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import { InMemorySuggestionEffects } from '$lib/testing/suggestions/fakes/in-memory-suggestion-effects';
-import {
-	InMemoryNoteRepository,
-	InMemoryAnchorRepository
-} from '$lib/testing/notes/fakes/in-memory-note-repositories';
-import { InMemoryTrustPolicyRepository } from '$lib/testing/agent/fakes/in-memory-trust-policy-repository';
-import {
-	InMemorySearchRepository,
-	InMemoryEmbeddingClient
-} from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
+import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import {
 	testActor,
 	testNow,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
+import { Memory, type MemoryDependencies } from './controller';
 
 interface Scenario {
 	name: string;
@@ -102,6 +103,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 	const controller = new Memory(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
+			...agentToolResultsFixture(),
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			memoryChanges: library.changes,

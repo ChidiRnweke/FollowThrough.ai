@@ -1,32 +1,33 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
-import { ReferencePresentationService } from '$lib/services/references/presentation';
-import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
+import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
+import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
-import { TodoPresentationService } from '$lib/services/todos/presentation';
-import { NoteTextSearchService } from '$lib/services/notes/text-search';
-import { NoteReferenceService } from '$lib/services/notes/references';
-import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
-import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { ProjectDetailService } from '$lib/services/projects/details';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
-import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
-import { expect, it } from 'vitest';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
-import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
-import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { seedUser, context } from '../database-harness';
+import { expect, it } from 'vitest';
+import { context, seedUser } from '../database-harness';
 
 it('keeps a folder at the project root after reloading a completed move', async () => {
 	const owner = await seedUser('13901');
@@ -51,6 +52,7 @@ it('keeps a folder at the project root after reloading a completed move', async 
 	const controller = new Projects(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
+			...agentToolResultsFixture(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),
 			presentation: new ProjectTreePresentationService(),
@@ -90,6 +92,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 		new WorkspaceCommandRulesService(),
 		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
+			...agentToolResultsFixture(),
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),
 			revisionComparison: new NoteRevisionComparisonService(),

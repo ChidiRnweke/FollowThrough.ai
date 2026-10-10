@@ -1,19 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { NotFoundError } from '$lib/errors';
 import type { AttachmentId, AttachmentUploadId } from '$lib/models/attachments';
-import { Attachments, type AttachmentsDependencies } from './controller';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAttachments,
 	reserveUpload
 } from '$lib/testing/attachments/fakes/in-memory-attachments';
+import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
-import { NotFoundError } from '$lib/errors';
 import {
 	testActor,
 	testTodoId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
+import { describe, expect, it } from 'vitest';
+import { Attachments, type AttachmentsDependencies } from './controller';
 
 const UPLOAD_ID = '00000000-0000-4000-8000-0000000000c1' as AttachmentUploadId;
 const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
@@ -27,6 +28,7 @@ const setup = () => {
 		todos,
 		controller: new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
+				...agentToolResultsFixture(),
 				uploads: attachments,
 				reader: attachments,
 				lifecycle: attachments,

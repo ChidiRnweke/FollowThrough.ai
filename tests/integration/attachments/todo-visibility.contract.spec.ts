@@ -1,4 +1,3 @@
-import { expect, it } from 'vitest';
 import { NotFoundError } from '$lib/errors';
 import {
 	Attachments,
@@ -6,17 +5,19 @@ import {
 } from '$lib/server/controllers/attachments/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
-import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
+import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	InMemoryAttachments,
 	reserveUpload
 } from '$lib/testing/attachments/fakes/in-memory-attachments';
 import { ATTACHMENT_ID, UPLOAD_ID } from '$lib/testing/attachments/fakes/processing';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { todoBuilder, testTodoId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { testTodoId, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { expect, it } from 'vitest';
 import { actor, context, now, seedNote } from '../database-harness';
 import { treeControllers } from '../project-tree-harness';
 
@@ -49,6 +50,7 @@ const setup = async (identity: number) => {
 	});
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
+			...agentToolResultsFixture(),
 			uploads: attachments,
 			reader: attachments,
 			lifecycle: attachments,

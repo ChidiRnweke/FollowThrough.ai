@@ -1,9 +1,3 @@
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
-import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
-import { describe, expect, it } from 'vitest';
 import {
 	AgentSettings,
 	type AgentSettingsDependencies
@@ -12,14 +6,21 @@ import {
 	UserSettings,
 	type UserSettingsDependencies
 } from '$lib/server/controllers/user-settings/controller';
+import { createTransactionContext } from '$lib/server/db/transaction-context';
+import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
 import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
 import { UserPreferencesRecords } from '$lib/server/repositories/identity/postgres/user-preferences';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { UserPreferenceStore } from '$lib/server/services/identity/user-preferences';
-import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { createSyncCapability } from '$lib/server/factories/capabilities/sync-capability-factory';
+import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { context, seedNote, now } from '../database-harness';
+import { describe, expect, it } from 'vitest';
+import { context, now, seedNote } from '../database-harness';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
@@ -31,6 +32,7 @@ const setup = async (suffix: string) => {
 	const agent = new AgentSettings(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
+			...agentToolResultsFixture(),
 			preferenceEditing: new AgentPreferenceEditingService(),
 			...agentRulesFixture(),
 			preferences,
