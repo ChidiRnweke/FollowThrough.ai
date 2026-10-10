@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Button } from '$lib/components/ui/button';
-	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import ChatMarkdown from './chat-markdown.svelte';
 	import { parseReasoning, reasoningTitle } from './chat-reasoning';
 
@@ -45,7 +45,9 @@
 				{title}
 				class="h-7 max-w-full gap-1 px-1.5 text-xs text-muted-foreground [&[data-state=open]>svg]:rotate-90"
 			>
-				<ChevronRight class="size-3.5 shrink-0 transition-transform duration-(--duration-micro)" />
+				<Icon.ChevronRight
+					class="size-3.5 shrink-0 transition-transform duration-(--duration-micro)"
+				/>
 				<span class="truncate {streaming ? 'animate-pulse' : ''}">{title}</span>
 			</Button>
 		{/snippet}

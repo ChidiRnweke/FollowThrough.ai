@@ -6,7 +6,7 @@
 	import type { WidgetId } from '$lib/models/widgets';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { FtExternal as OpenIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import WidgetView from './widget-view.svelte';
@@ -69,7 +69,7 @@
 							: workbench.openTab(tab));
 					}}
 				>
-					<OpenIcon />
+					<Icon.External />
 					Open widget
 				</Button>
 			</div>

@@ -8,11 +8,7 @@
 	import { mergeProps } from '$lib/utils';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import {
-		FtDocumentPlus as FilePlus,
-		FtFolderPlus as FolderPlus,
-		FtEllipsis as Ellipsis
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
@@ -113,11 +109,11 @@
 			     same place relative to the screen's own buttons. -->
 				<AgentAction action={agentActions.projectConnect} context={{ projectId: data.projectId }} />
 				<Button size="sm" onclick={() => (newNoteOpen = true)}>
-					<FilePlus class="size-4" />
+					<Icon.DocumentPlus class="size-4" />
 					New note
 				</Button>
 				<Button variant="outline" size="sm" onclick={() => (newFolderOpen = true)}>
-					<FolderPlus class="size-4" />
+					<Icon.FolderPlus class="size-4" />
 					New folder
 				</Button>
 				<DropdownMenu.Root>
@@ -131,7 +127,7 @@
 										size="icon-sm"
 										aria-label="Project actions"
 									>
-										<Ellipsis class="size-4" />
+										<Icon.Ellipsis class="size-4" />
 									</Button>
 								{/snippet}
 							</Tip>

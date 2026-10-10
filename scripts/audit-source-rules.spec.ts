@@ -65,6 +65,12 @@ describe('source audit rules', () => {
 	it('rejects stale allowances', () => {
 		expect(violations('// audit-allow: silent-catch — terminal reporter\nwork()')).toHaveLength(1);
 	});
+	it('rejects an icon library import', () => {
+		expect(violations("import Check from '@lucide/svelte/icons/check'")).toHaveLength(1);
+	});
+	it('allows the in-house icon set', () => {
+		expect(violations("import * as Icon from '$lib/components/icons'")).toHaveLength(0);
+	});
 	it('rejects instanceof in models', () => {
 		expect(analyzeSource('src/lib/models/example.ts', 'value instanceof Error')).toHaveLength(1);
 	});

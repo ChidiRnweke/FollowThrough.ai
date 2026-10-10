@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import * as Icon from '$lib/components/icons';
 	import Tooltip from './Tooltip.svelte';
 	import { getEditor, useEditorTransaction } from './commands/index.js';
 
@@ -37,7 +37,7 @@
 			})}
 		>
 			<span>{currentLabel}</span>
-			<ChevronDown class="text-muted-foreground size-2!" />
+			<Icon.ChevronDown class="text-muted-foreground size-2!" />
 		</DropdownMenu.Trigger>
 	</Tooltip>
 	<DropdownMenu.Content

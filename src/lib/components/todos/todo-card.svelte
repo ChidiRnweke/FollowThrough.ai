@@ -13,10 +13,9 @@
 		todoPriorityLabels,
 		todoPriorityStyle
 	} from '../shared/labels';
-	import { FtGrip as GripVertical } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { dragHandle } from 'svelte-dnd-action';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { FtEllipsis as MoreHorizontal } from '$lib/components/icons';
 	import { todoStatusLabels } from '../shared/labels';
 
 	const statuses: readonly TodoStatus[] = ['backlog', 'open', 'in_progress', 'done'];
@@ -100,7 +99,7 @@
 								: 'text-muted-foreground'} opacity-0 transition-opacity outline-none group-hover/card:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
 							aria-label="Drag {view.todo.title}"
 						>
-							<GripVertical />
+							<Icon.Grip />
 						</span>
 					{/snippet}
 				</Tip>
@@ -153,7 +152,7 @@
 								class="size-11 sm:size-8"
 								aria-label="Move todo"
 							>
-								<MoreHorizontal />
+								<Icon.Ellipsis />
 							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>

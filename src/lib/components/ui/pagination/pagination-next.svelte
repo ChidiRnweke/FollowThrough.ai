@@ -2,7 +2,7 @@
 	import { Pagination as PaginationPrimitive } from 'bits-ui';
 	import { cn } from '$lib/utils.js';
 	import { buttonVariants } from '$lib/components/ui/button/index.js';
-	import { FtChevronRight as ChevronRightIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -18,5 +18,5 @@
 	{...restProps}
 >
 	<span class="cn-pagination-next-text hidden sm:block">Next</span>
-	<ChevronRightIcon data-icon="inline-end" />
+	<Icon.ChevronRight data-icon="inline-end" />
 </PaginationPrimitive.NextButton>

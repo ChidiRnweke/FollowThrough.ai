@@ -1,9 +1,5 @@
 <script lang="ts">
-	import CloudCheck from '@lucide/svelte/icons/cloud-check';
-	import CloudOff from '@lucide/svelte/icons/cloud-off';
-	import CloudUpload from '@lucide/svelte/icons/cloud-upload';
-	import CloudDownload from '@lucide/svelte/icons/cloud-download';
-	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { syncIndicator } from '$lib/services/sync/indicator';
 	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
@@ -45,15 +41,6 @@
 						: null)
 		})
 	);
-	const Icon = $derived(
-		{
-			synced: CloudCheck,
-			offline: CloudOff,
-			saving: CloudUpload,
-			downloading: CloudDownload,
-			attention: TriangleAlert
-		}[indicator.kind]
-	);
 </script>
 
 <DropdownMenu.Root>
@@ -66,12 +53,9 @@
 				class="relative"
 				aria-label={`Sync status: ${indicator.headline}`}
 			>
-				<Icon
-					class={indicator.kind === 'attention'
-						? 'text-destructive'
-						: indicator.kind === 'saving'
-							? 'motion-safe:animate-pulse'
-							: ''}
+				<Icon.Sync
+					state={indicator.kind}
+					class={indicator.kind === 'attention' ? 'text-destructive' : ''}
 				/>
 				{#if indicator.badge}<Badge
 						variant="secondary"

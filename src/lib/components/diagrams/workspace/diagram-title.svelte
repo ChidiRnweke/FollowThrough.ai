@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtEdit as Pencil } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import InlineTitleInput from '$lib/components/shared/inline-title-input.svelte';
 
 	let {
@@ -56,7 +56,7 @@
 						editing = true;
 					}}
 				>
-					<Pencil />
+					<Icon.Edit />
 				</Button>
 			{/snippet}
 		</Tip>

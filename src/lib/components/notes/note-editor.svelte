@@ -54,15 +54,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Separator } from '$lib/components/ui/separator';
 	import SafeSvgPreview from '$lib/components/shared/safe-svg-preview.svelte';
-	import {
-		FtCopied as ClipboardCheck,
-		FtReferences as Waypoints,
-		FtReading as BookOpen,
-		FtWorkflow as Workflow,
-		FtSkills as Wrench,
-		FtSuggestion as Suggestion,
-		FtChevronDown as ChevronDown
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { agentActions } from '../agent/agent-actions';
 	import {
 		createSuggestionAnchorPlugin,
@@ -130,11 +122,11 @@
 		diagram: 'Drawing a diagram'
 	};
 
-	const runningIcon: Record<NoteAiAction, typeof Workflow> = {
-		promises: ClipboardCheck,
-		relate: Waypoints,
-		reference: BookOpen,
-		diagram: Workflow
+	const runningIcon: Record<NoteAiAction, typeof Icon.Diagram> = {
+		promises: Icon.Copied,
+		relate: Icon.Reference,
+		reference: Icon.Reading,
+		diagram: Icon.Diagram
 	};
 
 	function preserveEditorSelection(event: MouseEvent): void {
@@ -1291,7 +1283,7 @@
 											onmousedown={preserveEditorSelection}
 											onclick={() => onask(agentActions.selection.prompt)}
 										>
-											<Suggestion class="size-4" />
+											<Icon.Suggestion class="size-4" />
 											Ask about this
 										</Button>
 									{/snippet}
@@ -1307,7 +1299,7 @@
 										onmousedown={preserveEditorSelection}
 										onclick={() => runSelectionAction('promises')}
 									>
-										<ClipboardCheck class="size-4" />
+										<Icon.Copied class="size-4" />
 										Extract promises
 									</Button>
 								{/snippet}
@@ -1321,7 +1313,7 @@
 										onmousedown={preserveEditorSelection}
 										onclick={() => runSelectionAction('relate')}
 									>
-										<Waypoints class="size-4" />
+										<Icon.Reference class="size-4" />
 										Find related
 									</Button>
 								{/snippet}
@@ -1335,7 +1327,7 @@
 										onmousedown={preserveEditorSelection}
 										onclick={() => runSelectionAction('reference')}
 									>
-										<BookOpen class="size-4" />
+										<Icon.Reading class="size-4" />
 										Reference
 									</Button>
 								{/snippet}
@@ -1350,7 +1342,7 @@
 										onmousedown={preserveEditorSelection}
 										onclick={() => runSelectionAction('diagram')}
 									>
-										<Workflow class="size-4" />
+										<Icon.Diagram class="size-4" />
 										Diagram
 									</Button>
 								{/snippet}
@@ -1363,9 +1355,9 @@
 											<Tip text="Run one of your skills on the selection">
 												{#snippet children({ props: tipProps })}
 													<Button {...mergeProps(menuProps, tipProps)} variant="ghost" size="sm">
-														<Wrench class="size-4" />
+														<Icon.Skill class="size-4" />
 														Skills
-														<ChevronDown class="size-3" />
+														<Icon.ChevronDown class="size-3" />
 													</Button>
 												{/snippet}
 											</Tip>

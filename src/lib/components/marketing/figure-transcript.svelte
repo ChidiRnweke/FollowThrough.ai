@@ -3,9 +3,8 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { tick } from 'svelte';
 	import { fade, slide } from 'svelte/transition';
-	import { Pause, Play } from '@lucide/svelte';
+	import * as Icon from '$lib/components/icons';
 	import { Badge } from '$lib/components/ui/badge';
-	import { FtCheck as Check, FtLoader as Loader } from '$lib/components/icons';
 	import Surface from './surface.svelte';
 	import Carried from './carried.svelte';
 
@@ -225,9 +224,9 @@
 							class:opacity-40={playing && !done && !active}
 						>
 							{#if done}
-								<Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
+								<Icon.Check class="size-4 shrink-0 text-brand" aria-hidden="true" />
 							{:else if active}
-								<Loader
+								<Icon.Loader
 									class="size-4 shrink-0 animate-spin text-muted-foreground"
 									aria-hidden="true"
 								/>
@@ -276,7 +275,7 @@
 										class="mt-px flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border border-muted-foreground/40"
 										aria-hidden="true"
 									>
-										<Check class="size-3 text-transparent" />
+										<Icon.Check class="size-3 text-transparent" />
 									</span>
 									<div class="flex min-w-0 flex-col gap-2">
 										<span class="text-sm font-medium">Send the client brief to marketing</span>
@@ -295,7 +294,7 @@
 										class="mt-px flex size-4.5 shrink-0 items-center justify-center rounded-[5px] border border-muted-foreground/40"
 										aria-hidden="true"
 									>
-										<Check class="size-3 text-transparent" />
+										<Icon.Check class="size-3 text-transparent" />
 									</span>
 									<div class="flex min-w-0 flex-col gap-2">
 										<span class="text-sm font-medium">Find an owner for the deck</span>
@@ -321,9 +320,9 @@
 			onclick={togglePlay}
 		>
 			{#if paused}
-				<Play class="size-3" />
+				<Icon.Play class="size-3" />
 			{:else}
-				<Pause class="size-3" />
+				<Icon.Pause class="size-3" />
 			{/if}
 		</Button>
 		{#each labels as label, index (label)}

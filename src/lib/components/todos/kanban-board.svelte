@@ -8,7 +8,7 @@
 		type DndEvent
 	} from 'svelte-dnd-action';
 	import { Button } from '$lib/components/ui/button';
-	import { FtPlus as Plus, FtCheck as Check } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
 	import TodoCard from './todo-card.svelte';
@@ -181,7 +181,7 @@
 		>
 			<h3 class="eyebrow flex items-center gap-1.5 px-1.5 pt-1 pb-2">
 				{#if status === 'done'}
-					<Check class="size-3 text-success" />
+					<Icon.Check class="size-3 text-success" />
 				{:else}
 					<span class={['size-1.5 shrink-0 rounded-full', todoStatusStyle[status].dotClass]}></span>
 				{/if}
@@ -272,7 +272,7 @@
 						newTitle = '';
 					}}
 				>
-					<Plus class="size-3.5" />
+					<Icon.Plus class="size-3.5" />
 					Add
 				</Button>
 			{/if}

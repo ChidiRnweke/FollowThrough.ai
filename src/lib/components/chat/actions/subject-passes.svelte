@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { passLabelText, type SubjectPass } from '$lib/components/agent';
 	import { Button } from '$lib/components/ui/button';
-	import { FtExternal } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import ChatMarkdown from '../chat-markdown.svelte';
 	import FileOutput from './disclosure/file-output.svelte';
 	import RecordFields from './disclosure/record-fields.svelte';
@@ -78,7 +78,7 @@
 						onclick={onexpand}
 					>
 						Read all of it
-						<FtExternal class="size-3" />
+						<Icon.External class="size-3" />
 					</Button>
 				{/if}
 			{:else if pass.evidence.kind === 'fields'}

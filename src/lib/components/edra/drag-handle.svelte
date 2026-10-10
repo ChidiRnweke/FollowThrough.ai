@@ -2,15 +2,7 @@
 	import { autoPlacement } from '@floating-ui/dom';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-	import { Braces, Sparkles, TextAlignCenter } from '@lucide/svelte';
-	import Clipboard from '@lucide/svelte/icons/clipboard';
-	import Duplicate from '@lucide/svelte/icons/copy';
-	import GripVertical from '@lucide/svelte/icons/grip-vertical';
-	import Palette from '@lucide/svelte/icons/palette';
-	import Plus from '@lucide/svelte/icons/plus';
-	import RemoveFormatting from '@lucide/svelte/icons/remove-formatting';
-	import Repeat2 from '@lucide/svelte/icons/repeat-2';
-	import Delete from '@lucide/svelte/icons/trash-2';
+	import * as Icon from '$lib/components/icons';
 	import type { Editor } from '@tiptap/core';
 	import { DragHandlePlugin } from '@tiptap/extension-drag-handle';
 	import type { Node } from '@tiptap/pm/model';
@@ -199,7 +191,7 @@
 		class="z-0! size-7! rounded-sm opacity-60 hover:opacity-100 focus-visible:opacity-100 active:opacity-100"
 		onclick={() => (open = !open)}
 	>
-		<GripVertical />
+		<Icon.Grip />
 	</Button>
 	{#if type === 'extended'}
 		<DropdownMenu.Root bind:open>
@@ -213,7 +205,7 @@
 					</DropdownMenu.GroupHeading>
 					{#if useAI()}
 						<DropdownMenu.Item onmousedown={(e) => e.preventDefault()} onclick={handleAIHighlight}>
-							<Sparkles />
+							<Icon.Suggestion />
 							<span
 								class="bg-linear-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text font-bold text-transparent"
 							>
@@ -223,7 +215,7 @@
 					{/if}
 					<DropdownMenu.Sub>
 						<DropdownMenu.SubTrigger openDelay={300}>
-							<Repeat2 />
+							<Icon.Repeat />
 							Turn Into
 						</DropdownMenu.SubTrigger>
 						<DropdownMenu.SubContent
@@ -233,14 +225,14 @@
 								<DropdownMenu.Group>
 									<DropdownMenu.Label class="capitalize">{key}</DropdownMenu.Label>
 									{#each turnIntoCommands as command (command)}
-										{@const Icon = command.icon}
+										{@const Glyph = command.icon}
 										<DropdownMenu.Item
 											onclick={() => {
 												if (currentNode && currentNodePos && editor)
 													command.turnInto?.(editor, currentNode, currentNodePos);
 											}}
 										>
-											<Icon />
+											<Glyph />
 											<span>{command.tooltip}</span>
 											{#if command.shortCut}
 												<DropdownMenu.Shortcut class="bg-background rounded border p-0.5"
@@ -259,7 +251,7 @@
 				</DropdownMenu.Group>
 				<DropdownMenu.Sub>
 					<DropdownMenu.SubTrigger openDelay={300}>
-						<Palette />
+						<Icon.Palette />
 						Colors
 					</DropdownMenu.SubTrigger>
 					<DropdownMenu.Content
@@ -310,20 +302,20 @@
 				</DropdownMenu.Sub>
 				<DropdownMenu.Sub>
 					<DropdownMenu.SubTrigger openDelay={300}>
-						<TextAlignCenter />
+						<Icon.TextAlignCenter />
 						AlignMent
 					</DropdownMenu.SubTrigger>
 					<DropdownMenu.SubContent>
 						<DropdownMenu.Label>Alignments</DropdownMenu.Label>
 						{#each alignments as alignment (alignment)}
-							{@const Icon = alignment.icon}
+							{@const Glyph = alignment.icon}
 							<DropdownMenu.Item
 								onclick={() => {
 									if (currentNode && currentNodePos && editor)
 										alignment.turnInto?.(editor, currentNode, currentNodePos);
 								}}
 							>
-								<Icon />
+								<Glyph />
 								{alignment.tooltip}
 								<DropdownMenu.Shortcut class="bg-background rounded border p-0.5">
 									{alignment.shortCut}
@@ -334,27 +326,27 @@
 				</DropdownMenu.Sub>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={insertNode}>
-					<Plus />
+					<Icon.Plus />
 					Insert Next
 				</DropdownMenu.Item>
 				<DropdownMenu.Item onclick={handleRemoveFormatting}>
-					<RemoveFormatting />
+					<Icon.ClearFormatting />
 					Remove Formatting
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={handleDuplicate}>
-					<Duplicate />
+					<Icon.Copy />
 					Duplicate
 				</DropdownMenu.Item>
 				<DropdownMenu.Sub>
 					<DropdownMenu.SubTrigger>
-						<Clipboard />
+						<Icon.Clipboard />
 						Copy to Clipboard
 					</DropdownMenu.SubTrigger>
 					<DropdownMenu.Content side="right">
 						<DropdownMenu.Label>Copy as</DropdownMenu.Label>
 						<DropdownMenu.Item onclick={handleCopyToClipboard}>
-							<Clipboard />
+							<Icon.Clipboard />
 							Copy Content
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={() => handleCopyContentAs('markdown')}>
@@ -367,14 +359,14 @@
 							Copy as Markdown
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={() => handleCopyContentAs('json')}>
-							<Braces />
+							<Icon.Braces />
 							Copy as JSON
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Sub>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={handleDelete}>
-					<Delete class="text-destructive" />
+					<Icon.Trash class="text-destructive" />
 					Delete
 				</DropdownMenu.Item>
 			</DropdownMenu.Content>

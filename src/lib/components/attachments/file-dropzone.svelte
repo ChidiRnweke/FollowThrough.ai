@@ -2,11 +2,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		FtArtifacts as Archive,
-		FtDocument as FileIcon,
-		FtClose as X
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatBytes } from '../shared/labels';
 
 	let {
@@ -74,7 +70,7 @@
 		<!-- Once a file is chosen the zone becomes a statement about it, not an invitation:
 		     a drop target that still says "drag it here" beside a filename reads as unset. -->
 		<div class="flex items-center gap-3 rounded-md border border-border px-3 py-2.5">
-			<FileIcon class="size-4 shrink-0 text-muted-foreground" />
+			<Icon.Document class="size-4 shrink-0 text-muted-foreground" />
 			<div class="flex min-w-0 flex-1 flex-col">
 				<span class="truncate text-sm font-medium">{file.name}</span>
 				<span class="text-xs text-muted-foreground">{formatBytes(file.size)}</span>
@@ -86,7 +82,7 @@
 				{disabled}
 				onclick={clear}
 			>
-				<X />
+				<Icon.Close />
 			</Button>
 		</div>
 	{:else}
@@ -107,7 +103,7 @@
 			ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
 			ondrop={handleDrop}
 		>
-			<Archive
+			<Icon.Artifact
 				class="size-5 {dragging ? 'text-brand-muted-foreground' : 'text-muted-foreground'}"
 			/>
 			<span class="text-sm">{label}</span>

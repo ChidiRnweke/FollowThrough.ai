@@ -10,7 +10,7 @@
 	import type { PerNoteEditorSlot } from './editor-context';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import { FtHistory } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import { cn } from '$lib/utils';
 	import NoteVersionDiff from './note-version-diff.svelte';
@@ -93,7 +93,7 @@
 			</p>
 		{:else if revisions.length === 0}
 			<EmptyState
-				icon={FtHistory}
+				icon={Icon.History}
 				title="No versions yet"
 				hint="Publishing this note takes its first snapshot."
 			/>

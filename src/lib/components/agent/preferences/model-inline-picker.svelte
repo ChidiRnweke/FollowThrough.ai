@@ -13,13 +13,7 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from 'bits-ui';
-	import {
-		FtCheck as Check,
-		FtChevronDown as ChevronDown,
-		FtInfo as Info,
-		FtSettings as Settings,
-		FtSuggestion as Suggestion
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 
 	let {
@@ -104,7 +98,7 @@
 		disabled={requireTools && !model.supportsTools}
 		onSelect={() => pick(model.id)}
 	>
-		<Check class={selected === model.id ? 'opacity-100' : 'opacity-0'} />
+		<Icon.Check class={selected === model.id ? 'opacity-100' : 'opacity-0'} />
 		<div class="min-w-0 flex-1">
 			<p class="truncate">{shortModelName(model.name)}</p>
 			<p class="truncate text-xs text-muted-foreground">{modelMetaLine(model)}</p>
@@ -140,7 +134,7 @@
 			{@const recommended = catalogue.filter((model) => model.recommended)}
 			<Command.Group heading="This chat">
 				<Command.Item value="workspace default" onSelect={() => pick(null)}>
-					<Check class={selected === null ? 'opacity-100' : 'opacity-0'} />
+					<Icon.Check class={selected === null ? 'opacity-100' : 'opacity-0'} />
 					<div class="min-w-0 flex-1">
 						<p class="truncate">Use the workspace default</p>
 						<p class="truncate text-xs text-muted-foreground">
@@ -166,7 +160,7 @@
 					that is right there.
 				-->
 				<EmptyState
-					icon={Suggestion}
+					icon={Icon.Suggestion}
 					title="No recommended {noun}"
 					hint="Search to choose from all {catalogue.length}."
 				/>
@@ -216,7 +210,7 @@
 						{#if effective.source === 'workspace'}
 							<span class="shrink-0">· default</span>
 						{/if}
-						<ChevronDown data-icon="inline-end" />
+						<Icon.ChevronDown data-icon="inline-end" />
 					</Button>
 				{/snippet}
 			</Tip>
@@ -269,7 +263,7 @@
 							class="text-muted-foreground"
 							aria-label={visionExplanation}
 						>
-							<Info />
+							<Icon.Info />
 						</Button>
 					{/snippet}
 				</Tip>
@@ -310,7 +304,7 @@
 				href="/settings"
 				class="w-full justify-start px-3 font-normal text-muted-foreground"
 			>
-				<Settings data-icon="inline-start" /> Change defaults in settings
+				<Icon.Settings data-icon="inline-start" /> Change defaults in settings
 			</Button>
 		</div>
 	</Popover.Content>

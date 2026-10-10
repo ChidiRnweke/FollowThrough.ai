@@ -3,7 +3,7 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import type { AgentActionSpec } from './agent-actions';
 
@@ -41,7 +41,7 @@
 		class?: string;
 	} = $props();
 
-	const Icon = $derived(action.icon);
+	const Glyph = $derived(action.icon);
 	const prompt = $derived(subject ? `${action.prompt}: “${subject}”` : action.prompt);
 
 	function invoke(event: MouseEvent): void {
@@ -91,12 +91,12 @@
 			<span
 				class="flex size-7 shrink-0 items-center justify-center rounded-md bg-brand/10 text-brand transition-colors duration-(--duration-micro) group-hover:bg-brand/20 dark:bg-brand/15"
 			>
-				<Icon class="size-3.5" />
+				<Glyph class="size-3.5" />
 			</span>
 			<span class="min-w-0 flex-1">{action.label}</span>
 			<!-- Visible at rest: this row is a target, and an arrow you must hover to
 			     find leaves it reading as a sentence. -->
-			<ArrowRight
+			<Icon.ArrowRight
 				class="size-3.5 shrink-0 text-muted-foreground opacity-60 transition-[color,opacity] duration-(--duration-micro) group-hover:text-brand group-hover:opacity-100 group-focus-within:opacity-100"
 			/>
 		</Button>
@@ -111,7 +111,7 @@
 		class={['text-brand hover:text-brand', className]}
 		onclick={invoke}
 	>
-		<Icon class="size-3.5" />
+		<Glyph class="size-3.5" />
 		{action.label}
 	</Button>
 {:else}
@@ -132,7 +132,7 @@
 				<span
 					class="flex size-5 shrink-0 items-center justify-center rounded-sm bg-brand/10 text-brand transition-colors duration-(--duration-micro) group-hover/agent:bg-brand/20 dark:bg-brand/15"
 				>
-					<Icon class="size-3.5" />
+					<Glyph class="size-3.5" />
 				</span>
 				{#if !compact}
 					{action.label}

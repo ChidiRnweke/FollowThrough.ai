@@ -12,20 +12,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { mergeProps } from '$lib/utils';
 	import { AgentAction, agentActions } from '$lib/components/agent';
-	import {
-		FtEllipsis as Ellipsis,
-		FtLoader as LoaderCircle,
-		FtPin as Pin,
-		FtPinOff as PinOff,
-		FtExport as FileOutput,
-		FtPublish as ArrowUpFromLine,
-		FtUndo as Undo2,
-		FtHistory as History,
-		FtTrash as Trash,
-		FtSuggestion as Suggestion,
-		FtDocument as FileText,
-		FtClose as X
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
 	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteSyncStatus from '../note-sync-status.svelte';
@@ -124,14 +111,14 @@
 						size="icon-sm"
 						class="size-11 sm:size-8"
 						aria-label="Close split view"
-						onclick={onCloseSplit}><X /></Button
+						onclick={onCloseSplit}><Icon.Close /></Button
 					>
 				{/snippet}
 			</Tip>
 		{/if}
 	</div>
 	<div class="flex min-w-0 items-center gap-1 @[48rem]:ml-auto @[48rem]:gap-2">
-		{#if activeAction}<LoaderCircle
+		{#if activeAction}<Icon.Loader
 				class="size-4 animate-spin text-muted-foreground"
 				aria-label="AI action running"
 			/>{/if}
@@ -187,7 +174,7 @@
 					aria-label="Publish note (Ctrl+S, S)"
 					onclick={onpublish}
 				>
-					{#if publishing}<LoaderCircle class="size-4 animate-spin" />{:else}<ArrowUpFromLine
+					{#if publishing}<Icon.Loader class="size-4 animate-spin" />{:else}<Icon.Publish
 							class="size-4"
 						/>{/if}
 					Publish
@@ -202,7 +189,7 @@
 					size="icon-sm"
 					class="hidden sm:inline-flex"
 					aria-label="Export document"
-					onclick={onexport}><FileOutput class="size-4" /></Button
+					onclick={onexport}><Icon.Export class="size-4" /></Button
 				>
 			{/snippet}
 		</Tip>
@@ -216,7 +203,7 @@
 								variant="ghost"
 								size="icon-sm"
 								class="size-11 sm:size-8"
-								aria-label="Note actions"><Ellipsis /></Button
+								aria-label="Note actions"><Icon.Ellipsis /></Button
 							>
 						{/snippet}
 					</Tip>
@@ -224,20 +211,20 @@
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end">
 				<DropdownMenu.Item class="lg:hidden" onclick={onask}
-					><Suggestion data-icon="inline-start" />{agentActions.note.label}</DropdownMenu.Item
+					><Icon.Suggestion data-icon="inline-start" />{agentActions.note.label}</DropdownMenu.Item
 				>
 				{#if comparable}<DropdownMenu.Item onclick={oncompare}
-						><FileText data-icon="inline-start" />{agentActions.noteCompare
+						><Icon.Document data-icon="inline-start" />{agentActions.noteCompare
 							.label}</DropdownMenu.Item
 					>{/if}
 				<DropdownMenu.Separator class={comparable ? '' : 'lg:hidden'} />
 				<DropdownMenu.Item class="sm:hidden" onclick={onexport}
-					><FileOutput data-icon="inline-start" />Export document</DropdownMenu.Item
+					><Icon.Export data-icon="inline-start" />Export document</DropdownMenu.Item
 				>
 				<DropdownMenu.Separator class="sm:hidden" />
 				<DropdownMenu.Group>
 					<DropdownMenu.Item onclick={ontogglepin}>
-						{#if note.isPinned}<PinOff data-icon="inline-start" />Unpin{:else}<Pin
+						{#if note.isPinned}<Icon.PinOff data-icon="inline-start" />Unpin{:else}<Icon.Pin
 								data-icon="inline-start"
 							/>Pin to sidebar{/if}
 					</DropdownMenu.Item>
@@ -290,14 +277,15 @@
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
 					<DropdownMenu.Item onclick={onhistory}
-						><History data-icon="inline-start" />Version history</DropdownMenu.Item
+						><Icon.History data-icon="inline-start" />Version history</DropdownMenu.Item
 					>
 					<DropdownMenu.Item
 						disabled={note.publishedRevision === 0 || !hasUnpublishedChanges}
-						onclick={ondiscard}><Undo2 data-icon="inline-start" />Discard changes</DropdownMenu.Item
+						onclick={ondiscard}
+						><Icon.Undo data-icon="inline-start" />Discard changes</DropdownMenu.Item
 					>
 					<DropdownMenu.Item variant="destructive" onclick={onarchive}
-						><Trash data-icon="inline-start" />Move to trash</DropdownMenu.Item
+						><Icon.Trash data-icon="inline-start" />Move to trash</DropdownMenu.Item
 					>
 				</DropdownMenu.Group>
 			</DropdownMenu.Content>

@@ -6,7 +6,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Popover from '$lib/components/ui/popover';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
-	import { FtDownload as Download } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import {
 		MERMAID_PALETTE_KEYS,
 		MERMAID_PALETTE_LABELS,
@@ -53,7 +53,7 @@
 	<Popover.Trigger>
 		{#snippet child({ props })}
 			<Button {...props} size="icon-sm" variant="ghost" aria-label="Export diagram">
-				<Download class="text-muted-foreground" />
+				<Icon.Download class="text-muted-foreground" />
 			</Button>
 		{/snippet}
 	</Popover.Trigger>

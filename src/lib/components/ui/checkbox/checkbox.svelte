@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Checkbox as CheckboxPrimitive } from 'bits-ui';
 	import { cn, type WithoutChildrenOrChild } from '$lib/utils.js';
-	import { FtCheck as CheckIcon, FtMinus as MinusIcon } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	let {
 		ref = $bindable(null),
@@ -29,9 +29,9 @@
 			class="[&>svg]:size-3.5 grid place-content-center text-current transition-none"
 		>
 			{#if checked}
-				<CheckIcon />
+				<Icon.Check />
 			{:else if indeterminate}
-				<MinusIcon />
+				<Icon.Minus />
 			{/if}
 		</div>
 	{/snippet}

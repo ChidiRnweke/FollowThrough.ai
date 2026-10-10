@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import { FtSuggestion } from '$lib/components/icons';
+import * as Icon from '$lib/components/icons';
 import ActionProgress from './action-progress.svelte';
 
 const props = (overrides: Record<string, unknown> = {}) => ({
-	icon: FtSuggestion,
+	icon: Icon.Suggestion,
 	label: 'Converting to draw.io',
 	...overrides
 });

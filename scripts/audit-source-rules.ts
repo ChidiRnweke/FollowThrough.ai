@@ -18,7 +18,8 @@ const RULES = [
 	'no-record-unknown',
 	'no-json-parse-cast',
 	'no-cast-probe',
-	'no-unknown-type'
+	'no-unknown-type',
+	'no-icon-library'
 ] as const;
 export type SourceRule = (typeof RULES)[number];
 export interface SourceViolation {
@@ -395,6 +396,16 @@ export const analyzeSource = (
 		}
 		return false;
 	};
+	/**
+	 * The icon set is ours (ADR 0044): every glyph comes from `$lib/components/icons`. The
+	 * shadcn-svelte CLI still writes Lucide imports into components it adds, so this catches the
+	 * one that survives an add.
+	 */
+	const iconLibraryImport = (node: ts.Node): boolean =>
+		(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+		!!node.moduleSpecifier &&
+		ts.isStringLiteral(node.moduleSpecifier) &&
+		/^(@lucide\/|lucide-)/.test(node.moduleSpecifier.text);
 	const visit = (node: ts.Node): void => {
 		if (toolBoundaryImport(node))
 			report(
@@ -402,6 +413,8 @@ export const analyzeSource = (
 				node,
 				'constructs or re-exports tools outside the designated protocol adapter'
 			);
+		if (iconLibraryImport(node))
+			report('no-icon-library', node, 'imports an icon library; use $lib/components/icons');
 		if (shapeCast(node)) report('shape-cast', node, 'asserts a type onto an object literal');
 		if (responseJsonCast(node))
 			report('no-response-json-cast', node, 'casts a response JSON result without parsing it');

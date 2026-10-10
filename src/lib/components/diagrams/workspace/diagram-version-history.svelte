@@ -9,7 +9,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import { FtHistory } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import DiagramPreview from '../diagram-preview.svelte';
 	import DiagramDocumentPreview from './diagram-document-preview.svelte';
@@ -74,7 +74,7 @@
 			<p role="status" class="text-sm text-muted-foreground">Loading version history.</p>
 		{:else if revisions.length === 0}
 			<EmptyState
-				icon={FtHistory}
+				icon={Icon.History}
 				title="No versions yet"
 				hint="Publishing this diagram takes its first snapshot."
 			/>

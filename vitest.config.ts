@@ -134,6 +134,8 @@ export default defineConfig({
 						'src/lib/components/widgets/elements/widget-table.svelte.spec.ts',
 						'src/lib/components/widgets/widget-json-editor.svelte.spec.ts',
 						'src/lib/components/ui/ref-contracts.svelte.spec.ts',
+						// The icon motion contract lives in layout.css; only a real browser resolves it.
+						'src/lib/components/icons/icons.svelte.spec.ts',
 						'src/lib/components/edra/commands/InlineSuggestion.svelte.spec.ts',
 						'src/lib/components/diagrams/drawio-embed.svelte.spec.ts',
 						'src/lib/components/notes/export/export-slider.svelte.spec.ts',

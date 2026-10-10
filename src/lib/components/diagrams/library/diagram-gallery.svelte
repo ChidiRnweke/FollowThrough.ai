@@ -15,12 +15,7 @@
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import DiagramPreview from '../diagram-preview.svelte';
-	import {
-		FtWorkflow as Workflow,
-		FtSearch as Search,
-		FtClose as X,
-		FtEllipsis as Ellipsis
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
 	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
@@ -170,7 +165,7 @@
 
 	{#if !data.selectedProjectId}
 		<EmptyState
-			icon={Workflow}
+			icon={Icon.Diagram}
 			title="Select a project to see its diagrams."
 			size="large"
 			label="Diagrams"
@@ -195,11 +190,11 @@
 					<InputGroup.Addon align="inline-end">
 						{#if data.query}
 							<InputGroup.Button aria-label="Clear search" onclick={clearSearch}>
-								<X /> Clear
+								<Icon.Close /> Clear
 							</InputGroup.Button>
 						{/if}
 						<InputGroup.Button type="submit" variant="default">
-							<Search /> Search
+							<Icon.Search /> Search
 						</InputGroup.Button>
 					</InputGroup.Addon>
 				</InputGroup.Root>
@@ -207,14 +202,14 @@
 		{/if}
 
 		{#if diagrams.length === 0 && data.query}
-			<EmptyState icon={Search} title="No diagrams match “{data.query}”.">
+			<EmptyState icon={Icon.Search} title="No diagrams match “{data.query}”.">
 				{#snippet action()}
 					<Button variant="outline" onclick={clearSearch}>Clear search</Button>
 				{/snippet}
 			</EmptyState>
 		{:else if diagrams.length === 0}
 			<EmptyState
-				icon={Workflow}
+				icon={Icon.Diagram}
 				title="No diagrams yet."
 				hint="A diagram starts in conversation, and can be linked into any note once you keep it."
 				size="large"
@@ -279,7 +274,7 @@
 												class="size-7"
 												aria-label="Actions for {diagram.title ?? 'Untitled diagram'}"
 											>
-												<Ellipsis class="size-4" />
+												<Icon.Ellipsis class="size-4" />
 											</Button>
 										{/snippet}
 									</DropdownMenu.Trigger>

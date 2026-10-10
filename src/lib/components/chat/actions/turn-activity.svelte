@@ -5,7 +5,7 @@
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
-	import { FtChevronRight, FtLoader, FtReading } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import {
 		readDoorLabel,
 		runningSteps,
@@ -98,7 +98,7 @@
 			{#each steps as step, index (index)}
 				<li class="{CHAT_ROW} text-muted-foreground">
 					{#if step.outcome === 'running'}
-						<FtLoader class="{CHAT_ROW_ICON} animate-spin" />
+						<Icon.Loader class="{CHAT_ROW_ICON} animate-spin" />
 					{:else}
 						<span class={CHAT_ROW_ICON} aria-hidden="true"></span>
 					{/if}
@@ -145,7 +145,7 @@
 							size="sm"
 							class="{CHAT_ROW} text-muted-foreground [&[data-state=open]>svg:first-child]:rotate-90"
 						>
-							<FtChevronRight
+							<Icon.ChevronRight
 								class="{CHAT_ROW_ICON} transition-transform duration-(--duration-micro)"
 							/>
 							<span class="min-w-0 truncate">{readDoorLabel(context)}</span>
@@ -168,7 +168,7 @@
 							     Button — but `CHAT_ROW`'s padding, so it sits on the same optical column
 							     as the rows above it rather than at its own indent. -->
 							<p class="{CHAT_ROW} {CHAT_TEXT_REQUEST} items-start text-muted-foreground">
-								<FtReading class="{CHAT_ROW_ICON} mt-0.5" />
+								<Icon.Reading class="{CHAT_ROW_ICON} mt-0.5" />
 								<span class="min-w-0">{context.setup.join(' · ')}</span>
 							</p>
 						{/if}

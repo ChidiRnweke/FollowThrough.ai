@@ -49,7 +49,7 @@
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteOutlineRail from '../note-outline-rail.svelte';
 	import type { OutlineHeading } from '$lib/models/notes';
-	import { FtSuggestion as Lightbulb } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import NoteWorkspaceDialogs from './note-workspace-dialogs.svelte';
 	import NoteWorkspaceHeader from './note-workspace-header.svelte';
 	import {
@@ -776,7 +776,7 @@
 			{/each}
 			{#if pendingCount > 0}
 				<Button size="xs" variant="outline" onclick={() => rightPanel.openSuggestions()}>
-					<Lightbulb class="size-3.5" />
+					<Icon.Suggestion class="size-3.5" />
 					{pendingCount} suggestion{pendingCount === 1 ? '' : 's'}
 				</Button>
 			{/if}

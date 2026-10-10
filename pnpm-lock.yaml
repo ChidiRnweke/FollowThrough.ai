@@ -269,9 +269,6 @@ importers:
       '@internationalized/date':
         specifier: ^3.12.2
         version: 3.12.2
-      '@lucide/svelte':
-        specifier: ^1.24.0
-        version: 1.24.0(svelte@5.56.4(@typescript-eslint/types@8.63.0))
       '@opentelemetry/sdk-trace-base':
         specifier: ^2.10.0
         version: 2.10.0(@opentelemetry/api@1.9.1)
@@ -1884,11 +1881,6 @@ packages:
 
   '@layerstack/utils@2.0.0-next.19':
     resolution: {integrity: sha512-HyXCEz9pge4rFWklrSgFr3YIwdE1gP8WM6GPetmnKPDfYLF1/oetRFKI9FqiE+dw4brnULGPKJsVhjM3vQfD4A==}
-
-  '@lucide/svelte@1.24.0':
-    resolution: {integrity: sha512-yXwewA7ANQ5hfaSDrvsecosWjZn5RglzeXUZRSnxeANBskpNwblOkEJTqD0ujDdNKIKL8E9eVc2U/P3ziJr7OA==}
-    peerDependencies:
-      svelte: ^5
 
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
@@ -9142,10 +9134,6 @@ snapshots:
       d3-array: 3.2.4
       d3-time: 3.1.0
       d3-time-format: 4.1.0
-
-  '@lucide/svelte@1.24.0(svelte@5.56.4(@typescript-eslint/types@8.63.0))':
-    dependencies:
-      svelte: 5.56.4(@typescript-eslint/types@8.63.0)
 
   '@mdx-js/mdx@3.1.1':
     dependencies:

@@ -209,6 +209,30 @@ is opt-in rather than a blanket rule on the collapsible primitive — a tree who
 animates open is a slower tree, not a calmer one. The base reduced-motion guard collapses the
 duration and is the whole fallback needed.
 
+## Icons and motion
+
+Every icon is ours: `import * as Icon from '$lib/components/icons'`, then `<Icon.Search />`. There
+is no icon library dependency (ADR 0044); the `no-icon-library` source rule fails any Lucide import,
+including the ones the shadcn-svelte CLI writes into a newly added primitive — swap those on add.
+
+- **Through-line.** Glyphs sit on a 24-unit grid with a 1.75 stroke, round caps and joins, and ink
+  from `currentColor`. Each is named for what it means (`Icon.Skill`, `Icon.Preferences`), never
+  for its shape.
+- **Two tiers.** _Marks_ — places and things (Today, Todos, Folder, Memory, Skill, Diagram, Sync)
+  — are one stroke that ends in a dot, after the F-to-check product mark. _Utility_ glyphs —
+  verbs, arrows, and editor formatting — carry no dot, because they must read as conventions.
+- **The dot is the only accent.** It is ink at rest and takes `--brand` only when an ancestor is
+  live (`aria-current`, `aria-pressed`, `data-state="on"`/`"active"`, `data-active`). The rest of
+  the glyph stays ink, so a selected row shows one teal point, not a teal icon.
+- **Three motions, no per-component code.** Becoming live, the stroke retraces once and the dot
+  lands (`ft-trace`, `ft-land`, under 500ms). Leaving, the dot fades back; nothing retraces.
+  Ongoing work (sync saving or downloading) moves the dot in a loop. The contract is the
+  `ft-stroke` / `ft-accent` classes plus the block in `layout.css`; reduced motion turns the
+  animations off and every state still reads by colour and position.
+- **Preferences is a switch, Settings is a gear.** The switch's knob is its dot and slides across
+  when on. A skill is a repeatable workflow, so Skill takes the workflow mark and Diagram has its
+  own two-box mark.
+
 ## Voice & tone
 
 Calm, dry, second person, present tense. One sentence, period included, no exclamation marks. The
@@ -425,7 +449,7 @@ while the region is empty; the empty state and its one action are the whole surf
   dismissible context chip is the explanation.
 - **Agent context bar:** one plain-language sentence above the thread naming the scope, then a
   quiet row of text links with counts, including zero; every item explains itself on hover. Only
-  the project name carries the brand accent; items are muted text with a hairline icon, never
+  the project name carries the brand accent; items are muted text with a plain icon, never
   chips or washes. Artifacts are deliberately absent. Navigating re-derives the row with a short
   staggered re-entry. A capability renders at zero only here — the count is the teaching moment
   — never anywhere else.

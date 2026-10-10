@@ -7,11 +7,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import {
-		FtPin as Pin,
-		FtPlus as Plus,
-		FtChevronRight as ChevronRight
-	} from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { goto } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -91,7 +87,9 @@
 <PageShell title="Skills" description="Reusable methodology the agent loads when a task matches.">
 	{#snippet actions()}
 		<AgentAction action={agentActions.skills} />
-		<Button onclick={() => (createOpen = true)}><Plus data-icon="inline-start" />New skill</Button>
+		<Button onclick={() => (createOpen = true)}
+			><Icon.Plus data-icon="inline-start" />New skill</Button
+		>
 	{/snippet}
 
 	{#if data.skills.length === 0}
@@ -119,7 +117,7 @@
 							<div class="flex items-center gap-2">
 								<span class="truncate text-sm font-medium">{skill.name}</span>
 								{#if skill.isPinned}
-									<Pin class="size-3.5 shrink-0 text-muted-foreground" />
+									<Icon.Pin class="size-3.5 shrink-0 text-muted-foreground" />
 								{/if}
 							</div>
 							<p class="truncate text-sm text-muted-foreground">{skill.description}</p>
@@ -131,7 +129,7 @@
 								>
 							{/each}
 						</div>
-						<ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+						<Icon.ChevronRight class="size-4 shrink-0 text-muted-foreground" />
 					</a>
 				</li>
 			{/each}

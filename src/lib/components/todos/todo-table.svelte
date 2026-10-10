@@ -4,7 +4,7 @@
 	import type { TodoId, TodoView } from '$lib/models/todos';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
-	import { FtChevronDown, FtChevronUp, FtChevronsUd } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import TodoStatusField from './fields/todo-status-field.svelte';
 	import TodoPriorityField from './fields/todo-priority-field.svelte';
 	import TodoCategoryField from './fields/todo-category-field.svelte';
@@ -55,12 +55,12 @@
 			{label}
 			{#if sortKey === key}
 				{#if sortDir === 'asc'}
-					<FtChevronUp class="size-3" />
+					<Icon.ChevronUp class="size-3" />
 				{:else}
-					<FtChevronDown class="size-3" />
+					<Icon.ChevronDown class="size-3" />
 				{/if}
 			{:else}
-				<FtChevronsUd class="size-3 opacity-40" />
+				<Icon.ChevronsUpDown class="size-3 opacity-40" />
 			{/if}
 		</Button>
 	</Table.Head>

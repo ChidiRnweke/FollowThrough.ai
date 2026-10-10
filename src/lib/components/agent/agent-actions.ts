@@ -1,15 +1,5 @@
 import type { Component } from 'svelte';
-import {
-	FtArtifacts,
-	FtDocument,
-	FtLink,
-	FtMemory,
-	FtSettings,
-	FtSkills,
-	FtSuggestion,
-	FtTodos,
-	FtWorkflow
-} from '$lib/components/icons';
+import * as Icon from '$lib/components/icons';
 
 /**
  * The agent's invocation points: one prompt per screen, written where it applies.
@@ -61,7 +51,7 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 	today: {
 		label: 'Write a note',
 		prompt: 'Interview me and write it up as a note',
-		icon: FtDocument
+		icon: Icon.Document
 	},
 	/**
 	 * The thesis made visible, and the reason this one appears on a full board as
@@ -70,12 +60,12 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 	todosFromNotes: {
 		label: 'Find todos in my notes',
 		prompt: 'Read my notes and propose the todos they imply',
-		icon: FtTodos
+		icon: Icon.Todos
 	},
 	todoSource: {
 		label: 'Find the source',
 		prompt: 'Find the note this todo came from and what it says',
-		icon: FtDocument
+		icon: Icon.Document
 	},
 	/**
 	 * Names its output rather than a mood. What comes back is backlink suggestions
@@ -85,61 +75,61 @@ export const agentActions: Record<AgentActionKey, AgentActionSpec> = {
 	projectConnect: {
 		label: 'Connect these notes',
 		prompt: 'Find notes here that relate and propose backlinks',
-		icon: FtLink
+		icon: Icon.Link
 	},
 	projectDistil: {
 		label: 'Distil memory',
 		prompt: 'Read my notes here and propose what to remember',
-		icon: FtMemory
+		icon: Icon.Memory
 	},
 	projectAttachments: {
 		label: 'Write from these files',
 		prompt: 'Read these attachments and write up a note',
-		icon: FtDocument
+		icon: Icon.Document
 	},
 	artifactsExport: {
 		label: 'Export these notes',
 		prompt: "Create an artifact from this project's notes",
-		icon: FtArtifacts
+		icon: Icon.Artifact
 	},
 	note: {
 		label: 'Ask about this note',
 		prompt: 'Review this note and tell me what it commits me to',
-		icon: FtSuggestion
+		icon: Icon.Suggestion
 	},
 	noteCompare: {
 		label: 'Compare',
 		prompt: 'Compare the open notes and say where each idea belongs',
-		icon: FtDocument
+		icon: Icon.Document
 	},
 	selection: {
 		label: 'Ask about this',
 		prompt: 'Explain the selected text and what to do with it',
-		icon: FtSuggestion
+		icon: Icon.Suggestion
 	},
 	diagram: {
 		label: 'Explain this diagram',
 		prompt: 'Explain this diagram and what it is missing',
-		icon: FtWorkflow
+		icon: Icon.Diagram
 	},
 	skills: {
 		label: 'Draft a skill',
 		prompt: 'Draft a skill from how I write my notes',
-		icon: FtSkills
+		icon: Icon.Skill
 	},
 	skillDetail: {
 		label: 'Improve this skill',
 		prompt: 'Review this skill and propose a sharper version',
-		icon: FtSkills
+		icon: Icon.Skill
 	},
 	profile: {
 		label: 'Distil my profile',
 		prompt: 'Read my notes and propose what to remember about me',
-		icon: FtMemory
+		icon: Icon.Memory
 	},
 	settings: {
 		label: 'Explain these',
 		prompt: 'Explain what these agent settings change',
-		icon: FtSettings
+		icon: Icon.Preferences
 	}
 };

@@ -11,19 +11,7 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import { cn } from '$lib/utils';
-	import {
-		FtArrowRight as ArrowRight,
-		FtToday as House,
-		FtChat as MessageSquare,
-		FtChatAlert as MessageSquareWarning,
-		FtPlus as Plus,
-		FtSearch as Search,
-		FtTheme as SunMoon,
-		FtTrash as Trash,
-		FtSkills as Wrench
-	} from '$lib/components/icons';
-	import ListTodo from '@lucide/svelte/icons/list-todo';
-	import Settings from '@lucide/svelte/icons/settings';
+	import * as Icon from '$lib/components/icons';
 	import { toggleMode } from 'mode-watcher';
 	import { palette } from '$lib/stores/shell/palette.svelte';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
@@ -82,9 +70,9 @@
 	$effect(() => sidebarToggle.register(sidebar.toggle));
 
 	const destinations: readonly { href: string; label: string; icon: Component }[] = [
-		{ href: '/today', label: 'Today', icon: House },
-		{ href: '/todos', label: 'Todos', icon: ListTodo },
-		{ href: '/skills', label: 'Skills', icon: Wrench }
+		{ href: '/today', label: 'Today', icon: Icon.Today },
+		{ href: '/todos', label: 'Todos', icon: Icon.Todos },
+		{ href: '/skills', label: 'Skills', icon: Icon.Skill }
 	];
 
 	const railButton = 'size-9 text-muted-foreground hover:text-foreground';
@@ -153,7 +141,7 @@
 								disabled={!shell || inventoryLoading}
 								onclick={() => palette.open()}
 							>
-								<ArrowRight class="size-5" />
+								<Icon.ArrowRight class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -169,7 +157,7 @@
 								disabled={inventoryLoading || !shell}
 								onclick={() => rightPanel.toggle('search')}
 							>
-								<Search class="size-5" />
+								<Icon.Search class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -188,7 +176,7 @@
 								disabled={inventoryLoading || !shell}
 								onclick={() => rightPanel.toggle('chat')}
 							>
-								<MessageSquare class="size-5" />
+								<Icon.Chat class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -202,7 +190,7 @@
 								aria-label="Open chat"
 								href="/chats/new"
 							>
-								<MessageSquare class="size-5" />
+								<Icon.Chat class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -230,7 +218,7 @@
 								class={railButton}
 								onclick={toggleMode}
 							>
-								<SunMoon class="size-5" />
+								<Icon.Theme class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -244,7 +232,7 @@
 								class={railButton}
 								onclick={() => (feedbackOpen = true)}
 							>
-								<MessageSquareWarning class="size-5" />
+								<Icon.Feedback class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -258,7 +246,7 @@
 								href="/settings"
 								class={cn(railButton, isActive('/settings') && railActive)}
 							>
-								<Settings class="size-5" />
+								<Icon.Settings class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -275,7 +263,7 @@
 									isActive('/trash') && 'bg-destructive/15'
 								)}
 							>
-								<Trash class="size-5" />
+								<Icon.Trash class="size-5" />
 							</Button>
 						{/snippet}
 					</Tip>
@@ -347,7 +335,7 @@
 					disabled={!shell || inventoryLoading}
 					onclick={() => palette.open()}
 				>
-					<ArrowRight class="size-4 shrink-0" />
+					<Icon.ArrowRight class="size-4 shrink-0" />
 					<span class="truncate">Go to…</span>
 					<Kbd class="ml-auto">⌘K</Kbd>
 				</Button>
@@ -366,7 +354,7 @@
 								disabled={inventoryLoading || !shell}
 								onclick={() => tree?.openNewProject()}
 							>
-								<Plus class="size-4" />
+								<Icon.Plus class="size-4" />
 								<span class="sr-only">New project</span>
 							</Sidebar.GroupAction>
 						{/snippet}

@@ -7,14 +7,14 @@
 	//
 	// It is one list rather than a section per kind. Notes, folders and diagrams are the
 	// only things that end up here, and a row says which it is with the icon that thing
-	// already carries everywhere else — `FtDocument`, `FtFolder`, `FtWorkflow`. Splitting
+	// already carries everywhere else — `Icon.Document`, `Icon.Folder`, `Icon.Diagram`. Splitting
 	// into sections would answer "what is this" with a heading and leave the reader
 	// scanning three lists to find one name.
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
-	import { FtTrash } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatRelativeTime } from '$lib/components/shared/labels';
 	import {
 		trashEntryIcon,
@@ -90,7 +90,13 @@
 </script>
 
 {#if entries.length === 0}
-	<EmptyState icon={FtTrash} title={emptyTitle} hint={emptyHint} size="large" label="Empty trash" />
+	<EmptyState
+		icon={Icon.Trash}
+		title={emptyTitle}
+		hint={emptyHint}
+		size="large"
+		label="Empty trash"
+	/>
 {:else}
 	{#if onempty}
 		<div class="flex justify-end pb-2">
@@ -112,7 +118,7 @@
 	{/if}
 	<ul class="divide-y divide-border" aria-label="Items in the trash">
 		{#each entries as entry (trashEntryKey(entry))}
-			{@const Icon = trashEntryIcon(entry)}
+			{@const Glyph = trashEntryIcon(entry)}
 			{@const key = trashEntryKey(entry)}
 			<li class="flex items-center justify-between gap-3 py-2.5">
 				<!--
@@ -120,7 +126,7 @@
 					so a screen reader that announced both would say "Diagram" twice.
 				-->
 				<span aria-hidden="true" class="contents"
-					><Icon class="size-4 shrink-0 text-muted-foreground" /></span
+					><Glyph class="size-4 shrink-0 text-muted-foreground" /></span
 				>
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-sm font-medium">{entry.title}</p>
@@ -151,7 +157,7 @@
 									disabled={busy}
 									aria-label="Delete {entry.title} forever"
 								>
-									{#if deletingKey === key}<Spinner />{:else}<FtTrash class="size-4" />{/if}
+									{#if deletingKey === key}<Spinner />{:else}<Icon.Trash class="size-4" />{/if}
 								</Button>
 							{/snippet}
 						</ConfirmDelete>

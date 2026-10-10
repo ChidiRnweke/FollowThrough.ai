@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import { FtWarning as TriangleAlert } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { formatRelativeTime } from '../shared/labels';
 
 	let {
@@ -57,7 +57,7 @@
 		<Tip text={explanation}>
 			{#snippet children({ props })}
 				<Button {...props} variant="outline" size="xs" onclick={onReview}>
-					<TriangleAlert data-icon="inline-start" /> Review conflict
+					<Icon.Warning data-icon="inline-start" /> Review conflict
 				</Button>
 			{/snippet}
 		</Tip>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { FtClose as X } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 
 	/**
 	 * The row an AI action becomes while it runs: its icon, what it is doing, the
@@ -12,7 +12,7 @@
 	 * happened, and so does the way to take it back.
 	 */
 	let {
-		icon: Icon,
+		icon: Glyph,
 		label,
 		cancelling = false,
 		oncancel,
@@ -33,7 +33,7 @@
 	role="status"
 	aria-live="polite"
 >
-	<Icon class="size-4" />
+	<Glyph class="size-4" />
 	{cancelling ? 'Stopping…' : label}
 	{#if !cancelling}
 		<span class="chat-thinking-dots" aria-hidden="true">
@@ -48,7 +48,7 @@
 			disabled={cancelling}
 			onclick={oncancel}
 		>
-			<X />
+			<Icon.Close />
 		</Button>
 	{/if}
 </div>

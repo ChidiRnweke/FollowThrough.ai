@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { FtWarning as Warning, FtRetry as Retry } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { cn } from '$lib/utils';
 
 	/**
@@ -55,7 +55,7 @@
 				role="alert"
 			>
 				<div class="flex items-start gap-2 text-destructive">
-					<Warning class="mt-px size-3.5 shrink-0" />
+					<Icon.Warning class="mt-px size-3.5 shrink-0" />
 					<span>
 						Couldn't display {label}.
 						{source === undefined ? 'Nothing else was affected.' : 'Showing the raw content.'}
@@ -68,7 +68,7 @@
 				{/if}
 				<div class="flex items-center gap-2">
 					<Button variant="ghost" size="xs" onclick={reset}>
-						<Retry data-icon="inline-start" />
+						<Icon.Retry data-icon="inline-start" />
 						Try again
 					</Button>
 					<span class="truncate text-destructive-muted-foreground">{failure.message}</span>

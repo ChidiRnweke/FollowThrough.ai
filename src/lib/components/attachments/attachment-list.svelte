@@ -10,7 +10,7 @@
 	import EmptyState from '../shared/empty-state.svelte';
 	import { attachmentStatusStyle, formatBytes } from '../shared/labels';
 	import { toast } from 'svelte-sonner';
-	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
+	import * as Icon from '$lib/components/icons';
 	import { userFacingMessage } from '$lib/errors';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
 	import { storeUploadBytes } from '$lib/client/attachments/object-storage';
@@ -153,7 +153,7 @@
 		<!-- An empty region is an invitation, not dead text: the one action the
 		     space exists for sits inside the empty state. -->
 		<EmptyState
-			icon={Paperclip}
+			icon={Icon.Attachment}
 			title="No attachments yet."
 			hint="Briefs, screenshots, and exports you add here ground the agent's answers in this project."
 			size={heroEmpty ? 'large' : 'default'}
@@ -223,7 +223,7 @@
 							class="size-7"
 							aria-label="Actions for {item.attachment.path}"
 						>
-							<Ellipsis class="size-4" />
+							<Icon.Ellipsis class="size-4" />
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
