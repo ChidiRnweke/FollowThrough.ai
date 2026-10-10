@@ -154,7 +154,7 @@ export default defineConfig({
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
 						'src/lib/controllers/workspace/resources.svelte.spec.ts',
 						'src/lib/controllers/workspace/drafts.svelte.spec.ts',
-						'src/lib/stores/search/global-search.svelte.spec.ts',
+						'src/lib/controllers/search/global-search.svelte.spec.ts',
 						'src/lib/components/search/global-search-panel.svelte.spec.ts',
 						'src/lib/components/settings/trust-policy-control.svelte.spec.ts',
 						'src/lib/stores/agent/replay.svelte.spec.ts',

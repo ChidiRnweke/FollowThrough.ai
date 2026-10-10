@@ -1,3 +1,4 @@
+import { NoteTextSearchService, type NoteTextSearch } from '$lib/services/notes/text-search';
 import { NoteReferenceService, type NoteReferences } from '$lib/services/notes/references';
 import {
 	NoteSectionNumberingService,
@@ -65,6 +66,7 @@ export interface NotesCapabilityInput {
 
 export interface NotesCapability {
 	readonly references: NoteReferences;
+	readonly textSearch: NoteTextSearch;
 	readonly sections: NoteSectionNumbering;
 	readonly creationRules: NoteCreationRules;
 	readonly trashRules: NoteTrashRules;
@@ -89,6 +91,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	return {
 		presentation: new NotePresentationService(),
 		references: new NoteReferenceService(),
+		textSearch: new NoteTextSearchService(),
 		sections: new NoteSectionNumberingService(),
 		creationRules: lifecycleRules,
 		trashRules: lifecycleRules,

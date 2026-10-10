@@ -1,3 +1,4 @@
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
@@ -76,6 +77,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			textSearch: new NoteTextSearchService(),
 			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),

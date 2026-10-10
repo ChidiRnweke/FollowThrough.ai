@@ -1,3 +1,4 @@
+import type { ProseMirrorDocument as NoteDocument } from '$lib/models/notes';
 import type {
 	NoteSearchOptions,
 	NoteTextMatch,
@@ -53,10 +54,7 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
  * unless `regex` is on. Returns `undefined` for an empty query or an invalid regex —
  * callers turn that into a validation error rather than searching with a stale pattern.
  */
-export const buildNoteSearchPattern = (
-	query: string,
-	options: NoteSearchOptions
-): RegExp | undefined => {
+const buildNoteSearchPattern = (query: string, options: NoteSearchOptions): RegExp | undefined => {
 	if (query === '') return undefined;
 	const source = options.regex ? query : escapeRegExp(query);
 	try {
@@ -90,7 +88,7 @@ const findMatches = (text: string, pattern: RegExp): RichMatch[] => {
 	return matches;
 };
 
-export const searchNoteText = (
+const searchNoteText = (
 	text: string,
 	query: string,
 	options: NoteSearchOptions
@@ -111,7 +109,7 @@ export const searchNoteText = (
  * truncated flags report which sides were actually cut, so a UI never implies more text
  * than exists.
  */
-export const noteSearchSnippet = (
+const noteSearchSnippet = (
 	text: string,
 	match: NoteTextMatch,
 	contextChars = 60
@@ -136,7 +134,7 @@ export const noteSearchSnippet = (
  * `$$` is a literal dollar, `$&` the whole match, `$1`–`$99` numbered captures and
  * `$<name>` named captures. Unknown or absent references expand to the empty string.
  */
-export const expandNoteReplacement = (replacement: string, exec: RegExpExecArray): string =>
+const expandNoteReplacement = (replacement: string, exec: RegExpExecArray): string =>
 	replacement.replace(/\$(\$|&|\d{1,2}|<[^>]+>)/g, (_token, ref: string) => {
 		if (ref === '$') return '$';
 		if (ref === '&') return exec[0];
@@ -215,8 +213,7 @@ const layoutDocument = (document: ProseMirrorDocument): DocumentLayout => {
 };
 
 /** The plain text of a document, derived the same way replace lays it out. */
-export const noteDocumentText = (document: ProseMirrorDocument): string =>
-	layoutDocument(document).text;
+const noteDocumentText = (document: ProseMirrorDocument): string => layoutDocument(document).text;
 
 const EMPTY_PARAGRAPH: MutableDocumentNode = { type: 'paragraph' };
 
@@ -240,7 +237,7 @@ const hasContent = (node: MutableDocumentNode): boolean => (node.content?.length
  * entire text was consumed by one match are removed, which is how a replace across a
  * paragraph boundary reads seamlessly instead of leaving an empty paragraph behind.
  */
-export const replaceInNoteDocument = <Document extends ProseMirrorDocument>(
+const replaceInNoteDocument = <Document extends ProseMirrorDocument>(
 	document: Document,
 	query: string,
 	replacement: string,
@@ -293,7 +290,7 @@ export const replaceInNoteDocument = <Document extends ProseMirrorDocument>(
 };
 
 /** Assembles the hits for a set of search targets, dropping notes with no match at all. */
-export const searchNoteTargets = (
+const searchNoteTargets = (
 	targets: readonly NoteSearchTarget[],
 	query: string,
 	options: NoteSearchOptions
@@ -316,3 +313,38 @@ export const searchNoteTargets = (
 	}
 	return hits;
 };
+
+export interface NoteTextSearch {
+	valid(query: string, options: NoteSearchOptions): boolean;
+	search(
+		targets: readonly NoteSearchTarget[],
+		query: string,
+		options: NoteSearchOptions
+	): NoteSearchHit[];
+	replace(
+		document: NoteDocument,
+		query: string,
+		replacement: string,
+		options: NoteSearchOptions
+	): NoteDocumentReplaceResult<NoteDocument> | undefined;
+}
+export class NoteTextSearchService implements NoteTextSearch {
+	valid(query: string, options: NoteSearchOptions): boolean {
+		return buildNoteSearchPattern(query, options) !== undefined;
+	}
+	search(
+		targets: readonly NoteSearchTarget[],
+		query: string,
+		options: NoteSearchOptions
+	): NoteSearchHit[] {
+		return searchNoteTargets(targets, query, options);
+	}
+	replace(
+		document: NoteDocument,
+		query: string,
+		replacement: string,
+		options: NoteSearchOptions
+	): NoteDocumentReplaceResult<NoteDocument> | undefined {
+		return replaceInNoteDocument(document, query, replacement, options);
+	}
+}

@@ -1,3 +1,4 @@
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
@@ -32,6 +33,7 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			textSearch: new NoteTextSearchService(),
 			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
@@ -83,6 +85,7 @@ it.each([
 		});
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				textSearch: new NoteTextSearchService(),
 				noteReferences: new NoteReferenceService(),
 				sections: new NoteSectionNumberingService(),
 				noteCreationRules: new NoteLifecycleRulesService(),

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { replaceNoteDrafts } from './replace';
+import { NoteReplacements } from './replace';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+const replacements = new NoteReplacements(new NoteTextSearchService());
 import { InMemoryReplacementDraft } from '$lib/testing/notes/fakes/in-memory-replacement-draft';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -27,7 +29,7 @@ describe('durable local note replacements', () => {
 	it('reports the saved notes and remaining work when the second local write fails', async () => {
 		const { drafts } = setup();
 		drafts[1]!.failSave = true;
-		expect(await replaceNoteDrafts(drafts, input)).toEqual({
+		expect(await replacements.replace(drafts, input)).toEqual({
 			kind: 'failure',
 			saved: [{ noteId: testNoteId(1), title: 'Note 1', matches: 1 }],
 			failed: { noteId: testNoteId(2), title: 'Note 2', message: 'Device storage is full' },
@@ -37,7 +39,7 @@ describe('durable local note replacements', () => {
 	it('keeps the first durable write and leaves failed and unattempted notes unchanged', async () => {
 		const { notes, drafts } = setup();
 		drafts[1]!.failSave = true;
-		await replaceNoteDrafts(drafts, input);
+		await replacements.replace(drafts, input);
 		expect([...notes.values()].map((note) => note.plainText)).toEqual([
 			'deploy release',
 			'ship release',
@@ -47,7 +49,7 @@ describe('durable local note replacements', () => {
 	it('captures all selected notes before writing any replacement', async () => {
 		const { notes, drafts } = setup();
 		notes.delete(testNoteId(2));
-		const outcome = await replaceNoteDrafts(drafts, input).then(
+		const outcome = await replacements.replace(drafts, input).then(
 			() => ({ kind: 'complete' as const }),
 			(error: unknown) => ({
 				kind: 'failure' as const,
@@ -67,7 +69,7 @@ describe('durable local note replacements', () => {
 	});
 	it('reports every saved replacement on success', async () => {
 		const { drafts } = setup();
-		expect(await replaceNoteDrafts(drafts, input)).toEqual({
+		expect(await replacements.replace(drafts, input)).toEqual({
 			kind: 'complete',
 			saved: [1, 2, 3].map((id) => ({ noteId: testNoteId(id), title: `Note ${id}`, matches: 1 }))
 		});

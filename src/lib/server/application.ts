@@ -568,6 +568,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos
 		},
 		notes: {
+			textSearch: noteCapability.textSearch,
 			sections: noteCapability.sections,
 			noteReferences: noteCapability.references,
 			noteCreationRules: noteCapability.creationRules,

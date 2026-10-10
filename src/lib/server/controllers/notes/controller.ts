@@ -103,11 +103,7 @@ import type {
 import type { NoteReferences } from '$lib/services/notes/references';
 import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import {
-	buildNoteSearchPattern,
-	replaceInNoteDocument,
-	searchNoteTargets
-} from '$lib/services/notes/text-search';
+import type { NoteTextSearch } from '$lib/services/notes/text-search';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
@@ -330,6 +326,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly textSearch: NoteTextSearch;
 	readonly noteReferences: NoteReferences;
 	readonly sections: NoteSectionNumbering;
 	readonly noteEditingRules: NoteEditingRules;
@@ -375,8 +372,12 @@ export interface NotesDependencies {
 }
 
 /** Both text-search entry points reject a pattern they cannot run before touching any state. */
-const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
-	if (buildNoteSearchPattern(query, options) !== undefined) return;
+const assertValidSearch = (
+	rules: NoteTextSearch,
+	query: string,
+	options: NoteSearchOptions
+): void => {
+	if (rules.valid(query, options)) return;
 	throw new ValidationError(
 		options.regex
 			? 'The search pattern is not a valid regular expression'
@@ -858,23 +859,23 @@ export class Notes implements NotesController {
 	}
 	async searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
-		assertValidSearch(input.query, options);
+		assertValidSearch(this.dependencies.textSearch, input.query, options);
 		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
-		return { hits: searchNoteTargets(targets, input.query, options) };
+		return { hits: this.dependencies.textSearch.search(targets, input.query, options) };
 	}
 	async replaceText(
 		actor: ActorContext,
 		input: ReplaceNoteTextInput
 	): Promise<ReplaceNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
-		assertValidSearch(input.query, options);
+		assertValidSearch(this.dependencies.textSearch, input.query, options);
 		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);
 		return this.dependencies.transactionRunner.run(async () => {
 			const targets = await this.dependencies.noteTextSearcher.listSearchable(
 				actor,
 				input.projectId
 			);
-			const hits = searchNoteTargets(
+			const hits = this.dependencies.textSearch.search(
 				scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
 				input.query,
 				options
@@ -885,7 +886,7 @@ export class Notes implements NotesController {
 				// Title matches are display-only: replace rewrites document bodies, never titles.
 				if (hit.matches.length === 0) continue;
 				const note = await this.dependencies.noteReader.get(actor, hit.noteId);
-				const result = replaceInNoteDocument(
+				const result = this.dependencies.textSearch.replace(
 					note.document,
 					input.query,
 					input.replacement,

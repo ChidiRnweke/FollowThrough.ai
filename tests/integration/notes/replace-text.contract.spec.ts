@@ -1,3 +1,4 @@
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
 import { NoteReferenceService } from '$lib/services/notes/references';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
@@ -45,6 +46,7 @@ const setup = async (suffix: string) => {
 	const faults = { secondIndex: false };
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			textSearch: new NoteTextSearchService(),
 			noteReferences: new NoteReferenceService(),
 			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),

@@ -282,7 +282,7 @@ Every service module below has a planned disposition. This is routing, not compl
 | `src/lib/services/notes/reading-statistics.ts`                      | `NoteReadingStatisticsService`                                                                                                                                                                                                                         | Word counts and reading estimates are shared stateless rules. Note and agent context controllers coordinate callers.                                                                                                                                |
 | `src/lib/services/notes/references.ts`                              | NoteReferenceService                                                                                                                                                                                                                                   | Explicit NoteReferences contract; recursive traversal private. Browser presentation uses NoteDocuments; server note and skill controllers receive shared contract through capability factory.                                                       |
 | `src/lib/services/notes/section-numbering.ts`                       | NoteSectionNumberingService                                                                                                                                                                                                                            | Explicit NoteSectionNumbering contract shared by browser/server. Cascade helper private. NoteDocuments presents numbers; NoteDraftEditing and ProjectActions persist menu choices.                                                                  |
-| `src/lib/services/notes/text-search.ts`                             | `buildNoteSearchPattern`, `searchNoteText`, `noteSearchSnippet`, `expandNoteReplacement`, `noteDocumentText`, `replaceInNoteDocument`, `searchNoteTargets`                                                                                             | Named notes capabilities; private helpers, boundary adapters and state require semantic review. Pending.                                                                                                                                            |
+| `src/lib/services/notes/text-search.ts`                             | NoteTextSearchService                                                                                                                                                                                                                                  | Implements validation, search results and document replacement through NoteTextSearch. Regex, snippet, expansion and document-layout helpers private. Browser and server controllers share the capability.                                          |
 | `src/lib/services/projects/details.ts`                              | ProjectDetailService                                                                                                                                                                                                                                   | Shared detail normalization injected into server project operations and browser command preparation.                                                                                                                                                |
 | `src/lib/services/projects/export-entries.ts`                       | Merged into ProjectTreePresentationService                                                                                                                                                                                                             | Recursive export traversal private; complete export-entry preparation is public.                                                                                                                                                                    |
 | `src/lib/services/projects/presentation.ts`                         | ProjectTreePresentationService                                                                                                                                                                                                                         | Shared tree assembly, ancestry, subtree and export preparation. Recursive helpers private. Browser tree controller is the component entry point.                                                                                                    |
@@ -805,3 +805,27 @@ Every service module below has a planned disposition. This is routing, not compl
 - Architecture remains incomplete at 65 prohibited imports and 25 missing interfaces. Topology,
   source and test-quality audits pass. No phase is complete; note search and browser replacement
   coordination are the next note subsystem under review.
+
+## Search and durable replacement — 2026-10-10
+
+- NoteTextSearchService exposes complete search and replacement rules. Regex construction, snippet
+  windows, capture expansion and text traversal are private. Helper tests now exercise returned search
+  results and replaced documents. Existing sixty-character context, match offsets and replacement
+  semantics are unchanged.
+- GlobalSearch owns debouncing, query validation, local projection and multi-note replacement.
+  NoteReplacements captures all reviewed bodies before writing and retains explicit partial results.
+  GlobalSearchStore retains inputs, result state, collapse state and timer handles only. Browser
+  snapshot copying stays in a Svelte adapter; factories expose a readonly controller interface.
+- Replacement stops later writes after account replacement and does not publish a late report into
+  the new account. Delayed search callbacks are account-bound. New lifetime scenarios use the real
+  in-memory outbox and scheduler. Broader workbench navigation/reveal coordination remains pending.
+- Search-panel tests seed real project/note records instead of assigning fabricated derived hits.
+  Added the application stylesheet for long-snippet click-through; the selected second match is at
+  offset 147 in the seeded text. All 12 panel tests pass, including confirmation before writes.
+- Full unit verification passes: 538 files / 4,291 passed / one existing skip. Focused search/note
+  tests pass: 43 files / 335 tests. Isolated note/skill/sync contracts pass: 45 files / 216 tests.
+  Type check and lint pass. Architecture remains incomplete at 62 prohibited imports and 25 missing
+  interfaces; topology/source/test-quality pass. No full implementation phase is complete.
+- Regenerated inventory: 62 shared modules / 124 value exports (33 classes); 95 server modules /
+  171 value exports (98 classes). 11,627 rows and 12,869 resolved imports. Final browser, build and
+  PR checks remain pending. Server todo capabilities are next under review.

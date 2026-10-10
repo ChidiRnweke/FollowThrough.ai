@@ -1,10 +1,6 @@
-import {
-	expandNoteReplacement,
-	noteDocumentText,
-	noteSearchSnippet,
-	replaceInNoteDocument,
-	searchNoteText
-} from './text-search';
+import { NoteTextSearchService } from './text-search';
+import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+const search = new NoteTextSearchService();
 import { describe, expect, it } from 'vitest';
 import {
 	proseMirrorDocumentSchema,
@@ -33,6 +29,13 @@ const bold = (text: string): ProseMirrorTextNode => ({
 	marks: [{ type: 'bold' }]
 });
 
+const searchNoteText = (text: string, query: string, options: NoteSearchOptions) =>
+	search
+		.search([noteBuilder({ title: 'Target', plainText: text })], query, options)
+		.flatMap((hit) => hit.matches.map(({ start, end, text }) => ({ start, end, text })));
+const snippet = (text: string, query: string) =>
+	search.search([noteBuilder({ title: 'Target', plainText: text })], query, literal)[0]?.matches[0]
+		?.snippet;
 describe('Searching note text', () => {
 	it('finds literal matches with exact offsets', () => {
 		expect(searchNoteText('one fish two fish', 'fish', literal)).toEqual([
@@ -75,42 +78,36 @@ describe('Searching note text', () => {
 	});
 });
 
-describe('Shaping a snippet', () => {
-	it('windows the match with context on both sides', () => {
-		const text = '0123456789'.repeat(10);
-		expect(noteSearchSnippet(text, { start: 50, end: 55, text: '' }, 5)).toEqual({
-			before: '56789',
-			hit: '01234',
-			after: '56789',
+describe('Search result snippets', () => {
+	it('windows a match with sixty characters on both sides', () => {
+		expect(snippet('a'.repeat(100) + 'target' + 'b'.repeat(100), 'target')).toEqual({
+			before: 'a'.repeat(60),
+			hit: 'target',
+			after: 'b'.repeat(60),
 			truncatedBefore: true,
 			truncatedAfter: true
 		});
 	});
-
-	it('moves the leading budget to trailing context for a match at the text start', () => {
-		const text = '0123456789'.repeat(10);
-		expect(noteSearchSnippet(text, { start: 2, end: 4, text: '' }, 5)).toEqual({
-			before: '01',
-			hit: '23',
-			after: '45678901',
+	it('moves unused leading context to the trailing window', () => {
+		expect(snippet('abtarget' + 'c'.repeat(150), 'target')).toEqual({
+			before: 'ab',
+			hit: 'target',
+			after: 'c'.repeat(118),
 			truncatedBefore: false,
 			truncatedAfter: true
 		});
 	});
-
-	it('moves the trailing budget to leading context for a match at the text end', () => {
-		const text = '0123456789'.repeat(10);
-		expect(noteSearchSnippet(text, { start: 96, end: 98, text: '' }, 5)).toEqual({
-			before: '89012345',
-			hit: '67',
-			after: '89',
+	it('moves unused trailing context to the leading window', () => {
+		expect(snippet('a'.repeat(150) + 'targetbc', 'target')).toEqual({
+			before: 'a'.repeat(118),
+			hit: 'target',
+			after: 'bc',
 			truncatedBefore: true,
 			truncatedAfter: false
 		});
 	});
-
-	it('claims no truncation when the whole text fits the window', () => {
-		expect(noteSearchSnippet('short note', { start: 0, end: 5, text: '' }, 60)).toEqual({
+	it('claims no truncation when the whole text fits', () => {
+		expect(snippet('short note', 'short')).toEqual({
 			before: '',
 			hit: 'short',
 			after: ' note',
@@ -119,28 +116,30 @@ describe('Shaping a snippet', () => {
 		});
 	});
 });
-
-describe('Expanding replacements', () => {
-	const exec = /(\w+)@(\w+)/.exec('team@followthrough')!;
+describe('Replacement capture expansion', () => {
+	const replace = (replacement: string) =>
+		search.replace(doc(paragraph('team@followthrough')), '(\\w+)@(\\w+)', replacement, {
+			regex: true,
+			caseSensitive: false
+		})?.plainText;
 	it('expands numbered captures', () => {
-		expect(expandNoteReplacement('$2.$1', exec)).toBe('followthrough.team');
+		expect(replace('$2.$1')).toBe('followthrough.team');
 	});
-	it('expands $& to the whole match and $$ to a dollar', () => {
-		expect(expandNoteReplacement('[$&]$$', exec)).toBe('[team@followthrough]$');
+	it('expands the full match and a literal dollar', () => {
+		expect(replace('[$&]$$')).toBe('[team@followthrough]$');
 	});
-	it('expands missing groups to the empty string', () => {
-		expect(expandNoteReplacement('<$9>', exec)).toBe('<>');
+	it('expands missing groups to empty text', () => {
+		expect(replace('<$9>')).toBe('<>');
 	});
 });
-
 describe('Replacing in a document', () => {
 	it('replaces text inside a single text node', () => {
-		const result = replaceInNoteDocument(doc(paragraph('hello world')), 'world', 'there', literal);
+		const result = search.replace(doc(paragraph('hello world')), 'world', 'there', literal);
 		expect(result?.plainText).toBe('hello there');
 	});
 
 	it('replaces across paragraphs', () => {
-		const result = replaceInNoteDocument(
+		const result = search.replace(
 			doc(paragraph('alpha'), paragraph('beta')),
 			'alpha\n\nbeta',
 			'merged',
@@ -150,34 +149,24 @@ describe('Replacing in a document', () => {
 	});
 
 	it('drops a paragraph the replacement emptied', () => {
-		const result = replaceInNoteDocument(
-			doc(paragraph('gone'), paragraph('stays')),
-			'gone',
-			'',
-			literal
-		);
+		const result = search.replace(doc(paragraph('gone'), paragraph('stays')), 'gone', '', literal);
 		expect(result?.document.content).toEqual([paragraph('stays')]);
 	});
 
 	it('keeps the first node marks when a match spans an inline boundary', () => {
-		const result = replaceInNoteDocument(
-			doc(paragraph('foo', bold('bar'))),
-			'foobar',
-			'baz',
-			literal
-		);
+		const result = search.replace(doc(paragraph('foo', bold('bar'))), 'foobar', 'baz', literal);
 		expect(result?.document.content?.[0]).toMatchObject({
 			content: [{ type: 'text', text: 'baz' }]
 		});
 	});
 
 	it('removes the matched slice from later nodes without touching their siblings', () => {
-		const result = replaceInNoteDocument(doc(paragraph('a', bold('Xb'))), 'aX', '', literal);
+		const result = search.replace(doc(paragraph('a', bold('Xb'))), 'aX', '', literal);
 		expect(result?.document.content?.[0]).toMatchObject({ content: [bold('b')] });
 	});
 
 	it('expands regex capture groups per match', () => {
-		const result = replaceInNoteDocument(doc(paragraph('one two')), '(\\w+) (\\w+)', '$2 $1', {
+		const result = search.replace(doc(paragraph('one two')), '(\\w+) (\\w+)', '$2 $1', {
 			regex: true,
 			caseSensitive: true
 		});
@@ -185,12 +174,12 @@ describe('Replacing in a document', () => {
 	});
 
 	it('replaces every occurrence in one pass', () => {
-		const result = replaceInNoteDocument(doc(paragraph('a a a')), 'a', 'b', literal);
+		const result = search.replace(doc(paragraph('a a a')), 'a', 'b', literal);
 		expect(result).toMatchObject({ replaced: 3, plainText: 'b b b' });
 	});
 
 	it('leaves a valid document behind', () => {
-		const result = replaceInNoteDocument(
+		const result = search.replace(
 			doc(paragraph('foo', bold('bar')), paragraph('tail')),
 			'foobar\n\ntail',
 			'x',
@@ -200,17 +189,17 @@ describe('Replacing in a document', () => {
 	});
 
 	it('never leaves the document without a block', () => {
-		const result = replaceInNoteDocument(doc(paragraph('only')), 'only', '', literal);
+		const result = search.replace(doc(paragraph('only')), 'only', '', literal);
 		expect(result?.document.content).toEqual([{ type: 'paragraph' }]);
 	});
 
 	it('returns undefined when nothing matches', () => {
-		expect(replaceInNoteDocument(doc(paragraph('abc')), 'zzz', 'x', literal)).toBeUndefined();
+		expect(search.replace(doc(paragraph('abc')), 'zzz', 'x', literal)).toBeUndefined();
 	});
 
 	it('does not mutate the original document', () => {
 		const original = doc(paragraph('hello world'));
-		replaceInNoteDocument(original, 'world', 'there', literal);
+		search.replace(original, 'world', 'there', literal);
 		expect(original.content?.[0]).toMatchObject({
 			content: [{ type: 'text', text: 'hello world' }]
 		});
@@ -219,11 +208,13 @@ describe('Replacing in a document', () => {
 
 describe('Deriving document text', () => {
 	it('joins blocks with the editor block separator', () => {
-		expect(noteDocumentText(doc(paragraph('one'), paragraph('two')))).toBe('one\n\ntwo');
+		expect(
+			search.replace(doc(paragraph('one'), paragraph('two')), 'two', 'two', literal)?.plainText
+		).toBe('one\n\ntwo');
 	});
 
 	it('renders hard breaks as newlines', () => {
 		const withBreak = paragraph('line', { type: 'hardBreak' }, 'next');
-		expect(noteDocumentText(doc(withBreak))).toBe('line\nnext');
+		expect(search.replace(doc(withBreak), 'next', 'next', literal)?.plainText).toBe('line\nnext');
 	});
 });
