@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.0.1...v3.1.0) (2026-10-10)
+
+
+### Features
+
+* **ui:** point empty notes, boards, and chats at the features they hide ([#343](https://github.com/ChidiRnweke/FollowThrough.ai/issues/343)) ([b04536d](https://github.com/ChidiRnweke/FollowThrough.ai/commit/b04536dd23098b470a10c0768e030984ae5e24b3))
+
+
+### Bug Fixes
+
+* **agent:** surface upload, stale-revision, and tool-index failures honestly ([#341](https://github.com/ChidiRnweke/FollowThrough.ai/issues/341)) ([fafb553](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fafb553d8f92a3fa4ebe187b9455ca0cc1e570a5))
+* **shell:** create strip notes in the open project and reveal it in the sidebar ([#342](https://github.com/ChidiRnweke/FollowThrough.ai/issues/342)) ([adf31c8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/adf31c8d7e7c29c3aa69e16105b38e1abede8849))
+* **ui:** correct section numbering, keep the toolbar in the pane, and clarify sync wording ([#339](https://github.com/ChidiRnweke/FollowThrough.ai/issues/339)) ([01b4ef2](https://github.com/ChidiRnweke/FollowThrough.ai/commit/01b4ef2df924fbef151791d593fa4f4628c96596))
+
 ## [3.0.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.0.0...v3.0.1) (2026-10-10)
 
 
