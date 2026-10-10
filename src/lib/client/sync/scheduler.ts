@@ -1,8 +1,5 @@
-/** Time and wake-ups belong to the client boundary, not to queue state transitions. */
-export interface SyncScheduler {
-	now(): number;
-	schedule(at: number, work: () => Promise<void>): () => void;
-}
+import type { SyncScheduler } from '$lib/models/sync';
+export type { SyncScheduler } from '$lib/models/sync';
 
 export const browserSyncScheduler: SyncScheduler = {
 	now: () => Date.now(),

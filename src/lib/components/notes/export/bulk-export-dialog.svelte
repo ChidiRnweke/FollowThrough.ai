@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { loadExportSettings } from './load-settings';
-	import { accessMessage } from '$lib/services/sync/state';
+	import { untrack } from 'svelte';
+	import { createDocumentExports } from '$lib/factories/deliverables/export';
+	const exports = createDocumentExports();
+
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import type { ProjectExportEntry } from '$lib/models/projects';
-	import type { NoteDocument } from '$lib/models/notes';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -14,11 +15,8 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
-	import { mermaidSourcesIn, renderDiagrams } from './render-diagrams';
+
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import { generateBundle, generateDocument } from '$lib/remote/deliverables/deliverables.remote';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 
 	let {
 		open = $bindable(false),
@@ -37,69 +35,37 @@
 	let format = $state<'docx' | 'pdf'>('pdf');
 	let bundle = $state<'zip' | 'merged'>('zip');
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
-	let busy = $state(false);
-	let settingsReady = $state(false);
-	let error = $state('');
-	let result = $state<{ url: string; fileCount: number } | null>(null);
+	const busy = $derived(exports.busy);
+	const settingsReady = $derived(exports.ready);
+	const error = $derived(exports.error);
+	const result = $derived(exports.result);
 
 	const selected = new SvelteSet<string>();
 
-	const documents = $derived(
-		workspaceSession.current?.resources.views
-			.all('notes')
-			.filter((note) => entries.some((entry) => entry.id === note.id)) ?? []
-	);
+	const documents = $derived(exports.documents(entries.map((entry) => entry.id)));
 
 	$effect(() => {
 		if (!open) return;
 		title = sourceTitle;
 		format = 'pdf';
 		bundle = 'zip';
-		result = null;
-		error = '';
 		selected.clear();
 		for (const entry of entries) selected.add(entry.id);
-		let current = true;
-		void loadSettings(() => current);
-		return () => {
-			current = false;
-		};
+		const id = projectId;
+		void untrack(() => exports.open(id)).then((loaded) => {
+			if (loaded.kind === 'ready') settings = { ...loaded.settings };
+		});
+		return () => exports.close();
 	});
-
-	async function loadSettings(current: () => boolean): Promise<void> {
-		settingsReady = false;
-		try {
-			const loaded = await loadExportSettings(projectId);
-			if (!current()) return;
-			settings = { ...loaded };
-			settingsReady = true;
-			// audit-allow: silent-catch — the dialog renders the settings load error and does not pretend defaults were loaded.
-		} catch (cause) {
-			if (current())
-				error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
-		}
-	}
-
-	async function loadDocuments(): Promise<readonly NoteDocument[]> {
-		const session = await workspaceSession.start();
-		return Promise.all(
-			selectedEntries.map(async (entry) => {
-				const result = await session.resources.open({ type: 'notes', id: [entry.id] });
-				if (result.kind !== 'ready') throw new Error(accessMessage(result, 'note'));
-				if (result.value.type !== 'notes') throw new Error('The selected resource is not a note');
-				return result.value.value;
-			})
-		);
-	}
 
 	const selectedEntries = $derived(entries.filter((entry) => selected.has(entry.id)));
 	const allSelected = $derived(entries.length > 0 && selectedEntries.length === entries.length);
 
-	const mermaidSources = $derived(
-		mermaidSourcesIn(documents.filter((entry) => selected.has(entry.id)))
+	const diagramSummary = $derived(
+		exports.inspect(documents.filter((entry) => selected.has(entry.id)))
 	);
-	const hasDiagrams = $derived(mermaidSources.length > 0);
-	const hasSelfStyledDiagrams = $derived(mermaidSources.some(diagramKeepsOwnColours));
+	const hasDiagrams = $derived(diagramSummary.hasDiagrams);
+	const hasSelfStyledDiagrams = $derived(diagramSummary.hasSelfStyledDiagrams);
 
 	const indent = (depth: number): string =>
 		['pl-3', 'pl-8', 'pl-13', 'pl-18', 'pl-23'][depth] ?? 'pl-23';
@@ -114,50 +80,9 @@
 		else for (const entry of entries) selected.add(entry.id);
 	}
 
-	async function submit(event: SubmitEvent): Promise<void> {
+	function submit(event: SubmitEvent): void {
 		event.preventDefault();
-		const trimmed = title.trim();
-		if (!trimmed || !settingsReady || selectedEntries.length === 0) return;
-		busy = true;
-		error = '';
-		try {
-			const selectedDocuments = await loadDocuments();
-			const {
-				svgs: diagramSvgs,
-				pngs: diagramPngs,
-				sizes: diagramSizes
-			} = await renderDiagrams(mermaidSourcesIn(selectedDocuments), settings);
-			if (bundle === 'zip') {
-				const output = await generateBundle({
-					projectId,
-					entries: selectedEntries.map((entry) => ({ noteId: entry.id, path: entry.path })),
-					title: trimmed,
-					format,
-					settings,
-					diagramSvgs,
-					diagramPngs,
-					diagramSizes
-				});
-				result = { url: output.downloadUrl, fileCount: output.fileCount };
-			} else {
-				const output = await generateDocument({
-					projectId,
-					noteIds: selectedEntries.map((entry) => entry.id),
-					title: trimmed,
-					format,
-					settings,
-					diagramSvgs,
-					diagramPngs,
-					diagramSizes
-				});
-				result = { url: output.downloadUrl, fileCount: 1 };
-			}
-			// audit-allow: silent-catch — the dialog renders the export failure and remains open for retry.
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Export failed';
-		} finally {
-			busy = false;
-		}
+		void exports.bundle({ projectId, entries: selectedEntries, title, settings, format, bundle });
 	}
 </script>
 

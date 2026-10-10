@@ -6,7 +6,7 @@ import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { seedUser, actor, context, now, seedProvenance } from '../database-harness';
 describe('Postgres memory-entry repository invariants', () => {
 	const seedEntry = async (suffix: string) => {
@@ -33,12 +33,12 @@ describe('Postgres memory-entry repository invariants', () => {
 	it('preserves project memory when a profile replacement names its id', async () => {
 		const { owner, repository, entry } = await seedEntry('9813');
 		const provenance = await seedProvenance(owner, '9813');
-		const service = new MemoryLibrary(
+		const service = createMemoryServices(
 			repository,
 			new ProjectRecords(context.db),
 			new ProvenanceRecords(context.db)
 		);
-		const outcome = await service
+		const outcome = await service.changes
 			.apply(
 				owner,
 				{ scope: 'user', operation: 'update', memoryEntryId: entry.id, content: 'Wrong scope' },

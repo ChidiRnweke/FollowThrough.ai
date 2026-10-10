@@ -9,10 +9,10 @@
 	import { untrack } from 'svelte';
 	import { createStateStore } from '@json-render/core';
 	import { JsonUIProvider, Renderer } from '@json-render/svelte';
-	import { diffWidgetData } from '$lib/services/widgets/edits';
-	import { resolveWidgetState, widgetDataOf } from '$lib/services/widgets/edits';
+	import { createWidgetPresentationController } from '$lib/factories/widgets/presentation';
+	import { readWidgetControlData } from '$lib/client/widgets/control-reader';
+	const presentation = createWidgetPresentationController();
 	import {
-		widgetDataSchema,
 		type Widget,
 		type WidgetData,
 		type WidgetSourceRows,
@@ -50,18 +50,18 @@
 
 	// One store for the life of the view, holding the data and the values computed from it. The
 	// store copies along the changed path and never writes into its input.
-	const initial = untrack(() => resolveWidgetState(widget.layout, widget.data, rowsOf(sources)));
+	const initial = untrack(() => presentation.render(widget.layout, widget.data, rowsOf(sources)));
 	const store = createStateStore(initial.state);
 	let formulaIssues = $state(initial.issues);
 
 	const spec = $derived({ root: widget.layout.root, elements: widget.layout.elements });
 
 	/** The data the controls hold now. The store is the library's untyped model, read at the edge. */
-	const currentData = () => widgetDataSchema.safeParse(widgetDataOf(store.getSnapshot()));
+	const currentData = () => readWidgetControlData(store.getSnapshot());
 
 	/** Bring the store to `data` key by key, so mounted controls keep their focus. */
 	const adopt = (data: WidgetData) => {
-		const { state, issues } = resolveWidgetState(widget.layout, data, rowsOf(sources));
+		const { state, issues } = presentation.render(widget.layout, data, rowsOf(sources));
 		const keys = new Set([...Object.keys(store.getSnapshot()), ...Object.keys(state)]);
 		store.update(Object.fromEntries([...keys].map((key) => [`/${key}`, state[key]])));
 		formulaIssues = issues;
@@ -72,7 +72,7 @@
 	const recompute = () => {
 		const data = currentData();
 		if (!data.success) return;
-		const { state, issues } = resolveWidgetState(widget.layout, data.data, rowsOf(sources));
+		const { state, issues } = presentation.render(widget.layout, data.data, rowsOf(sources));
 		formulaIssues = issues;
 		for (const root of ['sources', 'derived'] as const)
 			if (JSON.stringify(store.get(`/${root}`)) !== JSON.stringify(state[root]))
@@ -101,7 +101,7 @@
 		const data = widget.data;
 		untrack(() => {
 			// While a change is waiting, the record is about to change because of it.
-			if (pending === undefined && diffWidgetData(observed, data).length > 0) adopt(data);
+			if (pending === undefined && presentation.changes(observed, data).length > 0) adopt(data);
 		});
 	});
 
@@ -116,7 +116,7 @@
 					adopt(widget.data);
 					return;
 				}
-				const patch = diffWidgetData(observed, next.data);
+				const patch = presentation.changes(observed, next.data);
 				if (patch.length === 0) return;
 				observed = next.data;
 				const change: WidgetChange = { kind: 'data', patch };

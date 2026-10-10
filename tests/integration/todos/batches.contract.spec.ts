@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from '$lib/server/controllers/todos/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -22,9 +25,13 @@ const setup = async (suffix: string) => {
 	});
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoCreator: capability.catalog,
-			todoEditor: capability.catalog,
-			todoContextReader: capability.catalog,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoCreator: capability.services.creator,
+			todoEditor: capability.services.editor,
+			todoContextReader: capability.services.context,
 			todoBatchReceipts: capability.batchReceipts,
 			transactionRunner
 		})

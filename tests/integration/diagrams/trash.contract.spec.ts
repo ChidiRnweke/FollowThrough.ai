@@ -1,13 +1,16 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { DiagramId } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/services/diagrams/editing';
+import { diagramEtag } from '$lib/models/diagrams';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
 	DiagramStudio,
 	type DiagramStudioDependencies
@@ -42,7 +45,7 @@ it.each([
 		const { database, transactionRunner } = createTransactionContext(writer.db);
 		const projects = new ProjectRecords(database);
 		const notes = createNotesCapability({ db: database, projects });
-		const library = new DiagramLibrary(
+		const library = createDiagramServices(
 			new DiagramRecords(database),
 			notes.repository,
 			notes.anchors,
@@ -51,9 +54,12 @@ it.each([
 		);
 		const controller = new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
-				diagramTrash: library,
-				diagramDraftWriter: library,
+				diagramEditing: new DiagramEditingService(),
+				diagramLifecycle: new DiagramLifecycleService(),
+				diagramTrash: library.lifecycle,
+				diagramDraftWriter: library.draftWriter,
 				drawioXmlValidator: { validate: (source) => source },
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => [diagram.searchableText] },
 				diagramIndexer: new InMemoryDiagrams(),
 				transactionRunner,
@@ -76,7 +82,7 @@ it.each([
 					: controller.saveProjectDiagramDraft(owner, {
 							diagramId: diagram.id,
 							source: diagram.source,
-							baseEtag: diagramEtag(diagram)
+							baseEtag: diagramEtag(diagram.id, diagram.currentRevision)
 						});
 			const rejected = expect(action).rejects.toThrow(message);
 			await vi.waitFor(async () => {

@@ -1,4 +1,4 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import { type AgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
 import { agentPayloadItems } from '$lib/services/agent/payload';
 import { isAgentPayloadObject } from '$lib/services/agent/payload';

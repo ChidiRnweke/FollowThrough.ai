@@ -2,7 +2,7 @@
 	import type { SuggestionId, SuggestionView } from '$lib/models/suggestions';
 	import { toast } from 'svelte-sonner';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import SuggestionCard from '../suggestion-card.svelte';
 

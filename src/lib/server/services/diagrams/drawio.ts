@@ -242,7 +242,7 @@ const assertFiniteGeometry = (model: Element): void => {
 	}
 };
 
-export class DrawioXmlValidator {
+export class DrawioXmlValidator implements DrawioXmlContentValidator {
 	validate(source: string): string {
 		const normalized = source.trim();
 		if (!normalized) throw new ValidationError('draw.io XML is required.');
@@ -296,7 +296,7 @@ const purifierWindow = (window: JSDOM['window']): WindowLike => ({
 	trustedTypes: window.trustedTypes
 });
 
-export class DrawioSvgSanitizer {
+export class DrawioSvgSanitizer implements DrawioSvgPreviewSanitizer {
 	sanitize(source: string): string {
 		const normalized = source.trim();
 		if (!normalized) throw new ValidationError('A draw.io SVG preview is required.');
@@ -339,7 +339,10 @@ export class DrawioSvgSanitizer {
 	}
 }
 
-export class DrawioLabelReader {
+export interface DrawioLabels {
+	read(source: string): readonly string[];
+}
+export class DrawioLabelReader implements DrawioLabels {
 	/** Decode XML attributes and rich HTML labels; callers apply label policy. */
 	read(source: string): readonly string[] {
 		const xmlDom = parseXml(source, 'draw.io XML');
@@ -358,4 +361,12 @@ export class DrawioLabelReader {
 			htmlDom.window.close();
 		}
 	}
+}
+
+export interface DrawioXmlContentValidator {
+	validate(source: string): string;
+}
+
+export interface DrawioSvgPreviewSanitizer {
+	sanitize(source: string): string;
 }

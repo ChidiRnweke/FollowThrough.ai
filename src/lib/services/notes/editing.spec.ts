@@ -1,16 +1,17 @@
 import { expect, it } from 'vitest';
 import { noteBuilder, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { prepareNoteSave } from './editing';
+import { NoteEditingService } from './editing';
+const editing = new NoteEditingService();
 
 it('rejects an unchanged candidate from a stale note revision', () => {
 	expect(() =>
-		prepareNoteSave(noteBuilder({ currentRevision: 2 }), noteBuilder(), testNow)
+		editing.prepareSave(noteBuilder({ currentRevision: 2 }), noteBuilder(), testNow)
 	).toThrow('The note has changed since it was loaded');
 });
 
 it('keeps saved placement and publication facts when preparing an authored edit', () => {
 	const current = noteBuilder({ position: 5, publishedRevision: 1 });
-	const result = prepareNoteSave(
+	const result = editing.prepareSave(
 		current,
 		{ ...current, title: ' Changed ', position: 99, publishedRevision: 0 },
 		testNow
@@ -26,7 +27,7 @@ it('keeps saved placement and publication facts when preparing an authored edit'
 
 it('refuses even an unchanged save of an archived note', () => {
 	const current = noteBuilder({ archivedAt: testNow });
-	expect(() => prepareNoteSave(current, current, testNow)).toThrow(
+	expect(() => editing.prepareSave(current, current, testNow)).toThrow(
 		'Archived notes cannot be edited'
 	);
 });

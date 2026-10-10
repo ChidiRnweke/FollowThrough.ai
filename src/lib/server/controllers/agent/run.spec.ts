@@ -1,4 +1,5 @@
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type PendingAgentDecision } from '$lib/models/agent';
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
@@ -24,7 +25,7 @@ afterEach(async () => {
 			await fixture.controller.cancel({ userId: run.userId }, run.id);
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run did not settle after fixture cleanup');
 		});
 	}

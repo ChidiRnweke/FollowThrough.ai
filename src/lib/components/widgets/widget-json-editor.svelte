@@ -1,16 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import {
-		widgetCatalog,
-		widgetDataSchema,
-		widgetLayoutSchema,
-		type Widget,
-		type WidgetChange,
-		type WidgetIssue
-	} from '$lib/models/widgets';
+	import type { Widget, WidgetChange } from '$lib/models/widgets';
 	import type { DateTime } from '$lib/models/workspace';
-	import { applyWidgetChanges, widgetChangesBetween } from '$lib/services/widgets/edits';
-	import { readJsonText } from '$lib/client/widgets/json-text';
+	import { createWidgetEditingController } from '$lib/factories/widgets/editing';
+	const editor = createWidgetEditingController();
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -38,40 +31,8 @@
 	let dataText = $state(untrack(() => JSON.stringify(widget.data, null, '\t')));
 	let applying = $state(false);
 
-	const outcome = $derived.by(
-		():
-			| { kind: 'ready'; changes: readonly WidgetChange[]; preview: Widget }
-			| { kind: 'invalid'; issues: readonly WidgetIssue[] } => {
-			const layout = readJsonText(layoutText, widgetLayoutSchema, 'layout');
-			const data = readJsonText(dataText, widgetDataSchema, 'data');
-			if (layout.kind === 'failure' || data.kind === 'failure')
-				return {
-					kind: 'invalid',
-					issues: [
-						...(layout.kind === 'failure' ? layout.issues : []),
-						...(data.kind === 'failure' ? data.issues : [])
-					]
-				};
-			const changes = widgetChangesBetween(widget, {
-				title,
-				layout: layout.value,
-				data: data.value
-			});
-			const applied = applyWidgetChanges(
-				widget,
-				changes,
-				widgetCatalog,
-				new Date().toISOString() as DateTime
-			);
-			if (applied.kind === 'applied') return { kind: 'ready', changes, preview: applied.widget };
-			return {
-				kind: 'invalid',
-				issues:
-					applied.kind === 'invalid'
-						? applied.issues
-						: [{ path: `/${applied.part}`, message: 'The widget changed. Reopen the editor.' }]
-			};
-		}
+	const outcome = $derived(
+		editor.previewText(widget, title, layoutText, dataText, new Date().toISOString() as DateTime)
 	);
 
 	async function apply(): Promise<void> {

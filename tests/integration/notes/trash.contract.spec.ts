@@ -1,3 +1,14 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { NoteId } from '$lib/models/notes';
@@ -26,13 +37,26 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteTrash: catalog,
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteTrash: catalog.trash,
 			noteIndexer: new InMemoryNoteContent(),
 			transactionRunner
 		})
@@ -74,13 +98,26 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteTrash: catalog,
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteTrash: catalog.trash,
 			noteIndexer: new InMemoryNoteContent(),
 			transactionRunner
 		})

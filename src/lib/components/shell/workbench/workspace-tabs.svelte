@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { ProjectId } from '$lib/models/projects';
 
@@ -21,7 +21,7 @@
 	} from '$lib/client/workbench/tab-drag';
 	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { Conversation } from '$lib/models/agent';
 	import { cubicOut } from 'svelte/easing';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';

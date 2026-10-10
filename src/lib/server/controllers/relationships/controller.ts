@@ -1,3 +1,4 @@
+import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { BacklinkSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -9,15 +10,11 @@ import type {
 import type { Note, TextSelection } from '$lib/models/notes';
 import { relatedNoteMatches, relatedNoteCandidate } from '$lib/services/relationships/candidates';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { RelationshipClassifier } from '$lib/server/services/relationships/contracts';
+import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
-import {
-	queryVector,
-	searchCandidateLimit,
-	type KnowledgeLookup
-} from '$lib/server/services/knowledge-search/semantic';
-import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
-import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
+import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
 	AgentRunReceipt,
 	AgentRunId,
@@ -25,14 +22,11 @@ import type {
 	NoteActionRequest,
 	SelectionGeneration
 } from '$lib/models/agent';
-import {
-	DuplicateNoteActionRequest,
-	type NoteActionRequests
-} from '$lib/server/services/agent/runs/note-action-requests';
+import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
-import type { RelationshipRules } from '$lib/server/services/relationships/rules';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import type { RelationshipRuleClassifier } from '$lib/server/services/relationships/rules';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 /**
  * Application boundary for relationship (backlink) suggestions between notes: find notes
@@ -60,16 +54,16 @@ export interface RelationshipsController {
 
 export interface RelationshipsDependencies {
 	selectionOrigins: SelectionOriginService;
-	knowledgeLookup: Pick<KnowledgeLookup, 'search'>;
+	knowledgeLookup: IKnowledgeLookup;
 	embeddings: EmbeddingClient;
 	reranker: Reranker;
 	relationshipClassifier: RelationshipClassifier;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	noteActionRequests: NoteActionRequests;
+	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
-	relationshipRules: RelationshipRules;
+	relationshipRules: RelationshipRuleClassifier;
 	relationshipGeneration: SelectionGeneration;
 }
 
@@ -121,7 +115,8 @@ export class Relationships implements RelationshipsController {
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
-		const active = registerActiveRun(runId);
+		const active = new AbortController();
+		activeRunStore.register(runId, active);
 		try {
 			const input = run.contextSnapshot;
 			const note = await this.dependencies.selectionOrigins.validate(actor, input.selection);
@@ -172,7 +167,7 @@ export class Relationships implements RelationshipsController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId, active);
+			activeRunStore.release(runId, active);
 		}
 	}
 
@@ -247,8 +242,8 @@ export class Relationships implements RelationshipsController {
 		signal?.throwIfAborted();
 		const candidates = await this.dependencies.knowledgeLookup.search(
 			actor,
-			queryVector(batch),
-			searchCandidateLimit(12),
+			batch,
+			this.dependencies.knowledgeLookup.candidateLimit(12),
 			note.projectId
 		);
 		// ADR 0036 permits vector order on provider failure, but never on cancellation.

@@ -5,18 +5,11 @@ import type {
 	AgentRunContext,
 	AgentRun,
 	AgentRunDecisionRecord,
-	AgentRunId,
 	AgentRunImages,
 	WebResearchSettings,
-	Conversation,
-	ConversationId,
-	ConversationImageInput,
 	InlineCompletionContext,
 	InlineSuggestionRequest,
-	StoredMessage,
 	RunAgentInput,
-	StagedAgentRunInput,
-	ToolActivity,
 	ToolClassification
 } from '$lib/models/agent';
 import type { ToolName } from '$lib/models/agent/tool-catalog';
@@ -24,8 +17,7 @@ import type { AgentPayload, AgentPayloadObject } from '$lib/models/agent/payload
 import type { ExtractPromisesOutput } from '$lib/models/todos';
 import type { FindReferencesOutput } from '$lib/models/references';
 import type { GenerateMermaidDiagramOutput } from '$lib/models/diagrams';
-import type { NoteId, TextSelection } from '$lib/models/notes';
-import type { ProjectId } from '$lib/models/projects';
+import type { TextSelection } from '$lib/models/notes';
 import type { RelateSelectionOutput } from '$lib/models/relationships';
 
 export interface AgentWorkflowToolbox {
@@ -79,19 +71,6 @@ export interface InlineCompletionGenerator {
  * queue behind another. `admit` refuses a second concurrent request for one
  * user and anything past the per-minute budget.
  */
-export type InlineSuggestionAdmission =
-	| { readonly allowed: true }
-	| {
-			readonly allowed: false;
-			readonly reason: 'busy' | 'rate_limited';
-			readonly retryAfterMs: number;
-	  };
-
-export interface InlineSuggestionThrottle {
-	admit(userId: string): InlineSuggestionAdmission;
-	consume(userId: string): InlineSuggestionAdmission;
-	release(userId: string): void;
-}
 
 /**
  * The seam every tool call crosses between the SDK adapter and the run.
@@ -107,7 +86,7 @@ export interface InlineSuggestionThrottle {
  * two calls without one collided and the second settled under the first one's
  * resource.
  *
- * `AgentReasoning` declares a local copy of this port. They meet where the
+ * `AgentExecution` declares a local copy of this port. They meet where the
  * controller hands its executor to the runner, so a
  * copy that drifts fails `pnpm check` there.
  */
@@ -121,72 +100,4 @@ export interface AgentToolExecutor {
 		},
 		action: () => Promise<AgentPayload>
 	): Promise<AgentPayload>;
-}
-export interface ConversationRecorder {
-	getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation>;
-}
-
-export interface ConversationJournal extends ConversationRecorder {
-	getForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation>;
-	listConversations(
-		actor: ActorContext,
-		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
-	): Promise<readonly Conversation[]>;
-	rename(actor: ActorContext, conversationId: ConversationId, title: string): Promise<Conversation>;
-	remove(actor: ActorContext, conversationId: ConversationId): Promise<void>;
-	createWorkflow(
-		actor: ActorContext,
-		input: {
-			title: string;
-			contextProjectId?: ProjectId;
-			contextNoteId?: NoteId;
-		}
-	): Promise<Conversation>;
-	get(actor: ActorContext, conversationId: ConversationId): Promise<Conversation>;
-	listMessages(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<readonly StoredMessage[]>;
-	/** Drop the `ordinal`-th user turn (1-based, user messages only) and all later turns. */
-	truncateFromUserMessage(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		ordinal: number
-	): Promise<void>;
-	recordUserPrompt(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		prompt: string,
-		runId?: AgentRunId,
-		images?: readonly ConversationImageInput[]
-	): Promise<void>;
-	recordAssistantText(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		text: string,
-		model?: string,
-		provenance?: {
-			readonly runId: AgentRunId;
-			readonly eventCursor?: string;
-		}
-	): Promise<void>;
-	recordAssistantReasoning(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		text: string,
-		model?: string,
-		provenance?: {
-			readonly runId: AgentRunId;
-			readonly eventCursor?: string;
-		}
-	): Promise<void>;
-	recordToolActivity(
-		actor: ActorContext,
-		conversationId: ConversationId,
-		activity: ToolActivity,
-		provenance?: {
-			readonly runId: AgentRunId;
-			readonly eventCursor?: string;
-		}
-	): Promise<void>;
 }

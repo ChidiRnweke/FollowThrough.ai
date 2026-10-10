@@ -5,7 +5,16 @@ import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 /** The caller holds the run lock through decisions, requeue and its event. */
-export class RunApprovals {
+export interface RunApprovalDecisions {
+	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<AgentRun>;
+	plan(
+		run: Pick<AgentRun, 'status' | 'pendingDecisions'>,
+		callIds: readonly string[],
+		timestamp: DateTime
+	): RunApprovalWrite | null;
+	persist(actor: ActorContext, runId: AgentRunId, change: RunApprovalWrite): Promise<AgentRun>;
+}
+export class RunApprovals implements RunApprovalDecisions {
 	constructor(private readonly runs: AgentRunRepository) {}
 
 	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<AgentRun> {

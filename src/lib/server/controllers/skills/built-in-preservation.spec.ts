@@ -1,7 +1,12 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
@@ -16,7 +21,7 @@ const setup = async () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository(notes);
 	const skills = new InMemorySkillRepository(notes);
-	const library = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
+	const library = createSkillServices(skills, notes, new InMemoryProvenanceRepository());
 	const transactionRunner = new InMemoryTransactionRunner([projects, notes, skills]);
 	const released = RETIRED_BUILT_INS.find((definition) => definition.key === 'followthrough');
 	if (!released) throw new Error('The released guide fixture is required');
@@ -29,10 +34,15 @@ const setup = async () => {
 	if (!note) throw new Error('The installed guide is required');
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
 			builtInSkills: new BuiltInSkills(projects, notes, skills, {
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
@@ -54,7 +64,7 @@ it.each(metadataEdits)(
 		const { controller, library, note, released } = await setup();
 		const edited = await controller.update(testActor(), { noteId: note.id, ...input });
 		await controller.list(testActor());
-		const retained = await library.getForEdit(testActor(), note.id);
+		const retained = await library.editor.getForEdit(testActor(), note.id);
 		expect({
 			text: retained.note.plainText,
 			revision: retained.note.currentRevision,
@@ -72,7 +82,7 @@ it('upgrades stock content without re-enabling a guide disabled through the cont
 	const { controller, library, note } = await setup();
 	await controller.update(testActor(), { noteId: note.id, isEnabled: false });
 	await controller.list(testActor());
-	const retained = await library.getForEdit(testActor(), note.id);
+	const retained = await library.editor.getForEdit(testActor(), note.id);
 	expect({
 		text: retained.note.plainText,
 		revision: retained.note.currentRevision,

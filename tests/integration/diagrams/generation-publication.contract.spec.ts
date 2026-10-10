@@ -1,3 +1,5 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -6,7 +8,7 @@ import {
 	type PostgresDatabaseContext
 } from '$lib/server/db/postgres-test-context';
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
 	InMemoryDiagrams,
 	mermaidBuilder
@@ -48,7 +50,7 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	});
 	const fixture = diagramGenerationFixture();
 	const records = new DiagramRecords(database);
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		records,
 		notes.repository,
 		notes.anchors,
@@ -58,24 +60,26 @@ const setup = async (suffix: string, connection: PostgresDatabaseContext = conte
 	const diagrams = new InMemoryDiagrams();
 	const controller = new Diagrams(
 		capabilityDependencies<DiagramsDependencies>({
+			generationRules: new DiagramGenerationRuleService(),
 			...fixture,
-			diagramFinder: library,
-			diagramWriter: library,
-			diagramSourceNotes: notes.catalog,
+			diagramFinder: library.finder,
+			diagramWriter: library.writer,
+			diagramSourceNotes: notes.services.reader,
 			mermaidRenderer: diagrams,
 			textExtractor: diagrams,
 			diagramIndexer: diagrams,
 			generation: {
 				...fixture.generation,
-				contextNotes: notes.catalog,
+				contextNotes: notes.services.reader,
 				conversations: new ConversationArchive(new ConversationRecords(database)),
+				conversationMessages: new ConversationArchive(new ConversationRecords(database)),
 				runs: new AgentRunLedger(new AgentRunRecords(database)),
 				runContext: new DiagramRunContext(new AgentRunRecords(database)),
 				provenance: notes.provenance
 			},
 			transactionRunner,
 			drawioXmlValidator: new DrawioXmlValidator(),
-			suggestionCreator: suggestions.inbox
+			suggestionCreator: suggestions.creator
 		})
 	);
 	return { ...seeded, controller, provider: fixture.provider, records };
@@ -232,6 +236,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 		const events = new AgentRunEventRecords(database);
 		const agent = new Agent(
 			capabilityDependencies<AgentDependencies>({
+				...agentRulesFixture(),
 				runs,
 				events,
 				transactionRunner,

@@ -1,107 +1,10 @@
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
-import type { ConversationId } from '$lib/models/agent';
-import type {
-	Diagram,
-	DiagramContentWrite,
-	DiagramId,
-	DiagramRevisionWrite,
-	DiagramRevision,
-	DiagramRevisionId,
-	ListProjectDiagramsOutput,
-	ListProjectDiagramsParams,
-	DrawioDiagram,
-	MermaidDiagram
-} from '$lib/models/diagrams';
-import type { NoteId } from '$lib/models/notes';
-import type { ProjectId } from '$lib/models/projects';
-export interface DiagramIconSearch {
-	search(query: string, limit?: number): Promise<readonly { name: string; url: string }[]>;
-}
-export interface MermaidDiagramRenderer {
-	render(source: string): Promise<string>;
-}
-export interface DrawioDiagramExporter {
-	exportSvg(diagram: DrawioDiagram): Promise<string>;
-}
-export interface DiagramPromoter {
-	promote(
-		actor: ActorContext,
-		source: MermaidDiagram,
-		target: DrawioDiagram
-	): Promise<DrawioDiagram>;
-}
-export interface DiagramTextExtractor {
-	/**
-	 * Takes the source rather than a whole `Diagram`, because the source is all
-	 * any extractor reads. Callers that have only just built a source — the studio
-	 * keep path — would otherwise have to assert a `Diagram` they do not have.
-	 */
-	extract(diagram: DiagramSource): Promise<string>;
-}
-
-/** The part of a diagram that carries text. */
-export interface DiagramSource {
-	readonly source: string;
-}
-export interface DiagramFinder {
-	get(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
-}
-export interface DiagramLister {
-	listForNote(actor: ActorContext, noteId: NoteId): Promise<readonly Diagram[]>;
-	listForProject(
-		actor: ActorContext,
-		projectId: ProjectId,
-		params?: ListProjectDiagramsParams
-	): Promise<ListProjectDiagramsOutput>;
-	countForProject(
-		actor: ActorContext,
-		projectId: ProjectId,
-		params?: ListProjectDiagramsParams
-	): Promise<number>;
-}
-export interface DiagramWriter {
-	create(actor: ActorContext, diagram: Diagram): Promise<Diagram>;
-	persistContent(actor: ActorContext, write: DiagramContentWrite): Promise<Diagram>;
-}
-/** Finds the diagram a studio conversation already produced, so promotion stays idempotent. */
-export interface DiagramConversationFinder {
-	findByConversation(
-		actor: ActorContext,
-		conversationId: ConversationId
-	): Promise<Diagram | undefined>;
-}
-/** Counts the notes rendering a diagram, to word its delete confirmation. */
-export interface DiagramReferenceCounter {
-	countReferencingNotes(actor: ActorContext, diagramId: DiagramId): Promise<number>;
-}
-export interface DiagramDraftWriter {
-	getForWrite(actor: ActorContext, diagramId: DiagramId): Promise<Diagram>;
-	persistEdit(actor: ActorContext, write: DiagramRevisionWrite): Promise<DrawioDiagram | undefined>;
-	recordRevision(actor: ActorContext, diagram: DrawioDiagram): Promise<DiagramRevision>;
-}
-export interface DiagramRevisionReader {
-	revisions(actor: ActorContext, diagramId: DiagramId): Promise<readonly DiagramRevision[]>;
-	revision(
-		actor: ActorContext,
-		diagramId: DiagramId,
-		revisionId: DiagramRevisionId
-	): Promise<DiagramRevision>;
-}
+import type { Diagram } from '$lib/models/diagrams';
 export interface DiagramIndexer {
 	index(
 		actor: ActorContext,
 		diagram: Diagram,
 		context: DiagramIndexContext
 	): Promise<IndexingResult>;
-}
-/** Parses Mermaid source and throws when it will not render. */
-export interface MermaidSourceValidator {
-	validate(source: string): Promise<void>;
-}
-export interface DrawioXmlContentValidator {
-	validate(source: string): string;
-}
-export interface DrawioSvgPreviewSanitizer {
-	sanitize(source: string): string;
 }

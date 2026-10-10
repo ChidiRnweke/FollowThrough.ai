@@ -1,20 +1,45 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import {
 	noteBuilder,
 	testActor,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteEditor: content,
 			noteLinkReconciler: content,
@@ -33,14 +58,14 @@ const setup = () => {
 describe('Note revision restore invariants', () => {
 	it('restores snapshot content, title, history, attachments, and search index together', async () => {
 		const { content, controller } = setup();
-		const originalBody = noteContentFromMarkdown('# Snapshot heading\n\nThe original **body**.');
+		const originalBody = noteMarkdown.read('# Snapshot heading\n\nThe original **body**.');
 		content.notes = [noteBuilder({ ...originalBody, title: 'First name' })];
 		const publishedNote = content.notes[0]!;
 		await controller.publish(testActor(), {
 			noteId: publishedNote.id,
-			baseEtag: noteEtag(publishedNote)
+			baseEtag: noteEtag(publishedNote.id, publishedNote.currentRevision)
 		});
-		const changedBody = noteContentFromMarkdown('# Current heading\n\nThe changed *body*.');
+		const changedBody = noteMarkdown.read('# Current heading\n\nThe changed *body*.');
 		await controller.save(testActor(), {
 			note: { ...content.notes[0]!, ...changedBody, title: 'Second name' }
 		});

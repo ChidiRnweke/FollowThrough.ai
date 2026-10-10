@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { widgetTemplates, type WidgetData, type WidgetLayout } from '$lib/models/widgets';
-import { resolveWidgetState, widgetDataOf } from './edits';
+import { WidgetEvaluationService } from '$lib/services/widgets/edits';
+const widgetEvaluation = new WidgetEvaluationService();
 
 const layoutWith = (derived: Record<string, string>): WidgetLayout => ({
 	root: 'text',
@@ -9,7 +10,7 @@ const layoutWith = (derived: Record<string, string>): WidgetLayout => ({
 });
 
 const derivedOf = (derived: Record<string, string>, data: WidgetData) =>
-	resolveWidgetState(layoutWith(derived), data, {}).state.derived;
+	widgetEvaluation.resolve(layoutWith(derived), data, {}).state.derived;
 
 describe('resolveWidgetState', () => {
 	it('compounds a balance from the data', () => {
@@ -85,7 +86,7 @@ describe('resolveWidgetState', () => {
 	});
 	it('counts the rows of a source', () => {
 		expect(
-			resolveWidgetState(
+			widgetEvaluation.resolve(
 				{
 					...layoutWith({ overdue: 'count(filter(@/sources/todos, item.overdue))' }),
 					sources: { todos: { kind: 'todos' } }
@@ -105,17 +106,17 @@ describe('resolveWidgetState', () => {
 	});
 	it('says why a formula failed and which one', () => {
 		expect(
-			resolveWidgetState(layoutWith({ ratio: '@/a / @/b' }), { a: 1, b: 0 }, {}).issues
+			widgetEvaluation.resolve(layoutWith({ ratio: '@/a / @/b' }), { a: 1, b: 0 }, {}).issues
 		).toEqual([{ path: '/layout/derived/ratio', message: 'Division by zero' }]);
 	});
 	it('names the value a formula expected when the data holds something else', () => {
-		expect(resolveWidgetState(layoutWith({ next: '@/n * 2' }), { n: 'three' }, {}).issues).toEqual([
-			{ path: '/layout/derived/next', message: '* needs a number, not a string' }
-		]);
+		expect(
+			widgetEvaluation.resolve(layoutWith({ next: '@/n * 2' }), { n: 'three' }, {}).issues
+		).toEqual([{ path: '/layout/derived/next', message: '* needs a number, not a string' }]);
 	});
 	it('stops a formula that would take too many steps', () => {
 		expect(
-			resolveWidgetState(layoutWith({ huge: 'count(series(1, 1000000, i))' }), {}, {}).issues
+			widgetEvaluation.resolve(layoutWith({ huge: 'count(series(1, 1000000, i))' }), {}, {}).issues
 		).toEqual([
 			{ path: '/layout/derived/huge', message: 'The formulas take too many steps to work out' }
 		]);
@@ -125,14 +126,9 @@ describe('resolveWidgetState', () => {
 	});
 	it('gives a layout without formulas or sources empty computed roots', () => {
 		expect(
-			resolveWidgetState({ root: 'text', elements: layoutWith({}).elements }, { n: 1 }, {}).state
+			widgetEvaluation.resolve({ root: 'text', elements: layoutWith({}).elements }, { n: 1 }, {})
+				.state
 		).toEqual({ n: 1, sources: {}, derived: {} });
-	});
-});
-
-describe('widgetDataOf', () => {
-	it('drops the computed roots from a rendered state', () => {
-		expect(widgetDataOf({ n: 1, derived: { total: 2 } })).toEqual({ n: 1 });
 	});
 });
 
@@ -140,7 +136,7 @@ describe('the savings template', () => {
 	// 10,000 · (1 + 0.05/12)^240 + 250 · ((1 + 0.05/12)^240 − 1) / (0.05/12) = 129,884.82
 	it('grows 10,000 with 250 a month at 5% to 129,885 after 20 years', () => {
 		const { layout, data } = widgetTemplates.savings;
-		expect(resolveWidgetState(layout, data, {}).state.derived).toMatchObject({
+		expect(widgetEvaluation.resolve(layout, data, {}).state.derived).toMatchObject({
 			balanceText: '129,885',
 			depositedText: '70,000'
 		});
@@ -151,9 +147,9 @@ describe('the templates', () => {
 	it('work out every formula without an issue', () => {
 		expect(
 			Object.entries(widgetTemplates).flatMap(([name, { layout, data }]) =>
-				resolveWidgetState(layout, data, { todos: [], notes: [] }).issues.map(
-					(issue) => `${name}${issue.path}: ${issue.message}`
-				)
+				widgetEvaluation
+					.resolve(layout, data, { todos: [], notes: [] })
+					.issues.map((issue) => `${name}${issue.path}: ${issue.message}`)
 			)
 		).toEqual([]);
 	});
@@ -163,7 +159,7 @@ describe('the loan template', () => {
 	// 250,000 · r / (1 − (1 + r)^−300), r = 0.04/12
 	it('pays 250,000 at 4% over 25 years in monthly payments of 1,319.59', () => {
 		const { layout, data } = widgetTemplates.loan;
-		expect(resolveWidgetState(layout, data, {}).state.derived).toMatchObject({
+		expect(widgetEvaluation.resolve(layout, data, {}).state.derived).toMatchObject({
 			paymentText: '1,319.59'
 		});
 	});

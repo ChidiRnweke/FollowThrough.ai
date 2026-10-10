@@ -1,5 +1,5 @@
 import type { LayoutLoad } from './$types';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import { parseSidebarWidth } from '$lib/client/shell/sidebar-width';
 
 export const ssr = false;

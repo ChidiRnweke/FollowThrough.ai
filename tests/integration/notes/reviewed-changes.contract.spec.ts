@@ -1,3 +1,14 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, it, expect } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -14,14 +25,14 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog, markdown } = createNotesCapability({
+	const { services: catalog, markdown } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const consequences = new InMemoryNoteContent();
 	const note =
 		target === 'skill'
-			? await storedNote(catalog, seeded.owner, {
+			? await storedNote(catalog.creator, seeded.owner, {
 					kind: 'skill',
 					title: 'Release checklist',
 					projectId: seeded.project.id
@@ -39,10 +50,23 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 		});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
 			anchorRepairer: consequences,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences

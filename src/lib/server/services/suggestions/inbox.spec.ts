@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SuggestionInbox } from './inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import {
 	InMemoryNoteRepository,
@@ -36,7 +36,7 @@ const setup = () => {
 			createdAt: testNow
 		}
 	];
-	const service = new SuggestionInbox(suggestions, notes, provenance, anchors, {
+	const service = createSuggestionServices(suggestions, notes, provenance, anchors, {
 		now: () => testNow
 	});
 	return { service, suggestions, anchors };
@@ -47,7 +47,7 @@ describe('Suggestion management invariants', () => {
 		const { service, anchors } = setup();
 		anchors.anchors = [anchorBuilder({ noteId: '00000000-0000-4000-0003-000000000002' as never })];
 		await expect(
-			service.create(testActor(), {
+			service.creator.create(testActor(), {
 				kind: 'todo',
 				noteId: noteBuilder().id,
 				sourceAnchorId: anchorBuilder().id,
@@ -59,7 +59,7 @@ describe('Suggestion management invariants', () => {
 	it('rejects a todo proposal scoped to another project', async () => {
 		const { service } = setup();
 		await expect(
-			service.create(testActor(), {
+			service.creator.create(testActor(), {
 				kind: 'todo',
 				noteId: noteBuilder().id,
 				provenanceId: testProvenanceId(),
@@ -74,7 +74,7 @@ describe('Suggestion management invariants', () => {
 	it('accepts a pending suggestion atomically', async () => {
 		const { service, suggestions } = setup();
 		suggestions.suggestions = [suggestionBuilder()];
-		const accepted = await service.accept(
+		const accepted = await service.accepter.accept(
 			testActor(),
 			suggestionBuilder(),
 			'00000000-0000-4000-0005-000000000001',
@@ -86,16 +86,21 @@ describe('Suggestion management invariants', () => {
 		const { service, suggestions } = setup();
 		const proposed = suggestionBuilder();
 		suggestions.suggestions = [proposed];
-		await service.accept(testActor(), proposed, '00000000-0000-4000-0005-000000000001', false);
+		await service.accepter.accept(
+			testActor(),
+			proposed,
+			'00000000-0000-4000-0005-000000000001',
+			false
+		);
 		await expect(
-			service.accept(testActor(), proposed, '00000000-0000-4000-0005-000000000001', false)
+			service.accepter.accept(testActor(), proposed, '00000000-0000-4000-0005-000000000001', false)
 		).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
 	});
 	it('cannot revert a rejected suggestion', async () => {
 		const { service, suggestions } = setup();
 		const rejected = suggestionBuilder({ status: 'rejected' });
 		suggestions.suggestions = [rejected];
-		await expect(service.revert(testActor(), rejected)).rejects.toMatchObject({
+		await expect(service.reverter.revert(testActor(), rejected)).rejects.toMatchObject({
 			code: 'INVALID_TRANSITION'
 		});
 	});
@@ -104,7 +109,7 @@ describe('Suggestion management invariants', () => {
 		const expired = suggestionBuilder({ expiresAt: '2026-07-10T09:00:00.000Z' as never });
 		suggestions.suggestions = [expired];
 		await expect(
-			service.accept(testActor(), expired, '00000000-0000-4000-0005-000000000001', false)
+			service.accepter.accept(testActor(), expired, '00000000-0000-4000-0005-000000000001', false)
 		).rejects.toMatchObject({ code: 'EXPIRED_SUGGESTION' });
 	});
 	it('expires only eligible proposed suggestions', async () => {
@@ -117,14 +122,14 @@ describe('Suggestion management invariants', () => {
 				expiresAt: '2026-07-10T09:00:00.000Z' as never
 			})
 		];
-		expect(await service.expire(testActor())).toBe(1);
+		expect(await service.expirer.expire(testActor())).toBe(1);
 	});
 	it('lists stored states without expiring proposals as a read side effect', async () => {
 		const { service, suggestions } = setup();
 		suggestions.suggestions = [
 			suggestionBuilder({ expiresAt: '2026-07-10T09:00:00.000Z' as never })
 		];
-		await service.listByStatus(testActor(), 'proposed');
+		await service.lister.listByStatus(testActor(), 'proposed');
 		expect(suggestions.suggestions[0]?.status).toBe('proposed');
 	});
 
@@ -142,6 +147,8 @@ describe('Suggestion management invariants', () => {
 				reason: 'Unrecognized key: "shape"'
 			}
 		];
-		expect(await service.listByStatus(testActor(), 'proposed')).toEqual([suggestionBuilder()]);
+		expect(await service.lister.listByStatus(testActor(), 'proposed')).toEqual([
+			suggestionBuilder()
+		]);
 	});
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import type { AttachmentView } from '$lib/models/attachments';
@@ -12,14 +12,6 @@
 	import { toast } from 'svelte-sonner';
 	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
 	import { userFacingMessage } from '$lib/errors';
-	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
-	import {
-		initiateAttachmentUpload,
-		completeAttachmentUpload,
-		downloadAttachment,
-		retryAttachment,
-		removeAttachment
-	} from '$lib/remote/attachments/attachments.remote';
 
 	let {
 		owner,
@@ -31,15 +23,11 @@
 	let blockedByNote = $state<{ id: string; title: string } | undefined>(undefined);
 	let removeOpen = $state(false);
 
-	const resources = $derived(workspaceSession.current?.resources);
-	const items = $derived(resources?.views.attachments(owner) ?? []);
-	const inputOwner = $derived(
-		owner.kind === 'project' ? { projectId: owner.id } : { noteId: owner.id }
-	);
+	const items = $derived(attachmentsController.list(owner));
 	let loadError = $state<string | null>(null);
 	$effect(() => {
-		if (!resources) return;
-		void resources.prepare().catch((error) => {
+		if (!attachmentsController.available) return;
+		void attachmentsController.prepare().catch((error) => {
 			loadError = error instanceof Error ? error.message : 'Could not load attachments';
 			return { kind: 'failure', message: loadError };
 		});
@@ -48,28 +36,7 @@
 	async function upload(file: File): Promise<void> {
 		busy = true;
 		try {
-			const intent = await initiateAttachmentUpload({
-				...inputOwner,
-				path: file.name,
-				mediaType: file.type || 'application/octet-stream',
-				byteSize: file.size,
-				checksumSha256: await fileChecksumSha256(file)
-			});
-			const stored = await fetch(intent.uploadUrl, {
-				method: 'PUT',
-				headers: intent.requiredHeaders,
-				body: file
-			});
-			if (!stored.ok) {
-				const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
-				throw new Error(
-					detail
-						? `Object storage rejected the upload: ${detail}`
-						: `Object storage rejected the upload (${stored.status})`
-				);
-			}
-			await completeAttachmentUpload({ uploadId: intent.upload.id });
-			await workspaceSession.synchronize();
+			await attachmentsController.upload(owner, file);
 			toast.success('Attachment queued for processing');
 			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
 		} catch (error) {
@@ -81,8 +48,7 @@
 
 	async function download(attachmentId: string): Promise<void> {
 		try {
-			const { url } = await downloadAttachment({ attachmentId });
-			window.open(url, '_blank', 'noopener,noreferrer');
+			await attachmentsController.download(attachmentId);
 			// audit-allow: silent-catch — the attachment action failure is reported in a toast.
 		} catch {
 			toast.error('The attachment action failed');
@@ -91,8 +57,7 @@
 
 	async function retry(attachmentId: string): Promise<void> {
 		try {
-			await retryAttachment({ attachmentId });
-			await workspaceSession.synchronize();
+			await attachmentsController.retry(attachmentId);
 			// audit-allow: silent-catch — retry failure is reported while the failed attachment remains retryable.
 		} catch {
 			toast.error('The attachment action failed');
@@ -119,8 +84,7 @@
 
 	async function remove(attachmentId: string) {
 		try {
-			const result = await removeAttachment({ attachmentId });
-			await workspaceSession.synchronize();
+			const result = await attachmentsController.remove(attachmentId);
 			return result;
 			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
 		} catch (error) {
@@ -153,9 +117,7 @@
 <div class="flex flex-col gap-6">
 	{#if loadError}<p role="alert">
 			{loadError}
-		</p>{:else if items.length === 0 && resources?.collectionReadiness() !== 'ready'}<p
-			role="status"
-		>
+		</p>{:else if items.length === 0 && !attachmentsController.ready}<p role="status">
 			Still downloading attachments.
 		</p>
 		{@render uploadButton()}{:else if items.length === 0}
@@ -175,7 +137,7 @@
 	{:else}
 		<div class="flex flex-wrap items-center gap-2">
 			{@render uploadButton()}
-			<Button variant="ghost" size="sm" onclick={() => void workspaceSession.synchronize()}
+			<Button variant="ghost" size="sm" onclick={() => void attachmentsController.refresh()}
 				>Refresh</Button
 			>
 		</div>

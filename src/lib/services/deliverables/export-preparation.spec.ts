@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { prepareExport } from './export-preparation';
+import { ExportPreparationService } from './export-preparation';
+const preparation = new ExportPreparationService();
 import type { ProseMirrorDocument } from '$lib/models/notes';
 const document: ProseMirrorDocument = {
 	type: 'doc',
@@ -7,7 +8,7 @@ const document: ProseMirrorDocument = {
 };
 describe('shared export preparation', () => {
 	it('retains SVG dimensions written with scientific notation and comma separators', () => {
-		const prepared = prepareExport({
+		const prepared = preparation.prepare({
 			title: 'Export',
 			notes: [],
 			diagramSvgs: { diagram: "<svg viewBox='0,0,1e2,5e1'/>" }
@@ -16,7 +17,7 @@ describe('shared export preparation', () => {
 	});
 
 	it('retains resolved attachment images for every renderer', async () => {
-		const prepared = await prepareExport({
+		const prepared = await preparation.prepare({
 			title: 'Export',
 			notes: [{ title: 'Note', document }],
 			images: new Map([['/api/attachments/file/content', 'data:image/png;base64,aGVsbG8=']])
@@ -26,7 +27,7 @@ describe('shared export preparation', () => {
 		);
 	});
 	it('keeps unavailable images absent so renderers report them', async () => {
-		const prepared = await prepareExport({
+		const prepared = await preparation.prepare({
 			title: 'Export',
 			notes: [{ title: 'Note', document }],
 			images: new Map()
@@ -34,7 +35,7 @@ describe('shared export preparation', () => {
 		expect(prepared.images.has('/api/attachments/file/content')).toBe(false);
 	});
 	it('prefers a supplied raster while retaining the diagram display size', async () => {
-		const prepared = await prepareExport({
+		const prepared = await preparation.prepare({
 			title: 'Export',
 			notes: [],
 			diagramPngs: { diagram: 'data:image/png;base64,aGVsbG8=' },
@@ -48,7 +49,7 @@ describe('shared export preparation', () => {
 		});
 	});
 	it('keeps a vector available for formats that support it', async () => {
-		const prepared = await prepareExport({
+		const prepared = await preparation.prepare({
 			title: 'Export',
 			notes: [],
 			diagramSvgs: { diagram: '<svg viewBox="0 0 400 200"/>' }

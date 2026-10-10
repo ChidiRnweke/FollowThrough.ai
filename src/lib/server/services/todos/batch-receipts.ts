@@ -7,7 +7,18 @@ import type {
 import type { TodoBatchReceiptRepository } from '$lib/server/repositories/todos/batch-receipts';
 import { ValidationError } from '$lib/errors';
 
-export class TodoBatchReceipts {
+export interface TodoBatchReceiptService {
+	findForUpdate(
+		actor: ActorContext,
+		input: CreateTodoBatchInput
+	): Promise<Exclude<TodoBatchLookup, { kind: 'reused' }>>;
+	save(
+		actor: ActorContext,
+		input: CreateTodoBatchInput,
+		result: CreateTodoBatchOutput
+	): Promise<void>;
+}
+export class TodoBatchReceipts implements TodoBatchReceiptService {
 	constructor(private readonly repository: TodoBatchReceiptRepository) {}
 	async findForUpdate(
 		actor: ActorContext,

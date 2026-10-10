@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RelationshipGraph } from './graph';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
 import { InMemoryRelationshipRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
@@ -26,7 +26,7 @@ const setup = () => {
 		notes,
 		anchors,
 		provenance,
-		service: new RelationshipGraph(relationships, notes, anchors, provenance)
+		service: createRelationshipServices(relationships, notes, anchors, provenance)
 	};
 };
 
@@ -34,11 +34,13 @@ describe('Relationship management invariants', () => {
 	it('rejects a relationship from a note to itself', async () => {
 		const { service } = setup();
 		await expect(
-			service.create(testActor(), {
-				sourceNoteId: testNoteId(),
-				targetNoteId: testNoteId(),
-				kind: 'mentions'
-			})
+			service.creator
+				.createWithChange(testActor(), {
+					sourceNoteId: testNoteId(),
+					targetNoteId: testNoteId(),
+					kind: 'mentions'
+				})
+				.then((change) => change.after)
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
@@ -46,11 +48,13 @@ describe('Relationship management invariants', () => {
 		const { service, notes } = setup();
 		notes.notes[1] = noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) });
 		await expect(
-			service.create(testActor(), {
-				sourceNoteId: testNoteId(),
-				targetNoteId: testNoteId(2),
-				kind: 'mentions'
-			})
+			service.creator
+				.createWithChange(testActor(), {
+					sourceNoteId: testNoteId(),
+					targetNoteId: testNoteId(2),
+					kind: 'mentions'
+				})
+				.then((change) => change.after)
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
@@ -58,12 +62,14 @@ describe('Relationship management invariants', () => {
 		const { service, anchors } = setup();
 		anchors.anchors = [anchorBuilder({ noteId: testNoteId(2) })];
 		await expect(
-			service.create(testActor(), {
-				sourceNoteId: testNoteId(),
-				targetNoteId: testNoteId(2),
-				kind: 'mentions',
-				sourceAnchorId: anchorBuilder().id
-			})
+			service.creator
+				.createWithChange(testActor(), {
+					sourceNoteId: testNoteId(),
+					targetNoteId: testNoteId(2),
+					kind: 'mentions',
+					sourceAnchorId: anchorBuilder().id
+				})
+				.then((change) => change.after)
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 
@@ -82,18 +88,24 @@ describe('Relationship management invariants', () => {
 				createdAt: testNow
 			}
 		];
-		const relationship = await service.create(testActor(), {
-			sourceNoteId: testNoteId(),
-			targetNoteId: testNoteId(2),
+		const relationship = await service.creator
+			.createWithChange(testActor(), {
+				sourceNoteId: testNoteId(),
+				targetNoteId: testNoteId(2),
+				kind: 'prior_decision',
+				sourceAnchorId: anchorBuilder().id,
+				provenanceId: testProvenanceId()
+			})
+			.then((change) => change.after);
+		expect({
+			kind: relationship.kind,
+			provenanceId: relationship.provenanceId,
+			sourceAnchorId: relationship.sourceAnchorId
+		}).toEqual({
 			kind: 'prior_decision',
-			sourceAnchorId: anchorBuilder().id,
-			provenanceId: testProvenanceId()
+			provenanceId: testProvenanceId(),
+			sourceAnchorId: anchorBuilder().id
 		});
-		expect({ kind: relationship.kind, provenanceId: relationship.provenanceId }).toEqual({
-			kind: 'prior_decision',
-			provenanceId: testProvenanceId()
-		});
-		expect(relationship.sourceAnchorId).toBe(anchorBuilder().id);
 	});
 });
 
@@ -110,7 +122,7 @@ describe('Reconciling a note’s links', () => {
 
 	it('creates a row for a new link', async () => {
 		const { service, relationships } = setup();
-		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
 		expect((await listMentions(relationships)).map((row) => row.targetNoteId)).toEqual([
 			testNoteId(2)
 		]);
@@ -118,16 +130,16 @@ describe('Reconciling a note’s links', () => {
 
 	it('creates nothing twice for the same link', async () => {
 		const { service, relationships } = setup();
-		await service.reconcile(testActor(), source(), [testNoteId(2)]);
-		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
 		expect(await listMentions(relationships)).toHaveLength(1);
 	});
 
 	/** Editing a link out of the document must stop it producing a backlink. */
 	it('removes a row for a link deleted from the document', async () => {
 		const { service, relationships } = setup();
-		await service.reconcile(testActor(), source(), [testNoteId(2)]);
-		await service.reconcile(testActor(), source(), []);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(testActor(), source(), []);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 
@@ -137,19 +149,21 @@ describe('Reconciling a note’s links', () => {
 	 */
 	it('leaves an AI-inferred relationship untouched', async () => {
 		const { service, relationships } = setup();
-		await service.create(testActor(), {
-			sourceNoteId: testNoteId(),
-			targetNoteId: testNoteId(2),
-			kind: 'elaborates'
-		});
-		await service.reconcile(testActor(), source(), []);
+		await service.creator
+			.createWithChange(testActor(), {
+				sourceNoteId: testNoteId(),
+				targetNoteId: testNoteId(2),
+				kind: 'elaborates'
+			})
+			.then((change) => change.after);
+		await service.reconciler.reconcile(testActor(), source(), []);
 		const remaining = await relationships.listForNote(testActor(), testNoteId());
 		expect(remaining.map((row) => row.kind)).toEqual(['elaborates']);
 	});
 
 	it('never links a note to itself', async () => {
 		const { service, relationships } = setup();
-		await service.reconcile(testActor(), source(), [testNoteId()]);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId()]);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 
@@ -160,13 +174,13 @@ describe('Reconciling a note’s links', () => {
 			noteBuilder(),
 			noteBuilder({ id: testNoteId(2), projectId: testProjectId(2) as never })
 		];
-		await service.reconcile(testActor(), source(), [testNoteId(2)]);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId(2)]);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 
 	it('skips a target that no longer exists', async () => {
 		const { service, relationships } = setup();
-		await service.reconcile(testActor(), source(), [testNoteId(9)]);
+		await service.reconciler.reconcile(testActor(), source(), [testNoteId(9)]);
 		expect(await listMentions(relationships)).toHaveLength(0);
 	});
 });

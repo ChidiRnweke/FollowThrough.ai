@@ -1,3 +1,5 @@
+import { WidgetExportService } from '$lib/services/widgets/export-blocks';
+const widgetExporting = new WidgetExportService();
 import type {
 	JsonValue,
 	Widget,
@@ -6,8 +8,8 @@ import type {
 	WidgetExportBlock,
 	WidgetSourceRows
 } from '$lib/models/widgets';
-import { resolveWidgetState } from '$lib/services/widgets/edits';
-import { widgetExport } from '$lib/services/widgets/export-blocks';
+import { WidgetEvaluationService } from '$lib/services/widgets/edits';
+const widgetEvaluation = new WidgetEvaluationService();
 
 export type JsonObject = { readonly [key: string]: JsonValue };
 
@@ -143,8 +145,8 @@ export const widgetReadout = (
 	data: WidgetData,
 	sources: WidgetSourceRows
 ): WidgetReadout => {
-	const { state, issues } = resolveWidgetState(widget.layout, data, sources);
-	const exported = widgetExport(
+	const { state, issues } = widgetEvaluation.resolve(widget.layout, data, sources);
+	const exported = widgetExporting.prepare(
 		{ ...widget, layout: { ...widget.layout, elements: unrolled(widget.layout.elements) } },
 		state
 	);

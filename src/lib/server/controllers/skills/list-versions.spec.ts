@@ -1,7 +1,12 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
-import { SkillLibrary } from '$lib/server/services/skills/library';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -31,21 +36,29 @@ const setup = async () => {
 		plainText: '',
 		createdAt: testNow
 	}));
-	const library = new SkillLibrary(
+	const library = createSkillServices(
 		new InMemorySkillRepository(notes),
 		notes,
 		new InMemoryProvenanceRepository()
 	);
-	await library.create(testActor(), note, {
+	await library.creator.create(testActor(), note, {
 		name: 'Review',
 		description: 'Review changes',
 		triggerHints: []
 	});
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Skills(
-		capabilityDependencies<SkillsDependencies>({ skillFinder: library, revisionReader: catalog })
+		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			skillFinder: library.finder,
+			revisionReader: catalog.revisionReader
+		})
 	);
 	return { controller, notes, note };
 };

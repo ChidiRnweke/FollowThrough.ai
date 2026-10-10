@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
@@ -27,7 +27,7 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 	);
 	const connection = connectPostgresTestDatabase(context.url);
 	const { database, transactionRunner } = createTransactionContext(connection.db);
-	const memory = new MemoryLibrary(
+	const memory = createMemoryServices(
 		new MemoryRecords(database),
 		new ProjectRecords(database),
 		new ProvenanceRecords(database)
@@ -44,7 +44,7 @@ it('deletes the latest memory version after a concurrent edit commits', async ()
 	try {
 		await locked.promise;
 		const [backend] = await connection.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-		const removing = transactionRunner.run(() => memory.remove(owner, entry.id));
+		const removing = transactionRunner.run(() => memory.deleter.remove(owner, entry.id));
 		await vi.waitFor(async () => {
 			const waiting = await blocker<
 				{ pid: number }[]

@@ -1,3 +1,5 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { InMemorySelectionOrigins } from '$lib/testing/notes/fakes/in-memory-selection-origins';
 import { Diagrams, type DiagramsDependencies } from '$lib/server/controllers/diagrams/controller';
@@ -37,6 +39,7 @@ export const durableDiagramFixture = () => {
 	);
 	const settlements = new RunSettlements(state.persistence, state.persistence);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		generationRules: new DiagramGenerationRuleService(),
 		...state,
 		selectionOrigins: new InMemorySelectionOrigins(state.notes, state.provenance),
 		drawioXmlValidator: new DrawioXmlValidator(),
@@ -48,6 +51,7 @@ export const durableDiagramFixture = () => {
 	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs: state.persistence,
 			cancellations: new RunCancellation(state.persistence),
 			events: state.persistence,

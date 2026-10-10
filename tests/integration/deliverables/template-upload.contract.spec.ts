@@ -10,8 +10,8 @@ import {
 	Deliverables,
 	type DeliverablesDependencies
 } from '$lib/server/controllers/deliverables/controller';
-import { DocumentTemplates } from '$lib/server/services/deliverables/templates';
-import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
+import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
+import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
 import { TemplateRecords } from '$lib/server/repositories/deliverables/postgres/templates';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import * as schema from '$lib/server/db/schema';
@@ -32,9 +32,9 @@ const setup = async (suffix: string) => {
 	const storage = new InMemoryAttachmentStorage();
 	const controller = new Deliverables(
 		capabilityDependencies<DeliverablesDependencies>({
-			templates: new DocumentTemplates(repository, () => now),
+			...createTemplateServices(repository, () => now),
 			templateStorage: storage,
-			templateStyles: verifiedTemplateStyles,
+			templateStyles: new DocxTemplateStyleReader(),
 			transactionRunner: transaction.transactionRunner
 		})
 	);

@@ -1,9 +1,15 @@
+import { InMemoryNoteMarkdownReader } from '$lib/testing/notes/fakes/markdown-reader';
+import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { prepareExport } from '$lib/services/deliverables/export-preparation';
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
+const preparation = new ExportPreparationService();
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-type BoardPdfGenerator = TodosDependencies['pdfGenerator'];
-type MarkdownToDocument = TodosDependencies['markdownToContent'];
+type BoardPdfGenerator = TodosDependencies['pdfGenerator']['render'];
+type MarkdownToDocument = TodosDependencies['markdownToContent']['read'];
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
 import {
@@ -30,12 +36,16 @@ const setup = () => {
 	};
 	const service = new Todos(
 		capabilityDependencies<TodosDependencies>({
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
 			todoLister: todos,
 			todoContextReader: todos,
 			projectLister: projects,
-			markdownToContent: markdownToDocument,
-			exportPreparer: prepareExport,
-			pdfGenerator
+			markdownToContent: new InMemoryNoteMarkdownReader(markdownToDocument),
+			exportPreparer: preparation,
+			pdfGenerator: new InMemoryDocumentRenderer(pdfGenerator)
 		})
 	);
 	return { todos, projects, markdownSources, pdfInputs, service };

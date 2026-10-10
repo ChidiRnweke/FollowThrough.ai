@@ -1,8 +1,8 @@
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { describe, expect, it } from 'vitest';
 import type { RunAgentInput } from '$lib/models/agent';
 import type { TextSelection } from '$lib/models/notes';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { AgentContext } from './context';
 
 describe('The pinned passages a run is built with', () => {
 	const note = noteBuilder({ id: testNoteId(1), title: 'Q3 planning' });
@@ -17,7 +17,7 @@ describe('The pinned passages a run is built with', () => {
 	});
 
 	const build = (input: Partial<Omit<RunAgentInput, 'conversationId'>>) =>
-		new AgentContext().base(input, { kind: 'note', note });
+		createAgentContext().base(input, { kind: 'note', note });
 
 	it('derives the active project from the resolved current note', () => {
 		expect(build({}).projectId).toBe(note.projectId);

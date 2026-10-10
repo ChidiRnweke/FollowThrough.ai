@@ -1,3 +1,4 @@
+import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { ReferenceSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
 import type {
@@ -7,26 +8,21 @@ import type {
 	ReferenceCandidate
 } from '$lib/models/references';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type {
-	ReferenceFinder,
-	ReferenceRanker,
-	ReferenceSearchOptions
-} from '$lib/server/services/references/contracts';
-import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
-import type { SuggestionCreator } from '$lib/server/services/suggestions/contracts';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
+import type { ReferenceRanker } from '$lib/server/services/references/ranking';
+import type { ReferenceSearchOptions } from '$lib/models/references';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
+import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
 	AgentRunReceipt,
 	AgentRunId,
 	RunSettlementOutcome,
 	NoteActionRequest
 } from '$lib/models/agent';
-import {
-	DuplicateNoteActionRequest,
-	type NoteActionRequests
-} from '$lib/server/services/agent/runs/note-action-requests';
+import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
-import { registerActiveRun, releaseActiveRun } from '$lib/server/services/agent/runs/active-runs';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 
 /**
  * Application boundary for reference suggestions: given a text selection, find and rank
@@ -58,7 +54,7 @@ export interface ReferencesDependencies {
 	referenceRanker: ReferenceRanker;
 	suggestionCreator: SuggestionCreator;
 	transactionRunner: TransactionRunner;
-	noteActionRequests: NoteActionRequests;
+	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
 	referenceModel: string;
@@ -112,7 +108,8 @@ export class References implements ReferencesController {
 		);
 		if (!run) return;
 		this.dependencies.runEvents.notify(runId);
-		const active = registerActiveRun(runId);
+		const active = new AbortController();
+		activeRunStore.register(runId, active);
 		try {
 			const input = run.contextSnapshot;
 			const ranked = await this.findCandidates(actor, input, {
@@ -159,7 +156,7 @@ export class References implements ReferencesController {
 				);
 			}
 		} finally {
-			releaseActiveRun(runId, active);
+			activeRunStore.release(runId, active);
 		}
 	}
 

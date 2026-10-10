@@ -1,5 +1,10 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { afterAll, expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -53,7 +58,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -76,6 +81,10 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = true;
 	const dependencies = capabilityDependencies<TodosDependencies>({
+		boardExport: new TodoBoardExportService(),
+		todoPresentation: new TodoPresentationService(),
+		todoEditingRules: new TodoEditingRulesService(),
+		todoCreationRules: new TodoEditingRulesService(),
 		transactionRunner,
 		noteActionRequests: requests,
 		promiseExtractor: extractor,
@@ -84,14 +93,15 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox,
-		suggestionAccepter: suggestions.inbox,
+		suggestionCreator: suggestions.creator,
+		suggestionAccepter: suggestions.accepter,
 		suggestionEffects: suggestions.effects,
-		todoCreator: todo.catalog,
+		todoCreator: todo.services.creator,
 		trustPolicyEvaluator: trust
 	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
@@ -117,7 +127,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
 			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Run has not settled');
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Run has not settled');
 		});
 	};
 	return {

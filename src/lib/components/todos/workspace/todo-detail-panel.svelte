@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import * as Field from '$lib/components/ui/field';
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';

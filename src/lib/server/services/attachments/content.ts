@@ -6,7 +6,14 @@ import type { DocumentImageDescription, DocumentContentSlot } from '$lib/models/
 import { ValidationError } from '$lib/errors';
 
 /** Reading order and Markdown presentation; provider calls belong to the controller. */
-export class AttachmentContent {
+export interface AttachmentContentPresentation {
+	plan(parts: readonly RecognizedContent[]): readonly DocumentContentSlot[];
+	render(
+		slots: readonly DocumentContentSlot[],
+		descriptions: ReadonlyMap<number, DocumentImageDescription>
+	): string;
+}
+export class AttachmentContent implements AttachmentContentPresentation {
 	plan(parts: readonly RecognizedContent[]): readonly DocumentContentSlot[] {
 		let index = 0;
 		let precedingMarkdown: string | undefined;
@@ -43,7 +50,7 @@ export class AttachmentContent {
 }
 
 // Older indexing marked a fully extracted file partial when its index exceeded fifty chunks.
-export const savedTruncatedContent = (
+const savedTruncatedContent = (
 	version: AttachmentVersion
 ): ExtractedAttachmentContent | undefined =>
 	version.processingStatus === 'partial' &&
@@ -52,12 +59,12 @@ export const savedTruncatedContent = (
 	version.parserKind !== undefined
 		? { text: version.extractedText, parserKind: version.parserKind }
 		: undefined;
-export const pendingAttachmentProcessing = (version: AttachmentVersion) =>
+const pendingAttachmentProcessing = (version: AttachmentVersion) =>
 	version.processingStatus === 'queued' ||
 	version.processingStatus === 'processing' ||
 	savedTruncatedContent(version) !== undefined;
 
-export const completedAttachmentVersion = (
+const completedAttachmentVersion = (
 	version: AttachmentVersion,
 	extraction: ExtractedAttachmentContent | undefined,
 	timestamp: DateTime
@@ -73,3 +80,28 @@ export const completedAttachmentVersion = (
 	processingFailure: extraction?.processingFailure,
 	processedAt: timestamp
 });
+
+export interface AttachmentProcessingRules {
+	saved(version: AttachmentVersion): ExtractedAttachmentContent | undefined;
+	pending(version: AttachmentVersion): boolean;
+	complete(
+		version: AttachmentVersion,
+		extraction: ExtractedAttachmentContent | undefined,
+		timestamp: DateTime
+	): AttachmentVersion;
+}
+export class AttachmentProcessingService implements AttachmentProcessingRules {
+	saved(version: AttachmentVersion) {
+		return savedTruncatedContent(version);
+	}
+	pending(version: AttachmentVersion) {
+		return pendingAttachmentProcessing(version);
+	}
+	complete(
+		version: AttachmentVersion,
+		extraction: ExtractedAttachmentContent | undefined,
+		timestamp: DateTime
+	) {
+		return completedAttachmentVersion(version, extraction, timestamp);
+	}
+}

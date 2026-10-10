@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { loadExportSettings } from './load-settings';
+	import { untrack } from 'svelte';
+	import { createDocumentExports } from '$lib/factories/deliverables/export';
+	const exports = createDocumentExports();
+
 	import { Form } from '$lib/components/ui/form';
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import type { ProseMirrorDocument } from '$lib/models/notes';
-	import { drawioReferencesIn } from '$lib/services/notes/references';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import { FtChevronRight as ChevronRight } from '$lib/components/icons';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -12,16 +14,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
-	import { diagramKeepsOwnColours } from '$lib/client/diagrams/mermaid-rendering';
-	import {
-		type DiagramRenders,
-		mergeDiagramRenders,
-		mermaidSourcesIn,
-		renderDiagrams,
-		renderDrawioDiagrams
-	} from './render-diagrams';
+
 	import ExportSettingsFields from './export-settings-fields.svelte';
-	import { generateDocument, previewDocument } from '$lib/remote/deliverables/deliverables.remote';
 
 	let {
 		open = $bindable(false),
@@ -43,134 +37,56 @@
 	let title = $state('');
 	let format = $state<'docx' | 'pdf'>('pdf');
 	let settings = $state<ExportSettings>({ ...defaultExportSettings });
-	let busy = $state(false);
-	let settingsReady = $state(false);
+	const busy = $derived(exports.busy);
+	const settingsReady = $derived(exports.ready);
 	let previewOpen = $state(false);
-	let previewUrl = $state('');
-	let result = $state<{ url: string; artifactId: string } | null>(null);
-	let error = $state('');
+	const previewUrl = $derived(exports.previewUrl);
+	const result = $derived(exports.result);
+	const error = $derived(exports.error);
 
 	$effect(() => {
-		if (open) {
-			title = defaultTitle;
-			format = 'pdf';
-			result = null;
-			error = '';
-			let current = true;
-			void loadSettings(() => current);
-			return () => {
-				current = false;
-			};
-		} else {
+		if (!open) {
 			previewOpen = false;
-			clearPreview();
+			return;
 		}
+		title = defaultTitle;
+		format = 'pdf';
+		const id = projectId;
+		void untrack(() => exports.open(id)).then((loaded) => {
+			if (loaded.kind === 'ready') settings = { ...loaded.settings };
+		});
+		return () => exports.close();
 	});
-
-	async function loadSettings(current: () => boolean): Promise<void> {
-		settingsReady = false;
-		try {
-			const loaded = await loadExportSettings(projectId);
-			if (!current()) return;
-			settings = { ...loaded };
-			settingsReady = true;
-			// audit-allow: silent-catch — the dialog renders the settings load error and does not claim defaults loaded.
-		} catch (cause) {
-			if (current())
-				error = cause instanceof Error ? cause.message : 'Export settings could not be loaded.';
-		}
-	}
-
-	function clearPreview(): void {
-		if (previewUrl) URL.revokeObjectURL(previewUrl);
-		previewUrl = '';
-	}
 
 	// Colour controls only earn their space when there is a diagram to colour, and the
 	// palette caveat only when a diagram ignores the palette.
-	const mermaidSources = $derived(mermaidSourcesIn(documents));
-	const hasDiagrams = $derived(mermaidSources.length > 0);
-	const hasSelfStyledDiagrams = $derived(mermaidSources.some(diagramKeepsOwnColours));
-
-	// draw.io diagrams travel as the SVG their editor exported, rasterized here the
-	// same way a mermaid render is. Only the ones the documents actually reference.
-	const referencedDrawio = $derived(
-		drawioReferencesIn(documents)
-			.map((id) => diagrams.find((diagram) => diagram.id === id))
-			.filter((diagram) => diagram !== undefined)
-	);
-
-	async function renderAllDiagrams(): Promise<DiagramRenders> {
-		// Together: two independent rasterization passes over two disjoint sets, so
-		// awaiting one before starting the other only made the export slower.
-		const [mermaid, drawio] = await Promise.all([
-			renderDiagrams(mermaidSources, settings),
-			renderDrawioDiagrams(referencedDrawio)
-		]);
-		return mergeDiagramRenders(mermaid, drawio);
-	}
+	const diagramSummary = $derived(exports.inspect(documents));
+	const hasDiagrams = $derived(diagramSummary.hasDiagrams);
+	const hasSelfStyledDiagrams = $derived(diagramSummary.hasSelfStyledDiagrams);
 
 	async function preview(): Promise<void> {
-		const trimmed = title.trim();
-		if (!trimmed || !settingsReady) return;
-		busy = true;
-		error = '';
-		try {
-			const {
-				svgs: diagramSvgs,
-				pngs: diagramPngs,
-				sizes: diagramSizes
-			} = await renderAllDiagrams();
-			const output = await previewDocument({
-				projectId,
-				noteIds: defaultNoteIds,
-				title: trimmed,
-				settings,
-				diagramSvgs,
-				diagramPngs,
-				diagramSizes
-			});
-			const bytes = Uint8Array.from(atob(output.data), (character) => character.charCodeAt(0));
-			clearPreview();
-			previewUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-			previewOpen = true;
-			// audit-allow: silent-catch — preview failure is rendered and the preview is not opened.
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Preview failed';
-		} finally {
-			busy = false;
-		}
+		await exports.preview({
+			projectId,
+			noteIds: defaultNoteIds,
+			title,
+			settings,
+			documents,
+			diagrams
+		});
+		if (exports.previewUrl) previewOpen = true;
 	}
 
-	async function submit(event: SubmitEvent): Promise<void> {
+	function submit(event: SubmitEvent): void {
 		event.preventDefault();
-		const trimmed = title.trim();
-		if (!trimmed || !settingsReady) return;
-		busy = true;
-		error = '';
-		try {
-			const {
-				svgs: diagramSvgs,
-				pngs: diagramPngs,
-				sizes: diagramSizes
-			} = await renderAllDiagrams();
-			const output = await generateDocument({
-				projectId,
-				noteIds: defaultNoteIds,
-				title: trimmed,
-				format,
-				settings,
-				diagramSvgs,
-				diagramPngs,
-				diagramSizes
-			});
-			result = { url: output.downloadUrl, artifactId: output.artifact.id };
-			// audit-allow: silent-catch — export failure is rendered and no download result is produced.
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Export failed';
-		} finally {
-			busy = false;
-		}
+		void exports.generate({
+			projectId,
+			noteIds: defaultNoteIds,
+			title,
+			format,
+			settings,
+			documents,
+			diagrams
+		});
 	}
 </script>
 

@@ -16,7 +16,7 @@ import type {
 	ProjectLister,
 	ProjectReader,
 	ProjectTreeReader
-} from '$lib/server/services/projects/contracts';
+} from '$lib/server/services/projects/catalog';
 import {
 	projectBuilder,
 	testNow,

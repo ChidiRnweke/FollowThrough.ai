@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { createMermaidDiagrams } from '$lib/factories/diagrams/mermaid';
+	const mermaidDiagrams = createMermaidDiagrams();
+
 	import type { ExportSettings } from '$lib/models/deliverables';
 	import { defaultExportSettings } from '$lib/models/deliverables';
 	import * as Select from '$lib/components/ui/select';
@@ -7,11 +10,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
 	import ExportSlider from './export-slider.svelte';
-	import {
-		MERMAID_PALETTE_KEYS,
-		MERMAID_PALETTE_LABELS,
-		mermaidTokensFor
-	} from '$lib/client/diagrams/mermaid-rendering';
+	import { MERMAID_PALETTE_KEYS, MERMAID_PALETTE_LABELS } from '$lib/models/diagrams/mermaid-theme';
 
 	let {
 		settings = $bindable(),
@@ -28,7 +27,7 @@
 	} = $props();
 
 	const diagramBase = $derived(settings.diagramTheme?.base ?? 'light');
-	const diagramPreset = $derived(mermaidTokensFor({ base: diagramBase }));
+	const diagramPreset = $derived(mermaidDiagrams.appearance({ base: diagramBase }).tokens);
 
 	const fontFamilyLabels: Record<ExportSettings['fontFamily'], string> = {
 		helvetica: 'Helvetica',

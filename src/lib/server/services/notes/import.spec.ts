@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import {
-	uniqueTitleIn,
-	resolveArchiveLinks as resolveIndexedArchiveLinks,
-	indexArchiveReferences
-} from './import';
+import { NoteArchiveImportService } from './import';
+const imports = new NoteArchiveImportService();
 import type { ArchiveNoteReference, ParsedMarkdownNote } from '$lib/models/projects';
 import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const resolveArchiveLinks = (
 	source: ParsedMarkdownNote,
 	references: readonly ArchiveNoteReference[]
-) => resolveIndexedArchiveLinks(source, indexArchiveReferences(references));
+) => imports.resolve([source], references).get(source)!;
 
 const reference: ArchiveNoteReference = {
 	path: 'reviews/Design Review.md',
@@ -97,16 +94,21 @@ describe('archive link identity', () => {
 
 describe('Keeping imported titles distinct', () => {
 	it('leaves the first use of a title alone', () => {
-		expect(uniqueTitleIn(new Set(), 'Notes')).toBe('Notes');
+		const entry = { ...note(''), title: 'Notes' };
+		expect(imports.prepare([entry]).titles.get(entry)).toBe('Notes');
 	});
 
 	it('suffixes a repeated title rather than overwriting', () => {
-		const taken = new Set(['Notes']);
-		expect(uniqueTitleIn(taken, 'Notes')).toBe('Notes (2)');
+		const entries = ['Notes', 'Notes'].map((title) => ({ ...note(''), title }));
+		expect([...imports.prepare(entries).titles.values()]).toEqual(['Notes', 'Notes (2)']);
 	});
 
 	it('keeps counting past the second collision', () => {
-		const taken = new Set(['Notes', 'Notes (2)']);
-		expect(uniqueTitleIn(taken, 'Notes')).toBe('Notes (3)');
+		const entries = ['Notes', 'Notes (2)', 'Notes'].map((title) => ({ ...note(''), title }));
+		expect([...imports.prepare(entries).titles.values()]).toEqual([
+			'Notes',
+			'Notes (2)',
+			'Notes (3)'
+		]);
 	});
 });

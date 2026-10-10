@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { ToolClassification, ToolPreference } from '$lib/models/agent';
 	import { toast } from 'svelte-sonner';

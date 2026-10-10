@@ -9,7 +9,20 @@ import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
-export class DiagramRunContext {
+export interface DiagramRunContexts {
+	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun>;
+	prepare(
+		run: Pick<WorkflowAgentRun, 'status' | 'contextSnapshot'>,
+		context: Extract<WorkflowRunContext, { kind: 'diagram'; state: 'prepared' }>,
+		timestamp: DateTime
+	): WorkflowContextWrite;
+	persist(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowContextWrite
+	): Promise<WorkflowAgentRun>;
+}
+export class DiagramRunContext implements DiagramRunContexts {
 	constructor(private readonly runs: AgentRunRepository) {}
 
 	async getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun> {

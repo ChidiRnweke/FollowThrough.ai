@@ -1,6 +1,9 @@
 import type { RelationshipClassification } from '$lib/models/relationships';
 
-export class RelationshipRules {
+export interface RelationshipRuleClassifier {
+	classify(sourceText: string, targetText: string): Promise<RelationshipClassification>;
+}
+export class RelationshipRules implements RelationshipRuleClassifier {
 	async classify(sourceText: string, targetText: string): Promise<RelationshipClassification> {
 		const sourceNegates = /\b(?:not|never|instead|opposite|avoid)\b/i.test(sourceText);
 		const targetNegates = /\b(?:not|never|instead|opposite|avoid)\b/i.test(targetText);

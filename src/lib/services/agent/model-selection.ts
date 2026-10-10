@@ -1,21 +1,22 @@
+import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type AgentModel, type AgentPreferences, type Conversation } from '$lib/models/agent';
 
 /** Resolve the account choice against the deployment default supplied by the caller. */
-export function resolveDefaultAgentModel(
+function resolveDefaultAgentModel(
 	preferences: Pick<AgentPreferences, 'defaultModel'>,
 	environmentDefault: string
 ): string {
 	return normalizeLanguageModelId(preferences.defaultModel ?? environmentDefault);
 }
 
-export function resolveDefaultVisionModel(
+function resolveDefaultVisionModel(
 	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
 	environmentDefault: string
 ): string {
 	return normalizeLanguageModelId(preferences.defaultVisionModel ?? environmentDefault);
 }
 
-export function resolveAgentModel(
+function resolveAgentModel(
 	conversation: Pick<Conversation, 'modelOverride'>,
 	preferences: Pick<AgentPreferences, 'defaultModel'>,
 	environmentDefault: string
@@ -25,7 +26,7 @@ export function resolveAgentModel(
 		: resolveDefaultAgentModel(preferences, environmentDefault);
 }
 
-export function resolveVisionModel(
+function resolveVisionModel(
 	conversation: Pick<Conversation, 'visionModelOverride'>,
 	preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
 	environmentDefault: string
@@ -35,7 +36,7 @@ export function resolveVisionModel(
 		: resolveDefaultVisionModel(preferences, environmentDefault);
 }
 
-export const resolveAttachmentVisionModel = (
+const resolveAttachmentVisionModel = (
 	preferences: Pick<AgentPreferences, 'attachmentVisionModel'>,
 	environmentDefault: string
 ): string => normalizeLanguageModelId(preferences.attachmentVisionModel ?? environmentDefault);
@@ -59,7 +60,7 @@ const includeConfiguredModel = (
 };
 
 /** The bootstrap always includes its deployment chat model, even outside the provider catalog. */
-export function configuredChatModels(
+function configuredChatModels(
 	models: readonly AgentModel[],
 	defaults: { chatModelId: string; visionModelId: string }
 ): readonly AgentModel[] {
@@ -74,7 +75,7 @@ export function configuredChatModels(
 }
 
 /** Preserve explicitly configured models when the deployment catalog omits them. */
-export const configuredAgentModels = (
+const configuredAgentModels = (
 	models: readonly AgentModel[],
 	defaults: { chatModelId: string; visionModelId: string }
 ): readonly AgentModel[] => {
@@ -86,7 +87,7 @@ export const configuredAgentModels = (
 };
 
 /** Validate a requested role against the resolved catalog, including trusted deployment choices. */
-export function modelChoiceIssue(
+function modelChoiceIssue(
 	models: readonly AgentModel[],
 	modelId: string,
 	role: 'chat' | 'vision' | 'generation'
@@ -100,9 +101,98 @@ export function modelChoiceIssue(
 	return null;
 }
 
-/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
-export const normalizeLanguageModelId = (modelId: string): string => {
-	const separator = modelId.indexOf(':');
-	if (separator <= 0 || modelId.includes('/')) return modelId;
-	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
-};
+export interface IAgentModelSelectionService {
+	resolveDefaultAgentModel(
+		preferences: Pick<AgentPreferences, 'defaultModel'>,
+		environmentDefault: string
+	): string;
+	resolveDefaultVisionModel(
+		preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
+		environmentDefault: string
+	): string;
+	resolveAgentModel(
+		conversation: Pick<Conversation, 'modelOverride'>,
+		preferences: Pick<AgentPreferences, 'defaultModel'>,
+		environmentDefault: string
+	): string;
+	resolveVisionModel(
+		conversation: Pick<Conversation, 'visionModelOverride'>,
+		preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
+		environmentDefault: string
+	): string;
+	resolveAttachmentVisionModel(
+		preferences: Pick<AgentPreferences, 'attachmentVisionModel'>,
+		environmentDefault: string
+	): string;
+}
+export class AgentModelSelectionService implements IAgentModelSelectionService {
+	resolveDefaultAgentModel(
+		preferences: Pick<AgentPreferences, 'defaultModel'>,
+		environmentDefault: string
+	): string {
+		return resolveDefaultAgentModel(preferences, environmentDefault);
+	}
+	resolveDefaultVisionModel(
+		preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
+		environmentDefault: string
+	): string {
+		return resolveDefaultVisionModel(preferences, environmentDefault);
+	}
+	resolveAgentModel(
+		conversation: Pick<Conversation, 'modelOverride'>,
+		preferences: Pick<AgentPreferences, 'defaultModel'>,
+		environmentDefault: string
+	): string {
+		return resolveAgentModel(conversation, preferences, environmentDefault);
+	}
+	resolveVisionModel(
+		conversation: Pick<Conversation, 'visionModelOverride'>,
+		preferences: Pick<AgentPreferences, 'defaultVisionModel'>,
+		environmentDefault: string
+	): string {
+		return resolveVisionModel(conversation, preferences, environmentDefault);
+	}
+	resolveAttachmentVisionModel(
+		preferences: Pick<AgentPreferences, 'attachmentVisionModel'>,
+		environmentDefault: string
+	): string {
+		return resolveAttachmentVisionModel(preferences, environmentDefault);
+	}
+}
+
+export interface IAgentModelChoiceService {
+	configuredChatModels(
+		models: readonly AgentModel[],
+		defaults: { chatModelId: string; visionModelId: string }
+	): readonly AgentModel[];
+	configuredAgentModels(
+		models: readonly AgentModel[],
+		defaults: { chatModelId: string; visionModelId: string }
+	): readonly AgentModel[];
+	modelChoiceIssue(
+		models: readonly AgentModel[],
+		modelId: string,
+		role: 'chat' | 'vision' | 'generation'
+	): string | null;
+}
+export class AgentModelChoiceService implements IAgentModelChoiceService {
+	configuredChatModels(
+		models: readonly AgentModel[],
+		defaults: { chatModelId: string; visionModelId: string }
+	): readonly AgentModel[] {
+		return configuredChatModels(models, defaults);
+	}
+	configuredAgentModels(
+		models: readonly AgentModel[],
+		defaults: { chatModelId: string; visionModelId: string }
+	): readonly AgentModel[] {
+		return configuredAgentModels(models, defaults);
+	}
+	modelChoiceIssue(
+		models: readonly AgentModel[],
+		modelId: string,
+		role: 'chat' | 'vision' | 'generation'
+	): string | null {
+		return modelChoiceIssue(models, modelId, role);
+	}
+}

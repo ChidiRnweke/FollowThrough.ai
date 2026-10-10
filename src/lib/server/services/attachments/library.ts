@@ -42,8 +42,25 @@ const validateAttachmentPath = (value: string): string => {
 
 const MAX_READ_CHARS = 20_000;
 const now = (): DateTime => new Date().toISOString() as DateTime;
-
-export class AttachmentLibrary {
+export interface AttachmentUploads {
+	initiate(
+		actor: ActorContext,
+		input: {
+			projectId?: ProjectId;
+			noteId?: NoteId;
+			path: string;
+			mediaType: string;
+			byteSize: number;
+			checksumSha256: string;
+		}
+	): Promise<{
+		upload: AttachmentUpload;
+		uploadUrl: string;
+		requiredHeaders: Record<string, string>;
+	}>;
+	complete(actor: ActorContext, uploadId: AttachmentUpload['id']): Promise<AttachmentView>;
+}
+export class AttachmentUploadService implements AttachmentUploads {
 	constructor(
 		private readonly attachments: AttachmentRepository,
 		private readonly notes: NoteRepository,
@@ -139,6 +156,26 @@ export class AttachmentLibrary {
 		});
 		return view;
 	}
+}
+
+export interface AttachmentLookup {
+	get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+}
+export interface AttachmentReader extends AttachmentLookup {
+	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]>;
+	listForProject(actor: ActorContext, projectId: ProjectId): Promise<readonly AttachmentView[]>;
+	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]>;
+	get(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+	read(
+		actor: ActorContext,
+		noteId: NoteId,
+		path: string,
+		offset?: number,
+		limit?: number
+	): Promise<{ text: string; offset: number; nextOffset?: number; parserKind: string }>;
+}
+export class AttachmentReadingService implements AttachmentReader, AttachmentLookup {
+	constructor(private readonly attachments: AttachmentRepository) {}
 
 	list(actor: ActorContext, noteId: NoteId): Promise<readonly AttachmentView[]> {
 		return this.attachments.list(actor, noteId);
@@ -146,10 +183,6 @@ export class AttachmentLibrary {
 
 	listForProject(actor: ActorContext, projectId: ProjectId) {
 		return this.attachments.listForProject(actor, projectId);
-	}
-
-	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
-		return this.attachments.linkToTodo(actor, attachmentId, todoId);
 	}
 
 	listForTodo(actor: ActorContext, todoId: TodoId): Promise<readonly AttachmentView[]> {
@@ -162,10 +195,66 @@ export class AttachmentLibrary {
 		return found;
 	}
 
+	async read(
+		actor: ActorContext,
+		noteId: NoteId,
+		path: string,
+		offset = 0,
+		limit = MAX_READ_CHARS
+	) {
+		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
+		if (!found) throw new NotFoundError('Attachment was not found');
+		if (!found.version.parserKind) throw new ValidationError('Attachment has no safe text parser');
+		const text = found.version.extractedText ?? '';
+		const boundedOffset = Math.max(0, offset);
+		const boundedLimit = Math.min(MAX_READ_CHARS, Math.max(1, limit));
+		const end = Math.min(text.length, boundedOffset + boundedLimit);
+		return {
+			text: text.slice(boundedOffset, end),
+			offset: boundedOffset,
+			...(end < text.length ? { nextOffset: end } : {}),
+			parserKind: found.version.parserKind
+		};
+	}
+}
+
+export interface AttachmentDownloads {
+	downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }>;
+	download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }>;
+}
+export class AttachmentDownloadService implements AttachmentDownloads {
+	constructor(
+		private readonly attachments: AttachmentRepository,
+		private readonly storage: IAttachmentStorage
+	) {}
+
 	async downloadById(actor: ActorContext, attachmentId: AttachmentId): Promise<{ url: string }> {
 		const found = await this.attachments.findById(actor, attachmentId);
 		if (!found) throw new NotFoundError('Attachment was not found');
 		return { url: await this.storage.createDownloadUrl(found.version.objectKey, 300) };
+	}
+
+	async download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }> {
+		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
+		if (!found) throw new NotFoundError('Attachment was not found');
+		return { url: await this.storage.createDownloadUrl(found.version.objectKey, 300) };
+	}
+}
+
+export interface AttachmentLifecycle {
+	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void>;
+	retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView>;
+	removeById(actor: ActorContext, attachmentId: AttachmentId): Promise<RemoveAttachmentResult>;
+	remove(actor: ActorContext, noteId: NoteId, path: string): Promise<AttachmentId | undefined>;
+}
+export class AttachmentLifecycleService implements AttachmentLifecycle {
+	constructor(
+		private readonly attachments: AttachmentRepository,
+		private readonly notes: NoteRepository
+	) {}
+
+	linkToTodo(actor: ActorContext, attachmentId: AttachmentId, todoId: TodoId): Promise<void> {
+		return this.attachments.linkToTodo(actor, attachmentId, todoId);
 	}
 
 	async retry(actor: ActorContext, attachmentId: AttachmentId): Promise<AttachmentView> {
@@ -198,34 +287,6 @@ export class AttachmentLibrary {
 		}
 		await this.attachments.removeById(actor, attachmentId);
 		return { kind: 'removed' };
-	}
-
-	async download(actor: ActorContext, noteId: NoteId, path: string): Promise<{ url: string }> {
-		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
-		if (!found) throw new NotFoundError('Attachment was not found');
-		return { url: await this.storage.createDownloadUrl(found.version.objectKey, 300) };
-	}
-
-	async read(
-		actor: ActorContext,
-		noteId: NoteId,
-		path: string,
-		offset = 0,
-		limit = MAX_READ_CHARS
-	) {
-		const found = await this.attachments.findByPath(actor, noteId, validateAttachmentPath(path));
-		if (!found) throw new NotFoundError('Attachment was not found');
-		if (!found.version.parserKind) throw new ValidationError('Attachment has no safe text parser');
-		const text = found.version.extractedText ?? '';
-		const boundedOffset = Math.max(0, offset);
-		const boundedLimit = Math.min(MAX_READ_CHARS, Math.max(1, limit));
-		const end = Math.min(text.length, boundedOffset + boundedLimit);
-		return {
-			text: text.slice(boundedOffset, end),
-			offset: boundedOffset,
-			...(end < text.length ? { nextOffset: end } : {}),
-			parserKind: found.version.parserKind
-		};
 	}
 
 	async remove(

@@ -1,13 +1,12 @@
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import { EMBEDDING_BATCH_TOKENS } from '$lib/models/knowledge-search/embeddings';
-import { getEncoding, type Tiktoken } from 'js-tiktoken';
+import type { TokenCounter } from '$lib/models/tokenization';
 import { getEmbeddingAttributes } from '@arizeai/openinference-core';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 import OpenAI from 'openai';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
-let encoding: Tiktoken | undefined;
 
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;
@@ -69,14 +68,17 @@ export class Embeddings implements IEmbeddings {
 	readonly model: string;
 	private readonly observer: OperationObserver;
 
-	constructor(apiKey: string, options: EmbeddingOptions = {}) {
+	constructor(
+		apiKey: string,
+		private readonly tokens: TokenCounter,
+		options: EmbeddingOptions = {}
+	) {
 		this.model = options.model ?? DEFAULT_EMBEDDING_MODEL;
 		this.client = options.client ?? createLanguageModelClient(apiKey, options);
 		this.observer = options.observer ?? directObserver;
 	}
 
 	async embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch> {
-		const tokenizer = (encoding ??= getEncoding('cl100k_base'));
 		const vectors: (readonly number[])[] = [];
 		let batch: string[] = [];
 		let tokens = 0;
@@ -88,7 +90,7 @@ export class Embeddings implements IEmbeddings {
 			tokens = 0;
 		};
 		for (const content of contents) {
-			const count = tokenizer.encode(content).length;
+			const count = this.tokens.count(content);
 			if (batch.length && tokens + count > EMBEDDING_BATCH_TOKENS) await flush();
 			batch.push(content);
 			tokens += count;

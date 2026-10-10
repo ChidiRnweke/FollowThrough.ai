@@ -2020,3 +2020,41 @@ export interface RunSettlementPlan {
 export type RunSettlementClaim =
 	| { readonly kind: 'claimed'; readonly run: AgentRun; readonly events: readonly AgentEvent[] }
 	| { readonly kind: 'lost' };
+
+/** Provider metadata consumed when presenting the available model catalog. */
+export interface AgentCatalogMetadata {
+	readonly id: string;
+	readonly name: string;
+	readonly contextLength?: number | null;
+	readonly supportedParameters: readonly string[];
+	readonly architecture?: { readonly inputModalities: readonly string[] } | null;
+}
+
+export type InlineSuggestionAdmission =
+	| { readonly allowed: true }
+	| {
+			readonly allowed: false;
+			readonly reason: 'busy' | 'rate_limited';
+			readonly retryAfterMs: number;
+	  };
+
+export interface InlineSuggestionThrottle {
+	admit(userId: string): InlineSuggestionAdmission;
+	consume(userId: string): InlineSuggestionAdmission;
+	release(userId: string): void;
+}
+
+export type LanguageModelId = string & { readonly __brand: 'LanguageModelId' };
+
+/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
+export const normalizeLanguageModelId = (modelId: string): LanguageModelId => {
+	const separator = modelId.indexOf(':');
+	if (separator <= 0 || modelId.includes('/')) return modelId as LanguageModelId;
+	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}` as LanguageModelId;
+};
+
+/** A provider tool result after its structured failure envelope has been read. */
+export type AgentToolOutcome =
+	| Exclude<ProviderToolOutput, { readonly kind: 'value' }>
+	| { readonly kind: 'succeeded'; readonly value: AgentPayload }
+	| { readonly kind: 'reported_failure'; readonly value: AgentPayload; readonly failure: string };

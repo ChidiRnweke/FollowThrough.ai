@@ -1,3 +1,7 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { InMemoryDiagrams } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
@@ -19,7 +23,6 @@ import {
 	noteBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	DrawioXmlValidator,
 	DrawioSvgSanitizer,
@@ -57,6 +60,8 @@ describe('Proposal effect coordination', () => {
 		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				todoCreationRules: new TodoEditingRulesService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionAccepter: suggestions,
 				suggestionEffects: effects,
@@ -64,6 +69,7 @@ describe('Proposal effect coordination', () => {
 				diagramWriter: diagrams,
 				drawioXmlValidator: new DrawioXmlValidator(),
 				drawioSvgSanitizer: new DrawioSvgSanitizer(),
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: new DrawioLabelReader(),
 				now: () => testNow,
 				diagramIndexer: diagrams,
@@ -87,7 +93,7 @@ describe('Proposal effect coordination', () => {
 		const suggestions = new InMemorySuggestions();
 		const effects = new InMemorySuggestionEffects();
 		const search = new InMemorySearchRepository();
-		const indexWriter = new ContentIndex(
+		const indexWriter = createContentIndex(
 			search,
 			new InMemoryEmbeddingClient().model,
 			undefined,
@@ -118,6 +124,8 @@ describe('Proposal effect coordination', () => {
 		await indexer.index(testActor(), replacement);
 		const controller = new Suggestions(
 			capabilityDependencies<SuggestionsDependencies>({
+				todoCreationRules: new TodoEditingRulesService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				suggestionFinder: suggestions,
 				suggestionReverter: suggestions,
 				suggestionEffects: effects,

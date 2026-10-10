@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { memoryWrite, newMemory } from '$lib/controllers/workspace/commands';
+import { memoryWrite, newMemory } from '$lib/testing/workspace/fixtures/commands';
 import {
 	memoryEntryBuilder,
 	testActor,
 	testMemoryEntryId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 describe('local memory writes', () => {
-	it('creates profile memory with a stable identity and the product sharing default', () => {
+	it('creates profile memory with a stable identity and the chosen sharing value', async () => {
 		expect(
-			newMemory(testMemoryEntryId(), testActor().userId, { content: '  Remember this  ' }, testNow)
+			await newMemory(
+				testMemoryEntryId(),
+				testActor().userId,
+				{ content: '  Remember this  ', shareWithAgents: true },
+				testNow
+			)
 		).toEqual({
 			id: testMemoryEntryId(),
 			userId: testActor().userId,
@@ -22,16 +26,16 @@ describe('local memory writes', () => {
 			updatedAt: testNow
 		});
 	});
-	it('retains sharing and type when only the content changes', () => {
+	it('retains sharing and type when only the content changes', async () => {
 		const entry = memoryEntryBuilder({ shareWithAgents: false, type: 'constraint' });
-		expect(memoryWrite(entry, { content: ' Updated ' }).local).toEqual({
+		expect((await memoryWrite(entry, { content: ' Updated ' })).local).toEqual({
 			type: 'memory_entries',
 			value: { ...entry, content: 'Updated' }
 		});
 	});
-	it('clears an explicitly removed type without changing the content', () => {
+	it('clears an explicitly removed type without changing the content', async () => {
 		const entry = memoryEntryBuilder({ type: 'constraint' });
-		expect(memoryWrite(entry, { type: null }).local).toEqual({
+		expect((await memoryWrite(entry, { type: null })).local).toEqual({
 			type: 'memory_entries',
 			value: { ...entry, type: undefined }
 		});

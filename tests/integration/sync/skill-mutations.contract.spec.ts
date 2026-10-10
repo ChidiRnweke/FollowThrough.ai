@@ -1,3 +1,8 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
@@ -13,31 +18,36 @@ const setup = async (suffix: string) => {
 	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const note = await storedNote(notes.catalog, source.owner, {
+	const note = await storedNote(notes.services.creator, source.owner, {
 		projectId: source.note.projectId,
 		title: 'Writing',
 		kind: 'skill'
 	});
 	const seeded = { ...source, note };
 	const sync = createSyncCapability({ db: database });
-	const { library } = createSkillsCapability({
+	const { services: library } = createSkillsCapability({
 		db: database,
 		projects: new ProjectRecords(database),
 		notes: notes.repository,
 		provenance: notes.provenanceRepository
 	});
-	await library.create(seeded.owner, seeded.note, {
+	await library.creator.create(seeded.owner, seeded.note, {
 		name: 'Writing',
 		description: 'Write clearly',
 		triggerHints: []
 	});
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
 			transactionRunner
 		})
 	);

@@ -9,8 +9,11 @@ import type {
 } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
-import { generateDocx } from './docx';
-import { prepareExport } from '$lib/services/deliverables/export-preparation';
+import { DocxDocumentService } from '$lib/server/services/deliverables/docx';
+const docxRendering = new DocxDocumentService();
+const generateDocx = docxRendering.render.bind(docxRendering);
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
+const preparation = new ExportPreparationService();
 import type { ExportInput } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
@@ -31,7 +34,7 @@ const memoizedGenerateDocx = (input: GenerateDocxArgs): Promise<Buffer> => {
 	});
 	const cached = renderCache.get(key);
 	if (cached) return cached;
-	const rendered = generateDocx(prepareExport(input));
+	const rendered = generateDocx(preparation.prepare(input));
 	renderCache.set(key, rendered);
 	return rendered;
 };

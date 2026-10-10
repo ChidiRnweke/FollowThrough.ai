@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { proseMirrorDocumentSchema, storedDocumentReadSchema } from './index';
-import { unknownProseMirrorNodes } from '$lib/services/notes/editor-content';
+import { unreadableDocumentBlocks } from '$lib/testing/notes/fixtures/unreadable-documents';
 
 describe('ProseMirror document invariants', () => {
 	it('accepts a structurally valid nested document', () => {
@@ -77,9 +77,9 @@ describe('reading a document out of storage', () => {
 
 	it('degrades an unmodelled block instead of throwing', () => {
 		const document = storedDocumentReadSchema.parse(withUnknownBlock);
-		const unknown = unknownProseMirrorNodes(document)[0];
+		const unknown = unreadableDocumentBlocks(document)[0];
 		expect({
-			unknownCount: unknownProseMirrorNodes(document).length,
+			unknownCount: unreadableDocumentBlocks(document).length,
 			keptKnownPrefix: document.content?.[0]?.type,
 			reason: unknown?.reason,
 			raw: unknown?.raw
@@ -99,7 +99,7 @@ describe('reading a document out of storage', () => {
 
 	it('answers with a document even when the column is not one', () => {
 		const document = storedDocumentReadSchema.parse('not a document');
-		expect(unknownProseMirrorNodes(document)).toMatchObject([
+		expect(unreadableDocumentBlocks(document)).toMatchObject([
 			{
 				type: 'unknown',
 				reason: expect.stringContaining('Stored document is not readable')

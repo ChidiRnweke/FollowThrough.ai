@@ -1,10 +1,9 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import { agentToolNameSchema } from '$lib/models/agent';
 import { toolNameSchema } from '$lib/models/agent';
 import { describe, expect, it } from 'vitest';
 import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
-import { toolDescription } from '$lib/services/agent/tool-catalog';
-import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
-import { FIRST_CLASS_TOOL_SET } from '$lib/services/agent/tool-catalog';
 
 describe('tool catalog', () => {
 	it('lists no duplicate tool names', () => {
@@ -13,12 +12,17 @@ describe('tool catalog', () => {
 		);
 	});
 
-	it('keeps first-class tools out of the on-demand catalog', () => {
-		expect(TOOL_CATALOG.every((entry) => !FIRST_CLASS_TOOL_SET.has(entry.name))).toBe(true);
+	it('keeps body edits direct while project archival remains discoverable', () => {
+		const names = toolCatalogRules.discoverable().map((entry) => entry.name);
+		expect({
+			archive: names.includes('archive_project'),
+			save: names.includes('save_note'),
+			edit: names.includes('edit_note')
+		}).toEqual({ archive: true, save: false, edit: false });
 	});
 
 	it('fails fast when a name drifts from the catalog', () => {
-		expect(() => toolDescription('not_a_tool')).toThrow(
+		expect(() => toolCatalogRules.description('not_a_tool')).toThrow(
 			'Tool description missing from catalog: not_a_tool'
 		);
 	});
@@ -52,7 +56,7 @@ describe('tool catalog', () => {
 	});
 
 	it('routes vague note cleanup away from whole-body replacement', () => {
-		expect(toolDescription('save_note')).toContain(
+		expect(toolCatalogRules.description('save_note')).toContain(
 			'A request to tidy, refresh, polish, or improve an existing note is not a full rewrite'
 		);
 	});

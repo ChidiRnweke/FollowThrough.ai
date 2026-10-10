@@ -27,13 +27,52 @@ const slug = (value: string): string =>
 		.slice(0, 64)
 		.replace(/-+$/g, '') || `skill-${crypto.randomUUID().slice(0, 8)}`;
 
-export class SkillLibrary {
+export interface SkillCreator {
+	lockCatalog(actor: ActorContext): Promise<void>;
+	create(
+		actor: ActorContext,
+		note: Note,
+		input: { name: string; description: string; triggerHints: readonly string[] }
+	): Promise<Skill<Note>>;
+}
+export interface SkillFinder {
+	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
+	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]>;
+	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
+}
+export interface SkillEditor {
+	lockCatalog(actor: ActorContext): Promise<void>;
+	getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>>;
+	prepareEdit(
+		actor: ActorContext,
+		current: Skill<Note>,
+		input: Omit<SkillEditInput, 'noteId'>
+	): Promise<PreparedSkillEdit<Note>>;
+	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>>;
+}
+export interface SkillUsageRecorder {
+	record(
+		actor: ActorContext,
+		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
+	): Promise<void>;
+}
+export interface SkillUsageLister {
+	list(actor: ActorContext, skillNoteId: NoteId): Promise<readonly SkillUsageView[]>;
+}
+async function loadSkill(
+	skills: SkillRepository,
+	actor: ActorContext,
+	noteId: NoteId
+): Promise<Skill<Note>> {
+	const skill = await skills.findByNoteId(actor, noteId);
+	if (!skill || skill.note.archivedAt) throw new NotFoundError('Skill was not found');
+	return skill;
+}
+export class SkillCreationService implements SkillCreator {
 	constructor(
 		private readonly skills: SkillRepository,
-		private readonly notes: NoteRepository,
-		private readonly provenance: ProvenanceRepository
+		private readonly notes: NoteRepository
 	) {}
-	/** Acquire before project or note locks; the controller owns the transaction. */
 	lockCatalog(actor: ActorContext): Promise<void> {
 		return this.skills.lockCatalog(actor);
 	}
@@ -62,51 +101,27 @@ export class SkillLibrary {
 			isEnabled: true
 		});
 	}
+}
+export class SkillReadingService implements SkillFinder {
+	constructor(private readonly skills: SkillRepository) {}
 	listEnabled(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills.listEnabled(actor, projectId);
 	}
 	listAll(actor: ActorContext, projectId?: ProjectId): Promise<readonly SkillSummary[]> {
 		return this.skills.listAll(actor, projectId);
 	}
-	async load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
-		const skill = await this.skills.findByNoteId(actor, noteId);
-		if (!skill || skill.note.archivedAt) throw new NotFoundError('Skill was not found');
-		return skill;
+	load(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
+		return loadSkill(this.skills, actor, noteId);
 	}
-	async record(
-		actor: ActorContext,
-		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
-	): Promise<void> {
-		await this.load(actor, input.skillNoteId);
-		if (input.contextNoteId) {
-			const context = await this.notes.findById(actor, input.contextNoteId);
-			if (!context) throw new NotFoundError('Skill context note was not found');
-		}
-		if (!(await this.provenance.findById(actor, input.provenanceId)))
-			throw new NotFoundError('Skill usage provenance was not found');
-		await this.skills.recordUsage(actor, {
-			id: crypto.randomUUID() as SkillUsageId,
-			...input,
-			createdAt: now()
-		});
+}
+export class SkillEditingService implements SkillEditor {
+	constructor(
+		private readonly skills: SkillRepository,
+		private readonly notes: NoteRepository
+	) {}
+	lockCatalog(actor: ActorContext): Promise<void> {
+		return this.skills.lockCatalog(actor);
 	}
-	async list(actor: ActorContext, skillNoteId: NoteId): Promise<readonly SkillUsageView[]> {
-		await this.load(actor, skillNoteId);
-		const usages = await this.skills.listUsages(actor, skillNoteId);
-		return Promise.all(
-			usages.map(async (usage: SkillUsage) => {
-				const context = usage.contextNoteId
-					? await this.notes.findById(actor, usage.contextNoteId)
-					: undefined;
-				return {
-					usage,
-					...(context ? { contextNote: { id: context.id, title: context.title } } : {})
-				};
-			})
-		);
-	}
-
-	/** Lock the note before metadata to match provisioning and the title projection trigger. */
 	async getForEdit(actor: ActorContext, noteId: NoteId): Promise<Skill<Note>> {
 		const note = await this.notes.findForWrite(actor, noteId);
 		if (!note) throw new NotFoundError('Skill note was not found');
@@ -116,7 +131,6 @@ export class SkillLibrary {
 		if (!skill) throw new NotFoundError('Skill was not found');
 		return skill;
 	}
-
 	async prepareEdit(
 		actor: ActorContext,
 		current: Skill<Note>,
@@ -174,11 +188,9 @@ export class SkillLibrary {
 			}
 		};
 	}
-
 	commitEdit(actor: ActorContext, skill: Skill<Note>): Promise<Skill<Note>> {
 		return this.skills.update(actor, skill);
 	}
-
 	private portable(skill: Skill<Note>): SkillManifest {
 		return {
 			slug: skill.slug,
@@ -189,5 +201,44 @@ export class SkillLibrary {
 			allowImplicitInvocation: skill.allowImplicitInvocation,
 			instructions: skill.note.plainText
 		};
+	}
+}
+export class SkillUsageService implements SkillUsageRecorder, SkillUsageLister {
+	constructor(
+		private readonly skills: SkillRepository,
+		private readonly notes: NoteRepository,
+		private readonly provenance: ProvenanceRepository
+	) {}
+	async record(
+		actor: ActorContext,
+		input: { skillNoteId: NoteId; contextNoteId?: NoteId; provenanceId: ProvenanceId }
+	): Promise<void> {
+		await loadSkill(this.skills, actor, input.skillNoteId);
+		if (input.contextNoteId) {
+			const context = await this.notes.findById(actor, input.contextNoteId);
+			if (!context) throw new NotFoundError('Skill context note was not found');
+		}
+		if (!(await this.provenance.findById(actor, input.provenanceId)))
+			throw new NotFoundError('Skill usage provenance was not found');
+		await this.skills.recordUsage(actor, {
+			id: crypto.randomUUID() as SkillUsageId,
+			...input,
+			createdAt: now()
+		});
+	}
+	async list(actor: ActorContext, skillNoteId: NoteId): Promise<readonly SkillUsageView[]> {
+		await loadSkill(this.skills, actor, skillNoteId);
+		const usages = await this.skills.listUsages(actor, skillNoteId);
+		return Promise.all(
+			usages.map(async (usage: SkillUsage) => {
+				const context = usage.contextNoteId
+					? await this.notes.findById(actor, usage.contextNoteId)
+					: undefined;
+				return {
+					usage,
+					...(context ? { contextNote: { id: context.id, title: context.title } } : {})
+				};
+			})
+		);
 	}
 }

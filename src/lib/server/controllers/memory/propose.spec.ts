@@ -1,3 +1,6 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import {
 	memoryEntryBuilder,
 	testMemoryEntryId
@@ -8,7 +11,7 @@ import type { MemoryDependencies } from './controller';
 import { describe, expect, it } from 'vitest';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { ValidationError } from '$lib/errors';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { Memory } from './controller';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
@@ -20,7 +23,6 @@ import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
 } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	projectBuilder,
 	testActor,
@@ -61,18 +63,20 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
 	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = new ContentIndex(search, indexEmbeddings.model);
-	const memory = new MemoryLibrary(entries, projects, provenanceRepository);
+	const indexWriter = createContentIndex(search, indexEmbeddings.model);
+	const memory = createMemoryServices(entries, projects, provenanceRepository);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
-			memoryLister: memory,
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryLister: memory.lister,
 			memoryIndexer: indexWriter.memories,
 			indexEmbeddings,
 			indexWriter,
-			memoryCreator: memory,
-			memoryEditor: memory,
-			memoryDeleter: memory,
-			memoryChanges: memory,
+			memoryCreator: memory.creator,
+			memoryEditor: memory.editor,
+			memoryDeleter: memory.deleter,
+			memoryChanges: memory.changes,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
@@ -134,7 +138,7 @@ describe('Memory proposal orchestration invariants', () => {
 
 	it('rejects a profile proposal targeting project memory before recording a suggestion', async () => {
 		const { controller, memory, suggestions } = setup();
-		const target = await memory.create(
+		const target = await memory.creator.create(
 			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(1),
@@ -161,7 +165,7 @@ describe('Memory proposal orchestration invariants', () => {
 	it('rejects a project proposal targeting another project', async () => {
 		const { controller, memory, projects } = setup();
 		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
-		const target = await memory.create(
+		const target = await memory.creator.create(
 			testActor(),
 			memoryEntryBuilder({
 				id: testMemoryEntryId(2),

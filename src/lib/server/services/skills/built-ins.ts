@@ -1,3 +1,4 @@
+import type { AppSurfaceKind } from '$lib/models/workspace/app-context';
 import { isDeepStrictEqual } from 'node:util';
 import type { ActorContext } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
@@ -13,7 +14,14 @@ import type { BuiltInSkillDefinition } from '$lib/models/skills/built-ins';
 
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
-export class BuiltInSkills {
+export interface BuiltInSkillProvisioner {
+	ensure(actor: ActorContext): Promise<void>;
+	load(actor: ActorContext, key: string): Promise<Skill<Note>>;
+}
+export interface BuiltInSkillSelection {
+	forSurface(kind: AppSurfaceKind): readonly string[];
+}
+export class BuiltInSkills implements BuiltInSkillProvisioner, BuiltInSkillSelection {
 	constructor(
 		private readonly projects: ProjectRepository,
 		private readonly notes: NoteRepository,
@@ -24,6 +32,11 @@ export class BuiltInSkills {
 		}
 	) {}
 
+	forSurface(kind: AppSurfaceKind): readonly string[] {
+		return this.definitions.active
+			.filter((skill) => skill.surfaces?.includes(kind))
+			.map((skill) => skill.name);
+	}
 	/** The calling controller owns the transaction for installation and its lock. */
 	async ensure(actor: ActorContext): Promise<void> {
 		await this.skills.lockCatalog(actor);

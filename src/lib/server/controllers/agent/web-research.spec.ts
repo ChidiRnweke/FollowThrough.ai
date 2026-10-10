@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { agentSubmissionFixture } from '$lib/testing/agent/fixtures/submission';
 import { testActor, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -15,7 +16,7 @@ afterEach(async () => {
 		for (const run of fixture.runs.runs) await fixture.controller.cancel(testActor(), run.id);
 		fixture.release();
 		await vi.waitFor(() => {
-			if (fixture.runs.runs.some((run) => !isTerminalAgentRunStatus(run.status)))
+			if (fixture.runs.runs.some((run) => !runStatus.isTerminal(run.status)))
 				throw new Error('Run did not settle');
 		});
 	}
@@ -34,7 +35,7 @@ it('freezes the deployment research defaults with a new run', async () => {
 
 it('freezes selected account settings together with deployment defaults', async () => {
 	const fixture = setup({
-		webSearchDefaults: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
+		webSearchOverrides: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
 	});
 	fixture.preferenceRecords.entries.set(testActor().userId, {
 		...fixture.preferences.defaults(testActor(), testNow),
@@ -55,7 +56,7 @@ it('freezes selected account settings together with deployment defaults', async 
 
 it('executes the frozen budget after injected deployment defaults change', async () => {
 	const defaults = { ...CHAT_WEB_SEARCH_DEFAULTS, maxResults: 7 };
-	const fixture = setup({ webSearchDefaults: defaults });
+	const fixture = setup({ webSearchOverrides: defaults });
 	await fixture.controller.submit(testActor(), {
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
@@ -89,7 +90,7 @@ it('retains frozen research settings on retry after account preferences change',
 
 it('resolves missing fields of a legacy saved request before provider execution', async () => {
 	const fixture = setup({
-		webSearchDefaults: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
+		webSearchOverrides: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
 	});
 	const receipt = await fixture.controller.submit(testActor(), {
 		requestId: crypto.randomUUID(),

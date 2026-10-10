@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { importedNotesFixture } from '$lib/testing/notes/fixtures/import';
-import { collectNoteLinkTargets } from '$lib/services/notes/references';
+import { NoteReferenceService } from '$lib/services/notes/references';
+const noteReferences = new NoteReferenceService();
 
 describe('imported note identities and write consequences', () => {
 	it('stores each note body and indexes the saved note', async () => {
@@ -45,7 +46,7 @@ describe('imported note identities and write consequences', () => {
 		});
 		const index = records.notes.find((note) => note.title === 'aaa')!;
 		const targets = records.notes.filter((note) => note.title === 'report');
-		expect(collectNoteLinkTargets(index.document)).toEqual(targets.map((note) => note.id));
+		expect(noteReferences.links(index.document)).toEqual(targets.map((note) => note.id));
 	});
 	it('leaves an ambiguous bare link visible and reports it', async () => {
 		const { run, records } = importedNotesFixture();

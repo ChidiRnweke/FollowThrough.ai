@@ -1,4 +1,4 @@
-import { getEncoding } from 'js-tiktoken';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
@@ -24,7 +24,7 @@ const content = 'alpha\nbeta warning\ngamma';
 const reader = (body = content): AgentVirtualFiles =>
 	new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
-			countTokens,
+			tokens,
 			projects: capabilityDependencies<ProjectRepository>({
 				listActive: async () => [projectBuilder()]
 			}),
@@ -40,7 +40,7 @@ const reader = (body = content): AgentVirtualFiles =>
 				listForProject: async () => ({ diagrams: [], total: 0 })
 			}),
 			stored: new InMemoryAgentFiles(),
-			noteMarkdown: () => body
+			noteMarkdown: { write: () => body }
 		})
 	);
 
@@ -81,7 +81,7 @@ describe('AgentVirtualFiles ls', () => {
 		const revision = noteRevisionBuilder({ revision: 7 });
 		const service = new AgentVirtualFiles(
 			capabilityDependencies<AgentVirtualFilesDependencies>({
-				countTokens,
+				tokens,
 				projects: capabilityDependencies<ProjectRepository>({
 					listActive: async () => [projectBuilder()]
 				}),
@@ -96,7 +96,7 @@ describe('AgentVirtualFiles ls', () => {
 					listForProject: async () => ({ diagrams: [], total: 0 })
 				}),
 				stored: new InMemoryAgentFiles(),
-				noteMarkdown: () => 'published body'
+				noteMarkdown: { write: () => 'published body' }
 			})
 		);
 
@@ -230,8 +230,7 @@ describe('AgentVirtualFiles sed', () => {
 	});
 });
 
-const tokenEncoder = getEncoding('cl100k_base');
-const countTokens = (text: string): number => tokenEncoder.encode(text).length;
+const tokens = testTokenizer;
 
 it.each(['/', '.'])('searches every file beneath root %s', async (path) => {
 	const result = await reader('root needle').grep(testActor(), {

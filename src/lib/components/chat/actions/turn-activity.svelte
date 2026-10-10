@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { Button } from '$lib/components/ui/button';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { FtChevronRight, FtLoader, FtReading } from '$lib/components/icons';

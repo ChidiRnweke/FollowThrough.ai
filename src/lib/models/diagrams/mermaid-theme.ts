@@ -84,3 +84,39 @@ export interface MermaidRenderConfig {
 	readonly htmlLabels: false;
 	readonly fontFamily: string;
 }
+
+export interface MermaidPaletteView {
+	readonly tokens: MermaidTokens;
+	readonly background: string | undefined;
+}
+export interface MermaidAppearance extends MermaidPaletteView {
+	readonly config: MermaidRenderConfig;
+}
+export type MermaidExportFormat = 'png' | 'svg';
+export interface MermaidExportRequest {
+	readonly source: string;
+	readonly theme: MermaidTheme;
+	readonly format: MermaidExportFormat;
+	readonly scale?: number;
+	readonly fileName?: string;
+}
+export interface MermaidSvgRenderer {
+	render(
+		id: string,
+		source: string,
+		config: MermaidRenderConfig,
+		mode: 'screen' | 'document'
+	): Promise<string>;
+}
+export interface MermaidImageOutput {
+	pixelRatio(): number;
+	rasterise(svg: string, background: string | undefined, scale: number): Promise<string>;
+	blob(dataUrl: string): Promise<Blob>;
+	downloadSvg(svg: string, name: string): void;
+	downloadPng(dataUrl: string, name: string): void;
+}
+
+export type MermaidRender =
+	| { readonly kind: 'pending' }
+	| { readonly kind: 'ready'; readonly svg: string }
+	| { readonly kind: 'failure' };

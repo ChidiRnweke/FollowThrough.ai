@@ -1,5 +1,6 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
+const toolCatalogRules = new AgentToolCatalogService();
 import { describe, expect, it } from 'vitest';
-import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 import { TOOL_RETRIEVAL_GOALS } from '../cases/tool-retrieval';
 import { ALL_EVAL_CASES, SMOKE_CASE_IDS, selectEvalCases } from './case-catalog';
 
@@ -10,9 +11,12 @@ describe('eval case selection', () => {
 
 	it('covers every long-tail tool with a retrieval goal', () => {
 		const covered = new Set(TOOL_RETRIEVAL_GOALS.map((goal) => goal.expected));
-		expect(TOOL_CATALOG.filter((tool) => !covered.has(tool.name)).map((tool) => tool.name)).toEqual(
-			[]
-		);
+		expect(
+			toolCatalogRules
+				.discoverable()
+				.filter((tool) => !covered.has(tool.name))
+				.map((tool) => tool.name)
+		).toEqual([]);
 	});
 
 	it('selects every case in an exact section', () => {

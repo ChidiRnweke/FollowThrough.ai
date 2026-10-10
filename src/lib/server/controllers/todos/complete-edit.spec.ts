@@ -1,9 +1,12 @@
-import { todoWrite } from '$lib/controllers/workspace/commands';
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { todoWrite } from '$lib/testing/workspace/fixtures/commands';
 import type { UpdateTodoInput } from '$lib/models/todos';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
+import { createTodoServices } from '$lib/server/factories/capabilities/todos-capability-factory';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import {
@@ -19,7 +22,6 @@ import {
 	testNoteId,
 	todoBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 const setup = () => {
 	const records = new InMemoryTodoRepository();
 	const original = todoBuilder({
@@ -29,7 +31,7 @@ const setup = () => {
 		waitingOn: 'Sam'
 	});
 	records.todos = [original];
-	const catalog = new TodoCatalog(
+	const catalog = createTodoServices(
 		records,
 		new InMemoryProjectRepository(),
 		new InMemoryAnchorRepository(),
@@ -39,15 +41,18 @@ const setup = () => {
 	);
 	const controller = new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoEditor: catalog,
-			todoContextReader: catalog,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoEditor: catalog.editor,
+			todoContextReader: catalog.context,
 			transactionRunner: new InMemoryTransactionRunner([records])
 		}),
 		() => testNow
 	);
 	return { records, original, controller };
 };
-
 describe('complete task edits', () => {
 	const edits: readonly Omit<UpdateTodoInput, 'todoId'>[] = [
 		{ title: '  Retitled  ', status: 'done' },
@@ -64,9 +69,8 @@ describe('complete task edits', () => {
 	it.each(edits)('matches the offline task preview for %j', async (edit) => {
 		const { controller, original } = setup();
 		const { todo } = await controller.update(testActor(), { todoId: original.id, ...edit });
-		expect(todo).toEqual(todoWrite(original, edit, testNow).local?.value);
+		expect(todo).toEqual((await todoWrite(original, edit, testNow)).local?.value);
 	});
-
 	it('leaves all fields unchanged when saving the completed task fails', async () => {
 		const { controller, records, original } = setup();
 		records.updateFailures.set('done', new Error('Completion write failed'));

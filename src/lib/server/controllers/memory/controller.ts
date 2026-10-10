@@ -1,22 +1,19 @@
-import {
-	sharedMemoryEntries,
-	decideMemoryCreation,
-	decideMemoryEdit
-} from '$lib/services/memory/edits';
+import type { AppliedChange } from '$lib/models/proposal-effects';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type { IMemoryEditingService } from '$lib/services/memory/edits';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import { ValidationError } from '$lib/errors';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import type { MemoryIndexer } from '$lib/server/services/memory/contracts';
-import { mapAppliedChange } from '$lib/server/services/suggestions/effects';
-import type { SuggestionEffectService } from '$lib/server/services/suggestions/contracts';
+import type { MemoryIndexer } from '$lib/server/services/memory/library';
+import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { Suggestion } from '$lib/models/suggestions';
 import type {
 	MemoryMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
@@ -36,11 +33,8 @@ import type {
 	MemoryEntryDeleter,
 	MemoryEntryEditor,
 	MemoryEntryLister
-} from '$lib/server/services/memory/contracts';
-import type {
-	SuggestionAccepter,
-	SuggestionCreator
-} from '$lib/server/services/suggestions/contracts';
+} from '$lib/server/services/memory/library';
+import type { SuggestionAccepter, SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 
 /**
@@ -81,10 +75,12 @@ export interface MemoryController {
 }
 
 export interface MemoryDependencies {
+	readonly editing: IMemoryEditingService;
+	readonly presentation: IMemoryPresentationService;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	memoryLister: MemoryEntryLister;
 	memoryCreator: MemoryEntryCreator;
@@ -144,7 +140,7 @@ export class Memory implements MemoryController {
 			projectId: input.projectId
 		});
 		return {
-			entries: input.sharedOnly ? sharedMemoryEntries(entries) : entries
+			entries: input.sharedOnly ? this.dependencies.presentation.sharedEntries(entries) : entries
 		};
 	}
 
@@ -153,7 +149,7 @@ export class Memory implements MemoryController {
 		input: CreateMemoryEntryInput
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
-			const decision = decideMemoryCreation(input, {
+			const decision = this.dependencies.editing.create(input, {
 				id: input.id ?? (crypto.randomUUID() as MemoryEntryId),
 				userId: actor.userId,
 				timestamp: new Date().toISOString() as DateTime
@@ -171,7 +167,11 @@ export class Memory implements MemoryController {
 	): Promise<{ entry: MemoryEntry }> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.memoryEditor.getForEdit(actor, input.memoryEntryId);
-			const decision = decideMemoryEdit(current, input, new Date().toISOString() as DateTime);
+			const decision = this.dependencies.editing.edit(
+				current,
+				input,
+				new Date().toISOString() as DateTime
+			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const entry = await this.dependencies.memoryEditor.update(actor, decision.entry);
 			await this.finishIndex(actor, await this.dependencies.memoryIndexer.index(actor, entry));
@@ -239,5 +239,19 @@ export class Memory implements MemoryController {
 			result.missing.map((chunk) => chunk.input)
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
+	}
+}
+
+function mapAppliedChange<Input, Output>(
+	change: AppliedChange<Input>,
+	map: (record: Input) => Output
+): AppliedChange<Output> {
+	switch (change.kind) {
+		case 'created':
+			return { kind: 'created', after: map(change.after) };
+		case 'modified':
+			return { kind: 'modified', before: map(change.before), after: map(change.after) };
+		case 'unchanged':
+			return { kind: 'unchanged', after: map(change.after) };
 	}
 }

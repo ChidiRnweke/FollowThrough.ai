@@ -1,19 +1,19 @@
-import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
-import { searchableDrawioText } from '$lib/services/diagrams/labels';
-import { prepareDiagramWrite } from '$lib/services/diagrams/editing';
+import type { IconSearch } from '$lib/server/services/diagrams/icons';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
+import type { DiagramLabelPresentation } from '$lib/services/diagrams/labels';
+import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
 import type { DiagramRevisionChange } from '$lib/models/diagrams';
-import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/trash';
-import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
+import type { DiagramLifecycle } from '$lib/server/services/diagrams/library';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import {
-	diagramIndexNoteId,
-	type ContentIndex
-} from '$lib/server/services/knowledge-search/indexing';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	DiagramMutationRequest,
 	WorkspaceMutationResult
@@ -53,23 +53,24 @@ import type {
 	SearchDiagramIconsInput,
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/services/diagrams/editing';
+import { diagramEtag } from '$lib/models/diagrams';
 import { StaleRevisionError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
 	DiagramConversationFinder,
 	DiagramDraftWriter,
 	DiagramFinder,
-	DiagramIconSearch,
-	DiagramIndexer,
 	DiagramLister,
 	DiagramReferenceCounter,
 	DiagramRevisionReader,
-	DiagramWriter,
+	DiagramWriter
+} from '$lib/server/services/diagrams/library';
+import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
+import type {
 	DrawioSvgPreviewSanitizer,
 	DrawioXmlContentValidator
-} from '$lib/server/services/diagrams/contracts';
-import type { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
+} from '$lib/server/services/diagrams/drawio';
+import type { CanvasSourceReader } from '$lib/server/services/diagrams/canvas-source';
 
 /**
  * Application boundary for the project diagram studio: the canvas beside a
@@ -195,7 +196,9 @@ export interface DiagramStudioController {
 }
 
 export interface DiagramStudioDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	readonly diagramEditing: DiagramEditingRules;
+	readonly diagramLifecycle: DiagramLifecycleRules;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	transactionRunner: TransactionRunner;
 	diagramFinder: DiagramFinder;
@@ -204,20 +207,18 @@ export interface DiagramStudioDependencies {
 	diagramReferences: DiagramReferenceCounter;
 	diagramDraftWriter: DiagramDraftWriter;
 	diagramRevisionReader: DiagramRevisionReader;
-	diagramTrash: Pick<
-		DiagramLibrary,
-		'getForWrite' | 'persistTrash' | 'deleteArchived' | 'listArchived'
-	>;
+	diagramTrash: DiagramLifecycle;
 	diagramWriter: Pick<DiagramWriter, 'create'>;
 	diagramSourceNotes: NoteReader;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
 	drawioXmlValidator: DrawioXmlContentValidator;
 	drawioSvgSanitizer: DrawioSvgPreviewSanitizer;
-	drawioLabels: Pick<DrawioLabelReader, 'read'>;
-	iconSearch: DiagramIconSearch;
-	canvasSource: PresentedCanvasSource;
+	drawioLabels: DrawioLabels;
+	readonly diagramLabelPresentation: DiagramLabelPresentation;
+	iconSearch: IconSearch;
+	canvasSource: CanvasSourceReader;
 	/** Injected so the write path has one clock, the way the services do. */
 	now: () => DateTime;
 }
@@ -268,7 +269,10 @@ export class DiagramStudio implements DiagramStudioController {
 			current.snapshot.value.value.kind !== 'drawio'
 		)
 			throw new UnsupportedDiagramOperationError('Only an existing draw.io diagram can be edited');
-		const baseEtag = diagramEtag(current.snapshot.value.value);
+		const baseEtag = diagramEtag(
+			current.snapshot.value.value.id,
+			current.snapshot.value.value.currentRevision
+		);
 		let result: DiagramWriteOutcome;
 		switch (command.kind) {
 			case 'saveDiagram':
@@ -314,7 +318,9 @@ export class DiagramStudio implements DiagramStudioController {
 				source,
 				// No preview yet. Only the draw.io embed can draw one, so the gallery says
 				// "No preview yet" until the canvas opens this and exports it.
-				searchableText: searchableDrawioText(this.dependencies.drawioLabels.read(source)),
+				searchableText: this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				),
 				currentRevision: 1,
 				publishedRevision: 0,
 				createdAt: timestamp,
@@ -341,7 +347,7 @@ export class DiagramStudio implements DiagramStudioController {
 		const result = await this.saveProjectDiagramDraft(actor, {
 			diagramId: target.id,
 			source,
-			baseEtag: diagramEtag(target)
+			baseEtag: diagramEtag(target.id, target.currentRevision)
 		});
 		if (result.outcome === 'conflict')
 			throw new StaleRevisionError('The diagram changed while it was being edited');
@@ -389,7 +395,9 @@ export class DiagramStudio implements DiagramStudioController {
 			...(diagram.title ? { title: diagram.title } : {}),
 			labels:
 				diagram.kind === 'drawio'
-					? searchableDrawioText(this.dependencies.drawioLabels.read(diagram.source))
+					? this.dependencies.diagramLabelPresentation.searchText(
+							this.dependencies.drawioLabels.read(diagram.source)
+						)
 					: diagram.source
 		};
 	}
@@ -438,7 +446,9 @@ export class DiagramStudio implements DiagramStudioController {
 		return this.writeOutcome(actor, input.diagramId, input.baseEtag, () =>
 			this.dependencies.transactionRunner.run(async () => {
 				const source = this.dependencies.drawioXmlValidator.validate(input.source);
-				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
+				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				);
 				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
 					kind: 'save',
 					source,
@@ -458,7 +468,9 @@ export class DiagramStudio implements DiagramStudioController {
 			this.dependencies.transactionRunner.run(async () => {
 				const source = this.dependencies.drawioXmlValidator.validate(input.source);
 				const renderedSvg = this.dependencies.drawioSvgSanitizer.sanitize(input.renderedSvg);
-				const searchableText = searchableDrawioText(this.dependencies.drawioLabels.read(source));
+				const searchableText = this.dependencies.diagramLabelPresentation.searchText(
+					this.dependencies.drawioLabels.read(source)
+				);
 				const diagram = await this.writeRevision(actor, input.diagramId, input.baseEtag, {
 					kind: 'publish',
 					source,
@@ -548,7 +560,12 @@ export class DiagramStudio implements DiagramStudioController {
 		change: DiagramRevisionChange
 	): Promise<DrawioDiagram> {
 		const current = await this.dependencies.diagramDraftWriter.getForWrite(actor, diagramId);
-		const decision = prepareDiagramWrite(current, change, baseEtag, this.dependencies.now());
+		const decision = this.dependencies.diagramEditing.prepare(
+			current,
+			change,
+			baseEtag,
+			this.dependencies.now()
+		);
 		if (decision.kind === 'unchanged') return decision.diagram;
 		const saved = await this.dependencies.diagramDraftWriter.persistEdit(actor, decision.write);
 		if (!saved) throw new StaleRevisionError('The diagram changed while it was being saved');
@@ -565,19 +582,23 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<DiagramWriteOutcome> {
 		try {
 			const diagram = await write();
-			return { outcome: 'saved', diagram, etag: diagramEtag(diagram) };
+			return { outcome: 'saved', diagram, etag: diagramEtag(diagram.id, diagram.currentRevision) };
 		} catch (error) {
 			if (!(error instanceof StaleRevisionError)) throw error;
 			const diagram = await this.dependencies.diagramFinder.get(actor, diagramId);
 			if (diagram.kind !== 'drawio') throw error;
-			return { outcome: 'conflict', baseEtag, remote: { diagram, etag: diagramEtag(diagram) } };
+			return {
+				outcome: 'conflict',
+				baseEtag,
+				remote: { diagram, etag: diagramEtag(diagram.id, diagram.currentRevision) }
+			};
 		}
 	}
 
 	deleteProjectDiagram(actor: ActorContext, input: DeleteProjectDiagramInput): Promise<void> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.diagramTrash.getForWrite(actor, input.diagramId);
-			const decision = decideDiagramTrash('delete', current);
+			const decision = this.dependencies.diagramLifecycle.decide('delete', current);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			await this.dependencies.diagramTrash.deleteArchived(actor, current.id);
 		});
@@ -589,7 +610,11 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<Diagram> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.diagramTrash.getForWrite(actor, input.diagramId);
-			const decision = diagramTrashChange('archive', current, this.dependencies.now());
+			const decision = this.dependencies.diagramLifecycle.change(
+				'archive',
+				current,
+				this.dependencies.now()
+			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const archived = await this.dependencies.diagramTrash.persistTrash(actor, decision.diagram);
 			await this.indexDiagram(actor, archived);
@@ -603,7 +628,11 @@ export class DiagramStudio implements DiagramStudioController {
 	): Promise<Diagram> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const current = await this.dependencies.diagramTrash.getForWrite(actor, input.diagramId);
-			const decision = diagramTrashChange('restore', current, this.dependencies.now());
+			const decision = this.dependencies.diagramLifecycle.change(
+				'restore',
+				current,
+				this.dependencies.now()
+			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const restored = await this.dependencies.diagramTrash.persistTrash(actor, decision.diagram);
 			await this.indexDiagram(actor, restored);

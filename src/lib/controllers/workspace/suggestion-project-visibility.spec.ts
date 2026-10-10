@@ -11,7 +11,7 @@ import {
 	testNow,
 	testProjectId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 
 const source = noteBuilder();
 const suggestion = memorySuggestionBuilder({ noteId: source.id });
@@ -41,7 +41,7 @@ const setup = (archived: boolean, proposal = suggestion) => {
 		{ type: 'suggestions', value: proposal },
 		{ type: 'provenance', value: provenance }
 	];
-	return new WorkspaceViews(
+	return createWorkspaceViews(
 		new Map(
 			records.map((record) => [workspaceResourceKey(workspaceRecordIdentity(record)), record])
 		)

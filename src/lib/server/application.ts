@@ -1,3 +1,4 @@
+import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import {
 	ProductionControllerFactory,
 	type ProductionControllerDependencies
@@ -5,19 +6,22 @@ import {
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { ToolRetriever } from './controllers/tool-discovery/controller';
-import type { ITextRecognition } from './services/attachments/mistral-ocr';
-import type { IImageDescription } from './services/attachments/image-description';
+import type { ITextRecognition } from './controllers/attachment-processing/controller';
+import type { IImageDescription } from './controllers/attachment-processing/controller';
 import type { AttachmentClaims } from './services/attachments/contracts';
 import type { EmbeddingClient } from './services/knowledge-search/contracts';
 import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
 import type { Reranker } from './services/knowledge-search/contracts';
-import type { ReferenceFinder } from './services/references/contracts';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
-import type { IAttachmentStorage, ObjectStorageConfig } from './services/attachments/storage';
-import type { AgentEventBus } from './services/agent/runs/events';
-import type { ScheduledTask } from './services/scheduler';
+import type {
+	IAttachmentStorage,
+	ObjectStorageConfig
+} from './repositories/attachments/object-storage';
+import type { AgentEventBus } from './stores/agent/events';
+import type { ScheduledTask } from '$lib/models/maintenance';
 import { createIdentityCapability } from './factories/capabilities/identity-capability-factory';
 import { createProjectsCapability } from './factories/capabilities/projects-capability-factory';
 import { createSyncCapability } from './factories/capabilities/sync-capability-factory';
@@ -80,6 +84,7 @@ export interface ApplicationConfig {
 }
 
 export interface ProductionApplication {
+	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ProductionControllerFactory;
 	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
@@ -162,13 +167,13 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	});
 
 	const projectRepository = projectCapability.repository;
-	const projects = projectCapability.catalog;
+	const projects = projectCapability;
 	const noteRepository = noteCapability.repository;
 	const anchorRepository = noteCapability.anchors;
 	const provenanceRepository = noteCapability.provenanceRepository;
-	const notes = noteCapability.catalog;
+	const notes = noteCapability.services;
 	const provenance = noteCapability.provenance;
-	const todos = todoCapability.catalog;
+	const todos = todoCapability.services;
 	const knowledgeSearch = createKnowledgeSearchCapability({
 		db,
 		transactionRunner,
@@ -191,6 +196,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	} = knowledgeSearch;
 	const toolRetriever = knowledgeSearch.toolRetriever;
 	const agentFilesCapability = createAgentFilesCapability({
+		tokens: knowledgeSearch.tokenizer,
 		db,
 		projects: projectRepository,
 		notes: noteRepository
@@ -199,13 +205,14 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		db,
 		projects: projectRepository,
 		notes: noteRepository
-	}).library;
+	});
 	const memory = createMemoryCapability({
 		db,
 		projects: projectRepository,
 		provenance: provenanceRepository
-	}).library;
+	});
 	const agentCapability = createAgentCapability({
+		tokens: knowledgeSearch.tokenizer,
 		db,
 		controllers: () => controllerFactory,
 		toolRetriever,
@@ -219,7 +226,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		modelCatalog: overrides.modelCatalog
 	});
 	const {
-		conversations: conversationJournal,
+		conversations: conversationSessions,
+		conversationMessages,
 		preferences,
 		models: modelCatalog,
 		toolPreferences,
@@ -256,22 +264,21 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		imageDescriber: overrides.imageDescriber
 	});
 	const attachmentStorage = attachmentCapability.storage;
-	const attachments = attachmentCapability.library;
 	const deliverables = createDeliverablesCapability({
 		db,
 		storage: attachmentStorage
 	});
 	const templates = deliverables.templates;
 	const artifacts = deliverables.artifacts;
-	const relationships = relationshipCapability.graph;
-	const references = referenceCapability.library;
+	const relationships = relationshipCapability;
+	const references = referenceCapability;
 	const referenceFinder = referenceCapability.finder;
-	const suggestions = suggestionCapability.inbox;
-	const skills = skillCapability.library;
+	const suggestions = suggestionCapability;
+	const skills = skillCapability.services;
 	const diagramCapability = createDiagramsCapability({
-		contextNotes: notes,
-		contextSkills: skills,
-		contextMemory: memory,
+		contextNotes: notes.reader,
+		contextSkills: skills.finder,
+		contextMemory: memory.lister,
 		apiKey: openRouterApiKey,
 		baseURL: openRouterBaseURL,
 		appURL,
@@ -282,7 +289,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		provenanceRepository,
 		provenance,
 		context: agentContext,
-		conversations: conversationJournal,
+		conversations: conversationSessions,
+		conversationMessages,
 		preferences,
 		models: modelCatalog,
 		runs: runStore,
@@ -291,28 +299,31 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		defaultVisionModel,
 		projects: projectRepository
 	});
-	const diagrams = diagramCapability.library;
-	const diagramTransforms = diagramCapability.transforms;
+	const diagrams = diagramCapability.services;
 	const dependencies: ProductionControllerDependencies = {
 		agentFiles: { reader: agentFilesCapability.reader },
 		todos: {
+			boardExport: todoCapability.boardExport,
+			todoPresentation: todoCapability.presentation,
+			todoEditingRules: todoCapability.editingRules,
+			todoCreationRules: todoCapability.creationRules,
 			todoBatchReceipts: todoCapability.batchReceipts,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			todoLister: todos,
-			todoContextReader: todos,
-			todoReader: todos,
-			todoEditor: todos,
-			todoDeleter: todos,
+			todoLister: todos.lister,
+			todoContextReader: todos.context,
+			todoReader: todos.reader,
+			todoEditor: todos.editor,
+			todoDeleter: todos.deleter,
 			selectionOrigins: noteCapability.selectionOrigins,
 			promiseExtractor: todoCapability.promiseExtractor,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			trustPolicyEvaluator: trust,
-			todoCreator: todos,
-			suggestionAccepter: suggestions,
+			todoCreator: todos.creator,
+			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			transactionRunner,
-			projectLister: projects,
+			projectLister: projects.lister,
 			markdownToContent: deliverables.markdownToContent,
 			exportPreparer: deliverables.prepareExport,
 			pdfGenerator: deliverables.pdfGenerator,
@@ -328,7 +339,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
 			relationshipClassifier: relationshipCapability.classifier,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			transactionRunner,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
@@ -340,7 +351,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			selectionOrigins: noteCapability.selectionOrigins,
 			referenceFinder,
 			referenceRanker: referenceCapability.ranking,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			transactionRunner,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
@@ -348,78 +359,93 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceModel: referenceCapability.model
 		},
 		diagrams: {
-			diagramSourceNotes: notes,
+			generationRules: diagramCapability.generationRules,
+			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			selectionOrigins: noteCapability.selectionOrigins,
 			generation: diagramCapability.generation,
-			suggestionCreator: suggestions,
+			suggestionCreator: suggestions.creator,
 			transactionRunner,
-			diagramFinder: diagrams,
+			diagramFinder: diagrams.finder,
 			mermaidValidator: diagramCapability.mermaidValidator,
 			now: diagramCapability.now,
 			drawioXmlValidator: diagramCapability.xmlValidator,
-			mermaidRenderer: diagramTransforms,
-			textExtractor: diagramTransforms,
-			diagramWriter: diagrams,
+			mermaidRenderer: diagramCapability.renderer,
+			textExtractor: diagramCapability.textExtractor,
+			diagramWriter: diagrams.writer,
 			diagramIndexer,
 			noteActionRequests: agentCapability.noteActionRequests,
 			runSettlements,
 			runEvents: eventBus
 		},
 		diagramStudio: {
-			diagramSourceNotes: notes,
+			diagramEditing: diagramCapability.editingRules,
+			diagramLifecycle: diagramCapability.lifecycleRules,
+			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
-			diagramFinder: diagrams,
-			diagramLister: diagrams,
-			diagramConversations: diagrams,
-			diagramReferences: diagrams,
-			diagramDraftWriter: diagrams,
-			diagramRevisionReader: diagrams,
-			diagramTrash: diagrams,
-			diagramWriter: diagrams,
+			diagramFinder: diagrams.finder,
+			diagramLister: diagrams.lister,
+			diagramConversations: diagrams.conversations,
+			diagramReferences: diagrams.references,
+			diagramDraftWriter: diagrams.draftWriter,
+			diagramRevisionReader: diagrams.revisionReader,
+			diagramTrash: diagrams.lifecycle,
+			diagramWriter: diagrams.writer,
 			diagramIndexer,
 			drawioXmlValidator: diagramCapability.xmlValidator,
 			drawioSvgSanitizer: diagramCapability.svgSanitizer,
 			drawioLabels: diagramCapability.labels,
+			diagramLabelPresentation: diagramCapability.labelPresentation,
 			iconSearch: diagramCapability.iconSearch,
 			canvasSource: diagramCapability.canvasSource,
 			now: diagramCapability.now
 		},
 		suggestions: {
+			todoCreationRules: todoCapability.creationRules,
+			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
-			suggestionLister: suggestions,
-			suggestionExpirer: suggestions,
-			suggestionContextReader: suggestions,
-			suggestionFinder: suggestions,
-			suggestionAccepter: suggestions,
+			suggestionLister: suggestions.lister,
+			suggestionExpirer: suggestions.expirer,
+			suggestionContextReader: suggestions.context,
+			suggestionFinder: suggestions.finder,
+			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
-			todoCreator: todos,
-			relationshipCreator: relationships,
-			referenceCreator: references,
-			memoryChanges: memory,
-			sourceNotes: notes,
+			todoCreator: todos.creator,
+			relationshipCreator: relationships.creator,
+			referenceCreator: references.creator,
+			memoryChanges: memory.changes,
+			sourceNotes: notes.reader,
 			memoryIndexer,
 			diagramIndexer,
-			diagramWriter: diagrams,
+			diagramWriter: diagrams.writer,
 			drawioXmlValidator: diagramCapability.xmlValidator,
 			drawioSvgSanitizer: diagramCapability.svgSanitizer,
 			drawioLabels: diagramCapability.labels,
+			diagramLabelPresentation: diagramCapability.labelPresentation,
 			now: diagramCapability.now,
 			transactionRunner,
-			suggestionRejecter: suggestions,
-			suggestionReverter: suggestions
+			suggestionRejecter: suggestions.rejecter,
+			suggestionReverter: suggestions.reverter
 		},
 		agent: {
-			webSearchDefaults: agentCapability.webSearchDefaults,
+			runStatus: agentCapability.runStatus,
+			streamPresentation: agentCapability.streamPresentation,
+			conversationHistory: agentCapability.conversationHistory,
+			imagePreparation: agentCapability.imagePreparation,
+			modelSelection: agentCapability.modelSelection,
+			modelChoices: agentCapability.modelChoices,
+			runSettings: agentCapability.runSettings,
+			webSearchOverrides: agentCapability.webSearchOverrides,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			conversationJournal,
+			conversationSessions,
+			conversationMessages,
 			preferences,
 			models: modelCatalog,
 			runs: runRepository,
@@ -437,19 +463,22 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			settlements: runSettlements,
 			eventBus,
 			contextFormatter: agentContext,
-			contextNotes: notes,
-			contextSkills: skills,
-			contextWidgets: widgets,
-			contextDiagrams: diagrams,
-			contextAttachments: attachments,
+			contextNotes: notes.reader,
+			contextSkills: skills.finder,
+			contextWidgets: widgets.reader,
+			contextDiagrams: diagrams.finder,
+			contextAttachments: attachmentCapability.reader,
 			builtInSkills: skillCapability.builtIns,
-			contextMemory: memory,
-			contextProjects: projects,
-			contextConversations: conversationJournal,
+			contextMemory: memory.lister,
+			contextProjects: projects.reader,
 			provenance
 		},
 		agentSettings: {
-			webSearchDefaults: agentCapability.webSearchDefaults,
+			preferenceEditing: agentCapability.preferenceEditing,
+			modelSelection: agentCapability.modelSelection,
+			modelChoices: agentCapability.modelChoices,
+			runSettings: agentCapability.runSettings,
+			webSearchOverrides: agentCapability.webSearchOverrides,
 			agentAvailable: agentCapability.agentAvailable,
 			now: agentCapability.now,
 			syncMutations: synchronization.mutations,
@@ -469,119 +498,143 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		apiTokens: { tokens: identity.apiTokens },
 		toolPreferences: {
 			preferences: toolPreferences,
+			catalog: agentCapability.toolCatalog,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner
 		},
 		attachments: {
-			attachments,
-			todoReader: todos,
+			uploads: attachmentCapability.uploads,
+			reader: attachmentCapability.reader,
+			downloads: attachmentCapability.downloads,
+			lifecycle: attachmentCapability.lifecycle,
+			todoReader: todos.reader,
 			transactionRunner,
 			attachmentIndexer: knowledgeSearch.attachmentIndexer
 		},
 		deliverables: {
+			exportSettingsRules: deliverables.exportSettingsRules,
+			artifactFiles: deliverables.artifactFiles,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			templates,
+			...templates,
 			templateStorage: deliverables.templateStorage,
 			templateStyles: deliverables.templateStyles,
-			noteReader: notes,
+			noteReader: notes.reader,
 			provenanceRecorder: provenance,
-			artifactWriter: artifacts,
+			artifactWriter: artifacts.artifactWriter,
 			artifactStorage: deliverables.artifactStorage,
-			attachmentDownloader: attachments,
+			attachmentDownloader: attachmentCapability.downloads,
 			fetchImage: deliverables.fetchImage,
 			prepareExport: deliverables.prepareExport,
-			exportImageSources: deliverables.exportImageSources,
-			exportDiagramReferences: deliverables.exportDiagramReferences,
-			exportWidgetReferences: deliverables.exportWidgetReferences,
-			widgetReader: widgets,
-			todoLister: todos,
-			noteLister: notes,
-			diagramReader: diagrams,
+			widgetReader: widgets.reader,
+			todoLister: todos.lister,
+			noteLister: notes.treeReader,
+			diagramReader: diagrams.finder,
 			diagramRenderer: deliverables.diagramRenderer,
+			mermaidThemes: deliverables.mermaidThemes,
 			docxGenerator: deliverables.docxGenerator,
 			pdfGenerator: deliverables.pdfGenerator,
 			zipPacker: deliverables.zipPacker,
-			exportSettingsReader: artifacts,
-			exportSettingsWriter: artifacts,
-			artifactLister: artifacts,
-			artifactReader: artifacts,
-			artifactDeleter: artifacts,
+			exportSettingsReader: artifacts.exportSettingsReader,
+			exportSettingsWriter: artifacts.exportSettingsWriter,
+			artifactLister: artifacts.artifactLister,
+			artifactReader: artifacts.artifactReader,
+			artifactDeleter: artifacts.artifactDeleter,
 			transactionRunner
 		},
 		skills: {
+			skillPortability: skillCapability.portability,
+			skillMetadataEditing: skillCapability.metadataEditing,
+			noteReferences: noteCapability.references,
+			noteCreationRules: noteCapability.creationRules,
+			noteEditingRules: noteCapability.editingRules,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			skillFinder: skills,
+			skillFinder: skills.finder,
 			builtInSkills: skillCapability.builtIns,
-			skillUsageLister: skills,
-			skillUsageRecorder: skills,
-			revisionRecorder: notes,
-			noteEditor: notes,
-			revisionReader: notes,
-			attachmentRestorer: notes,
-			anchorRepairer: notes,
+			skillUsageLister: skills.usageLister,
+			skillUsageRecorder: skills.usageRecorder,
+			revisionRecorder: notes.revisionRecorder,
+			noteEditor: notes.editor,
+			revisionReader: notes.revisionReader,
+			attachmentRestorer: notes.attachmentRestorer,
+			anchorRepairer: notes.anchorRepairer,
 			noteIndexer,
-			noteLinkReconciler: relationships,
-			skillEditor: skills,
+			noteLinkReconciler: relationships.reconciler,
+			skillEditor: skills.editor,
 			skillPinWriter: skillCapability.pins,
 			selectionOrigins: noteCapability.selectionOrigins,
-			skillCreator: skills,
-			noteCreation: notes,
+			skillCreator: skills.creator,
+			noteCreation: notes.creator,
 			transactionRunner
 		},
 		workspace: {
+			todoPresentation: todoCapability.presentation,
+			memoryPresentation: memory.presentation,
 			syncChanges: synchronization.changes,
 			writeRecovery: synchronization.mutations,
 			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
-			projectLister: projects,
-			noteTreeReader: notes,
-			skillFinder: skills,
+			projectLister: projects.lister,
+			noteTreeReader: notes.treeReader,
+			skillFinder: skills.finder,
 			builtInSkills: skillCapability.builtIns,
 			transactionRunner,
-			suggestionLister: suggestions,
-			suggestionExpirer: suggestions,
-			todoLister: todos,
-			waitingOnFinder: todos,
-			todoContextReader: todos
+			suggestionLister: suggestions.lister,
+			suggestionExpirer: suggestions.expirer,
+			todoLister: todos.lister,
+			waitingOnFinder: todos.waitingOn,
+			todoContextReader: todos.context
 		},
 		notes: {
+			todoPresentation: todoCapability.presentation,
+			textSearch: noteCapability.textSearch,
+			sections: noteCapability.sections,
+			noteReferences: noteCapability.references,
+			noteCreationRules: noteCapability.creationRules,
+			noteTrashRules: noteCapability.trashRules,
+			notePublicationRules: noteCapability.publicationRules,
+			noteEditingRules: noteCapability.editingRules,
+			notePresentation: noteCapability.presentation,
+			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			markdown: noteCapability.markdown,
+			archiveImport: noteCapability.archiveImport,
+			patchPreparation: noteCapability.patchPreparation,
+			revisionComparison: noteCapability.revisionComparison,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			noteReader: notes,
-			noteTreeReader: notes,
-			noteTextSearcher: notes,
-			noteCreation: notes,
-			noteSectionNumbering: notes,
-			projectReader: projects,
+			noteReader: notes.reader,
+			noteTreeReader: notes.treeReader,
+			noteTextSearcher: notes.textSearcher,
+			noteCreation: notes.creator,
+			noteSectionNumbering: notes.sectionNumbering,
+			projectReader: projects.reader,
 			userPreferences: identity.userPreferences,
-			relationshipFinder: relationships,
-			backlinkContextReader: relationships,
-			noteLinkReconciler: relationships,
-			referenceLister: references,
-			referenceContextReader: references,
-			diagramLister: diagrams,
-			todoLister: todos,
-			todoContextReader: todos,
-			suggestionLister: suggestions,
-			suggestionExpirer: suggestions,
-			suggestionContextReader: suggestions,
-			noteEditor: notes,
-			noteTrash: notes,
-			noteTrashReader: notes,
-			noteDeletion: notes,
-			attachmentRestorer: notes,
-			notePublisher: notes,
-			revisionRecorder: notes,
-			revisionReader: notes,
-			anchorRepairer: notes,
+			relationshipFinder: relationships.finder,
+			backlinkContextReader: relationships.contexts,
+			noteLinkReconciler: relationships.reconciler,
+			referenceLister: references.lister,
+			referenceContextReader: references.contexts,
+			diagramLister: diagrams.lister,
+			todoLister: todos.lister,
+			todoContextReader: todos.context,
+			suggestionLister: suggestions.lister,
+			suggestionExpirer: suggestions.expirer,
+			suggestionContextReader: suggestions.context,
+			noteEditor: notes.editor,
+			noteTrash: notes.trash,
+			noteTrashReader: notes.trashReader,
+			noteDeletion: notes.deletion,
+			attachmentRestorer: notes.attachmentRestorer,
+			notePublisher: notes.publisher,
+			revisionRecorder: notes.revisionRecorder,
+			revisionReader: notes.revisionReader,
+			anchorRepairer: notes.anchorRepairer,
 			noteIndexer,
 			transactionRunner
 		},
@@ -592,43 +645,55 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			transactionRunner
 		},
 		memory: {
+			editing: memory.editing,
+			presentation: memory.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			memoryLister: memory,
-			memoryCreator: memory,
-			memoryEditor: memory,
-			memoryDeleter: memory,
-			memoryChanges: memory,
-			suggestionCreator: suggestions,
-			suggestionAccepter: suggestions,
+			memoryLister: memory.lister,
+			memoryCreator: memory.creator,
+			memoryEditor: memory.editor,
+			memoryDeleter: memory.deleter,
+			memoryChanges: memory.changes,
+			suggestionCreator: suggestions.creator,
+			suggestionAccepter: suggestions.accepter,
 			suggestionEffects: suggestionCapability.effects,
 			trustPolicyEvaluator: trust,
 			transactionRunner
 		},
 		widgets: {
+			catalogReader: widgets.catalogReader,
+			editing: widgets.editing,
+			lifecycle: widgets.lifecycle,
+			catalog: widgets.catalog,
+			search: widgets.search,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			widgetReader: widgets,
-			widgetLister: widgets,
-			widgetWriter: widgets,
+			widgetReader: widgets.reader,
+			widgetLister: widgets.lister,
+			widgetWriter: widgets.writer,
 			widgetIndexer: knowledgeSearch.widgetIndexer,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			transactionRunner
 		},
 		projects: {
+			noteCreationRules: noteCapability.creationRules,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			projectCreator: projects,
-			projectReader: projects,
-			projectLister: projects,
-			projectEditor: projects,
-			projectTreeReader: projects,
-			noteCreation: notes,
-			entryWriter: projects,
+			placement: projects.placement,
+			details: projects.details,
+			presentation: projects.presentation,
+			projectLifecycle: projects.lifecycle,
+			projectCreator: projects.creator,
+			projectReader: projects.reader,
+			projectLister: projects.lister,
+			projectEditor: projects.editor,
+			projectTreeReader: projects.treeReader,
+			noteCreation: notes.creator,
+			entryWriter: projects.treeWriter,
 			transactionRunner
 		},
 		retrieval: {
@@ -636,16 +701,17 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
 			queryGenerator,
-			conversations: conversationJournal
+			conversations: conversationMessages
 		},
 		inlineSuggestions: {
-			noteReader: notes,
+			context: finalizedKnowledgeSearch.inlineContext,
+			noteReader: notes.reader,
 			preferences: finalizedKnowledgeSearch.preferences,
 			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
 			knowledgeLookup,
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
-			memory,
+			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
@@ -656,6 +722,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const controllerFactory = new ProductionControllerFactory(dependencies);
 	return {
 		controllers: controllerFactory,
+		mcpSurface: agentCapability.mcpSurface,
 		recoverInterruptedRuns: async () => {
 			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
 			return (

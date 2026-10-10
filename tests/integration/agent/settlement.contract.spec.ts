@@ -1,3 +1,4 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunApprovals } from '$lib/server/services/agent/runs/approvals';
@@ -60,17 +61,19 @@ const setup = async (suffix: string) => {
 	runner.events = [{ type: 'text_delta', text: 'Done' }];
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,
 			decisions,
 			settlements: new RunSettlements(runs, events),
-			conversationJournal: new ConversationArchive(conversations),
+			conversationMessages: new ConversationArchive(conversations),
+			conversationSessions: new ConversationArchive(conversations),
 			runner,
 			eventBus: { notify: () => {} }
 		})

@@ -3,11 +3,11 @@ import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { noteBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 
 it('rejects a traversal path before creating an attachment upload', async () => {
-	const { service, notes } = setupAttachments();
+	const { uploads, notes } = setupAttachments();
 	const note = noteBuilder();
 	notes.notes.push(note);
 	await expect(
-		service.initiate(testActor(), {
+		uploads.initiate(testActor(), {
 			noteId: note.id,
 			path: '../secret.txt',
 			mediaType: 'text/plain',

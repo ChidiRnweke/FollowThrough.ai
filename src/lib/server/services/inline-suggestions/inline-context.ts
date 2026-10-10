@@ -6,27 +6,14 @@ import type {
 import type { MemoryEntry } from '$lib/models/memory';
 import type { Note } from '$lib/models/notes';
 import type { SearchDocumentId, SearchMatch } from '$lib/models/knowledge-search';
-import { getEncoding, type Tiktoken } from 'js-tiktoken';
-let encoding: Tiktoken | undefined;
-const countRetrievalTokens = (value: string): number =>
-	(encoding ??= getEncoding('cl100k_base')).encode(value).length;
+import type { TokenCounter } from '$lib/models/tokenization';
 
 const USER_MEMORY_THRESHOLD = 20;
-export const USER_MEMORY_LIMIT = 8;
+const USER_MEMORY_LIMIT = 8;
 const USER_MEMORY_OUTPUT_TOKENS = 4_000;
 const USER_MEMORY_RERANK_TOKENS = 24_000;
-export const PROJECT_PASSAGE_LIMIT = 8;
-export const PROJECT_CANDIDATE_LIMIT = 40;
-
-export const retrievalQuery = (request: InlineSuggestionRequest): string =>
-	[
-		request.headingPath.join(' > '),
-		request.currentSection.trim(),
-		request.prefix.slice(-2_000),
-		request.suffix.slice(0, 500)
-	]
-		.filter(Boolean)
-		.join('\n');
+const PROJECT_PASSAGE_LIMIT = 8;
+const PROJECT_CANDIDATE_LIMIT = 40;
 
 const sourceType = (match: SearchMatch): InlineCompletionPassage['sourceType'] => {
 	if (match.document.memoryEntryId) return 'project-memory';
@@ -46,14 +33,18 @@ const passageOf = (match: SearchMatch): InlineCompletionPassage => ({
 const activeSharedUserMemory = (entries: readonly MemoryEntry[]): readonly MemoryEntry[] =>
 	entries.filter((entry) => !entry.projectId && !entry.deletedAt && entry.shareWithAgents);
 
-const withinTokenBudget = (values: readonly string[], budget: number): readonly string[] => {
+const withinTokenBudget = (
+	values: readonly string[],
+	budget: number,
+	tokens: TokenCounter
+): readonly string[] => {
 	const kept: string[] = [];
 	let used = 0;
 	for (const value of values) {
-		const tokens = countRetrievalTokens(value);
-		if (used + tokens > budget) continue;
+		const count = tokens.count(value);
+		if (used + count > budget) continue;
 		kept.push(value);
-		used += tokens;
+		used += count;
 	}
 	return kept;
 };
@@ -72,67 +63,102 @@ const memoryAsMatch = (entry: MemoryEntry, note: Note): SearchMatch => ({
 	score: 0
 });
 
-/**
- * Phoenix must show what the completer actually grounded on, not how many
- * items there were — counts are useless for improving retrieval.
- */
-export const inlineContextTraceOutput = (context: InlineCompletionContext): string =>
-	JSON.stringify({
-		noteTitle: context.noteTitle,
-		userMemory: context.userMemory,
-		projectPassages: context.projectPassages
-	});
-
-export const vectorSearchTraceOutput = (results: readonly SearchMatch[]): string =>
-	JSON.stringify(
-		results.map((match) => ({
-			id: match.document.id,
-			sourceTitle: match.document.sourceTitle,
-			noteId: match.document.noteId,
-			sectionPath: match.document.sectionPath,
-			score: match.score,
-			content: match.document.content
-		}))
-	);
-
-/** Select shared memory facts before the controller decides whether ranking is needed. */
-export function inlineMemoryPlan(
-	entries: readonly MemoryEntry[],
-	note: Note
-):
-	| { kind: 'complete'; contents: readonly string[] }
-	| { kind: 'rank'; candidates: readonly SearchMatch[] } {
-	const shared = activeSharedUserMemory(entries);
-	const contents = shared.map((entry) => entry.content);
-	const tokens = contents.reduce((total, content) => total + countRetrievalTokens(content), 0);
-	if (shared.length <= USER_MEMORY_THRESHOLD && tokens <= USER_MEMORY_OUTPUT_TOKENS)
-		return { kind: 'complete', contents };
-	const candidates: SearchMatch[] = [];
-	let used = 0;
-	for (const entry of shared) {
-		const tokens = countRetrievalTokens(entry.content);
-		if (used + tokens > USER_MEMORY_RERANK_TOKENS) continue;
-		candidates.push(memoryAsMatch(entry, note));
-		used += tokens;
-	}
-	return { kind: 'rank', candidates };
+export interface IInlineContextService {
+	readonly limits: {
+		readonly userMemory: number;
+		readonly projectPassages: number;
+		readonly projectCandidates: number;
+	};
+	retrievalQuery(request: InlineSuggestionRequest): string;
+	inlineContextTraceOutput(context: InlineCompletionContext): string;
+	vectorSearchTraceOutput(results: readonly SearchMatch[]): string;
+	inlineMemoryPlan(
+		entries: readonly MemoryEntry[],
+		note: Note
+	):
+		| { kind: 'complete'; contents: readonly string[] }
+		| { kind: 'rank'; candidates: readonly SearchMatch[] };
+	inlineRankedMemory(matches: readonly SearchMatch[]): readonly string[];
+	inlineProjectCandidates(matches: readonly SearchMatch[], note: Note): readonly SearchMatch[];
+	inlineProjectPassages(matches: readonly SearchMatch[]): readonly InlineCompletionPassage[];
+	eligibleInlinePrefix(prefix: string): boolean;
+	eligibleInlineNote(note: Note): boolean;
 }
-
-export const inlineRankedMemory = (matches: readonly SearchMatch[]): readonly string[] =>
-	withinTokenBudget(
-		matches.slice(0, USER_MEMORY_LIMIT).map((match) => match.document.content),
-		USER_MEMORY_OUTPUT_TOKENS
-	);
-
-export const inlineProjectCandidates = (
-	matches: readonly SearchMatch[],
-	note: Note
-): readonly SearchMatch[] => matches.filter((match) => match.document.noteId !== note.id);
-
-export const inlineProjectPassages = (
-	matches: readonly SearchMatch[]
-): readonly InlineCompletionPassage[] => matches.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
-
-/** Preserve cheap eligibility gates before retrieval and completion. */
-export const eligibleInlinePrefix = (prefix: string): boolean => prefix.trim().length >= 12;
-export const eligibleInlineNote = (note: Note): boolean => !note.archivedAt;
+export class InlineContextService implements IInlineContextService {
+	readonly limits: IInlineContextService['limits'] = {
+		userMemory: USER_MEMORY_LIMIT,
+		projectPassages: PROJECT_PASSAGE_LIMIT,
+		projectCandidates: PROJECT_CANDIDATE_LIMIT
+	};
+	constructor(private readonly tokens: TokenCounter) {}
+	retrievalQuery(request: InlineSuggestionRequest): string {
+		return [
+			request.headingPath.join(' > '),
+			request.currentSection.trim(),
+			request.prefix.slice(-2_000),
+			request.suffix.slice(0, 500)
+		]
+			.filter(Boolean)
+			.join('\n');
+	}
+	/** Record the actual grounding content in Phoenix, not only counts. */
+	inlineContextTraceOutput(context: InlineCompletionContext): string {
+		return JSON.stringify({
+			noteTitle: context.noteTitle,
+			userMemory: context.userMemory,
+			projectPassages: context.projectPassages
+		});
+	}
+	vectorSearchTraceOutput(results: readonly SearchMatch[]): string {
+		return JSON.stringify(
+			results.map((match) => ({
+				id: match.document.id,
+				sourceTitle: match.document.sourceTitle,
+				noteId: match.document.noteId,
+				sectionPath: match.document.sectionPath,
+				score: match.score,
+				content: match.document.content
+			}))
+		);
+	}
+	inlineMemoryPlan(
+		entries: readonly MemoryEntry[],
+		note: Note
+	):
+		| { kind: 'complete'; contents: readonly string[] }
+		| { kind: 'rank'; candidates: readonly SearchMatch[] } {
+		const shared = activeSharedUserMemory(entries);
+		const contents = shared.map((entry) => entry.content);
+		const tokens = contents.reduce((total, content) => total + this.tokens.count(content), 0);
+		if (shared.length <= USER_MEMORY_THRESHOLD && tokens <= USER_MEMORY_OUTPUT_TOKENS)
+			return { kind: 'complete', contents };
+		const candidates: SearchMatch[] = [];
+		let used = 0;
+		for (const entry of shared) {
+			const tokens = this.tokens.count(entry.content);
+			if (used + tokens > USER_MEMORY_RERANK_TOKENS) continue;
+			candidates.push(memoryAsMatch(entry, note));
+			used += tokens;
+		}
+		return { kind: 'rank', candidates };
+	}
+	inlineRankedMemory(matches: readonly SearchMatch[]): readonly string[] {
+		return withinTokenBudget(
+			matches.slice(0, USER_MEMORY_LIMIT).map((match) => match.document.content),
+			USER_MEMORY_OUTPUT_TOKENS,
+			this.tokens
+		);
+	}
+	inlineProjectCandidates(matches: readonly SearchMatch[], note: Note): readonly SearchMatch[] {
+		return matches.filter((match) => match.document.noteId !== note.id);
+	}
+	inlineProjectPassages(matches: readonly SearchMatch[]): readonly InlineCompletionPassage[] {
+		return matches.slice(0, PROJECT_PASSAGE_LIMIT).map(passageOf);
+	}
+	eligibleInlinePrefix(prefix: string): boolean {
+		return prefix.trim().length >= 12;
+	}
+	eligibleInlineNote(note: Note): boolean {
+		return !note.archivedAt;
+	}
+}

@@ -1,3 +1,5 @@
+import type { DiagramRevisionDecision, DiagramWriteDecision } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/models/diagrams';
 import {
 	type Diagram,
 	type DiagramEtag,
@@ -9,7 +11,7 @@ import type { DateTime } from '$lib/models/workspace';
 import { StaleRevisionError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 
 /** A completed identical diagram write can be retried against its original base. */
-export function decideDiagramRevision(
+function decideDiagramRevision(
 	command: {
 		readonly kind: 'save' | 'publish';
 		readonly baseMatches: boolean;
@@ -38,7 +40,7 @@ export function decideDiagramRevision(
 	};
 }
 
-export function prepareDiagramWrite(
+function prepareDiagramWrite(
 	current: Diagram,
 	change: DiagramRevisionChange,
 	baseEtag: DiagramEtag,
@@ -83,7 +85,7 @@ export function prepareDiagramWrite(
 	const decision = decideDiagramRevision(
 		{
 			kind: change.kind === 'publish' ? 'publish' : 'save',
-			baseMatches: diagramEtag(current) === baseEtag,
+			baseMatches: diagramEtag(current.id, current.currentRevision) === baseEtag,
 			contentChanged: current.source !== changed.source || current.title !== changed.title
 		},
 		current
@@ -106,5 +108,39 @@ export function prepareDiagramWrite(
 	};
 }
 
-export const diagramEtag = (diagram: Pick<DrawioDiagram, 'id' | 'currentRevision'>): DiagramEtag =>
-	`diagram:${diagram.id}:r${diagram.currentRevision}` as DiagramEtag;
+export interface DiagramEditingRules {
+	revision(
+		command: {
+			readonly kind: 'save' | 'publish';
+			readonly baseMatches: boolean;
+			readonly contentChanged: boolean;
+		},
+		current: { readonly currentRevision: number; readonly publishedRevision: number }
+	): DiagramRevisionDecision;
+	prepare(
+		current: Diagram,
+		change: DiagramRevisionChange,
+		baseEtag: DiagramEtag,
+		timestamp: DateTime
+	): DiagramWriteDecision;
+}
+export class DiagramEditingService implements DiagramEditingRules {
+	revision(
+		command: {
+			readonly kind: 'save' | 'publish';
+			readonly baseMatches: boolean;
+			readonly contentChanged: boolean;
+		},
+		current: { readonly currentRevision: number; readonly publishedRevision: number }
+	): DiagramRevisionDecision {
+		return decideDiagramRevision(command, current);
+	}
+	prepare(
+		current: Diagram,
+		change: DiagramRevisionChange,
+		baseEtag: DiagramEtag,
+		timestamp: DateTime
+	): DiagramWriteDecision {
+		return prepareDiagramWrite(current, change, baseEtag, timestamp);
+	}
+}

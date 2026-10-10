@@ -1,16 +1,18 @@
-import type { Note, NoteEtag, NoteView } from '$lib/models/notes';
+import { noteEtag, type NoteView, type NoteRevisionSummary } from '$lib/models/notes';
 
-export const noteEtag = (note: Pick<Note, 'id' | 'currentRevision'>): NoteEtag =>
-	`note:${note.id}:r${note.currentRevision}` as NoteEtag;
-
-export const noteMatchesEtag = (
-	note: Pick<Note, 'id' | 'currentRevision'>,
-	etag: NoteEtag
-): boolean => noteEtag(note) === etag;
-
-/** Assemble the same note surface from server records or downloaded records. */
-export function assembleNoteView<Backlink, Reference, Diagram, Task, Proposal>(
-	facts: Omit<NoteView<Backlink, Reference, Diagram, Task, Proposal>, 'etag'>
-): NoteView<Backlink, Reference, Diagram, Task, Proposal> {
-	return { ...facts, etag: noteEtag(facts.note) };
+export interface NotePresentation {
+	assemble<Backlink, Reference, Diagram, Task, Proposal>(
+		facts: Omit<NoteView<Backlink, Reference, Diagram, Task, Proposal>, 'etag'>
+	): NoteView<Backlink, Reference, Diagram, Task, Proposal>;
+	preferredRevision(revisions: readonly NoteRevisionSummary[]): NoteRevisionSummary | undefined;
+}
+export class NotePresentationService implements NotePresentation {
+	assemble<Backlink, Reference, Diagram, Task, Proposal>(
+		facts: Omit<NoteView<Backlink, Reference, Diagram, Task, Proposal>, 'etag'>
+	): NoteView<Backlink, Reference, Diagram, Task, Proposal> {
+		return { ...facts, etag: noteEtag(facts.note.id, facts.note.currentRevision) };
+	}
+	preferredRevision(revisions: readonly NoteRevisionSummary[]): NoteRevisionSummary | undefined {
+		return revisions.find((revision) => revision.isPublished) ?? revisions.at(0);
+	}
 }

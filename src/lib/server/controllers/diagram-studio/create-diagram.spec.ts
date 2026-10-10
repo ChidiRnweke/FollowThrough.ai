@@ -1,8 +1,11 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { describe, expect, it } from 'vitest';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
@@ -35,7 +38,7 @@ const setup = (
 	// A diagram is created in a project, and creating one verifies the project is
 	// there — the same rule that stopped notes being filed wherever sorted first.
 	projects.projects = [projectBuilder({ id: testProjectId() })];
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		diagrams,
 		new InMemoryNoteRepository(),
 		new InMemoryAnchorRepository(),
@@ -46,16 +49,19 @@ const setup = (
 		diagrams,
 		controller: new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
+				diagramEditing: new DiagramEditingService(),
+				diagramLifecycle: new DiagramLifecycleService(),
 				diagramSourceNotes: sourceNotes,
-				diagramFinder: library,
-				diagramDraftWriter: library,
-				diagramConversations: library,
-				diagramWriter: library,
+				diagramFinder: library.finder,
+				diagramDraftWriter: library.draftWriter,
+				diagramConversations: library.conversations,
+				diagramWriter: library.writer,
 				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
 				diagramIndexer: { index },
 				drawioXmlValidator: { validate: (source: string) => source },
+				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => ['Ingest Index Answer'] }
 			})
 		)
@@ -102,6 +108,8 @@ describe('Creating a diagram', () => {
 	it('validates draw.io XML before storing it', async () => {
 		const controller = new DiagramStudio(
 			capabilityDependencies<DiagramStudioDependencies>({
+				diagramEditing: new DiagramEditingService(),
+				diagramLifecycle: new DiagramLifecycleService(),
 				drawioXmlValidator: {
 					validate: () => {
 						throw new Error('bad xml');

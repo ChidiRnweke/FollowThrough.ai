@@ -1,11 +1,21 @@
-import { AgentReasoning } from '$lib/server/services/agent/runs/reasoning';
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
 import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
-import { ConversationBuffer } from '$lib/server/services/agent/conversations/buffer';
+import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -13,7 +23,6 @@ import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -42,7 +51,8 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { testActor, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import type { AgentRunner, ConversationJournal } from '$lib/server/services/agent/runs/contracts';
+import type { AgentRunner } from '$lib/server/services/agent/runs/contracts';
+import type { ConversationMessages } from '$lib/server/services/agent/conversations/archive';
 
 const testRunId = '30000000-0000-4000-8000-000000000001' as AgentRunId;
 const testConversationId = '30000000-0000-4000-8000-0000000000c1' as ConversationId;
@@ -116,29 +126,30 @@ const setup = <T extends AgentRunner>(
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			events: runs,
 			decisions: runs,
 			sessions,
 			transactionRunner: transactions,
 			settlements: new RunSettlements(runs, runs),
-			contextFormatter: new AgentContext(),
+			contextFormatter: createAgentContext(),
 			contextNotes: new InMemoryNoteContent(),
 			contextSkills: new InMemorySkills(),
 			builtInSkills: builtInSkillsFixture().builtInSkills,
 			contextProjects: new InMemoryProjects(),
 			contextMemory: options?.contextMemory ?? new InMemoryMemoryEntryRepository(),
-			contextConversations: new ConversationArchive(new InMemoryConversationRepository()),
+			conversationSessions: new ConversationArchive(new InMemoryConversationRepository()),
 			provenance: {
 				record: async () => {
 					throw new Error('Unexpected provenance record');
 				}
 			},
-			conversationJournal: capabilityDependencies<ConversationJournal>({
+			conversationMessages: capabilityDependencies<ConversationMessages>({
 				recordToolActivity: async (_actor, _conversationId, activity) => {
 					toolRows.push(activity);
 				},
@@ -590,7 +601,7 @@ describe('Durable note approval publication', () => {
 });
 
 it('journals a failed tool call and its correction through the production runner', async () => {
-	const note = noteBuilder({ ...noteContentFromMarkdown('Launch Monday.') });
+	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.') });
 	const notes = reviewedNoteFixture(note);
 	const model = new InMemoryToolCallingModel(
 		'edit_note',
@@ -598,10 +609,14 @@ it('journals a failed tool call and its correction through the production runner
 		JSON.stringify({ noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }),
 		'Too small'
 	);
-	const reasoning = new AgentReasoning(
+	const reasoning = new AgentExecution(
+		new AgentPromptService(),
+		new AgentToolRecoveryService(),
+		createAgentStream,
 		async ({ run, executor, signal }) => {
 			if (!run.inputSnapshot) throw new Error('Run input is missing');
 			return new AgentTools(
+				testTokenizer,
 				notes.factory,
 				testActor(),
 				run.executionMode,
@@ -609,21 +624,25 @@ it('journals a failed tool call and its correction through the production runner
 				executor,
 				new InMemoryToolRetriever(),
 				{ isEnabled: () => true },
-				run.pendingDecisions,
+				restoredToolReviews(notes.factory, testActor(), run.pendingDecisions),
 				signal
 			);
 		},
-		new InMemoryAgentSessionRepository(),
-		'test-key',
-		'https://unused.test',
-		'https://unused.test',
-		undefined,
-		(repository, actor, conversationId) =>
-			new ConversationBuffer(repository, actor, conversationId, {
-				virtualize: async (_actor, _id, item) => item
-			}),
-		undefined,
-		() => new InMemoryModelProvider(model)
+		{
+			create: (actor, conversationId) =>
+				createConversationSession(new InMemoryAgentSessionRepository(), actor, conversationId, {
+					virtualize: async (_actor, _id, item) => item
+				})
+		},
+		true,
+		new AgentSdkInfrastructure(
+			'test-key',
+			'https://unused.test',
+			'https://unused.test',
+			undefined,
+			() => new InMemoryModelProvider(model)
+		),
+		undefined
 	);
 	const fixture = setup(reasoning);
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));

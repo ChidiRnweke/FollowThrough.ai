@@ -245,3 +245,17 @@ export class AgentProviderFailure extends Error {
 		this.name = 'AgentProviderFailure';
 	}
 }
+
+/** The server authenticated a different account during an outbox request. */
+export class OutboxAccountChangedError extends Error {}
+
+/** The controller rolls back its conversation when another submission wins the request ID. */
+export class DuplicateNoteActionRequest extends Error {}
+
+export class RunPreparationCancelled extends Error {
+	constructor() {
+		super('The run was cancelled during preparation');
+	}
+}
+
+export class ToolLifecycleError extends Error {}

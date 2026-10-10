@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import type { DiagramSuggestion } from '$lib/models/suggestions';
 
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
@@ -23,16 +24,13 @@
 		type ProseMirrorDocument,
 		type TextSelection
 	} from '$lib/models/notes';
-	import { activeHeadingAt, outlineFrom } from '$lib/services/notes/outline';
 	import type { ProjectId } from '$lib/models/projects';
 	import { ProjectDiagramPicker, MermaidNodeView } from '$lib/components/diagrams';
 	import { revealHeading } from '$lib/components/edra/commands/HeadingLinkSuggestion.js';
-	import { changedTopLevelBlockIndices } from '$lib/services/notes/note-shimmer';
 	import type { ReferenceView } from '$lib/models/references';
 	import type { SkillSummary } from '$lib/models/skills';
 	import type { SuggestionId } from '$lib/models/suggestions';
 	import { createEditor } from '$lib/components/edra/commands/editor.js';
-	import { toEditorContent } from './editor-document';
 	import { completePendingConversion } from '$lib/components/edra/commands/diagram-references.js';
 	import { rankNoteLinkTargets } from '$lib/components/edra/commands/NoteLinkSuggestion.js';
 	import type { InlineSuggestionRequestInput } from '$lib/components/edra/commands/InlineSuggestion.js';
@@ -103,7 +101,7 @@
 	import NoteReadingStats from './note-reading-stats.svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import ActionProgress from '$lib/components/shared/action-progress.svelte';
-	import { uploadNoteAttachment } from './attachment-upload';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { plainTextRangeToPm } from '$lib/components/edra/commands/plain-text-range';
 	import {
 		proofreadSelection,
@@ -332,7 +330,10 @@
 	function reportActiveHeading(): void {
 		const viewport = paneViewport();
 		if (!viewport) return;
-		const active = activeHeadingAt(headingOffsets, viewport.scrollTop + activationLine());
+		const active = noteDocuments.activeHeading(
+			headingOffsets,
+			viewport.scrollTop + activationLine()
+		);
 		if (active === lastActiveHeading) return;
 		lastActiveHeading = active;
 		onactiveheading?.(active);
@@ -405,7 +406,7 @@
 				void noteClipboard.copy(selection);
 			},
 			onTocUpdate: (headings) => {
-				onoutline?.(outlineFrom(headings));
+				onoutline?.(noteDocuments.outline(headings));
 				queueMeasure();
 			},
 			onReviseMermaid: (source, instruction) => onreviseMermaid(source, instruction),
@@ -439,7 +440,7 @@
 			// upload URL itself.
 			onFileUpload: async (file) => {
 				try {
-					return await uploadNoteAttachment(noteId, file);
+					return await attachmentsController.uploadInline(noteId, file);
 				} catch (error) {
 					toast.error(error instanceof Error ? error.message : 'Image upload failed');
 					throw error;
@@ -771,7 +772,7 @@
 		if (!editor) return;
 
 		// Initial content only; the page remounts per note via {#key}.
-		editor.commands.setContent(toEditorContent(untrack(() => document)));
+		editor.commands.setContent(noteDocuments.editorContent(untrack(() => document)));
 		initialized = true;
 		editor.registerPlugin(
 			createSuggestionAnchorPlugin({
@@ -987,7 +988,7 @@
 		nextDocument: ProseMirrorDocument
 	): void {
 		if (!editor) return;
-		const indices = changedTopLevelBlockIndices(previousDocument, nextDocument);
+		const indices = noteDocuments.changedBlocks(previousDocument, nextDocument);
 		if (indices.length === 0) return;
 		const positions: number[] = [];
 		editor.state.doc.forEach((_node, offset, index) => {
@@ -1094,7 +1095,7 @@
 	): void {
 		if (!editor) return;
 		initialized = false;
-		editor.commands.setContent(toEditorContent(nextDocument));
+		editor.commands.setContent(noteDocuments.editorContent(nextDocument));
 		initialized = true;
 		if (previousDocument) shimmerChangedBlocks(previousDocument, nextDocument);
 	}

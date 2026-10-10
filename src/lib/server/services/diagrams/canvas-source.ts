@@ -10,7 +10,10 @@ export interface CanvasSourceItems {
 }
 
 /** The latest successful diagram write in the conversation, backed by its full transcript. */
-export class PresentedCanvasSource {
+export interface CanvasSourceReader {
+	latest(actor: ActorContext, conversationId: ConversationId): Promise<DiagramId | undefined>;
+}
+export class PresentedCanvasSource implements CanvasSourceReader {
 	constructor(private readonly items: CanvasSourceItems) {}
 
 	async latest(

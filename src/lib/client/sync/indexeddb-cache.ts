@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { Transaction } from 'dexie';
 import { syncCursorSchema } from '$lib/models/sync';
-import { mergeResourceStates, resourceVersion } from '$lib/services/sync/state';
-import type { CacheCommit, StoredCache, SyncCacheRepository } from './contracts';
+import type { CacheStorage, CacheTransaction } from '$lib/controllers/sync/cache-persistence';
+import type { StoredCache } from './contracts';
 import { WorkspaceDatabase, storedResourceSchema, storedTable } from './database';
 
 const checkpointSchema = z.object({
@@ -12,7 +12,7 @@ const checkpointSchema = z.object({
 });
 
 /** Complete resources and their inventory checkpoint commit together. Reads never repair data. */
-export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
+export class IndexedDbSyncCache<T> implements CacheStorage<T> {
 	constructor(
 		private readonly valueSchema: z.ZodType<T>,
 		readonly database: WorkspaceDatabase
@@ -33,48 +33,45 @@ export class IndexedDbSyncCache<T> implements SyncCacheRepository<T> {
 			inventoryComplete: checkpoint?.inventoryComplete ?? false
 		};
 	}
-	async commit(accountId: string, changes: CacheCommit<T>): Promise<void> {
+
+	async transaction<R>(
+		accountId: string,
+		work: (tx: CacheTransaction<T>) => Promise<R>
+	): Promise<R> {
 		this.database.assertAccount(accountId);
-		await this.database.run('rw', ['records', 'meta'], async (tx) => {
-			const records = storedTable(tx, 'records');
-			const schema = storedResourceSchema(this.valueSchema);
-			const keys = [...changes.put.map((row) => row.key), ...changes.remove.map((row) => row.key)];
-			if (new Set(keys).size !== keys.length)
-				throw new Error('A cache commit must touch each resource only once');
-			const existing = await records.bulkGet(keys);
-			const previous = new Map(
-				keys.map((key, index) => {
-					const raw = existing[index];
-					return [key, raw === undefined ? undefined : schema.parse(raw).entry];
-				})
-			);
-			await records.bulkPut(
-				changes.put.map((proposed) =>
-					schema.parse({
-						key: proposed.key,
-						entry: mergeResourceStates(previous.get(proposed.key), proposed.entry)
-					})
-				)
-			);
-			await records.bulkDelete(
-				changes.remove
-					.filter((removal) => {
-						const entry = previous.get(removal.key);
-						return entry === undefined || resourceVersion(entry) === removal.etag;
-					})
-					.map((removal) => removal.key)
-			);
-			if (changes.cursor !== undefined) {
-				const raw = await storedTable(tx, 'meta').get('checkpoint');
-				const previous = raw === undefined ? null : checkpointSchema.parse(raw);
-				if (previous === null || BigInt(changes.cursor) >= BigInt(previous.cursor))
-					await storedTable(tx, 'meta').put({
-						key: 'checkpoint',
-						cursor: changes.cursor,
-						inventoryComplete: previous?.inventoryComplete || changes.inventoryComplete === true
-					});
-			}
-		});
+		return this.database.run('rw', ['records', 'meta'], (tx) =>
+			work({
+				resources: async (keys) => {
+					const existing = await storedTable(tx, 'records').bulkGet([...keys]);
+					return new Map(
+						keys.map((key, index) => {
+							const raw = existing[index];
+							return [
+								key,
+								raw === undefined
+									? undefined
+									: storedResourceSchema(this.valueSchema).parse(raw).entry
+							];
+						})
+					);
+				},
+				checkpoint: async () => {
+					const raw = await storedTable(tx, 'meta').get('checkpoint');
+					return raw === undefined ? null : checkpointSchema.parse(raw);
+				},
+				put: async (records) => {
+					await storedTable(tx, 'records').bulkPut(
+						records.map((row) => storedResourceSchema(this.valueSchema).parse(row))
+					);
+				},
+				remove: async (keys) => {
+					await storedTable(tx, 'records').bulkDelete([...keys]);
+				},
+				putCheckpoint: async (checkpoint) => {
+					await storedTable(tx, 'meta').put({ key: 'checkpoint', ...checkpoint });
+				}
+			})
+		);
 	}
 	async close(): Promise<void> {
 		this.database.close();

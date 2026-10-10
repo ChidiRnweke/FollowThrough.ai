@@ -1,7 +1,9 @@
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
+import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
 import { wholeValueRebase } from '$lib/services/sync/rebase';
 import { afterEach, expect, it } from 'vitest';
 import { z } from 'zod';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { cachedSnapshot } from '$lib/services/sync/state';
 import { requestValue } from './database';
 import {
@@ -15,23 +17,12 @@ const subscriptions: (() => void)[] = [];
 const setup = () => {
 	const name = `workspace-observation-${crypto.randomUUID()}`;
 
-	const writer = new DexieWorkspaceRepository(
-		'alice',
-		z.string(),
-		z.string(),
-		wholeValueRebase<string>(),
-		name
-	);
-	const follower = new DexieWorkspaceRepository(
-		'alice',
-		z.string(),
-		z.string(),
-		wholeValueRebase<string>(),
-		name
-	);
+	const writer = new DexieWorkspaceRepository('alice', z.string(), z.string(), name);
+	const writerWrites = createDurableOutbox(writer, wholeValueRebase<string>());
+	const follower = new DexieWorkspaceRepository('alice', z.string(), z.string(), name);
 	names.add(writer.database.name);
 	repositories.push(writer, follower);
-	return { writer, follower, name };
+	return { writer, writerWrites, follower, name };
 };
 afterEach(async () => {
 	for (const stop of subscriptions.splice(0)) stop();
@@ -49,7 +40,7 @@ const saveBody = (
 	version: bigint,
 	value: string
 ) =>
-	repository.cache.commit('alice', {
+	createCachePersistence(repository.cache).commit('alice', {
 		put: [
 			{
 				key: 'note:1',
@@ -87,9 +78,9 @@ it('observes a body replacement from another connection even when the record cou
 });
 
 it('observes settlement as one coherent body, queue and exact receipt projection across connections', async () => {
-	const { writer, follower } = setup();
+	const { writerWrites, follower } = setup();
 	const operationId = crypto.randomUUID();
-	await writer.append('alice', {
+	await writerWrites.append('alice', {
 		operationId,
 		key: 'note:1',
 		command: 'create',
@@ -126,9 +117,9 @@ it('observes settlement as one coherent body, queue and exact receipt projection
 		)
 	);
 	await initial.promise;
-	const sent = await writer.take('alice');
+	const sent = await writerWrites.take('alice');
 	if (!sent) throw new Error('The staged edit was not eligible');
-	await writer.settle('alice', sent, {
+	await writerWrites.settle('alice', sent, {
 		kind: 'applied',
 		receipt: {
 			operationId,
@@ -170,17 +161,11 @@ it('leaves a healthy observed projection idle until durable data changes', async
 
 it('never publishes another account’s projection to an existing account observer', async () => {
 	const { writer, follower, name } = setup();
-	const bob = new DexieWorkspaceRepository(
-		'bob',
-		z.string(),
-		z.string(),
-		wholeValueRebase<string>(),
-		name
-	);
+	const bob = new DexieWorkspaceRepository('bob', z.string(), z.string(), name);
 	repositories.push(bob);
 	names.add(bob.database.name);
 	await saveBody(writer, 1n, 'Alice private note');
-	await bob.cache.commit('bob', {
+	await createCachePersistence(bob.cache).commit('bob', {
 		put: [
 			{
 				key: 'note:1',
@@ -225,7 +210,7 @@ it('reads a complete rich-content page while its live projection is active', asy
 			observed.reject
 		)
 	);
-	await writer.cache.commit('alice', {
+	await createCachePersistence(writer.cache).commit('alice', {
 		put: Array.from({ length: 32 }, (_, index) => ({
 			key: `note:${index}`,
 			entry: {

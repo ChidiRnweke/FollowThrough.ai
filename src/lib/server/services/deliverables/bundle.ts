@@ -1,3 +1,4 @@
+import type { BundleFile } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
 
 /**
@@ -6,12 +7,6 @@ import AdmZip from 'adm-zip';
  * Pure: bytes in, bytes out, with no workspace and no storage, so the naming rules that
  * decide what a reader sees when they open the archive are testable on their own.
  */
-
-export interface BundleFile {
-	/** Folder-relative, extension included. Sanitized here, so callers may pass note titles. */
-	readonly path: string;
-	readonly bytes: Uint8Array;
-}
 
 const RESERVED_SEGMENTS = new Set(['', '.', '..']);
 
@@ -68,7 +63,7 @@ const dedupe = (path: string, taken: ReadonlySet<string>): string => {
  * Pack documents into a zip. Names are sanitized and de-duplicated, so every file handed in
  * comes back out — `packZip` never drops one.
  */
-export function packZip(files: readonly BundleFile[]): Buffer {
+function packZip(files: readonly BundleFile[]): Buffer {
 	const zip = new AdmZip();
 	const taken = new Set<string>();
 	for (const file of files) {
@@ -77,4 +72,13 @@ export function packZip(files: readonly BundleFile[]): Buffer {
 		zip.addFile(path, Buffer.from(file.bytes));
 	}
 	return zip.toBuffer();
+}
+
+export interface DocumentBundlePacker {
+	pack(files: readonly BundleFile[]): Buffer;
+}
+export class DocumentBundleService implements DocumentBundlePacker {
+	pack(files: readonly BundleFile[]): Buffer {
+		return packZip(files);
+	}
 }

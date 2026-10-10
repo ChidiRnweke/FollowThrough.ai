@@ -1,0 +1,269 @@
+import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
+import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
+import { AgentToolRecoveryService } from '$lib/server/services/agent/runs/tool-recovery';
+import { AgentPromptService } from '$lib/server/services/agent/runs/instructions';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
+import { AgentImagePreparationService } from '$lib/server/services/agent/runs/images';
+const images = new AgentImagePreparationService();
+import { describe, expect, it } from 'vitest';
+import type { AgentRunContext, PreparedAgentRun, RunAgentInput } from '$lib/models/agent';
+import type { DateTime } from '$lib/models/workspace';
+import {
+	InMemoryModelProvider,
+	InMemoryTextModel
+} from '$lib/testing/agent/fakes/in-memory-model-provider';
+import { InMemoryAgentSessionRepository } from '$lib/testing/agent/fakes/in-memory-agent-sessions';
+import { InMemoryAgentFiles } from '$lib/testing/agent/fakes/in-memory-agent-files';
+import { testActor, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
+import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
+import { createReplayVirtualizer } from '$lib/server/factories/agent/conversation-factory';
+import { AgentExecution } from '$lib/server/controllers/agent/execution';
+
+const context: AgentRunContext = { contextNotes: [], contextResources: [], skills: { items: [] } };
+const now = '2026-09-16T00:00:00.000Z' as DateTime;
+const conversationId = testConversationId();
+const imageUrl =
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=';
+const request: RunAgentInput = {
+	conversationId,
+	prompt: 'Describe the image',
+	visionModelOverride: 'test/vision',
+	images: [
+		{
+			id: '40000000-0000-4000-8000-000000018001',
+			mediaType: 'image/png',
+			dataUrl: imageUrl,
+			name: 'sample.png'
+		}
+	]
+};
+const run: PreparedAgentRun = {
+	kind: 'agent',
+	id: '10000000-0000-4000-8000-000000000001' as PreparedAgentRun['id'],
+	userId: testActor().userId,
+	conversationId,
+	model: 'test/text',
+	executionMode: 'approval_required',
+	status: 'running',
+	startedAt: now,
+	requestId: 'image-preparation-test',
+	pendingDecisions: [],
+	inputSnapshot: request,
+	contextSnapshot: context,
+	createdAt: now,
+	updatedAt: now
+};
+const completion = (content: string | null) => ({
+	id: 'caption-1',
+	object: 'chat.completion',
+	created: 1,
+	model: 'test/vision',
+	choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }]
+});
+const setup = (fetch: typeof globalThis.fetch, prepare = async () => {}) => {
+	const model = new InMemoryTextModel('The image is described.');
+	const provider = new InMemoryModelProvider(model);
+	const sessions = new InMemoryAgentSessionRepository();
+	const reasoning = new AgentExecution(
+		new AgentPromptService(),
+		new AgentToolRecoveryService(),
+		createAgentStream,
+		async () => {
+			await prepare();
+			return {
+				agentTools: () => [],
+				offeredToolNames: () => [],
+				catalog: () => [],
+				reviewDecision: (pending) => pending
+			};
+		},
+		{
+			create: (actor, id) =>
+				createConversationSession(
+					sessions,
+					actor,
+					id,
+					createReplayVirtualizer(new InMemoryAgentFiles(), tokens)
+				)
+		},
+		true,
+		new AgentSdkInfrastructure(
+			'test-key',
+			'https://provider.test/v1',
+			'https://app.test',
+			fetch,
+			() => provider
+		),
+		undefined
+	);
+	const execute = async (signal = new AbortController().signal, input = request) => {
+		const updates = [];
+		for await (const update of reasoning.execute({
+			actor: testActor(),
+			run: { ...run, inputSnapshot: input },
+			request: input,
+			imageInput: images.prepare(input),
+			webSearch: CHAT_WEB_SEARCH_DEFAULTS,
+			context,
+			signal,
+			toolExecutor: { execute: async (_input, action) => action() }
+		}))
+			updates.push(update);
+		return updates;
+	};
+	return { model, provider, execute };
+};
+
+describe('agent image preparation', () => {
+	it('aborts remaining image requests when another description fails', async () => {
+		let release!: (response: Response) => void;
+		const first = new Promise<Response>((resolve) => {
+			release = resolve;
+		});
+		let waitingForFirst = true;
+		const active = new Set<AbortSignal>();
+		const transport: typeof globalThis.fetch = async (_url, options) => {
+			if (waitingForFirst) {
+				waitingForFirst = false;
+				return first;
+			}
+			const signal = options?.signal;
+			if (!signal) throw new Error('No cancellation signal');
+			active.add(signal);
+			return new Promise<Response>((_resolve, reject) => {
+				signal.addEventListener(
+					'abort',
+					() => {
+						active.delete(signal);
+						reject(signal.reason);
+					},
+					{ once: true }
+				);
+				release(Response.json(completion('')));
+			});
+		};
+		const { execute } = setup(transport);
+		const images = [
+			{
+				id: '40000000-0000-4000-8000-000000018001',
+				name: 'first.png',
+				mediaType: 'image/png' as const,
+				dataUrl: imageUrl
+			},
+			{
+				id: '40000000-0000-4000-8000-000000018002',
+				name: 'second.png',
+				mediaType: 'image/png' as const,
+				dataUrl: imageUrl
+			}
+		];
+		const result = await execute(new AbortController().signal, { ...request, images }).then(
+			() => ({ kind: 'success' }),
+			() => ({ kind: 'failure' })
+		);
+		expect({ result, activeRequests: active.size }).toEqual({
+			result: { kind: 'failure' },
+			activeRequests: 0
+		});
+	});
+	it.each(['', ' \n ', null])('rejects unusable image description %s', async (content) => {
+		const { execute } = setup(async () => Response.json(completion(content)));
+		await expect(execute()).rejects.toThrow('Image description provider returned no usable text');
+	});
+	it('releases the model provider when tool preparation fails', async () => {
+		const { execute, provider } = setup(
+			async () => Response.json(completion('A chart')),
+			async () => {
+				throw new Error('Tool preparation failed');
+			}
+		);
+		const result = await execute().then(
+			() => ({ kind: 'success' }),
+			() => ({ kind: 'failure' })
+		);
+		expect({ result, released: provider.closed }).toEqual({
+			result: { kind: 'failure' },
+			released: true
+		});
+	});
+	it('releases the model provider when image description is rejected', async () => {
+		const { execute, provider } = setup(async () =>
+			Response.json({ error: { message: 'Image rejected' } }, { status: 400 })
+		);
+		const result = await execute().then(
+			() => ({ kind: 'success' }),
+			() => ({ kind: 'failure' })
+		);
+		expect({ result, released: provider.closed }).toEqual({
+			result: { kind: 'failure' },
+			released: true
+		});
+	});
+	it('does not prepare a run cancelled before execution', async () => {
+		const abort = new AbortController();
+		abort.abort(new Error('Cancelled before preparation'));
+		const { execute } = setup(async () => {
+			throw new Error('Unexpected provider request');
+		});
+		await expect(execute(abort.signal)).rejects.toThrow('Cancelled before preparation');
+	});
+	it('cancels an in-flight image description and releases the provider', async () => {
+		const abort = new AbortController();
+		let started!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const transport: typeof globalThis.fetch = async (_url, options) =>
+			new Promise<Response>((_resolve, reject) => {
+				const signal = options?.signal;
+				if (!signal) throw new Error('No cancellation signal');
+				signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+				started();
+			});
+		const { execute, provider } = setup(transport);
+		const result = execute(abort.signal).then(
+			() => ({ kind: 'success' }),
+			() => ({ kind: 'failure' })
+		);
+		await pending;
+		abort.abort();
+		expect({ result: await result, released: provider.closed }).toEqual({
+			result: { kind: 'failure' },
+			released: true
+		});
+	});
+	it('provides the generated description to a text-only model', async () => {
+		const { execute, model } = setup(async () =>
+			Response.json(completion('  A chart of monthly sales.  '))
+		);
+		await execute();
+		expect(JSON.stringify(model.requests[0]?.input)).toContain(
+			'Image 1: A chart of monthly sales.'
+		);
+	});
+	it('keeps the original image for a model with native vision', async () => {
+		const { execute, model } = setup(async () => {
+			throw new Error('Native vision must not request a caption');
+		});
+		const { visionModelOverride: _override, ...native } = request;
+		await execute(new AbortController().signal, native);
+		expect(JSON.stringify(model.requests[0]?.input)).toContain(imageUrl);
+	});
+	it('provides app-supplied images to native vision', async () => {
+		const { execute, model } = setup(async () => {
+			throw new Error('Native vision must not request a caption');
+		});
+		const { visionModelOverride: _override, images, ...native } = request;
+		await execute(new AbortController().signal, { ...native, contextImages: images });
+		expect(JSON.stringify(model.requests[0]?.input)).toContain(imageUrl);
+	});
+	it('describes app-supplied images for a text-only model', async () => {
+		const { execute, model } = setup(async () => Response.json(completion('A diagram render.')));
+		const { images, ...contextual } = request;
+		await execute(new AbortController().signal, { ...contextual, contextImages: images });
+		expect(JSON.stringify(model.requests[0]?.input)).toContain('Image 1: A diagram render.');
+	});
+});
+
+const tokens = testTokenizer;

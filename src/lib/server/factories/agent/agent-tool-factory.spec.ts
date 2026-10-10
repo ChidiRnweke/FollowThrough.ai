@@ -1,3 +1,13 @@
+import { RunContext } from '@openai/agents';
+import type { ProvenanceId } from '$lib/models/provenance';
+import type { AgentToolSessionInput } from '$lib/server/controllers/agent/tool-sessions';
+import type { ToolPreferencesController } from '$lib/server/controllers/agent/tool-preferences/controller';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 import { loadedSkillFixture } from '$lib/testing/skills/fixtures/loaded-skill';
 import { describe, expect, it } from 'vitest';
@@ -16,8 +26,8 @@ import type { ApiTokensController } from '$lib/server/controllers/api-tokens/con
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import { noteEtag } from '$lib/models/notes';
+
 import {
 	appContextBuilder,
 	noteBuilder,
@@ -51,14 +61,15 @@ const executeDirectly: AgentToolExecutor = {
 const allTools: ToolAccessPolicy = { isEnabled: () => true };
 
 const createAgentTools = (
-	controllers: ConstructorParameters<typeof AgentTools>[0],
-	actor: ConstructorParameters<typeof AgentTools>[1],
-	mode: ConstructorParameters<typeof AgentTools>[2],
-	context: ConstructorParameters<typeof AgentTools>[3],
+	controllers: ConstructorParameters<typeof AgentTools>[1],
+	actor: ConstructorParameters<typeof AgentTools>[2],
+	mode: ConstructorParameters<typeof AgentTools>[3],
+	context: ConstructorParameters<typeof AgentTools>[4],
 	executor: AgentToolExecutor = executeDirectly,
 	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
 	access: ToolAccessPolicy = allTools
-): AgentTools => new AgentTools(controllers, actor, mode, context, executor, retriever, access);
+): AgentTools =>
+	new AgentTools(testTokenizer, controllers, actor, mode, context, executor, retriever, access);
 
 let freshKeyCounter = 0;
 const freshKey = (): string => `fresh:${freshKeyCounter++}`;
@@ -153,6 +164,7 @@ const registry = memoizeAgentTools(
 		options.factory ? freshKey() : `registry:${mode}`,
 	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
 		new MemoizedAgentTools(
+			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
 			mode,
@@ -212,6 +224,7 @@ const agentToolsRegistry = memoizeAgentTools(
 		options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
 	) =>
 		new MemoizedAgentTools(
+			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
 			mode,
@@ -367,6 +380,7 @@ describe('Agent tool coverage invariants', () => {
 	 */
 	it('builds every contract on the MCP surface except the app-surface tools', () => {
 		const mcp = new McpTools(
+			testTokenizer,
 			{} as ControllerFactory,
 			testActor(),
 			{ provenanceId: testProvenanceId() },
@@ -656,7 +670,7 @@ describe('Agent tool coverage invariants', () => {
 			notes: () => ({
 				get: async () => ({
 					note,
-					etag: noteEtag(note),
+					etag: noteEtag(note.id, note.currentRevision),
 					backlinks: [{ id: 'bl' }],
 					references: [{ id: 'ref' }],
 					diagrams: [{ id: 'dg' }],
@@ -676,7 +690,7 @@ describe('Agent tool coverage invariants', () => {
 		expect(result).toMatchObject({
 			noteId: note.id,
 			title: note.title,
-			etag: noteEtag(note),
+			etag: noteEtag(note.id, note.currentRevision),
 			backlinks: [{ id: 'bl' }],
 			references: [{ id: 'ref' }],
 			diagrams: [{ id: 'dg' }],
@@ -747,43 +761,49 @@ describe('Agent tool coverage invariants', () => {
 	});
 
 	it('threads the run provenanceId into load_skill even when the context omits it', async () => {
-		let receivedProvenanceId: unknown;
-		const skill = {
-			note: noteBuilder({ id: crypto.randomUUID() as never, kind: 'skill' }),
-			name: 'Compliance format',
-			description: 'Formats responses for compliance review',
-			triggerHints: ['compliance']
+		let receivedProvenanceId: ProvenanceId | undefined;
+		const note = noteBuilder({ kind: 'skill', title: 'Compliance format' });
+		const loadForAgent: SkillsController['loadForAgent'] = async (_actor, input) => {
+			receivedProvenanceId = input.provenanceId;
+			return {
+				skill: {
+					note,
+					slug: 'compliance-format',
+					description: 'Formats responses for compliance review',
+					triggerHints: ['compliance'],
+					metadata: {},
+					allowImplicitInvocation: true,
+					isEnabled: true
+				},
+				usages: []
+			};
 		};
-		const factory = {
-			toolPreferences: () => ({ list: async () => [] }),
-			skills: () => ({
-				loadForAgent: async (_actor: unknown, input: { provenanceId: unknown }) => {
-					receivedProvenanceId = input.provenanceId;
-					return { skill, usages: [] };
-				}
-			})
-		} as unknown as ControllerFactory;
-		const run = {
-			userId: testActor().userId,
+		const factory = capabilityDependencies<ControllerFactory>({
+			toolPreferences: () =>
+				capabilityDependencies<ToolPreferencesController>({ list: async () => [] }),
+			skills: () => capabilityDependencies<SkillsController>({ loadForAgent })
+		});
+		const run: AgentToolSessionInput['run'] = {
 			executionMode: 'auto_accept',
 			model: 'openai/gpt-5.6',
-			provenanceId: testProvenanceId()
+			provenanceId: testProvenanceId(),
+			pendingDecisions: []
 		};
 		const registry = await agentToolRegistry(
 			() => factory,
-			new InMemoryToolRetriever()
+			new InMemoryToolRetriever(),
+			testTokenizer
 		)({
 			actor: testActor(),
-			request: { prompt: 'Help' } as never,
-			run: run as never,
+			request: { prompt: 'Help', conversationId: testConversationId() },
+			run,
 			executor: { execute: async (_input, action) => action() },
 			signal: new AbortController().signal
 		});
 		const loadSkill = registry.agentTools().find((candidate) => candidate.name === 'load_skill');
-		await (loadSkill as FunctionTool).invoke(
-			{} as never,
-			JSON.stringify({ noteId: '11111111-1111-4111-8111-111111111111' })
-		);
+		if (!loadSkill || loadSkill.type !== 'function')
+			throw new Error('Expected load_skill function tool');
+		await loadSkill.invoke(new RunContext(), JSON.stringify({ noteId: note.id }));
 		expect(receivedProvenanceId).toBe(run.provenanceId);
 	});
 
@@ -906,6 +926,10 @@ describe('Agent tool coverage invariants', () => {
 		const receipts = new InMemoryTodoBatchReceipts();
 		const controller = new Todos(
 			capabilityDependencies<TodosDependencies>({
+				boardExport: new TodoBoardExportService(),
+				todoPresentation: new TodoPresentationService(),
+				todoEditingRules: new TodoEditingRulesService(),
+				todoCreationRules: new TodoEditingRulesService(),
 				todoCreator: todos,
 				todoBatchReceipts: new TodoBatchReceipts(receipts),
 				transactionRunner: new InMemoryTransactionRunner([todos, receipts])
@@ -924,7 +948,13 @@ describe('Agent tool coverage invariants', () => {
 		const input = JSON.stringify(payload);
 		const first = await selected.invoke({} as never, input);
 		const retry = await selected.invoke({} as never, input);
-		const mcp = new McpTools(factory, testActor(), { provenanceId: testProvenanceId() }, allTools)
+		const mcp = new McpTools(
+			testTokenizer,
+			factory,
+			testActor(),
+			{ provenanceId: testProvenanceId() },
+			allTools
+		)
 			.definitions()
 			.find((definition) => definition.name === 'create_todos');
 		if (!mcp) throw new Error('Missing task batch tool');
@@ -1461,8 +1491,8 @@ describe('Doomed note edits never reach the approval boundary', () => {
 			id: crypto.randomUUID() as never,
 			kind,
 			title: 'Knowledge layer',
-			document: noteContentFromMarkdown(markdown).document,
-			plainText: noteContentFromMarkdown(markdown).plainText
+			document: noteMarkdown.read(markdown).document,
+			plainText: noteMarkdown.read(markdown).plainText
 		});
 
 	const notesFactory = (note: ReturnType<typeof noteBuilder>) => reviewedNoteFixture(note).factory;
@@ -1526,6 +1556,7 @@ describe('Deselected tools', () => {
 		(...disabled: string[]): AgentTools => {
 			const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
 			return new MemoizedAgentTools(
+				testTokenizer,
 				{} as ControllerFactory,
 				testActor(),
 				'auto_accept',

@@ -109,3 +109,53 @@ export type CacheAccess<T> =
 	| { readonly kind: 'unavailable' }
 	| { readonly kind: 'deleted' }
 	| { readonly kind: 'failure'; readonly message: string };
+
+/** Transient account synchronization results; never persisted as resource state. */
+export type SynchronizationResult =
+	| { readonly kind: 'idle' }
+	| { readonly kind: 'complete' }
+	| { readonly kind: 'offline' }
+	| { readonly kind: 'unavailable' }
+	| { readonly kind: 'stopped' }
+	| { readonly kind: 'failure'; readonly message: string };
+export type SubmissionResult = SynchronizationResult | { readonly kind: 'waiting' };
+export type SyncLane = 'pull' | 'writes';
+export interface SyncLaneState {
+	readonly requested: boolean;
+	readonly running: Promise<void> | null;
+	readonly retry: number | null;
+	readonly failures: number;
+	readonly result: SubmissionResult;
+}
+export interface SyncWriteRetry {
+	readonly attempts: number;
+	readonly at: number;
+}
+export interface SyncScheduler {
+	now(): number;
+	schedule(at: number, work: () => Promise<void>): () => void;
+}
+
+export interface CachedRecord<T> {
+	readonly key: string;
+	readonly entry: ResourceState<T>;
+}
+
+export interface CacheCommit<T> {
+	readonly put: readonly CachedRecord<T>[];
+	readonly remove: readonly { readonly key: string; readonly etag: SyncEtag | null }[];
+	readonly cursor?: SyncCursor;
+	readonly inventoryComplete?: boolean;
+}
+
+export interface StoredCache<T> {
+	readonly inventoryComplete: boolean;
+	readonly records: readonly CachedRecord<T>[];
+	readonly cursor: SyncCursor | null;
+}
+
+/** Database sequence values are transported without JavaScript number rounding. */
+export const syncEtag = (version: bigint): SyncEtag => {
+	if (version <= 0n) throw new Error('A synchronization version must be positive');
+	return `sync-v1-${version}` as SyncEtag;
+};

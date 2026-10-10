@@ -20,11 +20,10 @@
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { mergeProps } from '$lib/utils';
 	import ConfirmDelete from '$lib/components/shared/confirm-delete.svelte';
-	import {
-		deleteArtifact,
-		downloadArtifact,
-		regenerateArtifact
-	} from '$lib/remote/deliverables/deliverables.remote';
+	import { onDestroy } from 'svelte';
+	import { createArtifactActions } from '$lib/factories/deliverables/artifacts';
+	const artifactActions = createArtifactActions();
+	onDestroy(() => artifactActions.close());
 	import { formatBytes, formatDateTime } from '$lib/components/shared/labels';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import * as InputGroup from '$lib/components/ui/input-group';
@@ -32,7 +31,6 @@
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 	import { goto } from '$app/navigation';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	export interface ArtifactLibraryData {
@@ -48,45 +46,22 @@
 	let { data }: { data: ArtifactLibraryData } = $props();
 
 	const artifacts = $derived<readonly ArtifactView[]>(data.artifacts);
-	let busyId = $state<ArtifactId | undefined>(undefined);
 	let searchValue = $derived(data.query);
 
 	async function download(id: ArtifactId): Promise<void> {
-		busyId = id;
-		try {
-			const { url } = await downloadArtifact({ artifactId: id });
-			window.location.assign(url);
-			// audit-allow: silent-catch — the toast tells the user that no download was prepared.
-		} catch {
-			toast.error('Could not prepare the download.');
-		} finally {
-			busyId = undefined;
-		}
+		const result = await artifactActions.download(id);
+		if (result.kind === 'failure') toast.error(result.message);
 	}
 
 	async function regenerate(id: ArtifactId): Promise<void> {
-		busyId = id;
-		try {
-			const output = await regenerateArtifact({ artifactId: id });
-			window.location.assign(output.downloadUrl);
-			await workspaceSession.synchronize();
-			toast.success('Document regenerated');
-			// audit-allow: silent-catch — the toast reports regeneration failure and the artifact remains unchanged.
-		} catch {
-			toast.error('Could not regenerate the document.');
-		} finally {
-			busyId = undefined;
-		}
+		const result = await artifactActions.regenerate(id);
+		if (result.kind === 'failure') toast.error(result.message);
+		else if (result.kind === 'complete') toast.success('Document regenerated');
 	}
 
 	async function remove(id: ArtifactId): Promise<void> {
-		try {
-			await deleteArtifact({ artifactId: id });
-			await workspaceSession.synchronize();
-			// audit-allow: silent-catch — the toast reports the failed deletion; the shared record remains available.
-		} catch {
-			toast.error('Could not delete the artifact.');
-		}
+		const result = await artifactActions.remove(id);
+		if (result.kind === 'failure') toast.error(result.message);
 	}
 
 	function urlFor(page: number, query = data.query): string {
@@ -234,7 +209,7 @@
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Download"
-										disabled={busyId === artifact.id}
+										disabled={artifactActions.busy(artifact.id)}
 										onclick={() => download(artifact.id)}
 									>
 										<Download />
@@ -248,7 +223,7 @@
 										variant="ghost"
 										size="icon-sm"
 										aria-label="Regenerate"
-										disabled={busyId === artifact.id}
+										disabled={artifactActions.busy(artifact.id)}
 										onclick={() => regenerate(artifact.id)}
 									>
 										<RefreshCw />
@@ -268,7 +243,7 @@
 												variant="ghost"
 												size="icon-sm"
 												aria-label="Delete"
-												disabled={busyId === artifact.id}
+												disabled={artifactActions.busy(artifact.id)}
 											>
 												<Trash2 />
 											</Button>

@@ -1,3 +1,6 @@
+import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
+import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -9,8 +12,7 @@ import type { AgentRunId, RunAgentInput } from '$lib/models/agent';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { AgentContext } from '$lib/server/services/agent/runs/context';
-import { AgentEvents } from '$lib/server/services/agent/runs/events';
+import { AgentEventStore } from '$lib/server/stores/agent/events';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { InMemoryAgentRunner, InMemorySkills } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -39,18 +41,19 @@ export const agentContextFixture = () => {
 	const sessions = new InMemoryAgentSessionRepository();
 	const transactions = new InMemoryTransactionRunner([runs, sessions, conversations]);
 	const dependencies = {
+		conversationHistory: new ConversationHistoryService(sessions),
 		runs,
 		cancellations: new RunCancellation(runs),
 		preparation: new RunPreparation(runs),
 		checkpoints: new RunCheckpoints(runs),
-		webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+		webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 		approvals: new RunApprovals(runs),
 		events: runs,
 		decisions: runs,
 		sessions,
 		transactionRunner: transactions,
 		settlements: new RunSettlements(runs, runs),
-		contextFormatter: new AgentContext(),
+		contextFormatter: createAgentContext(),
 		contextNotes: notes,
 		contextSkills: skills,
 		contextWidgets: resources.widgetReader,
@@ -59,13 +62,15 @@ export const agentContextFixture = () => {
 		builtInSkills: builtInSkillsFixture().builtInSkills,
 		contextProjects: projects,
 		contextMemory: memory,
-		contextConversations: journal,
+		conversationSessions: journal,
 		provenance: new InMemoryProvenanceRecorder(),
-		conversationJournal: journal,
+		conversationMessages: journal,
 		runner: new InMemoryAgentRunner(),
-		eventBus: new AgentEvents()
+		eventBus: new AgentEventStore()
 	};
-	const controller = new Agent(capabilityDependencies<AgentDependencies>(dependencies));
+	const controller = new Agent(
+		capabilityDependencies<AgentDependencies>({ ...dependencies, ...agentRulesFixture() })
+	);
 	const builder = {
 		async build(actor: ActorContext, input: RunAgentInput, origin: { provenanceId: ProvenanceId }) {
 			if (!(await conversations.findById(actor, input.conversationId))) {

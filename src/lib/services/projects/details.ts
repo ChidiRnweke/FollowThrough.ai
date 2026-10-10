@@ -1,6 +1,6 @@
 import type { ProjectDetails } from '$lib/models/projects';
 
-export function decideProjectDetails(input: {
+function decideProjectDetails(input: {
 	readonly name: string;
 	readonly description?: string;
 }): { kind: 'invalid'; message: string } | ({ kind: 'details' } & ProjectDetails) {
@@ -8,4 +8,16 @@ export function decideProjectDetails(input: {
 	return name
 		? { kind: 'details', name, description: input.description?.trim() || undefined }
 		: { kind: 'invalid', message: 'Project name is required' };
+}
+
+export interface ProjectDetailRules {
+	decide(input: {
+		readonly name: string;
+		readonly description?: string;
+	}): { kind: 'invalid'; message: string } | ({ kind: 'details' } & ProjectDetails);
+}
+export class ProjectDetailService implements ProjectDetailRules {
+	decide(input: { readonly name: string; readonly description?: string }) {
+		return decideProjectDetails(input);
+	}
 }

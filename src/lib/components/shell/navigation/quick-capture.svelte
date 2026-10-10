@@ -2,7 +2,7 @@
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import { Form } from '$lib/components/ui/form';
 	import { goto } from '$app/navigation';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import type { ProjectId } from '$lib/models/projects';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
 

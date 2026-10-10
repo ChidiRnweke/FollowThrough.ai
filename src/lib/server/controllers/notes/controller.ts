@@ -1,22 +1,29 @@
-import { noteTrashChange } from '$lib/services/notes/trash';
-import { prepareNotePublication } from '$lib/services/notes/publication';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
-import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { TodoPresentation } from '$lib/services/todos/presentation';
+import type { NoteEditingRules } from '$lib/services/notes/editing';
+import type {
+	NoteCreationRules,
+	NoteTrashRules,
+	NotePublicationRules
+} from '$lib/services/notes/lifecycle';
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type {
+	NoteCreator,
+	NoteTrashOperations,
+	NoteDeletion
+} from '$lib/server/services/notes/catalog';
 import type { DateTime } from '$lib/models/workspace';
-import { assembleTodoView } from '$lib/services/todos/presentation';
-import { assembleNoteView, noteEtag, noteMatchesEtag } from '$lib/services/notes/presentation';
+import type { NotePresentation } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
 import { mutationResource } from '$lib/services/workspace/commands';
-import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
-import { applyNotePatch, describeNotePatchFailure } from '$lib/server/services/notes/patches';
-import { diffNoteRevisionTexts } from '$lib/server/services/notes/revision-diff';
+import type { NotePatchPreparation } from '$lib/server/services/notes/patches';
+import type { NoteRevisionComparison } from '$lib/server/services/notes/revision-diff';
 import {
 	type NoteChangeRequest,
 	type NoteChangeTarget,
@@ -24,15 +31,13 @@ import {
 	type PreparedNoteChange,
 	type ApplyReviewedNoteChangeOutput
 } from '$lib/models/notes';
-import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
-import { applyNoteDraftEdit, prepareNoteSave } from '$lib/services/notes/editing';
 import type { BacklinkView } from '$lib/models/relationships';
 import type { ReferenceView } from '$lib/models/references';
 import type { Diagram } from '$lib/models/diagrams';
 import type { TodoView } from '$lib/models/todos';
 import type { SuggestionView } from '$lib/models/suggestions';
 import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ImportMarkdownArchiveInput,
@@ -41,12 +46,7 @@ import type {
 	ArchiveLinkIssue,
 	ParsedMarkdownNote
 } from '$lib/models/projects';
-import {
-	resolveArchiveLinks,
-	indexArchiveReferences,
-	uniqueTitleIn,
-	unmappedFrontmatterKeys
-} from '$lib/server/services/notes/import';
+import type { NoteArchiveImportPreparation } from '$lib/server/services/notes/import';
 import type {
 	ArchiveNoteInput,
 	ArchiveNoteOutput,
@@ -94,49 +94,47 @@ import type {
 	ReplaceNoteTextInput,
 	ReplaceNoteTextOutput
 } from '$lib/models/notes';
-import { collectNoteLinkTargets } from '$lib/services/notes/references';
-import { sectionNumberingView } from '$lib/services/notes/section-numbering';
+import type { NoteReferences } from '$lib/services/notes/references';
+import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import {
-	buildNoteSearchPattern,
-	replaceInNoteDocument,
-	searchNoteTargets
-} from '$lib/services/notes/text-search';
+import type { NoteTextSearch } from '$lib/services/notes/text-search';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { ProjectReader } from '$lib/server/services/projects/contracts';
+import type { ProjectReader } from '$lib/server/services/projects/catalog';
 import type { UserPreferencesReader } from '$lib/server/services/identity/user-preferences';
 import type {
 	BacklinkContextReader,
 	NoteLinkReconciler,
 	RelationshipFinder
-} from '$lib/server/services/relationships/contracts';
-import type { DiagramLister } from '$lib/server/services/diagrams/contracts';
+} from '$lib/server/services/relationships/graph';
+import type { DiagramLister } from '$lib/server/services/diagrams/library';
+
 import type {
 	NoteReader,
 	NoteTextSearcher,
 	NoteTreeReader
-} from '$lib/server/services/notes/contracts';
+} from '$lib/server/services/notes/catalog';
+
 import type {
 	ReferenceLister,
 	ReferenceContextReader
-} from '$lib/server/services/references/contracts';
+} from '$lib/server/services/references/library';
 import type {
 	SuggestionLister,
 	SuggestionExpirer,
 	SuggestionContextReader
-} from '$lib/server/services/suggestions/contracts';
-import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/contracts';
+} from '$lib/server/services/suggestions/inbox';
+import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/catalog';
 import type {
 	NoteAttachmentRestorer,
 	NoteEditor,
-	NoteIndexer,
 	NotePublisher,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
 	NoteSectionNumberingEditor,
 	NoteTrashReader,
 	SourceAnchorRepairer
-} from '$lib/server/services/notes/contracts';
+} from '$lib/server/services/notes/catalog';
+import type { NoteIndexer } from '$lib/server/services/notes/contracts';
 
 /**
  * Application boundary for notes: the read model, editing and publishing, offline sync,
@@ -145,6 +143,14 @@ import type {
  * Reads are assembled in parallel from many sources; writes go through the transaction
  * runner so a save and its link/index side effects commit atomically.
  */
+export interface NoteMarkdownReader {
+	read(markdown: string): Pick<Note, 'document' | 'plainText'>;
+}
+export interface NoteMarkdownWriter {
+	write(document: Note['document']): string;
+}
+export interface NoteMarkdown extends NoteMarkdownReader, NoteMarkdownWriter {}
+
 export interface NotesController {
 	importMarkdownArchive(
 		actor: ActorContext,
@@ -323,13 +329,26 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly archiveImport: NoteArchiveImportPreparation;
+	readonly patchPreparation: NotePatchPreparation;
+	readonly revisionComparison: NoteRevisionComparison;
+	readonly todoPresentation: TodoPresentation;
+	readonly textSearch: NoteTextSearch;
+	readonly noteReferences: NoteReferences;
+	readonly sections: NoteSectionNumbering;
+	readonly noteEditingRules: NoteEditingRules;
+	readonly notePublicationRules: NotePublicationRules;
+	readonly noteTrashRules: NoteTrashRules;
+	readonly noteCreationRules: NoteCreationRules;
+	readonly notePresentation: NotePresentation;
+	readonly suggestionPresentation: ISuggestionPresentationService;
 	markdown: NoteMarkdown;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
-	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	noteCreation: NoteCreator;
 	noteSectionNumbering: NoteSectionNumberingEditor;
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
@@ -345,23 +364,27 @@ export interface NotesDependencies {
 	suggestionContextReader: SuggestionContextReader;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
-	noteTrash: Pick<NoteCatalog, 'archiveFacts' | 'restoreFacts' | 'persistTrash'>;
+	noteTrash: NoteTrashOperations;
 	noteTrashReader: NoteTrashReader;
-	noteDeletion: Pick<NoteCatalog, 'deletionFacts' | 'trashForDeletion' | 'persistDeletion'>;
+	noteDeletion: NoteDeletion;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
 	revisionReader: NoteRevisionReader;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	transactionRunner: TransactionRunner;
 }
 
 /** Both text-search entry points reject a pattern they cannot run before touching any state. */
-const assertValidSearch = (query: string, options: NoteSearchOptions): void => {
-	if (buildNoteSearchPattern(query, options) !== undefined) return;
+const assertValidSearch = (
+	rules: NoteTextSearch,
+	query: string,
+	options: NoteSearchOptions
+): void => {
+	if (rules.valid(query, options)) return;
 	throw new ValidationError(
 		options.regex
 			? 'The search pattern is not a valid regular expression'
@@ -397,11 +420,8 @@ export class Notes implements NotesController {
 		const failed: { path: string; message: string }[] = [];
 		const folders = new Map<string, NoteId>();
 		const blocked = new Set<string>();
-		const paths = new Set<string>();
-		for (const note of input.notes)
-			for (let depth = 1; depth <= note.folders.length; depth++)
-				paths.add(note.folders.slice(0, depth).join('/'));
-		for (const path of [...paths].sort((a, b) => a.split('/').length - b.split('/').length)) {
+		const plan = this.dependencies.archiveImport.prepare(input.notes);
+		for (const path of plan.folders) {
 			const parts = path.split('/');
 			const parentPath = parts.slice(0, -1).join('/');
 			if (blocked.has(parentPath)) {
@@ -427,7 +447,6 @@ export class Notes implements NotesController {
 			} else folders.set(path, result.value.id);
 		}
 
-		const takenByFolder = new Map<string, Set<string>>();
 		const pending: { note: ParsedMarkdownNote; created: Note }[] = [];
 		const references: ArchiveNoteReference[] = [];
 		for (const note of input.notes) {
@@ -441,12 +460,10 @@ export class Notes implements NotesController {
 				continue;
 			}
 			const parentId = folderPath ? importedFolderId(folders, folderPath) : input.parentId;
-			const taken = takenByFolder.get(folderPath) ?? new Set<string>();
-			takenByFolder.set(folderPath, taken);
 			const result = await importAttempt(() =>
 				this.create(actor, {
 					projectId: input.projectId,
-					title: uniqueTitleIn(taken, note.title),
+					title: plan.titles.get(note)!,
 					...(parentId ? { parentId } : {})
 				})
 			);
@@ -463,10 +480,13 @@ export class Notes implements NotesController {
 			}
 		}
 		const unresolvedLinks: ArchiveLinkIssue[] = [];
-		const referenceIndex = indexArchiveReferences(references);
+		const resolvedNotes = this.dependencies.archiveImport.resolve(
+			pending.map(({ note }) => note),
+			references
+		);
 		for (const { note, created } of pending) {
 			if (!note.markdown.trim()) continue;
-			const resolved = resolveArchiveLinks(note, referenceIndex);
+			const resolved = resolvedNotes.get(note)!;
 			unresolvedLinks.push(...resolved.issues);
 			const result = await importAttempt(() =>
 				this.save(actor, {
@@ -480,7 +500,7 @@ export class Notes implements NotesController {
 			createdFolderIds: [...folders.values()],
 			skipped: input.skipped,
 			failed,
-			unmappedFrontmatterKeys: unmappedFrontmatterKeys(input.notes),
+			unmappedFrontmatterKeys: plan.unmappedFrontmatterKeys,
 			unresolvedLinks
 		};
 	}
@@ -529,7 +549,10 @@ export class Notes implements NotesController {
 					throw new ValidationError('The note no longer exists');
 				await this.publish(actor, {
 					noteId: command.noteId,
-					baseEtag: noteEtag(current.snapshot.value.value)
+					baseEtag: noteEtag(
+						current.snapshot.value.value.id,
+						current.snapshot.value.value.currentRevision
+					)
 				});
 				break;
 			case 'discardNoteDraft':
@@ -542,7 +565,7 @@ export class Notes implements NotesController {
 				if (current.kind !== 'found' || current.snapshot.value.type !== 'notes')
 					throw new ValidationError('The note no longer exists');
 				await this.save(actor, {
-					note: applyNoteDraftEdit(
+					note: this.dependencies.noteEditingRules.edit(
 						current.snapshot.value.value,
 						command,
 						current.snapshot.value.value.updatedAt
@@ -577,7 +600,7 @@ export class Notes implements NotesController {
 				this.dependencies.suggestionContextReader.readContexts(actor, pending),
 				this.resolveSectionNumbering(actor, note)
 			]);
-		return assembleNoteView({
+		return this.dependencies.notePresentation.assemble({
 			note,
 			backlinks: backlinkContexts.map(({ relationship, source, target }) =>
 				assembleBacklinkView(relationship, source, target)
@@ -586,9 +609,15 @@ export class Notes implements NotesController {
 				assembleReferenceView(reference, { anchor })
 			),
 			diagrams,
-			todos: todoContexts.map((context) => assembleTodoView(context.todo, context)),
+			todos: todoContexts.map((context) =>
+				this.dependencies.todoPresentation.view(context.todo, context)
+			),
 			pendingSuggestions: pendingContexts.map(({ suggestion, note, anchor, provenance }) =>
-				assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+				this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
+					note,
+					anchor,
+					origin: provenanceOrigin(provenance)
+				})
 			),
 			sectionNumbering
 		});
@@ -613,7 +642,7 @@ export class Notes implements NotesController {
 			this.dependencies.projectReader.get(actor, note.projectId),
 			this.dependencies.userPreferences.get(actor)
 		]);
-		return sectionNumberingView(
+		return this.dependencies.sections.view(
 			note.sectionNumbering,
 			project.sectionNumberingDefault,
 			preferences.sectionNumberingDefault
@@ -641,7 +670,7 @@ export class Notes implements NotesController {
 	): Promise<Note> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-			const decision = decideNoteCreation(
+			const decision = this.dependencies.noteCreationRules.decideCreation(
 				{
 					id: input.id ?? (crypto.randomUUID() as NoteId),
 					title: input.title,
@@ -687,9 +716,11 @@ export class Notes implements NotesController {
 					operation: { kind: 'replace' }
 				}
 			};
-		const patch = applyNotePatch(this.dependencies.markdown.write(note.document), input.edits);
-		if (!patch.ok)
-			return { kind: 'failure', problems: patch.failures.map(describeNotePatchFailure) };
+		const patch = this.dependencies.patchPreparation.prepare(
+			this.dependencies.markdown.write(note.document),
+			input.edits
+		);
+		if (!patch.ok) return { kind: 'failure', problems: patch.problems };
 		return {
 			kind: 'prepared',
 			change: {
@@ -753,7 +784,11 @@ export class Notes implements NotesController {
 
 	private async persistEditedNote(actor: ActorContext, candidate: Note): Promise<Note> {
 		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
-		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		const decision = this.dependencies.noteEditingRules.prepareSave(
+			current,
+			candidate,
+			new Date().toISOString() as DateTime
+		);
 		return decision.kind === 'unchanged'
 			? decision.note
 			: this.dependencies.noteEditor.persistEdit(actor, decision.write);
@@ -769,21 +804,28 @@ export class Notes implements NotesController {
 			await this.dependencies.noteLinkReconciler.reconcile(
 				actor,
 				note,
-				collectNoteLinkTargets(note.document)
+				this.dependencies.noteReferences.links(note.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
-			return { note, etag: noteEtag(note), repairedAnchorIds: anchors.map((anchor) => anchor.id) };
+			return {
+				note,
+				etag: noteEtag(note.id, note.currentRevision),
+				repairedAnchorIds: anchors.map((anchor) => anchor.id)
+			};
 		});
 	}
 	publish(actor: ActorContext, input: PublishNoteInput): Promise<PublishNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const note = await this.dependencies.notePublisher.getForPublication(actor, input.noteId);
-			if (!noteMatchesEtag(note, input.baseEtag))
+			if (noteEtag(note.id, note.currentRevision) !== input.baseEtag)
 				throw new StaleRevisionError('The note has changed since it was loaded');
-			const write = prepareNotePublication(note, new Date().toISOString() as DateTime);
+			const write = this.dependencies.notePublicationRules.preparePublication(
+				note,
+				new Date().toISOString() as DateTime
+			);
 			await this.dependencies.revisionRecorder.record(actor, note);
 			const published = await this.dependencies.notePublisher.persistPublication(actor, write);
-			return { note: published, etag: noteEtag(published) };
+			return { note: published, etag: noteEtag(published.id, published.currentRevision) };
 		});
 	}
 	async discardDraft(
@@ -817,31 +859,31 @@ export class Notes implements NotesController {
 			await this.dependencies.noteLinkReconciler.reconcile(
 				actor,
 				restored,
-				collectNoteLinkTargets(restored.document)
+				this.dependencies.noteReferences.links(restored.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
-			return { note: restored, etag: noteEtag(restored) };
+			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
 	async searchText(actor: ActorContext, input: SearchNoteTextInput): Promise<SearchNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
-		assertValidSearch(input.query, options);
+		assertValidSearch(this.dependencies.textSearch, input.query, options);
 		const targets = await this.dependencies.noteTextSearcher.listSearchable(actor, input.projectId);
-		return { hits: searchNoteTargets(targets, input.query, options) };
+		return { hits: this.dependencies.textSearch.search(targets, input.query, options) };
 	}
 	async replaceText(
 		actor: ActorContext,
 		input: ReplaceNoteTextInput
 	): Promise<ReplaceNoteTextOutput> {
 		const options = { regex: input.regex, caseSensitive: input.caseSensitive };
-		assertValidSearch(input.query, options);
+		assertValidSearch(this.dependencies.textSearch, input.query, options);
 		const scope = input.noteIds === undefined ? undefined : new Set(input.noteIds);
 		return this.dependencies.transactionRunner.run(async () => {
 			const targets = await this.dependencies.noteTextSearcher.listSearchable(
 				actor,
 				input.projectId
 			);
-			const hits = searchNoteTargets(
+			const hits = this.dependencies.textSearch.search(
 				scope === undefined ? targets : targets.filter((target) => scope.has(target.id)),
 				input.query,
 				options
@@ -852,7 +894,7 @@ export class Notes implements NotesController {
 				// Title matches are display-only: replace rewrites document bodies, never titles.
 				if (hit.matches.length === 0) continue;
 				const note = await this.dependencies.noteReader.get(actor, hit.noteId);
-				const result = replaceInNoteDocument(
+				const result = this.dependencies.textSearch.replace(
 					note.document,
 					input.query,
 					input.replacement,
@@ -884,7 +926,7 @@ export class Notes implements NotesController {
 	async archive(actor: ActorContext, input: ArchiveNoteInput): Promise<ArchiveNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteTrash.archiveFacts(actor, input.noteId);
-			const decision = noteTrashChange(
+			const decision = this.dependencies.noteTrashRules.changeTrash(
 				facts.note,
 				{ kind: 'archive', ...facts },
 				new Date().toISOString() as DateTime
@@ -898,7 +940,7 @@ export class Notes implements NotesController {
 	async restore(actor: ActorContext, input: RestoreNoteInput): Promise<RestoreNoteOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteTrash.restoreFacts(actor, input.noteId);
-			const decision = noteTrashChange(
+			const decision = this.dependencies.noteTrashRules.changeTrash(
 				facts.note,
 				{ kind: 'restore', ...facts },
 				new Date().toISOString() as DateTime
@@ -920,7 +962,10 @@ export class Notes implements NotesController {
 		// leave its contents at the project root with no way back to where they were.
 		return this.dependencies.transactionRunner.run(async () => {
 			const facts = await this.dependencies.noteDeletion.deletionFacts(actor, input.noteId);
-			const decision = prepareNoteDeletion(facts.trashed, { kind: 'one', note: facts.note });
+			const decision = this.dependencies.noteTrashRules.prepareDeletion(facts.trashed, {
+				kind: 'one',
+				note: facts.note
+			});
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
 				actor,
@@ -932,7 +977,7 @@ export class Notes implements NotesController {
 	async emptyTrash(actor: ActorContext, input: EmptyNoteTrashInput): Promise<EmptyNoteTrashOutput> {
 		return this.dependencies.transactionRunner.run(async () => {
 			const trashed = await this.dependencies.noteDeletion.trashForDeletion(actor, input.projectId);
-			const decision = prepareNoteDeletion(trashed, { kind: 'all' });
+			const decision = this.dependencies.noteTrashRules.prepareDeletion(trashed, { kind: 'all' });
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const deletedNotes = await this.dependencies.noteDeletion.persistDeletion(
 				actor,
@@ -1032,7 +1077,10 @@ export class Notes implements NotesController {
 					noteId: input.noteId
 				});
 		}
-		return { diff: diffNoteRevisionTexts(baseline, revision), againstRevision: baseline.revision };
+		return {
+			diff: this.dependencies.revisionComparison.compare(baseline, revision),
+			againstRevision: baseline.revision
+		};
 	}
 	async restoreRevision(
 		actor: ActorContext,
@@ -1063,10 +1111,10 @@ export class Notes implements NotesController {
 			await this.dependencies.noteLinkReconciler.reconcile(
 				actor,
 				restored,
-				collectNoteLinkTargets(restored.document)
+				this.dependencies.noteReferences.links(restored.document)
 			);
 			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
-			return { note: restored, etag: noteEtag(restored) };
+			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {

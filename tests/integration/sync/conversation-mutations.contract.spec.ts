@@ -1,3 +1,4 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it } from 'vitest';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -28,7 +29,9 @@ const setup = async (suffix: string) => {
 	const conversation = await records.insert(owner, parsed.value);
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
-			conversationJournal: new ConversationArchive(records),
+			...agentRulesFixture(),
+			conversationMessages: new ConversationArchive(records),
+			conversationSessions: new ConversationArchive(records),
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,
 			transactionRunner

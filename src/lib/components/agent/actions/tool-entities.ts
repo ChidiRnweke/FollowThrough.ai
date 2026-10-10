@@ -1,4 +1,4 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import type { EntityKind, EntityRef } from '$lib/models/tool-display';
 
 import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';

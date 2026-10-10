@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { diagramEtag } from '$lib/services/diagrams/editing';
+import { diagramEtag } from '$lib/models/diagrams';
 import { diagramRevisionFixture as setup } from '$lib/testing/diagrams/fixtures/revision-editing';
 
 describe('Diagram write outcomes', () => {
@@ -14,7 +14,7 @@ describe('Diagram write outcomes', () => {
 			.renameProjectDiagram(testActor(), {
 				diagramId: original.id,
 				title: 'Renamed diagram',
-				baseEtag: diagramEtag(original)
+				baseEtag: diagramEtag(original.id, original.currentRevision)
 			})
 			.catch(() => ({ kind: 'failure' }));
 		expect(diagrams.diagrams).toEqual([original]);
@@ -28,7 +28,7 @@ describe('Diagram write outcomes', () => {
 			.saveProjectDiagramDraft(testActor(), {
 				diagramId: original.id,
 				source: '<mxfile>replacement</mxfile>',
-				baseEtag: diagramEtag(original)
+				baseEtag: diagramEtag(original.id, original.currentRevision)
 			})
 			.catch(() => undefined);
 		expect(diagrams.diagrams).toEqual([original]);
@@ -57,7 +57,7 @@ describe('Diagram write outcomes', () => {
 		const { diagrams, controller } = setup();
 		const remote = drawioBuilder({ currentRevision: 2 });
 		diagrams.diagrams = [remote];
-		const baseEtag = diagramEtag(drawioBuilder());
+		const baseEtag = diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision);
 		expect(
 			await controller.saveProjectDiagramDraft(testActor(), {
 				diagramId: remote.id,
@@ -67,7 +67,7 @@ describe('Diagram write outcomes', () => {
 		).toEqual({
 			outcome: 'conflict',
 			baseEtag,
-			remote: { diagram: remote, etag: diagramEtag(remote) }
+			remote: { diagram: remote, etag: diagramEtag(remote.id, remote.currentRevision) }
 		});
 	});
 
@@ -79,9 +79,13 @@ describe('Diagram write outcomes', () => {
 			await controller.saveProjectDiagramDraft(testActor(), {
 				diagramId: remote.id,
 				source: remote.source,
-				baseEtag: diagramEtag(drawioBuilder())
+				baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
 			})
-		).toEqual({ outcome: 'saved', diagram: remote, etag: diagramEtag(remote) });
+		).toEqual({
+			outcome: 'saved',
+			diagram: remote,
+			etag: diagramEtag(remote.id, remote.currentRevision)
+		});
 	});
 
 	it('returns a conflict for a stale rename', async () => {
@@ -93,7 +97,7 @@ describe('Diagram write outcomes', () => {
 				await controller.renameProjectDiagram(testActor(), {
 					diagramId: remote.id,
 					title: 'Different',
-					baseEtag: diagramEtag(drawioBuilder())
+					baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
 				})
 			).outcome
 		).toBe('conflict');
@@ -109,7 +113,7 @@ describe('Diagram write outcomes', () => {
 					diagramId: remote.id,
 					source: '<mxfile>different</mxfile>',
 					renderedSvg: '<svg/>',
-					baseEtag: diagramEtag(drawioBuilder())
+					baseEtag: diagramEtag(drawioBuilder().id, drawioBuilder().currentRevision)
 				})
 			).outcome
 		).toBe('conflict');

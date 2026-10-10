@@ -1,9 +1,19 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -13,14 +23,27 @@ import type { Note, PreparedNoteChange, NoteChangeReview } from '$lib/models/not
 export const reviewedNoteFixture = (
 	note: Note = noteBuilder(),
 	markdown: NotesDependencies['markdown'] = {
-		read: noteContentFromMarkdown,
-		write: noteMarkdownFromContent
+		read: noteMarkdown.read,
+		write: noteMarkdown.write
 	}
 ) => {
 	const content = new InMemoryNoteContent();
 	content.notes = [note];
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			noteReader: content,
 			revisionReader: content,

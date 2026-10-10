@@ -11,7 +11,27 @@ import { NotFoundError, ValidationError } from '$lib/errors';
 import type { AgentRunRepository } from '$lib/server/repositories/agent';
 
 /** Direct workflow run values. Controllers own creation and publication transactions. */
-export class AgentRunLedger {
+export interface WorkflowRunLedger {
+	prepareCreation(
+		actor: ActorContext,
+		input: Pick<WorkflowAgentRun, 'conversationId' | 'model' | 'executionMode' | 'contextSnapshot'>,
+		timestamp: DateTime
+	): WorkflowAgentRun;
+	persistCreated(actor: ActorContext, run: WorkflowAgentRun): Promise<AgentRun>;
+	getForWrite(actor: ActorContext, runId: AgentRunId): Promise<WorkflowAgentRun>;
+	prepareCompletion(status: AgentRunStatus, timestamp: DateTime): WorkflowSettlementWrite;
+	prepareFailure(
+		status: AgentRunStatus,
+		failure: string,
+		timestamp: DateTime
+	): WorkflowSettlementWrite | null;
+	persistSettlement(
+		actor: ActorContext,
+		runId: AgentRunId,
+		change: WorkflowSettlementWrite
+	): Promise<WorkflowAgentRun>;
+}
+export class AgentRunLedger implements WorkflowRunLedger {
 	constructor(private readonly repository: AgentRunRepository) {}
 
 	prepareCreation(

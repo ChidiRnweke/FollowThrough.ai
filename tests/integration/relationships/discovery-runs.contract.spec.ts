@@ -1,5 +1,7 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -56,7 +58,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -79,12 +81,12 @@ const setup = async (suffix: string) => {
 		confidence: 95
 	};
 	const targetText = 'The team chose OAuth.';
-	const target = await storedNote(notes.catalog, seeded.owner, {
+	const target = await storedNote(notes.services.creator, seeded.owner, {
 		kind: 'note',
 		projectId: seeded.project.id,
 		title: 'Earlier decision'
 	});
-	const savedTarget = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const savedTarget = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...target,
 		plainText: targetText,
 		document: {
@@ -119,10 +121,11 @@ const setup = async (suffix: string) => {
 		runSettlements: settlements,
 		runEvents: { notify: () => {} },
 		selectionOrigins: notes.selectionOrigins,
-		suggestionCreator: suggestions.inbox
+		suggestionCreator: suggestions.creator
 	};
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
@@ -148,7 +151,7 @@ const setup = async (suffix: string) => {
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
 			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Run has not settled');
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Run has not settled');
 		});
 	};
 	return {

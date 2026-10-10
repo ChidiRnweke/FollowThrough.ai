@@ -1,12 +1,16 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { describe, expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
-import { jsonObjectSchema } from './tool-call-boundary';
+import { jsonObjectSchema } from '$lib/server/adapters/agent/tool-call';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -25,8 +29,9 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates } from '$lib/models/widgets';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
-import { widgetReferencesIn } from '$lib/services/notes/references';
+
+import { NoteReferenceService } from '$lib/services/notes/references';
+const noteReferences = new NoteReferenceService();
 
 const setup = () => {
 	const repository = new InMemoryWidgetRepository();
@@ -35,9 +40,10 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const library = new WidgetLibrary(repository, projects, new InMemoryNoteRepository());
 	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(new InMemorySearchRepository(), embeddings.model);
+	const index = createContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
 		capabilityDependencies<WidgetsDependencies>({
+			...createWidgetRules(),
 			widgetReader: library,
 			widgetLister: library,
 			widgetWriter: library,
@@ -48,6 +54,7 @@ const setup = () => {
 		})
 	);
 	const tools = new AgentTools(
+		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ widgets: () => controller }),
 		testActor(),
 		'auto_accept',
@@ -133,8 +140,8 @@ describe('agent widget tools', () => {
 	};
 	it('create a widget from JSON strings and return a line that embeds it in a note', async () => {
 		const { embed, created } = await createLaunch();
-		const note = noteContentFromMarkdown(`Plan\n\n${embed}\n`);
-		expect(widgetReferencesIn([note])).toEqual([created?.id]);
+		const note = noteMarkdown.read(`Plan\n\n${embed}\n`);
+		expect(noteReferences.widgets([note])).toEqual([created?.id]);
 	});
 	// The agent inserts the line inside edit_note's JSON arguments; a double quote it forgets to
 	// escape there fails the whole run as malformed tool arguments.

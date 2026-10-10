@@ -10,7 +10,7 @@ import type {
 	TodoReader,
 	TodoContextReader,
 	WaitingOnFinder
-} from '$lib/server/services/todos/contracts';
+} from '$lib/server/services/todos/catalog';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
 	RestoreSnapshot,

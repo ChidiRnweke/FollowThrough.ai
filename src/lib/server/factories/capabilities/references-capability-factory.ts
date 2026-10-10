@@ -1,7 +1,6 @@
-import { REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { openRouterWebSearchTool } from '$lib/server/services/agent/runs/reasoning';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
-import { resolveWebResearch } from '$lib/services/agent/web-research';
+import { AgentRunSettingsService } from '$lib/services/agent/run-settings';
+import { ReferenceSearch } from '$lib/server/controllers/references/search';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type {
@@ -9,13 +8,20 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { ReferenceRecords } from '$lib/server/repositories/references/postgres/references';
-import { ReferenceLibrary } from '$lib/server/services/references/library';
+import {
+	ReferenceReadingService,
+	ReferenceWritingService,
+	type ReferenceCreator,
+	type ReferenceLister,
+	type ReferenceContextReader
+} from '$lib/server/services/references/library';
+import type { ReferenceRepository } from '$lib/server/repositories/references/references';
 import { ReferenceDiscovery } from '$lib/server/services/references/discovery';
-import { ReferenceResearch } from '$lib/server/repositories/references/web-research';
-import { ReferenceRanking } from '$lib/server/services/references/ranking';
-import type { ReferenceFinder } from '$lib/server/services/references/contracts';
+import { ReferenceResearch } from '$lib/server/adapters/references/web-research';
+import { ReferenceRanking, type ReferenceRanker } from '$lib/server/services/references/ranking';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
 import { operationObserver } from '$lib/server/services/telemetry';
-import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
+import { normalizeLanguageModelId } from '$lib/models/agent';
 
 export interface ReferencesCapabilityInput {
 	readonly db: Database;
@@ -29,10 +35,9 @@ export interface ReferencesCapabilityInput {
 	readonly finder?: ReferenceFinder;
 }
 
-export interface ReferencesCapability {
-	readonly ranking: ReferenceRanking;
+export interface ReferencesCapability extends ReferenceServices {
+	readonly ranking: ReferenceRanker;
 	readonly model: string;
-	readonly library: ReferenceLibrary;
 	readonly finder: ReferenceFinder;
 }
 
@@ -41,7 +46,7 @@ export const createReferencesCapability = (
 ): ReferencesCapability => ({
 	ranking: new ReferenceRanking(),
 	model: normalizeLanguageModelId(input.defaultModel),
-	library: new ReferenceLibrary(
+	...createReferenceServices(
 		new ReferenceRecords(input.db),
 		input.notes,
 		input.anchors,
@@ -49,18 +54,34 @@ export const createReferencesCapability = (
 	),
 	finder:
 		input.finder ??
-		new ReferenceDiscovery(
+		new ReferenceSearch(
 			new ReferenceResearch(input.openRouterApiKey, {
 				baseURL: input.openRouterBaseURL,
-				searchTool: openRouterWebSearchTool(
-					resolveWebResearch(
-						webSearchOptionsFromEnvironment(process.env),
-						REFERENCE_WEB_SEARCH_DEFAULTS
-					)
-				),
 				appURL: input.appURL,
 				defaultModel: normalizeLanguageModelId(input.defaultModel),
 				observer: operationObserver
-			})
+			}),
+			new ReferenceDiscovery(),
+			new AgentRunSettingsService(),
+			webSearchOptionsFromEnvironment(process.env)
 		)
 });
+
+export interface ReferenceServices {
+	readonly creator: ReferenceCreator;
+	readonly lister: ReferenceLister;
+	readonly contexts: ReferenceContextReader;
+}
+export const createReferenceServices = (
+	references: ReferenceRepository,
+	notes: NoteRepository,
+	anchors: SourceAnchorRepository,
+	provenance: ProvenanceRepository
+): ReferenceServices => {
+	const reading = new ReferenceReadingService(references, notes, anchors);
+	return {
+		creator: new ReferenceWritingService(references, notes, anchors, provenance),
+		lister: reading,
+		contexts: reading
+	};
+};

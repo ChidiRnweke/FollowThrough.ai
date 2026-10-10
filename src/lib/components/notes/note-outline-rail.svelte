@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { type OutlineHeading } from '$lib/models/notes';
-	import { sectionNumbersFor } from '$lib/services/notes/section-numbering';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn } from '$lib/utils.js';
 
@@ -21,7 +21,7 @@
 	// see, and still costs the gutter.
 	const shown = $derived(headings.length > 1 ? headings : []);
 	const numbers = $derived(
-		numbered ? sectionNumbersFor(shown.map((heading) => heading.level)) : []
+		numbered ? noteDocuments.sectionNumbers(shown.map((heading) => heading.level)) : []
 	);
 
 	// Depth reads as indent. Written out as literal utilities rather than computed

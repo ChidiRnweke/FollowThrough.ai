@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import TrashPage from './+page.svelte';
-import type { WorkspaceSession } from '$lib/stores/workspace/session.svelte';
+import type { WorkspaceSession } from '$lib/controllers/workspace/session';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import {
 	noteBuilder,
@@ -10,7 +10,7 @@ import {
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 
 const sessions: ReturnType<typeof workspaceResourcesFixture>[] = [];
 afterEach(() => {

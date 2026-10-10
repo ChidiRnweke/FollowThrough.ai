@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { receiveResource } from '$lib/services/sync/state';
 const first = { etag: syncEtag(1n), value: 'Original' };
 it('ignores a response older than a retained version', () => {

@@ -29,3 +29,8 @@ export const workspaceBootstrapSchema = z.object({
 	agentAvailable: z.boolean()
 });
 export type WorkspaceBootstrap = z.infer<typeof workspaceBootstrapSchema>;
+
+export type StoredBootstrap =
+	| { kind: 'absent' }
+	| { kind: 'stored'; value: WorkspaceBootstrap }
+	| { kind: 'corrupt'; message: string };

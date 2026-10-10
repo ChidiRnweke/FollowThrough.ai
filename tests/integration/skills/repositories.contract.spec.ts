@@ -6,11 +6,11 @@ import { createNotesCapability } from '$lib/server/factories/capabilities/notes-
 import { context, seedNote } from '../database-harness';
 const seedSkillNote = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: context.db,
 		projects: new ProjectRecords(context.db)
 	});
-	const note = await storedNote(catalog, seeded.owner, {
+	const note = await storedNote(catalog.creator, seeded.owner, {
 		kind: 'skill',
 		projectId: seeded.project.id,
 		title: 'Contract skill'

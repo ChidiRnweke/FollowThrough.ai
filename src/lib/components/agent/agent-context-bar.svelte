@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { fly, slide } from 'svelte/transition';
 	import { page } from '$app/state';
@@ -17,7 +17,7 @@
 	} from '$lib/components/icons';
 	import { agentCapabilityCopy, type AgentCapability } from '$lib/components/shared/labels';
 	import { PrefersReducedMotion } from '$lib/hooks/prefers-reduced-motion.svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 
 	// The note is taken as a boolean, never as a title: the open note already
 	// appears by name once, as the dismissible context chip above the composer.

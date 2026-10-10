@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { WorkspaceViews } from './views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -44,7 +44,7 @@ const setup = () => {
 			{ type: 'project_skill_pins', value: pin }
 		]
 	];
-	return { views: new WorkspaceViews(new Map(records)), note, project, home };
+	return { views: createWorkspaceViews(new Map(records)), note, project, home };
 };
 
 it('does not turn a note pin into a project skill pin in the global catalog', () => {

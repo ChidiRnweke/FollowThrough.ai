@@ -10,7 +10,10 @@ import type { DateTime } from '$lib/models/workspace';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { AttachmentLibrary } from '$lib/server/services/attachments/library';
+import {
+	AttachmentDownloadService,
+	AttachmentUploadService
+} from '$lib/server/services/attachments/library';
 import { InMemoryStorage } from '$lib/testing/attachments/fakes/processing';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
 import { todoBuilder, testTodoId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -49,12 +52,13 @@ const setup = async (suffix: string, noteOwned = true) => {
 		objectKey: `staging/${suffix}/pending`
 	});
 	const archive = () => new ProjectRecords(context.db).archive(seed.owner, seed.project.id);
-	const library = new AttachmentLibrary(
+	const downloads = new AttachmentDownloadService(records, new InMemoryStorage());
+	const uploads = new AttachmentUploadService(
 		records,
 		new NoteRecords(context.db),
 		new InMemoryStorage()
 	);
-	return { ...seed, records, library, attachment, pendingUpload, archive };
+	return { ...seed, records, downloads, uploads, attachment, pendingUpload, archive };
 };
 
 it('hides note attachment lists after the owning project is archived', async () => {
@@ -64,11 +68,11 @@ it('hides note attachment lists after the owning project is archived', async () 
 });
 
 it('blocks attachment list, download, and path reads after project archival', async () => {
-	const { owner, project, note, records, library, attachment, archive } = await setup('34002');
+	const { owner, project, note, records, downloads, attachment, archive } = await setup('34002');
 	await archive();
 	expect(await records.listForProject(owner, project.id)).toEqual([]);
 	expect(await records.findByPath(owner, note.id, 'document.txt')).toBeUndefined();
-	await expect(library.downloadById(owner, attachment.attachment.id)).rejects.toThrow(
+	await expect(downloads.downloadById(owner, attachment.attachment.id)).rejects.toThrow(
 		'Attachment was not found'
 	);
 });
@@ -82,9 +86,9 @@ it('rejects new upload reservations in archived projects', async () => {
 });
 
 it('refuses upload completion after its project is archived', async () => {
-	const { owner, library, pendingUpload, archive } = await setup('34006');
+	const { owner, uploads, pendingUpload, archive } = await setup('34006');
 	await archive();
-	await expect(library.complete(owner, pendingUpload.id)).rejects.toThrow(
+	await expect(uploads.complete(owner, pendingUpload.id)).rejects.toThrow(
 		'Attachment upload was not found'
 	);
 });
@@ -104,10 +108,10 @@ it('refuses to claim a hidden project version already selected for processing', 
 });
 
 it('keeps an active owned attachment readable and downloadable', async () => {
-	const { owner, note, records, attachment, library } = await setup('34009');
+	const { owner, note, records, attachment, downloads } = await setup('34009');
 	expect({
 		attachments: (await records.list(owner, note.id)).map((view) => view.attachment.id),
-		download: await library.downloadById(owner, attachment.attachment.id)
+		download: await downloads.downloadById(owner, attachment.attachment.id)
 	}).toEqual({
 		attachments: [attachment.attachment.id],
 		download: { url: 'https://storage.test/presigned' }

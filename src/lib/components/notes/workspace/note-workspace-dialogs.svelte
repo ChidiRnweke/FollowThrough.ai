@@ -9,7 +9,7 @@
 	import ExportDialog from '../export/export-dialog.svelte';
 	import NoteConflictDialog from '../note-conflict-dialog.svelte';
 	import NoteVersionHistory from '../note-version-history.svelte';
-	import type { NoteHistoryReadState } from '$lib/stores/notes/history.svelte';
+	import type { NoteHistoryReadState } from '$lib/models/notes';
 
 	let {
 		exportOpen = $bindable(false),

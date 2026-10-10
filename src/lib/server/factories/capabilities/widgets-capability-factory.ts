@@ -1,3 +1,9 @@
+import { createWidgetRules, type WidgetRules } from '$lib/factories/widgets/rules';
+import type {
+	WidgetReader,
+	WidgetLister,
+	WidgetWriter
+} from '$lib/server/services/widgets/library';
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { Database } from '$lib/server/db';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
@@ -10,10 +16,13 @@ export interface WidgetsCapabilityInput {
 	readonly projects: ProjectRepository;
 }
 
-export interface WidgetsCapability {
-	readonly library: WidgetLibrary;
+export interface WidgetsCapability extends WidgetRules {
+	readonly reader: WidgetReader;
+	readonly lister: WidgetLister;
+	readonly writer: WidgetWriter;
 }
 
-export const createWidgetsCapability = (input: WidgetsCapabilityInput): WidgetsCapability => ({
-	library: new WidgetLibrary(new WidgetRecords(input.db), input.projects, input.notes)
-});
+export const createWidgetsCapability = (input: WidgetsCapabilityInput): WidgetsCapability => {
+	const library = new WidgetLibrary(new WidgetRecords(input.db), input.projects, input.notes);
+	return { reader: library, lister: library, writer: library, ...createWidgetRules() };
+};

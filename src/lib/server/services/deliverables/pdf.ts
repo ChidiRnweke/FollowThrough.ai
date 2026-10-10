@@ -1,10 +1,7 @@
+import type { PdfFontResources } from '$lib/models/deliverables';
 import type { WidgetExportBlock } from '$lib/models/widgets';
 import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
-import { resolve, sep } from 'node:path';
-import { openSync as openFontSync } from 'fontkit';
-import type { Font } from 'fontkit';
 import { ExternalServiceError } from '$lib/errors';
-import pdfmake from 'pdfmake';
 import type {
 	PdfCellBlock,
 	PdfContent,
@@ -20,599 +17,537 @@ import type {
 	ProseMirrorTextNode
 } from '$lib/models/notes';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
-
-// pdf.spec.ts imports the hash from here; keep the re-export.
-export { mermaidSourceHash };
-
-// Embedded Noto fonts ship in the repo (assets/fonts, OFL-licensed): PDFKit's
-// standard-14 fonts are WinAnsi-only, so emoji and most non-Latin-1 text need
-// real TTFs. Color emoji fonts (CBDT/COLR) cannot be embedded by PDFKit, hence
-// the monochrome Noto Emoji. Paths resolve from the app root, which is the
-// working directory in dev, tests, and the Docker runtime image.
-const FONTS_DIR = resolve(process.cwd(), 'assets/fonts');
-
-const FONT_FILES: Record<string, Record<string, string>> = {
-	NotoSans: {
-		normal: 'NotoSans-Regular.ttf',
-		bold: 'NotoSans-Bold.ttf',
-		italics: 'NotoSans-Italic.ttf',
-		bolditalics: 'NotoSans-BoldItalic.ttf'
-	},
-	NotoSerif: {
-		normal: 'NotoSerif-Regular.ttf',
-		bold: 'NotoSerif-Bold.ttf',
-		italics: 'NotoSerif-Italic.ttf',
-		bolditalics: 'NotoSerif-BoldItalic.ttf'
-	},
-	// Mono has no italic cuts; alias them to the upright styles.
-	NotoSansMono: {
-		normal: 'NotoSansMono-Regular.ttf',
-		bold: 'NotoSansMono-Bold.ttf',
-		italics: 'NotoSansMono-Regular.ttf',
-		bolditalics: 'NotoSansMono-Bold.ttf'
-	},
-	// Fallback-only families, single cut each.
-	NotoEmoji: {
-		normal: 'NotoEmoji.ttf',
-		bold: 'NotoEmoji.ttf',
-		italics: 'NotoEmoji.ttf',
-		bolditalics: 'NotoEmoji.ttf'
-	},
-	NotoSansSymbols2: {
-		normal: 'NotoSansSymbols2-Regular.ttf',
-		bold: 'NotoSansSymbols2-Regular.ttf',
-		italics: 'NotoSansSymbols2-Regular.ttf',
-		bolditalics: 'NotoSansSymbols2-Regular.ttf'
-	},
-	NotoSansMath: {
-		normal: 'NotoSansMath-Regular.ttf',
-		bold: 'NotoSansMath-Regular.ttf',
-		italics: 'NotoSansMath-Regular.ttf',
-		bolditalics: 'NotoSansMath-Regular.ttf'
+export interface PdfDocumentPreparation {
+	prepare(input: PreparedExport, resources: PdfFontResources): PdfDocumentDefinition;
+}
+export class PdfDocumentService implements PdfDocumentPreparation {
+	prepare(input: PreparedExport, resources: PdfFontResources): PdfDocumentDefinition {
+		return preparePdfDocument(input, resources);
 	}
-};
-
-const FONT_FAMILIES: Record<ExportSettings['fontFamily'], string> = {
-	helvetica: 'NotoSans',
-	times: 'NotoSerif',
-	courier: 'NotoSansMono'
-};
-
-const MONO_FONT = 'NotoSansMono';
-
-// Fallback order when a run's own font cannot draw a character: emoji first so
-// pictographs keep their emoji design, then symbols (arrows, shapes, dingbats),
-// then math (operators). Base Noto Sans/Serif/Mono cover the common scripts.
-const FALLBACK_FONTS = ['NotoEmoji', 'NotoSansSymbols2', 'NotoSansMath'];
-
-// Joiners and variation selectors need no glyph of their own.
-const JOINER_CODEPOINTS = new Set([0x200d, 0xfe0e, 0xfe0f]);
-
-const fontCoverage = new Map<string, Font>();
-
-/**
- * The opened face, or a failure naming the file.
- *
- * `openSync` answers `Font | FontCollection`, and this used to assert its way
- * past that with a locally declared `FontHandle` holding the one method it
- * wanted — an `instanceof`-shaped move on a union that carries its own `type`
- * discriminant. The shipped fonts are all single-face TTFs, so the collection
- * arm should never appear; if it ever does, a font file has been replaced and
- * that is worth saying rather than reading a method off the wrong shape.
- */
-function openFace(family: string): Font {
-	const path = resolve(FONTS_DIR, FONT_FILES[family]!.normal!);
-	const opened = openFontSync(path);
-	if ('fonts' in opened)
-		throw new ExternalServiceError(`The bundled font ${family} is a collection, not a face.`);
-	return opened;
 }
+function preparePdfDocument(
+	input: PreparedExport,
+	resources: PdfFontResources
+): PdfDocumentDefinition {
+	function covers(family: string, codepoint: number): boolean {
+		const coverage = resources.coverage.get(family);
+		if (!coverage) throw new ExternalServiceError(`The bundled font ${family} was not resolved.`);
+		return coverage.has(codepoint);
+	}
 
-function covers(family: string, codepoint: number): boolean {
-	const cached = fontCoverage.get(family);
-	if (cached) return cached.hasGlyphForCodePoint(codepoint);
-	const handle = openFace(family);
-	fontCoverage.set(family, handle);
-	return handle.hasGlyphForCodePoint(codepoint);
-}
-
-/** First font in the fallback chain that can draw every codepoint of the cluster. */
-function fallbackForCluster(cluster: string, baseFont: string): string | undefined {
-	const codepoints = [...cluster]
-		.map((char) => char.codePointAt(0)!)
-		.filter((codepoint) => !JOINER_CODEPOINTS.has(codepoint));
-	if (codepoints.every((codepoint) => covers(baseFont, codepoint))) return undefined;
-	return FALLBACK_FONTS.find((family) =>
-		codepoints.every((codepoint) => covers(family, codepoint))
-	);
-}
-
-const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
-
-/**
- * Split a text run into per-font runs. pdfmake has no font fallback, so
- * characters a run's font cannot draw (emoji, arrows, math operators) would
- * render as missing glyphs. Grapheme-level segmentation keeps ZWJ sequences,
- * keycaps, and variation selectors inside a single run.
- */
-function withFontRuns<T extends { text: string; font?: string }>(run: T, bodyFont: string): T[] {
-	const baseFont = run.font ?? bodyFont;
-	let chunk = '';
-	let chunkFont: string | undefined;
-	let sawFallback = false;
-	const runs: T[] = [];
-	const flush = () => {
-		if (!chunk) return;
-		runs.push({ ...run, text: chunk, ...(chunkFont ? { font: chunkFont } : {}) });
-		chunk = '';
+	const FONT_FAMILIES: Record<ExportSettings['fontFamily'], string> = {
+		helvetica: 'NotoSans',
+		times: 'NotoSerif',
+		courier: 'NotoSansMono'
 	};
-	for (const { segment } of graphemeSegmenter.segment(run.text)) {
-		const font = fallbackForCluster(segment, baseFont);
-		if (font) sawFallback = true;
-		if (chunk && font !== chunkFont) flush();
-		chunkFont = font;
-		chunk += segment;
-	}
-	flush();
-	return sawFallback ? runs : [run];
-}
 
-const A4_WIDTH = 595.28;
-const A4_HEIGHT = 841.89;
-const LINK_COLOR = '#1d4ed8';
+	const MONO_FONT = 'NotoSansMono';
 
-interface InlineRun {
-	text: string;
-	bold?: boolean;
-	italics?: boolean;
-	link?: string;
-	color?: string;
-	decoration?: string;
-	font?: string;
-}
+	// Fallback order when a run's own font cannot draw a character: emoji first so
+	// pictographs keep their emoji design, then symbols (arrows, shapes, dingbats),
+	// then math (operators). Base Noto Sans/Serif/Mono cover the common scripts.
+	const FALLBACK_FONTS = ['NotoEmoji', 'NotoSansSymbols2', 'NotoSansMath'];
 
-function textRunFromNode(node: ProseMirrorTextNode, context: ConversionContext): InlineRun {
-	const text = node.text;
-	const marks = presentation(node, context).marks;
-	const run: InlineRun = { text };
-	if (marks.bold) run.bold = true;
-	if (marks.italic) run.italics = true;
-	if (marks.href !== undefined) {
-		run.link = marks.href;
-		run.color = LINK_COLOR;
-		run.decoration = 'underline';
-	}
+	// Joiners and variation selectors need no glyph of their own.
+	const JOINER_CODEPOINTS = new Set([0x200d, 0xfe0e, 0xfe0f]);
 
-	return run;
-}
-
-interface ConversionContext {
-	readonly contentWidth: number;
-	readonly usableHeight: number;
-	readonly images: ReadonlyMap<string, string>;
-	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
-	readonly widgets: PreparedExport['widgets'];
-	readonly nodes: PreparedExport['nodes'];
-	readonly headingSpacing: PreparedExport['headingSpacing'];
-	/** Resolved pdfmake family for body text; the base font for fallback splitting. */
-	readonly bodyFont: string;
-}
-
-function imageBlock(
-	attrs: ProseMirrorMediaAttrs,
-	context: ConversionContext
-): PdfContent | PdfContent[] {
-	const src = attrs.src ?? undefined;
-	if (!src) return [];
-	const data = context.images.get(src);
-	if (!data) {
-		return { text: '[image unavailable]', italics: true, color: '#9ca3af', margin: [0, 4, 0, 4] };
-	}
-	const width = attrs.width;
-	let resolvedWidth: number | undefined;
-	if (typeof width === 'string' && width.endsWith('%')) {
-		const percentage = Number.parseFloat(width);
-		if (Number.isFinite(percentage))
-			resolvedWidth = (Math.min(percentage, 100) / 100) * context.contentWidth;
-	} else if (typeof width === 'number' && Number.isFinite(width)) {
-		resolvedWidth = Math.min(width * 0.75, context.contentWidth);
-	}
-	return {
-		image: data,
-		...(resolvedWidth
-			? { width: resolvedWidth }
-			: { fit: [context.contentWidth, context.contentWidth] }),
-		margin: [0, 4, 0, 8]
-	};
-}
-
-const TABLE_LINE_COLOR = '#d1d5db';
-const TABLE_HEADER_FILL = '#f3f4f6';
-const CODE_PANEL_FILL = '#f6f8fa';
-const CODE_PANEL_LINE = '#e5e7eb';
-
-/**
- * Render code as a padded, hairline-boxed panel. A single-cell table is the
- * pdfmake idiom for a filled box with inner padding; `preserveLeadingSpaces`
- * keeps the source indentation that plain text nodes would lose.
- */
-function codePanel(text: string): PdfTableBlock {
-	const runs: PdfContent[] = [...withFontRuns({ text, color: '#1f2328' }, MONO_FONT)];
-	return {
-		table: {
-			widths: ['*'],
-			body: [
-				[
-					{
-						text: runs,
-						font: MONO_FONT,
-						fontSize: 9,
-						lineHeight: 1.25,
-						preserveLeadingSpaces: true
-					}
-				]
-			]
-		},
-		layout: {
-			fillColor: CODE_PANEL_FILL,
-			hLineWidth: () => 0.75,
-			vLineWidth: () => 0.75,
-			hLineColor: CODE_PANEL_LINE,
-			vLineColor: CODE_PANEL_LINE,
-			paddingLeft: () => 10,
-			paddingRight: () => 10,
-			paddingTop: () => 8,
-			paddingBottom: () => 8
-		},
-		margin: [0, 6, 0, 10]
-	};
-}
-
-/** Convert a Tiptap table node into a pdfmake table element. */
-function tableBlock(
-	node: Extract<ProseMirrorNode, { type: 'table' }>,
-	context: ConversionContext
-): PdfContent | PdfContent[] {
-	const rows = (node.content ?? []).filter((row) => row.type === 'tableRow');
-	// Slots covered by a rowspan from an earlier row, per row index.
-	const covered: Array<Set<number>> = rows.map(() => new Set<number>());
-	const body: (readonly (PdfCellBlock | PdfSpannedCell)[])[] = [];
-	let columnCount = 0;
-
-	rows.forEach((row, rowIndex) => {
-		const cells = (row.content ?? []).filter(
-			(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+	/** First font in the fallback chain that can draw every codepoint of the cluster. */
+	function fallbackForCluster(cluster: string, baseFont: string): string | undefined {
+		const codepoints = [...cluster]
+			.map((char) => char.codePointAt(0)!)
+			.filter((codepoint) => !JOINER_CODEPOINTS.has(codepoint));
+		if (codepoints.every((codepoint) => covers(baseFont, codepoint))) return undefined;
+		return FALLBACK_FONTS.find((family) =>
+			codepoints.every((codepoint) => covers(family, codepoint))
 		);
-		const bodyRow: (PdfCellBlock | PdfSpannedCell)[] = [];
-		let column = 0;
-		for (const cell of cells) {
+	}
+
+	const graphemeSegmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+
+	/**
+	 * Split a text run into per-font runs. pdfmake has no font fallback, so
+	 * characters a run's font cannot draw (emoji, arrows, math operators) would
+	 * render as missing glyphs. Grapheme-level segmentation keeps ZWJ sequences,
+	 * keycaps, and variation selectors inside a single run.
+	 */
+	function withFontRuns<T extends { text: string; font?: string }>(run: T, bodyFont: string): T[] {
+		const baseFont = run.font ?? bodyFont;
+		let chunk = '';
+		let chunkFont: string | undefined;
+		let sawFallback = false;
+		const runs: T[] = [];
+		const flush = () => {
+			if (!chunk) return;
+			runs.push({ ...run, text: chunk, ...(chunkFont ? { font: chunkFont } : {}) });
+			chunk = '';
+		};
+		for (const { segment } of graphemeSegmenter.segment(run.text)) {
+			const font = fallbackForCluster(segment, baseFont);
+			if (font) sawFallback = true;
+			if (chunk && font !== chunkFont) flush();
+			chunkFont = font;
+			chunk += segment;
+		}
+		flush();
+		return sawFallback ? runs : [run];
+	}
+
+	const A4_WIDTH = 595.28;
+
+	const A4_HEIGHT = 841.89;
+
+	const LINK_COLOR = '#1d4ed8';
+
+	interface InlineRun {
+		text: string;
+		bold?: boolean;
+		italics?: boolean;
+		link?: string;
+		color?: string;
+		decoration?: string;
+		font?: string;
+	}
+
+	function textRunFromNode(node: ProseMirrorTextNode, context: ConversionContext): InlineRun {
+		const text = node.text;
+		const marks = presentation(node, context).marks;
+		const run: InlineRun = { text };
+		if (marks.bold) run.bold = true;
+		if (marks.italic) run.italics = true;
+		if (marks.href !== undefined) {
+			run.link = marks.href;
+			run.color = LINK_COLOR;
+			run.decoration = 'underline';
+		}
+
+		return run;
+	}
+
+	interface ConversionContext {
+		readonly contentWidth: number;
+		readonly usableHeight: number;
+		readonly images: ReadonlyMap<string, string>;
+		readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
+		readonly widgets: PreparedExport['widgets'];
+		readonly nodes: PreparedExport['nodes'];
+		readonly headingSpacing: PreparedExport['headingSpacing'];
+		/** Resolved pdfmake family for body text; the base font for fallback splitting. */
+		readonly bodyFont: string;
+	}
+
+	function imageBlock(
+		attrs: ProseMirrorMediaAttrs,
+		context: ConversionContext
+	): PdfContent | PdfContent[] {
+		const src = attrs.src ?? undefined;
+		if (!src) return [];
+		const data = context.images.get(src);
+		if (!data) {
+			return { text: '[image unavailable]', italics: true, color: '#9ca3af', margin: [0, 4, 0, 4] };
+		}
+		const width = attrs.width;
+		let resolvedWidth: number | undefined;
+		if (typeof width === 'string' && width.endsWith('%')) {
+			const percentage = Number.parseFloat(width);
+			if (Number.isFinite(percentage))
+				resolvedWidth = (Math.min(percentage, 100) / 100) * context.contentWidth;
+		} else if (typeof width === 'number' && Number.isFinite(width)) {
+			resolvedWidth = Math.min(width * 0.75, context.contentWidth);
+		}
+		return {
+			image: data,
+			...(resolvedWidth
+				? { width: resolvedWidth }
+				: { fit: [context.contentWidth, context.contentWidth] }),
+			margin: [0, 4, 0, 8]
+		};
+	}
+
+	const TABLE_LINE_COLOR = '#d1d5db';
+
+	const TABLE_HEADER_FILL = '#f3f4f6';
+
+	const CODE_PANEL_FILL = '#f6f8fa';
+
+	const CODE_PANEL_LINE = '#e5e7eb';
+
+	/**
+	 * Render code as a padded, hairline-boxed panel. A single-cell table is the
+	 * pdfmake idiom for a filled box with inner padding; `preserveLeadingSpaces`
+	 * keeps the source indentation that plain text nodes would lose.
+	 */
+	function codePanel(text: string): PdfTableBlock {
+		const runs: PdfContent[] = [...withFontRuns({ text, color: '#1f2328' }, MONO_FONT)];
+		return {
+			table: {
+				widths: ['*'],
+				body: [
+					[
+						{
+							text: runs,
+							font: MONO_FONT,
+							fontSize: 9,
+							lineHeight: 1.25,
+							preserveLeadingSpaces: true
+						}
+					]
+				]
+			},
+			layout: {
+				fillColor: CODE_PANEL_FILL,
+				hLineWidth: () => 0.75,
+				vLineWidth: () => 0.75,
+				hLineColor: CODE_PANEL_LINE,
+				vLineColor: CODE_PANEL_LINE,
+				paddingLeft: () => 10,
+				paddingRight: () => 10,
+				paddingTop: () => 8,
+				paddingBottom: () => 8
+			},
+			margin: [0, 6, 0, 10]
+		};
+	}
+
+	/** Convert a Tiptap table node into a pdfmake table element. */
+	function tableBlock(
+		node: Extract<ProseMirrorNode, { type: 'table' }>,
+		context: ConversionContext
+	): PdfContent | PdfContent[] {
+		const rows = (node.content ?? []).filter((row) => row.type === 'tableRow');
+		// Slots covered by a rowspan from an earlier row, per row index.
+		const covered: Array<Set<number>> = rows.map(() => new Set<number>());
+		const body: (readonly (PdfCellBlock | PdfSpannedCell)[])[] = [];
+		let columnCount = 0;
+
+		rows.forEach((row, rowIndex) => {
+			const cells = (row.content ?? []).filter(
+				(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+			);
+			const bodyRow: (PdfCellBlock | PdfSpannedCell)[] = [];
+			let column = 0;
+			for (const cell of cells) {
+				while (covered[rowIndex]!.has(column)) {
+					bodyRow.push({});
+					column += 1;
+				}
+				const colSpan = Math.max(cell.attrs?.colspan ?? 1, 1);
+				const rowSpan = Math.max(cell.attrs?.rowspan ?? 1, 1);
+				const cellContent = cell.content ?? [];
+				const converted = cellContent.map((c) => convertNode(c, context)).flat();
+				const entry: PdfCellBlock = {
+					...(converted.length > 0 ? { text: converted } : { text: '' }),
+					...(colSpan > 1 ? { colSpan } : {}),
+					...(rowSpan > 1 ? { rowSpan } : {}),
+					...(cell.type === 'tableHeader' ? { bold: true, fillColor: TABLE_HEADER_FILL } : {})
+				};
+				bodyRow.push(entry);
+				for (let offset = 1; offset < colSpan; offset += 1) {
+					bodyRow.push({});
+					if (rowSpan > 1) {
+						for (let r = rowIndex + 1; r < Math.min(rowIndex + rowSpan, rows.length); r += 1) {
+							covered[r]!.add(column + offset);
+						}
+					}
+				}
+				if (rowSpan > 1) {
+					for (let r = rowIndex + 1; r < Math.min(rowIndex + rowSpan, rows.length); r += 1) {
+						covered[r]!.add(column);
+					}
+				}
+				column += colSpan;
+			}
 			while (covered[rowIndex]!.has(column)) {
 				bodyRow.push({});
 				column += 1;
 			}
-			const colSpan = Math.max(cell.attrs?.colspan ?? 1, 1);
-			const rowSpan = Math.max(cell.attrs?.rowspan ?? 1, 1);
-			const cellContent = cell.content ?? [];
-			const converted = cellContent.map((c) => convertNode(c, context)).flat();
-			const entry: PdfCellBlock = {
-				...(converted.length > 0 ? { text: converted } : { text: '' }),
-				...(colSpan > 1 ? { colSpan } : {}),
-				...(rowSpan > 1 ? { rowSpan } : {}),
-				...(cell.type === 'tableHeader' ? { bold: true, fillColor: TABLE_HEADER_FILL } : {})
-			};
-			bodyRow.push(entry);
-			for (let offset = 1; offset < colSpan; offset += 1) {
-				bodyRow.push({});
-				if (rowSpan > 1) {
-					for (let r = rowIndex + 1; r < Math.min(rowIndex + rowSpan, rows.length); r += 1) {
-						covered[r]!.add(column + offset);
-					}
-				}
-			}
-			if (rowSpan > 1) {
-				for (let r = rowIndex + 1; r < Math.min(rowIndex + rowSpan, rows.length); r += 1) {
-					covered[r]!.add(column);
-				}
-			}
-			column += colSpan;
-		}
-		while (covered[rowIndex]!.has(column)) {
-			bodyRow.push({});
-			column += 1;
-		}
-		columnCount = Math.max(columnCount, column);
-		body.push(bodyRow);
-	});
+			columnCount = Math.max(columnCount, column);
+			body.push(bodyRow);
+		});
 
-	if (body.length === 0 || columnCount === 0) return [];
+		if (body.length === 0 || columnCount === 0) return [];
 
-	// Honour the editor's column widths when the first row records them; scale
-	// the pixel widths to fit the printable area. Otherwise distribute evenly.
-	const firstRowCells = (rows[0]?.content ?? []).filter(
-		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
-	);
-	const preparedShares = presentation(node, context).columnShares;
-	const shares = preparedShares?.length === columnCount ? preparedShares : undefined;
-	const widths: (number | '*')[] = shares
-		? shares.map((share) => share * context.contentWidth)
-		: Array.from({ length: columnCount }, () => '*');
+		// Honour the editor's column widths when the first row records them; scale
+		// the pixel widths to fit the printable area. Otherwise distribute evenly.
+		const firstRowCells = (rows[0]?.content ?? []).filter(
+			(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
+		);
+		const preparedShares = presentation(node, context).columnShares;
+		const shares = preparedShares?.length === columnCount ? preparedShares : undefined;
+		const widths: (number | '*')[] = shares
+			? shares.map((share) => share * context.contentWidth)
+			: Array.from({ length: columnCount }, () => '*');
 
-	const hasHeaderRow =
-		firstRowCells.length > 0 && firstRowCells.every((cell) => cell.type === 'tableHeader');
+		const hasHeaderRow =
+			firstRowCells.length > 0 && firstRowCells.every((cell) => cell.type === 'tableHeader');
 
-	return {
-		table: {
-			...(hasHeaderRow ? { headerRows: 1 } : {}),
-			widths,
-			body
-		},
-		layout: {
-			hLineColor: TABLE_LINE_COLOR,
-			vLineColor: TABLE_LINE_COLOR
-		},
-		margin: [0, 4, 0, 8]
-	};
-}
-
-/**
- * One rendered diagram, however it was keyed.
- *
- * The browser-rendered PNG raster is the reference rendering (the DOCX export
- * uses the same one); pdfmake's `fit` downscales to the content box, preserving
- * aspect, without upscaling — so diagrams always stay inline on the page.
- *
- * Both diagram kinds resolve through this rather than each spelling out the
- * raster-then-vector fallback: the two copies were identical down to the fit box,
- * and only one carried the note explaining it.
- */
-function diagramContent(key: string, context: ConversionContext): PdfContent | undefined {
-	// Leave the block's own margins out of the fit box: an unbreakable block
-	// reaching the exact page body height sits on a knife's edge.
-	const fit = [context.contentWidth, context.usableHeight - 16];
-	const margin = [0, 8, 0, 8];
-	const asset = context.diagrams.get(key);
-	if (!asset) return undefined;
-	return asset.kind === 'raster'
-		? { image: asset.data, fit, margin }
-		: { svg: asset.data, fit, margin };
-}
-
-const MUTED = '#6b7280';
-
-/** One widget block as pdfmake content; the block kinds are the whole set a widget shows. */
-function widgetBlock(block: WidgetExportBlock, context: ConversionContext): PdfContent {
-	const text = (value: string) => withFontRuns({ text: value }, context.bodyFont);
-	switch (block.kind) {
-		case 'heading':
-			return {
-				text: text(block.text),
-				bold: true,
-				fontSize: [13, 12, 11][block.level - 2],
-				margin: [0, 2, 0, 4]
-			};
-		case 'paragraph':
-			return {
-				text: text(block.text),
-				...(block.muted ? { color: MUTED } : {}),
-				margin: [0, 0, 0, 4]
-			};
-		case 'check':
-			return { text: text(`${block.checked ? '☑' : '☐'} ${block.label}`), margin: [0, 0, 0, 3] };
-		case 'field':
-			return {
-				text: [{ text: `${block.label}: `, color: MUTED }, ...text(block.value)],
-				margin: [0, 0, 0, 3]
-			};
-		case 'metric':
-			return {
-				stack: [
-					{ text: text(block.label), color: MUTED, fontSize: 9 },
-					{ text: text(block.value), bold: true, fontSize: 14 },
-					...(block.detail ? [{ text: text(block.detail), color: MUTED, fontSize: 9 }] : [])
-				],
-				margin: [0, 0, 0, 4]
-			};
-		case 'progress':
-			return {
-				text: text(`${block.label ? `${block.label}: ` : ''}${block.value} of ${block.max}`),
-				margin: [0, 0, 0, 4]
-			};
-		case 'table':
-			return {
-				table: {
-					headerRows: 1,
-					widths: block.columns.map(() => '*' as const),
-					body: [
-						block.columns.map((column) => ({ text: text(column), bold: true })),
-						...block.rows.map((row) => row.map((cell) => ({ text: text(cell) })))
-					]
-				},
-				layout: { hLineColor: TABLE_LINE_COLOR, vLineColor: TABLE_LINE_COLOR },
-				margin: [0, 2, 0, 6]
-			};
-		case 'badge':
-			return { text: text(`[${block.text}]`), color: MUTED, margin: [0, 0, 0, 3] };
-		case 'divider':
-			return {
-				canvas: [
-					{
-						type: 'line',
-						x1: 0,
-						y1: 4,
-						x2: context.contentWidth,
-						y2: 4,
-						lineWidth: 0.5,
-						lineColor: '#d1d5db'
-					}
-				],
-				margin: [0, 4, 0, 4]
-			};
-		case 'unsupported':
-			return { text: `[${block.type} element not shown]`, italics: true, color: MUTED };
+		return {
+			table: {
+				...(hasHeaderRow ? { headerRows: 1 } : {}),
+				widths,
+				body
+			},
+			layout: {
+				hLineColor: TABLE_LINE_COLOR,
+				vLineColor: TABLE_LINE_COLOR
+			},
+			margin: [0, 4, 0, 8]
+		};
 	}
-}
 
-function convertNode(node: ProseMirrorNode, context: ConversionContext): PdfContent | PdfContent[] {
-	const type = node.type;
-	const content = presentation(node, context).children;
+	/**
+	 * One rendered diagram, however it was keyed.
+	 *
+	 * The browser-rendered PNG raster is the reference rendering (the DOCX export
+	 * uses the same one); pdfmake's `fit` downscales to the content box, preserving
+	 * aspect, without upscaling — so diagrams always stay inline on the page.
+	 *
+	 * Both diagram kinds resolve through this rather than each spelling out the
+	 * raster-then-vector fallback: the two copies were identical down to the fit box,
+	 * and only one carried the note explaining it.
+	 */
+	function diagramContent(key: string, context: ConversionContext): PdfContent | undefined {
+		// Leave the block's own margins out of the fit box: an unbreakable block
+		// reaching the exact page body height sits on a knife's edge.
+		const fit = [context.contentWidth, context.usableHeight - 16];
+		const margin = [0, 8, 0, 8];
+		const asset = context.diagrams.get(key);
+		if (!asset) return undefined;
+		return asset.kind === 'raster'
+			? { image: asset.data, fit, margin }
+			: { svg: asset.data, fit, margin };
+	}
 
-	switch (type) {
-		case 'heading': {
-			const level = Math.min(node.attrs?.level ?? 1, 6);
-			const sizes = [18, 16, 14, 13, 12, 11];
-			const spacing = context.headingSpacing.get(level);
-			return {
-				text: withFontRuns({ text: presentation(node, context).text }, context.bodyFont),
-				fontSize: sizes[level - 1],
-				bold: true,
-				// A title is double-spaced from the body, mirroring the editor;
-				// section headings keep the tighter margin.
-				margin: spacing ? [0, spacing.before, 0, spacing.after] : [0, 10, 0, 5]
-			};
-		}
-		case 'paragraph': {
-			const children: (string | PdfContent)[] = [];
-			for (const child of content) {
-				if (child.type === 'text') {
-					children.push(...withFontRuns(textRunFromNode(child, context), context.bodyFont));
-				} else if (child.type === 'hardBreak') {
-					if (children.length > 0) children.push('\n');
-				}
-			}
-			return { text: children.length > 0 ? children : '', margin: [0, 0, 0, 4] };
-		}
-		case 'bulletList':
-		case 'orderedList': {
-			return {
-				[type === 'bulletList' ? 'ul' : 'ol']: content.map((item) => {
-					const itemContent = presentation(item, context).children;
-					const converted = itemContent.map((c) => convertNode(c, context)).flat();
-					if (converted.length === 0) return { text: '' };
-					// An item holding block content (a nested list, diagram, image, code
-					// panel) must stay a stack of blocks: forced into a text run, pdfmake
-					// silently drops everything that is not text.
-					const inlineOnly = itemContent.every(
-						(c) => c.type === 'paragraph' || c.type === 'text' || c.type === 'hardBreak'
-					);
-					if (inlineOnly) return { text: converted };
-					return { stack: converted };
-				})
-			};
-		}
-		case 'blockquote': {
-			const blockContent = content.map((c) => convertNode(c, context)).flat();
-			return blockContent.map((item) => {
-				if (typeof item === 'object' && item !== null) {
-					return { ...item, italics: true, margin: [20, 0, 20, 4] };
-				}
-				return { text: item, italics: true, margin: [20, 0, 20, 4] };
-			});
-		}
-		case 'codeBlock': {
-			return codePanel(presentation(node, context).text);
-		}
-		case 'mermaid': {
-			const source = presentation(node, context).text;
-			// Without a browser render the diagram source is still worth keeping.
-			return diagramContent(mermaidSourceHash(source), context) ?? codePanel(source);
-		}
-		case 'drawio': {
-			// draw.io ships its own exported SVG, rasterized by the browser like a
-			// mermaid diagram. Without one there is no source worth printing — the XML
-			// is not something a reader can use — so the block says it is missing.
-			const reference = node.attrs?.diagramId ?? undefined;
-			return (
-				(reference ? diagramContent(reference, context) : undefined) ?? {
-					text: '[diagram unavailable]',
-					italics: true,
-					color: '#9ca3af',
-					margin: [0, 4, 0, 4]
-				}
-			);
-		}
-		case 'widgetNode': {
-			// A widget prints as what it showed when exported: its title and its blocks.
-			const exported = node.attrs?.widgetId ? context.widgets.get(node.attrs.widgetId) : undefined;
-			if (!exported)
+	const MUTED = '#6b7280';
+
+	/** One widget block as pdfmake content; the block kinds are the whole set a widget shows. */
+	function widgetBlock(block: WidgetExportBlock, context: ConversionContext): PdfContent {
+		const text = (value: string) => withFontRuns({ text: value }, context.bodyFont);
+		switch (block.kind) {
+			case 'heading':
 				return {
-					text: '[widget unavailable]',
-					italics: true,
-					color: '#9ca3af',
+					text: text(block.text),
+					bold: true,
+					fontSize: [13, 12, 11][block.level - 2],
+					margin: [0, 2, 0, 4]
+				};
+			case 'paragraph':
+				return {
+					text: text(block.text),
+					...(block.muted ? { color: MUTED } : {}),
+					margin: [0, 0, 0, 4]
+				};
+			case 'check':
+				return { text: text(`${block.checked ? '☑' : '☐'} ${block.label}`), margin: [0, 0, 0, 3] };
+			case 'field':
+				return {
+					text: [{ text: `${block.label}: `, color: MUTED }, ...text(block.value)],
+					margin: [0, 0, 0, 3]
+				};
+			case 'metric':
+				return {
+					stack: [
+						{ text: text(block.label), color: MUTED, fontSize: 9 },
+						{ text: text(block.value), bold: true, fontSize: 14 },
+						...(block.detail ? [{ text: text(block.detail), color: MUTED, fontSize: 9 }] : [])
+					],
+					margin: [0, 0, 0, 4]
+				};
+			case 'progress':
+				return {
+					text: text(`${block.label ? `${block.label}: ` : ''}${block.value} of ${block.max}`),
+					margin: [0, 0, 0, 4]
+				};
+			case 'table':
+				return {
+					table: {
+						headerRows: 1,
+						widths: block.columns.map(() => '*' as const),
+						body: [
+							block.columns.map((column) => ({ text: text(column), bold: true })),
+							...block.rows.map((row) => row.map((cell) => ({ text: text(cell) })))
+						]
+					},
+					layout: { hLineColor: TABLE_LINE_COLOR, vLineColor: TABLE_LINE_COLOR },
+					margin: [0, 2, 0, 6]
+				};
+			case 'badge':
+				return { text: text(`[${block.text}]`), color: MUTED, margin: [0, 0, 0, 3] };
+			case 'divider':
+				return {
+					canvas: [
+						{
+							type: 'line',
+							x1: 0,
+							y1: 4,
+							x2: context.contentWidth,
+							y2: 4,
+							lineWidth: 0.5,
+							lineColor: '#d1d5db'
+						}
+					],
 					margin: [0, 4, 0, 4]
 				};
-			return {
-				stack: exported.blocks.map((block) => widgetBlock(block, context)),
-				margin: [0, 4, 0, 8]
-			};
+			case 'unsupported':
+				return { text: `[${block.type} element not shown]`, italics: true, color: MUTED };
 		}
-		case 'horizontalRule': {
-			return {
-				canvas: [
-					{
-						type: 'line',
-						x1: 0,
-						y1: 5,
-						x2: context.contentWidth,
-						y2: 5,
-						lineWidth: 1,
-						lineColor: '#cccccc'
-					}
-				],
-				margin: [0, 8, 0, 8]
-			};
-		}
-		case 'image': {
-			return imageBlock(node.attrs ?? {}, context);
-		}
-		case 'table': {
-			return tableBlock(node, context);
-		}
-		case 'text': {
-			return textRunFromNode(node, context);
-		}
-		case 'hardBreak': {
-			return '\n';
-		}
-		default: {
-			if (content.length > 0) {
-				return content.map((c) => convertNode(c, context)).flat();
+	}
+
+	function convertNode(
+		node: ProseMirrorNode,
+		context: ConversionContext
+	): PdfContent | PdfContent[] {
+		const type = node.type;
+		const content = presentation(node, context).children;
+
+		switch (type) {
+			case 'heading': {
+				const level = Math.min(node.attrs?.level ?? 1, 6);
+				const sizes = [18, 16, 14, 13, 12, 11];
+				const spacing = context.headingSpacing.get(level);
+				return {
+					text: withFontRuns({ text: presentation(node, context).text }, context.bodyFont),
+					fontSize: sizes[level - 1],
+					bold: true,
+					// A title is double-spaced from the body, mirroring the editor;
+					// section headings keep the tighter margin.
+					margin: spacing ? [0, spacing.before, 0, spacing.after] : [0, 10, 0, 5]
+				};
 			}
-			return [];
+			case 'paragraph': {
+				const children: (string | PdfContent)[] = [];
+				for (const child of content) {
+					if (child.type === 'text') {
+						children.push(...withFontRuns(textRunFromNode(child, context), context.bodyFont));
+					} else if (child.type === 'hardBreak') {
+						if (children.length > 0) children.push('\n');
+					}
+				}
+				return { text: children.length > 0 ? children : '', margin: [0, 0, 0, 4] };
+			}
+			case 'bulletList':
+			case 'orderedList': {
+				return {
+					[type === 'bulletList' ? 'ul' : 'ol']: content.map((item) => {
+						const itemContent = presentation(item, context).children;
+						const converted = itemContent.map((c) => convertNode(c, context)).flat();
+						if (converted.length === 0) return { text: '' };
+						// An item holding block content (a nested list, diagram, image, code
+						// panel) must stay a stack of blocks: forced into a text run, pdfmake
+						// silently drops everything that is not text.
+						const inlineOnly = itemContent.every(
+							(c) => c.type === 'paragraph' || c.type === 'text' || c.type === 'hardBreak'
+						);
+						if (inlineOnly) return { text: converted };
+						return { stack: converted };
+					})
+				};
+			}
+			case 'blockquote': {
+				const blockContent = content.map((c) => convertNode(c, context)).flat();
+				return blockContent.map((item) => {
+					if (typeof item === 'object' && item !== null) {
+						return { ...item, italics: true, margin: [20, 0, 20, 4] };
+					}
+					return { text: item, italics: true, margin: [20, 0, 20, 4] };
+				});
+			}
+			case 'codeBlock': {
+				return codePanel(presentation(node, context).text);
+			}
+			case 'mermaid': {
+				const source = presentation(node, context).text;
+				// Without a browser render the diagram source is still worth keeping.
+				return diagramContent(mermaidSourceHash(source), context) ?? codePanel(source);
+			}
+			case 'drawio': {
+				// draw.io ships its own exported SVG, rasterized by the browser like a
+				// mermaid diagram. Without one there is no source worth printing — the XML
+				// is not something a reader can use — so the block says it is missing.
+				const reference = node.attrs?.diagramId ?? undefined;
+				return (
+					(reference ? diagramContent(reference, context) : undefined) ?? {
+						text: '[diagram unavailable]',
+						italics: true,
+						color: '#9ca3af',
+						margin: [0, 4, 0, 4]
+					}
+				);
+			}
+			case 'widgetNode': {
+				// A widget prints as what it showed when exported: its title and its blocks.
+				const exported = node.attrs?.widgetId
+					? context.widgets.get(node.attrs.widgetId)
+					: undefined;
+				if (!exported)
+					return {
+						text: '[widget unavailable]',
+						italics: true,
+						color: '#9ca3af',
+						margin: [0, 4, 0, 4]
+					};
+				return {
+					stack: exported.blocks.map((block) => widgetBlock(block, context)),
+					margin: [0, 4, 0, 8]
+				};
+			}
+			case 'horizontalRule': {
+				return {
+					canvas: [
+						{
+							type: 'line',
+							x1: 0,
+							y1: 5,
+							x2: context.contentWidth,
+							y2: 5,
+							lineWidth: 1,
+							lineColor: '#cccccc'
+						}
+					],
+					margin: [0, 8, 0, 8]
+				};
+			}
+			case 'image': {
+				return imageBlock(node.attrs ?? {}, context);
+			}
+			case 'table': {
+				return tableBlock(node, context);
+			}
+			case 'text': {
+				return textRunFromNode(node, context);
+			}
+			case 'hardBreak': {
+				return '\n';
+			}
+			default: {
+				if (content.length > 0) {
+					return content.map((c) => convertNode(c, context)).flat();
+				}
+				return [];
+			}
 		}
 	}
-}
 
-function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): PdfContent[] {
-	const content = doc.content ?? [];
-	const result: PdfContent[] = [];
-	for (const node of content) {
-		const converted = convertNode(node, context);
-		if (Array.isArray(converted)) {
-			result.push(...converted);
-		} else {
-			result.push(converted);
+	function convertDoc(doc: ProseMirrorDocument, context: ConversionContext): PdfContent[] {
+		const content = doc.content ?? [];
+		const result: PdfContent[] = [];
+		for (const node of content) {
+			const converted = convertNode(node, context);
+			if (Array.isArray(converted)) {
+				result.push(...converted);
+			} else {
+				result.push(converted);
+			}
 		}
+		return result;
 	}
-	return result;
-}
 
-export async function generatePdf(input: PreparedExport): Promise<Buffer> {
+	function presentation(node: ProseMirrorNode, context: ConversionContext) {
+		const value = context.nodes.get(node);
+		if (!value) throw new Error('Export node was not prepared');
+		return value;
+	}
+
 	const { notes, settings, images, diagrams } = input;
-	const printer = pdfmake;
-	// Embed the repo-shipped Noto fonts; the local-access policy permits only
-	// files inside assets/fonts, never arbitrary filesystem paths.
-	printer.addFonts(
-		Object.fromEntries(
-			Object.entries(FONT_FILES).map(([family, styles]) => [
-				family,
-				Object.fromEntries(
-					Object.entries(styles).map(([style, file]) => [style, resolve(FONTS_DIR, file)])
-				)
-			])
-		)
-	);
-	printer.setLocalAccessPolicy((path) => resolve(path).startsWith(FONTS_DIR + sep));
-
 	const margin = Math.min(Math.max(settings.margin, 18), 144);
 	const contentWidth = A4_WIDTH - margin * 2;
 	const usableHeight = A4_HEIGHT - margin * 2 - 16;
@@ -666,11 +601,5 @@ export async function generatePdf(input: PreparedExport): Promise<Buffer> {
 		pageMargins: [margin, margin, margin, margin]
 	};
 
-	return printer.createPdf(docDefinition).getBuffer();
-}
-
-function presentation(node: ProseMirrorNode, context: ConversionContext) {
-	const value = context.nodes.get(node);
-	if (!value) throw new Error('Export node was not prepared');
-	return value;
+	return docDefinition;
 }

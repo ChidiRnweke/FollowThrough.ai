@@ -1,3 +1,8 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { vi } from 'vitest';
 import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
@@ -10,10 +15,10 @@ import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { SkillPins } from '$lib/server/services/skills/pins';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -25,12 +30,17 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const notes = new NoteRecords(database);
 	const skills = new SkillRecords(database);
 	const provenance = new ProvenanceRecords(database);
-	const library = new SkillLibrary(skills, notes, provenance);
-	const catalog = new NoteCatalog(notes, new SourceAnchorRecords(database), projects);
+	const library = createSkillServices(skills, notes, provenance);
+	const catalog = createNoteServices(notes, new SourceAnchorRecords(database), projects);
 	const content = new InMemoryNoteContent();
 	const sync = createSyncCapability({ db: database });
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
 			selectionOrigins: new SelectionOrigins(notes, new SourceAnchorRecords(database), provenance),
 			syncMutations: sync.mutations,
@@ -39,18 +49,18 @@ export const skillController = (database: Database, transactionRunner: Transacti
 				active: BUILT_INS,
 				retired: RETIRED_BUILT_INS
 			}),
-			skillFinder: library,
-			skillCreator: library,
-			noteCreation: catalog,
-			skillEditor: library,
+			skillFinder: library.finder,
+			skillCreator: library.creator,
+			noteCreation: catalog.creator,
+			skillEditor: library.editor,
 			skillPinWriter: new SkillPins(projects, notes, skills),
-			skillUsageLister: library,
-			skillUsageRecorder: library,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			skillUsageLister: library.usageLister,
+			skillUsageRecorder: library.usageRecorder,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: content,
 			noteIndexer: content
 		})

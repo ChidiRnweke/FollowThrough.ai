@@ -182,3 +182,9 @@ export type PreparedSkillEdit<Document> =
 			readonly skill: Skill<Document>;
 			readonly manifest: SkillManifest;
 	  };
+
+export interface SkillMetadataUpdate {
+	readonly description: string;
+	readonly triggerHints: string[];
+	readonly isEnabled: boolean;
+}

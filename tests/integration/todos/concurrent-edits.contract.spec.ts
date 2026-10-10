@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
@@ -15,7 +18,7 @@ const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 	const { database, transactionRunner } = createTransactionContext(connection.db);
 	const projects = new ProjectRecords(database);
 	const notes = createNotesCapability({ db: database, projects });
-	const { catalog } = createTodosCapability({
+	const { services: catalog } = createTodosCapability({
 		db: database,
 		projects,
 		notes: notes.repository,
@@ -24,8 +27,12 @@ const editor = (connection: ReturnType<typeof connectPostgresTestDatabase>) => {
 	});
 	return new Todos(
 		capabilityDependencies<TodosDependencies>({
-			todoEditor: catalog,
-			todoContextReader: catalog,
+			boardExport: new TodoBoardExportService(),
+			todoPresentation: new TodoPresentationService(),
+			todoEditingRules: new TodoEditingRulesService(),
+			todoCreationRules: new TodoEditingRulesService(),
+			todoEditor: catalog.editor,
+			todoContextReader: catalog.context,
 			transactionRunner
 		})
 	);

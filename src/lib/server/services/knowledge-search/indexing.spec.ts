@@ -1,5 +1,7 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
-import { ContentIndex, TokenAwareChunker } from './indexing';
 import {
 	InMemoryEmbeddingClient,
 	InMemorySearchRepository
@@ -11,38 +13,48 @@ import {
 	testActor,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { retrievalEncoding } from './indexing';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+
+const indexedChunks = async (content: string, targetTokens: number, overlapTokens: number) => {
+	const repository = new InMemorySearchRepository();
+	const index = createContentIndex(
+		repository,
+		'test-embedding',
+		{ targetTokens, overlapTokens },
+		true
+	);
+	await index.notes.index(testActor(), noteBuilder({ plainText: content }));
+	return repository.documents.map(({ document }) => document.content);
+};
 
 describe('Content chunking invariants', () => {
-	it('retains repeated final paragraphs instead of treating equal text as an overlap', () => {
-		expect(new TokenAwareChunker(2, 0).chunk('alpha beta\n\nalpha beta')).toEqual([
+	it('retains repeated final paragraphs instead of treating equal text as an overlap', async () => {
+		expect(await indexedChunks('alpha beta\n\nalpha beta', 2, 0)).toEqual([
 			'alpha beta',
 			'alpha beta'
 		]);
 	});
-	it('uses large token chunks with a generous overlap', () => {
-		const chunks = new TokenAwareChunker(20, 5).chunk(
-			Array.from({ length: 60 }, (_, index) => `word${index}`).join(' ')
+	it('uses large token chunks with a generous overlap', async () => {
+		const chunks = await indexedChunks(
+			Array.from({ length: 60 }, (_, index) => `word${index}`).join(' '),
+			20,
+			5
 		);
-		const encoding = retrievalEncoding();
+		const encoding = testTokenizer;
 		const left = encoding.encode(chunks[0]!);
 		const right = encoding.encode(chunks[1]!);
 		expect(right.slice(0, 5)).toEqual(left.slice(-5));
 	});
-
-	it('returns no chunks for empty content', () => {
-		expect(new TokenAwareChunker(20, 0).chunk('   ')).toEqual([]);
+	it('returns no chunks for empty content', async () => {
+		expect(await indexedChunks('   ', 20, 0)).toEqual([]);
 	});
-
-	it('preserves paragraph boundaries when they fit', () => {
-		expect(new TokenAwareChunker(30, 0).chunk('First paragraph.\n\nSecond.')).toEqual([
+	it('preserves paragraph boundaries when they fit', async () => {
+		expect(await indexedChunks('First paragraph.\n\nSecond.', 30, 0)).toEqual([
 			'First paragraph.\n\nSecond.'
 		]);
 	});
-
-	it('splits content deterministically at the configured limit', () => {
-		expect(new TokenAwareChunker(2, 0).chunk('alpha beta gamma delta')).toEqual([
+	it('splits content deterministically at the configured limit', async () => {
+		expect(await indexedChunks('alpha beta gamma delta', 2, 0)).toEqual([
 			'alpha beta',
 			'gamma delta'
 		]);
@@ -52,25 +64,28 @@ describe('Content chunking invariants', () => {
 describe('Search indexing invariants', () => {
 	it('keeps distinct stored identities when identical chunks recur in a later revision', async () => {
 		const repository = new InMemorySearchRepository();
-		const index = new ContentIndex(repository, 'test-embedding', new TokenAwareChunker(2, 0));
+		const index = createContentIndex(repository, 'test-embedding', {
+			targetTokens: 2,
+			overlapTokens: 0
+		});
 		const note = noteBuilder({ plainText: 'alpha beta\n\ngamma delta\n\nalpha beta' });
-		const prepared = await index.indexNote(testActor(), note);
+		const prepared = await index.notes.index(testActor(), note);
 		if (prepared.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await index.complete(testActor(), prepared, {
 			model: 'test-embedding',
 			vectors: prepared.missing.map(() => [1, 2])
 		});
 		const originalIds = repository.documents.map(({ document }) => document.id);
-		await index.indexNote(testActor(), { ...note, currentRevision: 2 });
+		await index.notes.index(testActor(), { ...note, currentRevision: 2 });
 		expect(repository.documents.map(({ document }) => document.id)).toEqual(originalIds);
 	});
 
 	it('stores every generated chunk', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(
+		const indexer = createContentIndex(
 			repository,
 			new InMemoryEmbeddingClient().model,
-			new TokenAwareChunker(2, 0),
+			{ targetTokens: 2, overlapTokens: 0 },
 			true
 		).notes;
 		await indexer.index(testActor(), noteBuilder({ plainText: 'alpha beta gamma delta' }));
@@ -79,15 +94,15 @@ describe('Search indexing invariants', () => {
 
 	it('replaces the persisted vector when indexed content changes', async () => {
 		const repository = new InMemorySearchRepository();
-		const index = new ContentIndex(repository, 'test-embedding');
-		const note = noteBuilder(noteContentFromMarkdown('architecture'));
-		const initial = await index.indexNote(testActor(), note);
+		const index = createContentIndex(repository, 'test-embedding');
+		const note = noteBuilder(noteMarkdown.read('architecture'));
+		const initial = await index.notes.index(testActor(), note);
 		if (initial.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await index.complete(testActor(), initial, { model: 'test-embedding', vectors: [[1, 2, 3]] });
 
-		const changed = await index.indexNote(testActor(), {
+		const changed = await index.notes.index(testActor(), {
 			...note,
-			...noteContentFromMarkdown('blueprint'),
+			...noteMarkdown.read('blueprint'),
 			currentRevision: 2
 		});
 		if (changed.kind === 'needs_embeddings')
@@ -107,26 +122,29 @@ describe('Search indexing invariants', () => {
 
 	it('reuses an existing embedding for unchanged content', async () => {
 		const repository = new InMemorySearchRepository();
-		const index = new ContentIndex(repository, 'test-embedding');
+		const index = createContentIndex(repository, 'test-embedding');
 		const note = noteBuilder({ plainText: 'architecture' });
-		const prepared = await index.indexNote(testActor(), note);
+		const prepared = await index.notes.index(testActor(), note);
 		if (prepared.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await index.complete(testActor(), prepared, { model: 'test-embedding', vectors: [[1, 2, 3]] });
-		await index.indexNote(testActor(), { ...note, currentRevision: 2 });
+		await index.notes.index(testActor(), { ...note, currentRevision: 2 });
 		expect(repository.documents[0]?.document.embedding).toEqual([1, 2, 3]);
 	});
 
 	it('requires new vectors when the embedding model changes', async () => {
 		const repository = new InMemorySearchRepository();
 		const note = noteBuilder({ plainText: 'architecture' });
-		const original = new ContentIndex(repository, 'first-model');
-		const prepared = await original.indexNote(testActor(), note);
+		const original = createContentIndex(repository, 'first-model');
+		const prepared = await original.notes.index(testActor(), note);
 		if (prepared.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await original.complete(testActor(), prepared, { model: 'first-model', vectors: [[1, 2, 3]] });
-		const replacement = await new ContentIndex(repository, 'second-model').indexNote(testActor(), {
-			...note,
-			currentRevision: 2
-		});
+		const replacement = await createContentIndex(repository, 'second-model').notes.index(
+			testActor(),
+			{
+				...note,
+				currentRevision: 2
+			}
+		);
 		expect(replacement).toMatchObject({
 			kind: 'needs_embeddings',
 			model: 'second-model',
@@ -136,7 +154,7 @@ describe('Search indexing invariants', () => {
 
 	it('replaces stale chunks after content changes', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).notes;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).notes;
 		const note = noteBuilder({ plainText: 'old content' });
 		await indexer.index(testActor(), note);
 		await indexer.index(testActor(), { ...note, plainText: 'new content', currentRevision: 2 });
@@ -145,7 +163,7 @@ describe('Search indexing invariants', () => {
 
 	it('removes stale chunks when a note becomes empty', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).notes;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).notes;
 		const note = noteBuilder({ plainText: 'old content' });
 		await indexer.index(testActor(), note);
 		await indexer.index(testActor(), { ...note, plainText: '', currentRevision: 2 });
@@ -154,8 +172,11 @@ describe('Search indexing invariants', () => {
 
 	it('rejects an embedding count mismatch before storing prepared chunks', async () => {
 		const repository = new InMemorySearchRepository();
-		const index = new ContentIndex(repository, 'test-embedding');
-		const prepared = await index.indexNote(testActor(), noteBuilder({ plainText: 'architecture' }));
+		const index = createContentIndex(repository, 'test-embedding');
+		const prepared = await index.notes.index(
+			testActor(),
+			noteBuilder({ plainText: 'architecture' })
+		);
 		if (prepared.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await expect(
 			index.complete(testActor(), prepared, { model: 'test-embedding', vectors: [] })
@@ -167,7 +188,7 @@ describe('Diagram indexing invariants', () => {
 	it('stores diagram text as a diagram-scoped search document', async () => {
 		const repository = new InMemorySearchRepository();
 		const diagram = diagramBuilder();
-		await new ContentIndex(repository, 'test-embedding', undefined, true).diagrams.index(
+		await createContentIndex(repository, 'test-embedding', undefined, true).diagrams.index(
 			testActor(),
 			diagram,
 			{ kind: 'note', title: noteBuilder().title }
@@ -182,7 +203,7 @@ describe('Diagram indexing invariants', () => {
 	// it would offer the user something they cannot open.
 	it('indexes no chunks for a diagram that is in the trash', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).diagrams;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).diagrams;
 		const diagram = diagramBuilder();
 		await indexer.index(testActor(), diagram, { kind: 'note', title: noteBuilder().title });
 		await indexer.index(testActor(), { ...diagram, archivedAt: testNow }, { kind: 'standalone' });
@@ -192,11 +213,11 @@ describe('Diagram indexing invariants', () => {
 	it('keeps note chunks when replacing diagram chunks', async () => {
 		const repository = new InMemorySearchRepository();
 		const note = noteBuilder({ plainText: 'note content' });
-		await new ContentIndex(repository, 'test-embedding', undefined, true).notes.index(
+		await createContentIndex(repository, 'test-embedding', undefined, true).notes.index(
 			testActor(),
 			note
 		);
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).diagrams;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).diagrams;
 		const diagram = diagramBuilder();
 		await indexer.index(testActor(), diagram, { kind: 'note', title: noteBuilder().title });
 		await indexer.index(
@@ -210,11 +231,11 @@ describe('Diagram indexing invariants', () => {
 	it('removes only diagram chunks when searchable text becomes empty', async () => {
 		const repository = new InMemorySearchRepository();
 		const note = noteBuilder({ plainText: 'note content' });
-		await new ContentIndex(repository, 'test-embedding', undefined, true).notes.index(
+		await createContentIndex(repository, 'test-embedding', undefined, true).notes.index(
 			testActor(),
 			note
 		);
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).diagrams;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).diagrams;
 		const diagram = diagramBuilder();
 		await indexer.index(testActor(), diagram, { kind: 'note', title: noteBuilder().title });
 		await indexer.index(testActor(), { ...diagram, searchableText: '' }, { kind: 'standalone' });
@@ -225,7 +246,7 @@ describe('Diagram indexing invariants', () => {
 	// must not go looking for one — the note reader would throw.
 	it('indexes a diagram that has no source note', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).diagrams;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).diagrams;
 		const diagram = diagramBuilder({ sourceNoteId: undefined, title: 'Delivery pipeline' });
 		await indexer.index(testActor(), diagram, { kind: 'standalone' });
 		expect(repository.documents[0]?.document.projectId).toBe(diagram.projectId);
@@ -236,7 +257,7 @@ describe('Diagram indexing invariants', () => {
 	// rank on labels alone and effectively disappear.
 	it('titles an untitled note-less diagram rather than indexing it blank', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).diagrams;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).diagrams;
 		await indexer.index(
 			testActor(),
 			diagramBuilder({ sourceNoteId: undefined, title: undefined }),
@@ -253,7 +274,7 @@ describe('Memory indexing invariants', () => {
 	it('stores memory content as a memory-scoped search document', async () => {
 		const repository = new InMemorySearchRepository();
 		const entry = memoryEntryBuilder();
-		await new ContentIndex(repository, 'test-embedding', undefined, true).memories.index(
+		await createContentIndex(repository, 'test-embedding', undefined, true).memories.index(
 			testActor(),
 			entry
 		);
@@ -265,19 +286,19 @@ describe('Memory indexing invariants', () => {
 
 	it('reuses a chunk with an unchanged content hash', async () => {
 		const repository = new InMemorySearchRepository();
-		const index = new ContentIndex(repository, 'test-embedding');
+		const index = createContentIndex(repository, 'test-embedding');
 		const entry = memoryEntryBuilder();
-		const prepared = await index.indexMemory(testActor(), entry);
+		const prepared = await index.memories.index(testActor(), entry);
 		if (prepared.kind !== 'needs_embeddings') throw new Error('Expected fresh chunks');
 		await index.complete(testActor(), prepared, { model: 'test-embedding', vectors: [[1, 2, 3]] });
 		const firstId = repository.documents[0]?.document.id;
-		await index.indexMemory(testActor(), entry);
+		await index.memories.index(testActor(), entry);
 		expect(repository.documents[0]?.document.id).toBe(firstId);
 	});
 
 	it('removes chunks for an entry withheld from agents', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).memories;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).memories;
 		const entry = memoryEntryBuilder();
 		await indexer.index(testActor(), entry);
 		await indexer.index(testActor(), { ...entry, shareWithAgents: false });
@@ -286,7 +307,7 @@ describe('Memory indexing invariants', () => {
 
 	it('removes chunks for a deleted entry', async () => {
 		const repository = new InMemorySearchRepository();
-		const indexer = new ContentIndex(repository, 'test-embedding', undefined, true).memories;
+		const indexer = createContentIndex(repository, 'test-embedding', undefined, true).memories;
 		const entry = memoryEntryBuilder();
 		await indexer.index(testActor(), entry);
 		await indexer.index(testActor(), { ...entry, deletedAt: testNow });

@@ -297,3 +297,6 @@ export interface ProjectDetails {
 	readonly name: string;
 	readonly description: string | undefined;
 }
+
+export type ArchiveImportResponse =
+	{ kind: 'report'; report: ImportMarkdownArchiveOutput } | { kind: 'failure'; message: string };

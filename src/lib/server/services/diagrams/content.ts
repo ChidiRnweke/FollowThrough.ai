@@ -1,52 +1,21 @@
-import type { ActorContext } from '$lib/models/identity';
-import type { DateTime } from '$lib/models/workspace';
-import type {
-	MermaidDiagram,
-	ReviseInlineMermaidInput,
-	ReviseInlineMermaidOutput
-} from '$lib/models/diagrams';
-import type { ProvenanceId } from '$lib/models/provenance';
-import type { TextSelection } from '$lib/models/notes';
 import { ValidationError } from '$lib/errors';
-
-const now = (): DateTime => new Date().toISOString() as DateTime;
 const escapeXml = (value: string): string =>
 	value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-
-export class DiagramContent {
-	async create(
-		_actor: ActorContext,
-		selection: TextSelection,
-		instruction?: string
-	): Promise<{ title?: string; source: string; provenanceId?: ProvenanceId }> {
-		if (!selection.text.trim()) throw new ValidationError('Diagram source text is required');
-		const labels = selection.text
-			.split(/(?:->|calls|to)/i)
-			.map((label) => label.trim().replace(/[.!]+$/, ''))
-			.filter(Boolean);
-		return {
-			title: instruction ? `Diagram: ${instruction}` : 'Generated diagram',
-			source: `flowchart LR\n${labels.map((label, index) => `  N${index}["${label}"]`).join('\n')}\n${labels
-				.slice(1)
-				.map((_, index) => `  N${index} --> N${index + 1}`)
-				.join('\n')}`
-		};
-	}
-	async revise(
-		_actor: ActorContext,
-		diagram: MermaidDiagram,
-		instruction: string
-	): Promise<MermaidDiagram> {
-		return { ...diagram, source: `${diagram.source}\n%% ${instruction}`, updatedAt: now() };
-	}
-
-	async reviseInline(
-		_actor: ActorContext,
-		input: ReviseInlineMermaidInput
-	): Promise<ReviseInlineMermaidOutput> {
-		void _actor;
-		return { source: `${input.source}\n%% ${input.instruction}` };
-	}
+export interface MermaidDiagramRenderer {
+	render(source: string): Promise<string>;
+}
+export interface DiagramTextExtractor {
+	/**
+	 * Takes the source rather than a whole `Diagram`, because the source is all
+	 * any extractor reads. Callers that have only just built a source — the studio
+	 * keep path — would otherwise have to assert a `Diagram` they do not have.
+	 */
+	extract(diagram: DiagramSource): Promise<string>;
+}
+export interface DiagramSource {
+	readonly source: string;
+}
+export class DiagramContent implements MermaidDiagramRenderer, DiagramTextExtractor {
 	async render(source: string): Promise<string> {
 		if (!/^(?:flowchart|graph|sequenceDiagram|classDiagram|stateDiagram)/m.test(source))
 			throw new ValidationError('Generated Mermaid is invalid');

@@ -1,22 +1,27 @@
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { ToolDescriptor, ToolEmbeddingSeedSummary } from '$lib/models/agent/tool-index';
-import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
-import type { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
+import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
+import type { IToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 
 export interface ToolRetriever {
 	retrieve(catalog: readonly ToolDescriptor[], query: string, topN: number): Promise<string[]>;
 }
 
+export interface ToolDiscoveryController extends ToolRetriever {
+	seed(catalog?: readonly ToolDescriptor[]): Promise<ToolEmbeddingSeedSummary>;
+}
+
 interface TransactionRunner {
 	run<T>(work: () => Promise<T>): Promise<T>;
 }
 
-export class ToolDiscovery implements ToolRetriever {
+export class ToolDiscovery implements ToolDiscoveryController {
 	constructor(
-		private readonly index: ToolCatalogIndex,
+		private readonly index: IToolCatalogIndex,
 		private readonly embeddings: IEmbeddings,
-		private readonly transactions: TransactionRunner
+		private readonly transactions: TransactionRunner,
+		private readonly catalog: Pick<AgentToolCatalog, 'discoverable'>
 	) {}
 
 	async retrieve(
@@ -37,7 +42,9 @@ export class ToolDiscovery implements ToolRetriever {
 		);
 	}
 
-	async seed(catalog: readonly ToolDescriptor[] = TOOL_CATALOG): Promise<ToolEmbeddingSeedSummary> {
+	async seed(
+		catalog: readonly ToolDescriptor[] = this.catalog.discoverable()
+	): Promise<ToolEmbeddingSeedSummary> {
 		const plan = await this.index.prepare(catalog, this.embeddings.model);
 		const batch = plan.pending.length
 			? await this.embeddings.embed(plan.pending.map((entry) => entry.input))

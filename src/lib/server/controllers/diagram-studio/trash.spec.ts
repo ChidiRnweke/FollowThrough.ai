@@ -1,8 +1,11 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { DiagramEditingService } from '$lib/services/diagrams/editing';
+import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
-import { DiagramLibrary } from '$lib/server/services/diagrams/library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -17,7 +20,7 @@ import {
 	InMemoryDiagrams
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { prepareWorkspaceCommand } from '$lib/controllers/workspace/commands';
+import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import {
 	testNow,
 	testNoteId,
@@ -25,14 +28,13 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DateTime } from '$lib/models/workspace';
 const timestamp = '2026-09-23T12:00:00.000Z' as DateTime;
-
 const setup = () => {
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
 	const index = new InMemoryDiagrams();
 	const notes = new InMemoryNoteRepository();
-	const library = new DiagramLibrary(
+	const library = createDiagramServices(
 		diagrams,
 		notes,
 		new InMemoryAnchorRepository(),
@@ -41,21 +43,23 @@ const setup = () => {
 	);
 	const controller = new DiagramStudio(
 		capabilityDependencies<DiagramStudioDependencies>({
+			diagramEditing: new DiagramEditingService(),
+			diagramLifecycle: new DiagramLifecycleService(),
 			diagramSourceNotes: sourceNotes,
-			diagramFinder: library,
-			diagramDraftWriter: library,
-			diagramTrash: library,
+			diagramFinder: library.finder,
+			diagramDraftWriter: library.draftWriter,
+			diagramTrash: library.lifecycle,
 			now: () => timestamp,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, index]),
 			diagramIndexer: index,
 			drawioXmlValidator: { validate: (source) => source },
+			diagramLabelPresentation: new DiagramLabelPresentationService(),
 			drawioLabels: { read: () => ['labels'] },
 			drawioSvgSanitizer: { sanitize: (svg) => svg }
 		})
 	);
 	return { diagrams, controller, index, library, notes };
 };
-
 describe('diagram trash transitions', () => {
 	it('requires trashing a diagram before permanent deletion', async () => {
 		const { controller, diagrams } = setup();
@@ -113,15 +117,17 @@ describe('diagram trash transitions', () => {
 				kind: action === 'archive' ? 'archiveDiagram' : 'restoreDiagram',
 				diagramId: diagram.id
 			} as const;
-			const local = prepareWorkspaceCommand(
-				command,
-				{ type: 'diagrams', value: diagram },
-				{
-					userId: testActor().userId,
-					now: timestamp,
-					records: new Map(),
-					inventory: 'complete'
-				}
+			const local = (
+				await prepareWorkspaceCommand(
+					command,
+					{ type: 'diagrams', value: diagram },
+					{
+						userId: testActor().userId,
+						now: timestamp,
+						records: new Map(),
+						inventory: 'complete'
+					}
+				)
 			).local;
 			const stored =
 				action === 'archive'
@@ -131,7 +137,6 @@ describe('diagram trash transitions', () => {
 		}
 	);
 });
-
 describe('Diagram soft delete', () => {
 	it('takes a restored diagram back out of the trash', async () => {
 		const { controller, library, diagrams } = setup();
@@ -139,11 +144,10 @@ describe('Diagram soft delete', () => {
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
 		await controller.restoreProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(await library.listArchived(testActor())).toHaveLength(0);
-		const listed = await library.listForProject(testActor(), diagram.projectId);
+		expect(await library.lifecycle.listArchived(testActor())).toHaveLength(0);
+		const listed = await library.lister.listForProject(testActor(), diagram.projectId);
 		expect(listed.diagrams).toHaveLength(1);
 	});
-
 	// The defect this whole block exists for: archiving marked the row and hid it
 	// from nothing, so the gallery still listed it. Pressing "Move to trash" again
 	// then failed, because the diagram was already there.
@@ -152,14 +156,13 @@ describe('Diagram soft delete', () => {
 		const diagram = drawioBuilder();
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		const listed = await library.listForProject(testActor(), diagram.projectId);
+		const listed = await library.lister.listForProject(testActor(), diagram.projectId);
 		expect(listed.diagrams).toHaveLength(0);
-		expect(await library.listArchived(testActor())).toMatchObject([
+		expect(await library.lifecycle.listArchived(testActor())).toMatchObject([
 			{ id: diagram.id, archivedAt: timestamp, updatedAt: timestamp }
 		]);
-		expect(await library.countForProject(testActor(), diagram.projectId)).toBe(0);
+		expect(await library.lister.countForProject(testActor(), diagram.projectId)).toBe(0);
 	});
-
 	// The gallery's confirmation promises a note shows the diagram as unavailable
 	// until it is restored, so the note's own listing has to agree.
 	it('takes an archived diagram out of its note listing', async () => {
@@ -169,9 +172,8 @@ describe('Diagram soft delete', () => {
 		const diagram = drawioBuilder({ sourceNoteId: testNoteId() });
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(await library.listForNote(testActor(), testNoteId())).toHaveLength(0);
+		expect(await library.lister.listForNote(testActor(), testNoteId())).toHaveLength(0);
 	});
-
 	// Otherwise `create_diagram` refuses a new diagram by naming one the user threw
 	// away, which is worse than the guess that refusal replaced.
 	it('treats a conversation whose diagram is archived as having none', async () => {
@@ -179,6 +181,8 @@ describe('Diagram soft delete', () => {
 		const diagram = drawioBuilder({ conversationId: testConversationId() });
 		diagrams.diagrams = [diagram];
 		await controller.archiveProjectDiagram(testActor(), { diagramId: diagram.id });
-		expect(await library.findByConversation(testActor(), testConversationId())).toBeUndefined();
+		expect(
+			await library.conversations.findByConversation(testActor(), testConversationId())
+		).toBeUndefined();
 	});
 });

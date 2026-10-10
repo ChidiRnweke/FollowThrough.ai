@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { isOcrImage, isOcrSupported } from './formats';
+import { AttachmentFormatService } from './formats';
 
 describe('Attachment recognition formats', () => {
 	it('recognizes office documents with generic browser media types', () => {
-		expect(isOcrSupported('application/octet-stream', 'Report.DOCX')).toBe(true);
+		expect(new AttachmentFormatService().ocrKind('application/octet-stream', 'Report.DOCX')).toBe(
+			'document'
+		);
 	});
 	it('routes an image extension through image recognition', () => {
-		expect(isOcrImage('application/octet-stream', 'Photo.HEIC')).toBe(true);
+		expect(new AttachmentFormatService().ocrKind('application/octet-stream', 'Photo.HEIC')).toBe(
+			'image'
+		);
 	});
 	it('does not offer OCR for archive files', () => {
-		expect(isOcrSupported('application/zip', 'archive.zip')).toBe(false);
+		expect(new AttachmentFormatService().ocrKind('application/zip', 'archive.zip')).toBeUndefined();
 	});
 });

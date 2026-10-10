@@ -1,3 +1,14 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -10,13 +21,26 @@ import {
 	testAnchorId,
 	testNoteId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 
 const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteTreeReader: content,
 			noteEditor: content,
@@ -113,7 +137,7 @@ describe('Note publish invariants', () => {
 		content.notes = [note];
 		content.publicationFailure = new Error('Publication storage unavailable');
 		await controller
-			.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) })
+			.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 			.catch(() => ({ kind: 'failure' }));
 		expect({ notes: content.notes, snapshots: content.recordedRevisions }).toEqual({
 			notes: [note],
@@ -125,14 +149,20 @@ describe('Note publish invariants', () => {
 		const note = noteBuilder({ archivedAt: noteBuilder().updatedAt });
 		content.notes = [note];
 		await expect(
-			controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) })
+			controller.publish(testActor(), {
+				noteId: note.id,
+				baseEtag: noteEtag(note.id, note.currentRevision)
+			})
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('creates a revision snapshot on publish (1/2)', async () => {
 		const { content, controller } = setup();
 		const note = noteBuilder();
 		content.notes = [note];
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note.id, note.currentRevision)
+		});
 		expect(content.recordedRevisions).toHaveLength(1);
 
 		expect(content.recordedRevisions[0]?.revision).toBe(note.currentRevision);
@@ -144,7 +174,7 @@ describe('Note publish invariants', () => {
 		content.notes = [note];
 		const result = await controller.publish(testActor(), {
 			noteId: note.id,
-			baseEtag: noteEtag(note)
+			baseEtag: noteEtag(note.id, note.currentRevision)
 		});
 		expect(result.note.publishedRevision).toBe(note.currentRevision);
 
@@ -158,7 +188,7 @@ describe('Note publish invariants', () => {
 		await expect(
 			controller.publish(testActor(), {
 				noteId: note.id,
-				baseEtag: noteEtag({ ...note, currentRevision: 99 })
+				baseEtag: noteEtag(note.id, 99)
 			})
 		).rejects.toMatchObject({ code: 'STALE_REVISION' });
 	});
@@ -170,7 +200,10 @@ describe('Note discard draft invariants', () => {
 		const note = noteBuilder({ plainText: 'Original' });
 		content.notes = [note];
 		// Publish the original
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note.id, note.currentRevision)
+		});
 		// Edit (draft save)
 		const _saved = await controller.save(testActor(), {
 			note: { ...content.notes[0]!, plainText: 'Draft change' }
@@ -184,7 +217,10 @@ describe('Note discard draft invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Published' });
 		content.notes = [note];
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note.id, note.currentRevision)
+		});
 		const { note: draft } = await controller.save(testActor(), {
 			note: { ...content.notes[0]!, plainText: 'Imported draft' }
 		});
@@ -196,7 +232,10 @@ describe('Note discard draft invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Published' });
 		content.notes = [note];
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note.id, note.currentRevision)
+		});
 		await controller.save(testActor(), { note: { ...content.notes[0]!, plainText: 'Draft' } });
 		await controller.discardDraft(testActor(), { noteId: note.id });
 		expect(content.restoredAttachmentRevisionIds).toEqual([content.recordedRevisions[0]!.id]);
@@ -205,7 +244,10 @@ describe('Note discard draft invariants', () => {
 		const { content, controller } = setup();
 		const note = noteBuilder({ plainText: 'Published' });
 		content.notes = [note];
-		await controller.publish(testActor(), { noteId: note.id, baseEtag: noteEtag(note) });
+		await controller.publish(testActor(), {
+			noteId: note.id,
+			baseEtag: noteEtag(note.id, note.currentRevision)
+		});
 		const { note: draft } = await controller.save(testActor(), {
 			note: { ...content.notes[0]!, plainText: 'Draft' }
 		});

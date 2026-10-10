@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { inlineMemoryPlan, inlineProjectCandidates } from './inline-context';
+import { InlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+const rules = new InlineContextService(testTokenizer);
 import {
 	memoryEntryBuilder,
 	noteBuilder,
@@ -26,7 +28,7 @@ describe('inline grounding selection', () => {
 				content: 'Deleted'
 			})
 		];
-		expect(inlineMemoryPlan(entries, noteBuilder())).toEqual({
+		expect(rules.inlineMemoryPlan(entries, noteBuilder())).toEqual({
 			kind: 'complete',
 			contents: ['Shared']
 		});
@@ -34,7 +36,7 @@ describe('inline grounding selection', () => {
 	it('excludes current-note chunks before any reranker sees candidates', () => {
 		const other = { document: searchDocumentBuilder({ noteId: testNoteId(2) }), score: 1 };
 		expect(
-			inlineProjectCandidates(
+			rules.inlineProjectCandidates(
 				[{ document: searchDocumentBuilder({ noteId: testNoteId() }), score: 1 }, other],
 				noteBuilder()
 			)

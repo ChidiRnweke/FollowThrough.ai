@@ -1,4 +1,5 @@
-import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
+import type { InlineSuggestionThrottle } from '$lib/models/agent';
+import { normalizeLanguageModelId } from '$lib/models/agent';
 import { type ActorContext } from '$lib/models/identity';
 import {
 	type InlineSuggestion,
@@ -9,30 +10,15 @@ import type { SearchMatch } from '$lib/models/knowledge-search';
 import { type Note } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
-import type {
-	InlineCompletionGenerator,
-	InlineSuggestionThrottle
-} from '$lib/server/services/agent/runs/contracts';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { InlineCompletionGenerator } from '$lib/server/services/agent/runs/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import { traceWorkflow } from '$lib/server/services/telemetry';
 import type { OperationObserver } from '$lib/models/telemetry';
-import type { MemoryEntryLister } from '$lib/server/services/memory/contracts';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
-import { queryVector, type KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
-import {
-	eligibleInlinePrefix,
-	eligibleInlineNote,
-	retrievalQuery,
-	inlineMemoryPlan,
-	inlineRankedMemory,
-	inlineProjectCandidates,
-	inlineProjectPassages,
-	inlineContextTraceOutput,
-	vectorSearchTraceOutput,
-	PROJECT_CANDIDATE_LIMIT,
-	PROJECT_PASSAGE_LIMIT,
-	USER_MEMORY_LIMIT
-} from '$lib/server/services/inline-suggestions/inline-context';
+import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
+import type { IInlineContextService } from '$lib/server/services/inline-suggestions/inline-context';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
@@ -53,9 +39,10 @@ export interface InlineSuggestionsController {
 }
 
 export interface InlineSuggestionsDependencies {
+	context: IInlineContextService;
 	inlineCompletionGenerator: InlineCompletionGenerator;
 	embeddings: EmbeddingClient;
-	knowledgeLookup: Pick<KnowledgeLookup, 'search'>;
+	knowledgeLookup: IKnowledgeLookup;
 	reranker: Reranker;
 	memory: MemoryEntryLister;
 	observer: OperationObserver;
@@ -72,7 +59,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		request: InlineSuggestionRequest,
 		signal: AbortSignal
 	): Promise<InlineSuggestion> {
-		if (!eligibleInlinePrefix(request.prefix)) return INELIGIBLE;
+		if (!this.dependencies.context.eligibleInlinePrefix(request.prefix)) return INELIGIBLE;
 		// One read serves both the on/off gate and the model choice; ghost text
 		// fires on every typing pause, so a second round trip here is not free.
 		const preferences = await this.dependencies.preferences.get(actor);
@@ -147,7 +134,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		note: Note,
 		signal: AbortSignal
 	): Promise<InlineCompletionContext> {
-		const query = retrievalQuery(request);
+		const query = this.dependencies.context.retrievalQuery(request);
 		const { observer, memory, embeddings, knowledgeLookup } = this.dependencies;
 		return observer.run(
 			'inline.context',
@@ -163,37 +150,40 @@ export class InlineSuggestions implements InlineSuggestionsController {
 							signal.throwIfAborted();
 							return knowledgeLookup.search(
 								actor,
-								queryVector(batch),
-								PROJECT_CANDIDATE_LIMIT,
+								batch,
+								this.dependencies.context.limits.projectCandidates,
 								note.projectId
 							);
 						},
-						vectorSearchTraceOutput
+						(matches) => this.dependencies.context.vectorSearchTraceOutput(matches)
 					),
 					memory.list(actor, {})
 				]);
 				signal.throwIfAborted();
-				const candidates = inlineProjectCandidates(matches, note);
-				const memoryPlan = inlineMemoryPlan(entries, note);
+				const candidates = this.dependencies.context.inlineProjectCandidates(matches, note);
+				const memoryPlan = this.dependencies.context.inlineMemoryPlan(entries, note);
 				const [projectMatches, userMemory] = await Promise.all([
 					candidates.length > 1
-						? this.rank(query, candidates, PROJECT_PASSAGE_LIMIT, signal)
+						? this.rank(query, candidates, this.dependencies.context.limits.projectPassages, signal)
 						: candidates,
 					memoryPlan.kind === 'complete'
 						? memoryPlan.contents
-						: this.rank(query, memoryPlan.candidates, USER_MEMORY_LIMIT, signal).then(
-								inlineRankedMemory
-							)
+						: this.rank(
+								query,
+								memoryPlan.candidates,
+								this.dependencies.context.limits.userMemory,
+								signal
+							).then((matches) => this.dependencies.context.inlineRankedMemory(matches))
 				]);
 				signal.throwIfAborted();
 				return {
 					noteTitle: note.title,
 					noteText: note.plainText,
 					userMemory,
-					projectPassages: inlineProjectPassages(projectMatches)
+					projectPassages: this.dependencies.context.inlineProjectPassages(projectMatches)
 				};
 			},
-			inlineContextTraceOutput
+			(context) => this.dependencies.context.inlineContextTraceOutput(context)
 		);
 	}
 
@@ -219,6 +209,6 @@ export class InlineSuggestions implements InlineSuggestionsController {
 	): Promise<Note | undefined> {
 		if (!enabled) return undefined;
 		const note = await this.dependencies.noteReader.get(actor, request.noteId);
-		return eligibleInlineNote(note) ? note : undefined;
+		return this.dependencies.context.eligibleInlineNote(note) ? note : undefined;
 	}
 }

@@ -1,7 +1,7 @@
 import { toast } from 'svelte-sonner';
 import type { DiagramId } from '$lib/models/diagrams';
 
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 
 /** Trash actions capture the visible copy and use the same durable write path as the editor. */
 export const changeDiagramTrash = async (

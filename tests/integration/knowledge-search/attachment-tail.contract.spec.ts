@@ -1,8 +1,9 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
+import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { Attachment, AttachmentId, AttachmentVersionId } from '$lib/models/attachments';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { EmbeddingMaintenance } from '$lib/server/controllers/knowledge-indexing/controller';
 import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
@@ -59,11 +60,10 @@ const setup = async (suffix: string) => {
 		.where(eq(schema.attachments.id, attachment.id));
 	const transaction = createTransactionContext(context.db);
 	const repository = new KnowledgeIndexRecords(transaction.database);
-	await new ContentIndex(repository, client.model, new TokenAwareChunker(30, 5)).attachments.index(
-		owner,
-		attachment,
-		text
-	);
+	await createContentIndex(repository, client.model, {
+		targetTokens: 30,
+		overlapTokens: 5
+	}).attachments.index(owner, attachment, text);
 	return { owner, project, attachment, repository, transaction };
 };
 
@@ -84,7 +84,8 @@ describe('attachment search tail in PostgreSQL', () => {
 		await new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			client,
-			transaction.transactionRunner
+			transaction.transactionRunner,
+			new EmbeddingProgressStore()
 		).run();
 		const matches = await repository.searchByEmbedding(owner, vector(true), 1, project.id);
 		expect(

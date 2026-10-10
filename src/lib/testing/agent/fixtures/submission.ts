@@ -1,3 +1,4 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import type { WebResearchSettings } from '$lib/models/agent';
 import { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
@@ -14,7 +15,7 @@ export const agentSubmissionFixture = (
 	configuration: {
 		readonly defaultModel?: string;
 		readonly defaultVisionModel?: string;
-		readonly webSearchDefaults?: WebResearchSettings;
+		readonly webSearchOverrides?: WebResearchSettings;
 	} = {}
 ) => {
 	const { dependencies, runs } = agentContextFixture();
@@ -43,12 +44,13 @@ export const agentSubmissionFixture = (
 	const preferences = new AgentPreferenceCatalog(preferenceRecords);
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			...dependencies,
-			conversationJournal: journal,
-			contextConversations: journal,
+			conversationMessages: journal,
+			conversationSessions: journal,
 			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 			preferences,
-			webSearchDefaults: configuration.webSearchDefaults ?? dependencies.webSearchDefaults,
+			webSearchOverrides: configuration.webSearchOverrides ?? dependencies.webSearchOverrides,
 			models,
 			defaultModel: configuration.defaultModel ?? 'openai/test-model',
 			defaultVisionModel: configuration.defaultVisionModel ?? 'openai/test-vision-model'

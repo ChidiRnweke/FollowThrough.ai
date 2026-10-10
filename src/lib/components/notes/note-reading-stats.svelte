@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getEditor, useEditorState } from '$lib/components/edra/commands/index.js';
-	import { readingMinutes } from '$lib/services/notes/reading-time';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 
 	/**
 	 * How much note there is, and how long it takes.
@@ -27,7 +27,7 @@
 	});
 
 	const words = $derived($stats.words);
-	const minutes = $derived(readingMinutes(words));
+	const minutes = $derived(noteDocuments.readingMinutes(words));
 	const count = $derived(`${words.toLocaleString()} ${words === 1 ? 'word' : 'words'}`);
 </script>
 

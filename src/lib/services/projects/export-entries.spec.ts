@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportTreeNode } from '$lib/models/projects';
-import { projectExportEntries } from './export-entries';
+import { ProjectTreePresentationService } from './presentation';
 
 const note = (title: string, kind = 'note'): ExportTreeNode => ({
 	entry: { id: title.toLowerCase(), title, kind },
@@ -14,7 +14,7 @@ const folder = (title: string, children: readonly ExportTreeNode[]): ExportTreeN
 
 describe('Project export entry invariants', () => {
 	it('offers every note in the tree', () => {
-		const entries = projectExportEntries([
+		const entries = new ProjectTreePresentationService().exportEntries([
 			note('Kickoff'),
 			folder('Interviews', [note('Round one')])
 		]);
@@ -22,12 +22,14 @@ describe('Project export entry invariants', () => {
 	});
 
 	it('leaves a root note at the top of the archive', () => {
-		const entries = projectExportEntries([note('Kickoff')]);
+		const entries = new ProjectTreePresentationService().exportEntries([note('Kickoff')]);
 		expect(entries[0]?.path).toBe('Kickoff');
 	});
 
 	it('files a note under the folder holding it', () => {
-		const entries = projectExportEntries([folder('Interviews', [note('Round one')])]);
+		const entries = new ProjectTreePresentationService().exportEntries([
+			folder('Interviews', [note('Round one')])
+		]);
 		expect({ path: entries[0]?.path, ids: entries.map((entry) => entry.id) }).toEqual({
 			path: 'Interviews/Round one',
 			ids: ['round one']
@@ -35,7 +37,7 @@ describe('Project export entry invariants', () => {
 	});
 
 	it('composes the path through nested folders', () => {
-		const entries = projectExportEntries([
+		const entries = new ProjectTreePresentationService().exportEntries([
 			folder('Interviews', [folder('Round two', [note('Findings')])])
 		]);
 		expect({ path: entries[0]?.path, depth: entries[0]?.depth }).toEqual({
@@ -45,15 +47,15 @@ describe('Project export entry invariants', () => {
 	});
 
 	it('yields nothing for a folder with no notes in it', () => {
-		expect(projectExportEntries([folder('Empty', [])])).toEqual([]);
+		expect(new ProjectTreePresentationService().exportEntries([folder('Empty', [])])).toEqual([]);
 	});
 
 	it('offers a skill alongside the notes, because it is a document too', () => {
-		const entries = projectExportEntries([note('Reviewer', 'skill')]);
+		const entries = new ProjectTreePresentationService().exportEntries([note('Reviewer', 'skill')]);
 		expect(entries.map((entry) => entry.title)).toEqual(['Reviewer']);
 	});
 
 	it('yields nothing for an empty project', () => {
-		expect(projectExportEntries([])).toEqual([]);
+		expect(new ProjectTreePresentationService().exportEntries([])).toEqual([]);
 	});
 });

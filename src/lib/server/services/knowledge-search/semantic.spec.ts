@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SearchDocument, SearchDocumentId } from '$lib/models/knowledge-search';
-import { KnowledgeLookup, queryVector, knowledgeSearchSource } from './semantic';
+import { KnowledgeLookup } from './semantic';
 import type { AttachmentId } from '$lib/models/attachments';
 import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
@@ -26,7 +26,9 @@ const document = (overrides: Partial<SearchDocument> = {}): SearchDocument => ({
 describe('Embedded search invariants', () => {
 	it('identifies an attachment chunk by its source rather than the containing note', () => {
 		const attachmentId = crypto.randomUUID() as AttachmentId;
-		expect(knowledgeSearchSource(document({ attachmentId }))).toMatchObject({
+		expect(
+			new KnowledgeLookup(new InMemorySearchRepository()).source(document({ attachmentId }))
+		).toMatchObject({
 			kind: 'attachment',
 			id: attachmentId
 		});
@@ -34,13 +36,16 @@ describe('Embedded search invariants', () => {
 	it('identifies a widget chunk as the widget, so the agent can open it by id', () => {
 		const widgetId = testWidgetId();
 		expect(
-			knowledgeSearchSource(
+			new KnowledgeLookup(new InMemorySearchRepository()).source(
 				document({ noteId: undefined, widgetId, sourceTitle: 'Widget: Launch' })
 			)
 		).toMatchObject({ kind: 'widget', id: widgetId, title: 'Widget: Launch' });
 	});
 	it('rejects a query batch containing more than one vector', () => {
-		expect(() => queryVector({ model: 'fake', vectors: [[1], [2]] })).toThrow('invalid result');
+		const lookup = new KnowledgeLookup(new InMemorySearchRepository());
+		expect(() => lookup.search(testActor(), { model: 'fake', vectors: [[1], [2]] }, 10)).toThrow(
+			'invalid result'
+		);
 	});
 
 	it('limits vector results to the requested project', async () => {
@@ -50,7 +55,12 @@ describe('Embedded search invariants', () => {
 			document({ noteId: testNoteId(3), projectId: testProjectId(2) })
 		]);
 		const searcher = new KnowledgeLookup(repository);
-		const matches = await searcher.search(testActor(), [1, 0, 0], 10, testProjectId());
+		const matches = await searcher.search(
+			testActor(),
+			{ model: 'fake', vectors: [[1, 0, 0]] },
+			10,
+			testProjectId()
+		);
 		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(2)]);
 	});
 
@@ -61,9 +71,15 @@ describe('Embedded search invariants', () => {
 			document({ noteId: testNoteId(3) })
 		]);
 		const searcher = new KnowledgeLookup(repository);
-		const matches = await searcher.search(testActor(), [1, 0, 0], 10, undefined, {
-			noteId: testNoteId(3)
-		});
+		const matches = await searcher.search(
+			testActor(),
+			{ model: 'fake', vectors: [[1, 0, 0]] },
+			10,
+			undefined,
+			{
+				noteId: testNoteId(3)
+			}
+		);
 		expect(matches.map((match) => match.document.noteId)).toEqual([testNoteId(3)]);
 	});
 });

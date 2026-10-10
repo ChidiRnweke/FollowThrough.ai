@@ -1,6 +1,17 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { WorkspaceViews } from '$lib/controllers/workspace/views';
+import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import {
 	noteRecordSchema,
 	projectRecordSchema,
@@ -8,8 +19,8 @@ import {
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
 import type { Url } from '$lib/models/references';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
-import { ReferenceLibrary } from '$lib/server/services/references/library';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
+import { createReferenceServices } from '$lib/server/factories/capabilities/references-capability-factory';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import {
 	InMemoryNoteRepository,
@@ -25,7 +36,7 @@ import {
 } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import {
@@ -52,24 +63,26 @@ describe('note view assembly', () => {
 		projects.projects = [projectBuilder()];
 		const anchors = new InMemoryAnchorRepository();
 		const provenance = new InMemoryProvenanceRepository();
-		const graph = new RelationshipGraph(
+		const graph = createRelationshipServices(
 			new InMemoryRelationshipRepository(),
 			notes,
 			anchors,
 			provenance
 		);
-		const library = new ReferenceLibrary(
+		const library = createReferenceServices(
 			new InMemoryReferenceRepository(),
 			notes,
 			anchors,
 			provenance
 		);
-		const relationship = await graph.create(actor, {
-			sourceNoteId: note.id,
-			targetNoteId: target.id,
-			kind: 'mentions'
-		});
-		const reference = await library.create(actor, {
+		const relationship = await graph.creator
+			.createWithChange(actor, {
+				sourceNoteId: note.id,
+				targetNoteId: target.id,
+				kind: 'mentions'
+			})
+			.then((change) => change.after);
+		const reference = await library.creator.create(actor, {
 			noteId: note.id,
 			title: 'Source',
 			url: 'https://example.com' as Url,
@@ -77,7 +90,7 @@ describe('note view assembly', () => {
 			relevanceNote: 'Explains the note'
 		});
 		const todos = new InMemoryTodos();
-		const suggestions = new SuggestionInbox(
+		const suggestions = createSuggestionServices(
 			new InMemorySuggestionRepository(),
 			notes,
 			provenance,
@@ -97,25 +110,38 @@ describe('note view assembly', () => {
 			pipeline: 'extract_promises',
 			metadata: {}
 		});
-		const proposal = await suggestions.createFromSelection(actor, origin, {
+		const proposal = await suggestions.creator.createFromSelection(actor, origin, {
 			kind: 'todo',
 			payload: { title: 'Review the architecture', responsibility: 'mine' }
 		});
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				archiveImport: new NoteArchiveImportService(),
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
+				todoPresentation: new TodoPresentationService(),
+				textSearch: new NoteTextSearchService(),
+				noteReferences: new NoteReferenceService(),
+				sections: new NoteSectionNumberingService(),
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
+				notePresentation: new NotePresentationService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				noteReader: content,
 				projectReader: projects,
 				userPreferences: new InMemoryUserPreferencesRepository(),
-				relationshipFinder: graph,
-				backlinkContextReader: graph,
-				referenceLister: library,
-				referenceContextReader: library,
+				relationshipFinder: graph.finder,
+				backlinkContextReader: graph.contexts,
+				referenceLister: library.lister,
+				referenceContextReader: library.contexts,
 				diagramLister: new InMemoryDiagramRepository(),
 				todoLister: todos,
 				todoContextReader: todos,
-				suggestionLister: suggestions,
-				suggestionExpirer: suggestions,
-				suggestionContextReader: suggestions
+				suggestionLister: suggestions.lister,
+				suggestionExpirer: suggestions.expirer,
+				suggestionContextReader: suggestions.context
 			})
 		);
 		const records = [
@@ -136,7 +162,7 @@ describe('note view assembly', () => {
 				value: resourceDataSchemas.references.parse({ ...reference, projectId: note.projectId })
 			}
 		] satisfies WorkspaceRecord[];
-		const downloaded = new WorkspaceViews(
+		const downloaded = createWorkspaceViews(
 			new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 		);
 		expect(downloaded.note(note.id)?.view).toEqual(

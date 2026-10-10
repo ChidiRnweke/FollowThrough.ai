@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryChangePayload } from '$lib/models/memory';
-import { MemoryLibrary } from './library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -28,8 +28,8 @@ const setup = async (scope: 'project' | 'user' = 'project') => {
 		metadata: {},
 		createdAt: testNow
 	});
-	const library = new MemoryLibrary(entries, projects, provenance);
-	const entry = await library.create(
+	const library = createMemoryServices(entries, projects, provenance);
+	const entry = await library.creator.create(
 		actor,
 		memoryEntryBuilder({ projectId: scope === 'project' ? testProjectId() : undefined })
 	);
@@ -42,9 +42,13 @@ describe('memory owned by an archived project', () => {
 		async (operation) => {
 			const { actor, projects, library, entry } = await setup();
 			await projects.archive(actor, testProjectId());
-			await expect(library[operation](actor, entry.id)).rejects.toThrow(
-				'Memory project was not found'
-			);
+			await expect(
+				{
+					get: () => library.reader.get(actor, entry.id),
+					getForEdit: () => library.editor.getForEdit(actor, entry.id),
+					remove: () => library.deleter.remove(actor, entry.id)
+				}[operation]()
+			).rejects.toThrow('Memory project was not found');
 		}
 	);
 
@@ -68,7 +72,7 @@ describe('memory owned by an archived project', () => {
 							memoryEntryId: entry.id
 						};
 			await projects.archive(actor, testProjectId());
-			const outcome = await library.apply(actor, payload, testProvenanceId()).then(
+			const outcome = await library.changes.apply(actor, payload, testProvenanceId()).then(
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
@@ -82,7 +86,7 @@ describe('memory owned by an archived project', () => {
 	it('preserves a resolved edit when its project has since been archived', async () => {
 		const { actor, entries, projects, library, entry } = await setup();
 		await projects.archive(actor, testProjectId());
-		const outcome = await library.update(actor, { ...entry, content: 'Replacement' }).then(
+		const outcome = await library.editor.update(actor, { ...entry, content: 'Replacement' }).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);
@@ -101,14 +105,20 @@ describe('memory owned by an archived project', () => {
 	it('allows profile memory edits after an unrelated project is archived', async () => {
 		const { actor, projects, library, entry } = await setup('user');
 		await projects.archive(actor, testProjectId());
-		const updated = await library.update(actor, { ...entry, content: 'Profile replacement' });
+		const updated = await library.editor.update(actor, {
+			...entry,
+			content: 'Profile replacement'
+		});
 		expect(updated.content).toBe('Profile replacement');
 	});
 
 	it('allows edits while the project remains active', async () => {
 		const { actor, library, entry } = await setup();
-		const current = await library.getForEdit(actor, entry.id);
-		const updated = await library.update(actor, { ...current, content: 'Active replacement' });
+		const current = await library.editor.getForEdit(actor, entry.id);
+		const updated = await library.editor.update(actor, {
+			...current,
+			content: 'Active replacement'
+		});
 		expect(updated.content).toBe('Active replacement');
 	});
 });

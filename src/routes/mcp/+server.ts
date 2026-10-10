@@ -3,7 +3,6 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import type { RequestHandler } from './$types';
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import { AppFactory } from '$lib/server/factories/app-factory';
-import { createMcpToolSurface } from '$lib/server/factories/agent/mcp-tool-factory';
 
 const unauthorized = (detail: string): Response =>
 	new Response(JSON.stringify({ error: 'unauthorized', detail }), {
@@ -48,12 +47,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		preferences.filter((preference) => !preference.enabled).map((preference) => preference.name)
 	);
 
-	const server = createMcpToolSurface({
-		controllers,
+	const server = AppFactory.mcpSurface({
 		actor: authenticated.actor,
 		scope: authenticated.scope,
 		provenanceId: provenance.id,
-		toolRetriever: AppFactory.toolRetriever(),
 		toolAccess: { isEnabled: (toolName) => !disabled.has(toolName) }
 	});
 

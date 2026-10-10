@@ -1,8 +1,19 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
-import { noteTrashWrite } from '$lib/controllers/workspace/commands';
+import { noteTrashWrite } from '$lib/testing/workspace/fixtures/commands';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
@@ -17,23 +28,34 @@ import {
 	testNoteId,
 	testNow
 } from '$lib/testing/workspace/fixtures/domain-builders';
-
 const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const indexer = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteTrash: service,
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteTrash: service.trash,
 			noteIndexer: indexer,
 			transactionRunner: new InMemoryTransactionRunner([notes, indexer])
 		})
 	);
 	return { notes, controller, indexer };
 };
-
 describe('Note archive invariants', () => {
 	it('rolls back the archive when indexing fails', async () => {
 		const { notes, controller, indexer } = setup();
@@ -46,18 +68,16 @@ describe('Note archive invariants', () => {
 		);
 		expect(outcome).toEqual({ kind: 'failure', notes: [original] });
 	});
-
 	it('uses the same resolved note as the offline archive command', async () => {
 		const { notes, controller } = setup();
 		const original = noteBuilder();
 		notes.notes = [original];
 		const { note } = await controller.archive(testActor(), { noteId: original.id });
-		expect(noteTrashWrite(original, 'archive', [original], note.updatedAt).local).toEqual({
+		expect((await noteTrashWrite(original, 'archive', [original], note.updatedAt)).local).toEqual({
 			type: 'notes',
 			value: note
 		});
 	});
-
 	it('archives the note through the controller', async () => {
 		const { notes, controller, indexer } = setup();
 		notes.notes = [noteBuilder()];
@@ -66,7 +86,6 @@ describe('Note archive invariants', () => {
 		expect(await notes.listActive(testActor())).toEqual([]);
 		expect(indexer.indexedNoteIds).toEqual([testNoteId()]);
 	});
-
 	it('rejects archiving a folder with active contents', async () => {
 		const { notes, controller } = setup();
 		notes.notes = [
@@ -78,7 +97,6 @@ describe('Note archive invariants', () => {
 		});
 	});
 });
-
 it('rejects archiving a note that is already archived', async () => {
 	const { notes, controller } = setup();
 	notes.notes = [noteBuilder({ archivedAt: testNow })];

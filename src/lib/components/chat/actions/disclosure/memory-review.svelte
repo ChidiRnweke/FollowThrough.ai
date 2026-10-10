@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { FtMemory, FtPlus } from '$lib/components/icons';
 	import { CHAT_ROW, CHAT_ROW_ICON } from '../chat-row';
 

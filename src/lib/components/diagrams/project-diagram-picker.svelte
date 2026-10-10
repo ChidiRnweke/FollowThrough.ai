@@ -5,7 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/shared/empty-state.svelte';
 	import { FtWorkflow as Workflow } from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { untrack } from 'svelte';
 	import DiagramPreview from './diagram-preview.svelte';
 

@@ -1,3 +1,4 @@
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { Attachments, type AttachmentsDependencies } from './controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -5,17 +6,20 @@ import { setupAttachments } from '$lib/testing/attachments/fixtures/processing';
 import { view } from '$lib/testing/attachments/fakes/processing';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 describe('attachment search removal', () => {
 	it('removes the attachment and its indexed content together', async () => {
-		const { service, repository, search, process } = setupAttachments();
+		const { uploads, reader, downloads, lifecycle, repository, search, process } =
+			setupAttachments();
 		const attachment = view('application/pdf');
 		await process(attachment);
 		const controller = new Attachments(
 			capabilityDependencies<AttachmentsDependencies>({
-				attachments: service,
-				attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model)
+				uploads,
+				reader,
+				downloads,
+				lifecycle,
+				attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
 					.attachments,
 				transactionRunner: new InMemoryTransactionRunner([repository, search])
 			})
@@ -29,11 +33,15 @@ describe('attachment search removal', () => {
 });
 
 it('keeps attachment bytes when index removal rolls back', async () => {
-	const { service, repository, search, storage, process } = setupAttachments();
+	const { uploads, reader, downloads, lifecycle, repository, search, storage, process } =
+		setupAttachments();
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
-			attachments: service,
+			uploads,
+			reader,
+			downloads,
+			lifecycle,
 			attachmentIndexer: capabilityDependencies<AttachmentsDependencies['attachmentIndexer']>({
 				remove: async () => {
 					throw new Error('Index unavailable');
@@ -62,12 +70,17 @@ it('keeps attachment bytes when index removal rolls back', async () => {
 });
 
 it('commits physical cleanup intent without deleting bytes inside the transaction', async () => {
-	const { service, repository, search, storage, process } = setupAttachments();
+	const { uploads, reader, downloads, lifecycle, repository, search, storage, process } =
+		setupAttachments();
 	await process(view('application/pdf'));
 	const controller = new Attachments(
 		capabilityDependencies<AttachmentsDependencies>({
-			attachments: service,
-			attachmentIndexer: new ContentIndex(search, new InMemoryEmbeddingClient().model).attachments,
+			uploads,
+			reader,
+			downloads,
+			lifecycle,
+			attachmentIndexer: createContentIndex(search, new InMemoryEmbeddingClient().model)
+				.attachments,
 			transactionRunner: new InMemoryTransactionRunner([repository, search])
 		})
 	);

@@ -1,10 +1,14 @@
+import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, expect, it } from 'vitest';
 import { RunContext } from '@openai/agents';
 import { AgentTools } from './agent-tool-factory';
 import type { AgentExecutionMode, PendingAgentDecision } from '$lib/models/agent';
 import { noteChangeReviewSchema } from '$lib/models/notes';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
-import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
+
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import {
 	noteBuilder,
@@ -17,7 +21,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 	const note = noteBuilder({
 		kind,
 		title: 'Release checklist',
-		...noteContentFromMarkdown('Check releases on Monday.')
+		...noteMarkdown.read('Check releases on Monday.')
 	});
 	const fixture = reviewedNoteFixture(note);
 	const registry = (
@@ -25,6 +29,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 		mode: AgentExecutionMode = 'approval_required'
 	) =>
 		new AgentTools(
+			testTokenizer,
 			fixture.factory,
 			testActor(),
 			mode,
@@ -36,7 +41,7 @@ const setup = (kind: 'skill' | 'note' = 'skill', operation: 'replace' | 'patch' 
 			{ execute: (_call, action) => action() },
 			new InMemoryToolRetriever(),
 			{ isEnabled: () => true },
-			pending
+			restoredToolReviews(fixture.factory, testActor(), pending)
 		);
 	const call: PendingAgentDecision = {
 		callId: 'skill-change-1',
@@ -85,7 +90,7 @@ describe('Revision-bound skill content approvals', () => {
 			const fixture = setup('skill', operation);
 			const pending = await fixture.prepare();
 			await fixture.controller.save(testActor(), {
-				note: { ...fixture.note, ...noteContentFromMarkdown('Check releases on Friday.') }
+				note: { ...fixture.note, ...noteMarkdown.read('Check releases on Friday.') }
 			});
 			const result = await fixture.invoke(fixture.registry([pending]));
 			expect({ result, text: fixture.content.notes[0].plainText }).toMatchObject({
@@ -157,7 +162,7 @@ describe('Revision-bound skill content approvals', () => {
 	it('does not save when the requested skill text cannot be matched', async () => {
 		const fixture = setup('skill', 'patch');
 		await fixture.controller.save(testActor(), {
-			note: { ...fixture.note, ...noteContentFromMarkdown('Check releases on Friday.') }
+			note: { ...fixture.note, ...noteMarkdown.read('Check releases on Friday.') }
 		});
 		const before = fixture.content.notes[0];
 		const result = await fixture.invoke(fixture.registry([], 'auto_accept'));

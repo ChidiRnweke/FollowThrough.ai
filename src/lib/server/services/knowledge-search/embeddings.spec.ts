@@ -1,3 +1,4 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_EMBEDDING_MODEL, Embeddings, type EmbeddingClient } from './embeddings';
@@ -29,7 +30,10 @@ class FakeEmbeddingResponder implements EmbeddingClient {
 }
 
 const embedder = (responder: FakeEmbeddingResponder, model?: string): Embeddings =>
-	new Embeddings('test-key', { client: responder, ...(model === undefined ? {} : { model }) });
+	new Embeddings('test-key', testTokenizer, {
+		client: responder,
+		...(model === undefined ? {} : { model })
+	});
 
 describe('Embeddings', () => {
 	it('rejects duplicate provider indexes instead of pairing vectors with the wrong input', async () => {

@@ -1,3 +1,15 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import { createAgentFilesCapability } from '$lib/server/factories/capabilities/agent-files-capability-factory';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
@@ -8,7 +20,7 @@ import { createNotesCapability } from '$lib/server/factories/capabilities/notes-
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { context, seedNote } from '../database-harness';
 
 const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> => ({
@@ -19,20 +31,33 @@ const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> =
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: tx.database,
 		projects: new ProjectRecords(tx.database)
 	});
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: tx.transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
-			revisionReader: catalog,
-			anchorRepairer: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
+			revisionReader: catalog.revisionReader,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})
@@ -42,12 +67,15 @@ const setup = async (suffix: string) => {
 	});
 	const published = await controller.publish(seed.owner, {
 		noteId: seed.note.id,
-		baseEtag: noteEtag(first.note)
+		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
 	});
 	const second = await controller.save(seed.owner, {
 		note: { ...published.note, ...content('Second publication') }
 	});
-	await controller.publish(seed.owner, { noteId: seed.note.id, baseEtag: noteEtag(second.note) });
+	await controller.publish(seed.owner, {
+		noteId: seed.note.id,
+		baseEtag: noteEtag(second.note.id, second.note.currentRevision)
+	});
 	const { revisions } = await controller.listRevisions(seed.owner, { noteId: seed.note.id });
 	return { ...seed, controller, revisions };
 };
@@ -96,6 +124,7 @@ it('makes stored history unavailable when its project is archived', async () => 
 it('reads the old publication from the agent version path', async () => {
 	const { owner, note, project, revisions } = await setup('28008');
 	const { reader } = createAgentFilesCapability({
+		tokens: testTokenizer,
 		db: context.db,
 		projects: new ProjectRecords(context.db),
 		notes: new NoteRecords(context.db)

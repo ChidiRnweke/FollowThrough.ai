@@ -1,3 +1,6 @@
+import { TodoBoardExportService } from '$lib/services/todos/board-export';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { Todos, type TodosDependencies } from './controller';
@@ -15,6 +18,10 @@ const setup = () => {
 		todos,
 		controller: new Todos(
 			capabilityDependencies<TodosDependencies>({
+				boardExport: new TodoBoardExportService(),
+				todoPresentation: new TodoPresentationService(),
+				todoEditingRules: new TodoEditingRulesService(),
+				todoCreationRules: new TodoEditingRulesService(),
 				todoLister: todos,
 				todoContextReader: todos,
 				todoReader: todos,

@@ -5,7 +5,7 @@ import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table
 import { describe, expect, it } from 'vitest';
 import extensions from '$lib/components/edra/commands/extensions';
 import { proseMirrorDocumentSchema, storedDocumentReadSchema } from '$lib/models/notes';
-import { unknownProseMirrorNodes } from '$lib/services/notes/editor-content';
+import { unreadableDocumentBlocks } from '$lib/testing/notes/fixtures/unreadable-documents';
 
 /**
  * What the editor writes must be what the model accepts.
@@ -72,7 +72,7 @@ describe('what the real editor serializes', () => {
 	});
 
 	it('produces no block the model had to fall back on', () => {
-		expect(unknownProseMirrorNodes(storedDocumentReadSchema.parse(document()))).toEqual([]);
+		expect(unreadableDocumentBlocks(storedDocumentReadSchema.parse(document()))).toEqual([]);
 	});
 
 	// The two defaults that actually broke, pinned individually so a regression

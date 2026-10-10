@@ -2,8 +2,9 @@ import type { ActorContext } from '$lib/models/identity';
 import type { NoteId } from '$lib/models/notes';
 import type { LocalDate } from '$lib/models/workspace';
 import type { Widget } from '$lib/models/widgets';
-import { widgetReferencesIn } from '$lib/services/notes/references';
-import type { WidgetSourceRecords } from '$lib/services/widgets/sources';
+import { NoteReferenceService } from '$lib/services/notes/references';
+const noteReferences = new NoteReferenceService();
+import type { WidgetSourceRecords } from '$lib/models/widgets';
 import type { Lab } from '../../lab/application';
 
 /**
@@ -52,7 +53,7 @@ export async function embedVerdict(
 	widget: Widget
 ): Promise<WidgetVerdict> {
 	const { note } = await lab.controllers.notes().get(actor, { noteId });
-	const embedded = widgetReferencesIn([note]).includes(widget.id);
+	const embedded = noteReferences.widgets([note]).includes(widget.id);
 	return {
 		passed: embedded,
 		explanation: embedded

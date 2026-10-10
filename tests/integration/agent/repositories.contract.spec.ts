@@ -1,8 +1,10 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { segmentOutput } from '$lib/server/services/agent/runs/output';
+import { AgentStreamPresentationService } from '$lib/server/services/agent/runs/stream-presentation';
+const streamPresentation = new AgentStreamPresentationService();
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunSettlements } from '$lib/server/services/agent/runs/settlement';
 import { noteReviewBuilder } from '$lib/testing/notes/fixtures/note-review';
@@ -344,7 +346,13 @@ describe('Postgres durable agent run repository invariants', () => {
 			conversationId: run.conversationId,
 			model: run.model
 		});
-		const controller = new Agent(capabilityDependencies<AgentDependencies>({ events, runs }));
+		const controller = new Agent(
+			capabilityDependencies<AgentDependencies>({
+				...agentRulesFixture(),
+				events,
+				runs
+			})
+		);
 		const replay = await controller.listRunEvents(owner, run.id, '0');
 		const tail = replay.at(-1);
 		if (!tail) throw new Error('Replay dropped its terminal cursor');
@@ -388,7 +396,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const records = await events.listAttempt(run.id, 1);
 		expect({
 			kinds: records.map((record) => record.kind),
-			segments: segmentOutput(records)
+			segments: streamPresentation.segments(records)
 		}).toEqual({
 			kinds: ['readable', 'unreadable', 'readable'],
 			segments: [
@@ -402,6 +410,7 @@ describe('Postgres durable agent run repository invariants', () => {
 		const run = await seedQueuedRun('17803');
 		const controller = new Agent(
 			capabilityDependencies<AgentDependencies>({
+				...agentRulesFixture(),
 				runs: new AgentRunRecords(context.db),
 				events: new AgentRunEventRecords(context.db)
 			})

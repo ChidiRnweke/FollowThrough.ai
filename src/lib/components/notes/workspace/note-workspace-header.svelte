@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
 	import { type SectionNumberingLevel, type SectionNumberingView } from '$lib/models/notes';
-	import { sectionNumberingLevelFor } from '$lib/services/notes/section-numbering';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import type { ProjectId } from '$lib/models/projects';
 
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -64,7 +64,7 @@
 		shell: ShellContext;
 		note: Note;
 		projectId: ProjectId;
-		draft: Pick<WorkspaceDraft<'notes'>, 'status' | 'lastError'>;
+		draft: Pick<WorkspaceDraftController<'notes'>, 'status' | 'lastError'>;
 		dirty: boolean;
 		saveFailed: boolean;
 		unsynced: boolean;
@@ -258,7 +258,7 @@
 						<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
 						<DropdownMenu.SubContent>
 							<DropdownMenu.RadioGroup
-								value={sectionNumberingLevelFor(sectionNumbering.noteOverride)}
+								value={noteDocuments.numberingLevel(sectionNumbering.noteOverride)}
 								onValueChange={(value) => onsectionnumbering(value as SectionNumberingLevel)}
 							>
 								<DropdownMenu.RadioItem value="on">On</DropdownMenu.RadioItem>

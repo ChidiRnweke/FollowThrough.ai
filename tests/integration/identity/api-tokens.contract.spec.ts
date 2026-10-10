@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { ApiTokens } from '$lib/server/controllers/api-tokens/controller';
-import { AccessTokens, hashApiToken } from '$lib/server/services/identity/api-tokens';
+import { AccessTokens } from '$lib/server/services/identity/api-tokens';
 import { ApiTokenRecords } from '$lib/server/repositories/identity/postgres/api-tokens';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import * as schema from '$lib/server/db/schema/identity';
@@ -28,7 +28,9 @@ it('stores only the credential hash and excludes it from public token records', 
 		hashIsCredential: stored.tokenHash === minted.plaintext,
 		publicRecords: await controller.list(actor)
 	}).toEqual({
-		storedHash: hashApiToken(minted.plaintext),
+		storedHash: Buffer.from(
+			await crypto.subtle.digest('SHA-256', new TextEncoder().encode(minted.plaintext))
+		).toString('hex'),
 		hashIsCredential: false,
 		publicRecords: [minted.token]
 	});

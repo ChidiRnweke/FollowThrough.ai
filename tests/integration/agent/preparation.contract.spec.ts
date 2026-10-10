@@ -1,3 +1,4 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { expect, it } from 'vitest';
 import type { AgentRunId, ConversationId } from '$lib/models/agent';
@@ -57,6 +58,7 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 	const fixture = agentContextFixture();
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			...fixture.dependencies,
 			runs,
 			events,
@@ -68,8 +70,8 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
 			sessions: new AgentSessionRecords(database),
-			conversationJournal: new ConversationArchive(conversations),
-			contextConversations: new ConversationArchive(conversations)
+			conversationMessages: new ConversationArchive(conversations),
+			conversationSessions: new ConversationArchive(conversations)
 		})
 	);
 	return { owner, run, runs, events, controller };

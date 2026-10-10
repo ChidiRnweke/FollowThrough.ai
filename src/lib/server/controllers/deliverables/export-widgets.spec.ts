@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import AdmZip from 'adm-zip';
 import type { PreparedExport } from '$lib/models/deliverables';
 import { widgetTemplates } from '$lib/models/widgets';
-import { generateDocx } from '$lib/server/services/deliverables/docx';
+import { DocxDocumentService } from '$lib/server/services/deliverables/docx';
+const docxRendering = new DocxDocumentService();
+const generateDocx = docxRendering.render.bind(docxRendering);
 import { exportControllerFixture } from '$lib/testing/deliverables/fixtures/export-controller';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 import {

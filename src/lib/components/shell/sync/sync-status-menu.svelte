@@ -4,9 +4,9 @@
 	import CloudUpload from '@lucide/svelte/icons/cloud-upload';
 	import CloudDownload from '@lucide/svelte/icons/cloud-download';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { syncIndicator } from '$lib/services/sync/indicator';
-	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -17,7 +17,7 @@
 		startupFailure = null,
 		side = 'bottom'
 	}: {
-		resources: WorkspaceResources;
+		resources: WorkspaceResourcesController;
 		startupFailure?: string | null;
 		/** `right` from the sidebar's icon rail; `bottom` from the mobile header. */
 		side?: 'bottom' | 'right';

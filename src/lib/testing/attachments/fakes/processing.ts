@@ -1,3 +1,4 @@
+import type { AttachmentTextReader } from '$lib/server/controllers/attachment-processing/controller';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AttachmentId,
@@ -14,13 +15,12 @@ import type {
 	OwnedAttachmentUpload
 } from '$lib/server/repositories/attachments/attachments';
 import {
-	type AttachmentParser,
 	type IAttachmentStorage,
 	type StoredObjectInfo
-} from '$lib/server/services/attachments/storage';
+} from '$lib/server/repositories/attachments/object-storage';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
-import type { ITextRecognition as OcrEngineClient } from '$lib/server/services/attachments/mistral-ocr';
-import type { IImageDescription as ImageDescriber } from '$lib/server/services/attachments/image-description';
+import type { ITextRecognition as OcrEngineClient } from '$lib/server/controllers/attachment-processing/controller';
+import type { IImageDescription as ImageDescriber } from '$lib/server/controllers/attachment-processing/controller';
 import type { RecognizedContent as OcrContentPart } from '$lib/models/attachments/ocr';
 
 export const ATTACHMENT_ID = '00000000-0000-4000-8000-0000000000a1' as AttachmentId;
@@ -191,14 +191,12 @@ export class InMemoryStorage implements IAttachmentStorage {
 	}
 }
 
-export class InMemoryTextParser implements AttachmentParser {
+export class InMemoryTextParser implements AttachmentTextReader {
 	text = 'decoded text';
 	beforeParse: () => Promise<void> = async () => {};
 	readonly kind = 'text';
 	calls = 0;
-	supports(mediaType: string, path: string): boolean {
-		return mediaType.startsWith('text/') || path.endsWith('.md');
-	}
+
 	async parse(): Promise<string> {
 		this.calls += 1;
 		await this.beforeParse();

@@ -50,7 +50,7 @@ const generatePlaintext = (): string => {
  * the right primitive: it makes the stored value non-reversible without making
  * the per-request lookup a scan.
  */
-export const hashApiToken = (plaintext: string): string =>
+const hashApiToken = (plaintext: string): string =>
 	createHash('sha256').update(plaintext).digest('hex');
 
 const bearerToken = (header: string | null): string | null => {

@@ -3,7 +3,7 @@ import { SKILL_PORTABLE_LIMITS, SKILL_PORTABLE_NAME, type SkillManifest } from '
 import { ValidationError } from '$lib/errors';
 
 /** Check portable field constraints before export or document replacement. */
-export function validatePortableSkill(manifest: SkillManifest): void {
+function validatePortableSkill(manifest: SkillManifest): void {
 	if (!SKILL_PORTABLE_NAME.test(manifest.slug) || manifest.slug.length > SKILL_PORTABLE_LIMITS.slug)
 		throw new ValidationError('Invalid SKILL.md: use a portable lowercase skill name');
 	if (
@@ -26,7 +26,7 @@ export function validatePortableSkill(manifest: SkillManifest): void {
 }
 
 /** Portable text is derived from the current instruction body and metadata, on either side. */
-export const serializeSkillManifest = (manifest: SkillManifest): string => {
+const serializeSkillManifest = (manifest: SkillManifest): string => {
 	validatePortableSkill(manifest);
 	const header = stringify(
 		{
@@ -45,3 +45,16 @@ export const serializeSkillManifest = (manifest: SkillManifest): string => {
 	).trimEnd();
 	return `---\n${header}\n---\n\n${manifest.instructions.trimEnd()}\n`;
 };
+
+export interface SkillPortability {
+	validate(manifest: SkillManifest): void;
+	export(manifest: SkillManifest): { readonly filename: string; readonly content: string };
+}
+export class SkillPortabilityService implements SkillPortability {
+	validate(manifest: SkillManifest): void {
+		validatePortableSkill(manifest);
+	}
+	export(manifest: SkillManifest): { readonly filename: string; readonly content: string } {
+		return { filename: `${manifest.slug}.skill.md`, content: serializeSkillManifest(manifest) };
+	}
+}

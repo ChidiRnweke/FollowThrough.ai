@@ -12,7 +12,7 @@ import type {
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
@@ -27,10 +27,10 @@ import {
 	runAgentInputBuilder,
 	suggestionBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { ResourceCache } from '$lib/client/sync/resource-cache';
-import { MutationQueue } from '$lib/client/sync/mutation-queue';
+import { createResourceCache } from '$lib/factories/sync/cache';
+import { createMutationQueue } from '$lib/factories/sync/submission';
 import type { AgentRunTransport } from '$lib/client/agent/runs/contracts';
-import { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 import { ChatStore, entryTools } from './chat.svelte';
 
 const conversationId = '20000000-0000-4000-8000-000000000001' as ConversationId;
@@ -85,23 +85,24 @@ const setup = async (
 ) => {
 	const transport = new InMemorySyncTransport<WorkspaceRecord>();
 	const repository = new InMemoryOutbox<WorkspaceCommand, WorkspaceRecord>(rebaseWorkspaceRecord);
-	const cache = new ResourceCache(conversation.userId, {
+	const cache = createResourceCache(conversation.userId, {
 		repository: repository.projectedCache,
 		transport
 	});
-	const writes = new MutationQueue(conversation.userId, {
+	const { writes, execution } = createMutationQueue(conversation.userId, {
 		repository,
 		transport: new InMemoryNoteWrites(),
 		scheduler: new InMemorySyncScheduler(),
 		writerLock: new InMemoryAccountWriterLock(),
 		pull: () => cache.refresh()
 	});
-	const resources = new WorkspaceResources(conversation.userId, {
+	const resources = assembleWorkspaceResources(conversation.userId, {
 		repository: repository,
 		cache,
-		writes
+		writes,
+		execution
 	});
-	repository.observe(conversation.userId, (state) => resources.applyLocal(state));
+	await resources.initialize();
 	const records: Extract<WorkspaceRecord, { type: 'conversations' | 'messages' | 'agent_runs' }>[] =
 		[
 			{ type: 'conversations', value: { ...conversation, ...options.conversation } },

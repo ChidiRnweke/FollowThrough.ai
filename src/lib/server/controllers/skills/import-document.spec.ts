@@ -1,12 +1,25 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { Skills, type SkillsDependencies } from './controller';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
 import type { SkillEditInput } from '$lib/models/skills';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryNoteRepository,
@@ -28,20 +41,25 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
-	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
-	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const service = createSkillServices(skills, notes, new InMemoryProvenanceRepository());
+	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
-			skillFinder: service,
-			skillEditor: service,
-			skillUsageLister: service,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			skillFinder: service.finder,
+			skillEditor: service.editor,
+			skillUsageLister: service.usageLister,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteIndexer: content,
 			noteLinkReconciler: content,
 			transactionRunner
@@ -141,11 +159,11 @@ describe('Skill document imports', () => {
 	});
 	it('reads the current note title in the skill list after a document rename', async () => {
 		const { catalog, service, note, transactionRunner } = importSkill();
-		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+		await saveNoteDraft(catalog.editor, transactionRunner, testActor(), {
 			...note,
 			title: 'Release decisions'
 		});
-		expect((await service.listAll(testActor())).map((skill) => skill.name)).toEqual([
+		expect((await service.finder.listAll(testActor())).map((skill) => skill.name)).toEqual([
 			'Release decisions'
 		]);
 	});
@@ -266,14 +284,27 @@ describe('Skill document imports', () => {
 		const result = await controller.update(testActor(), input);
 		const publisher = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				archiveImport: new NoteArchiveImportService(),
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
+				todoPresentation: new TodoPresentationService(),
+				textSearch: new NoteTextSearchService(),
+				noteReferences: new NoteReferenceService(),
+				sections: new NoteSectionNumberingService(),
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
+				notePresentation: new NotePresentationService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog,
-				revisionRecorder: catalog
+				notePublisher: catalog.publisher,
+				revisionRecorder: catalog.revisionRecorder
 			})
 		);
 		await publisher.publish(testActor(), {
 			noteId: result.skill.note.id,
-			baseEtag: noteEtag(result.skill.note)
+			baseEtag: noteEtag(result.skill.note.id, result.skill.note.currentRevision)
 		});
 		expect(notes.revisions.map((snapshot) => snapshot.plainText)).toEqual([
 			'Write a decision and explain its consequences.'
@@ -281,7 +312,7 @@ describe('Skill document imports', () => {
 	});
 	it('refuses imported content based on an older editor revision', async () => {
 		const { controller, catalog, note, transactionRunner } = importSkill();
-		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+		await saveNoteDraft(catalog.editor, transactionRunner, testActor(), {
 			...note,
 			plainText: 'A newer edit'
 		});

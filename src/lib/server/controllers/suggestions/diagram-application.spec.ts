@@ -1,3 +1,6 @@
+import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { DiagramSuggestion } from '$lib/models/suggestions';
 import { describe, expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
@@ -43,6 +46,8 @@ const setup = (source = VALID_DRAWIO_XML) => {
 	suggestions.suggestions = [suggestion];
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
+			todoCreationRules: new TodoEditingRulesService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			suggestionFinder: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
@@ -51,6 +56,7 @@ const setup = (source = VALID_DRAWIO_XML) => {
 			sourceNotes: notes,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),
+			diagramLabelPresentation: new DiagramLabelPresentationService(),
 			drawioLabels: new DrawioLabelReader(),
 			now: () => testNow,
 			transactionRunner: new InMemoryTransactionRunner([diagrams, suggestions, effects])

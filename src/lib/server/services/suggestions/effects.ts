@@ -6,21 +6,16 @@ import type {
 	AppliedRecord
 } from '$lib/server/repositories/suggestions/application-effects';
 import { InvalidTransitionError } from '$lib/errors';
-export function mapAppliedChange<Input, Output>(
-	change: AppliedChange<Input>,
-	map: (record: Input) => Output
-): AppliedChange<Output> {
-	switch (change.kind) {
-		case 'created':
-			return { kind: 'created', after: map(change.after) };
-		case 'modified':
-			return { kind: 'modified', before: map(change.before), after: map(change.after) };
-		case 'unchanged':
-			return { kind: 'unchanged', after: map(change.after) };
-	}
+export interface SuggestionEffectService {
+	lock(actor: ActorContext, id: SuggestionId): Promise<void>;
+	record(
+		actor: ActorContext,
+		id: SuggestionId,
+		changes: readonly AppliedChange<AppliedRecord>[]
+	): Promise<void>;
+	restore(actor: ActorContext, suggestion: Suggestion): Promise<readonly AppliedRecord[]>;
 }
-
-export class SuggestionEffects {
+export class SuggestionEffects implements SuggestionEffectService {
 	constructor(private readonly effects: ApplicationEffectRepository) {}
 	lock(actor: ActorContext, id: SuggestionId): Promise<void> {
 		return this.effects.lock(actor, id);

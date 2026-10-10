@@ -1,10 +1,10 @@
-import type { ShellContext } from '$lib/client/shell/views';
+import type { ShellContext } from '$lib/models/workspace-views';
 import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import { workbench } from '../workbench/workbench.svelte';
 import { chatKeyOf, noteIdOf, widgetIdOf } from '../workbench/tab-ref';
-import { workspaceSession } from '../workspace/session.svelte';
+import { workspaceSession } from '$lib/factories/workspace/session';
 
 export function surfaceFor(
 	pathname: string,

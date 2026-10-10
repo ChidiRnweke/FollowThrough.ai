@@ -1,10 +1,21 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import type { NoteRevisionId } from '$lib/models/notes';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import {
 	noteBuilder,
 	testActor,
@@ -15,6 +26,19 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			noteReader: content,
 			noteEditor: content,
 			noteLinkReconciler: content,
@@ -39,7 +63,7 @@ const publishRepeatedly = async (
 		const current = content.notes[0]!;
 		await controller.publish(testActor(), {
 			noteId: current.id,
-			baseEtag: noteEtag(current)
+			baseEtag: noteEtag(current.id, current.currentRevision)
 		});
 		await controller.save(testActor(), {
 			note: { ...content.notes[0]!, plainText: `Body ${round}` }

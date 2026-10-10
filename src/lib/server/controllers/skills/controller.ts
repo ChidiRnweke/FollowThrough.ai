@@ -1,23 +1,23 @@
-import { prepareNoteSave, sameNoteDraft } from '$lib/services/notes/editing';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { decideNoteCreation } from '$lib/services/notes/creation';
+import type { NoteEditingRules } from '$lib/services/notes/editing';
+import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
+import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
+import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import type { DateTime } from '$lib/models/workspace';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { IndexingResult } from '$lib/models/knowledge-search';
-import { validatePortableSkill } from '$lib/services/skills/manifest';
-import { applySkillMetadataEdit } from '$lib/services/skills/metadata';
+import type { SkillPortability } from '$lib/services/skills/manifest';
+import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
 import type { SkillEditInput, SkillPinChange } from '$lib/models/skills';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import type { Note, NoteId, CreateNoteInput } from '$lib/models/notes';
-import { collectNoteLinkTargets } from '$lib/services/notes/references';
+import type { NoteReferences } from '$lib/services/notes/references';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
-import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
+import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateSkillFromSelectionInput,
@@ -38,19 +38,20 @@ import type {
 	NoteRevisionReader,
 	NoteRevisionRecorder,
 	NoteAttachmentRestorer,
-	SourceAnchorRepairer,
-	NoteIndexer,
-	SelectionOriginService
-} from '$lib/server/services/notes/contracts';
+	SourceAnchorRepairer
+} from '$lib/server/services/notes/catalog';
+import type { NoteIndexer } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
+
 import type {
 	SkillCreator,
-	BuiltInSkillProvisioner,
 	SkillFinder,
 	SkillUsageLister,
 	SkillUsageRecorder,
-	SkillEditor,
-	SkillPinWriter
-} from '$lib/server/services/skills/contracts';
+	SkillEditor
+} from '$lib/server/services/skills/library';
+import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
+import type { SkillPinWriter } from '$lib/server/services/skills/pins';
 
 /**
  * Application boundary for skills: reading, creating, editing, and versioning the
@@ -96,8 +97,13 @@ export interface SkillsController {
 }
 /** Everything the {@link SkillsController} needs, injected so it can be built and tested without real stores. */
 export interface SkillsDependencies {
+	readonly skillPortability: SkillPortability;
+	readonly skillMetadataEditing: SkillMetadataEditing;
+	readonly noteReferences: NoteReferences;
+	readonly noteEditingRules: NoteEditingRules;
+	readonly noteCreationRules: NoteCreationRules;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
@@ -108,14 +114,14 @@ export interface SkillsDependencies {
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
 	indexEmbeddings: IEmbeddings;
-	indexWriter: Pick<ContentIndex, 'complete'>;
+	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
 	skillEditor: SkillEditor;
 	skillPinWriter: SkillPinWriter;
 	selectionOrigins: SelectionOriginService;
 	skillCreator: SkillCreator;
-	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	noteCreation: NoteCreator;
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {
@@ -184,7 +190,7 @@ export class Skills implements SkillsController {
 	}
 	private async createSkillNote(actor: ActorContext, input: CreateNoteInput): Promise<Note> {
 		const facts = await this.dependencies.noteCreation.creationFacts(actor, input);
-		const decision = decideNoteCreation(
+		const decision = this.dependencies.noteCreationRules.decideCreation(
 			{
 				id: input.id ?? (crypto.randomUUID() as NoteId),
 				title: input.title,
@@ -303,18 +309,18 @@ export class Skills implements SkillsController {
 		const skill = await this.dependencies.transactionRunner.run(async () => {
 			await this.dependencies.skillEditor.lockCatalog(actor);
 			const current = await this.dependencies.skillEditor.getForEdit(actor, input.noteId);
-			const metadata = applySkillMetadataEdit(current, input);
+			const metadata = this.dependencies.skillMetadataEditing.edit(current, input);
 			const prepared = await this.dependencies.skillEditor.prepareEdit(
 				actor,
 				{ ...current, ...metadata },
 				input
 			);
 			if (prepared.kind === 'document') {
-				validatePortableSkill(prepared.manifest);
+				this.dependencies.skillPortability.validate(prepared.manifest);
 				if (
 					input.content &&
 					input.content.baseRevision !== current.note.currentRevision &&
-					!sameNoteDraft(current.note, prepared.skill.note)
+					!this.dependencies.noteEditingRules.sameDraft(current.note, prepared.skill.note)
 				)
 					throw new StaleRevisionError('The skill document has changed since it was loaded');
 			}
@@ -328,7 +334,11 @@ export class Skills implements SkillsController {
 	}
 	private async saveDocument(actor: ActorContext, candidate: Note): Promise<Note> {
 		const current = await this.dependencies.noteEditor.getForEdit(actor, candidate);
-		const decision = prepareNoteSave(current, candidate, new Date().toISOString() as DateTime);
+		const decision = this.dependencies.noteEditingRules.prepareSave(
+			current,
+			candidate,
+			new Date().toISOString() as DateTime
+		);
 		const note =
 			decision.kind === 'unchanged'
 				? decision.note
@@ -337,7 +347,7 @@ export class Skills implements SkillsController {
 		await this.dependencies.noteLinkReconciler.reconcile(
 			actor,
 			note,
-			collectNoteLinkTargets(note.document)
+			this.dependencies.noteReferences.links(note.document)
 		);
 		await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
 		return note;

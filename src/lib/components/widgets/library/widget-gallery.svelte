@@ -21,8 +21,8 @@
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
 	import { formatDateTime } from '$lib/components/shared/labels';
-	import { widgetReferencesIn } from '$lib/services/notes/references';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { widgetTab } from '$lib/stores/workbench/tab-ref';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
@@ -51,8 +51,9 @@
 		const resources = workspaceSession.current?.resources;
 		if (!resources || resources.availability !== 'complete') return null;
 		const id = removeTarget.id;
-		return resources.views.all('notes').filter((note) => widgetReferencesIn([note]).includes(id))
-			.length;
+		return resources.views
+			.all('notes')
+			.filter((note) => noteDocuments.widgetReferences([note]).includes(id)).length;
 	});
 
 	// Mirrors the loader's canonical URL, so navigation never takes an extra redirect.

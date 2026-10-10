@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DiagramLibrary } from './library';
+import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import { InMemoryDiagramRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryAnchorRepository,
@@ -33,7 +33,7 @@ const setup = () => {
 		anchors,
 		provenance,
 		projects,
-		service: new DiagramLibrary(diagrams, notes, anchors, provenance, projects)
+		service: createDiagramServices(diagrams, notes, anchors, provenance, projects)
 	};
 };
 
@@ -42,27 +42,27 @@ describe('Diagram management invariants', () => {
 		const { service, projects } = setup();
 		projects.projects.push(projectBuilder({ id: testProjectId(2) }));
 		await expect(
-			service.create(testActor(), mermaidBuilder({ projectId: testProjectId(2) }))
+			service.writer.create(testActor(), mermaidBuilder({ projectId: testProjectId(2) }))
 		).rejects.toThrow('same project');
 	});
 
 	it('rejects a diagram for a missing note', async () => {
 		const { service } = setup();
 		await expect(
-			service.create(testActor(), mermaidBuilder({ sourceNoteId: testNoteId(2) }))
+			service.writer.create(testActor(), mermaidBuilder({ sourceNoteId: testNoteId(2) }))
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
 	it('persists a diagram for an owned note', async () => {
 		const { service, diagrams } = setup();
-		await service.create(testActor(), mermaidBuilder());
+		await service.writer.create(testActor(), mermaidBuilder());
 		expect(diagrams.diagrams).toHaveLength(1);
 	});
 
 	it('rejects a diagram carrying another user identity', async () => {
 		const { service } = setup();
 		await expect(
-			service.create(testActor(), mermaidBuilder({ userId: testActor(2).userId }))
+			service.writer.create(testActor(), mermaidBuilder({ userId: testActor(2).userId }))
 		).rejects.toMatchObject({ code: 'OWNERSHIP' });
 	});
 
@@ -71,7 +71,7 @@ describe('Diagram management invariants', () => {
 		const foreign = projectBuilder({ id: testProjectId(2), userId: testActor(2).userId });
 		projects.projects.push(foreign);
 		await expect(
-			service.create(testActor(), mermaidBuilder({ projectId: foreign.id }))
+			service.writer.create(testActor(), mermaidBuilder({ projectId: foreign.id }))
 		).rejects.toMatchObject({ code: 'NOT_FOUND' });
 	});
 
@@ -79,15 +79,15 @@ describe('Diagram management invariants', () => {
 	// there is no note to look up and no note check to fail.
 	it('persists a diagram that names no source note', async () => {
 		const { service, diagrams } = setup();
-		await service.create(testActor(), mermaidBuilder({ sourceNoteId: undefined }));
+		await service.writer.create(testActor(), mermaidBuilder({ sourceNoteId: undefined }));
 		expect(diagrams.diagrams).toHaveLength(1);
 	});
 
 	it('lists a note-less diagram under its project', async () => {
 		const { service } = setup();
 		const diagram = mermaidBuilder({ sourceNoteId: undefined });
-		await service.create(testActor(), diagram);
-		expect((await service.listForProject(testActor(), diagram.projectId)).diagrams).toEqual([
+		await service.writer.create(testActor(), diagram);
+		expect((await service.lister.listForProject(testActor(), diagram.projectId)).diagrams).toEqual([
 			diagram
 		]);
 	});
@@ -100,7 +100,7 @@ describe('Diagram management invariants', () => {
 		const mermaid = mermaidBuilder({ sourceNoteId: undefined });
 		const drawio = drawioBuilder({ sourceNoteId: undefined, projectId: mermaid.projectId });
 		diagrams.diagrams = [mermaid, drawio];
-		const listed = await service.listForProject(testActor(), mermaid.projectId, {
+		const listed = await service.lister.listForProject(testActor(), mermaid.projectId, {
 			kind: 'drawio'
 		});
 		expect(listed.diagrams.map((item) => item.id)).toEqual([drawio.id]);

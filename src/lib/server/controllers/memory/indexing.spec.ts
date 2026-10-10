@@ -1,7 +1,9 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { Memory, type MemoryDependencies } from './controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -22,13 +24,15 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const search = new InMemorySearchRepository();
 	const indexEmbeddings = new InMemoryEmbeddingClient();
-	const indexWriter = new ContentIndex(search, indexEmbeddings.model);
-	const memory = new MemoryLibrary(entries, projects, new InMemoryProvenanceRepository());
+	const indexWriter = createContentIndex(search, indexEmbeddings.model);
+	const memory = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
-			memoryCreator: memory,
-			memoryEditor: memory,
-			memoryDeleter: memory,
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryCreator: memory.creator,
+			memoryEditor: memory.editor,
+			memoryDeleter: memory.deleter,
 			memoryIndexer: indexWriter.memories,
 			indexEmbeddings,
 			indexWriter,

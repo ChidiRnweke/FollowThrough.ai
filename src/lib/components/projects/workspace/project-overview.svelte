@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/services/projects/export-entries';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -35,7 +35,7 @@
 	} from '$lib/components/icons';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import ResourceRow from '../resource-row.svelte';
@@ -90,7 +90,7 @@
 	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
-	let renameEntry = $state<{ draft: WorkspaceDraft<'notes'>; title: string } | null>(null);
+	let renameEntry = $state<{ draft: ProjectNameEditor<'notes'>; title: string } | null>(null);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);
@@ -351,9 +351,10 @@
 					{/snippet}
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
-					{#if isFolder && projectExportEntries(node.children).length > 0}
+					{#if isFolder && projectTreeController.exportEntries(node.children).length > 0}
 						<DropdownMenu.Item
-							onclick={() => onexport?.(node.entry.title, projectExportEntries(node.children))}
+							onclick={() =>
+								onexport?.(node.entry.title, projectTreeController.exportEntries(node.children))}
 						>
 							Export…
 						</DropdownMenu.Item>

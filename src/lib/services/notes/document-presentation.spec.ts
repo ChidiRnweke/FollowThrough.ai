@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest';
+import { storedDocumentReadSchema } from '$lib/models/notes';
+import { NoteDocumentPresentationService } from './document-presentation';
+const presentation = new NoteDocumentPresentationService();
+
+describe('editable document recovery', () => {
+	it('preserves readable siblings and exposes an unsupported block as copyable JSON', () => {
+		const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Keep this' }] };
+		const futureBlock = { type: 'futureBlock', attrs: { value: 'Recover this' } };
+		const document = storedDocumentReadSchema.parse({
+			type: 'doc',
+			content: [paragraph, futureBlock]
+		});
+
+		expect(presentation.prepare(document).content).toEqual([
+			paragraph,
+			{
+				type: 'codeBlock',
+				attrs: { language: 'json' },
+				content: [{ type: 'text', text: JSON.stringify(futureBlock, null, '\t') }]
+			}
+		]);
+	});
+
+	it('keeps a malformed stored document visible instead of opening an empty note', () => {
+		const raw = { damaged: true, content: 'Recover the original document' };
+
+		expect(presentation.prepare(storedDocumentReadSchema.parse(raw))).toEqual({
+			type: 'doc',
+			content: [
+				{
+					type: 'codeBlock',
+					attrs: { language: 'json' },
+					content: [{ type: 'text', text: JSON.stringify(raw, null, '\t') }]
+				}
+			]
+		});
+	});
+});

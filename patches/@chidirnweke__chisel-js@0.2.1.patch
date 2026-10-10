@@ -1,8 +1,16 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce38e34822 100755
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b237af49d39 100644
 --- a/dist/main.js
 +++ b/dist/main.js
-@@ -8333,6 +8333,7 @@ var LAYER_MATCHERS = [
+@@ -8267,6 +8267,7 @@ var Layer = {
+   ERRORS: "errors",
+   CONFIG: "config",
+   SERVICES: "services",
++  ADAPTERS: "adapters",
+   REPOSITORIES: "repositories",
+   CONTROLLERS: "controllers",
+   FACTORY: "factory",
+@@ -8333,11 +8334,14 @@ var LAYER_MATCHERS = [
    [/^src\/lib\/testing\//, Layer.TESTS],
    [/^src\/hooks\.(server\.)?(ts|js)$/, Layer.HOOKS],
    [/\.remote\.(ts|js)$/, Layer.REMOTE],
@@ -10,29 +18,173 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
    [/^src\/routes\/.*\+.*\.server\.(ts|js)$/, Layer.ROUTES],
    [/^src\/routes\/.*\+server\.(ts|js)$/, Layer.ROUTES],
    [/^src\/routes\//, Layer.COMPONENTS],
-@@ -9087,6 +9088,12 @@ class ImportBoundaryService {
+   [/^src\/lib\/server\/(repositories|db)\//, Layer.REPOSITORIES],
+   [/^src\/lib\/server\/services\//, Layer.SERVICES],
++  [/^src\/lib\/(server\/)?adapters\//, Layer.ADAPTERS],
++  [/^src\/lib\/server\/stores\//, Layer.STORES],
+   [/^src\/lib\/server\/controllers\//, Layer.CONTROLLERS],
+   [/^src\/lib\/server\/config\.(ts|js)$/, Layer.CONFIG],
+   [/^src\/lib\/server\/[^/]*[Ff]actory\.(ts|js)$/, Layer.FACTORY],
+@@ -8998,7 +9002,6 @@ var BANNED_INTERNAL = new Map([
+     Layer.REMOTE,
+     Layer.HOOKS,
+     Layer.CONFIG,
+-    Layer.STORES,
+     Layer.CLIENT,
+     Layer.COMPONENTS
+   ])],
+@@ -9033,6 +9036,15 @@ var BANNED_INTERNAL = new Map([
+     Layer.HOOKS
+   ])]
+ ]);
++BANNED_INTERNAL.set(Layer.ADAPTERS, new Set([
++  Layer.SERVICES, Layer.REPOSITORIES, Layer.CONTROLLERS, Layer.FACTORY,
++  Layer.ROUTES, Layer.REMOTE, Layer.HOOKS, Layer.STORES, Layer.CLIENT,
++  Layer.COMPONENTS, Layer.CONFIG, Layer.UTILS
++]));
++for (const [layer, banned] of BANNED_INTERNAL) {
++  if (layer !== Layer.FACTORY && layer !== Layer.ADAPTERS && banned !== null)
++    banned.add(Layer.ADAPTERS);
++}
+ var PACKAGE_RULES = [
+   {
+     match: (s) => s === "drizzle-orm" || s.startsWith("drizzle-orm/"),
+@@ -9068,6 +9080,7 @@ class ImportBoundaryService {
+     this.mode = mode;
+   }
+   check(project) {
++    this.files = new Map(project.files.map((file) => [file.path, file]));
+     const layers = new Map(project.files.map((f) => [f.path, f.layer]));
+     const violations = [];
+     for (const edge of this.graph.allImports) {
+@@ -9087,6 +9100,21 @@ class ImportBoundaryService {
      const importedLayer = layers.get(edge.imported);
      if (importedLayer === undefined)
        return [];
-+    // Shared services/controllers keep their real layer. Browser-facing code may
-+    // call them without routing a local decision through the server. The separate
-+    // server-leak check still rejects any server-only dependency they acquire.
-+    if ([Layer.CLIENT, Layer.STORES, Layer.COMPONENTS].includes(importerLayer) &&
-+        /^src\/lib\/(services|controllers)\//.test(edge.imported))
++    // ADR 0007: browser components invoke controller operations and compose their
++    // interface-typed browser capabilities. Services and mutable stores are not entry points.
++    if (importerLayer === Layer.COMPONENTS &&
++        /^src\/lib\/(controllers|factories)\//.test(edge.imported))
++      return [];
++    // Contracts are declared with their operation owner. Boundary adapters implement
++    // those contracts, and coordinators receive them from factories; no construction leaks.
++    if (edge.isTypeOnly && importedLayer === Layer.CONTROLLERS &&
++        [Layer.CONTROLLERS, Layer.CLIENT, Layer.ADAPTERS, Layer.STORES].includes(importerLayer))
++      return [];
++    // A provider adapter implements repository-owned input/output protocols. Only
++    // named interface imports qualify: a concrete class remains a dependency leak.
++    if (edge.isTypeOnly && importerLayer === Layer.ADAPTERS &&
++        importedLayer === Layer.REPOSITORIES && this._importsInterfaces(edge))
 +      return [];
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9208,8 +9215,6 @@ function fixFor(importer, imported) {
- var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
+@@ -9100,6 +9128,35 @@ class ImportBoundaryService {
+       return [];
+     return [this._violation(edge, "banned-layer-import", `${importerLayer} must not import ${importedLayer} (${edge.imported}). ` + `${fixFor(importerLayer, importedLayer)}`)];
+   }
++  _importsInterfaces(edge) {
++    const source = this.files.get(edge.importer);
++    const target = this.files.get(edge.imported);
++    if (!source?.ast || !target?.ast) return false;
++    const exported = new Set();
++    for (const { sf } of scriptsOf(target.ast)) {
++      for (const statement of sf.statements) {
++        if (ts2.isInterfaceDeclaration(statement) &&
++            statement.modifiers?.some((modifier) => modifier.kind === ts2.SyntaxKind.ExportKeyword))
++          exported.add(statement.name.text);
++      }
++    }
++    let matched = false;
++    for (const { sf } of scriptsOf(source.ast)) {
++      for (const statement of sf.statements) {
++        if (!ts2.isImportDeclaration(statement) ||
++            !ts2.isStringLiteral(statement.moduleSpecifier) ||
++            statement.moduleSpecifier.text !== edge.specifier) continue;
++        matched = true;
++        const clause = statement.importClause;
++        const bindings = clause?.namedBindings;
++        if (clause?.name || !bindings || !ts2.isNamedImports(bindings)) return false;
++        if (bindings.elements.length === 0) return false;
++        if (!bindings.elements.every((entry) => exported.has((entry.propertyName ?? entry.name).text)))
++          return false;
++      }
++    }
++    return matched;
++  }
+   _checkExternal(edge, importerLayer) {
+     if (!BANNED_INTERNAL.has(importerLayer))
+       return [];
+@@ -9190,30 +9247,26 @@ function fixFor(importer, imported) {
+     return "One service never imports another. If you need a shared type, it is domain " + "data — move it to $lib/models. Service-local data is fine, but no other " + "service may reach for it. If you need the behaviour, orchestrate both " + "services from a controller.";
+   }
+   if (importer === Layer.CONTROLLERS && imported === Layer.CONTROLLERS) {
+-    return "Controllers do not chain. Compose the services they need instead, and put " + "any shared type in $lib/models.";
++    return "Receive operation contracts through type-only imports and factory injection. " + "Do not construct another controller implementation inside a controller.";
+   }
+   if (imported === Layer.REPOSITORIES) {
+     return "Depend on the repository interface and let the factory inject the implementation.";
+   }
+   if (imported === Layer.SERVICES || imported === Layer.CONTROLLERS) {
+-    return "Go through the factory: routes and remote functions are the only entry points.";
++    return "Components invoke controller operations. Stores retain state and adapters handle I/O; " + "move domain decisions and workflow coordination to services and controllers.";
+   }
+   if (imported === Layer.FACTORY) {
+-    return "Only routes and remote functions build from the factory.";
++    return "Keep dependency construction in capability factories and application composition. " + "Do not construct application capabilities inside stores, services or controllers.";
+   }
+   return "Move the dependency to a layer that is allowed to hold it.";
+ }
+ 
+ // src/chisel/checker/services/architecture/layout.ts
+-var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers"]);
++var SERVER_LAYER_FOLDERS = new Set(["repositories", "db", "services", "controllers", "stores", "adapters"]);
  var SERVER_ROOT_FILE_RE = /^src\/lib\/server\/([^/]*[Ff]actory|application|config|index)\.(ts|js)$/;
  var MISPLACED_LAYER_DIRS = [
 -  [/^src\/lib\/services\//, "src/lib/services/", "src/lib/server/services/"],
 -  [/^src\/lib\/controllers\//, "src/lib/controllers/", "src/lib/server/controllers/"],
    [/^src\/lib\/repositories\//, "src/lib/repositories/", "src/lib/server/repositories/"],
-   [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
+-  [/^src\/lib\/(factories|factory)\//, "src/lib/factories/", "src/lib/server/"]
  ];
-@@ -10244,7 +10249,6 @@ class TestStructureService {
+-
+ class LayoutService {
+   ruleIdPrefix = "structure";
+   check(project) {
+@@ -9375,8 +9428,8 @@ class StructuralSvelteService {
+       {
+         id: "structural:missing-service-interface",
+         category: "structural",
+-        description: "Concrete service without a matching I<ServiceName> interface",
+-        fixGuidance: "Declare an I<ServiceName> interface in the same file. Controllers " + "depend on the interface and the factory supplies the implementation. It has to " + "be the same file — a sibling contracts.ts is a same-layer import, which the " + "boundary rules ban."
++        description: "Public service class without an explicitly implemented capability interface",
++        fixGuidance: "Declare a narrow capability interface beside its service and explicitly implement it. Controllers depend on that interface; factories supply the implementation."
+       },
+       {
+         id: "structural:factory-contains-logic",
+@@ -9445,16 +9498,19 @@ class StructuralSvelteService {
+         if (!ts3.isClassDeclaration(statement) || statement.name === undefined)
+           continue;
+         const name = statement.name.text;
+-        if (!name.endsWith("Service"))
++        if (!statement.modifiers?.some((modifier) => modifier.kind === ts3.SyntaxKind.ExportKeyword))
+           continue;
+-        if (interfaces.has(`I${name}`))
++        const implemented = statement.heritageClauses?.filter((clause) => clause.token === ts3.SyntaxKind.ImplementsKeyword)
++          .flatMap((clause) => clause.types) ?? [];
++        if (implemented.length > 0 && implemented.every((type) =>
++            ts3.isIdentifier(type.expression) && interfaces.has(type.expression.text)))
+           continue;
+         violations.push(createViolation({
+           file: file.path,
+           line: lineOf(file.source, offset + statement.getStart(sf)),
+           severity: Severity.ERROR,
+           ruleId: "structural:missing-service-interface",
+-          message: `Service "${name}" has no I${name} interface in this file. Controllers ` + `depend on the interface; the factory supplies the implementation.`
++          message: `Service "${name}" must explicitly implement its locally declared capability interfaces. Controllers depend on those interfaces; factories supply the implementation.`
+         }));
+       }
+     }
+@@ -10244,7 +10300,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -40,7 +192,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10295,6 @@ class TestStructureService {
+@@ -10291,29 +10346,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -70,7 +222,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..63e56eed10c0bc6c3f05c0967b83a2ce
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10351,6 @@ class TestStructureService {
+@@ -10370,7 +10402,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

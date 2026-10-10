@@ -11,16 +11,13 @@ import type { Note, TextSelection } from '$lib/models/notes';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
 import { ExternalServiceError, NotFoundError, StaleRevisionError } from '$lib/errors';
+import type { DiagramFinder, DiagramWriter } from '$lib/server/services/diagrams/library';
+import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
 import type {
-	DiagramFinder,
-	DiagramIndexer,
-	DiagramPromoter,
 	DiagramTextExtractor,
-	DiagramWriter,
-	DrawioDiagramExporter,
 	MermaidDiagramRenderer
-} from '$lib/server/services/diagrams/contracts';
-import type { SkillCreator } from '$lib/server/services/skills/contracts';
+} from '$lib/server/services/diagrams/content';
+import type { SkillCreator } from '$lib/server/services/skills/library';
 import {
 	noteBuilder,
 	testActor,
@@ -68,8 +65,6 @@ export class InMemoryDiagrams
 	implements
 		DiagramFinder,
 		MermaidDiagramRenderer,
-		DrawioDiagramExporter,
-		DiagramPromoter,
 		DiagramTextExtractor,
 		DiagramWriter,
 		DiagramIndexer,
@@ -102,19 +97,6 @@ export class InMemoryDiagrams
 
 	async render(source: string): Promise<string> {
 		return `<svg>${source}</svg>`;
-	}
-
-	async exportSvg(diagram: DrawioDiagram): Promise<string> {
-		return `<svg>${diagram.searchableText}</svg>`;
-	}
-
-	async promote(
-		_actor: ActorContext,
-		source: MermaidDiagram,
-		target: DrawioDiagram
-	): Promise<DrawioDiagram> {
-		void _actor;
-		return { ...target, promotedFromId: source.id };
 	}
 
 	async extract(diagram: { readonly source: string }): Promise<string> {

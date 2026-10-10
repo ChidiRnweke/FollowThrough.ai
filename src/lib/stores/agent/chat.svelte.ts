@@ -20,7 +20,7 @@ import type {
 } from '$lib/client/agent/runs/contracts';
 import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport';
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
-import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
 import { accessMessage } from '$lib/services/sync/state';
 import {
@@ -32,15 +32,15 @@ import {
 } from './chat-tools';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
-import type { SelectionChip } from './selection-chip';
+import type { SelectionChip } from '$lib/models/chat';
 import { SvelteSet } from 'svelte/reactivity';
 import type { ContextChip, MentionHistory } from '$lib/models/chat';
-import { createMentionHistory } from '$lib/services/chat/mentions';
+import { createMentionHistory } from '$lib/models/chat';
 import { contextResourceRefOf, uniqueContextResources } from '$lib/services/chat/chips';
 export type { ContextChip, ResourceChip } from '$lib/models/chat';
 
 export type { ChatToolActivity } from './chat-tools';
-export type { SelectionChip } from './selection-chip';
+export type { SelectionChip } from '$lib/models/chat';
 
 const STORAGE_KEY_PREFIX = 'followthrough.agent.conversation';
 const browser = typeof window !== 'undefined';
@@ -436,7 +436,7 @@ export class ChatStore {
 	connection = $state<'detached' | 'connected' | 'reconnecting' | 'offline'>('detached');
 	persistenceError = $state<string | undefined>(undefined);
 	private hydratedConversationId?: ConversationId;
-	private resources: WorkspaceResources | null = null;
+	private resources: WorkspaceResourcesController | null = null;
 	private generation = 0;
 	private connectionGeneration = 0;
 	private liveConfirmed = $state(true);
@@ -497,7 +497,7 @@ export class ChatStore {
 		this.staged = request;
 	}
 
-	hydrate(resources: WorkspaceResources): Promise<void> {
+	hydrate(resources: WorkspaceResourcesController): Promise<void> {
 		if (this.hydrating?.generation === this.generation) return this.hydrating.promise;
 		const operation = { generation: this.generation, promise: this.hydrateHistory(resources) };
 		this.hydrating = operation;
@@ -506,7 +506,7 @@ export class ChatStore {
 		});
 	}
 
-	private async hydrateHistory(resources: WorkspaceResources): Promise<void> {
+	private async hydrateHistory(resources: WorkspaceResourcesController): Promise<void> {
 		this.resources = resources;
 		if (!browser || !this.conversationId) return;
 		if (this.isStreaming && this.eventConnection) return;
@@ -954,7 +954,10 @@ export class ChatStore {
 		if (browser) sessionStorage.removeItem(this.storageKey);
 	}
 
-	async switchToConversation(id: ConversationId, resources: WorkspaceResources): Promise<void> {
+	async switchToConversation(
+		id: ConversationId,
+		resources: WorkspaceResourcesController
+	): Promise<void> {
 		if (this.conversationId === id) return this.hydrate(resources);
 		this.generation++;
 		this.refreshing = null;

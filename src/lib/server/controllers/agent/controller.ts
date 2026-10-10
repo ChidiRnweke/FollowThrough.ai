@@ -1,28 +1,26 @@
-import { resolveWebResearch } from '$lib/services/agent/web-research';
-import {
-	prepareRunImages,
-	validateRunImages,
-	freezeImageReader
-} from '$lib/server/services/agent/runs/images';
-import { segmentOutput } from '$lib/server/services/agent/runs/output';
-import { isTerminalAgentRunStatus, isRunEventStreamComplete } from '$lib/services/agent/run-status';
-import type { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
-import {
-	RunPreparationCancelled,
-	type RunPreparation
-} from '$lib/server/services/agent/runs/preparation';
-import type { RunApprovals } from '$lib/server/services/agent/runs/approvals';
-import type { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
+import type {
+	IAgentModelSelectionService,
+	IAgentModelChoiceService
+} from '$lib/services/agent/model-selection';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
+import type { AgentImagePreparation } from '$lib/server/services/agent/runs/images';
+import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
+import type { AgentRunStatusRules } from '$lib/services/agent/run-status';
+import type { RunCheckpointWriter } from '$lib/server/services/agent/runs/checkpoints';
+import { RunPreparationCancelled } from '$lib/errors';
+import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
+import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
+import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type {
 	ConversationMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
-	WebResearchSettings,
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
@@ -42,45 +40,39 @@ import type {
 } from '$lib/models/agent';
 import type { NoteId } from '$lib/models/notes';
 import type { DateTime } from '$lib/models/workspace';
-import { skillsForSurface } from '$lib/server/services/skills/built-in-definitions';
 import { NotFoundError, ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
-import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
-import { resolveAgentExecutionMode } from '$lib/server/services/agent/runs/preferences';
-import {
-	configuredAgentModels,
-	modelChoiceIssue,
-	resolveAgentModel,
-	resolveVisionModel,
-	resolveDefaultAgentModel,
-	resolveDefaultVisionModel
-} from '$lib/services/agent/model-selection';
-import {
-	abortActiveRun,
-	registerActiveRun,
-	releaseActiveRun
-} from '$lib/server/services/agent/runs/active-runs';
-import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
+
+import { activeRunStore } from '$lib/server/stores/agent/active-runs';
+import type { ConversationHistory } from '$lib/server/services/agent/conversations/history';
 import { activeTraceparent } from '$lib/server/services/telemetry';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import { AgentProviderFailure } from '$lib/errors';
-import type { AgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
-import type { WidgetReader } from '$lib/server/services/widgets/contracts';
-import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
-import type { AttachmentLibrary } from '$lib/server/services/attachments/library';
+import type { IAgentContext, AttachedResource } from '$lib/server/services/agent/runs/context';
+import type { WidgetReader } from '$lib/server/services/widgets/library';
+import type { DiagramFinder } from '$lib/server/services/diagrams/library';
+import type { AttachmentLookup } from '$lib/server/services/attachments/library';
 import {
 	attachmentFilePath,
 	diagramFilePath
 } from '$lib/server/services/agent-files/virtual-files';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
-import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
-import type { MemoryLibrary } from '$lib/server/services/memory/library';
-import type { ProjectReader } from '$lib/server/services/projects/contracts';
-import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
+import type {
+	BuiltInSkillProvisioner,
+	BuiltInSkillSelection
+} from '$lib/server/services/skills/built-ins';
+import type { SkillFinder } from '$lib/server/services/skills/library';
+import type { MemoryEntryLister } from '$lib/server/services/memory/library';
+import type { ProjectReader } from '$lib/server/services/projects/catalog';
+import type {
+	ConversationSessions,
+	ConversationMessages
+} from '$lib/server/services/agent/conversations/archive';
 import { toolActivityFromEvent } from '$lib/server/services/agent/conversations/tool-activity';
 import type { AgentRunContext, ContextResourceRef, PreparedAgentRun } from '$lib/models/agent';
 import type {
@@ -92,7 +84,7 @@ import type {
 import type { AgentRunExecutionOutcome } from '$lib/models/agent';
 import type { AgentRunner, AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type { AgentEventBus } from '$lib/server/services/agent/runs/events';
+import type { AgentEventBus } from '$lib/server/stores/agent/events';
 const now = (): DateTime => new Date().toISOString() as DateTime;
 
 /** Grace period the executor gets to settle a cancelled run before the backstop does it. */
@@ -224,23 +216,27 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	readonly runStatus: AgentRunStatusRules;
+	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
+	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
+	readonly imagePreparation: AgentImagePreparation;
+	readonly modelSelection: IAgentModelSelectionService;
+	readonly modelChoices: IAgentModelChoiceService;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	/** Persists conversations and their message history. */
-	conversationJournal: ConversationJournal;
+	conversationSessions: ConversationSessions;
+	conversationMessages: ConversationMessages;
 	/** Per-user agent preferences used to settle defaults when a run is frozen. */
 	preferences: AgentPreferencesStore;
 	/** The catalogue of selectable models, used to validate and resolve run models. */
 	models: AgentModelCatalog;
 	/** Run records: idempotent inserts, lookups and persistence of resolved values. */
 	runs: AgentRunRepository;
-	cancellations: Pick<RunCancellation, 'getForWrite' | 'plan' | 'persist'>;
-	approvals: Pick<RunApprovals, 'getForWrite' | 'plan' | 'persist'>;
-	checkpoints: Pick<RunCheckpoints, 'prepare' | 'persist'>;
-	preparation: Pick<
-		RunPreparation,
-		'claim' | 'getForWrite' | 'provenance' | 'context' | 'persistProvenance' | 'persistContext'
-	>;
+	cancellations: Pick<RunCancellationDecisions, 'getForWrite' | 'plan' | 'persist'>;
+	approvals: Pick<RunApprovalDecisions, 'getForWrite' | 'plan' | 'persist'>;
+	checkpoints: Pick<RunCheckpointWriter, 'prepare' | 'persist'>;
+	preparation: ChatRunPreparation;
 	/** The append-only event log per run that clients poll via cursors. */
 	events: AgentRunEventRepository;
 	/** Recorded approvals and rejections for pending tool calls. */
@@ -253,11 +249,12 @@ export interface AgentDependencies {
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
-	webSearchDefaults: WebResearchSettings;
+	readonly runSettings: AgentRunSettings;
+	webSearchOverrides: WebResearchOptions;
 
 	readonly settlements: RunSettlement;
 
-	readonly contextFormatter: AgentContext;
+	readonly contextFormatter: IAgentContext;
 
 	readonly contextNotes: NoteReader;
 
@@ -265,17 +262,15 @@ export interface AgentDependencies {
 
 	readonly contextWidgets: WidgetReader;
 
-	readonly contextDiagrams: Pick<DiagramLibrary, 'get'>;
+	readonly contextDiagrams: DiagramFinder;
 
-	readonly contextAttachments: Pick<AttachmentLibrary, 'get'>;
+	readonly contextAttachments: AttachmentLookup;
 
-	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
+	readonly builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'> & BuiltInSkillSelection;
 
-	readonly contextMemory: Pick<MemoryLibrary, 'list'>;
+	readonly contextMemory: MemoryEntryLister;
 
 	readonly contextProjects: ProjectReader;
-
-	readonly contextConversations: Pick<ConversationArchive, 'get'>;
 
 	readonly provenance: ProvenanceRecorder;
 
@@ -319,7 +314,7 @@ export class Agent implements AgentController {
 		actor: ActorContext,
 		options?: { readonly limit?: number; readonly offset?: number; readonly query?: string }
 	): Promise<readonly Conversation[]> {
-		return this.dependencies.conversationJournal.listConversations(actor, options);
+		return this.dependencies.conversationSessions.listConversations(actor, options);
 	}
 
 	renameSession(
@@ -327,16 +322,16 @@ export class Agent implements AgentController {
 		conversationId: ConversationId,
 		title: string
 	): Promise<Conversation> {
-		return this.dependencies.conversationJournal.rename(actor, conversationId, title);
+		return this.dependencies.conversationSessions.rename(actor, conversationId, title);
 	}
 
 	async deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
 		await this.dependencies.transactionRunner.run(async () => {
-			await this.dependencies.conversationJournal.getForWrite(actor, conversationId);
+			await this.dependencies.conversationSessions.getForWrite(actor, conversationId);
 			const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
 			if (active)
 				throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
-			await this.dependencies.conversationJournal.remove(actor, conversationId);
+			await this.dependencies.conversationSessions.remove(actor, conversationId);
 		});
 	}
 
@@ -344,11 +339,20 @@ export class Agent implements AgentController {
 		const existing = await this.dependencies.runs.findByRequestId(actor, input.requestId);
 		if (existing) return this.receipt(actor, existing);
 		if (input.model) {
-			const models = configuredAgentModels(await this.dependencies.models.list(), {
-				chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
-				visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
-			});
-			const issue = modelChoiceIssue(models, input.model, 'chat');
+			const models = this.dependencies.modelChoices.configuredAgentModels(
+				await this.dependencies.models.list(),
+				{
+					chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+						{},
+						this.dependencies.defaultModel
+					),
+					visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+						{},
+						this.dependencies.defaultVisionModel
+					)
+				}
+			);
+			const issue = this.dependencies.modelChoices.modelChoiceIssue(models, input.model, 'chat');
 			if (issue) throw new ValidationError(issue);
 		}
 		try {
@@ -359,13 +363,17 @@ export class Agent implements AgentController {
 				// whatever they have since become.
 				const preferences = await this.dependencies.preferences.get(actor);
 				const runInput = this.freezeInput(input, preferences);
-				const conversation = await this.dependencies.conversationJournal.getOrCreate(
+				const conversation = await this.dependencies.conversationSessions.getOrCreate(
 					actor,
 					runInput
 				);
 				if (input.retryUserOrdinal !== undefined)
 					await this.rewind(actor, conversation.id, input.retryUserOrdinal);
-				const model = resolveAgentModel(conversation, preferences, this.dependencies.defaultModel);
+				const model = this.dependencies.modelSelection.resolveAgentModel(
+					conversation,
+					preferences,
+					this.dependencies.defaultModel
+				);
 				// Settled only now, because it depends on the chat model, which is not
 				// known until the conversation has been resolved.
 				const finalInput = await this.withImageReader(
@@ -387,7 +395,7 @@ export class Agent implements AgentController {
 					userId: actor.userId,
 					conversationId: conversation.id,
 					model,
-					executionMode: resolveAgentExecutionMode(conversation, preferences),
+					executionMode: this.dependencies.runSettings.executionMode(conversation, preferences),
 					status: 'queued',
 					requestId: input.requestId,
 					pendingDecisions: [],
@@ -399,7 +407,7 @@ export class Agent implements AgentController {
 				};
 				const inserted = await this.dependencies.runs.insertIdempotent(actor, run);
 				if (!inserted) throw new DuplicateSubmission();
-				await this.dependencies.conversationJournal.recordUserPrompt(
+				await this.dependencies.conversationMessages.recordUserPrompt(
 					actor,
 					conversation.id,
 					runInput.prompt,
@@ -442,7 +450,11 @@ export class Agent implements AgentController {
 	): Promise<boolean> {
 		const run = await this.requireRun(actor, runId);
 		const latestCursor = await this.dependencies.events.latestCursor(actor, runId);
-		return isRunEventStreamComplete(run.status, deliveredCursor, latestCursor);
+		return this.dependencies.runStatus.eventStreamComplete(
+			run.status,
+			deliveredCursor,
+			latestCursor
+		);
 	}
 
 	/**
@@ -522,7 +534,9 @@ export class Agent implements AgentController {
 		});
 		// The abort waits for the commit above: the executor settles the run out of
 		// `cancelling`, which has to be durable before it can read it.
-		if (abortActiveRun(runId)) {
+		const activeHandle = activeRunStore.get(runId);
+		if (activeHandle) {
+			activeHandle.abort();
 			this.settleCancellationAfterGrace(runId);
 			return this.snapshot(actor, run);
 		}
@@ -555,7 +569,10 @@ export class Agent implements AgentController {
 		try {
 			const receipt = await this.dependencies.transactionRunner.run(async () => {
 				const original = await this.requireAgentRun(actor, runId);
-				if (!isTerminalAgentRunStatus(original.status) || original.status === 'completed')
+				if (
+					!this.dependencies.runStatus.isTerminal(original.status) ||
+					original.status === 'completed'
+				)
 					throw new ValidationError('Only failed or cancelled runs can be retried');
 				const submittedAt = now();
 				// Joins the retry request's trace, same as a fresh submit.
@@ -603,8 +620,9 @@ export class Agent implements AgentController {
 	}
 
 	private executeInBackground(runId: AgentRunId): void {
-		const controller = registerActiveRun(runId);
-		const cleanup = () => releaseActiveRun(runId, controller);
+		const controller = new AbortController();
+		activeRunStore.register(runId, controller);
+		const cleanup = () => activeRunStore.release(runId, controller);
 		// audit-allow: silent-catch — detached execution persists a failed run; only failure of that settlement reaches the terminal reporter.
 		void this.execute(runId, controller.signal)
 			.then(cleanup, async (error) => {
@@ -631,13 +649,13 @@ export class Agent implements AgentController {
 	): Promise<void> {
 		const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
 		if (active) throw new ValidationError('Wait for the current agent run to finish first');
-		await this.dependencies.conversationJournal.truncateFromUserMessage(
+		await this.dependencies.conversationMessages.truncateFromUserMessage(
 			actor,
 			conversationId,
 			ordinal
 		);
 		const items = await this.dependencies.sessions.list(actor, conversationId);
-		const rewound = rewindToUserItem(
+		const rewound = this.dependencies.conversationHistory.rewind(
 			items.map((item) => item.item),
 			ordinal
 		);
@@ -648,7 +666,7 @@ export class Agent implements AgentController {
 		input: SubmitAgentRunInput,
 		preferences: AgentPreferences
 	): StagedAgentRunInput {
-		validateRunImages(input);
+		this.dependencies.imagePreparation.validate(input);
 		const contextProjectId =
 			input.appContext?.currentProject?.id ?? input.appContext?.activeResource?.projectId;
 		const contextNoteId =
@@ -670,11 +688,13 @@ export class Agent implements AgentController {
 		const requestedSkillNames = [
 			...new Set([
 				...(input.requestedSkillNames ?? []),
-				...skillsForSurface(input.appContext?.surface?.kind)
+				...(input.appContext?.surface
+					? this.dependencies.builtInSkills.forSurface(input.appContext.surface.kind)
+					: [])
 			])
 		];
 		// Freeze effective settings so later deployment changes cannot alter a resumed turn.
-		const webSearch = resolveWebResearch(
+		const webSearch = this.dependencies.runSettings.research(
 			{
 				...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
 				...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
@@ -682,7 +702,10 @@ export class Agent implements AgentController {
 					? { maxTotalResults: preferences.webSearchMaxTotalResults }
 					: {})
 			},
-			this.dependencies.webSearchDefaults
+			this.dependencies.runSettings.research(
+				this.dependencies.webSearchOverrides,
+				CHAT_WEB_SEARCH_DEFAULTS
+			)
 		);
 		return {
 			requestId: input.requestId,
@@ -741,16 +764,29 @@ export class Agent implements AgentController {
 	): Promise<RunAgentInput> {
 		// Context images need a model that can see just as much as attachments do;
 		// ignoring them here would silently drop the render on a text-only model.
-		if (prepareRunImages(runInput).kind === 'none') return runInput;
-		const models = configuredAgentModels(await this.dependencies.models.list(), {
-			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
-			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
-		});
-		return freezeImageReader(
+		if (this.dependencies.imagePreparation.prepare(runInput).kind === 'none') return runInput;
+		const models = this.dependencies.modelChoices.configuredAgentModels(
+			await this.dependencies.models.list(),
+			{
+				chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+					{},
+					this.dependencies.defaultModel
+				),
+				visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+					{},
+					this.dependencies.defaultVisionModel
+				)
+			}
+		);
+		return this.dependencies.imagePreparation.freezeReader(
 			runInput,
 			models,
 			chatModel,
-			resolveVisionModel(conversation, preferences, this.dependencies.defaultVisionModel)
+			this.dependencies.modelSelection.resolveVisionModel(
+				conversation,
+				preferences,
+				this.dependencies.defaultVisionModel
+			)
 		);
 	}
 
@@ -822,8 +858,14 @@ export class Agent implements AgentController {
 				actor,
 				run,
 				request,
-				imageInput: prepareRunImages(request),
-				webSearch: resolveWebResearch(request.webSearch ?? {}, this.dependencies.webSearchDefaults),
+				imageInput: this.dependencies.imagePreparation.prepare(request),
+				webSearch: this.dependencies.runSettings.research(
+					request.webSearch ?? {},
+					this.dependencies.runSettings.research(
+						this.dependencies.webSearchOverrides,
+						CHAT_WEB_SEARCH_DEFAULTS
+					)
+				),
 				context: run.contextSnapshot,
 				...(decisions.length > 0 ? { decisions } : {}),
 				signal,
@@ -860,7 +902,7 @@ export class Agent implements AgentController {
 							const record = await this.dependencies.events.append(run.id, 1, event);
 							const activity = toolActivityFromEvent(event);
 							if (activity)
-								await this.dependencies.conversationJournal.recordToolActivity(
+								await this.dependencies.conversationMessages.recordToolActivity(
 									actor,
 									run.conversationId,
 									activity,
@@ -1030,7 +1072,7 @@ export class Agent implements AgentController {
 				contextResources,
 				profileMemory
 			});
-		const conversation = await this.dependencies.contextConversations.get(
+		const conversation = await this.dependencies.conversationSessions.get(
 			actor,
 			input.conversationId
 		);
@@ -1139,7 +1181,7 @@ export class Agent implements AgentController {
 		if (run.pendingDecisions.length === 0) return;
 		const actor: ActorContext = { userId: run.userId };
 		for (const pending of run.pendingDecisions)
-			await this.dependencies.conversationJournal.recordToolActivity(
+			await this.dependencies.conversationMessages.recordToolActivity(
 				actor,
 				run.conversationId,
 				{
@@ -1163,7 +1205,7 @@ export class Agent implements AgentController {
 			const record = await this.dependencies.events.append(run.id, 1, event);
 			const activity = toolActivityFromEvent(event);
 			if (activity)
-				await this.dependencies.conversationJournal.recordToolActivity(
+				await this.dependencies.conversationMessages.recordToolActivity(
 					actor,
 					run.conversationId,
 					activity,
@@ -1199,11 +1241,11 @@ export class Agent implements AgentController {
 			// Written as a single blob it could only be replayed after every tool call, which
 			// is why a reopened conversation read as "all the work, then all the words".
 			const records = await this.dependencies.events.listAttempt(run.id, 1);
-			const segments = segmentOutput(records);
+			const segments = this.dependencies.streamPresentation.segments(records);
 			for (const segment of segments) {
 				const provenance = { runId: run.id, eventCursor: segment.cursor };
 				if (segment.kind === 'reasoning')
-					await this.dependencies.conversationJournal.recordAssistantReasoning(
+					await this.dependencies.conversationMessages.recordAssistantReasoning(
 						actor,
 						run.conversationId,
 						segment.text,
@@ -1211,7 +1253,7 @@ export class Agent implements AgentController {
 						provenance
 					);
 				else
-					await this.dependencies.conversationJournal.recordAssistantText(
+					await this.dependencies.conversationMessages.recordAssistantText(
 						actor,
 						run.conversationId,
 						segment.text,

@@ -1,3 +1,4 @@
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
@@ -66,17 +67,19 @@ const approvalController = (db: typeof context.db) => {
 	runner.abortable = true;
 	const controller = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs,
 			approvals: new RunApprovals(runs),
 			runner,
 			sessions: new AgentSessionRecords(database),
-			conversationJournal: new ConversationArchive(new ConversationRecords(database)),
+			conversationMessages: new ConversationArchive(new ConversationRecords(database)),
+			conversationSessions: new ConversationArchive(new ConversationRecords(database)),
 			events,
 			transactionRunner,
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
 			eventBus: { notify: () => {} }

@@ -1,3 +1,4 @@
+import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import { describe, expect, it } from 'vitest';
 import { ToolPreferences } from '$lib/server/controllers/agent/tool-preferences/controller';
 import { TrustPolicies } from '$lib/server/controllers/agent/trust-policies/controller';
@@ -19,16 +20,8 @@ const setup = async (suffix: string) => {
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,
-		preferences: new ToolAccess(preferences, {
-			entries: () => [
-				{
-					name: 'archive_project',
-					description: 'Archive a project',
-					classification: 'mutation',
-					locked: false
-				}
-			]
-		})
+		preferences: new ToolAccess(preferences),
+		catalog: new AgentToolCatalogService()
 	});
 	const policies = new TrustPolicies({
 		syncMutations: sync.mutations,

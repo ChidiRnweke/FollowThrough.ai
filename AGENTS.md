@@ -182,6 +182,23 @@ carrying the span's trace id. Do not add boundary logs at call sites; log at `de
 services for detail. `LOG_LEVEL` (platform key, never a secret) gates debug records — debug in
 dev, info in prod.
 
+## Service contracts and state ownership (ADR 0007)
+
+- Public services are stateless classes that explicitly implement narrow capability interfaces.
+  Private helpers stay private. Do not expose a helper solely for a test or wrap every helper
+  in a separate class. Production callers define the public capability.
+- Services never call other services, including through function dependencies or renamed ports.
+  Controllers own cross-capability sequencing and transactions.
+- Retained mutable state belongs in a store with an account, editor, execution, worker or process
+  lifetime. A readonly Map is still mutable state. Services may keep readonly collaborators and
+  immutable configuration; operation-local collections are valid.
+- Stores retain state and expose controlled updates. They do not fetch, retry, call providers or
+  make business decisions. Server stores live in `src/lib/server/stores/`.
+- Components and adjacent TypeScript call controllers for complete application operations and
+  observe readonly application state. They do not assemble service or remote calls.
+- Factories construct and connect dependencies and expose their interfaces. They do not execute
+  application workflows or expose mutable internals to components.
+
 ## Layering rules the audits enforce
 
 - Each `src/lib/models/<domain>/` domain is self-contained: no imports of sibling files in the

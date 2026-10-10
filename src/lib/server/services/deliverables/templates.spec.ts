@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DocumentTemplates } from './templates';
+import { TemplateUploadService } from './templates';
 import { InMemoryTemplateRepository } from '$lib/testing/attachments/fakes/in-memory-deliverables';
 import { testActor, testNow, testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 
@@ -12,19 +12,19 @@ const input = {
 };
 describe('template upload reservations', () => {
 	it('rejects an empty upload reservation', async () => {
-		const templates = new DocumentTemplates(new InMemoryTemplateRepository(), () => testNow);
+		const templates = new TemplateUploadService(new InMemoryTemplateRepository(), () => testNow);
 		await expect(
 			templates.reserveUpload(testActor(), { ...input, byteSize: 0 })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('rejects a malformed checksum', async () => {
-		const templates = new DocumentTemplates(new InMemoryTemplateRepository(), () => testNow);
+		const templates = new TemplateUploadService(new InMemoryTemplateRepository(), () => testNow);
 		await expect(
 			templates.reserveUpload(testActor(), { ...input, checksumSha256: 'invalid' })
 		).rejects.toMatchObject({ code: 'VALIDATION' });
 	});
 	it('normalizes the checksum and retains the declared size in the reservation', async () => {
-		const templates = new DocumentTemplates(new InMemoryTemplateRepository(), () => testNow);
+		const templates = new TemplateUploadService(new InMemoryTemplateRepository(), () => testNow);
 		const upload = await templates.reserveUpload(testActor(), {
 			...input,
 			checksumSha256: 'A'.repeat(64)

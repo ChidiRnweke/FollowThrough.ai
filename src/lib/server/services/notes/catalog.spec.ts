@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NoteCatalog } from './catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { NOTE_REVISION_HISTORY_LIMIT } from '$lib/models/notes';
 import {
 	InMemoryAnchorRepository,
@@ -20,7 +20,7 @@ const setup = () => {
 	const anchors = new InMemoryAnchorRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const service = new NoteCatalog(notes, anchors, projects);
+	const service = createNoteServices(notes, anchors, projects);
 	return { service, notes, anchors };
 };
 
@@ -32,7 +32,7 @@ describe('Note management invariants', () => {
 			noteBuilder({ id: testNoteId(2), kind: 'folder' }),
 			noteBuilder({ id: testNoteId(3), kind: 'skill' })
 		];
-		const listed = await service.list(testActor());
+		const listed = await service.treeReader.list(testActor());
 		expect(listed.map((note) => note.id)).toEqual([testNoteId(), testNoteId(2)]);
 	});
 
@@ -41,7 +41,10 @@ describe('Note management invariants', () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
 		for (let revision = 1; revision <= NOTE_REVISION_HISTORY_LIMIT + 3; revision += 1)
-			await service.record(testActor(), noteBuilder({ currentRevision: revision }));
+			await service.revisionRecorder.record(
+				testActor(),
+				noteBuilder({ currentRevision: revision })
+			);
 		const kept = await notes.listRevisions(testActor(), testNoteId());
 		expect(kept.map((entry) => entry.revision).sort((left, right) => left - right)).toEqual(
 			Array.from({ length: NOTE_REVISION_HISTORY_LIMIT }, (_, index) => index + 4)
@@ -51,13 +54,13 @@ describe('Note management invariants', () => {
 	it('lists a trashed note in the trash', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder({ archivedAt: testNow })];
-		expect(await service.listTrashed(testActor())).toHaveLength(1);
+		expect(await service.trashReader.listTrashed(testActor())).toHaveLength(1);
 	});
 
 	it('keeps active notes out of the trash', async () => {
 		const { service, notes } = setup();
 		notes.notes = [noteBuilder()];
-		expect(await service.listTrashed(testActor())).toEqual([]);
+		expect(await service.trashReader.listTrashed(testActor())).toEqual([]);
 	});
 
 	it('leaves an ambiguous anchor unchanged during repair', async () => {
@@ -65,7 +68,7 @@ describe('Note management invariants', () => {
 		const note = noteBuilder({ plainText: 'same and same', currentRevision: 2 });
 		notes.notes = [note];
 		anchors.anchors = [anchorBuilder({ quote: 'same', from: 0, to: 4 })];
-		await service.repairForNote(testActor(), note);
+		await service.anchorRepairer.repairForNote(testActor(), note);
 		expect(anchors.anchors[0]?.revision).toBe(1);
 	});
 
@@ -74,7 +77,7 @@ describe('Note management invariants', () => {
 		const note = noteBuilder({ plainText: 'prefix unique suffix', currentRevision: 2 });
 		notes.notes = [note];
 		anchors.anchors = [anchorBuilder({ quote: 'unique' })];
-		const repaired = await service.repairForNote(testActor(), note);
+		const repaired = await service.anchorRepairer.repairForNote(testActor(), note);
 		expect(repaired[0]?.revision).toBe(2);
 	});
 });

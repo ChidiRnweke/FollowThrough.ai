@@ -9,7 +9,7 @@ type NoteId = Brand<string, 'NoteId'>;
 
 export type DiagramId = Brand<string, 'DiagramId'>;
 export type DiagramRevisionId = Brand<string, 'DiagramRevisionId'>;
-export type DiagramEtag = Brand<string, 'DiagramEtag'>;
+export type DiagramEtag = string & { readonly __brand: 'DiagramEtag' };
 
 export type DiagramRevisionChange =
 	| { readonly kind: 'save'; readonly source: string; readonly searchableText: string }
@@ -479,3 +479,61 @@ export interface DrawioRevision {
 	readonly source: string;
 	readonly renderedSvg: string;
 }
+
+export type DiagramActionInput =
+	| Omit<Extract<DiagramActionSubmission, { operation: 'generate' }>, 'requestId'>
+	| Omit<Extract<DiagramActionSubmission, { operation: 'revise' }>, 'requestId'>
+	| Omit<Extract<DiagramActionSubmission, { operation: 'convert' }>, 'requestId'>;
+
+export type DiagramTask = { readonly signal?: AbortSignal } & (
+	| {
+			readonly operation: 'generate';
+			readonly noteId: NoteId;
+			readonly selection: TextSelection;
+			readonly instruction?: string;
+	  }
+	| {
+			readonly operation: 'revise';
+			readonly noteId: NoteId;
+			readonly source: string;
+			readonly instruction: string;
+			readonly renderedPngDataUrl?: string;
+	  }
+	| {
+			readonly operation: 'convert';
+			readonly noteId?: NoteId;
+			readonly source: string;
+			readonly instruction?: string;
+	  }
+);
+
+export interface DiagramIcon {
+	/** Iconify's own name, `prefix:icon`, which is what a follow-up query uses. */
+	readonly name: string;
+	/** Ready to drop into a draw.io style as `shape=image;image=<url>`. */
+	readonly url: string;
+}
+
+export const iconSearchResponseSchema = z.object({
+	icons: z.array(z.string()),
+	total: z.number().int().nonnegative(),
+	limit: z.number().int().positive(),
+	start: z.number().int().nonnegative()
+});
+
+export type IconSearchPage = z.infer<typeof iconSearchResponseSchema>;
+
+export const diagramEtag = (id: string, revision: number): DiagramEtag =>
+	`diagram:${id}:r${revision}` as DiagramEtag;
+
+export type DiagramRevisionDecision =
+	| { readonly kind: 'unchanged' }
+	| { readonly kind: 'conflict' }
+	| {
+			readonly kind: 'write';
+			readonly currentRevision: number;
+			readonly publishedRevision: number;
+	  };
+export type DiagramWriteDecision =
+	| { readonly kind: 'unchanged'; readonly diagram: DrawioDiagram }
+	| { readonly kind: 'write'; readonly write: DiagramRevisionWrite };

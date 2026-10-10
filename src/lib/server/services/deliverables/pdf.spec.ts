@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
-import { generatePdf, mermaidSourceHash } from './pdf';
-import { prepareExport } from '$lib/services/deliverables/export-preparation';
+import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
+const pdfRendering = createPdfRendering();
+const generatePdf = pdfRendering.render.bind(pdfRendering);
+import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
+const preparation = new ExportPreparationService();
 import type { ExportInput } from '$lib/models/deliverables';
 
 type GeneratePdfArgs = ExportInput;
@@ -21,7 +25,7 @@ const memoizedGeneratePdf = (input: GeneratePdfArgs): Promise<Buffer> => {
 	});
 	const cached = renderCache.get(key);
 	if (cached) return cached;
-	const rendered = generatePdf(prepareExport(input));
+	const rendered = generatePdf(preparation.prepare(input));
 	renderCache.set(key, rendered);
 	return rendered;
 };

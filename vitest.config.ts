@@ -122,8 +122,9 @@ export default defineConfig({
 						// Drives real svelte-dnd-action drags against the zone geometry of the tree;
 						// dropping into folders broke silently when that geometry drifted.
 						'src/lib/components/projects/project-tree-drop.svelte.spec.ts',
-						'src/lib/client/notes/selection-submissions.svelte.spec.ts',
-						'src/lib/client/notes/diagram-submissions.svelte.spec.ts',
+						'src/lib/controllers/notes/actions.svelte.spec.ts',
+						'src/lib/controllers/notes/selection-submissions.svelte.spec.ts',
+						'src/lib/controllers/notes/diagram-submissions.svelte.spec.ts',
 						'src/lib/client/notes/action-run-storage.svelte.spec.ts',
 						// Feeds real editor JSON through `parseProseMirrorDocument` and asserts
 						// `attrs: { textAlign: null }`. It would have caught the strict-schema
@@ -144,16 +145,16 @@ export default defineConfig({
 						'src/lib/client/sync/database.svelte.spec.ts',
 						'src/lib/client/clipboard/transfer.svelte.spec.ts',
 						'src/lib/client/markdown/rendering.svelte.spec.ts',
-						'src/lib/client/diagrams/mermaid-rendering.svelte.spec.ts',
+						'src/lib/controllers/diagrams/mermaid.svelte.spec.ts',
 						'src/lib/components/edra/commands/cut-editor.svelte.spec.ts',
 						'src/lib/components/edra/commands/table-editing.svelte.spec.ts',
 						'src/lib/client/sync/workspace-local-repository.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-cache.svelte.spec.ts',
 						'src/lib/client/sync/storage-recovery.svelte.spec.ts',
 						'src/lib/client/sync/indexeddb-outbox.svelte.spec.ts',
-						'src/lib/stores/workspace/resources.svelte.spec.ts',
-						'src/lib/stores/workspace/drafts.svelte.spec.ts',
-						'src/lib/stores/search/global-search.svelte.spec.ts',
+						'src/lib/controllers/workspace/resources.svelte.spec.ts',
+						'src/lib/controllers/workspace/drafts.svelte.spec.ts',
+						'src/lib/controllers/search/global-search.svelte.spec.ts',
 						'src/lib/components/search/global-search-panel.svelte.spec.ts',
 						'src/lib/components/settings/trust-policy-control.svelte.spec.ts',
 						'src/lib/stores/agent/replay.svelte.spec.ts',

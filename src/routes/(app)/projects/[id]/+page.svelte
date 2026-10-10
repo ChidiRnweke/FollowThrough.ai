@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';
@@ -13,15 +13,12 @@
 		FtFolderPlus as FolderPlus,
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
-	import { projectExportEntries } from '$lib/services/projects/export-entries';
+	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { type SectionNumberingLevel } from '$lib/models/notes';
-	import {
-		sectionNumberingLevelFor,
-		sectionNumberingOverrideFor
-	} from '$lib/services/notes/section-numbering';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
@@ -47,7 +44,7 @@
 	);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
-	let renameDraft = $state<WorkspaceDraft<'projects'> | null>(null);
+	let renameDraft = $state<ProjectNameEditor<'projects'> | null>(null);
 	let exportDefaultsOpen = $state(false);
 	let importOpen = $state(false);
 	let exportOpen = $state(false);
@@ -56,7 +53,7 @@
 
 	// The whole project, folders preserved as folders inside the zip. A project with no
 	// notes in it gets no menu item rather than a dialog with nothing to offer.
-	const projectEntries = $derived(view ? projectExportEntries(view.tree) : []);
+	const projectEntries = $derived(view ? projectTreeController.exportEntries(view.tree) : []);
 
 	function startExport(sourceTitle: string, entries: readonly ProjectExportEntry[]): void {
 		exportSourceTitle = sourceTitle;
@@ -97,10 +94,7 @@
 	}
 
 	async function changeSectionNumberingDefault(level: SectionNumberingLevel): Promise<void> {
-		const output = await projectActions.setSectionNumberingDefault(
-			data.projectId,
-			sectionNumberingOverrideFor(level)
-		);
+		const output = await projectActions.setSectionNumberingDefault(data.projectId, level);
 		if (!output) toast.error('Could not update the project default. Try again.');
 	}
 </script>
@@ -146,7 +140,7 @@
 							<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
 							<DropdownMenu.SubContent>
 								<DropdownMenu.RadioGroup
-									value={sectionNumberingLevelFor(project.sectionNumberingDefault)}
+									value={noteDocuments.numberingLevel(project.sectionNumberingDefault)}
 									onValueChange={(value) =>
 										void changeSectionNumberingDefault(value as SectionNumberingLevel)}
 								>

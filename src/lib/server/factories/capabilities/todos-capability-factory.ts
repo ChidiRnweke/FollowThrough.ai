@@ -1,3 +1,10 @@
+import { TodoBoardExportService, type TodoBoardExport } from '$lib/services/todos/board-export';
+import {
+	TodoEditingRulesService,
+	type TodoCreationRules,
+	type TodoEditingRules
+} from '$lib/services/todos/edits';
+import { TodoPresentationService, type TodoPresentation } from '$lib/services/todos/presentation';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
@@ -6,14 +13,38 @@ import type {
 	SourceAnchorRepository
 } from '$lib/server/repositories/provenance';
 import { TodoRecords } from '$lib/server/repositories/todos/postgres/todos';
-import { TodoCatalog } from '$lib/server/services/todos/catalog';
-import { TodoBatchReceipts } from '$lib/server/services/todos/batch-receipts';
+import {
+	TodoCreationService,
+	TodoReadingService,
+	TodoEditingService,
+	TodoLifecycleService,
+	TodoContextService,
+	type TodoCreator,
+	type TodoReader,
+	type TodoEditor,
+	type TodoDeleter,
+	type TodoLister,
+	type WaitingOnFinder,
+	type TodoContextReader
+} from '$lib/server/services/todos/catalog';
+import type { TodoRepository } from '$lib/server/repositories/todos/todos';
+import type { DateTime } from '$lib/models/workspace';
+import {
+	TodoBatchReceipts,
+	type TodoBatchReceiptService
+} from '$lib/server/services/todos/batch-receipts';
 import { TodoBatchReceiptRecords } from '$lib/server/repositories/todos/postgres/batch-receipts';
-import { PromiseDiscovery } from '$lib/server/services/todos/promise-discovery';
+import {
+	PromiseDiscovery,
+	type PromiseExtractor
+} from '$lib/server/services/todos/promise-discovery';
 import { PromiseClassification } from '$lib/server/repositories/todos/classification';
 import { DEFAULT_PROMISE_MODEL } from '$lib/models/todos';
 import type { SelectionGeneration } from '$lib/models/agent';
-import { DeterministicPromiseExtractor } from '$lib/server/services/todos/promise-rules';
+import {
+	DeterministicPromiseExtractor,
+	type IPromiseRules
+} from '$lib/server/services/todos/promise-rules';
 import { operationObserver } from '$lib/server/services/telemetry';
 
 export interface TodosCapabilityInput {
@@ -25,16 +56,24 @@ export interface TodosCapabilityInput {
 }
 
 export interface TodosCapability {
-	readonly catalog: TodoCatalog;
-	readonly batchReceipts: TodoBatchReceipts;
-	readonly promiseExtractor: PromiseDiscovery;
-	readonly promiseRules: DeterministicPromiseExtractor;
+	readonly boardExport: TodoBoardExport;
+	readonly creationRules: TodoCreationRules;
+	readonly editingRules: TodoEditingRules;
+	readonly presentation: TodoPresentation;
+	readonly services: TodoServices;
+	readonly batchReceipts: TodoBatchReceiptService;
+	readonly promiseExtractor: PromiseExtractor;
+	readonly promiseRules: IPromiseRules;
 	readonly promiseGeneration: SelectionGeneration;
 }
 
 export const createTodosCapability = (input: TodosCapabilityInput): TodosCapability => ({
+	boardExport: new TodoBoardExportService(),
+	creationRules: new TodoEditingRulesService(),
+	editingRules: new TodoEditingRulesService(),
+	presentation: new TodoPresentationService(),
 	batchReceipts: new TodoBatchReceipts(new TodoBatchReceiptRecords(input.db)),
-	catalog: new TodoCatalog(
+	services: createTodoServices(
 		new TodoRecords(input.db),
 		input.projects,
 		input.anchors,
@@ -53,3 +92,32 @@ export const createTodosCapability = (input: TodosCapabilityInput): TodosCapabil
 		})
 	)
 });
+
+export interface TodoServices {
+	readonly creator: TodoCreator;
+	readonly reader: TodoReader;
+	readonly editor: TodoEditor;
+	readonly deleter: TodoDeleter;
+	readonly lister: TodoLister;
+	readonly waitingOn: WaitingOnFinder;
+	readonly context: TodoContextReader;
+}
+export const createTodoServices = (
+	todos: TodoRepository,
+	projects: ProjectRepository,
+	anchors: SourceAnchorRepository,
+	notes: NoteRepository,
+	provenance: ProvenanceRepository,
+	clock: () => DateTime = () => new Date().toISOString() as DateTime
+): TodoServices => {
+	const reading = new TodoReadingService(todos);
+	return {
+		creator: new TodoCreationService(todos, projects, anchors, notes, provenance),
+		reader: reading,
+		lister: reading,
+		waitingOn: reading,
+		editor: new TodoEditingService(todos, anchors, notes, provenance),
+		deleter: new TodoLifecycleService(todos, clock),
+		context: new TodoContextService(anchors, notes, provenance)
+	};
+};

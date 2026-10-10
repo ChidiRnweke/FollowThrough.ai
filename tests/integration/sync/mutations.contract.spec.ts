@@ -1,3 +1,15 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
@@ -20,23 +32,36 @@ const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const synchronization = createSyncCapability({ db: database });
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const content = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
-			noteReader: catalog,
-			noteTrash: catalog,
-			noteEditor: catalog,
-			noteSectionNumbering: catalog,
-			noteCreation: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
+			noteReader: catalog.reader,
+			noteTrash: catalog.trash,
+			noteEditor: catalog.editor,
+			noteSectionNumbering: catalog.sectionNumbering,
+			noteCreation: catalog.creator,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
 			noteIndexer: content,
 			anchorRepairer: content,
 			noteLinkReconciler: content
@@ -52,6 +77,8 @@ const setup = async (suffix: string) => {
 		...seeded,
 		workspace: new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
+				todoPresentation: new TodoPresentationService(),
+				memoryPresentation: new MemoryPresentationService(),
 				writeRecovery: synchronization.mutations,
 				transactionRunner
 			})
@@ -192,7 +219,7 @@ describe('guarded note trash actions', () => {
 			baseEtag: current.snapshot.etag,
 			command: { kind: 'restoreNote', noteId: note.id }
 		});
-		const restored = await catalog.get(owner, note.id);
+		const restored = await catalog.reader.get(owner, note.id);
 		expect({ result: result.kind, archivedAt: restored.archivedAt }).toEqual({
 			result: 'applied',
 			archivedAt: undefined

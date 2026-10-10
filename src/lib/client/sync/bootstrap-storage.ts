@@ -5,10 +5,8 @@ import {
 } from '$lib/models/workspace-bootstrap';
 
 export const workspaceBootstrapKey = 'followthrough-workspace-bootstrap-v2';
-export type StoredBootstrap =
-	| { kind: 'absent' }
-	| { kind: 'stored'; value: WorkspaceBootstrap }
-	| { kind: 'corrupt'; message: string };
+export type { StoredBootstrap } from '$lib/models/workspace-bootstrap';
+import type { StoredBootstrap } from '$lib/models/workspace-bootstrap';
 
 /** Only deployment metadata and the active account binding; workspace records live in IndexedDB. */
 export const readStoredBootstrap = (

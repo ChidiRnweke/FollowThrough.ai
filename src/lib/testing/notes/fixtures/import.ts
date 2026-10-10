@@ -1,10 +1,20 @@
+import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
+const noteMarkdown = new NodeNoteMarkdown();
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import AdmZip from 'adm-zip';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import {
-	noteContentFromMarkdown,
-	noteMarkdownFromContent
-} from '$lib/server/services/notes/markdown';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+
 import {
 	readMarkdownArchive,
 	parseMarkdownNote,
@@ -34,16 +44,29 @@ export const importedNotesFixture = () => {
 	const records = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository(records);
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(records, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(records, new InMemoryAnchorRepository(), projects);
 	const consequences = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
-			noteCreation: catalog,
-			noteEditor: catalog,
-			anchorRepairer: catalog,
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			noteCreation: catalog.creator,
+			noteEditor: catalog.editor,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences,
-			markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
+			markdown: noteMarkdown,
 			transactionRunner: new InMemoryTransactionRunner([records, consequences])
 		})
 	);

@@ -1,7 +1,18 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import { DomainError } from '$lib/errors';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
@@ -20,15 +31,28 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 		title: 'Publication rollback contract'
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			notePublisher: catalog,
-			revisionRecorder: catalog
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder
 		})
 	);
 	await context.client`create function reject_contract_note_publication() returns trigger language plpgsql as $$
@@ -41,7 +65,7 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 	await context.client`create trigger reject_contract_note_publication before update on notes for each row execute function reject_contract_note_publication()`;
 	try {
 		await controller
-			.publish(owner, { noteId: note.id, baseEtag: noteEtag(note) })
+			.publish(owner, { noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 			.catch(() => ({ kind: 'failure' }));
 		expect({
 			note: await records.findById(owner, note.id),
@@ -63,15 +87,28 @@ it.each([
 		const writer = connectPostgresTestDatabase(context.url);
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const { catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability({
 			db: database,
 			projects: new ProjectRecords(database)
 		});
 		const controller = new Notes(
 			capabilityDependencies<NotesDependencies>({
+				archiveImport: new NoteArchiveImportService(),
+				patchPreparation: new NotePatchPreparationService(),
+				revisionComparison: new NoteRevisionComparisonService(),
+				todoPresentation: new TodoPresentationService(),
+				textSearch: new NoteTextSearchService(),
+				noteReferences: new NoteReferenceService(),
+				sections: new NoteSectionNumberingService(),
+				noteCreationRules: new NoteLifecycleRulesService(),
+				noteTrashRules: new NoteLifecycleRulesService(),
+				notePublicationRules: new NoteLifecycleRulesService(),
+				noteEditingRules: new NoteEditingRulesService(),
+				notePresentation: new NotePresentationService(),
+				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog,
-				revisionRecorder: catalog
+				notePublisher: catalog.publisher,
+				revisionRecorder: catalog.revisionRecorder
 			})
 		);
 		const locked = Promise.withResolvers<void>();
@@ -88,7 +125,7 @@ it.each([
 			await locked.promise;
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
 			const publishing = controller
-				.publish(owner, { noteId: note.id, baseEtag: noteEtag(note) })
+				.publish(owner, { noteId: note.id, baseEtag: noteEtag(note.id, note.currentRevision) })
 				.then(
 					() => ({ kind: 'published' }),
 					(error) => {

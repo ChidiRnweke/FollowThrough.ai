@@ -3,19 +3,15 @@ import type {
 	Attachment,
 	AttachmentUpload,
 	AttachmentVersion,
-	AttachmentView
+	AttachmentView,
+	OwnedAttachmentUpload,
+	UploadRetentionCursor
 } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId } from '$lib/models/todos';
 
-/** An upload reservation together with the owner needed to scope its removal. */
-export interface OwnedAttachmentUpload {
-	readonly userId: UserId;
-	readonly upload: AttachmentUpload;
-}
-
-export type UploadRetentionCursor = Pick<AttachmentUpload, 'expiresAt' | 'id'>;
+export type { OwnedAttachmentUpload, UploadRetentionCursor } from '$lib/models/attachments';
 
 /** `finalize` is the only path that makes an attachment visible: nothing before it is observable to any reader but the uploader. */
 export interface AttachmentRepository {

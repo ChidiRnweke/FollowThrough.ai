@@ -15,23 +15,23 @@ describe('attachments and the note document revision', () => {
 	// holds it open while a pasted image uploads, so a bump here surfaced to the
 	// user as a conflict dialog on a note only they had touched.
 	it('leaves the revision alone when an upload completes, so an open editor stays current', async () => {
-		const { service, repository, notes } = setup();
+		const { uploads, repository, notes } = setup();
 		const note = noteBuilder({ currentRevision: 7 });
 		notes.notes.push(note);
 		repository.upload = uploadFor(note.id);
 
-		await service.complete(testActor(), UPLOAD_ID);
+		await uploads.complete(testActor(), UPLOAD_ID);
 
 		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
 		expect(notes.revisions).toEqual([]);
 	});
 
 	it('leaves the revision alone when an attachment is removed', async () => {
-		const { service, notes } = setup();
+		const { lifecycle, notes } = setup();
 		const note = noteBuilder({ currentRevision: 7 });
 		notes.notes.push(note);
 
-		await service.remove(testActor(), note.id, 'pasted-diagram.png');
+		await lifecycle.remove(testActor(), note.id, 'pasted-diagram.png');
 
 		expect((await notes.findById(testActor(), note.id))?.currentRevision).toBe(7);
 	});
@@ -44,7 +44,7 @@ describe('removing an attachment without breaking its containing note', () => {
 	});
 
 	it('returns the containing note when its document still embeds the attachment', async () => {
-		const { service, repository, notes } = setup();
+		const { lifecycle, repository, notes } = setup();
 		const note = noteBuilder({
 			title: 'Solution design',
 			document: {
@@ -62,7 +62,7 @@ describe('removing an attachment without breaking its containing note', () => {
 		notes.notes.push(note);
 		repository.found = noteAttachment(note.id);
 
-		const result = await service.removeById(testActor(), ATTACHMENT_ID);
+		const result = await lifecycle.removeById(testActor(), ATTACHMENT_ID);
 
 		expect(result).toEqual({
 			kind: 'referenced-by-note',
@@ -71,7 +71,7 @@ describe('removing an attachment without breaking its containing note', () => {
 	});
 
 	it('allows removal when the attachment endpoint appears only in prose', async () => {
-		const { service, repository, notes } = setup();
+		const { lifecycle, repository, notes } = setup();
 		const note = noteBuilder({
 			document: {
 				type: 'doc',
@@ -85,11 +85,11 @@ describe('removing an attachment without breaking its containing note', () => {
 		});
 		notes.notes.push(note);
 		repository.found = noteAttachment(note.id);
-		expect(await service.removeById(testActor(), ATTACHMENT_ID)).toEqual({ kind: 'removed' });
+		expect(await lifecycle.removeById(testActor(), ATTACHMENT_ID)).toEqual({ kind: 'removed' });
 	});
 
 	it('keeps a referenced attachment downloadable', async () => {
-		const { service, repository, notes } = setup();
+		const { downloads, lifecycle, repository, notes } = setup();
 		const note = noteBuilder({
 			document: {
 				type: 'doc',
@@ -103,29 +103,29 @@ describe('removing an attachment without breaking its containing note', () => {
 		});
 		notes.notes.push(note);
 		repository.found = noteAttachment(note.id);
-		await service.removeById(testActor(), ATTACHMENT_ID);
+		await lifecycle.removeById(testActor(), ATTACHMENT_ID);
 
-		expect(await service.downloadById(testActor(), ATTACHMENT_ID)).toEqual({
+		expect(await downloads.downloadById(testActor(), ATTACHMENT_ID)).toEqual({
 			url: 'https://storage.test/presigned'
 		});
 	});
 
 	it('preserves note attachment bytes after the image leaves the current document', async () => {
-		const { service, repository, notes, storage } = setup();
+		const { lifecycle, repository, notes, storage } = setup();
 		const note = noteBuilder();
 		notes.notes.push(note);
 		repository.found = noteAttachment(note.id);
 
-		await service.removeById(testActor(), ATTACHMENT_ID);
+		await lifecycle.removeById(testActor(), ATTACHMENT_ID);
 
 		expect(storage.objects.has('objects/doc')).toBe(true);
 	});
 
 	it('queues project attachment bytes for removal after commit', async () => {
-		const { service, repository, storage } = setup();
+		const { lifecycle, repository, storage } = setup();
 		repository.found = view('image/png');
 
-		await service.removeById(testActor(), ATTACHMENT_ID);
+		await lifecycle.removeById(testActor(), ATTACHMENT_ID);
 
 		expect({
 			bytes: storage.objects.has('objects/doc'),

@@ -1,3 +1,4 @@
+import type { MermaidAppearance } from '$lib/models/diagrams/mermaid-theme';
 import {
 	lightTokens,
 	darkTokens,
@@ -6,7 +7,7 @@ import {
 } from '$lib/models/diagrams/mermaid-theme';
 
 /** True when the source carries its own colour directives and so ignores the chosen palette. */
-export const diagramKeepsOwnColours = (source: string): boolean =>
+const diagramKeepsOwnColours = (source: string): boolean =>
 	/^\s*(?:classDef|style)\s/m.test(source);
 
 const createThemeVariables = (tokens: MermaidTokens, dark: boolean) => ({
@@ -48,12 +49,12 @@ const createThemeVariables = (tokens: MermaidTokens, dark: boolean) => ({
 	activationBorderColor: tokens.brand
 });
 
-export const mermaidTokensFor = (theme: MermaidTheme): MermaidTokens => ({
+const mermaidTokensFor = (theme: MermaidTheme): MermaidTokens => ({
 	...(theme.base === 'dark' ? darkTokens : lightTokens),
 	...theme.palette
 });
 
-export const createMermaidConfig = (theme: MermaidTheme | boolean) => {
+const createMermaidConfig = (theme: MermaidTheme | boolean) => {
 	const resolved: MermaidTheme =
 		typeof theme === 'boolean' ? { base: theme ? 'dark' : 'light' } : theme;
 	return {
@@ -65,3 +66,23 @@ export const createMermaidConfig = (theme: MermaidTheme | boolean) => {
 		fontFamily: "'Inter Variable', sans-serif"
 	};
 };
+
+export interface MermaidThemeRules {
+	resolve(theme: MermaidTheme | boolean): MermaidAppearance;
+	keepsOwnColours(source: string): boolean;
+}
+export class MermaidThemeService implements MermaidThemeRules {
+	resolve(theme: MermaidTheme | boolean): MermaidAppearance {
+		const resolved: MermaidTheme =
+			typeof theme === 'boolean' ? { base: theme ? 'dark' : 'light' } : theme;
+		const tokens = mermaidTokensFor(resolved);
+		return {
+			config: createMermaidConfig(resolved),
+			tokens,
+			background: resolved.transparent ? undefined : tokens.background
+		};
+	}
+	keepsOwnColours(source: string): boolean {
+		return diagramKeepsOwnColours(source);
+	}
+}

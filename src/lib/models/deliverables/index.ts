@@ -312,3 +312,49 @@ export interface RegenerateArtifactOutput {
 	readonly artifact: Artifact;
 	readonly downloadUrl: string;
 }
+
+/** Immutable local assets supplied to a disposable rendering browser. */
+export interface DiagramRenderResources {
+	readonly mermaidScript: string;
+	readonly fontData: string;
+}
+
+export interface ArtifactFile {
+	readonly name: string;
+	readonly mediaType: string;
+}
+
+export interface BundleFile {
+	/** Folder-relative, extension included. Sanitized here, so callers may pass note titles. */
+	readonly path: string;
+	readonly bytes: Uint8Array;
+}
+
+export interface PdfFontResources {
+	readonly directory: string;
+	readonly files: Readonly<Record<string, Readonly<Record<string, string>>>>;
+	readonly coverage: ReadonlyMap<string, ReadonlySet<number>>;
+}
+
+export type ExportImageReference =
+	| { readonly kind: 'attachment'; readonly source: string; readonly id: string }
+	| { readonly kind: 'external'; readonly source: string };
+export interface ExportAssets {
+	readonly diagrams: readonly ExportDiagramReference[];
+	readonly widgets: readonly string[];
+	readonly images: readonly ExportImageReference[];
+}
+export interface ExportDiagramImages {
+	readonly svgs: Record<string, string>;
+	readonly pngs: Record<string, string>;
+	readonly sizes: Record<string, DiagramSize>;
+}
+
+export interface ExportDownload {
+	readonly url: string;
+	readonly fileCount: number;
+}
+export type ExportSettingsLoad =
+	| { readonly kind: 'ready'; readonly settings: ExportSettings }
+	| { readonly kind: 'failure'; readonly message: string }
+	| { readonly kind: 'superseded' };

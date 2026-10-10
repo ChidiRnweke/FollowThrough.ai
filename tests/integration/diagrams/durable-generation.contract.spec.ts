@@ -1,5 +1,8 @@
+import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
+import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
-import { isTerminalAgentRunStatus } from '$lib/services/agent/run-status';
+import { AgentRunStatusService } from '$lib/services/agent/run-status';
+const runStatus = new AgentRunStatusService();
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -46,7 +49,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Service A calls Service B';
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -65,11 +68,13 @@ const setup = async (suffix: string) => {
 	const requests = new NoteActionRequests(runs, events, conversations);
 	const settlements = new RunSettlements(runs, events);
 	const dependencies = capabilityDependencies<DiagramsDependencies>({
+		generationRules: new DiagramGenerationRuleService(),
 		...fixture,
 		generation: {
 			...fixture.generation,
-			contextNotes: notes.catalog,
+			contextNotes: notes.services.reader,
 			conversations: new ConversationArchive(conversations),
+			conversationMessages: new ConversationArchive(conversations),
 			runs: new AgentRunLedger(runs),
 			runContext: new DiagramRunContext(runs),
 			provenance: notes.provenance
@@ -77,13 +82,14 @@ const setup = async (suffix: string) => {
 		transactionRunner,
 		selectionOrigins: notes.selectionOrigins,
 		drawioXmlValidator: new DrawioXmlValidator(),
-		suggestionCreator: suggestions.inbox,
+		suggestionCreator: suggestions.creator,
 		noteActionRequests: requests,
 		runSettlements: settlements,
 		runEvents: { notify: () => {} }
 	});
 	const agent = new Agent(
 		capabilityDependencies<AgentDependencies>({
+			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
 			events,
@@ -103,7 +109,7 @@ const setup = async (suffix: string) => {
 	const finished = async (runId: AgentRunId) => {
 		await vi.waitFor(async () => {
 			const run = await runs.findById(seeded.owner, runId);
-			if (!run || !isTerminalAgentRunStatus(run.status)) throw new Error('Diagram has not settled');
+			if (!run || !runStatus.isTerminal(run.status)) throw new Error('Diagram has not settled');
 		});
 	};
 	return {

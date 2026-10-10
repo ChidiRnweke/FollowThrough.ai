@@ -1,25 +1,17 @@
 <script lang="ts">
-	import { NoteHistory } from '$lib/stores/notes/history.svelte';
-	import type { DiagramSuggestion, Suggestion } from '$lib/models/suggestions';
+	import { createNoteHistory } from '$lib/factories/notes/history';
+	import type { DiagramSuggestion } from '$lib/models/suggestions';
 
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
-	import type { NoteView } from '$lib/client/notes/view';
+	import type { NoteView } from '$lib/models/workspace-views';
 
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
-	import { noteCommand, noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
+	import { noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import type {
-		ConvertInlineMermaidOutput,
-		DrawioDiagram,
-		GenerateMermaidDiagramOutput,
-		ReviseInlineMermaidOutput
-	} from '$lib/models/diagrams';
-	import type { ExtractPromisesOutput } from '$lib/models/todos';
-	import type { FindReferencesOutput } from '$lib/models/references';
-	import type { RelateSelectionOutput } from '$lib/models/relationships';
+	import type { DrawioDiagram } from '$lib/models/diagrams';
 	import type {
 		NoteId,
 		NoteRevisionId,
@@ -28,21 +20,19 @@
 	} from '$lib/models/notes';
 
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { sectionNumberingOverrideFor } from '$lib/services/notes/section-numbering';
+	import { createNoteDraftEditing } from '$lib/factories/notes/draft-editing';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
 	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
-	import { noteActions } from '$lib/stores/notes/note-actions.svelte';
-	import {
-		noteActionRunsFor,
-		type NoteActionContext
-	} from '$lib/stores/notes/note-action-runs.svelte';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { noteActions } from '$lib/factories/notes/actions';
+	import { noteActionTracking } from '$lib/factories/notes/action-runs';
+	import type { NoteActionContext } from '$lib/models/agent';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
-	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
 	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
@@ -68,7 +58,7 @@
 	}: {
 		view: NoteView;
 		shell: ShellContext;
-		draft: WorkspaceDraft<'notes'>;
+		draft: WorkspaceDraftController<'notes'>;
 		editorSelection: EditorSelectionStore;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
@@ -83,14 +73,7 @@
 
 	let exportOpen = $state(false);
 	let historyOpen = $state(false);
-	const history = untrack(
-		() =>
-			new NoteHistory(
-				view.note.id,
-				async (noteId) => (await listNoteRevisions(noteId)).revisions,
-				async (noteId, revisionId) => (await getNoteRevision({ noteId, revisionId })).revision
-			)
-	);
+	const history = untrack(() => createNoteHistory(view.note.id));
 	$effect(() => {
 		if (!historyOpen) history.cancel();
 	});
@@ -104,12 +87,13 @@
 	let outline = $state<readonly OutlineHeading[]>([]);
 	let activeHeading = $state<string | undefined>(undefined);
 	let utilityHeaderHeight = $state(0);
-	const editorSession = untrack(() => new EditorSession(() => draft.active));
+	const editorSession = untrack(() => createEditorSession(() => draft.active));
 	const dirty = $derived(editorSession.dirty);
 	const saveFailed = $derived(editorSession.failure !== null);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
-	const actionRuns = noteActionRunsFor(untrack(() => view.note.id));
+	const draftEditing = untrack(() => createNoteDraftEditing(view.note.id, draft));
+	const actionRuns = noteActionTracking.open(untrack(() => view.note.id));
 	const activeAction = $derived(
 		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
 	);
@@ -123,10 +107,9 @@
 	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
-		const enabled = sectionNumberingOverrideFor(level);
-		const result = await draft.stage({ kind: 'noteNumbering', noteId: note.id, enabled });
+		const result = await draftEditing.numbering(level);
 		if (result.kind === 'failure') toast.error(result.message);
-		else note = { ...note, sectionNumbering: enabled };
+		else note = { ...note, sectionNumbering: result.value.sectionNumbering };
 	}
 
 	/**
@@ -254,18 +237,12 @@
 			.save(
 				async () => {
 					if (!editorRef) return { kind: 'failure', message: 'The editor is unavailable' };
-					const result = await draft.stage(
-						noteCommand({
-							...note,
-							title: note.title.trim(),
-							document: editorRef.getDocument(),
-							plainText: editorRef.getPlainText()
-						})
-					);
-					if (result.kind === 'failure') return result;
-					return result.value
-						? { kind: 'saved', value: result.value }
-						: { kind: 'failure', message: 'The note no longer exists' };
+					return draftEditing.save({
+						...note,
+						title: note.title.trim(),
+						document: editorRef.getDocument(),
+						plainText: editorRef.getPlainText()
+					});
 				},
 				(value, unchanged) => {
 					note = unchanged
@@ -295,14 +272,11 @@
 			if (dirty) return;
 		}
 		const isCurrent = editorSession.checkpoint();
-		const toggled = { ...note, isPinned: !note.isPinned };
-		const record = await draft.stage(
-			noteCommand({
-				...toggled,
-				document: editorRef.getDocument(),
-				plainText: editorRef.getPlainText()
-			})
-		);
+		const record = await draftEditing.togglePin({
+			...note,
+			document: editorRef.getDocument(),
+			plainText: editorRef.getPlainText()
+		});
 		if (record.kind === 'saved' && record.value) {
 			if (!isCurrent()) return;
 			note = { ...record.value };
@@ -398,7 +372,8 @@
 	 */
 	function registerActionHandlers(): void {
 		actionRuns.on('promises', async (result) => {
-			const output = result as ExtractPromisesOutput<Suggestion>;
+			if (result.action !== 'promises') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.createdTodos.length > 0) {
 				toast.success(`${output.createdTodos.length} todo(s) created from explicit promises`);
 				await workspaceSession.synchronize();
@@ -406,11 +381,13 @@
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('relate', (result) => {
-			const output = result as RelateSelectionOutput<Suggestion>;
+			if (result.action !== 'relate') throw new Error('Unexpected note action result');
+			const output = result.output;
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('reference', async (result) => {
-			const output = result as FindReferencesOutput<Suggestion>;
+			if (result.action !== 'reference') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.outcome === 'nothing_relevant') {
 				toast.info('Nothing sufficiently relevant found.');
 				return;
@@ -419,7 +396,8 @@
 			reportAdded(output.suggestions.filter((s) => s.status === 'proposed').length);
 		});
 		actionRuns.on('diagram', async (result, context, runId) => {
-			const output = result as GenerateMermaidDiagramOutput<Suggestion>;
+			if (result.action !== 'diagram') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.suggestion.kind !== 'diagram') return;
 			const live = editorRef?.consumeInsertionPoint(runId);
 			// The live mapped point wins; a refresh leaves no plugin state behind, so
@@ -440,13 +418,15 @@
 			toast.success('Diagram inserted — undo with Ctrl+Z');
 		});
 		actionRuns.on('convert', (result) => {
-			const output = result as ConvertInlineMermaidOutput<Suggestion>;
+			if (result.action !== 'convert') throw new Error('Unexpected note action result');
+			const output = result.output;
 			if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 				return;
 			toast.success('draw.io conversion ready to review');
 		});
 		actionRuns.on('revise', (result, context) => {
-			const output = result as ReviseInlineMermaidOutput;
+			if (result.action !== 'revise') throw new Error('Unexpected note action result');
+			const output = result.output;
 			const previous = typeof context.source === 'string' ? context.source : undefined;
 			// On the live path the Mermaid node view applies this itself from the
 			// promise; this branch is the one a refresh leaves behind.
@@ -487,7 +467,8 @@
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram revision failed. Try again.');
 		toast.success('Diagram revised — undo with Ctrl+Z');
-		return outcome.result as ReviseInlineMermaidOutput;
+		if (outcome.result.action !== 'revise') throw new Error('Unexpected diagram revision result');
+		return outcome.result.output;
 	}
 
 	async function convertMermaid(source: string, instruction?: string): Promise<DiagramSuggestion> {
@@ -499,7 +480,9 @@
 		if (outcome.status === 'cancelled') throw new Error('Diagram conversion cancelled.');
 		if (outcome.status !== 'completed')
 			throw new Error(outcome.message ?? 'Diagram conversion failed. Try again.');
-		const output = outcome.result as ConvertInlineMermaidOutput<Suggestion>;
+		if (outcome.result.action !== 'convert')
+			throw new Error('Unexpected diagram conversion result');
+		const output = outcome.result.output;
 		if (output.suggestion.kind !== 'diagram' || output.suggestion.payload.kind !== 'drawio')
 			throw new Error('Diagram conversion failed. Try again.');
 		return output.suggestion;

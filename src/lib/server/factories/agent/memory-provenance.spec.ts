@@ -1,9 +1,12 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it } from 'vitest';
 import { AgentTools, McpTools } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { InMemoryMemoryEntryRepository } from '$lib/testing/memory/fakes/in-memory-memory-repository';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -50,17 +53,19 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 				};
 	provenance.provenance = [origin];
 	const entries = new InMemoryMemoryEntryRepository();
-	const library = new MemoryLibrary(entries, new InMemoryProjectRepository(), provenance);
+	const library = createMemoryServices(entries, new InMemoryProjectRepository(), provenance);
 	const suggestions = new InMemorySuggestions();
 	const effects = new InMemorySuggestionEffects();
 	const search = new InMemorySearchRepository();
 	const embeddings = new InMemoryEmbeddingClient();
-	const index = new ContentIndex(search, embeddings.model);
+	const index = createContentIndex(search, embeddings.model);
 	const trust = new InMemoryTrustPolicyEvaluator();
 	trust.autoAccept = trusted;
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
-			memoryChanges: library,
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryChanges: library.changes,
 			suggestionCreator: suggestions,
 			suggestionAccepter: suggestions,
 			suggestionEffects: effects,
@@ -75,6 +80,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const tools =
 		surface === 'agent'
 			? new AgentTools(
+					testTokenizer,
 					factory,
 					actor,
 					'auto_accept',
@@ -87,7 +93,13 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 					new InMemoryToolRetriever(),
 					{ isEnabled: () => true }
 				)
-			: new McpTools(factory, actor, { provenanceId: origin.id }, { isEnabled: () => true });
+			: new McpTools(
+					testTokenizer,
+					factory,
+					actor,
+					{ provenanceId: origin.id },
+					{ isEnabled: () => true }
+				);
 	const tool = tools.definitions().find((item) => item.name === 'propose_memory_change');
 	if (!tool) throw new Error('Memory proposal tool is missing');
 	const propose = () =>

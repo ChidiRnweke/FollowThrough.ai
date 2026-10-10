@@ -20,7 +20,6 @@ import {
 import type {
 	NoteAttachmentRestorer,
 	NoteEditor,
-	NoteIndexer,
 	NotePublisher,
 	NoteReader,
 	NoteSectionNumberingEditor,
@@ -29,8 +28,10 @@ import type {
 	NoteRevisionReader,
 	NoteRevisionRecorder,
 	SourceAnchorRepairer
-} from '$lib/server/services/notes/contracts';
-import type { NoteLinkReconciler } from '$lib/server/services/relationships/contracts';
+} from '$lib/server/services/notes/catalog';
+import type { NoteIndexer } from '$lib/server/services/notes/contracts';
+
+import type { NoteLinkReconciler } from '$lib/server/services/relationships/graph';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant

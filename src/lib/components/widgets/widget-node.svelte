@@ -7,7 +7,7 @@
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { FtExternal as OpenIcon } from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import WidgetView from './widget-view.svelte';
 	import { widgetSources } from '$lib/stores/widgets/widget-sources.svelte';

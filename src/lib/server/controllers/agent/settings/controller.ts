@@ -1,30 +1,30 @@
-import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
-import { DEFAULT_AGENT_MAX_TURNS, type WebResearchSettings } from '$lib/models/agent';
-import {
-	configuredAgentModels,
-	configuredChatModels,
-	modelChoiceIssue,
-	resolveDefaultAgentModel,
-	resolveDefaultVisionModel
+import type {
+	IAgentModelSelectionService,
+	IAgentModelChoiceService
 } from '$lib/services/agent/model-selection';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 import {
-	validateAgentPreferenceUpdate,
-	applyAgentPreferenceUpdate
-} from '$lib/services/agent/preferences';
+	DEFAULT_AGENT_MAX_TURNS,
+	CHAT_WEB_SEARCH_DEFAULTS,
+	type WebResearchOptions
+} from '$lib/models/agent';
+
+import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	AgentPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
 import type { AgentModelDefaults } from '$lib/models/agent/model-label';
 import { ValidationError } from '$lib/errors';
 import type {
 	AgentModelCatalog,
-	AgentPreferenceCatalog
+	AgentPreferenceEditor
 } from '$lib/server/services/agent/runs/preferences';
 
 /**
@@ -67,17 +67,21 @@ export interface AgentSettingsController {
 }
 
 export interface AgentSettingsDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	readonly preferenceEditing: AgentPreferenceEditing;
+	readonly modelSelection: IAgentModelSelectionService;
+	readonly modelChoices: IAgentModelChoiceService;
+	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
-	preferences: Pick<AgentPreferenceCatalog, 'get' | 'getForWrite' | 'defaults' | 'persist'>;
+	preferences: AgentPreferenceEditor;
 	now: () => DateTime;
 	models: AgentModelCatalog;
 	/** Deployment fallback chat model when the user has not chosen one. */
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
-	webSearchDefaults: WebResearchSettings;
+	readonly runSettings: AgentRunSettings;
+	webSearchOverrides: WebResearchOptions;
 	agentAvailable: boolean;
 }
 
@@ -129,40 +133,54 @@ export class AgentSettings implements AgentSettingsController {
 			choices.push({ modelId: input.attachmentVisionModel, role: 'vision' });
 		if (input.inlineModel) choices.push({ modelId: input.inlineModel, role: 'generation' });
 		if (choices.length > 0) {
-			const models = configuredAgentModels(
+			const models = this.dependencies.modelChoices.configuredAgentModels(
 				await this.dependencies.models.list(),
 				this.modelDefaults()
 			);
 			for (const choice of choices) {
-				const issue = modelChoiceIssue(models, choice.modelId, choice.role);
+				const issue = this.dependencies.modelChoices.modelChoiceIssue(
+					models,
+					choice.modelId,
+					choice.role
+				);
 				if (issue) throw new ValidationError(issue);
 			}
 		}
-		validateAgentPreferenceUpdate(input);
+		this.dependencies.preferenceEditing.validate(input);
 		return this.dependencies.transactionRunner.run(async () => {
 			const stored = await this.dependencies.preferences.getForWrite(actor);
 			const timestamp = this.dependencies.now();
 			const current = stored ?? this.dependencies.preferences.defaults(actor, timestamp);
-			const preferences = applyAgentPreferenceUpdate(current, input, timestamp);
+			const preferences = this.dependencies.preferenceEditing.apply(current, input, timestamp);
 			return this.dependencies.preferences.persist(actor, preferences);
 		});
 	}
 
 	async listModels(_actor: ActorContext): Promise<readonly AgentModel[]> {
 		void _actor;
-		return configuredChatModels(await this.dependencies.models.list(), this.modelDefaults());
+		return this.dependencies.modelChoices.configuredChatModels(
+			await this.dependencies.models.list(),
+			this.modelDefaults()
+		);
 	}
 
 	async bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap> {
 		const agentDefaults = this.modelDefaults();
-		const agentModels = configuredChatModels(await this.dependencies.models.list(), agentDefaults);
+		const webSearch = this.dependencies.runSettings.research(
+			this.dependencies.webSearchOverrides,
+			CHAT_WEB_SEARCH_DEFAULTS
+		);
+		const agentModels = this.dependencies.modelChoices.configuredChatModels(
+			await this.dependencies.models.list(),
+			agentDefaults
+		);
 		return {
 			accountId: actor.userId,
 			agentDefaults,
 			agentModels,
 			numericDefaults: {
-				webSearchMaxResults: this.dependencies.webSearchDefaults.maxResults,
-				webSearchMaxTotalResults: this.dependencies.webSearchDefaults.maxTotalResults,
+				webSearchMaxResults: webSearch.maxResults,
+				webSearchMaxTotalResults: webSearch.maxTotalResults,
 				agentMaxTurns: DEFAULT_AGENT_MAX_TURNS
 			},
 			agentAvailable: this.dependencies.agentAvailable
@@ -171,16 +189,28 @@ export class AgentSettings implements AgentSettingsController {
 
 	private modelDefaults(): AgentModelDefaults {
 		return {
-			chatModelId: resolveDefaultAgentModel({}, this.dependencies.defaultModel),
-			visionModelId: resolveDefaultVisionModel({}, this.dependencies.defaultVisionModel)
+			chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+				{},
+				this.dependencies.defaultModel
+			),
+			visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+				{},
+				this.dependencies.defaultVisionModel
+			)
 		};
 	}
 
 	async resolveDefaults(actor: ActorContext): Promise<AgentModelDefaults> {
 		const preferences = await this.dependencies.preferences.get(actor);
 		return {
-			chatModelId: resolveDefaultAgentModel(preferences, this.dependencies.defaultModel),
-			visionModelId: resolveDefaultVisionModel(preferences, this.dependencies.defaultVisionModel)
+			chatModelId: this.dependencies.modelSelection.resolveDefaultAgentModel(
+				preferences,
+				this.dependencies.defaultModel
+			),
+			visionModelId: this.dependencies.modelSelection.resolveDefaultVisionModel(
+				preferences,
+				this.dependencies.defaultVisionModel
+			)
 		};
 	}
 }

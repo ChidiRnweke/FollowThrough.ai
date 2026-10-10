@@ -1,65 +1,88 @@
+import type { TokenCounter } from '$lib/models/tokenization';
 import { createHash } from 'node:crypto';
-import type { ConversationId, PersistedSessionItem } from '$lib/models/agent';
+import type { ConversationId, PersistedSessionItem, SessionJson } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentFileRepository } from '$lib/server/repositories/agent-files/agent-files';
 
 /** Reuses the measured boundary already enforced for attached context notes. */
 const REPLAY_FILE_THRESHOLD_TOKENS = 4000;
-const DIAGRAM_TOOLS = new Set(['create_diagram', 'edit_diagram']);
+const isDiagramWrite = (name: string): boolean =>
+	name === 'create_diagram' || name === 'edit_diagram';
 
 const safeSegment = (value: string): string => {
 	const safe = value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
 	return safe.length > 0 ? safe : 'content';
 };
 
-export class AgentReplayVirtualizer {
-	constructor(
-		private readonly files: AgentFileRepository,
-		private readonly countTokens: (text: string) => number
-	) {}
-
-	async virtualize(
+type ReplayRecord = Extract<
+	PersistedSessionItem,
+	{ type: 'function_call_result' | 'user_message' | 'assistant_message' }
+>;
+type ReplayCall = Extract<PersistedSessionItem, { type: 'function_call' }>;
+export type ReplayPreparation =
+	| { readonly kind: 'unchanged'; readonly item: PersistedSessionItem }
+	| { readonly kind: 'arguments'; readonly item: ReplayCall }
+	| { readonly kind: 'record'; readonly item: ReplayRecord };
+export type ReplayContent =
+	| { readonly kind: 'arguments'; readonly item: ReplayCall; readonly value: SessionJson }
+	| { readonly kind: 'record'; readonly item: ReplayRecord };
+export interface ReplayVirtualization {
+	prepare(item: PersistedSessionItem): ReplayPreparation;
+	apply(
 		actor: ActorContext,
 		conversationId: ConversationId,
-		item: PersistedSessionItem
-	): Promise<PersistedSessionItem> {
-		// `reasoning` and `unrecognised` are left alone: the first is the model's own
-		// scratch text and the second is a shape this code did not understand.
+		content: ReplayContent
+	): Promise<PersistedSessionItem>;
+}
+export class AgentReplayVirtualizer implements ReplayVirtualization {
+	constructor(
+		private readonly files: AgentFileRepository,
+		private readonly tokens: TokenCounter
+	) {}
+	prepare(item: PersistedSessionItem): ReplayPreparation {
 		switch (item.type) {
 			case 'function_call':
-				if (DIAGRAM_TOOLS.has(item.name)) return item;
-				return {
-					...item,
-					arguments: JSON.stringify(
-						await this.walk(
-							actor,
-							conversationId,
-							// The tool's own payload, which the session-item union does not
-							// claim to know. `unknown` is the honest type for it here.
-							JSON.parse(item.arguments) as unknown,
-							safeSegment(item.callId),
-							'arguments'
-						)
-					)
-				};
+				return isDiagramWrite(item.name)
+					? { kind: 'unchanged', item }
+					: { kind: 'arguments', item };
 			case 'function_call_result':
-				if (DIAGRAM_TOOLS.has(item.name)) return item;
-				return this.walk(actor, conversationId, item, safeSegment(item.callId), 'item');
+				return isDiagramWrite(item.name) ? { kind: 'unchanged', item } : { kind: 'record', item };
 			case 'user_message':
 			case 'assistant_message':
-				return this.walk(
-					actor,
-					conversationId,
-					item,
-					// A message carries no call id. Hashing it is not a fallback for a
-					// missing fact — it is the only stable name a message has, and it is
-					// what the stored file path is keyed by.
-					safeSegment(createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 16)),
-					'message'
-				);
+				return { kind: 'record', item };
 			default:
-				return item;
+				return { kind: 'unchanged', item };
 		}
+	}
+	async apply(
+		actor: ActorContext,
+		conversationId: ConversationId,
+		content: ReplayContent
+	): Promise<PersistedSessionItem> {
+		if (content.kind === 'arguments')
+			return {
+				...content.item,
+				arguments: JSON.stringify(
+					await this.walk(
+						actor,
+						conversationId,
+						content.value,
+						safeSegment(content.item.callId),
+						'arguments'
+					)
+				)
+			};
+		const item = content.item;
+		if (item.type === 'function_call_result')
+			return this.walk(actor, conversationId, item, safeSegment(item.callId), 'item');
+		// A message has no call id; its content hash is the stable storage identity.
+		return this.walk(
+			actor,
+			conversationId,
+			item,
+			safeSegment(createHash('sha256').update(JSON.stringify(item)).digest('hex').slice(0, 16)),
+			'message'
+		);
 	}
 
 	private async walk<T>(
@@ -70,7 +93,7 @@ export class AgentReplayVirtualizer {
 		location: string
 	): Promise<T> {
 		if (typeof value === 'string') {
-			if (this.countTokens(value) <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
+			if (this.tokens.count(value) <= REPLAY_FILE_THRESHOLD_TOKENS) return value;
 			const checksum = createHash('sha256').update(value).digest('hex');
 			const category = location.startsWith('message.') ? 'history' : 'tool-results';
 			const path = `/conversations/${conversationId}/${category}/${callId}/${safeSegment(location)}-${checksum.slice(0, 12)}.txt`;

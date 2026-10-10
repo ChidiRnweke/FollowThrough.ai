@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
+	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { untrack } from 'svelte';
 	import type { ProjectId } from '$lib/models/projects';
 	import type { TodoId } from '$lib/models/todos';
@@ -9,7 +9,7 @@
 	import ImageZoom from '$lib/components/shared/image-zoom.svelte';
 	import { toast } from 'svelte-sonner';
 	import { todoUpdates } from '$lib/stores/todos/todo-updates.svelte';
-	import { uploadTodoScreenshot } from '../screenshot-upload';
+	import { attachmentsController } from '$lib/factories/attachments/capability';
 	import { insertAtCaret, screenshotMarkdown, screenshotsFrom } from '../screenshot-markdown';
 
 	let {
@@ -25,7 +25,7 @@
 		return editor;
 	});
 
-	const editorSession = new EditorSession(() => resourceDraft.active);
+	const editorSession = createEditorSession(() => resourceDraft.active);
 	$effect(() => () => editorSession.close());
 	const initialValue = (): string => value;
 	let saved = $state(initialValue());
@@ -105,7 +105,7 @@
 		uploading = true;
 		try {
 			for (const file of files) {
-				const url = await uploadTodoScreenshot(todoId, projectId, file);
+				const url = await attachmentsController.uploadScreenshot(todoId, projectId, file);
 				const caretStart = textarea?.selectionStart ?? draft.length;
 				const caretEnd = textarea?.selectionEnd ?? draft.length;
 				const next = insertAtCaret(

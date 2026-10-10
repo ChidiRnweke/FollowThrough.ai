@@ -7,7 +7,8 @@ import {
 	testNow,
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
-import { RunPreparation, RunPreparationCancelled } from './preparation';
+import { RunPreparation } from './preparation';
+import { RunPreparationCancelled } from '$lib/errors';
 
 const context = { contextNotes: [], contextResources: [], skills: { items: [] } };
 const setup = async (status: 'queued' | 'running' | 'cancelling' | 'cancelled' = 'running') => {

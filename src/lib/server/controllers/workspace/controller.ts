@@ -1,4 +1,4 @@
-import { assembleTodoView } from '$lib/services/todos/presentation';
+import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodoView } from '$lib/models/todos';
 import type { SkillSummary } from '$lib/models/skills';
 import type { NoteSummary } from '$lib/models/notes';
@@ -18,21 +18,20 @@ import type {
 	TodayView as AggregateTodayView
 } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
-import { pendingMemoryNotifications } from '$lib/services/memory/attention';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import { assembleToday } from '$lib/services/workspace/today';
-import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
-import type { ProjectLister } from '$lib/server/services/projects/contracts';
+import type { NoteTreeReader } from '$lib/server/services/notes/catalog';
+
+import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
-import type {
-	SuggestionExpirer,
-	SuggestionLister
-} from '$lib/server/services/suggestions/contracts';
+import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
+import type { SkillFinder } from '$lib/server/services/skills/library';
+import type { SuggestionExpirer, SuggestionLister } from '$lib/server/services/suggestions/inbox';
 import type {
 	TodoLister,
 	TodoContextReader,
 	WaitingOnFinder
-} from '$lib/server/services/todos/contracts';
+} from '$lib/server/services/todos/catalog';
 import type { UserReader } from '$lib/server/services/identity/users';
 
 /**
@@ -57,6 +56,8 @@ export interface WorkspaceController {
 	getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView>;
 }
 export interface WorkspaceDependencies {
+	readonly todoPresentation: TodoPresentation;
+	readonly memoryPresentation: IMemoryPresentationService;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
 	transactionRunner: TransactionRunner;
 	writeRecovery: SyncWriteRecovery;
@@ -110,7 +111,10 @@ export class Workspace implements WorkspaceController {
 			noteTree,
 			skills,
 			pendingSuggestionCount: pendingSuggestions.length,
-			pendingMemoryNotifications: pendingMemoryNotifications(projects, pendingSuggestions)
+			pendingMemoryNotifications: this.dependencies.memoryPresentation.pendingNotifications(
+				projects,
+				pendingSuggestions
+			)
 		};
 	}
 	async getTodayView(actor: ActorContext, input: GetTodayViewInput): Promise<TodayView> {
@@ -128,7 +132,9 @@ export class Workspace implements WorkspaceController {
 			...due,
 			...waiting
 		]);
-		const views = contexts.map((context) => assembleTodoView(context.todo, context));
+		const views = contexts.map((context) =>
+			this.dependencies.todoPresentation.view(context.todo, context)
+		);
 		return assembleToday({
 			today: input.today,
 			due: views.slice(0, due.length),

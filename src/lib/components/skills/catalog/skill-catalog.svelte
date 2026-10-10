@@ -12,7 +12,7 @@
 		FtPlus as Plus,
 		FtChevronRight as ChevronRight
 	} from '$lib/components/icons';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { goto } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';

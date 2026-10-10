@@ -1,3 +1,8 @@
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
 import type { Database } from '$lib/server/db';
@@ -10,7 +15,7 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { BuiltInSkills } from '$lib/server/services/skills/built-ins';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definitions';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -25,14 +30,19 @@ const controller = (
 	const projects = new ProjectRecords(database);
 	const notes = new NoteRecords(database);
 	const skills = new SkillRecords(database);
-	const library = new SkillLibrary(skills, notes, new ProvenanceRecords(database));
+	const library = createSkillServices(skills, notes, new ProvenanceRecords(database));
 	return new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
 			builtInSkills: new BuiltInSkills(projects, notes, skills, definitions),
-			skillFinder: library,
-			skillEditor: library,
-			skillUsageLister: library
+			skillFinder: library.finder,
+			skillEditor: library.editor,
+			skillUsageLister: library.usageLister
 		})
 	);
 };

@@ -1,15 +1,10 @@
-import { z } from 'zod';
 import { formulaFunctions } from '$lib/models/widget-formulas';
 import {
 	widgetActions,
 	widgetSourceKinds,
 	widgetTemplates,
-	type WidgetCatalog
+	type WidgetCatalogDescription
 } from '$lib/models/widgets';
-
-/** A component's props as compact JSON Schema, which is the form a model reads most reliably. */
-const propsSchema = (props: z.ZodObject): string =>
-	JSON.stringify(z.toJSONSchema(props, { io: 'input', unrepresentable: 'any' }));
 
 /**
  * What an agent needs to write a widget this catalog accepts (ADR 0043). It is generated from the
@@ -17,7 +12,7 @@ const propsSchema = (props: z.ZodObject): string =>
  * json-render's own `catalog.prompt()` is not used: it describes custom actions, `watch` and
  * other features this catalog leaves out on purpose.
  */
-export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
+const widgetCatalogPrompt = (catalog: WidgetCatalogDescription): string =>
 	[
 		`# Widget catalog, version ${catalog.version}`,
 		'',
@@ -61,7 +56,7 @@ export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
 			`### ${name}`,
 			definition.description,
 			definition.slots.length > 0 ? 'Renders its children.' : 'A leaf: `children` must be `[]`.',
-			`Props: ${propsSchema(definition.props)}`,
+			`Props: ${definition.propsSchema}`,
 			''
 		]),
 		'## Example: a checklist',
@@ -84,3 +79,12 @@ export const widgetCatalogPrompt = (catalog: WidgetCatalog): string =>
 		JSON.stringify({ derived: widgetTemplates.savings.layout.derived }, null, 1),
 		'```'
 	].join('\n');
+
+export interface IWidgetCatalogService {
+	describe(catalog: WidgetCatalogDescription): string;
+}
+export class WidgetCatalogService implements IWidgetCatalogService {
+	describe(catalog: WidgetCatalogDescription): string {
+		return widgetCatalogPrompt(catalog);
+	}
+}

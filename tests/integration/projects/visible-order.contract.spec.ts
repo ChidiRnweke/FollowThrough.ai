@@ -1,11 +1,14 @@
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createSkillsCapability } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
@@ -25,17 +28,22 @@ const setup = async (suffix: string) => {
 	await tx.transactionRunner.run(() => builtIns.ensure(owner));
 	const skill = (await notes.findByBuiltInKey(owner, 'followthrough'))!;
 	const projectId = skill.projectId;
-	const catalog = new ProjectCatalog(records, records);
+	const catalog = createProjectServices(records, records);
 	const projects = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectReader: catalog,
-			projectTreeReader: catalog,
-			entryWriter: catalog,
+			noteCreationRules: new NoteLifecycleRulesService(),
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectReader: catalog.reader,
+			projectTreeReader: catalog.treeReader,
+			entryWriter: catalog.treeWriter,
 			transactionRunner: tx.transactionRunner
 		})
 	);
 	const creation = noteCreationControllers(
-		new NoteCatalog(notes, new SourceAnchorRecords(tx.database), records),
+		createNoteServices(notes, new SourceAnchorRecords(tx.database), records).creator,
 		tx.transactionRunner
 	);
 	return { owner, projectId, skill, projects, creation, records };

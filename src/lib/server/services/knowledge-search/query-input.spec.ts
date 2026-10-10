@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationId, Message, StoredMessage } from '$lib/models/agent';
 import { testNow } from '$lib/testing/workspace/fixtures/domain-builders';
-import { searchQueryInput } from './query-generation';
+import { KnowledgeLookup } from './semantic';
+import { InMemorySearchRepository } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 
 const message = (text: string): StoredMessage => ({
 	kind: 'readable',
@@ -13,16 +14,27 @@ const message = (text: string): StoredMessage => ({
 });
 describe('search query context', () => {
 	it('keeps the original query when there is no conversation history', () => {
-		expect(searchQueryInput('raw query', [])).toEqual({ kind: 'direct', query: 'raw query' });
+		expect(new KnowledgeLookup(new InMemorySearchRepository()).queryInput('raw query', [])).toEqual(
+			{ kind: 'direct', query: 'raw query' }
+		);
 	});
 	it('keeps the original query before a conversation has prior turns', () => {
-		expect(searchQueryInput('raw query', [message('first')])).toEqual({
+		expect(
+			new KnowledgeLookup(new InMemorySearchRepository()).queryInput('raw query', [
+				message('first')
+			])
+		).toEqual({
 			kind: 'direct',
 			query: 'raw query'
 		});
 	});
 	it('includes the conversation and current query when the search spans multiple turns', () => {
-		expect(searchQueryInput('follow up', [message('a'), message('b')])).toEqual({
+		expect(
+			new KnowledgeLookup(new InMemorySearchRepository()).queryInput('follow up', [
+				message('a'),
+				message('b')
+			])
+		).toEqual({
 			kind: 'conversation',
 			transcript: 'a\nb\nuser: follow up'
 		});

@@ -1,3 +1,14 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it, vi } from 'vitest';
 import type { Database } from '$lib/server/db';
 import type { AtomicOperation } from '$lib/models/workspace';
@@ -10,22 +21,35 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-import { noteEtag } from '$lib/services/notes/presentation';
+import { noteEtag } from '$lib/models/notes';
 import { context, seedNote } from '../database-harness';
 
 const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
-	const { catalog } = createNotesCapability({ db, projects: new ProjectRecords(db) });
+	const { services: catalog } = createNotesCapability({ db, projects: new ProjectRecords(db) });
 	const effects = new InMemoryNoteContent();
 	return new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
-			revisionReader: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
+			revisionReader: catalog.revisionReader,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})
@@ -40,7 +64,10 @@ it('discards to the publication committed while it waits for the note lock', asy
 	const seedTx = createTransactionContext(context.db);
 	const seed = controllerFor(seedTx.database, seedTx.transactionRunner);
 	const first = await seed.save(owner, { note: { ...note, ...content('First publication') } });
-	const published = await seed.publish(owner, { noteId: note.id, baseEtag: noteEtag(first.note) });
+	const published = await seed.publish(owner, {
+		noteId: note.id,
+		baseEtag: noteEtag(first.note.id, first.note.currentRevision)
+	});
 	const draft = await seed.save(owner, {
 		note: { ...published.note, ...content('New publication') }
 	});
@@ -53,7 +80,7 @@ it('discards to the publication committed while it waits for the note lock', asy
 	const publishing = peerTx.transactionRunner.run(async () => {
 		const result = await controllerFor(peerTx.database, peerTx.transactionRunner).publish(owner, {
 			noteId: note.id,
-			baseEtag: noteEtag(draft.note)
+			baseEtag: noteEtag(draft.note.id, draft.note.currentRevision)
 		});
 		ready.resolve();
 		await release.promise;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoryChangePayload, MemoryEntryId } from '$lib/models/memory';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
@@ -11,8 +11,8 @@ const setup = async (suffix: string) => {
 	const provenance = await seedProvenance(owner, suffix);
 	const entries = new MemoryRecords(context.db);
 	const projects = new ProjectRecords(context.db);
-	const library = new MemoryLibrary(entries, projects, new ProvenanceRecords(context.db));
-	const entry = await library.create(owner, {
+	const library = createMemoryServices(entries, projects, new ProvenanceRecords(context.db));
+	const entry = await library.creator.create(owner, {
 		id: crypto.randomUUID() as MemoryEntryId,
 		userId: owner.userId,
 		projectId: project.id,
@@ -28,7 +28,9 @@ const setup = async (suffix: string) => {
 describe('archived project memory boundaries', () => {
 	it('hides a retained project entry from the application reader', async () => {
 		const { owner, library, entry } = await setup('22101');
-		await expect(library.get(owner, entry.id)).rejects.toThrow('Memory project was not found');
+		await expect(library.reader.get(owner, entry.id)).rejects.toThrow(
+			'Memory project was not found'
+		);
 	});
 
 	it.each(['update', 'remove'] as const)(
@@ -52,7 +54,7 @@ describe('archived project memory boundaries', () => {
 							operation,
 							memoryEntryId: entry.id
 						};
-			const outcome = await library.apply(owner, payload, provenance.id).then(
+			const outcome = await library.changes.apply(owner, payload, provenance.id).then(
 				() => 'unexpected success',
 				(error: Error) => error.message
 			);
@@ -65,7 +67,7 @@ describe('archived project memory boundaries', () => {
 
 	it('rejects direct deletion while preserving the stored entry', async () => {
 		const { owner, entries, library, entry } = await setup('22104');
-		const outcome = await library.remove(owner, entry.id).then(
+		const outcome = await library.deleter.remove(owner, entry.id).then(
 			() => 'unexpected success',
 			(error: Error) => error.message
 		);

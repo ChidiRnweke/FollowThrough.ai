@@ -1,56 +1,43 @@
+import type { ResolvedToolCatalogEntry } from '$lib/models/agent/tool-catalog';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
-import type { ToolClassification, ToolPreference } from '$lib/models/agent';
+import type { ToolPreference } from '$lib/models/agent';
 import { ValidationError } from '$lib/errors';
 import type { ToolPreferenceRepository } from '$lib/server/repositories/agent';
 
-/** One tool's identity, as published by whatever owns the tool definitions. */
-export interface ToolCatalogEntry {
-	readonly name: string;
-	readonly description: string;
-	readonly classification: ToolClassification;
-	/** Locked tools are always enabled and cannot be stored as disabled. */
-	readonly locked: boolean;
-}
-
-/**
- * Injected rather than imported so this module stays free of the agent registry
- * — the registry pulls in the whole controller surface, and the settings page
- * only needs names and descriptions.
- */
-export interface ToolCatalog {
-	entries(): readonly ToolCatalogEntry[];
-}
-
-/** The resolved selection, shaped for `AgentTools`'s filter. */
-export interface ResolvedToolAccess {
-	isEnabled(toolName: string): boolean;
-}
-
-export interface ToolPreferenceStore {
+export interface ToolPreferenceCapability {
 	/** The full catalog with each tool's resolved state, for the settings UI. */
-	view(actor: ActorContext, projectId?: ProjectId): Promise<readonly ToolPreference[]>;
-	/** The same resolution collapsed to a predicate, for an agent turn. */
-	resolve(actor: ActorContext, projectId?: ProjectId): Promise<ResolvedToolAccess>;
+	view(
+		actor: ActorContext,
+		catalog: readonly ResolvedToolCatalogEntry[],
+		projectId?: ProjectId
+	): Promise<readonly ToolPreference[]>;
 	setEnabled(
 		actor: ActorContext,
+		catalog: readonly ResolvedToolCatalogEntry[],
 		input: { toolName: string; enabled: boolean; projectId?: ProjectId }
 	): Promise<void>;
-	clearOverride(actor: ActorContext, projectId: ProjectId, toolName: string): Promise<void>;
+	clearOverride(
+		actor: ActorContext,
+		catalog: readonly ResolvedToolCatalogEntry[],
+		projectId: ProjectId,
+		toolName: string
+	): Promise<void>;
 }
 
 const byName = (rows: readonly { toolName: string; enabled: boolean }[]) =>
 	new Map(rows.map((row) => [row.toolName, row.enabled]));
 
-export class ToolAccess implements ToolPreferenceStore {
-	constructor(
-		private readonly repository: ToolPreferenceRepository,
-		private readonly catalog: ToolCatalog
-	) {}
+export class ToolAccess implements ToolPreferenceCapability {
+	constructor(private readonly repository: ToolPreferenceRepository) {}
 
-	async view(actor: ActorContext, projectId?: ProjectId): Promise<readonly ToolPreference[]> {
+	async view(
+		actor: ActorContext,
+		catalog: readonly ResolvedToolCatalogEntry[],
+		projectId?: ProjectId
+	): Promise<readonly ToolPreference[]> {
 		const { user, project } = await this.storedRows(actor, projectId);
-		return this.catalog.entries().map((entry) => {
+		return catalog.map((entry) => {
 			const { enabled, source } = this.resolveEntry(entry, user, project);
 			return {
 				name: entry.name,
@@ -63,28 +50,24 @@ export class ToolAccess implements ToolPreferenceStore {
 		});
 	}
 
-	async resolve(actor: ActorContext, projectId?: ProjectId): Promise<ResolvedToolAccess> {
-		const view = await this.view(actor, projectId);
-		const disabled = new Set(
-			view.filter((preference) => !preference.enabled).map((preference) => preference.name)
-		);
-		// Unknown names resolve to enabled: a tool the user never touched, and a
-		// tool added since these rows were written, are the same case.
-		return { isEnabled: (toolName: string) => !disabled.has(toolName) };
-	}
-
 	async setEnabled(
 		actor: ActorContext,
+		catalog: readonly ResolvedToolCatalogEntry[],
 		input: { toolName: string; enabled: boolean; projectId?: ProjectId }
 	): Promise<void> {
-		this.assertSelectable(input.toolName);
+		this.assertSelectable(catalog, input.toolName);
 		const preference = { toolName: input.toolName, enabled: input.enabled };
 		if (input.projectId) await this.repository.upsertForProject(actor, input.projectId, preference);
 		else await this.repository.upsertForUser(actor, preference);
 	}
 
-	async clearOverride(actor: ActorContext, projectId: ProjectId, toolName: string): Promise<void> {
-		this.assertSelectable(toolName);
+	async clearOverride(
+		actor: ActorContext,
+		catalog: readonly ResolvedToolCatalogEntry[],
+		projectId: ProjectId,
+		toolName: string
+	): Promise<void> {
+		this.assertSelectable(catalog, toolName);
 		await this.repository.deleteProjectOverride(actor, projectId, toolName);
 	}
 
@@ -92,8 +75,8 @@ export class ToolAccess implements ToolPreferenceStore {
 	 * Guards the write path rather than the UI, so the agent's own
 	 * `set_tool_enabled` is held to the same rules as the settings page.
 	 */
-	private assertSelectable(toolName: string): void {
-		const entry = this.catalog.entries().find((candidate) => candidate.name === toolName);
+	private assertSelectable(catalog: readonly ResolvedToolCatalogEntry[], toolName: string): void {
+		const entry = catalog.find((candidate) => candidate.name === toolName);
 		if (!entry) throw new ValidationError(`There is no tool named "${toolName}"`);
 		if (entry.locked)
 			throw new ValidationError(
@@ -110,7 +93,7 @@ export class ToolAccess implements ToolPreferenceStore {
 	}
 
 	private resolveEntry(
-		entry: ToolCatalogEntry,
+		entry: ResolvedToolCatalogEntry,
 		user: ReadonlyMap<string, boolean>,
 		project: ReadonlyMap<string, boolean>
 	): { enabled: boolean; source: ToolPreference['source'] } {

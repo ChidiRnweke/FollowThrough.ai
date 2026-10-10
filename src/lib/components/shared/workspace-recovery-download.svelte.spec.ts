@@ -1,25 +1,19 @@
-import { wholeValueRebase } from '$lib/services/sync/rebase';
+import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { afterEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { z } from 'zod';
 import { Dexie } from 'dexie';
 import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
-import { syncEtag } from '$lib/services/sync/versions';
+import { syncEtag } from '$lib/models/sync';
 import { receiveResource } from '$lib/services/sync/state';
 import WorkspaceRecoveryDownload from './workspace-recovery-download.svelte';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {
 	const prefix = `reset-review-${crypto.randomUUID()}`;
-	const store = new DexieWorkspaceRepository(
-		'alice',
-		z.string(),
-		z.string(),
-		wholeValueRebase<string>(),
-		prefix
-	);
+	const store = new DexieWorkspaceRepository('alice', z.string(), z.string(), prefix);
 	const recovery = new IndexedDbStorageRecovery(prefix);
-	await store.cache.commit('alice', {
+	await createCachePersistence(store.cache).commit('alice', {
 		put: [
 			{
 				key: 'note',

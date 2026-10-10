@@ -21,7 +21,7 @@ function revisionLabel(side: RevisionText): string {
  * reported as a leading `title:` line since the body patch never sees it.
  * Identical inputs produce an empty patch.
  */
-export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText): NoteRevisionDiff {
+function diffNoteRevisionTexts(before: RevisionText, after: RevisionText): NoteRevisionDiff {
 	const titleLine = before.title === after.title ? '' : `title: ${before.title} → ${after.title}\n`;
 	if (before.plainText === after.plainText) {
 		return { patch: titleLine.trimEnd(), addedLines: 0, removedLines: 0 };
@@ -40,4 +40,13 @@ export function diffNoteRevisionTexts(before: RevisionText, after: RevisionText)
 	const removedLines = changedLines.filter((line) => line.startsWith('-')).length;
 	const patch = formatPatch(changes);
 	return { patch: titleLine + patch, addedLines, removedLines };
+}
+
+export interface NoteRevisionComparison {
+	compare(before: RevisionText, after: RevisionText): NoteRevisionDiff;
+}
+export class NoteRevisionComparisonService implements NoteRevisionComparison {
+	compare(before: RevisionText, after: RevisionText): NoteRevisionDiff {
+		return diffNoteRevisionTexts(before, after);
+	}
 }

@@ -640,7 +640,7 @@ function convertNode(
 	return results;
 }
 
-export async function generateDocx(input: PreparedExport): Promise<Buffer> {
+async function generateDocx(input: PreparedExport): Promise<Buffer> {
 	const { notes, settings, images, diagrams } = input;
 	const styles = resolveStyles(input.styles, settings);
 	const ctx: DocxContext = {
@@ -779,4 +779,13 @@ function presentation(node: ProseMirrorNode, context: DocxContext) {
 	const value = context.nodes.get(node);
 	if (!value) throw new Error('Export node was not prepared');
 	return value;
+}
+
+export interface DocxRenderer {
+	render(input: PreparedExport): Promise<Buffer>;
+}
+export class DocxDocumentService implements DocxRenderer {
+	render(input: PreparedExport): Promise<Buffer> {
+		return generateDocx(input);
+	}
 }

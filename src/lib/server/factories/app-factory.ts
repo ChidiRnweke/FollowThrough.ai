@@ -1,12 +1,12 @@
+import type { McpSurfaceFactory } from './agent/mcp-tool-factory';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
-import type { AgentEventBus } from '../services/agent/runs/events';
+import type { AgentEventBus } from '../stores/agent/events';
 import { createProductionFactory, type ProductionApplication } from './production-factory';
 import { SessionRegistry, type ISessionRegistry } from '$lib/server/services/identity/sessions';
 import { AccessTokens, type IAccessTokens } from '$lib/server/services/identity/api-tokens';
 import type { ProvenanceRecorder } from '../services/notes/provenance';
-import type { ToolRetriever } from '../controllers/tool-discovery/controller';
 import { ApiTokenRecords } from '../repositories/identity/postgres/api-tokens';
 import { SignIn, type ISignIn } from '$lib/server/controllers/identity/controller';
 import { OAuthAuthorization } from '$lib/server/services/identity/oauth-authorization';
@@ -61,8 +61,8 @@ export class AppFactory {
 		return this.application().provenance;
 	}
 
-	static toolRetriever(): ToolRetriever {
-		return this.application().toolRetriever;
+	static mcpSurface(...args: Parameters<McpSurfaceFactory>): ReturnType<McpSurfaceFactory> {
+		return this.application().mcpSurface(...args);
 	}
 
 	static actor(locals?: App.Locals): ActorContext {

@@ -1,3 +1,4 @@
+import type { WebResearchSettings } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import type { RelationshipClassification } from '$lib/models/relationships';
 import type { PipelineKind } from '$lib/models/agent';
@@ -6,18 +7,16 @@ import { provenanceSchema, type Provenance, type ProvenanceRequest } from '$lib/
 import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
 import type { Suggestion } from '$lib/models/suggestions';
 import type { TextSelection } from '$lib/models/notes';
-import type { StructuredRelationshipClient } from '$lib/server/services/relationships/contracts';
+import type { StructuredRelationshipClient } from '$lib/server/repositories/relationships/classification';
+import type { PromiseExtractor } from '$lib/server/services/todos/promise-discovery';
 import type {
-	PromiseExtractor,
 	StructuredPromiseClient,
 	StructuredPromiseResult
-} from '$lib/server/services/todos/promise-extraction/contracts';
+} from '$lib/server/repositories/todos/classification';
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
-import type {
-	ReferenceFinder,
-	ReferenceSearchOptions,
-	WebReferenceClient
-} from '$lib/server/services/references/contracts';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
+import type { WebReferenceClient } from '$lib/server/controllers/references/search';
+import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { TrustPolicyEvaluator } from '$lib/server/services/agent/runs/tool-trust';
 import { testNow, testProvenanceId } from '$lib/testing/workspace/fixtures/domain-builders';
 import type {
@@ -100,13 +99,16 @@ export class InMemoryReferencePipeline implements ReferenceFinder {
 
 export class InMemoryWebReferenceClient implements WebReferenceClient {
 	result?: readonly ReferenceSource[];
+	research?: WebResearchSettings;
 	failure?: Error;
 	model?: string;
 	async search(
 		_selectionText: string,
+		research: WebResearchSettings,
 		options: ReferenceSearchOptions = {}
 	): Promise<readonly ReferenceSource[] | undefined> {
 		void _selectionText;
+		this.research = research;
 		this.model = options.model;
 		if (this.failure) throw this.failure;
 		return this.result;

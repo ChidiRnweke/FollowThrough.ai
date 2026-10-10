@@ -1,12 +1,7 @@
 <script lang="ts">
 	import type { NoteId, ProseMirrorDocument } from '$lib/models/notes';
 	import type { Diagram } from '$lib/models/diagrams';
-	import {
-		countNoteDiff,
-		diffNoteDocuments,
-		focusNoteDiffSide,
-		withTitleBlock
-	} from '$lib/services/notes/note-diff';
+	import { noteComparison } from '$lib/factories/notes/comparison';
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { cn } from '$lib/utils';
 	import NoteDiffEditor from './note-diff-editor.svelte';
@@ -72,22 +67,10 @@
 		noteId?: NoteId;
 	} = $props();
 
-	const baseDocument = $derived(titles ? withTitleBlock(base, titles.base) : base);
-	const candidateDocument = $derived(
-		titles ? withTitleBlock(candidate, titles.candidate) : candidate
-	);
-	const diff = $derived(diffNoteDocuments(baseDocument, candidateDocument));
-	const counts = $derived(countNoteDiff(diff));
-	const baseSide = $derived(
-		focus
-			? focusNoteDiffSide(baseDocument, diff.base)
-			: { document: baseDocument, kinds: diff.base }
-	);
-	const candidateSide = $derived(
-		focus
-			? focusNoteDiffSide(candidateDocument, diff.candidate)
-			: { document: candidateDocument, kinds: diff.candidate }
-	);
+	const comparison = $derived(noteComparison.compare(base, candidate, { titles, focus }));
+	const counts = $derived(comparison.counts);
+	const baseSide = $derived(comparison.base);
+	const candidateSide = $derived(comparison.candidate);
 
 	/**
 	 * Stacked and compact, each half is bounded so the second is never below the fold. The

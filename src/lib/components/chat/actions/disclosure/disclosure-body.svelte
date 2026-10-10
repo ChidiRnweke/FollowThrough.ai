@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 	import type { ToolDisclosure } from '$lib/components/agent';

@@ -1,45 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import {
-	assertRenderedPng,
-	diagramRevisionModel,
-	MermaidSubmissionValidator
-} from './submission-validation';
+import { MermaidSubmissionValidator } from './submission-validation';
+import { NodeMermaidSyntaxReader } from '$lib/server/adapters/diagrams/mermaid-parser';
+import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
 
 describe('Diagram submission safety invariants', () => {
-	it('rejects a rendered payload that is not a PNG', () => {
-		expect(() => assertRenderedPng('data:image/png;base64,dGV4dA==')).toThrow('valid PNG');
-	});
-
-	it('keeps a native-vision diagram model for rendered revisions', () => {
-		expect(diagramRevisionModel('native/model', true, 'png', 'fallback/model')).toBe(
-			'native/model'
-		);
-	});
-
-	it('uses the fallback vision model for a text-only diagram model', () => {
-		expect(diagramRevisionModel('text/model', false, 'png', 'fallback/model')).toBe(
-			'fallback/model'
-		);
-	});
-
-	it('keeps source-only repair on the configured model', () => {
-		expect(diagramRevisionModel('text/model', false, undefined, 'fallback/model')).toBe(
-			'text/model'
-		);
-	});
-
-	/**
-	 * The safety-rule tests inject a hand-written parse seam so their rejections
-	 * can only come from the submission rules, never from a child process.
-	 */
-	const alwaysValid = async (): Promise<void> => {};
-	const rejectsSyntax = async (): Promise<void> => {
-		throw new Error('syntax error');
-	};
-
 	it('accepts styled Mermaid source in the server validator', async () => {
 		await expect(
-			new MermaidSubmissionValidator().validate(
+			new MermaidSubmissionValidator(new NodeMermaidSyntaxReader()).validate(
 				'flowchart LR\n  A[Frontend App] -->|API Calls| B[Backend Server]\n  style A fill:#4A90D9,color:#fff'
 			)
 		).resolves.toBeUndefined();
@@ -47,7 +14,7 @@ describe('Diagram submission safety invariants', () => {
 
 	it('rejects Mermaid click handlers', async () => {
 		await expect(
-			new MermaidSubmissionValidator(alwaysValid).validate(
+			new MermaidSubmissionValidator(new InMemoryMermaidSyntaxReader()).validate(
 				'flowchart LR\n  A --> B\n  click A "https://example.com"'
 			)
 		).rejects.toThrow('click handlers');
@@ -55,19 +22,23 @@ describe('Diagram submission safety invariants', () => {
 
 	it('rejects fenced Mermaid output', async () => {
 		await expect(
-			new MermaidSubmissionValidator(alwaysValid).validate('```mermaid\nflowchart LR\nA --> B\n```')
+			new MermaidSubmissionValidator(new InMemoryMermaidSyntaxReader()).validate(
+				'```mermaid\nflowchart LR\nA --> B\n```'
+			)
 		).rejects.toThrow('without code fences');
 	});
 
 	it('rejects invalid Mermaid syntax', async () => {
 		await expect(
-			new MermaidSubmissionValidator(rejectsSyntax).validate('sequenceDiagram\n  Alice->>Bob Hello')
+			new MermaidSubmissionValidator(
+				new InMemoryMermaidSyntaxReader(new Error('syntax error'))
+			).validate('sequenceDiagram\n  Alice->>Bob Hello')
 		).rejects.toThrow('Invalid Mermaid syntax');
 	});
 
 	it('rejects Mermaid HTML labels and names the escaped-newline alternative', async () => {
 		await expect(
-			new MermaidSubmissionValidator(alwaysValid).validate(
+			new MermaidSubmissionValidator(new InMemoryMermaidSyntaxReader()).validate(
 				'flowchart LR\n  A["Mini app<br/>(JSON render)"]'
 			)
 		).rejects.toThrow('Use escaped \\n inside quoted labels');

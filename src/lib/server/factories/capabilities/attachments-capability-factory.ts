@@ -1,26 +1,43 @@
-import { AttachmentObjectRemoval } from '$lib/server/services/attachments/object-removal';
+import { ImageDescriptionService } from '$lib/server/services/attachments/image-description';
+import { TextAttachmentReader } from '$lib/server/adapters/attachments/text-reader';
+import { AgentModelSelectionService } from '$lib/services/agent/model-selection';
+import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
+import type { ScheduledTask } from '$lib/models/maintenance';
+import { UploadRetentionStore } from '$lib/server/stores/attachments/upload-retention';
+import { AttachmentObjectRemoval } from '$lib/server/controllers/attachments/object-removal';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
+import type { AttachmentRepository } from '$lib/server/repositories/attachments';
 import type { AttachmentClaims } from '$lib/server/services/attachments/contracts';
 import type { AtomicOperation } from '$lib/models/workspace';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { AttachmentRecords } from '$lib/server/repositories/attachments/postgres/attachments';
-import type { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
-import { AttachmentContent } from '$lib/server/services/attachments/content';
+import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
+import { AttachmentFormatService } from '$lib/server/services/attachments/formats';
 import {
-	ImageDescription,
-	type IImageDescription
-} from '$lib/server/services/attachments/image-description';
-import { AttachmentLibrary } from '$lib/server/services/attachments/library';
-import { MistralOcr, type ITextRecognition } from '$lib/server/services/attachments/mistral-ocr';
-import { UploadRetention } from '$lib/server/services/attachments/retention';
+	AttachmentContent,
+	AttachmentProcessingService
+} from '$lib/server/services/attachments/content';
+import { ImageDescription } from '$lib/server/adapters/attachments/image-description';
+import type { IImageDescription } from '$lib/server/controllers/attachment-processing/controller';
 import {
-	AttachmentParserRegistry,
+	AttachmentUploadService,
+	type AttachmentUploads,
+	AttachmentReadingService,
+	type AttachmentReader,
+	AttachmentDownloadService,
+	type AttachmentDownloads,
+	AttachmentLifecycleService,
+	type AttachmentLifecycle
+} from '$lib/server/services/attachments/library';
+import { MistralOcr } from '$lib/server/adapters/attachments/mistral-ocr';
+import type { ITextRecognition } from '$lib/server/controllers/attachment-processing/controller';
+import { UploadRetention } from '$lib/server/controllers/attachments/retention';
+import {
 	AttachmentStorage,
 	type IAttachmentStorage,
 	type ObjectStorageConfig
-} from '$lib/server/services/attachments/storage';
-import type { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
+} from '$lib/server/repositories/attachments/object-storage';
 import { operationObserver } from '$lib/server/services/telemetry';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
@@ -35,8 +52,8 @@ export interface AttachmentsCapabilityInput {
 	readonly transactionRunner: AtomicOperation;
 	readonly visionModel: string;
 	readonly notes: NoteRepository;
-	readonly preferences: AgentPreferenceCatalog;
-	readonly indexer: ContentIndex['attachments'];
+	readonly preferences: AgentPreferenceEditor;
+	readonly indexer: AttachmentIndexing;
 	readonly openRouterApiKey: string;
 	readonly openRouterBaseURL: string;
 	readonly appURL: string;
@@ -50,12 +67,15 @@ export interface AttachmentsCapabilityInput {
 }
 
 export interface AttachmentsCapability {
-	readonly repository: AttachmentRecords;
+	readonly repository: AttachmentRepository;
 	readonly storage: IAttachmentStorage;
-	readonly library: AttachmentLibrary;
-	readonly retention: UploadRetention;
-	readonly objectRemoval: AttachmentObjectRemoval;
-	readonly processing: AttachmentProcessing;
+	readonly uploads: AttachmentUploads;
+	readonly reader: AttachmentReader;
+	readonly downloads: AttachmentDownloads;
+	readonly lifecycle: AttachmentLifecycle;
+	readonly retention: ScheduledTask;
+	readonly objectRemoval: ScheduledTask;
+	readonly processing: ScheduledTask;
 }
 
 export const createAttachmentsCapability = (
@@ -90,15 +110,22 @@ export const createAttachmentsCapability = (
 	return {
 		repository,
 		storage,
-		library: new AttachmentLibrary(repository, input.notes, storage),
+		uploads: new AttachmentUploadService(repository, input.notes, storage),
+		reader: new AttachmentReadingService(repository),
+		downloads: new AttachmentDownloadService(repository, storage),
+		lifecycle: new AttachmentLifecycleService(repository, input.notes),
 		processing: new AttachmentProcessing({
+			modelSelection: new AgentModelSelectionService(),
 			records: repository,
 			claims: input.claims,
 			storage,
-			parsers: new AttachmentParserRegistry(),
+			textReader: new TextAttachmentReader(),
 			ocr: ocrEngine,
 			imageDescriber,
 			content: new AttachmentContent(),
+			imageInstructions: new ImageDescriptionService(),
+			processing: new AttachmentProcessingService(),
+			formats: new AttachmentFormatService(),
 			preferences: input.preferences,
 			indexer: input.indexer,
 			transactionRunner: input.transactionRunner,
@@ -106,7 +133,7 @@ export const createAttachmentsCapability = (
 			logger: console
 		}),
 		objectRemoval: new AttachmentObjectRemoval(repository, storage),
-		retention: new UploadRetention(repository, storage, {
+		retention: new UploadRetention(repository, storage, new UploadRetentionStore(), {
 			...optionalProperty('intervalMs', positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')),
 			...optionalProperty('maxPerTick', positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK'))
 		})

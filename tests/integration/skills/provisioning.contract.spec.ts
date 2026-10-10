@@ -1,4 +1,6 @@
-import { syncEtag } from '$lib/services/sync/versions';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
+import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { afterAll, expect, it } from 'vitest';
 import { syncCursorSchema } from '$lib/models/sync';
@@ -40,7 +42,7 @@ const setup = () => {
 	const dependencies = {
 		transactionRunner,
 		builtInSkills: capability.builtIns,
-		skillFinder: capability.library
+		skillFinder: capability.services.finder
 	};
 	return {
 		projects,
@@ -48,6 +50,8 @@ const setup = () => {
 		skills: new Skills(capabilityDependencies<SkillsDependencies>(dependencies)),
 		workspace: new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
+				todoPresentation: new TodoPresentationService(),
+				memoryPresentation: new MemoryPresentationService(),
 				...dependencies,
 				syncChanges: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)
 			})

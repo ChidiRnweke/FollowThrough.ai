@@ -1,6 +1,9 @@
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
+import { ProjectDetailService } from '$lib/services/projects/details';
 import { describe, expect, it } from 'vitest';
 import { Projects, type ProjectsDependencies } from './controller';
-import { ProjectCatalog } from '$lib/server/services/projects/catalog';
+import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { projectBuilder, testActor } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -8,13 +11,18 @@ import { projectBuilder, testActor } from '$lib/testing/workspace/fixtures/domai
 const setup = () => {
 	const repository = new InMemoryProjectRepository();
 	repository.projects = [projectBuilder()];
-	const catalog = new ProjectCatalog(repository, repository);
+	const catalog = createProjectServices(repository, repository);
 	const controller = new Projects(
 		capabilityDependencies<ProjectsDependencies>({
-			projectCreator: catalog,
-			projectReader: catalog,
-			projectEditor: catalog,
-			projectTreeReader: catalog
+			noteCreationRules: new NoteLifecycleRulesService(),
+			details: new ProjectDetailService(),
+			presentation: new ProjectTreePresentationService(),
+			placement: catalog.placement,
+			projectLifecycle: catalog.lifecycle,
+			projectCreator: catalog.creator,
+			projectReader: catalog.reader,
+			projectEditor: catalog.editor,
+			projectTreeReader: catalog.treeReader
 		})
 	);
 	return { repository, controller };

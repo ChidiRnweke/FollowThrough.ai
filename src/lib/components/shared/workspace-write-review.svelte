@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { cn } from '$lib/utils';
 	import { type OutboxEntry } from '$lib/models/outbox';
-	import { dependentWrites } from '$lib/services/sync/state';
 	import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 	import type { WorkspaceRecord } from '$lib/models/workspace-records';
-	import type { WorkspaceResources } from '$lib/stores/workspace/resources.svelte';
+	import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import WorkspaceRecordPreview from './workspace-record-preview.svelte';
@@ -50,8 +49,10 @@
 	} from '$lib/services/workspace/write-review';
 
 	type Entry = OutboxEntry<WorkspaceCommand, WorkspaceRecord>;
-	let { resources, open = $bindable(false) }: { resources: WorkspaceResources; open?: boolean } =
-		$props();
+	let {
+		resources,
+		open = $bindable(false)
+	}: { resources: WorkspaceResourcesController; open?: boolean } = $props();
 	let reviewed = $state<readonly Entry[]>([]);
 	let busy = $state(false);
 	let confirmation = $state<'discard' | null>(null);
@@ -102,7 +103,7 @@
 	}
 	function review(entry: Entry): void {
 		confirmation = null;
-		const group = dependentWrites(resources.pending, entry.intent.operationId);
+		const group = resources.reviewDependents(entry.intent.operationId);
 		reviewed = [
 			entry,
 			...group.filter((item) => item.intent.operationId !== entry.intent.operationId)

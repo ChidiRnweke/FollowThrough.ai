@@ -1,8 +1,10 @@
+import { MemoryEditingService } from '$lib/services/memory/edits';
+import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
 import type { ProvenanceId } from '$lib/models/provenance';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
@@ -27,21 +29,23 @@ const setup = async (suffix: string) => {
 		createdAt: now
 	});
 	const suggestions = new SuggestionRecords(database);
-	const inbox = new SuggestionInbox(
+	const inbox = createSuggestionServices(
 		suggestions,
 		new NoteRecords(database),
 		provenance,
 		new SourceAnchorRecords(database)
 	);
-	const library = new MemoryLibrary(
+	const library = createMemoryServices(
 		new MemoryRecords(database),
 		new ProjectRecords(database),
 		provenance
 	);
 	const controller = new Memory(
 		capabilityDependencies<MemoryDependencies>({
-			memoryChanges: library,
-			suggestionCreator: inbox,
+			editing: new MemoryEditingService(),
+			presentation: new MemoryPresentationService(),
+			memoryChanges: library.changes,
+			suggestionCreator: inbox.creator,
 			trustPolicyEvaluator: new InMemoryTrustPolicyEvaluator(),
 			transactionRunner
 		})

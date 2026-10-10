@@ -1,13 +1,13 @@
-import {
-	pendingMemorySuggestions,
-	newestMemoryViews
-} from '$lib/services/suggestions/presentation';
-import { assembleTodoView } from '$lib/services/todos/presentation';
-import { assembleProjectTree } from '$lib/services/projects/presentation';
-import { assembleNoteView } from '$lib/services/notes/presentation';
+import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-views';
+import type { Project } from '$lib/models/projects';
+import type { Note } from '$lib/models/notes';
+import type { WorkspaceViewState } from '$lib/models/workspace-views';
+import type { TodoPresentation } from '$lib/services/todos/presentation';
+import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
+import type { NotePresentation } from '$lib/services/notes/presentation';
 import { assembleBacklinkView } from '$lib/services/relationships/presentation';
 import { assembleReferenceView } from '$lib/services/references/presentation';
-import { assembleSuggestionView } from '$lib/services/suggestions/presentation';
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';
 import type {
@@ -34,24 +34,81 @@ import type { LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectView } from '$lib/models/projects';
 import { type NoteId } from '$lib/models/notes';
-import { sectionNumberingView } from '$lib/services/notes/section-numbering';
+import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 import type { WorkspaceSkill } from '$lib/models/workspace-views';
 import { assembleToday } from '$lib/services/workspace/today';
-import { pendingMemoryNotifications } from '$lib/services/memory/attention';
+import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 
 /** Coordinates feature views from the normalized records, including local write overlays. */
-export class WorkspaceViews {
-	private readonly byType = new Map<WorkspaceRecord['type'], WorkspaceRecord[]>();
-	constructor(private readonly records: ReadonlyMap<string, WorkspaceRecord>) {
-		for (const record of records.values()) {
-			const bucket = this.byType.get(record.type);
-			if (bucket) bucket.push(record);
-			else this.byType.set(record.type, [record]);
-		}
+export interface WorkspaceViewsController {
+	all<K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K][];
+	get<K extends WorkspaceRecord['type']>(
+		type: K,
+		...id: [string, ...string[]]
+	): WorkspaceValues[K] | undefined;
+	readonly projects: readonly Project[];
+	readonly notes: readonly Note[];
+	conversations(query?: string): readonly Conversation[];
+	conversation(id: ConversationId): Conversation | null;
+	messages(id: ConversationId): readonly StoredMessage[];
+	latestRun(id: ConversationId): WorkspaceValues['agent_runs'] | null;
+	skill(noteId: NoteId): WorkspaceSkill | null;
+	skills(projectId?: ProjectId): readonly SkillSummary[];
+	shell(userId: string): ShellContext | null;
+	memories(projectId?: ProjectId): readonly MemoryEntry[];
+	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[];
+	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[];
+	mentionableResources(
+		query: string,
+		projectId?: ProjectId
+	): {
+		readonly widgets: readonly Widget[];
+		readonly diagrams: readonly Diagram[];
+		readonly attachments: readonly AttachmentView[];
+	};
+	trashedNotes(projectId?: ProjectId): readonly TrashedNote[];
+	trashedDiagrams(projectId?: ProjectId): readonly Diagram[];
+	widget(widgetId: string): Widget | null;
+	widgets(projectId: ProjectId, query?: string): readonly Widget[];
+	trashedWidgets(projectId?: ProjectId): readonly Widget[];
+	diagram(diagramId: string): Diagram | null;
+	diagrams(projectId: ProjectId, query?: string): readonly Diagram[];
+	artifacts(projectId: ProjectId, query?: string): readonly ArtifactView[];
+	capabilityCounts(
+		projectId?: ProjectId
+	): Record<'memory' | 'notes' | 'todos' | 'attachments', number>;
+	agentPreferences(userId: UserId): AgentPreferenceValues;
+	toolPreferences(userId: string, projectId?: ProjectId): readonly ToolPreference[];
+	project(projectId: ProjectId): ProjectView | null;
+	note(
+		noteId: NoteId
+	): { readonly view: NoteView; readonly missing: readonly WorkspaceResourceIdentity[] } | null;
+	todo(todo: Todo): TodoView | null;
+	todos(filter?: TodoListFilter): readonly TodoView[];
+	readonly categories: readonly string[];
+	today(today: LocalDate): TodayView;
+}
+
+export class WorkspaceViews implements WorkspaceViewsController {
+	constructor(
+		private readonly todoPresentation: TodoPresentation,
+		private readonly state: WorkspaceViewState,
+		private readonly suggestionPresentation: ISuggestionPresentationService,
+		private readonly memoryPresentation: IMemoryPresentationService,
+		private readonly projectPresentation: ProjectTreePresentation,
+		private readonly notePresentation: NotePresentation,
+		private readonly sections: NoteSectionNumbering
+	) {}
+	private get records() {
+		return this.state.records;
 	}
+	private get byType() {
+		return this.state.byType;
+	}
+
 	all<K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K][] {
 		return (this.byType.get(type) ?? [])
 			.filter((record): record is WorkspaceRecordOf<K> => record.type === type)
@@ -65,12 +122,12 @@ export class WorkspaceViews {
 		if (!record || !isWorkspaceRecord(record, type)) return undefined;
 		return record.value;
 	}
-	get projects() {
+	get projects(): readonly Project[] {
 		return this.all('projects')
 			.filter((project) => !project.archivedAt)
 			.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 	}
-	get notes() {
+	get notes(): readonly Note[] {
 		const projects = new Set(this.projects.map((project) => project.id));
 		return this.all('notes')
 			.filter((note) => !note.archivedAt && projects.has(note.projectId))
@@ -136,7 +193,7 @@ export class WorkspaceViews {
 			];
 		});
 	}
-	shell(userId: string) {
+	shell(userId: string): ShellContext | null {
 		const user = this.get('users', userId);
 		if (!user) return null;
 		const projects = this.projects;
@@ -147,7 +204,10 @@ export class WorkspaceViews {
 			noteTree: this.notes.filter((note) => note.kind !== 'skill'),
 			skills: this.skills().filter((skill) => skill.isEnabled),
 			pendingSuggestionCount: suggestions.length,
-			pendingMemoryNotifications: pendingMemoryNotifications(projects, suggestions)
+			pendingMemoryNotifications: this.memoryPresentation.pendingNotifications(
+				projects,
+				suggestions
+			)
 		};
 	}
 	private get pendingSuggestions() {
@@ -172,22 +232,24 @@ export class WorkspaceViews {
 	}
 	memorySuggestions(projectId?: ProjectId): readonly MemorySuggestionView[] {
 		if (projectId && !this.isActiveProject(projectId)) return [];
-		return newestMemoryViews(
-			pendingMemorySuggestions(this.pendingSuggestions, projectId).flatMap((suggestion) => {
-				const provenance = suggestion.provenanceId
-					? this.get('provenance', suggestion.provenanceId)
-					: undefined;
-				if (!provenance) return [];
-				const anchor = suggestion.sourceAnchorId
-					? this.get('source_anchors', suggestion.sourceAnchorId)
-					: undefined;
-				return [
-					assembleSuggestionView(suggestion, {
-						origin: provenanceOrigin(provenance),
-						anchor
-					})
-				];
-			})
+		return this.suggestionPresentation.newestMemoryViews(
+			this.suggestionPresentation
+				.pendingMemorySuggestions(this.pendingSuggestions, projectId)
+				.flatMap((suggestion) => {
+					const provenance = suggestion.provenanceId
+						? this.get('provenance', suggestion.provenanceId)
+						: undefined;
+					if (!provenance) return [];
+					const anchor = suggestion.sourceAnchorId
+						? this.get('source_anchors', suggestion.sourceAnchorId)
+						: undefined;
+					return [
+						this.suggestionPresentation.assembleSuggestionView(suggestion, {
+							origin: provenanceOrigin(provenance),
+							anchor
+						})
+					];
+				})
 		);
 	}
 	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[] {
@@ -421,9 +483,11 @@ export class WorkspaceViews {
 		const entries = this.notes
 			.filter((note) => note.projectId === projectId && note.kind !== 'skill')
 			.sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt));
-		return { project, tree: assembleProjectTree(entries) };
+		return { project, tree: this.projectPresentation.assemble(entries) };
 	}
-	note(noteId: NoteId) {
+	note(
+		noteId: NoteId
+	): { readonly view: NoteView; readonly missing: readonly WorkspaceResourceIdentity[] } | null {
 		const note = this.get('notes', noteId);
 		if (!note) return null;
 		const missing: WorkspaceResourceIdentity[] = [];
@@ -474,11 +538,15 @@ export class WorkspaceViews {
 				if (suggestion.sourceAnchorId && !anchor)
 					missing.push({ type: 'source_anchors', id: [suggestion.sourceAnchorId] });
 				return [
-					assembleSuggestionView(suggestion, { note, anchor, origin: provenanceOrigin(provenance) })
+					this.suggestionPresentation.assembleSuggestionView(suggestion, {
+						note,
+						anchor,
+						origin: provenanceOrigin(provenance)
+					})
 				];
 			});
 		return {
-			view: assembleNoteView({
+			view: this.notePresentation.assemble({
 				note,
 				backlinks,
 				references,
@@ -487,7 +555,7 @@ export class WorkspaceViews {
 				),
 				todos: this.todos({ noteId }),
 				pendingSuggestions,
-				sectionNumbering: sectionNumberingView(
+				sectionNumbering: this.sections.view(
 					note.sectionNumbering,
 					project?.sectionNumberingDefault,
 					preferences?.sectionNumberingDefault
@@ -506,7 +574,7 @@ export class WorkspaceViews {
 		const origin = anchor ? this.get('notes', anchor.noteId) : undefined;
 		const linked = todo.linkedNoteId ? this.get('notes', todo.linkedNoteId) : undefined;
 		const provenance = todo.provenanceId ? this.get('provenance', todo.provenanceId) : undefined;
-		return assembleTodoView(todo, {
+		return this.todoPresentation.view(todo, {
 			anchor: anchor ?? null,
 			origin: origin ?? null,
 			linked: linked ?? null,
@@ -548,7 +616,7 @@ export class WorkspaceViews {
 			...new Set(this.todos().flatMap(({ todo }) => (todo.category ? [todo.category] : [])))
 		].sort();
 	}
-	today(today: LocalDate) {
+	today(today: LocalDate): TodayView {
 		const due = this.todos({ dueBefore: today, responsibility: 'mine' });
 		const notes = this.notes.filter((note) => note.kind !== 'skill');
 		return assembleToday({

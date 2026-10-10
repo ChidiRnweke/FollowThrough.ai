@@ -23,13 +23,13 @@ import type {
 	SuggestionReverter,
 	SuggestionContextReader,
 	SuggestionContext
-} from '$lib/server/services/suggestions/contracts';
+} from '$lib/server/services/suggestions/inbox';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { testNow, testSuggestionId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { createProposalRecord, selectionProposal } from '$lib/server/services/suggestions/inbox';
+import type { DateTime } from '$lib/models/workspace';
 
 export class InMemorySuggestionReader
 	implements SuggestionLister, SuggestionExpirer, SuggestionContextReader
@@ -189,5 +189,78 @@ export class InMemorySuggestions
 			candidate.id === suggestion.id ? suggestion : candidate
 		);
 		return suggestion;
+	}
+}
+
+type SuggestionIdentity = {
+	readonly id: SuggestionId;
+	readonly userId: ActorContext['userId'];
+	readonly now: DateTime;
+};
+function createProposalRecord<P extends SuggestionProposal>(
+	proposal: P,
+	identity: SuggestionIdentity
+): Extract<Suggestion, { kind: P['kind'] }>;
+function createProposalRecord(
+	proposal: SuggestionProposal,
+	identity: SuggestionIdentity
+): Suggestion {
+	const common = {
+		id: identity.id,
+		userId: identity.userId,
+		status: 'proposed' as const,
+		provenanceId: proposal.provenanceId,
+		isAutoAccepted: false,
+		createdAt: identity.now,
+		updatedAt: identity.now,
+		...(proposal.noteId !== undefined ? { noteId: proposal.noteId } : {}),
+		...(proposal.confidence !== undefined
+			? { confidence: proposal.confidence as Suggestion['confidence'] }
+			: {}),
+		...(proposal.sourceAnchorId !== undefined ? { sourceAnchorId: proposal.sourceAnchorId } : {})
+	};
+	switch (proposal.kind) {
+		case 'todo':
+			return { ...common, kind: 'todo', payload: proposal.payload };
+		case 'backlink':
+			return { ...common, kind: 'backlink', payload: proposal.payload };
+		case 'reference':
+			return { ...common, kind: 'reference', payload: proposal.payload };
+		case 'diagram':
+			return { ...common, kind: 'diagram', payload: proposal.payload };
+		case 'memory':
+			return { ...common, kind: 'memory', payload: proposal.payload };
+	}
+}
+
+function selectionProposal<P extends SelectionProposal>(
+	origin: ProposalSelectionOrigin,
+	proposal: P
+): Extract<SuggestionProposal, { kind: P['kind'] }>;
+function selectionProposal(
+	origin: ProposalSelectionOrigin,
+	proposal: SelectionProposal
+): SuggestionProposal {
+	const source = { sourceAnchorId: origin.anchor.id, provenanceId: origin.provenance.id };
+	const common = { ...source, noteId: origin.note.id, confidence: proposal.confidence };
+	switch (proposal.kind) {
+		case 'todo':
+			return {
+				...common,
+				kind: 'todo',
+				payload: { ...proposal.payload, ...source, projectId: origin.note.projectId }
+			};
+		case 'backlink':
+			return {
+				...common,
+				kind: 'backlink',
+				payload: { ...proposal.payload, ...source, sourceNoteId: origin.note.id }
+			};
+		case 'reference':
+			return {
+				...common,
+				kind: 'reference',
+				payload: { ...proposal.payload, ...source, noteId: origin.note.id }
+			};
 	}
 }

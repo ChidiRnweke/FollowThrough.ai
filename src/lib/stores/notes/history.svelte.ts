@@ -1,69 +1,53 @@
-import type { NoteId, NoteRevision, NoteRevisionId, NoteRevisionSummary } from '$lib/models/notes';
+import type {
+	NoteRevision,
+	NoteRevisionId,
+	NoteRevisionSummary,
+	NoteHistoryReadState
+} from '$lib/models/notes';
+import type { NoteActionSession } from '$lib/controllers/notes/actions';
 
-export type NoteHistoryReadState =
-	{ kind: 'ready' } | { kind: 'loading' } | { kind: 'failure'; message: string };
-
-/** The revision list and comparison selected by one open note pane. */
-export class NoteHistory {
+export class NoteHistoryStore {
 	private request = 0;
-	cancel(): void {
+	private revisionsValue = $state<readonly NoteRevisionSummary[]>([]);
+	private selectedIdValue = $state<NoteRevisionId | undefined>();
+	private selectedValue = $state<NoteRevision | undefined>();
+	private readStateValue = $state<NoteHistoryReadState>({ kind: 'ready' });
+	private bindingValue = $state.raw<NoteActionSession | null>(null);
+	get generation(): number {
+		return this.request;
+	}
+	get binding(): NoteActionSession | null {
+		return this.bindingValue;
+	}
+	get revisions(): readonly NoteRevisionSummary[] {
+		return this.revisionsValue;
+	}
+	get selectedId(): NoteRevisionId | undefined {
+		return this.selectedIdValue;
+	}
+	get selected(): NoteRevision | undefined {
+		return this.selectedValue;
+	}
+	get readState(): NoteHistoryReadState {
+		return this.readStateValue;
+	}
+	invalidate(): void {
 		this.request++;
 	}
-	revisions = $state<readonly NoteRevisionSummary[]>([]);
-	selectedId = $state<NoteRevisionId | undefined>(undefined);
-	selected = $state<NoteRevision | undefined>(undefined);
-	readState = $state<NoteHistoryReadState>({ kind: 'ready' });
-	constructor(
-		private readonly noteId: NoteId,
-		private readonly list: (noteId: NoteId) => Promise<readonly NoteRevisionSummary[]>,
-		private readonly read: (noteId: NoteId, revisionId: NoteRevisionId) => Promise<NoteRevision>
-	) {}
-	async open(): Promise<void> {
-		const request = ++this.request;
-		this.revisions = [];
-		this.selectedId = undefined;
-		this.selected = undefined;
-		this.readState = { kind: 'loading' };
-		const result = await this.list(this.noteId).then(
-			(revisions) => ({ kind: 'ready' as const, revisions }),
-			(): { kind: 'failure'; message: string } => {
-				return {
-					kind: 'failure',
-					message: 'Could not load the version history. Close this dialog and try again.'
-				};
-			}
-		);
-		if (request !== this.request) return;
-		if (result.kind === 'failure') {
-			this.readState = result;
-			return;
-		}
-		this.revisions = result.revisions;
-		const preferred =
-			result.revisions.find((revision) => revision.isPublished) ?? result.revisions.at(0);
-		if (preferred) await this.select(preferred.id);
-		else this.readState = { kind: 'ready' };
+	begin(binding: NoteActionSession | null, selectedId?: NoteRevisionId): number {
+		this.bindingValue = binding;
+		this.selectedIdValue = selectedId;
+		this.selectedValue = undefined;
+		this.readStateValue = { kind: 'loading' };
+		return ++this.request;
 	}
-	async select(revisionId: NoteRevisionId): Promise<void> {
-		const request = ++this.request;
-		this.selectedId = revisionId;
-		this.selected = undefined;
-		this.readState = { kind: 'loading' };
-		const result = await this.read(this.noteId, revisionId).then(
-			(revision) => ({ kind: 'ready' as const, revision }),
-			(): { kind: 'failure'; message: string } => {
-				return {
-					kind: 'failure',
-					message: 'Could not load that version. Close this dialog and try again.'
-				};
-			}
-		);
-		if (request !== this.request) return;
-		if (result.kind === 'failure') {
-			this.readState = result;
-			return;
-		}
-		this.selected = result.revision;
-		this.readState = { kind: 'ready' };
+	setRevisions(revisions: readonly NoteRevisionSummary[]): void {
+		this.revisionsValue = revisions;
+	}
+	setSelected(revision: NoteRevision): void {
+		this.selectedValue = revision;
+	}
+	setReadState(state: NoteHistoryReadState): void {
+		this.readStateValue = state;
 	}
 }

@@ -24,7 +24,13 @@ export type FolderContextResolution =
 	| { readonly kind: 'incomplete' }
 	| { readonly kind: 'missing'; readonly folderId: NoteId };
 
-export type NoteEtag = Brand<string, 'NoteEtag'>;
+export type NoteEtag = string & { readonly __brand: 'NoteEtag' };
+export const noteEtag = (id: string, revision: number): NoteEtag =>
+	`note:${id}:r${revision}` as NoteEtag;
+export type NoteHistoryReadState =
+	| { readonly kind: 'ready' }
+	| { readonly kind: 'loading' }
+	| { readonly kind: 'failure'; readonly message: string };
 
 export type NoteRevisionId = Brand<string, 'NoteRevisionId'>;
 
@@ -1291,3 +1297,12 @@ export interface NoteBuiltInRepairWrite {
 	readonly archivedAt: null;
 	readonly updatedAt: DateTime;
 }
+
+export type SelectionAction = 'promises' | 'reference' | 'relate';
+
+/** Editable fields captured from a mounted note editor. */
+export type NoteDraftInput = Pick<Note, 'id' | 'document' | 'plainText' | 'title' | 'isPinned'>;
+
+export type NoteDraftSave =
+	| { readonly kind: 'saved'; readonly value: Note }
+	| { readonly kind: 'failure'; readonly message: string };

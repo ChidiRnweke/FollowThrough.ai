@@ -1,3 +1,15 @@
+import { NoteArchiveImportService } from '$lib/server/services/notes/import';
+import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
+import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
+import { TodoPresentationService } from '$lib/services/todos/presentation';
+import { NoteTextSearchService } from '$lib/services/notes/text-search';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { NotePresentationService } from '$lib/services/notes/presentation';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
@@ -5,7 +17,6 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { createNotesCapability } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex, TokenAwareChunker } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -15,20 +26,20 @@ const setup = async (suffix: string) => {
 	const first = await seedNote(suffix);
 	const second = await seedNote(`${suffix}1`, first.owner);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog, markdown } = createNotesCapability({
+	const { services: catalog, markdown } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const search = new KnowledgeIndexRecords(database);
-	const index = new ContentIndex(
+	const index = createContentIndex(
 		search,
 		new InMemoryEmbeddingClient().model,
-		new TokenAwareChunker(),
+		{ targetTokens: 2400, overlapTokens: 480 },
 		true
 	).notes;
 	const original = await Promise.all(
 		[first.note, second.note].map((note) =>
-			saveNoteDraft(catalog, transactionRunner, first.owner, {
+			saveNoteDraft(catalog.editor, transactionRunner, first.owner, {
 				...note,
 				...markdown.read('ship release')
 			})
@@ -39,10 +50,23 @@ const setup = async (suffix: string) => {
 	const faults = { secondIndex: false };
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			archiveImport: new NoteArchiveImportService(),
+			patchPreparation: new NotePatchPreparationService(),
+			revisionComparison: new NoteRevisionComparisonService(),
+			todoPresentation: new TodoPresentationService(),
+			textSearch: new NoteTextSearchService(),
+			noteReferences: new NoteReferenceService(),
+			sections: new NoteSectionNumberingService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteTrashRules: new NoteLifecycleRulesService(),
+			notePublicationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
+			notePresentation: new NotePresentationService(),
+			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
-			noteTextSearcher: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			noteTextSearcher: catalog.textSearcher,
 			anchorRepairer: effects,
 			noteLinkReconciler: effects,
 			noteIndexer: {
@@ -65,7 +89,7 @@ const setup = async (suffix: string) => {
 	const read = async () =>
 		Promise.all(
 			original.map(async (note) => ({
-				note: await catalog.get(first.owner, note.id),
+				note: await catalog.reader.get(first.owner, note.id),
 				index: await search.listForNote(first.owner, note.id)
 			}))
 		);

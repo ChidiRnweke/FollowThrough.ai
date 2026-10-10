@@ -1,4 +1,9 @@
-import { syncEtag } from '$lib/services/sync/versions';
+import { SkillPortabilityService } from '$lib/services/skills/manifest';
+import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
+import { NoteReferenceService } from '$lib/services/notes/references';
+import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
+import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
+import { syncEtag } from '$lib/models/sync';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
@@ -9,7 +14,7 @@ import { ProjectRecords } from '$lib/server/repositories/projects/postgres/proje
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { SkillRecords } from '$lib/server/repositories/skills/postgres/skills';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
-import { SkillLibrary } from '$lib/server/services/skills/library';
+import { createSkillServices } from '$lib/server/factories/capabilities/skills-capability-factory';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -20,12 +25,12 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const records = new SkillRecords(database);
-	const library = new SkillLibrary(
+	const library = createSkillServices(
 		records,
 		new NoteRecords(database),
 		new ProvenanceRecords(database)
@@ -33,17 +38,22 @@ const setup = async (suffix: string) => {
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
+			skillPortability: new SkillPortabilityService(),
+			skillMetadataEditing: new SkillMetadataEditingService(),
+			noteReferences: new NoteReferenceService(),
+			noteCreationRules: new NoteLifecycleRulesService(),
+			noteEditingRules: new NoteEditingRulesService(),
 			transactionRunner,
-			skillEditor: library,
-			skillFinder: library,
-			skillUsageLister: library,
-			noteEditor: catalog,
+			skillEditor: library.editor,
+			skillFinder: library.finder,
+			skillUsageLister: library.usageLister,
+			noteEditor: catalog.editor,
 			anchorRepairer: content,
 			noteLinkReconciler: content,
 			noteIndexer: content
 		})
 	);
-	const note = await storedNote(catalog, owner, {
+	const note = await storedNote(catalog.creator, owner, {
 		kind: 'skill',
 		projectId: project.id,
 		title: 'Release checklist'
@@ -77,7 +87,10 @@ describe('Skill display name authority', () => {
 	it('publishes the renamed skill and note resources with the derived database name', async () => {
 		const { owner, note, catalog, journal, transactionRunner } = await setup('12202');
 		const initial = await journal.pullPage(owner, initialSyncCursor);
-		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
+		await saveNoteDraft(catalog.editor, transactionRunner, owner, {
+			...note,
+			title: 'Ship checklist'
+		});
 		const batch = await journal.pullPage(owner, initial.cursor);
 		expect({
 			resources: batch.records,
@@ -108,7 +121,7 @@ describe('Skill display name authority', () => {
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
-				await saveNoteDraft(catalog, transactionRunner, owner, {
+				await saveNoteDraft(catalog.editor, transactionRunner, owner, {
 					...note,
 					title: 'Ship checklist'
 				});

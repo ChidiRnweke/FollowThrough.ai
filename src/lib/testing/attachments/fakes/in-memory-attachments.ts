@@ -8,7 +8,11 @@ import type {
 } from '$lib/models/attachments';
 import type { NoteId } from '$lib/models/notes';
 import type { TodoId } from '$lib/models/todos';
-import type { AttachmentManager } from '$lib/server/services/attachments/contracts';
+import type {
+	AttachmentUploads,
+	AttachmentDownloads,
+	AttachmentLifecycle
+} from '$lib/server/services/attachments/library';
 import type {
 	RestoreSnapshot,
 	SnapshotParticipant
@@ -52,7 +56,9 @@ export const attachmentViewBuilder = (
  * actually crosses are implemented; the rest throw so an unexpected call is a
  * loud failure rather than a silent success.
  */
-export class InMemoryAttachments implements AttachmentManager, SnapshotParticipant {
+export class InMemoryAttachments
+	implements AttachmentUploads, AttachmentDownloads, AttachmentLifecycle, SnapshotParticipant
+{
 	downloadUrls = new Map<string, string>();
 	/** Upload reservations `complete` can finalize, keyed by upload id. */
 	uploads = new Map<string, AttachmentView>();
@@ -83,6 +89,11 @@ export class InMemoryAttachments implements AttachmentManager, SnapshotParticipa
 		if (!reserved) throw new NotFoundError('Attachment upload was not found');
 		this.finalized = [...this.finalized, reserved];
 		return reserved;
+	}
+	async get(_actor: ActorContext, id: AttachmentId): Promise<AttachmentView> {
+		const found = this.finalized.find((view) => view.attachment.id === id);
+		if (!found) throw new NotFoundError('Attachment was not found');
+		return found;
 	}
 	list(): Promise<readonly AttachmentView[]> {
 		throw new Error('not used');

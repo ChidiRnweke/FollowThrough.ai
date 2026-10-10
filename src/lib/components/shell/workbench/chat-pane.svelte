@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShellContext } from '$lib/client/shell/views';
+	import type { ShellContext } from '$lib/models/workspace-views';
 
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import type { AgentModel, AgentPreferenceValues, Conversation } from '$lib/models/agent';

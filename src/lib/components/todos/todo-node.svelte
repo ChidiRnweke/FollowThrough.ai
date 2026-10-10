@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { NodeViewProps } from '@tiptap/core';
 	import { untrack } from 'svelte';
-	import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { TodoId } from '$lib/models/todos';
 	import NodeViewWrapper from '$lib/components/edra/NodeViewWrapper.svelte';
 	import { Badge } from '$lib/components/ui/badge';

@@ -2,8 +2,8 @@ import { SvelteSet } from 'svelte/reactivity';
 import type { ProjectId } from '$lib/models/projects';
 import type { TodoId, TodoStatus, UpdateTodoInput } from '$lib/models/todos';
 
-import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
-import { workspaceSession } from '$lib/stores/workspace/session.svelte';
+import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+import { workspaceSession } from '$lib/factories/workspace/session';
 import { rightPanel } from '../shell/right-panel.svelte';
 
 class TodoUpdatesStore {
@@ -13,13 +13,13 @@ class TodoUpdatesStore {
 	isPending(todoId: TodoId): boolean {
 		return this.pendingIds.has(todoId);
 	}
-	editor(todoId: TodoId): WorkspaceDraft<'todos'> {
+	editor(todoId: TodoId): WorkspaceDraftController<'todos'> {
 		const session = workspaceSession.current;
 		if (!session) throw new Error('Open the workspace before editing a todo');
 		return session.resources.draft({ type: 'todos', id: [todoId] });
 	}
 	async save(
-		editor: WorkspaceDraft<'todos'>,
+		editor: WorkspaceDraftController<'todos'>,
 		patch: Omit<UpdateTodoInput, 'todoId'>
 	): Promise<boolean> {
 		const todo = editor.value;

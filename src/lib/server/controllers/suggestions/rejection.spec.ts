@@ -1,6 +1,8 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
 import { Suggestions, type SuggestionsDependencies } from './controller';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { InMemorySuggestionRepository } from '$lib/testing/suggestions/fakes/in-memory-suggestion-repository';
 import {
 	InMemoryNoteRepository,
@@ -17,7 +19,7 @@ import {
 
 const setup = () => {
 	const records = new InMemorySuggestionRepository();
-	const inbox = new SuggestionInbox(
+	const inbox = createSuggestionServices(
 		records,
 		new InMemoryNoteRepository(),
 		new InMemoryProvenanceRepository(),
@@ -26,8 +28,10 @@ const setup = () => {
 	);
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
-			suggestionFinder: inbox,
-			suggestionRejecter: inbox,
+			todoCreationRules: new TodoEditingRulesService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			suggestionFinder: inbox.finder,
+			suggestionRejecter: inbox.rejecter,
 			transactionRunner: new InMemoryTransactionRunner([])
 		})
 	);
@@ -74,13 +78,13 @@ it('preserves a decision that won after the pending proposal was read', async ()
 	const { records, inbox } = setup();
 	const proposal = suggestionBuilder();
 	records.suggestions = [proposal];
-	const accepted = await inbox.accept(
+	const accepted = await inbox.accepter.accept(
 		testActor(),
 		proposal,
 		'00000000-0000-4000-8005-000000000001',
 		false
 	);
-	const outcome = await inbox.reject(testActor(), proposal).then(
+	const outcome = await inbox.rejecter.reject(testActor(), proposal).then(
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);

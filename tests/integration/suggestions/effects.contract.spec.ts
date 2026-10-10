@@ -1,3 +1,6 @@
+import { TodoEditingRulesService } from '$lib/services/todos/edits';
+import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
+import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import type { MemoryEntryId } from '$lib/models/memory';
@@ -12,16 +15,15 @@ import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-contex
 import { SuggestionRecords } from '$lib/server/repositories/suggestions/postgres/suggestions';
 import { SuggestionEffectRecords } from '$lib/server/repositories/suggestions/postgres/application-effects';
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
-import { SuggestionInbox } from '$lib/server/services/suggestions/inbox';
+import { createSuggestionServices } from '$lib/server/factories/capabilities/suggestions-capability-factory';
 import { RelationshipRecords } from '$lib/server/repositories/relationships/postgres/relationships';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
-import { RelationshipGraph } from '$lib/server/services/relationships/graph';
-import { MemoryLibrary } from '$lib/server/services/memory/library';
+import { createRelationshipServices } from '$lib/server/factories/capabilities/relationships-capability-factory';
+import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
 import { MemoryRecords } from '$lib/server/repositories/memory/postgres/memory-entries';
 import { KnowledgeIndexRecords } from '$lib/server/repositories/knowledge-search/postgres/search';
-import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import { InMemoryEmbeddingClient } from '$lib/testing/knowledge-search/fakes/in-memory-search';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { context, now, seedNote, seedProvenance } from '../database-harness';
@@ -34,7 +36,7 @@ const application = (
 	const notes = new NoteRecords(database);
 	const provenance = new ProvenanceRecords(database);
 	const anchors = new SourceAnchorRecords(database);
-	const inbox = new SuggestionInbox(suggestions, notes, provenance, anchors);
+	const inbox = createSuggestionServices(suggestions, notes, provenance, anchors);
 	const repository = new SuggestionEffectRecords(database);
 	const entries = new MemoryRecords(database);
 	const relationships = new RelationshipRecords(database);
@@ -46,15 +48,19 @@ const application = (
 			Array.from({ length: 3072 }, (_, i) => (i === 0 ? 1 : 0))
 		);
 	}
-	const index = new ContentIndex(search, embeddings.model);
+	const index = createContentIndex(search, embeddings.model);
 	const controller = new Suggestions(
 		capabilityDependencies<SuggestionsDependencies>({
-			suggestionFinder: inbox,
-			suggestionAccepter: inbox,
-			suggestionReverter: inbox,
+			todoCreationRules: new TodoEditingRulesService(),
+			suggestionPresentation: new SuggestionPresentationService(),
+			suggestionFinder: inbox.finder,
+			suggestionAccepter: inbox.accepter,
+			suggestionReverter: inbox.reverter,
 			suggestionEffects: new SuggestionEffects(repository),
-			memoryChanges: new MemoryLibrary(entries, new ProjectRecords(database), provenance),
-			relationshipCreator: new RelationshipGraph(relationships, notes, anchors, provenance),
+			memoryChanges: createMemoryServices(entries, new ProjectRecords(database), provenance)
+				.changes,
+			relationshipCreator: createRelationshipServices(relationships, notes, anchors, provenance)
+				.creator,
 			memoryIndexer: index.memories,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
@@ -91,7 +97,7 @@ const memoryReplacement = async (suffix: string) => {
 		createdAt: now,
 		updatedAt: now
 	});
-	const suggestion = await state.inbox.create(state.owner, {
+	const suggestion = await state.inbox.creator.create(state.owner, {
 		kind: 'memory',
 		provenanceId: state.provenance.id,
 		payload: {
@@ -173,7 +179,7 @@ describe('Durable proposal application effects', () => {
 			createdAt: now,
 			updatedAt: now
 		});
-		const suggestion = await state.inbox.create(state.owner, {
+		const suggestion = await state.inbox.creator.create(state.owner, {
 			kind: 'backlink',
 			noteId: state.note.id,
 			provenanceId: state.provenance.id,
@@ -237,7 +243,7 @@ describe('Durable proposal application effects', () => {
 	});
 	it('serializes competing controller acceptances with one effect and one artifact', async () => {
 		const state = await setup('9508');
-		const suggestion = await state.inbox.create(state.owner, {
+		const suggestion = await state.inbox.creator.create(state.owner, {
 			kind: 'memory',
 			provenanceId: state.provenance.id,
 			payload: {
@@ -273,7 +279,7 @@ describe('Durable proposal application effects', () => {
 	});
 	it('rejects an invalid stored effect at the repository boundary', async () => {
 		const state = await setup('9507');
-		const suggestion = await state.inbox.create(state.owner, {
+		const suggestion = await state.inbox.creator.create(state.owner, {
 			kind: 'memory',
 			provenanceId: state.provenance.id,
 			payload: { scope: 'user', operation: 'add', content: 'Original' }
