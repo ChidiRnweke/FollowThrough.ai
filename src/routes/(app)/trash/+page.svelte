@@ -7,7 +7,7 @@
 		widgetTrashEntry,
 		type TrashEntry
 	} from '$lib/components/shared/trash-entry';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { changeDiagramTrash } from '$lib/stores/diagrams/trash-actions';
 	import { widgetEdits } from '$lib/stores/widgets/widget-edits.svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';

@@ -14,7 +14,7 @@
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';

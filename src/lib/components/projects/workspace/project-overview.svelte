@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
 	import type { GetProjectOutput, ProjectExportEntry, ProjectTreeNode } from '$lib/models/projects';
 	import { projectTreeController } from '$lib/factories/projects/tree';
 	import type { NoteId, NoteSummary, TrashedNote } from '$lib/models/notes';
@@ -35,7 +35,7 @@
 	} from '$lib/components/icons';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import EmptyState from '../../shared/empty-state.svelte';
 	import NameDialog from '../name-dialog.svelte';
 	import ResourceRow from '../resource-row.svelte';
@@ -90,9 +90,7 @@
 	const now = $derived(Date.parse(renderedAt));
 
 	const project = $derived(view.project);
-	let renameEntry = $state<{ draft: WorkspaceDraftController<'notes'>; title: string } | null>(
-		null
-	);
+	let renameEntry = $state<{ draft: ProjectNameEditor<'notes'>; title: string } | null>(null);
 
 	function countEntries(nodes: readonly ProjectTreeNode[]): number {
 		return nodes.reduce((total, node) => total + 1 + countEntries(node.children), 0);

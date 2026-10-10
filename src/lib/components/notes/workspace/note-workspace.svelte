@@ -39,7 +39,7 @@
 		noteActionRunsFor,
 		type NoteActionContext
 	} from '$lib/stores/notes/note-action-runs.svelte';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import type { PerNoteEditorSlot } from '../editor-context';
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';

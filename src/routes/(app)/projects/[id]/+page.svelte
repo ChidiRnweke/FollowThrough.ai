@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
 	import PageShell from '$lib/components/layout/page-shell.svelte';
 	import { NameDialog, ProjectOverview } from '$lib/components/projects';
 	import { Button } from '$lib/components/ui/button';
@@ -13,7 +13,7 @@
 		FtFolderPlus as FolderPlus,
 		FtEllipsis as Ellipsis
 	} from '$lib/components/icons';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { BulkExportDialog, ExportSettingsDialog, ImportNotesDialog } from '$lib/components/notes';
 	import type { ProjectExportEntry } from '$lib/models/projects';
 	import { projectTreeController } from '$lib/factories/projects/tree';
@@ -47,7 +47,7 @@
 	);
 	let newNoteOpen = $state(false);
 	let newFolderOpen = $state(false);
-	let renameDraft = $state<WorkspaceDraftController<'projects'> | null>(null);
+	let renameDraft = $state<ProjectNameEditor<'projects'> | null>(null);
 	let exportDefaultsOpen = $state(false);
 	let importOpen = $state(false);
 	let exportOpen = $state(false);

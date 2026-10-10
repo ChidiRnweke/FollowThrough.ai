@@ -8,7 +8,7 @@
 </script>
 
 <script lang="ts">
-	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
+	import type { ProjectNameEditor } from '$lib/controllers/projects/actions';
 	import type { NoteSummary } from '$lib/models/notes';
 	import type { Project, ProjectId } from '$lib/models/projects';
 	import { goto } from '$app/navigation';
@@ -17,7 +17,7 @@
 	import { onMount } from 'svelte';
 	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { projectActions } from '$lib/stores/projects/project-actions.svelte';
+	import { projectActions } from '$lib/factories/projects/actions';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import NameDialog from './name-dialog.svelte';
 	import ProjectTreeView from './project-tree-view.svelte';
@@ -347,7 +347,7 @@
 				mode: 'rename';
 				entryId: NoteId;
 				current: string;
-				draft: WorkspaceDraftController<'notes'>;
+				draft: ProjectNameEditor<'notes'>;
 		  };
 
 	let inlineEdit = $state<InlineEdit | null>(null);
@@ -432,7 +432,7 @@
 
 	type ProjectDialog =
 		| { kind: 'new-project' }
-		| { kind: 'rename-project'; draft: WorkspaceDraftController<'projects'>; current: string };
+		| { kind: 'rename-project'; draft: ProjectNameEditor<'projects'>; current: string };
 
 	let dialog = $state<ProjectDialog | null>(null);
 

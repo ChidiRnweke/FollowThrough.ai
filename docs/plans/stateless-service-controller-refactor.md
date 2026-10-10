@@ -642,3 +642,21 @@ Every service module below has a planned disposition. This is routing, not compl
   87 prohibited imports and 27 missing interfaces; topology, source and test-quality audits pass.
 - Browser project action workflows still live in the action store. Their migration, remaining
   feature families, full enforcement and final verification are pending. No phase is complete.
+
+## Browser project actions — 2026-10-10
+
+- ProjectActions owns local creation/editing, remote moves/deletion, synchronization and failure
+  outcomes. The former action store retains only account-bound status and controlled updates.
+  A browser adapter preserves framework error messages; transport calls live behind a narrow port.
+- Rename dialogs hold a ProjectNameEditor with readonly values and a complete rename operation.
+  They no longer receive capture/stage/read or mutable draft state. Other note-editor draft access
+  remains pending in its own feature migration.
+- Actions check both session identity and account identity after awaits. A stopped/replaced account
+  cannot receive a late synchronization or error. Concurrent actions retain busy status until all
+  current-account operations settle. Controller tests retain a full offline rename in the outbox
+  before success and reject an editor captured before account stop.
+- Focused controller/workspace/browser tests pass: 34 files / 194 tests. Type check passes with
+  zero errors/warnings. Lint passes. Architecture remains incomplete at 86 prohibited imports and
+  27 missing interfaces; topology/source/test-quality audits pass. Whole-application final
+  verification is still pending. The next browser workflow under review is durable note-action
+  submission and its retained request identities.
