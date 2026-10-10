@@ -20,7 +20,7 @@ const configurationDisabled = (): boolean => building || process.env.NODE_ENV ==
 export const init: ServerInit = async () => {
 	if (configurationDisabled()) return;
 	await hydrateEnvironment();
-	const recovered = await AppFactory.recoverInterruptedRuns();
+	const recovered = await AppFactory.startup().recoverInterruptedRuns();
 	if (recovered > 0)
 		console.log(`[agent-run] Recovered ${recovered} interrupted run(s) on startup`);
 };
@@ -111,7 +111,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Establish the local profile before any workspace or tool write.
 		setWorkspaceAccountCookie(
 			event.cookies,
-			(await AppFactory.localActor()).userId,
+			(await AppFactory.localIdentity().localActor()).userId,
 			event.url.protocol === 'https:'
 		);
 	}

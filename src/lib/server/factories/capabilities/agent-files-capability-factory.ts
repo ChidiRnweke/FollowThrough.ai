@@ -9,6 +9,7 @@ import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import {
 	AgentVirtualFiles,
+	type AgentFileReferences,
 	type AgentFileReader
 } from '$lib/server/services/agent-files/virtual-files';
 
@@ -21,6 +22,7 @@ export interface AgentFilesCapabilityInput {
 
 export interface AgentFilesCapability {
 	readonly reader: AgentFileReader;
+	readonly references: AgentFileReferences;
 	readonly repository: AgentFileRepository;
 }
 
@@ -29,16 +31,14 @@ export const createAgentFilesCapability = (
 ): AgentFilesCapability => {
 	const tokens = input.tokens;
 	const repository = new AgentFileRecords(input.db, tokens);
-	return {
-		repository,
-		reader: new AgentVirtualFiles({
-			tokens,
-			projects: input.projects,
-			notes: input.notes,
-			attachments: new AttachmentRecords(input.db),
-			diagrams: new DiagramRecords(input.db),
-			stored: repository,
-			noteMarkdown: new NodeNoteMarkdown()
-		})
-	};
+	const files = new AgentVirtualFiles({
+		tokens,
+		projects: input.projects,
+		notes: input.notes,
+		attachments: new AttachmentRecords(input.db),
+		diagrams: new DiagramRecords(input.db),
+		stored: repository,
+		noteMarkdown: new NodeNoteMarkdown()
+	});
+	return { repository, reader: files, references: files };
 };

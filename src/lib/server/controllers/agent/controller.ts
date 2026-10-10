@@ -56,10 +56,7 @@ import type { IAgentContext, AttachedResource } from '$lib/server/services/agent
 import type { WidgetReader } from '$lib/server/services/widgets/library';
 import type { DiagramFinder } from '$lib/server/services/diagrams/library';
 import type { AttachmentLookup } from '$lib/server/services/attachments/library';
-import {
-	attachmentFilePath,
-	diagramFilePath
-} from '$lib/server/services/agent-files/virtual-files';
+import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
 import type {
@@ -216,6 +213,7 @@ export interface AgentController {
  * controller can be built and tested with repository and provider fakes.
  */
 export interface AgentDependencies {
+	readonly fileReferences: AgentFileReferences;
 	readonly runStatus: AgentRunStatusRules;
 	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
 	readonly conversationHistory: Pick<ConversationHistory, 'rewind'>;
@@ -1142,14 +1140,21 @@ export class Agent implements AgentController {
 					};
 				case 'diagram': {
 					const diagram = await this.dependencies.contextDiagrams.get(actor, ref.id);
-					return { kind: 'diagram', diagram, filePath: diagramFilePath(diagram) };
+					return {
+						kind: 'diagram',
+						diagram,
+						filePath: this.dependencies.fileReferences.diagramPath(diagram)
+					};
 				}
 				case 'attachment': {
 					const view = await this.dependencies.contextAttachments.get(actor, ref.id);
 					return {
 						kind: 'attachment',
 						view,
-						filePath: attachmentFilePath(view.attachment.projectId, view.attachment.id)
+						filePath: this.dependencies.fileReferences.attachmentPath(
+							view.attachment.projectId,
+							view.attachment.id
+						)
 					};
 				}
 			}

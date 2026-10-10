@@ -5,7 +5,11 @@ export interface UserReader {
 	get(actor: ActorContext): Promise<User>;
 }
 
-export class UserDirectory implements UserReader {
+export interface LocalUserInitializer {
+	initializeLocal(actor: ActorContext): Promise<User>;
+}
+
+export class UserDirectory implements UserReader, LocalUserInitializer {
 	constructor(private readonly users: UserRepository) {}
 
 	async initializeLocal(actor: ActorContext): Promise<User> {

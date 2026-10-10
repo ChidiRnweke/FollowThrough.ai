@@ -22,6 +22,7 @@ import type {
 	AgentFile,
 	AgentFileError,
 	AgentFileId,
+	AgentFileMetadata,
 	AgentFileNextAction,
 	AgentGrepResult,
 	AgentLsResult,
@@ -58,14 +59,14 @@ const lineCount = (content: string): number =>
 	content.length === 0 ? 0 : content.split('\n').length;
 
 /** Where an attachment's extracted text is mounted. */
-export const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
+const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
 	`/projects/${projectId}/attachments/${attachmentId}.txt`;
 
 /** Where a diagram's source is mounted; the extension says which language it is. */
-export const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
+const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
 	`/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`;
 
-export const agentFileOf = (
+const agentFileOf = (
 	tokens: TokenCounter,
 	path: string,
 	mediaType: string,
@@ -117,8 +118,29 @@ export interface AgentFileReader {
 	sed(actor: ActorContext, path: string, range: AgentSedRange): Promise<AgentSedResult>;
 }
 
-export class AgentVirtualFiles implements AgentFileReader {
+export interface AgentFileReferences {
+	describeNote(note: Note): AgentFileMetadata;
+	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string;
+	diagramPath(diagram: Diagram): string;
+}
+
+export class AgentVirtualFiles implements AgentFileReader, AgentFileReferences {
 	constructor(private readonly dependencies: AgentVirtualFilesDependencies) {}
+
+	describeNote(note: Note): AgentFileMetadata {
+		return agentFileOf(
+			this.dependencies.tokens,
+			`/projects/${note.projectId}/notes/${note.id}.md`,
+			'text/markdown',
+			this.dependencies.noteMarkdown.write(note.document)
+		).metadata;
+	}
+	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string {
+		return attachmentFilePath(projectId, attachmentId);
+	}
+	diagramPath(diagram: Diagram): string {
+		return diagramFilePath(diagram);
+	}
 
 	private async exactFile(actor: ActorContext, path: string): Promise<AgentFile | undefined> {
 		const stored = await this.dependencies.stored.findByPath(actor, path);

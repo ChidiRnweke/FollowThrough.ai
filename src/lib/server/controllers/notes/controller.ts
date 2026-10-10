@@ -1,3 +1,8 @@
+import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
+import type {
+	AgentToolPresentation,
+	NoteViewProjection
+} from '$lib/server/services/agent/runs/tool-views';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type {
@@ -152,6 +157,7 @@ export interface NoteMarkdownWriter {
 export interface NoteMarkdown extends NoteMarkdownReader, NoteMarkdownWriter {}
 
 export interface NotesController {
+	getForAgent(actor: ActorContext, input: GetNoteViewInput): Promise<NoteViewProjection>;
 	importMarkdownArchive(
 		actor: ActorContext,
 		input: ImportMarkdownArchiveInput
@@ -329,6 +335,8 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly fileReferences: Pick<AgentFileReferences, 'describeNote'>;
+	readonly agentPresentation: Pick<AgentToolPresentation, 'projectNoteView'>;
 	readonly archiveImport: NoteArchiveImportPreparation;
 	readonly patchPreparation: NotePatchPreparation;
 	readonly revisionComparison: NoteRevisionComparison;
@@ -582,6 +590,13 @@ export class Notes implements NotesController {
 	}
 
 	constructor(private readonly dependencies: NotesDependencies) {}
+	async getForAgent(actor: ActorContext, input: GetNoteViewInput): Promise<NoteViewProjection> {
+		const view = await this.get(actor, input);
+		return this.dependencies.agentPresentation.projectNoteView(
+			view,
+			this.dependencies.fileReferences.describeNote(view.note)
+		);
+	}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<ResolvedNoteView> {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([

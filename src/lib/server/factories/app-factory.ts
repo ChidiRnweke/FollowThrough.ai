@@ -1,3 +1,10 @@
+import {
+	LocalIdentity,
+	type LocalIdentityController
+} from '../controllers/identity/local-identity';
+import type { StartupController } from '../controllers/startup/controller';
+import { instrumentedController } from '../controllers/instrumentation';
+import { internalControllerSurfaces } from './controller-surfaces';
 import type { McpSurfaceFactory } from './agent/mcp-tool-factory';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import type { ActorContext } from '$lib/models/identity';
@@ -28,7 +35,16 @@ class DeferredValue<T> {
 }
 
 const application = new DeferredValue(createProductionFactory);
-const localUsers = new DeferredValue(() => new UserDirectory(new UserRecords(db)));
+const localIdentity = new DeferredValue(() =>
+	instrumentedController(
+		'localIdentity',
+		new LocalIdentity({
+			resolveActor: requestActor,
+			users: new UserDirectory(new UserRecords(db))
+		}),
+		internalControllerSurfaces.localIdentity
+	)
+);
 const sessions = new DeferredValue(() => new SessionRegistry(new SessionRecords(db)));
 const accessTokens = new DeferredValue(() => new AccessTokens(new ApiTokenRecords(db)));
 const signIn = new DeferredValue(() => {
@@ -49,8 +65,8 @@ export class AppFactory {
 		return this.application().controllers;
 	}
 
-	static recoverInterruptedRuns(): Promise<number> {
-		return this.application().recoverInterruptedRuns();
+	static startup(): StartupController {
+		return this.application().startup;
 	}
 
 	static eventBus(): AgentEventBus {
@@ -69,12 +85,8 @@ export class AppFactory {
 		return requestActor(locals?.user);
 	}
 
-	/** Provisioning is only reached through the explicit authentication-disabled branch. */
-	static async localActor(): Promise<ActorContext> {
-		// With authentication enabled, an absent session identity is rejected here.
-		const actor = requestActor();
-		await localUsers.get().initializeLocal(actor);
-		return actor;
+	static localIdentity(): LocalIdentityController {
+		return localIdentity.get();
 	}
 
 	static sessions(): ISessionRegistry {

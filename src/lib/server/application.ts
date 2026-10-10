@@ -1,3 +1,5 @@
+import type { StartupController } from './controllers/startup/controller';
+import { createStartup } from './factories/startup-factory';
 import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import {
 	ProductionControllerFactory,
@@ -86,7 +88,7 @@ export interface ApplicationConfig {
 export interface ProductionApplication {
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ProductionControllerFactory;
-	readonly recoverInterruptedRuns: () => Promise<number>;
+	readonly startup: StartupController;
 	readonly eventBus: AgentEventBus;
 	/**
 	 * Periodic work for the worker sidecar to run. The web process builds these
@@ -434,6 +436,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionReverter: suggestions.reverter
 		},
 		agent: {
+			fileReferences: agentFilesCapability.references,
 			runStatus: agentCapability.runStatus,
 			streamPresentation: agentCapability.streamPresentation,
 			conversationHistory: agentCapability.conversationHistory,
@@ -590,6 +593,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos.context
 		},
 		notes: {
+			fileReferences: agentFilesCapability.references,
+			agentPresentation: noteCapability.agentPresentation,
 			todoPresentation: todoCapability.presentation,
 			textSearch: noteCapability.textSearch,
 			sections: noteCapability.sections,
@@ -723,16 +728,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	return {
 		controllers: controllerFactory,
 		mcpSurface: agentCapability.mcpSurface,
-		recoverInterruptedRuns: async () => {
-			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
-			return (
-				interrupted +
-				(await controllerFactory.todos().recoverQueuedPromiseRuns()) +
-				(await controllerFactory.references().recoverQueuedReferenceRuns()) +
-				(await controllerFactory.relationships().recoverQueuedRelatedNoteRuns()) +
-				(await controllerFactory.diagrams().recoverQueuedDiagramRuns())
-			);
-		},
+		startup: createStartup(controllerFactory),
 		backgroundTasks: [
 			knowledgeSearch.maintenance,
 			attachmentCapability.retention,
