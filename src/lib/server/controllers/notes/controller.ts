@@ -145,7 +145,7 @@ import type {
 	NoteTrashReader,
 	SourceAnchorRepairer
 } from '$lib/server/services/notes/catalog';
-import type { NoteIndexer } from '$lib/server/services/notes/contracts';
+import type { NoteIndexing as NoteIndexer } from '$lib/server/services/knowledge-search/indexing';
 import type {
 	ReferenceContextReader,
 	ReferenceLister
@@ -893,7 +893,7 @@ export class Notes implements NotesController {
 				note,
 				this.dependencies.noteReferences.links(note.document)
 			);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
 			return {
 				note,
 				etag: noteEtag(note.id, note.currentRevision),
@@ -948,7 +948,7 @@ export class Notes implements NotesController {
 				restored,
 				this.dependencies.noteReferences.links(restored.document)
 			);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, restored));
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}
@@ -1006,7 +1006,7 @@ export class Notes implements NotesController {
 			});
 			// Deliberately no revision: history is bounded, and a title correction should not
 			// evict a snapshot of the body somebody may still want back.
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
 			return { note };
 		});
 	}
@@ -1020,7 +1020,7 @@ export class Notes implements NotesController {
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
 			return { note };
 		});
 	}
@@ -1034,7 +1034,7 @@ export class Notes implements NotesController {
 			);
 			if (decision.kind === 'invalid') throw new ValidationError(decision.message);
 			const note = await this.dependencies.noteTrash.persistTrash(actor, decision.note);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, note));
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, note));
 			return { note };
 		});
 	}
@@ -1200,7 +1200,7 @@ export class Notes implements NotesController {
 				restored,
 				this.dependencies.noteReferences.links(restored.document)
 			);
-			await this.finishIndex(actor, await this.dependencies.noteIndexer.index(actor, restored));
+			await this.finishIndex(actor, await this.dependencies.noteIndexer.indexNote(actor, restored));
 			return { note: restored, etag: noteEtag(restored.id, restored.currentRevision) };
 		});
 	}

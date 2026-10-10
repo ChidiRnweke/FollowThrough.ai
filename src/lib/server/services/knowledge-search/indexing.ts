@@ -1,6 +1,8 @@
 import type {
 	DiagramIndexContext,
+	DiagramIndexContextRequirement,
 	IndexContent,
+	IndexChunking,
 	IndexPlan,
 	IndexingResult
 } from '$lib/models/knowledge-search';
@@ -20,10 +22,6 @@ import type { EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 
 import type { TokenCodec } from '$lib/models/tokenization';
 
-export const diagramIndexNoteId = (diagram: Diagram) =>
-	diagram.archivedAt === undefined && diagram.searchableText.trim()
-		? diagram.sourceNoteId
-		: undefined;
 export type { EmbeddingBatch };
 const decideIndexPlan = (content: IndexContent): IndexPlan =>
 	content.contents.length
@@ -31,75 +29,6 @@ const decideIndexPlan = (content: IndexContent): IndexPlan =>
 		: { kind: 'remove', source: content.source };
 
 const MEMORY_SOURCE_TITLE = 'Project memory';
-
-class TokenAwareChunker {
-	constructor(
-		private readonly targetTokens: number,
-		private readonly overlapTokens: number,
-		private readonly encoding: TokenCodec
-	) {
-		if (!Number.isInteger(targetTokens) || targetTokens <= 0)
-			throw new Error('Retrieval chunk target must be a positive integer');
-		if (!Number.isInteger(overlapTokens) || overlapTokens < 0 || overlapTokens >= targetTokens)
-			throw new Error('Retrieval chunk overlap must be non-negative and smaller than target');
-	}
-
-	chunk(content: string): readonly string[] {
-		const normalized = content.replace(/\r\n/g, '\n').trim();
-		if (!normalized) return [];
-		const chunks: string[] = [];
-		let current = '';
-		for (const unit of this.semanticUnits(normalized)) {
-			const combined = current ? `${current}\n\n${unit}` : unit;
-			if (this.count(combined) <= this.targetTokens) {
-				current = combined;
-				continue;
-			}
-			if (current) chunks.push(current);
-			const overlap = this.overlapTail(current);
-			current = overlap ? `${overlap}\n\n${unit}` : unit;
-			if (this.count(current) > this.targetTokens) {
-				const tokens = this.encoding.encode(current);
-				chunks.push(this.encoding.decode(tokens.slice(0, this.targetTokens)).trim());
-				current = this.encoding.decode(tokens.slice(this.targetTokens - this.overlapTokens)).trim();
-			}
-		}
-		if (current) chunks.push(current);
-		return chunks;
-	}
-
-	private count(content: string): number {
-		return this.encoding.encode(content).length;
-	}
-
-	private semanticUnits(content: string): readonly string[] {
-		const units: string[] = [];
-		for (const paragraph of content
-			.split(/\n\s*\n/)
-			.map((value) => value.trim())
-			.filter(Boolean)) {
-			if (this.count(paragraph) <= this.targetTokens) {
-				units.push(paragraph);
-				continue;
-			}
-			for (const sentence of paragraph.split(/(?<=[.!?])\s+/u).filter(Boolean)) {
-				if (this.count(sentence) <= this.targetTokens) units.push(sentence);
-				else {
-					const tokens = this.encoding.encode(sentence);
-					for (let start = 0; start < tokens.length; start += this.targetTokens)
-						units.push(this.encoding.decode(tokens.slice(start, start + this.targetTokens)).trim());
-				}
-			}
-		}
-		return units;
-	}
-
-	private overlapTail(value: string): string {
-		if (!value || this.overlapTokens === 0) return '';
-		const tokens = this.encoding.encode(value);
-		return this.encoding.decode(tokens.slice(-this.overlapTokens)).trim();
-	}
-}
 
 const retrievalContentHash = async (
 	content: string,
@@ -230,10 +159,6 @@ const applyIndex = async (
 	return { kind: 'stored' };
 };
 
-export interface IndexChunking {
-	readonly targetTokens: number;
-	readonly overlapTokens: number;
-}
 export interface IndexCompletion {
 	complete(
 		actor: ActorContext,
@@ -242,42 +167,51 @@ export interface IndexCompletion {
 	): Promise<void>;
 }
 export interface NoteIndexing {
-	index(actor: ActorContext, note: Note): Promise<IndexingResult>;
+	indexNote(actor: ActorContext, note: Note): Promise<IndexingResult>;
 }
 export interface AttachmentIndexing {
-	index(actor: ActorContext, attachment: Attachment, text: string): Promise<void>;
-	remove(actor: ActorContext, attachmentId: Attachment['id']): Promise<void>;
+	indexAttachment(actor: ActorContext, attachment: Attachment, text: string): Promise<void>;
+	removeAttachment(actor: ActorContext, attachmentId: Attachment['id']): Promise<void>;
 }
 export interface MemoryIndexing {
-	index(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult>;
+	indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult>;
 }
 export interface DiagramIndexing {
-	index(
+	diagramContextRequirement(diagram: Diagram): DiagramIndexContextRequirement;
+	indexDiagram(
 		actor: ActorContext,
 		diagram: Diagram,
 		context: DiagramIndexContext
 	): Promise<IndexingResult>;
 }
 export interface WidgetIndexing {
-	index(actor: ActorContext, widget: Widget, searchableText: string): Promise<IndexingResult>;
+	indexWidget(actor: ActorContext, widget: Widget, searchableText: string): Promise<IndexingResult>;
 }
-export interface IndexCapabilities extends IndexCompletion {
-	readonly notes: NoteIndexing;
-	readonly attachments: AttachmentIndexing;
-	readonly memories: MemoryIndexing;
-	readonly diagrams: DiagramIndexing;
-	readonly widgets: WidgetIndexing;
-}
+export interface IndexCapabilities
+	extends
+		IndexCompletion,
+		NoteIndexing,
+		AttachmentIndexing,
+		MemoryIndexing,
+		DiagramIndexing,
+		WidgetIndexing {}
 export class ContentIndex implements IndexCapabilities {
-	private readonly chunker: TokenAwareChunker;
+	private readonly targetTokens: number;
+	private readonly overlapTokens: number;
 	constructor(
 		private readonly repository: RetrievalIndexRepository,
 		private readonly embeddingModel: string,
-		tokenizer: TokenCodec,
+		private readonly encoding: TokenCodec,
 		chunking: IndexChunking,
 		private readonly defer: boolean
 	) {
-		this.chunker = new TokenAwareChunker(chunking.targetTokens, chunking.overlapTokens, tokenizer);
+		const { targetTokens, overlapTokens } = chunking;
+		if (!Number.isInteger(targetTokens) || targetTokens <= 0)
+			throw new Error('Retrieval chunk target must be a positive integer');
+		if (!Number.isInteger(overlapTokens) || overlapTokens < 0 || overlapTokens >= targetTokens)
+			throw new Error('Retrieval chunk overlap must be non-negative and smaller than target');
+		this.targetTokens = targetTokens;
+		this.overlapTokens = overlapTokens;
 	}
 	async complete(
 		actor: ActorContext,
@@ -298,25 +232,30 @@ export class ContentIndex implements IndexCapabilities {
 			})
 		);
 	}
-	readonly notes = { index: this.indexNote.bind(this) };
-	readonly attachments = {
-		index: this.indexAttachment.bind(this),
-		remove: async (actor: ActorContext, attachmentId: Attachment['id']) => {
-			await this.apply(actor, { kind: 'remove', source: { kind: 'attachment', attachmentId } });
-		}
-	};
-	readonly memories = { index: this.indexMemory.bind(this) };
-	readonly diagrams = { index: this.indexDiagram.bind(this) };
-	readonly widgets = { index: this.indexWidget.bind(this) };
+	async removeAttachment(actor: ActorContext, attachmentId: Attachment['id']): Promise<void> {
+		await this.apply(actor, { kind: 'remove', source: { kind: 'attachment', attachmentId } });
+	}
+
+	/** Decide whether the owning operation needs an authorized source-note title. */
+	diagramContextRequirement(diagram: Diagram): DiagramIndexContextRequirement {
+		return this.isDiagramIndexable(diagram) && diagram.sourceNoteId !== undefined
+			? { kind: 'source_note', noteId: diagram.sourceNoteId }
+			: { kind: 'standalone' };
+	}
+
+	private isDiagramIndexable(diagram: Diagram): boolean {
+		return diagram.archivedAt === undefined && diagram.searchableText.trim().length > 0;
+	}
+
 	private apply(actor: ActorContext, plan: IndexPlan, defer = this.defer): Promise<IndexingResult> {
 		return applyIndex(this.repository, this.embeddingModel, defer, actor, plan);
 	}
-	private async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
+	async indexNote(actor: ActorContext, note: Note): Promise<IndexingResult> {
 		return this.apply(
 			actor,
 			decideIndexPlan({
 				source: { kind: 'note', noteId: note.id },
-				contents: note.archivedAt ? [] : this.chunker.chunk(note.plainText),
+				contents: note.archivedAt ? [] : this.chunk(note.plainText),
 				embedPrefix: note.title,
 				base: {
 					projectId: note.projectId,
@@ -328,12 +267,8 @@ export class ContentIndex implements IndexCapabilities {
 			})
 		);
 	}
-	private async indexAttachment(
-		actor: ActorContext,
-		attachment: Attachment,
-		text: string
-	): Promise<void> {
-		const contents = this.chunker.chunk(text);
+	async indexAttachment(actor: ActorContext, attachment: Attachment, text: string): Promise<void> {
+		const contents = this.chunk(text);
 		const sourceTitle = attachment.path.split('/').at(-1) ?? attachment.path;
 		await this.apply(
 			actor,
@@ -354,14 +289,12 @@ export class ContentIndex implements IndexCapabilities {
 			true
 		);
 	}
-	private async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult> {
+	async indexMemory(actor: ActorContext, entry: MemoryEntry): Promise<IndexingResult> {
 		// User-profile entries (no project) are injected into agent context directly and
 		// never enter the retrieval index.
 		const projectId = entry.projectId;
 		const contents =
-			!projectId || entry.deletedAt || !entry.shareWithAgents
-				? []
-				: this.chunker.chunk(entry.content);
+			!projectId || entry.deletedAt || !entry.shareWithAgents ? [] : this.chunk(entry.content);
 		if (!contents.length || !projectId) {
 			return this.apply(actor, {
 				kind: 'remove',
@@ -384,17 +317,17 @@ export class ContentIndex implements IndexCapabilities {
 			})
 		);
 	}
-	private async indexDiagram(
+	async indexDiagram(
 		actor: ActorContext,
 		diagram: Diagram,
 		context: DiagramIndexContext
 	): Promise<IndexingResult> {
-		const contents = this.chunker.chunk(diagram.searchableText);
+		const contents = this.chunk(diagram.searchableText);
 		// A diagram in the trash answers no searches, for the same reason one with no
 		// labels does not: the index describes what the project currently holds. Both
 		// conditions land here rather than in a second port, so "make the index agree
 		// with this row" stays one call whatever changed about the row.
-		if (diagram.archivedAt !== undefined || !contents.length) {
+		if (!this.isDiagramIndexable(diagram) || !contents.length) {
 			return this.apply(actor, {
 				kind: 'remove',
 				source: { kind: 'diagram', diagramId: diagram.id }
@@ -432,12 +365,12 @@ export class ContentIndex implements IndexCapabilities {
 	 * A widget is indexed by the words it shows, which its controller derives. A widget in the
 	 * trash, or one that shows no words, answers no searches.
 	 */
-	private async indexWidget(
+	async indexWidget(
 		actor: ActorContext,
 		widget: Widget,
 		searchableText: string
 	): Promise<IndexingResult> {
-		const contents = widget.archivedAt ? [] : this.chunker.chunk(searchableText);
+		const contents = widget.archivedAt ? [] : this.chunk(searchableText);
 		if (!contents.length)
 			return this.apply(actor, { kind: 'remove', source: { kind: 'widget', widgetId: widget.id } });
 		// A widget chunk is a list of labels, so its title is the context the reranker gets.
@@ -458,5 +391,60 @@ export class ContentIndex implements IndexCapabilities {
 				}
 			})
 		);
+	}
+	private chunk(content: string): readonly string[] {
+		const normalized = content.replace(/\r\n/g, '\n').trim();
+		if (!normalized) return [];
+		const chunks: string[] = [];
+		let current = '';
+		for (const unit of this.semanticUnits(normalized)) {
+			const combined = current ? `${current}\n\n${unit}` : unit;
+			if (this.count(combined) <= this.targetTokens) {
+				current = combined;
+				continue;
+			}
+			if (current) chunks.push(current);
+			const overlap = this.overlapTail(current);
+			current = overlap ? `${overlap}\n\n${unit}` : unit;
+			if (this.count(current) > this.targetTokens) {
+				const tokens = this.encoding.encode(current);
+				chunks.push(this.encoding.decode(tokens.slice(0, this.targetTokens)).trim());
+				current = this.encoding.decode(tokens.slice(this.targetTokens - this.overlapTokens)).trim();
+			}
+		}
+		if (current) chunks.push(current);
+		return chunks;
+	}
+
+	private count(content: string): number {
+		return this.encoding.encode(content).length;
+	}
+
+	private semanticUnits(content: string): readonly string[] {
+		const units: string[] = [];
+		for (const paragraph of content
+			.split(/\n\s*\n/)
+			.map((value) => value.trim())
+			.filter(Boolean)) {
+			if (this.count(paragraph) <= this.targetTokens) {
+				units.push(paragraph);
+				continue;
+			}
+			for (const sentence of paragraph.split(/(?<=[.!?])\s+/u).filter(Boolean)) {
+				if (this.count(sentence) <= this.targetTokens) units.push(sentence);
+				else {
+					const tokens = this.encoding.encode(sentence);
+					for (let start = 0; start < tokens.length; start += this.targetTokens)
+						units.push(this.encoding.decode(tokens.slice(start, start + this.targetTokens)).trim());
+				}
+			}
+		}
+		return units;
+	}
+
+	private overlapTail(value: string): string {
+		if (!value || this.overlapTokens === 0) return '';
+		const tokens = this.encoding.encode(value);
+		return this.encoding.decode(tokens.slice(-this.overlapTokens)).trim();
 	}
 }

@@ -41,7 +41,7 @@ const setup = async (suffix: string) => {
 		new InMemoryEmbeddingClient().model,
 		{ targetTokens: 2400, overlapTokens: 480 },
 		true
-	).notes;
+	);
 	const original = await Promise.all(
 		[first.note, second.note].map((note) =>
 			saveNoteDraft(catalog.editor, transactionRunner, first.owner, {
@@ -50,7 +50,7 @@ const setup = async (suffix: string) => {
 			})
 		)
 	);
-	for (const note of original) await index.index(first.owner, note);
+	for (const note of original) await index.indexNote(first.owner, note);
 	const effects = new InMemoryNoteContent();
 	const faults = { secondIndex: false };
 	const controller = new Notes(
@@ -80,8 +80,8 @@ const setup = async (suffix: string) => {
 			anchorRepairer: effects,
 			noteLinkReconciler: effects,
 			noteIndexer: {
-				index: async (actor, note) => {
-					const result = await index.index(actor, note);
+				indexNote: async (actor, note) => {
+					const result = await index.indexNote(actor, note);
 					if (faults.secondIndex && note.id === second.note.id)
 						throw new Error('Second index write failed');
 					return result;

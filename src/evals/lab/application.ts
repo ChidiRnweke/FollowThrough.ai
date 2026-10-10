@@ -8,7 +8,7 @@ import {
 	Embeddings,
 	DEFAULT_EMBEDDING_MODEL
 } from '$lib/server/services/knowledge-search/embeddings';
-import { SearchRanking } from '$lib/server/services/knowledge-search/ranking';
+import { SearchRanking } from '$lib/server/adapters/knowledge-search/ranking';
 import { SearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
@@ -19,7 +19,7 @@ import {
 	CachedReranker
 } from './cache/cached-clients';
 import type { Database } from '$lib/server/db';
-import type { EmbeddingClient } from '$lib/server/services/knowledge-search/contracts';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import { InMemoryAttachmentStorage, StubModelCatalog } from './fakes';
 import { createPGliteDatabase } from './pglite-database';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';

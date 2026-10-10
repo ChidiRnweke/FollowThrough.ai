@@ -39,7 +39,8 @@ import type {
 } from './repositories/attachments/object-storage';
 import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { AttachmentClaims } from './services/attachments/contracts';
-import type { EmbeddingClient, Reranker } from './services/knowledge-search/contracts';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
+import type { Reranker } from '$lib/models/knowledge-search';
 import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { AgentEventBus } from './stores/agent/events';

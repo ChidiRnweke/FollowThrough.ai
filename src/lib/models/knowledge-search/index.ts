@@ -135,3 +135,31 @@ export type IndexingResult =
 
 export type DiagramIndexContext =
 	{ readonly kind: 'standalone' } | { readonly kind: 'note'; readonly title: string };
+
+/** Context that the indexing owner must resolve before preparing diagram chunks. */
+export type DiagramIndexContextRequirement =
+	{ readonly kind: 'source_note'; readonly noteId: NoteId } | { readonly kind: 'standalone' };
+
+export interface Reranker {
+	rerank(
+		query: string,
+		matches: readonly SearchMatch[],
+		topN: number,
+		signal?: AbortSignal
+	): Promise<readonly SearchMatch[]>;
+}
+
+export const rerankResponseSchema = z.object({
+	results: z.array(
+		z.object({
+			index: z.number().int().nonnegative(),
+			relevance_score: z.number().optional(),
+			relevanceScore: z.number().optional()
+		})
+	)
+});
+
+export interface IndexChunking {
+	readonly targetTokens: number;
+	readonly overlapTokens: number;
+}

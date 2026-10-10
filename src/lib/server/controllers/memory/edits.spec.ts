@@ -37,7 +37,7 @@ const setup = () => {
 			memoryCreator: memory.creator,
 			memoryEditor: memory.editor,
 			memoryDeleter: memory.deleter,
-			memoryIndexer: indexWriter.memories,
+			memoryIndexer: indexWriter,
 			indexEmbeddings,
 			indexWriter,
 			transactionRunner: new InMemoryTransactionRunner([entries, search])

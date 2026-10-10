@@ -25,7 +25,8 @@ import type {
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import { type NoteActionSubmission } from '$lib/server/services/agent/runs/note-action-requests';
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
-import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
+import type { Reranker } from '$lib/models/knowledge-search';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';

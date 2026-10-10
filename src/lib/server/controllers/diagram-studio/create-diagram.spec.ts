@@ -6,6 +6,7 @@ import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentToolResultsFixture } from '$lib/testing/agent/fixtures/tool-results';
 import {
 	drawioBuilder,
+	InMemoryDiagrams,
 	mermaidBuilder
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
@@ -31,7 +32,9 @@ import { describe, expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
 
 const setup = (
-	index: DiagramStudioDependencies['diagramIndexer']['index'] = async () => ({ kind: 'stored' })
+	index: DiagramStudioDependencies['diagramIndexer']['indexDiagram'] = async () => ({
+		kind: 'stored'
+	})
 ) => {
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];
@@ -63,7 +66,11 @@ const setup = (
 				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
-				diagramIndexer: { index },
+				diagramIndexer: {
+					diagramContextRequirement: (diagram) =>
+						new InMemoryDiagrams().diagramContextRequirement(diagram),
+					indexDiagram: index
+				},
 				drawioXmlValidator: { validate: (source: string) => source },
 				diagramLabelPresentation: new DiagramLabelPresentationService(),
 				drawioLabels: { read: () => ['Ingest Index Answer'] }

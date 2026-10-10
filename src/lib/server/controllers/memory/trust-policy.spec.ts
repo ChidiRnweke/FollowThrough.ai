@@ -111,7 +111,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			suggestionAccepter: inbox.accepter,
 			trustPolicyEvaluator: trust,
 			suggestionEffects: effects,
-			memoryIndexer: index.memories,
+			memoryIndexer: index,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
 			transactionRunner: new InMemoryTransactionRunner([entries, effects, search])

@@ -62,7 +62,7 @@ import type {
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
 import type { CanvasSourceReader } from '$lib/server/services/diagrams/canvas-source';
-import type { DiagramIndexer } from '$lib/server/services/diagrams/contracts';
+import type { DiagramIndexing as DiagramIndexer } from '$lib/server/services/knowledge-search/indexing';
 import type {
 	DrawioSvgPreviewSanitizer,
 	DrawioXmlContentValidator
@@ -77,7 +77,6 @@ import type {
 	DiagramWriter
 } from '$lib/server/services/diagrams/library';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
-import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
@@ -694,17 +693,17 @@ export class DiagramStudio implements DiagramStudioController {
 		return this.dependencies.diagramReferences.countReferencingNotes(actor, input.diagramId);
 	}
 	private async indexDiagram(actor: ActorContext, diagram: Diagram): Promise<void> {
-		const noteId = diagramIndexNoteId(diagram);
+		const requirement = this.dependencies.diagramIndexer.diagramContextRequirement(diagram);
 		const context: DiagramIndexContext =
-			noteId === undefined
+			requirement.kind === 'standalone'
 				? { kind: 'standalone' }
 				: {
 						kind: 'note',
-						title: (await this.dependencies.diagramSourceNotes.get(actor, noteId)).title
+						title: (await this.dependencies.diagramSourceNotes.get(actor, requirement.noteId)).title
 					};
 		await this.finishIndex(
 			actor,
-			await this.dependencies.diagramIndexer.index(actor, diagram, context)
+			await this.dependencies.diagramIndexer.indexDiagram(actor, diagram, context)
 		);
 	}
 

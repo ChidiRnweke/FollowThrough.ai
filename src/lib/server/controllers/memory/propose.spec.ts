@@ -72,7 +72,7 @@ const setup = () => {
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),
 			memoryLister: memory.lister,
-			memoryIndexer: indexWriter.memories,
+			memoryIndexer: indexWriter,
 			indexEmbeddings,
 			indexWriter,
 			memoryCreator: memory.creator,

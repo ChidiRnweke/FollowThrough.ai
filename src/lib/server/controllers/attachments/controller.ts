@@ -1,3 +1,4 @@
+import type { AttachmentIndexing } from '$lib/server/services/knowledge-search/indexing';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
@@ -117,7 +118,7 @@ export interface AttachmentsDependencies {
 	downloads: AttachmentDownloads;
 	lifecycle: AttachmentLifecycle;
 	todoReader: TodoReader;
-	attachmentIndexer: { remove(actor: ActorContext, attachmentId: AttachmentId): Promise<void> };
+	attachmentIndexer: Pick<AttachmentIndexing, 'removeAttachment'>;
 	transactionRunner: TransactionRunner;
 }
 
@@ -161,7 +162,7 @@ export class Attachments implements AttachmentsController {
 		return this.dependencies.transactionRunner.run(async () => {
 			const result = await this.dependencies.lifecycle.removeById(actor, attachmentId);
 			if (result.kind === 'removed')
-				await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
+				await this.dependencies.attachmentIndexer.removeAttachment(actor, attachmentId);
 			return result;
 		});
 	}
@@ -174,7 +175,8 @@ export class Attachments implements AttachmentsController {
 	remove(actor: ActorContext, noteId: NoteId, path: string) {
 		return this.dependencies.transactionRunner.run(async () => {
 			const attachmentId = await this.dependencies.lifecycle.remove(actor, noteId, path);
-			if (attachmentId) await this.dependencies.attachmentIndexer.remove(actor, attachmentId);
+			if (attachmentId)
+				await this.dependencies.attachmentIndexer.removeAttachment(actor, attachmentId);
 		});
 	}
 

@@ -6,3 +6,8 @@ export interface EmbeddingBatch {
 
 /** Existing provider request budget; batching never discards source text. */
 export const EMBEDDING_BATCH_TOKENS = 30_000;
+
+export interface EmbeddingClient {
+	readonly model: string;
+	embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch>;
+}

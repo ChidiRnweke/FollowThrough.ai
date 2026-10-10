@@ -304,7 +304,7 @@ export class Widgets implements WidgetsController {
 
 	/** Index what the widget now shows; embed inline unless the index defers to the worker. */
 	private async index(actor: ActorContext, widget: Widget): Promise<void> {
-		const result: IndexingResult = await this.dependencies.widgetIndexer.index(
+		const result: IndexingResult = await this.dependencies.widgetIndexer.indexWidget(
 			actor,
 			widget,
 			this.dependencies.search.text(widget)

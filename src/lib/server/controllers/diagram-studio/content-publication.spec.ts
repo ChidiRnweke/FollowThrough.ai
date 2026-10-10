@@ -62,8 +62,9 @@ const setup = () => {
 			diagramLifecycle: new DiagramLifecycleService(),
 			diagramSourceNotes: notes,
 			diagramFinder: library.finder,
+			diagramTrash: library.lifecycle,
 			diagramDraftWriter: library.draftWriter,
-			diagramIndexer: index.diagrams,
+			diagramIndexer: index,
 			indexEmbeddings: embeddings,
 			indexWriter: index,
 			drawioXmlValidator: new DrawioXmlValidator(),
@@ -185,4 +186,34 @@ it('rejects draw.io publication for a Mermaid diagram', async () => {
 	await expect(controller.publishProjectDiagram(testActor(), input)).rejects.toMatchObject({
 		code: 'UNSUPPORTED_DIAGRAM_OPERATION'
 	});
+});
+
+it('publishes a standalone diagram without requiring a source-note lookup', async () => {
+	const { controller, input, notes, diagrams, original, search } = setup();
+	diagrams.diagrams = [{ ...original, sourceNoteId: undefined }];
+	notes.notes = [];
+	await controller.publishProjectDiagram(testActor(), input);
+	expect(search.documents.map(({ document }) => document.sourceTitle)).toEqual([
+		'Diagram: Architecture'
+	]);
+});
+
+it('removes empty diagram chunks without requiring unavailable source-note context', async () => {
+	const { controller, input, notes, search } = setup();
+	const published = await controller.publishProjectDiagram(testActor(), input).then(savedDiagram);
+	notes.notes = [];
+	await controller.publishProjectDiagram(testActor(), {
+		...input,
+		baseEtag: diagramEtag(published.id, published.currentRevision),
+		source: VALID_DRAWIO_XML.replace('API &amp; worker', '   ')
+	});
+	expect(search.documents).toEqual([]);
+});
+
+it('removes archived diagram chunks without requiring unavailable source-note context', async () => {
+	const { controller, input, notes, search } = setup();
+	await controller.publishProjectDiagram(testActor(), input);
+	notes.notes = [];
+	await controller.archiveProjectDiagram(testActor(), { diagramId: input.diagramId });
+	expect(search.documents).toEqual([]);
 });

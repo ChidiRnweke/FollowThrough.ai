@@ -1,8 +1,8 @@
+import type { IndexChunking } from '$lib/models/knowledge-search';
 import type { TokenCodec } from '$lib/models/tokenization';
 import {
 	ContentIndex,
-	type IndexCapabilities,
-	type IndexChunking
+	type IndexCapabilities
 } from '$lib/server/services/knowledge-search/indexing';
 import type { RetrievalIndexRepository } from '$lib/server/repositories/knowledge-search';
 

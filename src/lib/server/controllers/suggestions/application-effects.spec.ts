@@ -103,7 +103,7 @@ describe('Proposal effect coordination', () => {
 			undefined,
 			true
 		);
-		const indexer = indexWriter.memories;
+		const indexer = indexWriter;
 		const before = memoryEntryBuilder();
 		const deleted = { ...before, deletedAt: testNow };
 		const replacement = memoryEntryBuilder({
@@ -125,7 +125,7 @@ describe('Proposal effect coordination', () => {
 			},
 			{ kind: 'created', after: { type: 'memory_entries', value: replacement } }
 		]);
-		await indexer.index(testActor(), replacement);
+		await indexer.indexMemory(testActor(), replacement);
 		const controller = new Suggestions(
 			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({

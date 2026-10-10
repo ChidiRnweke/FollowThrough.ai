@@ -63,7 +63,7 @@ export const setupAttachments = (chunker = { targetTokens: 2400, overlapTokens: 
 				updatedAt: testNow
 			})
 		},
-		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker).attachments,
+		indexer: createContentIndex(search, new InMemoryEmbeddingClient().model, chunker),
 		transactionRunner: new InMemoryTransactionRunner([repository, search]),
 		visionModel: process.env.OPENROUTER_ATTACHMENT_VISION_MODEL ?? 'google/gemini-2.5-flash-lite',
 		logger: { error: () => {} }

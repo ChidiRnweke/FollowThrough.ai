@@ -147,7 +147,7 @@ it('allows note indexing to finish while a pin holds project locks and waits for
 				'contract-model',
 				{ targetTokens: 2400, overlapTokens: 480 },
 				true
-			).notes.index(owner, note);
+			).indexNote(owner, note);
 		})
 		.then(
 			() => ({ kind: 'success' as const }),
