@@ -1,4 +1,3 @@
-import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import { readCanvasSessionResult } from '../canvas-results';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
@@ -130,10 +129,7 @@ type PendingDecisionRows = NonNullable<(typeof schema.agentRuns.$inferInsert)['p
 const toPendingDecisionRows = (run: AgentRun): PendingDecisionRows => run.pendingDecisions;
 
 export class AgentPreferenceRecords implements AgentPreferencesRepository {
-	constructor(
-		private readonly database: Database,
-		private readonly resourceKey: (identity: WorkspaceResourceIdentity) => string
-	) {}
+	constructor(private readonly database: Database) {}
 
 	async get(actor: ActorContext): Promise<AgentPreferences | undefined> {
 		const [row] = await this.database
@@ -143,9 +139,12 @@ export class AgentPreferenceRecords implements AgentPreferencesRepository {
 		return row ? toPreferences(row) : undefined;
 	}
 
-	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
+	async getForWrite(
+		actor: ActorContext,
+		resourceKey: string
+	): Promise<AgentPreferences | undefined> {
 		// The same resource lock as synchronized writes also covers an absent preference row.
-		const key = 'resource:' + this.resourceKey({ type: 'agent_preferences', id: [actor.userId] });
+		const key = 'resource:' + resourceKey;
 		await this.database.execute(
 			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${key}))`
 		);

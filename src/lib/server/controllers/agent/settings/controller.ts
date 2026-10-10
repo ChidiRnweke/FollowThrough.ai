@@ -117,7 +117,10 @@ export class AgentSettings implements AgentSettingsController {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
 					return this.dependencies.syncMutations.complete(actor, input, target);
@@ -174,7 +177,11 @@ export class AgentSettings implements AgentSettingsController {
 		}
 		this.dependencies.preferenceEditing.validate(input);
 		return this.dependencies.transactionRunner.run(async () => {
-			const stored = await this.dependencies.preferences.getForWrite(actor);
+			const resourceKey = this.workspaceCommandRules.workspaceResourceKey({
+				type: 'agent_preferences',
+				id: [actor.userId]
+			});
+			const stored = await this.dependencies.preferences.getForWrite(actor, resourceKey);
 			const timestamp = this.dependencies.now();
 			const current = stored ?? this.dependencies.preferences.defaults(actor, timestamp);
 			const preferences = this.dependencies.preferenceEditing.apply(current, input, timestamp);

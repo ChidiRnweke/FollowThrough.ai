@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { LocalIdentity } from '$lib/server/controllers/identity/local';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
@@ -7,7 +8,7 @@ import { actor, context, seedProvenance } from '../database-harness';
 it('establishes a local administrator before the first provenance and project writes', async () => {
 	const owner = actor('27001');
 	const users = new UserDirectory(new UserRecords(context.db));
-	await users.initializeLocal(owner);
+	await new LocalIdentity({ provisioner: users, users }).initializeLocal(owner);
 	await seedProvenance(owner, '27001');
 	await new ProjectRecords(context.db).insert(owner, { name: 'Local workspace' });
 	expect(await users.get(owner)).toMatchObject({
@@ -23,9 +24,10 @@ it('keeps an existing waiting account unchanged during local initialization', as
 		displayName: 'Waiting reader',
 		role: 'WAITING'
 	});
-	expect(await new UserDirectory(records).initializeLocal({ userId: original.id })).toEqual(
-		original
-	);
+	const users = new UserDirectory(records);
+	expect(
+		await new LocalIdentity({ provisioner: users, users }).initializeLocal({ userId: original.id })
+	).toEqual(original);
 });
 it('rejects a missing profile during an ordinary read', async () => {
 	await expect(

@@ -20,15 +20,11 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { describe, expect, it } from 'vitest';
 import { context, now, seedNote } from '../database-harness';
 
-const { workspaceResourceKey } = new WorkspaceCommandRulesService();
-
 const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
-	const preferences = new AgentPreferenceCatalog(
-		new AgentPreferenceRecords(database, workspaceResourceKey)
-	);
+	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(database));
 	const agent = new AgentSettings(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({

@@ -83,3 +83,9 @@ export const workspaceResourceIdentitySchema = z.discriminatedUnion('type', [
 	})
 ]);
 export type WorkspaceResourceIdentity = z.infer<typeof workspaceResourceIdentitySchema>;
+
+/** Resource identity and its canonical key, resolved by workspace rules before persistence. */
+export interface ResolvedWorkspaceResource {
+	readonly identity: WorkspaceResourceIdentity;
+	readonly key: string;
+}

@@ -1,5 +1,6 @@
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
+import { LocalIdentity } from '$lib/server/controllers/identity/local';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { UserRecords } from '$lib/server/repositories/identity/postgres/users';
 import { randomUUID } from 'node:crypto';
@@ -114,7 +115,8 @@ export async function selectionFromSeededNote(
 /** The lab has no HTTP local-mode boundary, so establish its account before workspace writes. */
 export async function seedActor(lab: Pick<Lab, 'db' | 'controllers'>): Promise<ActorContext> {
 	const actor: ActorContext = { userId: randomUUID() as UserId };
-	await new UserDirectory(new UserRecords(lab.db)).initializeLocal(actor);
+	const users = new UserDirectory(new UserRecords(lab.db));
+	await new LocalIdentity({ provisioner: users, users }).initializeLocal(actor);
 	await lab.controllers.workspace().getShellContext(actor);
 	return actor;
 }

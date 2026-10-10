@@ -21,7 +21,7 @@ it.each([false, true])(
 	'retains concurrent independent preference edits (existing row: %s)',
 	async (existing) => {
 		const { owner } = await seedNote(existing ? '16901' : '16902');
-		const records = new AgentPreferenceRecords(context.db, workspaceResourceKey);
+		const records = new AgentPreferenceRecords(context.db);
 		if (existing)
 			await records.upsert(owner, {
 				userId: owner.userId,
@@ -41,9 +41,7 @@ it.each([false, true])(
 					...agentToolResultsFixture(),
 					preferenceEditing: new AgentPreferenceEditingService(),
 					...agentRulesFixture(),
-					preferences: new AgentPreferenceCatalog(
-						new AgentPreferenceRecords(database, workspaceResourceKey)
-					),
+					preferences: new AgentPreferenceCatalog(new AgentPreferenceRecords(database)),
 					transactionRunner,
 					now: () => now
 				})

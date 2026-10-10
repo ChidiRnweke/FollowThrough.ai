@@ -111,7 +111,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Establish the local profile before any workspace or tool write.
 		setWorkspaceAccountCookie(
 			event.cookies,
-			(await AppFactory.localActor()).userId,
+			(await AppFactory.localIdentity().initializeLocal(AppFactory.actor())).id,
 			event.url.protocol === 'https:'
 		);
 	}

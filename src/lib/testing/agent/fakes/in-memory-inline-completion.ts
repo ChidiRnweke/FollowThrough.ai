@@ -16,7 +16,10 @@ export class InMemoryAgentPreferencesRepository implements AgentPreferencesRepos
 			for (const [key, value] of entries) this.entries.set(key, value);
 		};
 	}
-	async getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
+	async getForWrite(
+		actor: ActorContext,
+		_resourceKey: string
+	): Promise<AgentPreferences | undefined> {
 		return this.get(actor);
 	}
 	async get(actor: ActorContext): Promise<AgentPreferences | undefined> {

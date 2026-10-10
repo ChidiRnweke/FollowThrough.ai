@@ -42,7 +42,7 @@ it('seeds an existing source record that has no sync metadata', async () => {
 it('preserves tombstones and cancellation proofs during reinstallation', async () => {
 	const { owner, note } = await seedNote('8824');
 	const operationId = '90000000-0000-4000-8000-000000008824';
-	const receipts = new WorkspaceSyncReceipts(context.db, workspaceResourceKey);
+	const receipts = new WorkspaceSyncReceipts(context.db);
 	await receipts.cancel(owner, operationId, '{}');
 	await context.client`delete from notes where id = ${note.id}`;
 	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);

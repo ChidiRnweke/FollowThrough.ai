@@ -269,7 +269,10 @@ export class DiagramStudio implements DiagramStudioController {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input, prepared.current);
 					return this.dependencies.syncMutations.complete(actor, input, target);

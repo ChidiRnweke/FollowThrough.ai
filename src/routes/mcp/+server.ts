@@ -20,7 +20,11 @@ const unauthorized = (detail: string): Response =>
 const authenticate = async (
 	request: Request
 ): Promise<{ actor: ActorContext; scope: ApiTokenScope } | Response> => {
-	if (!AppFactory.isAuthEnabled()) return { actor: await AppFactory.localActor(), scope: 'full' };
+	if (!AppFactory.isAuthEnabled()) {
+		const actor = AppFactory.actor();
+		await AppFactory.localIdentity().initializeLocal(actor);
+		return { actor, scope: 'full' };
+	}
 
 	const verified = await AppFactory.accessTokens().verify(request.headers.get('authorization'));
 	if (!verified) return unauthorized('Provide a FollowThrough API token as a Bearer credential.');

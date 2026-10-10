@@ -366,3 +366,7 @@ export const agentToolAuthoritySurface = {
 export const agentToolSessionSurface = { authority: true } satisfies ControllerSurface<
 	import('../controllers/agent/tool-sessions').AgentToolSessionControl
 >;
+
+export const localIdentitySurface = { initializeLocal: true } satisfies ControllerSurface<
+	import('../controllers/identity/local').LocalIdentityController
+>;
