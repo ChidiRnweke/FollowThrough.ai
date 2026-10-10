@@ -3,7 +3,7 @@ import { SuggestionPresentationService } from '$lib/services/suggestions/present
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
@@ -23,12 +23,12 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder(), projectBuilder({ id: testProjectId(2), name: 'Beta' })];
-	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteDeletion: service,
+			noteDeletion: service.deletion,
 			transactionRunner: new InMemoryTransactionRunner([notes, projects])
 		})
 	);

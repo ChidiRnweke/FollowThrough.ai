@@ -23,7 +23,7 @@ const setup = async (suffix: string) => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const synchronization = createSyncCapability({ db: database });
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -35,13 +35,13 @@ const setup = async (suffix: string) => {
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			transactionRunner,
-			noteReader: catalog,
-			noteTrash: catalog,
-			noteEditor: catalog,
-			noteSectionNumbering: catalog,
-			noteCreation: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
+			noteReader: catalog.reader,
+			noteTrash: catalog.trash,
+			noteEditor: catalog.editor,
+			noteSectionNumbering: catalog.sectionNumbering,
+			noteCreation: catalog.creator,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
 			noteIndexer: content,
 			anchorRepairer: content,
 			noteLinkReconciler: content
@@ -198,7 +198,7 @@ describe('guarded note trash actions', () => {
 			baseEtag: current.snapshot.etag,
 			command: { kind: 'restoreNote', noteId: note.id }
 		});
-		const restored = await catalog.get(owner, note.id);
+		const restored = await catalog.reader.get(owner, note.id);
 		expect({ result: result.kind, archivedAt: restored.archivedAt }).toEqual({
 			result: 'applied',
 			archivedAt: undefined

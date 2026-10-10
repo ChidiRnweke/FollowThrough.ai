@@ -6,7 +6,7 @@ import { createSkillsCapability } from '$lib/server/factories/capabilities/skill
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -41,7 +41,7 @@ const setup = async (suffix: string) => {
 		})
 	);
 	const creation = noteCreationControllers(
-		new NoteCatalog(notes, new SourceAnchorRecords(tx.database), records),
+		createNoteServices(notes, new SourceAnchorRecords(tx.database), records).creator,
 		tx.transactionRunner
 	);
 	return { owner, projectId, skill, projects, creation, records };

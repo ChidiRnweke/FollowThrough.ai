@@ -69,7 +69,8 @@ import {
 	attachmentFilePath,
 	diagramFilePath
 } from '$lib/server/services/agent-files/virtual-files';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { ProjectReader } from '$lib/server/services/projects/catalog';

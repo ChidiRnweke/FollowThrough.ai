@@ -13,7 +13,7 @@ const setup = async (suffix: string) => {
 	const source = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const notes = createNotesCapability({ db: database, projects: new ProjectRecords(database) });
-	const note = await storedNote(notes.catalog, source.owner, {
+	const note = await storedNote(notes.services.creator, source.owner, {
 		projectId: source.note.projectId,
 		title: 'Writing',
 		kind: 'skill'

@@ -11,7 +11,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 import type { ReferenceFinder } from '$lib/server/services/references/discovery';
 import type { ReferenceRanker } from '$lib/server/services/references/ranking';
 import type { ReferenceSearchOptions } from '$lib/models/references';
-import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
 	AgentRunReceipt,

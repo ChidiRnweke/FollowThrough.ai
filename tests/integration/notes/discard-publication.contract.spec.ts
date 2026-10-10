@@ -16,20 +16,20 @@ import { noteEtag } from '$lib/models/notes';
 import { context, seedNote } from '../database-harness';
 
 const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
-	const { catalog } = createNotesCapability({ db, projects: new ProjectRecords(db) });
+	const { services: catalog } = createNotesCapability({ db, projects: new ProjectRecords(db) });
 	const effects = new InMemoryNoteContent();
 	return new Notes(
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
-			revisionReader: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
+			revisionReader: catalog.revisionReader,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})

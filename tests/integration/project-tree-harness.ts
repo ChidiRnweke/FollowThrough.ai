@@ -11,7 +11,7 @@ import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -22,7 +22,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 	const projects = new ProjectRecords(database);
 	const catalog = createProjectServices(projects, projects);
 	const records = new NoteRecords(database);
-	const notes = new NoteCatalog(records, new SourceAnchorRecords(database), projects);
+	const notes = createNoteServices(records, new SourceAnchorRecords(database), projects);
 	return {
 		records,
 		projects: new Projects(
@@ -33,7 +33,7 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 				projectLifecycle: catalog.lifecycle,
 				entryWriter: catalog.treeWriter,
 				projectEditor: catalog.editor,
-				noteCreation: notes,
+				noteCreation: notes.creator,
 				transactionRunner
 			})
 		),
@@ -41,9 +41,9 @@ export const treeControllers = (database: Database, transactionRunner: Transacti
 			capabilityDependencies<NotesDependencies>({
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
-				noteCreation: notes,
-				noteTrash: notes,
-				noteDeletion: notes,
+				noteCreation: notes.creator,
+				noteTrash: notes.trash,
+				noteDeletion: notes.deletion,
 				noteIndexer: new InMemoryNoteContent(),
 				transactionRunner
 			})

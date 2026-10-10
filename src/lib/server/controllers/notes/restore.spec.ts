@@ -4,7 +4,7 @@ import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memor
 import { noteTrashWrite } from '$lib/testing/workspace/fixtures/commands';
 import { describe, expect, it } from 'vitest';
 import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryAnchorRepository,
 	InMemoryNoteRepository
@@ -23,14 +23,14 @@ const setup = () => {
 	const notes = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const service = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const service = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const indexer = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: service,
-			noteTrashReader: service,
+			noteTrash: service.trash,
+			noteTrashReader: service.trashReader,
 			noteIndexer: indexer,
 			transactionRunner: new InMemoryTransactionRunner([notes, indexer])
 		})

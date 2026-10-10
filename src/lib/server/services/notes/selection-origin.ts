@@ -14,7 +14,17 @@ import type {
 	SourceAnchorRepository,
 	ProvenanceRepository
 } from '$lib/server/repositories/provenance';
-export class SelectionOrigins {
+export interface SelectionOriginService {
+	validate(actor: ActorContext, selection: TextSelection): Promise<Note>;
+	resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>>;
+	record(
+		actor: ActorContext,
+		source: SelectionSource<Note>,
+		producer: SelectionProducer
+	): Promise<SelectionOrigin<Note>>;
+}
+
+export class SelectionOrigins implements SelectionOriginService {
 	constructor(
 		private readonly notes: NoteRepository,
 		private readonly anchors: SourceAnchorRepository,
@@ -63,7 +73,7 @@ export class SelectionOrigins {
 }
 
 /** Selection offsets describe one observed revision of the source document. */
-export function decideSelection(
+function decideSelection(
 	selection: TextSelection,
 	note: Pick<Note, 'id' | 'currentRevision' | 'plainText'>
 ): { kind: 'valid' } | { kind: 'invalid'; code: 'VALIDATION' | 'STALE_REVISION'; message: string } {

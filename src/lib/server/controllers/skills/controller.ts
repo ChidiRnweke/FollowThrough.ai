@@ -1,6 +1,6 @@
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import { prepareNoteSave, sameNoteDraft } from '$lib/services/notes/editing';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -38,10 +38,11 @@ import type {
 	NoteRevisionReader,
 	NoteRevisionRecorder,
 	NoteAttachmentRestorer,
-	SourceAnchorRepairer,
-	NoteIndexer,
-	SelectionOriginService
-} from '$lib/server/services/notes/contracts';
+	SourceAnchorRepairer
+} from '$lib/server/services/notes/catalog';
+import type { NoteIndexer } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
+
 import type {
 	SkillCreator,
 	BuiltInSkillProvisioner,
@@ -115,7 +116,7 @@ export interface SkillsDependencies {
 	skillPinWriter: SkillPinWriter;
 	selectionOrigins: SelectionOriginService;
 	skillCreator: SkillCreator;
-	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	noteCreation: NoteCreator;
 	transactionRunner: TransactionRunner;
 }
 export class Skills implements SkillsController {

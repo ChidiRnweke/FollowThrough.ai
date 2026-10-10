@@ -2,7 +2,7 @@ import { NotePresentationService } from '$lib/services/notes/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import AdmZip from 'adm-zip';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	noteContentFromMarkdown,
 	noteMarkdownFromContent
@@ -36,15 +36,15 @@ export const importedNotesFixture = () => {
 	const records = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository(records);
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(records, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(records, new InMemoryAnchorRepository(), projects);
 	const consequences = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteCreation: catalog,
-			noteEditor: catalog,
-			anchorRepairer: catalog,
+			noteCreation: catalog.creator,
+			noteEditor: catalog.editor,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences,
 			markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },

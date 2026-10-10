@@ -1,7 +1,7 @@
 import { InMemoryTransactionRunner } from '$lib/testing/workspace/fakes/in-memory-transaction';
 import { describe, expect, it } from 'vitest';
 import { noteCreationControllers } from '$lib/testing/notes/fixtures/creation';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -19,7 +19,7 @@ const setup = () => {
 	return {
 		records,
 		creation: noteCreationControllers(
-			new NoteCatalog(records, new InMemoryAnchorRepository(), projects),
+			createNoteServices(records, new InMemoryAnchorRepository(), projects).creator,
 			new InMemoryTransactionRunner([records, projects])
 		)
 	};

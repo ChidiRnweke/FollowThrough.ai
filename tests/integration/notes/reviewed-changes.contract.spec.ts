@@ -16,14 +16,14 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') => {
 	const seeded = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog, markdown } = createNotesCapability({
+	const { services: catalog, markdown } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
 	const consequences = new InMemoryNoteContent();
 	const note =
 		target === 'skill'
-			? await storedNote(catalog, seeded.owner, {
+			? await storedNote(catalog.creator, seeded.owner, {
 					kind: 'skill',
 					title: 'Release checklist',
 					projectId: seeded.project.id
@@ -45,8 +45,8 @@ const setup = async (suffix: string, target: 'authored' | 'skill' = 'authored') 
 			suggestionPresentation: new SuggestionPresentationService(),
 			markdown,
 			transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
 			anchorRepairer: consequences,
 			noteLinkReconciler: consequences,
 			noteIndexer: consequences

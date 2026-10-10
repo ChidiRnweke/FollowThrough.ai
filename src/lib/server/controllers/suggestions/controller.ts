@@ -19,7 +19,8 @@ import type { TodoCreator } from '$lib/server/services/todos/contracts';
 import type { RelationshipCreator } from '$lib/server/services/relationships/graph';
 import type { ReferenceCreator } from '$lib/server/services/references/library';
 import type { MemoryChanges } from '$lib/server/services/memory/library';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import type { DrawioLabelReader } from '$lib/server/services/diagrams/drawio';
 import type { ActorContext } from '$lib/models/identity';
 import type { Diagram } from '$lib/models/diagrams';

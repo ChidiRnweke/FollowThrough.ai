@@ -11,7 +11,8 @@ import { type Note } from '$lib/models/notes';
 import { ExternalServiceError } from '$lib/errors';
 import type { AgentPreferencesStore } from '$lib/server/services/agent/runs/preferences';
 import type { InlineCompletionGenerator } from '$lib/server/services/agent/runs/contracts';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import { traceWorkflow } from '$lib/server/services/telemetry';
 import type { OperationObserver } from '$lib/models/telemetry';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';

@@ -17,7 +17,7 @@ const setup = async (suffix: string) => {
 	const first = await seedNote(suffix);
 	const second = await seedNote(`${suffix}1`, first.owner);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog, markdown } = createNotesCapability({
+	const { services: catalog, markdown } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -30,7 +30,7 @@ const setup = async (suffix: string) => {
 	).notes;
 	const original = await Promise.all(
 		[first.note, second.note].map((note) =>
-			saveNoteDraft(catalog, transactionRunner, first.owner, {
+			saveNoteDraft(catalog.editor, transactionRunner, first.owner, {
 				...note,
 				...markdown.read('ship release')
 			})
@@ -44,9 +44,9 @@ const setup = async (suffix: string) => {
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
-			noteTextSearcher: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			noteTextSearcher: catalog.textSearcher,
 			anchorRepairer: effects,
 			noteLinkReconciler: effects,
 			noteIndexer: {
@@ -69,7 +69,7 @@ const setup = async (suffix: string) => {
 	const read = async () =>
 		Promise.all(
 			original.map(async (note) => ({
-				note: await catalog.get(first.owner, note.id),
+				note: await catalog.reader.get(first.owner, note.id),
 				index: await search.listForNote(first.owner, note.id)
 			}))
 		);

@@ -4,7 +4,8 @@ import type { ActorContext } from '$lib/models/identity';
 import type { Note } from '$lib/models/notes';
 import type { AtomicOperation } from '$lib/models/workspace';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
-import type { NoteEditor } from '$lib/server/services/notes/contracts';
+import type { NoteEditor } from '$lib/server/services/notes/catalog';
+
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 

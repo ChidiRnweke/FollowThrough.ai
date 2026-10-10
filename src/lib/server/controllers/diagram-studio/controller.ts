@@ -7,7 +7,8 @@ import { decideDiagramTrash, diagramTrashChange } from '$lib/services/diagrams/t
 import type { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { mutationResource } from '$lib/services/workspace/commands';
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';

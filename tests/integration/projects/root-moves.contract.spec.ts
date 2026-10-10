@@ -9,7 +9,7 @@ import { expect, it } from 'vitest';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -22,7 +22,8 @@ it('keeps a folder at the project root after reloading a completed move', async 
 	const catalog = createProjectServices(repository, repository);
 	const project = await repository.insert(owner, { name: 'Root folder move' });
 	const creation = noteCreationControllers(
-		new NoteCatalog(new NoteRecords(database), new SourceAnchorRecords(database), repository),
+		createNoteServices(new NoteRecords(database), new SourceAnchorRecords(database), repository)
+			.creator,
 		transactionRunner
 	);
 	const { folder: parent } = await creation.projects.createFolder(owner, {
@@ -57,8 +58,8 @@ it('restores a note at the root when its previous folder is archived', async () 
 	const projects = new ProjectRecords(database);
 	const project = await projects.insert(owner, { name: 'Restore at root' });
 	const repository = new NoteRecords(database);
-	const catalog = new NoteCatalog(repository, new SourceAnchorRecords(database), projects);
-	const creation = noteCreationControllers(catalog, transactionRunner);
+	const catalog = createNoteServices(repository, new SourceAnchorRecords(database), projects);
+	const creation = noteCreationControllers(catalog.creator, transactionRunner);
 	const { folder: parent } = await creation.projects.createFolder(owner, {
 		projectId: project.id,
 		name: 'Archived parent'
@@ -72,7 +73,7 @@ it('restores a note at the root when its previous folder is archived', async () 
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: catalog,
+			noteTrash: catalog.trash,
 			noteIndexer: new InMemoryNoteContent(),
 			transactionRunner
 		})

@@ -62,7 +62,7 @@ const setup = async (suffix: string, title: string | null = 'Architecture') => {
 			syncRetry: sync.mutationRetry,
 			transactionRunner,
 			diagramFinder: library,
-			diagramSourceNotes: notes.catalog,
+			diagramSourceNotes: notes.services.reader,
 			diagramDraftWriter: library,
 			diagramRevisionReader: library,
 			diagramTrash: library,

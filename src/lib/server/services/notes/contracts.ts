@@ -1,97 +1,9 @@
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	Note,
-	NoteSaveWrite,
-	NotePublicationWrite,
-	NoteId,
-	NoteRevision,
-	NoteRevisionId,
-	NoteSearchTarget,
-	NoteSummary,
-	SetNoteSectionNumberingInput,
-	TextSelection,
-	TrashedNote
-} from '$lib/models/notes';
-import type {
-	Provenance,
-	SourceAnchor,
-	SelectionSource,
-	SelectionOrigin,
-	SelectionProducer
-} from '$lib/models/provenance';
-import type { ProjectId } from '$lib/models/projects';
-export interface NoteReader {
-	get(actor: ActorContext, noteId: NoteId): Promise<Note>;
-}
-export interface NoteTreeReader {
-	list(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSummary[]>;
-}
-/** The read behind global text search: the searchable projection of every active note. */
-export interface NoteTextSearcher {
-	listSearchable(actor: ActorContext, projectId?: ProjectId): Promise<readonly NoteSearchTarget[]>;
-}
-export interface NoteEditor {
-	getForEdit(actor: ActorContext, candidate: Pick<Note, 'id' | 'userId'>): Promise<Note>;
-	persistEdit(actor: ActorContext, write: NoteSaveWrite): Promise<Note>;
-}
-export interface NoteSectionNumberingEditor {
-	setSectionNumbering(actor: ActorContext, input: SetNoteSectionNumberingInput): Promise<Note>;
-}
-export interface NoteRevisionRecorder {
-	record(actor: ActorContext, note: Note, provenance?: Provenance): Promise<void>;
-}
-export interface NoteRevisionReader {
-	latestRevision(actor: ActorContext, noteId: NoteId): Promise<NoteRevision | undefined>;
-	/** Every kept snapshot of a note, newest first. */
-	revisions(actor: ActorContext, noteId: NoteId): Promise<readonly NoteRevision[]>;
-	revisionById(
-		actor: ActorContext,
-		noteId: NoteId,
-		revisionId: NoteRevisionId
-	): Promise<NoteRevision | undefined>;
-}
-export interface NoteAttachmentRestorer {
-	restoreAttachments(
-		actor: ActorContext,
-		noteId: NoteId,
-		revisionId: NoteRevisionId
-	): Promise<void>;
-}
-export interface NoteTrashReader {
-	listTrashed(actor: ActorContext, projectId?: ProjectId): Promise<readonly TrashedNote[]>;
-}
-export interface NotePublisher {
-	getForPublication(actor: ActorContext, noteId: NoteId): Promise<Note>;
-	persistPublication(actor: ActorContext, write: NotePublicationWrite): Promise<Note>;
-}
-export interface NoteImporter {
-	import(actor: ActorContext, markdown: string): Promise<Note>;
-}
-export interface NoteExporter {
-	export(actor: ActorContext, noteId: NoteId): Promise<string>;
-}
-export interface SourceAnchorResolver {
-	resolve(
-		actor: ActorContext,
-		anchorId: SourceAnchor['id']
-	): Promise<{ noteId: NoteId; from: number; to: number }>;
-}
-export interface SourceAnchorRepairer {
-	repairForNote(actor: ActorContext, note: Note): Promise<readonly SourceAnchor[]>;
-}
+import type { Note } from '$lib/models/notes';
+
 export interface NoteIndexer {
 	index(actor: ActorContext, note: Note): Promise<IndexingResult>;
-}
-
-export interface SelectionOriginService {
-	validate(actor: ActorContext, selection: TextSelection): Promise<Note>;
-	resolve(actor: ActorContext, selection: TextSelection): Promise<SelectionSource<Note>>;
-	record(
-		actor: ActorContext,
-		source: SelectionSource<Note>,
-		producer: SelectionProducer
-	): Promise<SelectionOrigin<Note>>;
 }
 
 /** Editor-schema conversion at the document boundary. */

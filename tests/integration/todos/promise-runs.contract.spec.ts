@@ -54,7 +54,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		anchors: notes.anchors,
 		provenance: notes.provenanceRepository
 	});
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }

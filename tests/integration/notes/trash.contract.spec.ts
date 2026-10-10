@@ -28,7 +28,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -36,7 +36,7 @@ it('restores to the root after a concurrent parent archive commits', async () =>
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: catalog,
+			noteTrash: catalog.trash,
 			noteIndexer: new InMemoryNoteContent(),
 			transactionRunner
 		})
@@ -78,7 +78,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 	const writer = connectPostgresTestDatabase(context.url);
 	const blocker = postgres(context.url, { max: 2 });
 	const { database, transactionRunner } = createTransactionContext(writer.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -86,7 +86,7 @@ it('archives the authoritative note after a concurrent note edit commits', async
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
-			noteTrash: catalog,
+			noteTrash: catalog.trash,
 			noteIndexer: new InMemoryNoteContent(),
 			transactionRunner
 		})

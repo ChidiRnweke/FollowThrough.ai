@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import { InMemoryProvenanceRepository } from '$lib/testing/provenance/fakes/in-memory-provenance-repository';
@@ -24,18 +24,18 @@ const setup = () => {
 	const noteRepository = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const notes = new NoteCatalog(noteRepository, new InMemoryAnchorRepository(), projects);
+	const notes = createNoteServices(noteRepository, new InMemoryAnchorRepository(), projects);
 	const skills = new InMemorySkillRepository(noteRepository);
 	const library = new SkillLibrary(skills, noteRepository, new InMemoryProvenanceRepository());
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			skillCreator: library,
-			noteEditor: notes,
-			anchorRepairer: notes,
+			noteEditor: notes.editor,
+			anchorRepairer: notes.anchorRepairer,
 			noteLinkReconciler: content,
 			noteIndexer: content,
-			noteCreation: notes,
+			noteCreation: notes.creator,
 			transactionRunner: new InMemoryTransactionRunner([noteRepository, skills, content])
 		})
 	);

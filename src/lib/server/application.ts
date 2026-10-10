@@ -171,7 +171,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const noteRepository = noteCapability.repository;
 	const anchorRepository = noteCapability.anchors;
 	const provenanceRepository = noteCapability.provenanceRepository;
-	const notes = noteCapability.catalog;
+	const notes = noteCapability.services;
 	const provenance = noteCapability.provenance;
 	const todos = todoCapability.catalog;
 	const knowledgeSearch = createKnowledgeSearchCapability({
@@ -275,7 +275,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	const suggestions = suggestionCapability;
 	const skills = skillCapability.library;
 	const diagramCapability = createDiagramsCapability({
-		contextNotes: notes,
+		contextNotes: notes.reader,
 		contextSkills: skills,
 		contextMemory: memory.lister,
 		apiKey: openRouterApiKey,
@@ -354,7 +354,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			referenceModel: referenceCapability.model
 		},
 		diagrams: {
-			diagramSourceNotes: notes,
+			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			selectionOrigins: noteCapability.selectionOrigins,
@@ -374,7 +374,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			runEvents: eventBus
 		},
 		diagramStudio: {
-			diagramSourceNotes: notes,
+			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
@@ -410,7 +410,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			relationshipCreator: relationships.creator,
 			referenceCreator: references.creator,
 			memoryChanges: memory.changes,
-			sourceNotes: notes,
+			sourceNotes: notes.reader,
 			memoryIndexer,
 			diagramIndexer,
 			diagramWriter: diagrams,
@@ -446,7 +446,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			settlements: runSettlements,
 			eventBus,
 			contextFormatter: agentContext,
-			contextNotes: notes,
+			contextNotes: notes.reader,
 			contextSkills: skills,
 			contextWidgets: widgets.reader,
 			contextDiagrams: diagrams,
@@ -499,7 +499,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			templates,
 			templateStorage: deliverables.templateStorage,
 			templateStyles: deliverables.templateStyles,
-			noteReader: notes,
+			noteReader: notes.reader,
 			provenanceRecorder: provenance,
 			artifactWriter: artifacts,
 			artifactStorage: deliverables.artifactStorage,
@@ -511,7 +511,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			exportWidgetReferences: deliverables.exportWidgetReferences,
 			widgetReader: widgets.reader,
 			todoLister: todos,
-			noteLister: notes,
+			noteLister: notes.treeReader,
 			diagramReader: diagrams,
 			diagramRenderer: deliverables.diagramRenderer,
 			docxGenerator: deliverables.docxGenerator,
@@ -533,18 +533,18 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			builtInSkills: skillCapability.builtIns,
 			skillUsageLister: skills,
 			skillUsageRecorder: skills,
-			revisionRecorder: notes,
-			noteEditor: notes,
-			revisionReader: notes,
-			attachmentRestorer: notes,
-			anchorRepairer: notes,
+			revisionRecorder: notes.revisionRecorder,
+			noteEditor: notes.editor,
+			revisionReader: notes.revisionReader,
+			attachmentRestorer: notes.attachmentRestorer,
+			anchorRepairer: notes.anchorRepairer,
 			noteIndexer,
 			noteLinkReconciler: relationships.reconciler,
 			skillEditor: skills,
 			skillPinWriter: skillCapability.pins,
 			selectionOrigins: noteCapability.selectionOrigins,
 			skillCreator: skills,
-			noteCreation: notes,
+			noteCreation: notes.creator,
 			transactionRunner
 		},
 		workspace: {
@@ -554,7 +554,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncObjects: synchronization.objects,
 			userReader: identity.userReader,
 			projectLister: projects.lister,
-			noteTreeReader: notes,
+			noteTreeReader: notes.treeReader,
 			skillFinder: skills,
 			builtInSkills: skillCapability.builtIns,
 			transactionRunner,
@@ -572,11 +572,11 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			markdown: noteCapability.markdown,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
-			noteReader: notes,
-			noteTreeReader: notes,
-			noteTextSearcher: notes,
-			noteCreation: notes,
-			noteSectionNumbering: notes,
+			noteReader: notes.reader,
+			noteTreeReader: notes.treeReader,
+			noteTextSearcher: notes.textSearcher,
+			noteCreation: notes.creator,
+			noteSectionNumbering: notes.sectionNumbering,
 			projectReader: projects.reader,
 			userPreferences: identity.userPreferences,
 			relationshipFinder: relationships.finder,
@@ -590,15 +590,15 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			suggestionLister: suggestions.lister,
 			suggestionExpirer: suggestions.expirer,
 			suggestionContextReader: suggestions.context,
-			noteEditor: notes,
-			noteTrash: notes,
-			noteTrashReader: notes,
-			noteDeletion: notes,
-			attachmentRestorer: notes,
-			notePublisher: notes,
-			revisionRecorder: notes,
-			revisionReader: notes,
-			anchorRepairer: notes,
+			noteEditor: notes.editor,
+			noteTrash: notes.trash,
+			noteTrashReader: notes.trashReader,
+			noteDeletion: notes.deletion,
+			attachmentRestorer: notes.attachmentRestorer,
+			notePublisher: notes.publisher,
+			revisionRecorder: notes.revisionRecorder,
+			revisionReader: notes.revisionReader,
+			anchorRepairer: notes.anchorRepairer,
 			noteIndexer,
 			transactionRunner
 		},
@@ -655,7 +655,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			projectLister: projects.lister,
 			projectEditor: projects.editor,
 			projectTreeReader: projects.treeReader,
-			noteCreation: notes,
+			noteCreation: notes.creator,
 			entryWriter: projects.treeWriter,
 			transactionRunner
 		},
@@ -668,7 +668,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		},
 		inlineSuggestions: {
 			context: finalizedKnowledgeSearch.inlineContext,
-			noteReader: notes,
+			noteReader: notes.reader,
 			preferences: finalizedKnowledgeSearch.preferences,
 			inlineCompletionGenerator: finalizedKnowledgeSearch.inlineCompletion,
 			knowledgeLookup,

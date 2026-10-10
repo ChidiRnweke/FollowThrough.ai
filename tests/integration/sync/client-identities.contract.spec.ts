@@ -21,12 +21,12 @@ describe('stable offline creation identities', () => {
 		const { owner, project } = await seedNote('9002');
 		const id = crypto.randomUUID() as NoteId;
 		const { database, transactionRunner } = createTransactionContext(context.db);
-		const { catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability({
 			db: database,
 			projects: new ProjectRecords(database)
 		});
 		const { folder } = await noteCreationControllers(
-			catalog,
+			catalog.creator,
 			transactionRunner
 		).projects.createFolder(owner, {
 			id,

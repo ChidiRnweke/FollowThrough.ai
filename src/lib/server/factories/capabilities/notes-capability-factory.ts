@@ -4,14 +4,43 @@ import {
 	noteMarkdownFromContent
 } from '$lib/server/services/notes/markdown';
 import type { NoteMarkdown } from '$lib/server/services/notes/contracts';
-import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
+import {
+	SelectionOrigins,
+	type SelectionOriginService
+} from '$lib/server/services/notes/selection-origin';
 import type { Database } from '$lib/server/db';
 import type { NoteRepository } from '$lib/server/repositories/notes';
 import { NoteRecords, SourceAnchorRecords } from '$lib/server/repositories/notes/postgres/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
-import type { SourceAnchorRepository } from '$lib/server/repositories/provenance';
+import type {
+	SourceAnchorRepository,
+	ProvenanceRepository
+} from '$lib/server/repositories/provenance';
 import { ProvenanceRecords } from '$lib/server/repositories/provenance/postgres/provenance';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import {
+	NoteReadingService,
+	NoteEditingService,
+	NoteLifecycleService,
+	NoteRevisionReadingService,
+	NoteRevisionWritingService,
+	NotePublicationService,
+	NoteAnchorRepairService,
+	NoteCreationService,
+	type NoteCreator,
+	type NoteReader,
+	type NoteTreeReader,
+	type NoteTextSearcher,
+	type NoteEditor,
+	type NoteSectionNumberingEditor,
+	type NoteTrashOperations,
+	type NoteTrashReader,
+	type NoteDeletion,
+	type NotePublisher,
+	type NoteRevisionRecorder,
+	type NoteRevisionReader,
+	type NoteAttachmentRestorer,
+	type SourceAnchorRepairer
+} from '$lib/server/services/notes/catalog';
 import { NoteProvenance, type ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 
 export interface NotesCapabilityInput {
@@ -24,25 +53,68 @@ export interface NotesCapability {
 	readonly markdown: NoteMarkdown;
 	readonly repository: NoteRepository;
 	readonly anchors: SourceAnchorRepository;
-	readonly catalog: NoteCatalog;
-	readonly selectionOrigins: SelectionOrigins;
+	readonly services: NoteServices;
+	readonly selectionOrigins: SelectionOriginService;
 	readonly provenance: ProvenanceRecorder;
-	readonly provenanceRepository: ProvenanceRecords;
+	readonly provenanceRepository: ProvenanceRepository;
 }
 
 export const createNotesCapability = (input: NotesCapabilityInput): NotesCapability => {
 	const repository = new NoteRecords(input.db);
 	const anchors = new SourceAnchorRecords(input.db);
 	const provenanceRepository = new ProvenanceRecords(input.db);
-	const catalog = new NoteCatalog(repository, anchors, input.projects);
+	const services = createNoteServices(repository, anchors, input.projects);
 	return {
 		presentation: new NotePresentationService(),
 		markdown: { read: noteContentFromMarkdown, write: noteMarkdownFromContent },
 		repository,
 		anchors,
-		catalog,
+		services,
 		selectionOrigins: new SelectionOrigins(repository, anchors, provenanceRepository),
 		provenance: new NoteProvenance(provenanceRepository, anchors),
 		provenanceRepository
+	};
+};
+
+export interface NoteServices {
+	readonly creator: NoteCreator;
+	readonly reader: NoteReader;
+	readonly treeReader: NoteTreeReader;
+	readonly textSearcher: NoteTextSearcher;
+	readonly editor: NoteEditor;
+	readonly sectionNumbering: NoteSectionNumberingEditor;
+	readonly trash: NoteTrashOperations;
+	readonly trashReader: NoteTrashReader;
+	readonly deletion: NoteDeletion;
+	readonly publisher: NotePublisher;
+	readonly revisionRecorder: NoteRevisionRecorder;
+	readonly revisionReader: NoteRevisionReader;
+	readonly attachmentRestorer: NoteAttachmentRestorer;
+	readonly anchorRepairer: SourceAnchorRepairer;
+}
+export const createNoteServices = (
+	notes: NoteRepository,
+	anchors: SourceAnchorRepository,
+	projects: ProjectRepository
+): NoteServices => {
+	const reading = new NoteReadingService(notes, projects);
+	const editing = new NoteEditingService(notes);
+	const lifecycle = new NoteLifecycleService(notes, projects);
+	const revisionWriting = new NoteRevisionWritingService(notes);
+	return {
+		reader: reading,
+		treeReader: reading,
+		textSearcher: reading,
+		trashReader: reading,
+		editor: editing,
+		sectionNumbering: editing,
+		trash: lifecycle,
+		deletion: lifecycle,
+		creator: new NoteCreationService(notes, projects),
+		publisher: new NotePublicationService(notes),
+		revisionReader: new NoteRevisionReadingService(notes),
+		revisionRecorder: revisionWriting,
+		attachmentRestorer: revisionWriting,
+		anchorRepairer: new NoteAnchorRepairService(notes, anchors)
 	};
 };

@@ -6,7 +6,7 @@ import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import { UserDirectory } from '$lib/server/services/identity/users';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { InMemoryAnchorRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { InMemoryUserRepository } from '$lib/testing/identity/fakes/in-memory-users';
 import { InMemorySuggestionReader } from '$lib/testing/suggestions/fakes/in-memory-automation';
@@ -22,7 +22,11 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 			...state,
 			userReader: new UserDirectory(users),
 			projectLister: createProjectServices(state.projects, state.projects).lister,
-			noteTreeReader: new NoteCatalog(state.notes, new InMemoryAnchorRepository(), state.projects),
+			noteTreeReader: createNoteServices(
+				state.notes,
+				new InMemoryAnchorRepository(),
+				state.projects
+			).treeReader,
 			suggestionExpirer: suggestions,
 			suggestionLister: suggestions
 		})

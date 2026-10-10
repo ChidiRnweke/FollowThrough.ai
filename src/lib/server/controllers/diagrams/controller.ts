@@ -34,7 +34,8 @@ import type { DiagramSubmission } from '$lib/models/diagrams/generation';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
@@ -75,7 +76,7 @@ import {
 import type { RunSettlement } from '$lib/server/services/agent/runs/settlement';
 import type { AgentEventBus } from '$lib/server/stores/agent/events';
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
-import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 
 /**

@@ -41,7 +41,7 @@ import {
 	ValidationError
 } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { PromiseExtractor } from '$lib/server/services/todos/promise-extraction/contracts';
 import type { IPromiseRules } from '$lib/server/services/todos/promise-rules';
 import type { DateTime } from '$lib/models/workspace';

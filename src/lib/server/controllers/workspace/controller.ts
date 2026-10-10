@@ -20,7 +20,8 @@ import type {
 import type { Project } from '$lib/models/projects';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import { assembleToday } from '$lib/services/workspace/today';
-import type { NoteTreeReader } from '$lib/server/services/notes/contracts';
+import type { NoteTreeReader } from '$lib/server/services/notes/catalog';
+
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { BuiltInSkillProvisioner, SkillFinder } from '$lib/server/services/skills/contracts';

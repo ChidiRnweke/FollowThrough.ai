@@ -14,7 +14,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	const { owner, project } = await seedNote('21401');
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const skills = skillController(database, transactionRunner);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -23,8 +23,8 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			notePublisher: catalog,
-			revisionRecorder: catalog
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder
 		})
 	);
 	const created = await skills.create(owner, { projectId: project.id, name: 'Review' });

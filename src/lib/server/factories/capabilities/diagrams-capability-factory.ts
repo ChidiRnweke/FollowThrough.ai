@@ -10,7 +10,8 @@ import type {
 import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagrams';
 import type { ConversationArchive } from '$lib/server/services/agent/conversations/archive';
 import type { IAgentContext } from '$lib/server/services/agent/runs/context';
-import type { NoteReader } from '$lib/server/services/notes/contracts';
+import type { NoteReader } from '$lib/server/services/notes/catalog';
+
 import type { SkillFinder } from '$lib/server/services/skills/contracts';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { WorkflowRunLedger } from '$lib/server/services/agent/runs/ledger';

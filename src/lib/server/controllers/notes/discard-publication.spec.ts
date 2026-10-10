@@ -7,7 +7,7 @@ const content = (text: string): Pick<Note, 'plainText' | 'document'> => ({
 	document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
 });
 import { Notes, type NotesDependencies } from './controller';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { noteEtag } from '$lib/models/notes';
 import {
 	InMemoryNoteRepository,
@@ -27,20 +27,20 @@ it('discards against the publication that committed before it acquired the note'
 	const records = new InMemoryNoteRepository();
 	const projects = new InMemoryProjectRepository(records);
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(records, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(records, new InMemoryAnchorRepository(), projects);
 	const effects = new InMemoryNoteContent();
 	const controller = new Notes(
 		capabilityDependencies<NotesDependencies>({
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: new InMemoryTransactionRunner([records, effects]),
-			noteReader: catalog,
-			noteEditor: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
-			revisionReader: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
+			revisionReader: catalog.revisionReader,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})

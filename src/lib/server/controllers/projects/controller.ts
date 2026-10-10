@@ -1,5 +1,5 @@
 import type { ProjectPlacement } from '$lib/services/projects/placement';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
@@ -81,7 +81,7 @@ export interface ProjectsDependencies {
 	details: ProjectDetailRules;
 	presentation: ProjectTreePresentation;
 	projectTreeReader: ProjectTreeReader;
-	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	noteCreation: NoteCreator;
 	entryWriter: ProjectTreeWriter;
 	transactionRunner: TransactionRunner;
 }

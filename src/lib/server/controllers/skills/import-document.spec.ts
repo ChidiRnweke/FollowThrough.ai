@@ -8,7 +8,7 @@ import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { readSkillManifest } from '$lib/remote/skills/manifest-reader.server';
 import type { SkillEditInput } from '$lib/models/skills';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryNoteRepository,
@@ -31,7 +31,7 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
 	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
-	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
@@ -39,11 +39,11 @@ const setup = () => {
 			skillFinder: service,
 			skillEditor: service,
 			skillUsageLister: service,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteIndexer: content,
 			noteLinkReconciler: content,
 			transactionRunner
@@ -143,7 +143,7 @@ describe('Skill document imports', () => {
 	});
 	it('reads the current note title in the skill list after a document rename', async () => {
 		const { catalog, service, note, transactionRunner } = importSkill();
-		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+		await saveNoteDraft(catalog.editor, transactionRunner, testActor(), {
 			...note,
 			title: 'Release decisions'
 		});
@@ -271,8 +271,8 @@ describe('Skill document imports', () => {
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog,
-				revisionRecorder: catalog
+				notePublisher: catalog.publisher,
+				revisionRecorder: catalog.revisionRecorder
 			})
 		);
 		await publisher.publish(testActor(), {
@@ -285,7 +285,7 @@ describe('Skill document imports', () => {
 	});
 	it('refuses imported content based on an older editor revision', async () => {
 		const { controller, catalog, note, transactionRunner } = importSkill();
-		await saveNoteDraft(catalog, transactionRunner, testActor(), {
+		await saveNoteDraft(catalog.editor, transactionRunner, testActor(), {
 			...note,
 			plainText: 'A newer edit'
 		});

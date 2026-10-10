@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -43,9 +43,12 @@ const setup = async () => {
 	});
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const controller = new Skills(
-		capabilityDependencies<SkillsDependencies>({ skillFinder: library, revisionReader: catalog })
+		capabilityDependencies<SkillsDependencies>({
+			skillFinder: library,
+			revisionReader: catalog.revisionReader
+		})
 	);
 	return { controller, notes, note };
 };

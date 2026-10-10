@@ -2,7 +2,11 @@ import type { ISuggestionPresentationService } from '$lib/services/suggestions/p
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import { noteTrashChange } from '$lib/services/notes/trash';
 import { prepareNotePublication } from '$lib/services/notes/publication';
-import type { NoteCatalog } from '$lib/server/services/notes/catalog';
+import type {
+	NoteCreator,
+	NoteTrashOperations,
+	NoteDeletion
+} from '$lib/server/services/notes/catalog';
 import { prepareNoteDeletion } from '$lib/server/services/notes/deletion';
 import { decideNoteCreation } from '$lib/services/notes/creation';
 import type { DateTime } from '$lib/models/workspace';
@@ -116,7 +120,8 @@ import type {
 	NoteReader,
 	NoteTextSearcher,
 	NoteTreeReader
-} from '$lib/server/services/notes/contracts';
+} from '$lib/server/services/notes/catalog';
+
 import type {
 	ReferenceLister,
 	ReferenceContextReader
@@ -130,14 +135,14 @@ import type { TodoLister, TodoContextReader } from '$lib/server/services/todos/c
 import type {
 	NoteAttachmentRestorer,
 	NoteEditor,
-	NoteIndexer,
 	NotePublisher,
 	NoteRevisionRecorder,
 	NoteRevisionReader,
 	NoteSectionNumberingEditor,
 	NoteTrashReader,
 	SourceAnchorRepairer
-} from '$lib/server/services/notes/contracts';
+} from '$lib/server/services/notes/catalog';
+import type { NoteIndexer } from '$lib/server/services/notes/contracts';
 
 /**
  * Application boundary for notes: the read model, editing and publishing, offline sync,
@@ -332,7 +337,7 @@ export interface NotesDependencies {
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;
 	noteTextSearcher: NoteTextSearcher;
-	noteCreation: Pick<NoteCatalog, 'creationFacts' | 'insert'>;
+	noteCreation: NoteCreator;
 	noteSectionNumbering: NoteSectionNumberingEditor;
 	projectReader: ProjectReader;
 	userPreferences: UserPreferencesReader;
@@ -348,9 +353,9 @@ export interface NotesDependencies {
 	suggestionContextReader: SuggestionContextReader;
 	noteEditor: NoteEditor;
 	noteLinkReconciler: NoteLinkReconciler;
-	noteTrash: Pick<NoteCatalog, 'archiveFacts' | 'restoreFacts' | 'persistTrash'>;
+	noteTrash: NoteTrashOperations;
 	noteTrashReader: NoteTrashReader;
-	noteDeletion: Pick<NoteCatalog, 'deletionFacts' | 'trashForDeletion' | 'persistDeletion'>;
+	noteDeletion: NoteDeletion;
 	notePublisher: NotePublisher;
 	revisionRecorder: NoteRevisionRecorder;
 	revisionReader: NoteRevisionReader;

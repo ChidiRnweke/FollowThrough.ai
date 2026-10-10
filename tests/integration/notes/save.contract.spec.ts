@@ -18,7 +18,7 @@ it.each([
 		const writer = connectPostgresTestDatabase(context.url);
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const { catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability({
 			db: database,
 			projects: new ProjectRecords(database)
 		});
@@ -35,7 +35,7 @@ it.each([
 		try {
 			await locked.promise;
 			const [backend] = await writer.client<{ pid: number }[]>`select pg_backend_pid() as pid`;
-			const saving = saveNoteDraft(catalog, transactionRunner, owner, note).then(
+			const saving = saveNoteDraft(catalog.editor, transactionRunner, owner, note).then(
 				() => ({ kind: 'saved' }),
 				(error) => {
 					if (!(error instanceof DomainError)) throw error;

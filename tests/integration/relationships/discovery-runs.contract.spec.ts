@@ -57,7 +57,7 @@ const setup = async (suffix: string) => {
 		provenance: notes.provenanceRepository
 	});
 	const text = 'Use OAuth';
-	const note = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const note = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...seeded.note,
 		plainText: text,
 		document: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] }
@@ -80,12 +80,12 @@ const setup = async (suffix: string) => {
 		confidence: 95
 	};
 	const targetText = 'The team chose OAuth.';
-	const target = await storedNote(notes.catalog, seeded.owner, {
+	const target = await storedNote(notes.services.creator, seeded.owner, {
 		kind: 'note',
 		projectId: seeded.project.id,
 		title: 'Earlier decision'
 	});
-	const savedTarget = await saveNoteDraft(notes.catalog, transactionRunner, seeded.owner, {
+	const savedTarget = await saveNoteDraft(notes.services.editor, transactionRunner, seeded.owner, {
 		...target,
 		plainText: targetText,
 		document: {

@@ -22,7 +22,7 @@ const content = (text: string): Pick<Note, 'title' | 'plainText' | 'document'> =
 const setup = async (suffix: string) => {
 	const seed = await seedNote(suffix);
 	const tx = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: tx.database,
 		projects: new ProjectRecords(tx.database)
 	});
@@ -32,12 +32,12 @@ const setup = async (suffix: string) => {
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner: tx.transactionRunner,
-			noteReader: catalog,
-			noteEditor: catalog,
-			notePublisher: catalog,
-			revisionRecorder: catalog,
-			revisionReader: catalog,
-			anchorRepairer: catalog,
+			noteReader: catalog.reader,
+			noteEditor: catalog.editor,
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder,
+			revisionReader: catalog.revisionReader,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: effects,
 			noteIndexer: effects
 		})

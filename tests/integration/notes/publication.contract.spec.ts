@@ -22,7 +22,7 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 		title: 'Publication rollback contract'
 	});
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -31,8 +31,8 @@ it('rolls back the snapshot when PostgreSQL rejects publication', async () => {
 			notePresentation: new NotePresentationService(),
 			suggestionPresentation: new SuggestionPresentationService(),
 			transactionRunner,
-			notePublisher: catalog,
-			revisionRecorder: catalog
+			notePublisher: catalog.publisher,
+			revisionRecorder: catalog.revisionRecorder
 		})
 	);
 	await context.client`create function reject_contract_note_publication() returns trigger language plpgsql as $$
@@ -67,7 +67,7 @@ it.each([
 		const writer = connectPostgresTestDatabase(context.url);
 		const blocker = postgres(context.url, { max: 2 });
 		const { database, transactionRunner } = createTransactionContext(writer.db);
-		const { catalog } = createNotesCapability({
+		const { services: catalog } = createNotesCapability({
 			db: database,
 			projects: new ProjectRecords(database)
 		});
@@ -76,8 +76,8 @@ it.each([
 				notePresentation: new NotePresentationService(),
 				suggestionPresentation: new SuggestionPresentationService(),
 				transactionRunner,
-				notePublisher: catalog,
-				revisionRecorder: catalog
+				notePublisher: catalog.publisher,
+				revisionRecorder: catalog.revisionRecorder
 			})
 		);
 		const locked = Promise.withResolvers<void>();

@@ -13,7 +13,7 @@ import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace
 import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
 import type { IKnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
-import type { SelectionOriginService } from '$lib/server/services/notes/contracts';
+import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';
 import type { SuggestionCreator } from '$lib/server/services/suggestions/inbox';
 import type {
 	AgentRunReceipt,

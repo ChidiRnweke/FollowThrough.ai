@@ -1,7 +1,7 @@
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { describe, expect, it } from 'vitest';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import {
 	InMemoryNoteRepository,
 	InMemoryAnchorRepository
@@ -38,16 +38,16 @@ const setup = () => {
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
 	const anchors = new InMemoryAnchorRepository();
-	const catalog = new NoteCatalog(repository, anchors, projects);
+	const catalog = createNoteServices(repository, anchors, projects);
 	const skills = new InMemorySkillRepository(repository);
 	const provenance = new InMemoryProvenanceRepository();
 	const library = new SkillLibrary(skills, repository, provenance);
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			selectionOrigins: new SelectionOrigins(repository, anchors, provenance),
-			noteCreation: catalog,
-			noteEditor: catalog,
-			anchorRepairer: catalog,
+			noteCreation: catalog.creator,
+			noteEditor: catalog.editor,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: notes,
 			noteIndexer: notes,
 			skillCreator: library,

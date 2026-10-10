@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { SkillLibrary } from '$lib/server/services/skills/library';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { InMemorySkillRepository } from '$lib/testing/skills/fakes/in-memory-artifact-repositories';
 import {
 	InMemoryNoteRepository,
@@ -24,18 +24,18 @@ const setup = () => {
 	projects.projects = [projectBuilder()];
 	const skills = new InMemorySkillRepository(notes);
 	const service = new SkillLibrary(skills, notes, new InMemoryProvenanceRepository());
-	const catalog = new NoteCatalog(notes, new InMemoryAnchorRepository(), projects);
+	const catalog = createNoteServices(notes, new InMemoryAnchorRepository(), projects);
 	const content = new InMemoryNoteContent();
 	const controller = new Skills(
 		capabilityDependencies<SkillsDependencies>({
 			skillFinder: service,
 			skillEditor: service,
 			skillUsageLister: service,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteIndexer: content,
 			noteLinkReconciler: content,
 			transactionRunner: new InMemoryTransactionRunner([notes, skills])

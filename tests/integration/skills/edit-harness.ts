@@ -13,7 +13,7 @@ import { BUILT_INS, RETIRED_BUILT_INS } from '$lib/server/services/skills/built-
 import { SkillLibrary } from '$lib/server/services/skills/library';
 import { SkillPins } from '$lib/server/services/skills/pins';
 import { SelectionOrigins } from '$lib/server/services/notes/selection-origin';
-import { NoteCatalog } from '$lib/server/services/notes/catalog';
+import { createNoteServices } from '$lib/server/factories/capabilities/notes-capability-factory';
 import { Skills, type SkillsDependencies } from '$lib/server/controllers/skills/controller';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -26,7 +26,7 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const skills = new SkillRecords(database);
 	const provenance = new ProvenanceRecords(database);
 	const library = new SkillLibrary(skills, notes, provenance);
-	const catalog = new NoteCatalog(notes, new SourceAnchorRecords(database), projects);
+	const catalog = createNoteServices(notes, new SourceAnchorRecords(database), projects);
 	const content = new InMemoryNoteContent();
 	const sync = createSyncCapability({ db: database });
 	return new Skills(
@@ -41,16 +41,16 @@ export const skillController = (database: Database, transactionRunner: Transacti
 			}),
 			skillFinder: library,
 			skillCreator: library,
-			noteCreation: catalog,
+			noteCreation: catalog.creator,
 			skillEditor: library,
 			skillPinWriter: new SkillPins(projects, notes, skills),
 			skillUsageLister: library,
 			skillUsageRecorder: library,
-			noteEditor: catalog,
-			revisionReader: catalog,
-			revisionRecorder: catalog,
-			attachmentRestorer: catalog,
-			anchorRepairer: catalog,
+			noteEditor: catalog.editor,
+			revisionReader: catalog.revisionReader,
+			revisionRecorder: catalog.revisionRecorder,
+			attachmentRestorer: catalog.attachmentRestorer,
+			anchorRepairer: catalog.anchorRepairer,
 			noteLinkReconciler: content,
 			noteIndexer: content
 		})

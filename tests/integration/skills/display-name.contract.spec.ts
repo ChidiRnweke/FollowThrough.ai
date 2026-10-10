@@ -20,7 +20,7 @@ import { context, seedNote } from '../database-harness';
 const setup = async (suffix: string) => {
 	const { owner, project } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
-	const { catalog } = createNotesCapability({
+	const { services: catalog } = createNotesCapability({
 		db: database,
 		projects: new ProjectRecords(database)
 	});
@@ -37,13 +37,13 @@ const setup = async (suffix: string) => {
 			skillEditor: library,
 			skillFinder: library,
 			skillUsageLister: library,
-			noteEditor: catalog,
+			noteEditor: catalog.editor,
 			anchorRepairer: content,
 			noteLinkReconciler: content,
 			noteIndexer: content
 		})
 	);
-	const note = await storedNote(catalog, owner, {
+	const note = await storedNote(catalog.creator, owner, {
 		kind: 'skill',
 		projectId: project.id,
 		title: 'Release checklist'
@@ -77,7 +77,10 @@ describe('Skill display name authority', () => {
 	it('publishes the renamed skill and note resources with the derived database name', async () => {
 		const { owner, note, catalog, journal, transactionRunner } = await setup('12202');
 		const initial = await journal.pullPage(owner, initialSyncCursor);
-		await saveNoteDraft(catalog, transactionRunner, owner, { ...note, title: 'Ship checklist' });
+		await saveNoteDraft(catalog.editor, transactionRunner, owner, {
+			...note,
+			title: 'Ship checklist'
+		});
 		const batch = await journal.pullPage(owner, initial.cursor);
 		expect({
 			resources: batch.records,
@@ -108,7 +111,7 @@ describe('Skill display name authority', () => {
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await transactionRunner
 			.run(async () => {
-				await saveNoteDraft(catalog, transactionRunner, owner, {
+				await saveNoteDraft(catalog.editor, transactionRunner, owner, {
 					...note,
 					title: 'Ship checklist'
 				});
