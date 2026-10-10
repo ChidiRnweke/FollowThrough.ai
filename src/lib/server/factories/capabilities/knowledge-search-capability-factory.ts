@@ -4,7 +4,6 @@ import {
 	InlineCompletionRules,
 	type IInlineCompletionRules
 } from '$lib/server/services/inline-suggestions/completion-rules';
-import type { InlineSuggestionThrottle } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { TokenCodec } from '$lib/models/tokenization';
@@ -49,7 +48,14 @@ import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 
 import { optionalProperty, positiveNumberFromEnvironment } from '$lib/server/config';
 import type { AgentToolDiscoveryServices } from '$lib/server/factories/agent/tool-discovery-factory';
-import { createInlineAdmission } from '$lib/server/factories/inline-admission';
+import {
+	InlineAdmissionRules,
+	type IInlineAdmissionRules
+} from '$lib/server/services/inline-suggestions/inline-admission';
+import {
+	InlineAdmissionStore,
+	type InlineAdmissionState
+} from '$lib/server/stores/inline-suggestions/admission';
 import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/tool-embeddings';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/preferences';
@@ -111,7 +117,8 @@ export interface KnowledgeSearchFinalized {
 	readonly inlineContext: IInlineContextService;
 	readonly observer: OperationObserver;
 	readonly workflow: WorkflowObserver;
-	readonly inlineAdmission: InlineSuggestionThrottle;
+	readonly admissionRules: IInlineAdmissionRules;
+	readonly admissions: InlineAdmissionState;
 }
 
 export const createKnowledgeSearchCapability = (
@@ -184,7 +191,8 @@ export const createKnowledgeSearchCapability = (
 			}),
 			observer: operationObserver,
 			workflow: workflowObserver,
-			inlineAdmission: createInlineAdmission()
+			admissionRules: new InlineAdmissionRules(),
+			admissions: new InlineAdmissionStore()
 		}),
 		reranker,
 		queryGenerator,

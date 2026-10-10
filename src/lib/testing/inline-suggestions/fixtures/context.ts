@@ -5,7 +5,8 @@ import {
 	InlineSuggestions,
 	type InlineSuggestionsDependencies
 } from '$lib/server/controllers/inline-suggestions/controller';
-import { createInlineAdmission } from '$lib/server/factories/inline-admission';
+import { InlineAdmissionRules } from '$lib/server/services/inline-suggestions/inline-admission';
+import { InlineAdmissionStore } from '$lib/server/stores/inline-suggestions/admission';
 import { AgentPreferenceCatalog } from '$lib/server/services/agent/runs/preferences';
 import { KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import {
@@ -29,7 +30,7 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 	const reranker = new InMemoryReranker();
 	const generator = new InMemoryInlineCompletion();
 	const preferences = new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository());
-	const admission = createInlineAdmission();
+	const admissions = new InlineAdmissionStore();
 	const controller = new InlineSuggestions(
 		capabilityDependencies<InlineSuggestionsDependencies>({
 			context: new InlineContextService(testTokenizer),
@@ -41,7 +42,9 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 			inlineCompletionGenerator: generator,
 			completionRules: new InlineCompletionRules(),
 			defaultCompletionModel: 'default-inline-model',
-			inlineSuggestionThrottle: admission,
+			admissionRules: new InlineAdmissionRules(),
+			admissions,
+			now: () => 0,
 			preferences,
 			observer: { run: (_name, _context, body) => body() },
 			workflow: { run: (_name, _context, body) => body() },
@@ -57,6 +60,6 @@ export const inlineSuggestionFixture = (overrides: Partial<InlineSuggestionsDepe
 		reranker,
 		generator,
 		preferences,
-		admission
+		admissions
 	};
 };

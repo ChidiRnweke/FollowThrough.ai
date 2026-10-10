@@ -110,9 +110,9 @@ describe('inline completion ownership', () => {
 			(result) => result,
 			(error) => error
 		);
-		expect({ outcome, admission: cancelling.admission.admit(actor.userId) }).toEqual({
+		expect({ outcome, inFlight: cancelling.admissions.hasRequest(actor.userId) }).toEqual({
 			outcome: failure,
-			admission: { allowed: true }
+			inFlight: false
 		});
 	});
 	it('retains raw provider attributes and sanitized output in the generation span', async () => {

@@ -780,7 +780,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			workflow: finalizedKnowledgeSearch.workflow,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
-			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission
+			admissionRules: finalizedKnowledgeSearch.admissionRules,
+			admissions: finalizedKnowledgeSearch.admissions,
+			now: Date.now
 		},
 		feedback
 	};
