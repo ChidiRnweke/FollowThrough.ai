@@ -10,7 +10,7 @@ import {
 } from '@openai/agents';
 import OpenAI from 'openai';
 import type { ActorContext } from '$lib/models/identity';
-import { readToolFailure, toolFailure } from '$lib/models/agent/tool-failure';
+import { readToolOutput, toolFailure } from '$lib/models/agent/tool-failure';
 import {
 	DEFAULT_AGENT_MAX_TURNS,
 	openRouterWebSearchTool,
@@ -24,7 +24,6 @@ import {
 	type ContextResourceText,
 	type PendingAgentDecision,
 	type ProviderStreamEvent,
-	type ProviderToolCall,
 	type ProviderToolOutput,
 	type RunAgentInput,
 	type ToolClassification,
@@ -247,33 +246,26 @@ const unidentifiedCall = (name: string) =>
 		false
 	);
 
-/**
- * The provider names a tool; this is where that name becomes one of ours.
- *
- * It raises rather than settling the row as `tool_failed`, and rather than
- * carrying the raw string onward. The SDK resolves every call against the tools
- * this run handed it and answers an unknown name with its own `Tool not found`
- * before any event is emitted, so a name arriving here that the agent surface
- * does not have means the registry and the tools given to the SDK have
- * diverged — a bug in this process, not a thing the model did. Across the 2554
- * stored run events in `tests/corpus/`, it has never happened.
- *
- * `tool_started` has no failure arm to settle into either: the call did start,
- * and inventing an outcome for it would be the quiet wrong answer.
- */
-const namedTool = (name: string): AgentToolName => {
-	const read = readAgentToolName(name);
-	if (read === undefined)
-		throw new AgentProviderFailure(
-			`The provider called "${name}", which is not a tool this agent offers`,
-			'UNKNOWN_TOOL_CALL',
-			false
-		);
-	return read;
+/** The SDK's own answer to a call it could not route, or a plain statement of it. */
+const unavailableFailure = (output: ProviderToolOutput): string => {
+	const reading = output.kind === 'value' ? readToolOutput(output.value) : undefined;
+	return reading?.kind === 'failure'
+		? reading.failure.message
+		: 'The agent has no tool by this name, so nothing ran.';
 };
 
+/**
+ * The mapper records what the SDK did; it does not decide again.
+ *
+ * Two calls never run, and the SDK answers both itself so the run continues: a
+ * name the agent does not have (`TOOL_NOT_AVAILABLE`, with suggestions), and
+ * arguments that are not JSON (a plain-text correction). Neither gets a running
+ * row — `tool_started` names a catalog tool with readable arguments — and both
+ * settle as `tool_failed` in the journal. The turn summary then decides what is news: a failure
+ * a later call put right is not reported (see `turn-context.ts`).
+ */
 export class AgentToolEventMapper {
-	private readonly calls = new Map<string, ProviderToolCall>();
+	private readonly calls = new Map<string, { readonly name: string; readonly readable: boolean }>();
 
 	map(event: ProviderStreamEvent): AgentEvent | undefined {
 		if (event.type === 'tool_called') {
@@ -281,13 +273,12 @@ export class AgentToolEventMapper {
 			// A call the run cannot name is a call no output and no approval can ever
 			// be matched to. It has to fail here rather than be keyed on a stand-in.
 			if (call.callId === undefined) throw unidentifiedCall(call.name);
-			this.calls.set(call.callId, call);
-			return {
-				type: 'tool_started',
-				callId: call.callId,
-				name: namedTool(call.name),
-				arguments: call.arguments
-			};
+			const readable = call.arguments.kind === 'value';
+			this.calls.set(call.callId, { name: call.name, readable });
+			const name = readAgentToolName(call.name);
+			return name !== undefined && call.arguments.kind === 'value'
+				? { type: 'tool_started', callId: call.callId, name, arguments: call.arguments.value }
+				: undefined;
 		}
 		if (event.type !== 'tool_output') return undefined;
 		const { call } = event;
@@ -298,10 +289,24 @@ export class AgentToolEventMapper {
 		const callId = call.callId ?? soleActive;
 		const known = callId === undefined ? undefined : this.calls.get(callId);
 		if (callId !== undefined) this.calls.delete(callId);
-		return this.outcome(
-			{ ...(callId === undefined ? {} : { callId }), name: namedTool(known?.name ?? call.name) },
-			call.output
-		);
+		const requested = known?.name ?? call.name;
+		const id = callId === undefined ? {} : { callId };
+		const name = readAgentToolName(requested);
+		if (name === undefined)
+			return {
+				type: 'tool_failed',
+				...id,
+				name: requested,
+				failure: unavailableFailure(call.output)
+			};
+		if (known?.readable === false)
+			return {
+				type: 'tool_failed',
+				...id,
+				name,
+				failure: 'The tool arguments were not valid JSON, so the tool did not run.'
+			};
+		return this.outcome({ ...id, name }, call.output);
 	}
 
 	/**
@@ -325,10 +330,21 @@ export class AgentToolEventMapper {
 				...identity,
 				failure: `The tool result could not be read. ${output.message}`
 			};
-		const failure = readToolFailure(output.value);
-		return failure === undefined
-			? { type: 'tool_succeeded', ...identity, output: output.value }
-			: { type: 'tool_reported_failure', ...identity, failure, output: output.value };
+		const reading = readToolOutput(output.value);
+		if (reading.kind === 'success')
+			return { type: 'tool_succeeded', ...identity, output: output.value };
+		if (reading.kind === 'corrupt')
+			return {
+				type: 'tool_failed',
+				...identity,
+				failure: `The tool reported a failure that could not be read. ${reading.message}`
+			};
+		return {
+			type: 'tool_reported_failure',
+			...identity,
+			failure: reading.failure.message,
+			output: output.value
+		};
 	}
 }
 
@@ -447,7 +463,11 @@ const promotedInConversation = async (
 const parkedCall = (
 	// audit-allow: no-unknown-type — A provider interruption item, read here for the call it parked.
 	item: unknown
-): ProviderToolCall & { readonly callId: string; readonly name: ToolName } => {
+): {
+	readonly callId: string;
+	readonly name: ToolName;
+	readonly arguments: AgentPayloadObject;
+} => {
 	const call = parseProviderToolCall(item);
 	if (!call)
 		throw new AgentProviderFailure(
@@ -464,7 +484,7 @@ const parkedCall = (
 			'UNKNOWN_PARKED_CALL',
 			false
 		);
-	return { ...call, callId, name };
+	return { callId, name, arguments: call.arguments.value };
 };
 
 /**
@@ -750,6 +770,8 @@ export class AgentReasoning {
 			);
 		} catch (error) {
 			if (signal.aborted) throw error;
+			// Already classified where it was raised; rewrapping would erase that code.
+			if (error instanceof AgentProviderFailure) throw error;
 			throw new AgentProviderFailure(
 				error instanceof Error ? error.message : String(error),
 				this.providerErrorCode(error) ?? 'EXTERNAL_SERVICE',

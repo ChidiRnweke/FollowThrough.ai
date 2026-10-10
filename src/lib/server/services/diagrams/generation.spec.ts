@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DiagramProviderSession } from './generation';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
-import { InMemoryDiagramModel } from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
+import {
+	InMemoryDiagramModel,
+	type DiagramCandidate
+} from '$lib/testing/diagrams/fakes/in-memory-diagram-model';
 import type { DiagramGenerationRequest, DiagramSubmission } from '$lib/models/diagrams/generation';
 
 const request: DiagramGenerationRequest = {
@@ -11,7 +14,7 @@ const request: DiagramGenerationRequest = {
 	instructions: 'Submit a Mermaid diagram.'
 };
 const draft: DiagramSubmission = { kind: 'mermaid', source: 'flowchart LR\nA --> B' };
-const setup = (candidates = [draft]) => {
+const setup = (candidates: readonly DiagramCandidate[] = [draft]) => {
 	const provider = new InMemoryModelProvider(new InMemoryDiagramModel(candidates));
 	return { provider, session: new DiagramProviderSession(provider, request) };
 };

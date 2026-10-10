@@ -28,7 +28,8 @@ import {
 	mergeToolActivity,
 	readJournalledTool,
 	toolArguments,
-	type ChatToolActivity
+	type ChatToolActivity,
+	type ChatToolActivityBase
 } from './chat-tools';
 import { appContext } from './app-context.svelte';
 import type { ChatHandoff } from './chat-handoff';
@@ -382,7 +383,7 @@ const applyToolActivity = (parts: ChatPart[], incoming: ChatToolActivity): void 
 };
 
 /** What a row keeps across a change of state: which call it is, and what it was asked. */
-const toolIdentity = (tool: ChatToolActivity) => ({
+const toolIdentity = (tool: ChatToolActivityBase) => ({
 	callId: tool.callId,
 	name: tool.name,
 	arguments: tool.arguments,
@@ -882,10 +883,16 @@ export class ChatStore {
 		decision: 'approve' | 'reject'
 	): Promise<void> {
 		if (!this.canExecute || this.deciding) return;
-		const runId = tools.find((tool) => tool.runId)?.runId;
+		// Only a parked call can be decided, and only a parked call carries a
+		// catalog name the decision can be replayed under.
+		const parked = tools.filter(
+			(tool): tool is Extract<ChatToolActivity, { status: 'approval_required' }> =>
+				tool.status === 'approval_required'
+		);
+		const runId = parked.find((tool) => tool.runId)?.runId;
 		// A call the run could not name is a call the server cannot match a decision
 		// to, so it is not sent. Parked approvals always carry one.
-		const callIds = tools
+		const callIds = parked
 			.map((tool) => tool.callId)
 			.filter((callId): callId is string => callId !== undefined);
 		if (!runId || callIds.length === 0) return;
@@ -900,17 +907,19 @@ export class ChatStore {
 			if (generation !== this.generation) return;
 			// Replaced, not edited: an approved call is `running` and a refused one is
 			// `rejected`, and neither is the arm the parked row was in.
-			for (const tool of tools)
-				applyToolActivity(reply.parts, {
-					...toolIdentity(tool),
-					status: decision === 'approve' ? 'running' : 'rejected'
-				});
+			for (const tool of parked)
+				applyToolActivity(
+					reply.parts,
+					decision === 'approve'
+						? { ...toolIdentity(tool), status: 'running' }
+						: { ...toolIdentity(tool), status: 'rejected' }
+				);
 			this.reconcileSnapshot(reply, snapshot);
 			this.attach(reply, snapshot.run.id, this.cursor, this.attempt);
 			// audit-allow: silent-catch — every affected tool is marked failed so the decision is never presented as applied.
 		} catch {
 			if (generation !== this.generation) return;
-			for (const tool of tools)
+			for (const tool of parked)
 				applyToolActivity(reply.parts, {
 					...toolIdentity(tool),
 					failure: 'The decision could not be applied.',

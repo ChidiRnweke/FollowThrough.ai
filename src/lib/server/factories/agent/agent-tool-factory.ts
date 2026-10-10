@@ -3,12 +3,7 @@ import type { AgentController } from '$lib/server/controllers/agent/controller';
 import type { Tool } from '@openai/agents';
 import { projectFileResult } from './tool-result-projectors';
 import { createSdkTool } from './sdk-tool-adapter';
-import {
-	bindToolArguments,
-	ToolLifecycleError,
-	type PreparedAction,
-	type ToolPreparation
-} from './tool-call-boundary';
+import { bindToolArguments, type PreparedAction, type ToolPreparation } from './tool-call-boundary';
 import { z } from 'zod';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
 import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
@@ -1190,8 +1185,7 @@ export class AgentTools {
 		this.toolAccess = toolAccess;
 		for (const pending of pendingDecisions) {
 			if (!isReviewedNoteTool(pending.toolName)) continue;
-			if (!pending.review)
-				throw new ToolLifecycleError('A saved note approval is missing its prepared review');
+			if (!pending.review) throw new Error('A saved note approval is missing its prepared review');
 			const review = noteChangeReviewSchema.parse(JSON.parse(pending.review.content));
 			this.noteReviews.set(pending.callId, review);
 		}
@@ -1391,26 +1385,25 @@ export class AgentTools {
 			parameters: definition.parameters,
 			signal: this.signal,
 			...options,
-			prepare: async (input, callId, phase): Promise<ToolPreparation> => {
+			prepare: async (input, callId): Promise<ToolPreparation> => {
 				const action = definition.prepare(input);
 				let prepared = action;
 				if (isReviewedNoteTool(definition.name)) {
-					if (!callId) throw new ToolLifecycleError('A note change requires a tool call identity');
+					// The review is bound to its call id, so the approval checkpoint can carry it.
+					if (callId === undefined)
+						throw new Error('A note change cannot be reviewed without a tool call identity');
+					// A resumed approval was restored from its checkpoint in the constructor;
+					// any other call prepares its review here, once, by call id.
 					const saved = this.noteReviews.get(callId);
-					if (!saved && phase === 'execute' && this.mode === 'approval_required')
-						throw new ToolLifecycleError('A resumed note approval is missing its prepared review');
 					const review =
 						saved ?? (await this.prepareNoteCall(definition.name, action.arguments, callId));
 					if (review.kind === 'failure')
-						return {
-							kind: 'failure',
-							failure: toolFailure(
-								'NOTE_REVIEW_FAILED',
-								'No changes were applied.',
-								'Correct the problems below and submit a new tool call.',
-								{ problems: [...review.problems] }
-							)
-						};
+						return toolFailure(
+							'NOTE_REVIEW_FAILED',
+							'No changes were applied.',
+							'Correct the problems below and submit a new tool call.',
+							{ problems: [...review.problems] }
+						);
 					prepared = {
 						arguments: action.arguments,
 						execute: async () => {

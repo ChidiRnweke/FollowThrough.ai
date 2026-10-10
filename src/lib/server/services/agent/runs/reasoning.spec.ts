@@ -600,21 +600,6 @@ describe('Agent tool event invariants', () => {
 		expect(mapAnonymousCall).toThrowError(AgentProviderFailure);
 	});
 
-	/**
-	 * The SDK resolves every call against the tools this run handed it and answers
-	 * an unknown name with its own `Tool not found` before any event is emitted, so
-	 * a name arriving here that the agent surface does not have means the registry
-	 * and the tools given to the SDK have diverged. That is a bug in this process,
-	 * not something the model did, and `tool_started` has no failure arm to settle
-	 * it into: the call did start, and inventing an outcome for it would be the
-	 * quiet wrong answer.
-	 */
-	it('refuses a call to a name the agent surface does not have', () => {
-		const mapUnknownCall = () =>
-			new AgentToolEventMapper().map(toolCalled({ callId: 'call-1', name: 'save_notes' }));
-		expect(mapUnknownCall).toThrowError(AgentProviderFailure);
-	});
-
 	it('accepts search_tools, which is built rather than defined and has no catalog entry', () => {
 		const event = new AgentToolEventMapper().map(
 			toolCalled({ callId: 'call-1', name: 'search_tools' })
@@ -664,7 +649,7 @@ describe('Agent tool event invariants', () => {
 			call: {
 				callId: 'call-9',
 				name: 'get_note',
-				arguments: {},
+				arguments: { kind: 'value', value: {} },
 				output: { kind: 'corrupt', message: 'root.when is a Date' }
 			}
 		});

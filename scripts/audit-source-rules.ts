@@ -337,9 +337,8 @@ export const analyzeSource = (
 		if (violations.some((v) => v.rule === rule && v.line === localLine + lineOffset)) return;
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
-	const sdkAdapter = 'src/lib/server/factories/agent/sdk-tool-adapter.ts';
+	const sdkAdapter = 'src/lib/server/repositories/agent/sdk-tool.ts';
 	const mcpAdapter = 'src/lib/server/factories/agent/mcp-tool-factory.ts';
-	const diagramProtocol = 'src/lib/server/services/diagrams/generation.ts';
 	const toolBoundaryImport = (node: ts.Node): boolean => {
 		if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
 			const clause = node.importClause;
@@ -359,7 +358,7 @@ export const analyzeSource = (
 				);
 			}
 			if (module !== '@openai/agents' && module !== '@openai/agents-core') return false;
-			if (fileName === sdkAdapter || fileName === diagramProtocol) return false;
+			if (fileName === sdkAdapter) return false;
 			return (
 				!!bindings &&
 				(ts.isNamespaceImport(bindings) ||

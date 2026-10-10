@@ -4,7 +4,7 @@ import { AgentTools } from './agent-tool-factory';
 import { type PendingAgentDecision, type AgentExecutionMode } from '$lib/models/agent';
 import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
 import { noteChangeReviewSchema } from '$lib/models/notes';
-import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { readToolOutput } from '$lib/models/agent/tool-failure';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -263,12 +263,12 @@ describe('A note change that fails while it is being prepared', () => {
 		const message = JSON.stringify(result);
 		expect({
 			approvalRequired,
-			failure: readToolFailure(result),
+			failure: readToolOutput(result).kind,
 			takesResponsibility: message.includes('The fault is ours, not your arguments.'),
 			leaksInternalText: message.includes('is not writable')
 		}).toEqual({
 			approvalRequired: false,
-			failure: expect.any(String),
+			failure: 'failure',
 			takesResponsibility: true,
 			leaksInternalText: false
 		});

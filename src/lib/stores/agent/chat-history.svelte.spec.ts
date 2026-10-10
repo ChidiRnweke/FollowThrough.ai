@@ -203,6 +203,28 @@ describe('shared cached chat history', () => {
 			tools: entryTools(store.entries[0])
 		}).toEqual({ parts: ['unreadable'], tools: [] });
 	});
+	// A failed call to a tool the agent does not have was journalled under the name the model
+	// asked for. Reopening the conversation shows it as the failure it was.
+	it('restores a failed call to an unknown tool as that failure', async () => {
+		const failure = 'Tool "save_notes" is not available. Did you mean: save_note?';
+		const { store, resources } = await setup({
+			messages: [
+				message(
+					'tool',
+					{ callId: 'c1', name: 'save_notes', input: {}, failure, status: 'failed' },
+					'1'
+				)
+			]
+		});
+		await store.hydrate(resources);
+		expect(
+			entryTools(store.entries[0]).map((tool) => ({
+				name: tool.name,
+				status: tool.status,
+				failure: tool.status === 'failed' ? tool.failure : undefined
+			}))
+		).toEqual([{ name: 'save_notes', status: 'failed', failure }]);
+	});
 	it('keeps reasoning, tools, and text in event order within one assistant turn', async () => {
 		const { store, resources } = await setup({
 			messages: [

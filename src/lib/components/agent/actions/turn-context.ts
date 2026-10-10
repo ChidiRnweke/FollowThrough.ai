@@ -185,6 +185,8 @@ const strongerVerb = (left: Verb, right: Verb): Verb =>
  */
 const verbs: Record<Exclude<AgentToolName, MechanismTool>, Verb> = {
 	get_project: 'read',
+	submit_mermaid_diagram: 'created',
+	submit_drawio_diagram: 'created',
 	create_project: 'created',
 	rename_project: 'renamed',
 	archive_project: 'archived',
@@ -317,8 +319,10 @@ function passRequest(tool: ChatToolActivity): { label: string; query?: string } 
 						: 'Proposed remembering'
 		};
 	}
+	// Only a call that worked is named in the past tense; a failed one never "completed".
 	return {
-		label: tool.status === 'running' ? friendlyToolLabel(tool.name) : completedToolLabel(tool.name)
+		label:
+			tool.status === 'succeeded' ? completedToolLabel(tool.name) : friendlyToolLabel(tool.name)
 	};
 }
 
@@ -429,9 +433,9 @@ function callEntries(
 	const disclosure = toolDisclosure(tool, shell);
 	const request = passRequest(tool);
 	const outcome = outcomeOf(tool);
-	// A call still in flight keeps its whole present-tense label: "Saving" is not yet a thing that
-	// befell the subject, and the verbs below are all past.
-	const objectVerb = outcome === 'running' ? undefined : subjectVerb(tool.name);
+	// Only a call that worked is named by a past-tense verb. One still in flight, or one that
+	// failed or was declined, keeps its whole present-tense label: "Saved" did not befall it.
+	const objectVerb = outcome === 'done' ? subjectVerb(tool.name) : undefined;
 	const label: PassLabel = objectVerb
 		? { kind: 'subject', verb: objectVerb }
 		: { kind: 'phrase', text: request.label };

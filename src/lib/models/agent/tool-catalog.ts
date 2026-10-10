@@ -603,8 +603,13 @@ export const FIRST_CLASS_TOOL_SET: ReadonlySet<ToolName> = new Set<ToolName>(
  * and 129 stored tool messages in `tests/corpus/`, every name is a catalog name
  * except `search_tools`, which accounts for 38 and 10 rows respectively.
  * `tests/unit/corpus.spec.ts` holds that at zero exceptions.
+ *
+ * The two diagram submission tools belong to the Diagram Agent, which records
+ * its calls through the same mapper and journal. They are names, not grants:
+ * the chat agent is never handed them.
  */
-export type AgentToolName = ToolName | 'search_tools';
+export type AgentToolName =
+	ToolName | 'search_tools' | 'submit_mermaid_diagram' | 'submit_drawio_diagram';
 
 /**
  * The {@link AgentToolName} values, as a list `z.enum` can be built from. The
@@ -613,7 +618,9 @@ export type AgentToolName = ToolName | 'search_tools';
  */
 export const AGENT_TOOL_NAME_VALUES = [
 	...TOOL_DESCRIPTIONS.map((entry) => entry.name),
-	'search_tools'
+	'search_tools',
+	'submit_mermaid_diagram',
+	'submit_drawio_diagram'
 ] as const;
 
 /** The {@link ToolName} values, for the same reason as {@link AGENT_TOOL_NAME_VALUES}. */

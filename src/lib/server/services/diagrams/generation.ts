@@ -2,7 +2,6 @@ import {
 	Agent,
 	OpenAIProvider,
 	Runner,
-	tool,
 	type AgentInputItem,
 	type ModelProvider
 } from '@openai/agents';
@@ -15,13 +14,13 @@ import type {
 	DiagramSubmissionDecision
 } from '$lib/models/diagrams/generation';
 import type { ProviderStreamEvent } from '$lib/models/agent';
+import type { AgentPayload } from '$lib/models/agent/payload';
 
 export type DiagramGenerationEvent = GenerationEvent<ProviderStreamEvent>;
 import { parseProviderStreamEvent } from '$lib/server/repositories/agent/provider-events';
-import {
-	diagramSubmissionParameters,
-	readDiagramSubmission
-} from '$lib/server/repositories/diagrams/submissions';
+import { sdkTool } from '$lib/server/repositories/agent/sdk-tool';
+import { readDiagramSubmission } from '$lib/server/repositories/diagrams/submissions';
+import { drawioSubmissionSchema, mermaidSubmissionSchema } from '$lib/models/diagrams/generation';
 
 export interface DiagramGenerationSession {
 	readonly events: AsyncIterable<DiagramGenerationEvent>;
@@ -128,18 +127,15 @@ export class DiagramProviderSession implements DiagramGenerationSession {
 			signal.throwIfAborted();
 			let accepted: DiagramSubmission | undefined;
 			const kind = this.request.operation === 'convert' ? 'drawio' : 'mermaid';
-			const submit = tool({
+			const submit = sdkTool({
 				name: kind === 'drawio' ? 'submit_drawio_diagram' : 'submit_mermaid_diagram',
 				description:
 					kind === 'drawio'
 						? 'Submit a title and final uncompressed draw.io mxfile XML. This is the only tool that completes conversion.'
 						: 'Submit the final Mermaid source. This is the only tool that completes the diagram task. Labels: for multi-line text use escaped \\n inside quoted labels; never use HTML tags such as <br/>.',
-				parameters: diagramSubmissionParameters(kind),
-				strict: true,
-				errorFunction: (_context, error) =>
-					JSON.stringify({ failure: error instanceof Error ? error.message : String(error) }),
-				execute: async (value) => {
-					signal.throwIfAborted();
+				parameters: kind === 'drawio' ? drawioSubmissionSchema : mermaidSubmissionSchema,
+				signal,
+				execute: async (value): Promise<AgentPayload> => {
 					if (accepted) throw new ValidationError('A diagram has already been submitted.');
 					const draft = readDiagramSubmission(value, kind);
 					const id = crypto.randomUUID();
@@ -147,11 +143,12 @@ export class DiagramProviderSession implements DiagramGenerationSession {
 						this.decisions.set(id, { resolve, reject });
 						this.emit({ kind: 'submission', id, draft });
 					});
-					signal.throwIfAborted();
 					if (decision.kind === 'rejected') throw new ValidationError(decision.message);
 					if (accepted) throw new ValidationError('A diagram has already been submitted.');
 					accepted = decision.draft;
-					return { title: accepted.title, source: accepted.source };
+					return accepted.title === undefined
+						? { source: accepted.source }
+						: { title: accepted.title, source: accepted.source };
 				}
 			});
 			const agent = new Agent({

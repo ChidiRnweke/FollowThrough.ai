@@ -128,24 +128,28 @@ Chat and MCP use one application tool boundary. It validates arguments before ap
 An empty edit batch therefore reaches the next model generation as `VALIDATION`; it cannot create an
 approval prompt or end the run merely because validation occurred in `needsApproval`.
 
-Preparation produces a ready action, an action awaiting approval, or a failure. Execution uses the
-same bound arguments. Reviewed note and skill actions retain the exact saved review across checkpoint
-serialization. Stale reviews report failure; missing or corrupt review checkpoints stop the run.
+Every tool reports failures through one boundary. A tool throws a meaningful error, and
+`withToolFeedback` returns it to the model as the failure envelope, so the model corrects its next
+call within the same run. Only cancellation escapes. `sdkTool` is the only Agents SDK tool
+constructor and applies the boundary to every tool, including the Diagram Agent's submission; MCP
+handlers use the same wrapper.
 
-Internal application errors return a safe message and advice not to retry. Cancellation, provider
-transport, checkpoint and journal failures remain terminal. The journal sits outside tool recovery,
-so a failure to record an already completed write cannot become advice to repeat that write. MCP
-uses the same envelope with `isError: true`. These envelopes replace all earlier application failure
-formats; there are no legacy readers or historical conversions.
+Preparation produces a ready action, an action awaiting approval, or the failure envelope. Execution
+uses the same bound arguments. Reviewed note and skill actions retain the exact saved review across
+checkpoint serialization. Stale reviews report failure; a missing or corrupt review checkpoint stops
+the run where the checkpoint is restored, before any tool runs.
 
-The SDKs still own malformed protocol messages. The installed chat SDK returns its own correction
-message for invalid JSON before it invokes application callbacks. Valid JSON with invalid application
-arguments reaches the shared recovery boundary.
+Internal application errors return a safe message and advice not to retry. A failure to record a
+completed write is feedback like any other: ADR 0003 promises no exactly-once execution, and ADR
+0010 makes a satisfied repeat return unchanged. MCP uses the same envelope with `isError: true`.
 
-Real SDK lifecycle tests cover correction, approval, serialized resume, rejection, stale reviews and
-terminal failures. A controller lifecycle test verifies the stored failure and corrected success.
-The source audit restricts SDK and MCP construction to their designated adapters. The complete
-invariant-to-test map is in `docs/architecture/tool-recovery-invariants.md`.
+The SDK answers malformed JSON and unknown tool names itself and the run continues. The run loop
+records those calls as failed tool rows; it never re-validates what the SDK already decided.
+
+Real SDK lifecycle tests cover correction, approval, serialized resume, rejection, stale reviews,
+malformed and unknown calls, and cancellation. The source audit restricts SDK and MCP construction
+to their designated adapters. The complete invariant-to-test map is in
+`docs/architecture/tool-recovery-invariants.md`.
 
 ## Tracing
 

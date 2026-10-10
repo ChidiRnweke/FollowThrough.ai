@@ -12,7 +12,7 @@ import {
 	type ChatToolActivity
 } from './chat-tools';
 
-const runningTool = (callId = 'call-1'): ChatToolActivity => ({
+const runningTool = (callId = 'call-1'): Extract<ChatToolActivity, { status: 'running' }> => ({
 	callId,
 	name: 'find_references',
 	arguments: { query: 'agent skills' },

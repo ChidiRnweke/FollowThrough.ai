@@ -1,14 +1,12 @@
 // chisel-ignore-file structural:factory-contains-logic -- This is the sole chat SDK tool construction adapter.
-import { tool, ModelBehaviorError, type Tool } from '@openai/agents';
+import type { Tool } from '@openai/agents';
 import { z } from 'zod';
-import { toolFailure } from '$lib/models/agent/tool-failure';
-import { DOMAIN_ERROR_ADVICE } from '$lib/errors';
+import { ValidationError } from '$lib/errors';
+import { sdkTool } from '$lib/server/repositories/agent/sdk-tool';
 import { readAgentPayload, type AgentPayload } from '$lib/models/agent/payload';
 import {
-	jsonObjectSchema,
-	executeToolAction,
 	prepareToolCall,
-	ToolLifecycleError,
+	runToolAction,
 	type PreparedAction,
 	type ToolPreparation
 } from './tool-call-boundary';
@@ -61,11 +59,7 @@ export interface SdkToolOptions {
 	readonly parameters: z.ZodObject;
 	readonly signal: AbortSignal;
 	readonly isEnabled?: () => boolean;
-	readonly prepare: (
-		input: unknown,
-		callId: string | undefined,
-		phase: 'approval' | 'execute'
-	) => Promise<ToolPreparation>;
+	readonly prepare: (input: unknown, callId: string | undefined) => Promise<ToolPreparation>;
 	readonly execute: (
 		action: PreparedAction,
 		callId: string | undefined,
@@ -76,48 +70,38 @@ export interface SdkToolOptions {
 export const createSdkTool = (options: SdkToolOptions): Tool<unknown> => {
 	const schema = z.toJSONSchema(options.parameters, { io: 'input' });
 	const calls = new Map<string, { input: string; preparation: Promise<ToolPreparation> }>();
-	const prepare = (input: unknown, callId: string | undefined, phase: 'approval' | 'execute') => {
-		options.signal.throwIfAborted();
-		const payload = readAgentPayload(input);
-		if (payload.kind === 'corrupt') throw new ToolLifecycleError(payload.message);
-		const normalized = normalizeInput(payload.value, schema);
-		const serialized = JSON.stringify(normalized);
-		const prior = callId === undefined ? undefined : calls.get(callId);
-		if (prior) {
-			if (prior.input !== serialized)
-				throw new ToolLifecycleError('A tool call identity was reused with different arguments');
-			return prior.preparation;
-		}
-		const preparation = prepareToolCall(
-			() => options.prepare(normalized, callId, phase),
-			options.signal
-		);
-		if (callId !== undefined) calls.set(callId, { input: serialized, preparation });
-		return preparation;
-	};
-	const built = tool({
+	// One preparation per call id: approval and execution share it, so the user
+	// approves exactly what runs. Everything here is tool work, so any error is
+	// feedback, including a provider reusing a call id for different arguments.
+	const prepare = (input: unknown, callId: string | undefined) =>
+		prepareToolCall(async () => {
+			const payload = readAgentPayload(input);
+			if (payload.kind === 'corrupt') throw new ValidationError(payload.message);
+			const normalized = normalizeInput(payload.value, schema);
+			const serialized = JSON.stringify(normalized);
+			const prior = callId === undefined ? undefined : calls.get(callId);
+			if (prior) {
+				if (prior.input !== serialized)
+					throw new ValidationError('A tool call identity was reused with different arguments');
+				return prior.preparation;
+			}
+			const preparation = options.prepare(normalized, callId);
+			if (callId !== undefined) calls.set(callId, { input: serialized, preparation });
+			return preparation;
+		}, options.signal);
+	const built = sdkTool({
 		name: options.name,
 		description: options.description,
-		parameters: jsonObjectSchema(options.parameters),
-		strict: true,
+		parameters: options.parameters,
+		signal: options.signal,
 		...(options.isEnabled ? { isEnabled: options.isEnabled } : {}),
-		needsApproval: async (_context, input, callId) =>
-			(await prepare(input, callId, 'approval')).kind === 'approval_required',
-		errorFunction: (_context, error) => {
-			options.signal.throwIfAborted();
-			if (error instanceof ModelBehaviorError && error.name === 'InvalidToolInputError')
-				return JSON.stringify(
-					toolFailure('VALIDATION', error.message, DOMAIN_ERROR_ADVICE.VALIDATION)
-				);
-			// Tool-local errors have already become values. Anything escaping is terminal.
-			throw error;
-		},
-		execute: async (input, _context, details) => {
-			const callId = details?.toolCall?.callId;
-			const prepared = await prepare(input, callId, 'execute');
-			if (prepared.kind === 'failure') return prepared.failure;
+		needsApproval: async (input, callId) =>
+			(await prepare(input, callId)).kind === 'approval_required',
+		execute: async (input, callId) => {
+			const prepared = await prepare(input, callId);
+			if (prepared.kind === 'failure') return prepared;
 			return options.execute(prepared.action, callId, () =>
-				executeToolAction(prepared.action, options.signal)
+				runToolAction(prepared.action, options.signal)
 			);
 		}
 	});

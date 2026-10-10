@@ -1,4 +1,4 @@
-import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { readToolOutput } from '$lib/models/agent/tool-failure';
 import type { Model, ModelRequest, ModelResponse, StreamEvent } from '@openai/agents';
 
 /** A model that can correct a call only after the runner delivers its failure. */
@@ -26,11 +26,13 @@ export class InMemoryToolCallingModel implements Model {
 			typeof outputValue === 'object' && outputValue !== null && 'text' in outputValue
 				? outputValue.text
 				: outputValue;
-		const blocked = readToolFailure(text) !== undefined;
+		const blocked = readToolOutput(text).kind !== 'success';
 		const terminal = blocked && typeof text === 'string' && text.includes('INTERNAL_ERROR');
-		const failed = blocked && JSON.stringify(text).includes(this.failureText);
+		// The SDK answers malformed JSON with plain text rather than the failure
+		// envelope, so correction keys on the feedback itself, not on its format.
+		const failed = last !== undefined && JSON.stringify(text).includes(this.failureText);
 		const output: Extract<StreamEvent, { type: 'response_done' }>['response']['output'] =
-			corrected || terminal || (last !== undefined && !blocked)
+			corrected || terminal || (last !== undefined && !blocked && !failed)
 				? [
 						{
 							type: 'message',
