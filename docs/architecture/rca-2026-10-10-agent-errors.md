@@ -308,3 +308,23 @@ process and the deployed collector, which this work did not have.
 Evidence: a run against the real provider client with a scripted HTTP 400 transport settles as
 failed with `400 Provider returned error (provider OpenAI, request req-e1)`, and the scripted raw
 body does not appear. Before the change the message was `400 Provider returned error`.
+
+### E7–E8 trace findings
+
+Read-only Phoenix queries of project `followthrough`, 2026-10-09 10:25–10:45 UTC (124 spans, nine
+traces), and of the four traces named under E7–E8. Only tool names, call order, note ids, anchor
+lengths, revisions and failure codes were read; no note content is recorded here.
+
+E7: every agent write to note `2eba27da…` in the window is accounted for. They produced revisions
+99, 100, 101, 102, 107, 112 and 116. Revisions 103–106, 108–111 and 113–115 have no agent trace, so
+three to four other writes landed between consecutive agent edits, and both stale reviews fall in
+those gaps. The saved review base was correct; the note had changed underneath it. Phoenix cannot
+tell whether the other writes were the user typing in the open note or the editor writing back
+after receiving the agent's edit. Unresolved: the author of those revisions.
+
+E8: `get_note` returns the body as a file reference (ADR 0035), so the anchors were not quoted from
+what the model had just read. In `559b11c0…` each failed anchor differed from the applied anchor by
+one missing space after a semicolon; after reading the exact text with `sed`, the model's corrected
+call applied. `6f49595f…` shows the same recovery. The matcher does not treat a missing space as a
+match, by design. Disposition: model quoting error; the safeguard worked and nothing applied
+partially.
