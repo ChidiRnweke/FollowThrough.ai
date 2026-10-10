@@ -80,11 +80,31 @@ conversation starts with them.
 
 ## Controlled by you
 
-- **Approve or auto-accept.** Each chat runs in approval mode or auto-accept. Changes that matter,
-  such as new notes, widgets and memory, wait for you in approval mode.
-- **Every capability is a tool, and every tool can be turned off.** The agent can do what you can
-  do in the app, and nothing you have switched off.
-- **Any model.** Pick the model per chat through OpenRouter.
+### Approve or auto-accept
+
+Each chat runs in approval mode or auto-accept. In approval mode, changes that matter, such as new
+notes, widgets and memory, wait for you to approve them.
+
+### Everything you can do, the agent can do
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/06-tools-dark.jpg" />
+  <img src="static/readme/walkthrough/06-tools-light.jpg" alt="Settings, Tools: 84 of 85 tools on, filters for changes, proposals, and reading, and a toggle beside each tool, with archive_project turned off." />
+</picture>
+
+Every capability in the app is a tool the agent can use: more than eighty, from creating a note to
+exporting a document. Each one is a change, a proposal, or a read. Turn any tool off for one
+project or for all of them, and the agent loses it everywhere.
+
+### Any model
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="static/readme/walkthrough/07-models-dark.jpg" />
+  <img src="static/readme/walkthrough/07-models-light.jpg" alt="Settings, Models, with the default chat model picker open: a search box and a list of models, including Amazon Nova and Anthropic Claude models, each with its provider and context size." />
+</picture>
+
+Pick any model on OpenRouter for one chat, or set defaults for chat, vision, attachment reading
+and inline suggestions. The picker listed 458 models from 55 providers when this was captured.
 
 The [trust model](https://chidirnweke.github.io/FollowThrough.ai/explanation/agents-propose-users-accept/)
 explains what the agent may do on its own and what always waits for you.

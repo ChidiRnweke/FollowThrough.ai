@@ -1,6 +1,6 @@
 ---
 title: FollowThrough.ai
-description: An agent-native note editor you never have to brief. It turns notes into actions, keeps project context for agents, and carries work through to finished deliverables.
+description: FollowThrough keeps notes, todos, decisions, files, and project memory in one workspace. The agent reads that context and acts on it, and what you keep becomes context for the next task.
 template: splash
 ---
 
@@ -12,19 +12,20 @@ import Screenshot from '../../components/screenshot.astro';
 <HomeHero />
 
 <Screenshot
-	id="today-screen"
-	alt="The Today page: overdue, due today, and waiting-on groups with pinned notes below."
+	id="hero"
+	ext="svg"
+	alt="On the left, the agent's context: notes, todos, memory, draw.io diagrams, widgets, skills, and files. On the right, what the agent produces: notes, todos, memory proposals, draw.io diagrams, widgets, skills, and Word or PDF exports. The FollowThrough mark sits between them above an infinity sign labelled reads, plans, acts."
 />
 
 <div className="ft-home-groups">
 
-<HomeSection title="User documentation">
+<HomeSection title="Start here">
 	<li>
 		<ResourceRow
 			href="/getting-started/"
 			icon="rocket"
 			label="Getting started"
-			hint="Create a project, extract commitments from a note, and ship an artifact. About ten minutes."
+			hint="Follow one project from a brief to a working plan: the agent writes notes and todos, you edit, and it builds on your changes."
 		/>
 	</li>
 	<li>
@@ -32,7 +33,7 @@ import Screenshot from '../../components/screenshot.astro';
 			href="/using/the-agent/"
 			icon="comment"
 			label="The agent"
-			hint="Everything you can do in the app, the agent can do: every capability a tool, every tool yours to turn off."
+			hint="Everything you can do in the app, the agent can do: every capability a tool, every tool yours to turn off, any model."
 		/>
 	</li>
 	<li>
@@ -41,6 +42,76 @@ import Screenshot from '../../components/screenshot.astro';
 			icon="approve-check-circle"
 			label="Trust model"
 			hint="What the agent may do on its own, and what always waits for your accept."
+		/>
+	</li>
+</HomeSection>
+
+<HomeSection title="Agent context">
+	<li>
+		<ResourceRow
+			href="/using/notes/"
+			icon="document"
+			label="Notes"
+			hint="Write in the editor. Every note is context the agent can read and edit."
+		/>
+	</li>
+	<li>
+		<ResourceRow
+			href="/using/todos/"
+			icon="list-format"
+			label="Todos"
+			hint="Commitments with owners and dates, on a board and on Today."
+		/>
+	</li>
+	<li>
+		<ResourceRow
+			href="/using/memory/"
+			icon="star"
+			label="Memory"
+			hint="Durable facts and decisions the agent reads before it answers."
+		/>
+	</li>
+	<li>
+		<ResourceRow
+			href="/using/attachments/"
+			icon="document"
+			label="Attachments"
+			hint="Files the app reads on upload, so the agent can quote them."
+		/>
+	</li>
+	<li>
+		<ResourceRow
+			href="/using/projects/"
+			icon="open-book"
+			label="Projects"
+			hint="The unit that holds notes, todos, memory, files, skills, and outputs."
+		/>
+	</li>
+</HomeSection>
+
+<HomeSection title="What the agent produces">
+	<li>
+		<ResourceRow
+			href="/using/widgets/"
+			icon="setting"
+			label="Widgets"
+			hint="Interactive tools inside a note: checklists, tables, and simulators that compute from their data."
+		/>
+	</li>
+	<li>
+		<ResourceRow
+			href="/diagram-to-drawio/"
+			icon="seti:image"
+			label="Diagrams"
+			hint="Turn a note into a diagram, then convert it to an editable draw.io file."
+		/>
+	</li>
+	<li>
+		<ResourceRow
+			href="/extract-todos-from-text/"
+			icon="approve-check"
+			label="Todos from text"
+			hint="Paste or select text and turn every commitment in it into a todo you review."
 		/>
 	</li>
 </HomeSection>
