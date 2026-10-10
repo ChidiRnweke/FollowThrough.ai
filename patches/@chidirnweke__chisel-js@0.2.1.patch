@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9725cf9fe 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27153fe01e 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -79,7 +79,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9100,6 +9128,62 @@ class ImportBoundaryService {
+@@ -9100,6 +9128,68 @@ class ImportBoundaryService {
        return [];
      return [this._violation(edge, "banned-layer-import", `${importerLayer} must not import ${importedLayer} (${edge.imported}). ` + `${fixFor(importerLayer, importedLayer)}`)];
    }
@@ -89,6 +89,12 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
 +    let matched = false;
 +    for (const { sf } of scriptsOf(source.ast)) {
 +      for (const statement of sf.statements) {
++        if (ts2.isExportDeclaration(statement) && statement.isTypeOnly && statement.moduleSpecifier && ts2.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === edge.specifier) {
++          matched = true;
++          if (!statement.exportClause || !ts2.isNamedExports(statement.exportClause)) return false;
++          if (!statement.exportClause.elements.every((entry) => this._isContract(edge.imported, (entry.propertyName ?? entry.name).text, new Set()))) return false;
++          continue;
++        }
 +        if (!ts2.isImportDeclaration(statement) || !ts2.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== edge.specifier) continue;
 +        matched = true;
 +        const clause = statement.importClause;
@@ -142,7 +148,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
    _checkExternal(edge, importerLayer) {
      if (!BANNED_INTERNAL.has(importerLayer))
        return [];
-@@ -9190,30 +9274,26 @@ function fixFor(importer, imported) {
+@@ -9190,30 +9280,26 @@ function fixFor(importer, imported) {
      return "One service never imports another. If you need a shared type, it is domain " + "data — move it to $lib/models. Service-local data is fine, but no other " + "service may reach for it. If you need the behaviour, orchestrate both " + "services from a controller.";
    }
    if (importer === Layer.CONTROLLERS && imported === Layer.CONTROLLERS) {
@@ -177,7 +183,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
  class LayoutService {
    ruleIdPrefix = "structure";
    check(project) {
-@@ -9375,8 +9455,8 @@ class StructuralSvelteService {
+@@ -9375,8 +9461,8 @@ class StructuralSvelteService {
        {
          id: "structural:missing-service-interface",
          category: "structural",
@@ -188,7 +194,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
        },
        {
          id: "structural:factory-contains-logic",
-@@ -9445,16 +9525,19 @@ class StructuralSvelteService {
+@@ -9445,16 +9531,19 @@ class StructuralSvelteService {
          if (!ts3.isClassDeclaration(statement) || statement.name === undefined)
            continue;
          const name = statement.name.text;
@@ -211,7 +217,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
          }));
        }
      }
-@@ -10244,7 +10327,6 @@ class TestStructureService {
+@@ -10244,7 +10333,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -219,7 +225,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10373,6 @@ class TestStructureService {
+@@ -10291,29 +10379,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -249,7 +255,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..79e29221157982d440fa023fac2af4c9
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10429,6 @@ class TestStructureService {
+@@ -10370,7 +10435,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

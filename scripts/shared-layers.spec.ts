@@ -387,3 +387,34 @@ it('rejects controller class aliases through an index barrel', () => {
 		})
 	).toContain('import-boundary:banned-layer-import');
 });
+
+it('allows clients to forward controller-owned port interfaces', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/sync/cache.ts':
+				'export interface Repository { load(): Promise<string>; } export interface Transport { read(): Promise<string>; }',
+			'src/lib/client/sync/contracts.ts':
+				"export type { Repository, Transport as ReadTransport } from '$lib/controllers/sync/cache';"
+		})
+	).not.toContain('import-boundary:banned-layer-import');
+});
+it('rejects clients forwarding concrete controller classes as types', () => {
+	expect(
+		inspect({
+			'src/lib/controllers/sync/cache.ts':
+				'export class Repository { async load(): Promise<string> { return "note"; } }',
+			'src/lib/client/sync/contracts.ts':
+				"export type { Repository as Port } from '$lib/controllers/sync/cache';"
+		})
+	).toContain('import-boundary:banned-layer-import');
+});
+it('allows an adapter to forward a repository port interface', () => {
+	expect(
+		inspect({
+			'src/lib/server/repositories/notes/reader.ts':
+				'export interface Reader { read(): Promise<string>; }',
+			'src/lib/server/adapters/notes/reader.ts':
+				"export type { Reader } from '$lib/server/repositories/notes/reader';"
+		})
+	).not.toContain('import-boundary:banned-layer-import');
+});
