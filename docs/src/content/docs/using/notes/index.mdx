@@ -1,12 +1,12 @@
 ---
 title: Notes
-description: Write in the Markdown editor at the center of FollowThrough. It autosaves offline first, offers AI actions on any selection, and renders diagrams inline.
+description: Write in the Markdown editor at the center of FollowThrough. It autosaves offline first, offers agent actions on any selection, and renders diagrams inline.
 ---
 
 import Mermaid from '../../../../components/mermaid.astro';
 import Screenshot from '../../../../components/screenshot.astro';
 
-Open a note and start typing. A note is a rich-text Markdown document inside a project, edited in a vendored TipTap editor: it autosaves two seconds after you stop typing, saves to your device first, and syncs when it can. Select any text to reach AI actions (ask about it, extract promises, find related notes, propose references, generate a diagram), and Mermaid diagrams render inline and convert to draw.io.
+Open a note and start typing. A note is a rich-text Markdown document inside a project, edited in a vendored TipTap editor: it autosaves two seconds after you stop typing, saves to your device first, and syncs when it can. Select any text to reach agent actions (ask about it, extract promises, find related notes, propose references, generate a diagram), and Mermaid diagrams render inline and convert to draw.io.
 
 <Screenshot
 	id="note-view"
@@ -46,13 +46,13 @@ flowchart LR
 
 If you hit a **Review conflict**, a dialog opens that diffs both versions against the version you both started from. Choose **Keep mine** to rebase your text on top of the latest version and re-sync, **Use latest** to discard your local edits, or **Review later** to leave the note conflicted until you decide. Whichever you pick, you keep a complete document; there's no line-by-line merge. (A stale save whose remote content is identical to yours still resolves to Saved, so retrying a save that actually landed never shows a false conflict.)
 
-Sync your note before moving, archiving, publishing, or running any AI selection action; if it's not synced, you'll be told to sync first and nothing else happens. If the editor itself fails to render a note, the page says so and offers a retry; nothing is written while the editor is down, so the saved note on the server stays untouched.
+Sync your note before moving, archiving, publishing, or running any agent action on a selection; if it's not synced, you'll be told to sync first and nothing else happens. If the editor itself fails to render a note, the page says so and offers a retry; nothing is written while the editor is down, so the saved note on the server stays untouched.
 
-## Run an AI action on a selection
+## Run an agent action on a selection
 
 Select text and choose from the bubble menu: **Ask about this**, **Extract promises**, **Find related**, **Reference**, **Diagram**, plus any skills you have. While one runs, the menu becomes a single status line and the selection keeps its highlight until the result lands.
 
-<Screenshot id="in-editor-ai" alt="The bubble menu over a text selection with AI actions" />
+<Screenshot id="in-editor-ai" alt="The bubble menu over a text selection with agent actions" />
 
 Every action is a proposal, not a silent edit. Extract promises puts todo suggestions in the Suggestions panel, Find related proposes backlinks, and Reference proposes ranked references. Nothing lands without your accept.
 
