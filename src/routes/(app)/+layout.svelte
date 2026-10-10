@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { newNoteDestination } from '$lib/client/shell/new-note-destination';
 	import { WorkspaceStartup, WorkspaceRouteOutlet } from '$lib/components/shell';
 	import type { RouteReadiness } from '$lib/client/sync/route-access';
 	import type { NoteId } from '$lib/models/notes';
@@ -196,15 +197,15 @@
 		if (prerequisitesReady && !inventoryLoading) keyboard.handle(event);
 	}
 
-	/**
-	 * The strip's "+" names no project, so it uses the inbox — the destination the
-	 * quick-capture field advertises. Note creation used to answer a missing project
-	 * itself, filing the note wherever the sort order happened to land.
-	 */
 	const inboxProjectId = $derived(shell?.projects.find((project) => project.role === 'inbox')?.id);
 
 	async function createNoteFromStrip(): Promise<void> {
-		const projectId = inboxProjectId;
+		const projectId = newNoteDestination({
+			routeProject: urlActiveProjectId(),
+			focusedProject: workbench.activeProjectId,
+			onNoteRoute: isNoteWorkbench,
+			inbox: inboxProjectId
+		});
 		if (!projectId) {
 			toast.error('This workspace has no inbox yet. Open Today to create your first note.');
 			return;
