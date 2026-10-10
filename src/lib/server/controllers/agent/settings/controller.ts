@@ -2,8 +2,13 @@ import type {
 	IAgentModelSelectionService,
 	IAgentModelChoiceService
 } from '$lib/services/agent/model-selection';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
-import { DEFAULT_AGENT_MAX_TURNS, type WebResearchSettings } from '$lib/models/agent';
+import {
+	DEFAULT_AGENT_MAX_TURNS,
+	CHAT_WEB_SEARCH_DEFAULTS,
+	type WebResearchOptions
+} from '$lib/models/agent';
 
 import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
 import { mutationResource } from '$lib/services/workspace/commands';
@@ -75,7 +80,8 @@ export interface AgentSettingsDependencies {
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
-	webSearchDefaults: WebResearchSettings;
+	readonly runSettings: AgentRunSettings;
+	webSearchOverrides: WebResearchOptions;
 	agentAvailable: boolean;
 }
 
@@ -160,6 +166,10 @@ export class AgentSettings implements AgentSettingsController {
 
 	async bootstrap(actor: ActorContext): Promise<WorkspaceBootstrap> {
 		const agentDefaults = this.modelDefaults();
+		const webSearch = this.dependencies.runSettings.research(
+			this.dependencies.webSearchOverrides,
+			CHAT_WEB_SEARCH_DEFAULTS
+		);
 		const agentModels = this.dependencies.modelChoices.configuredChatModels(
 			await this.dependencies.models.list(),
 			agentDefaults
@@ -169,8 +179,8 @@ export class AgentSettings implements AgentSettingsController {
 			agentDefaults,
 			agentModels,
 			numericDefaults: {
-				webSearchMaxResults: this.dependencies.webSearchDefaults.maxResults,
-				webSearchMaxTotalResults: this.dependencies.webSearchDefaults.maxTotalResults,
+				webSearchMaxResults: webSearch.maxResults,
+				webSearchMaxTotalResults: webSearch.maxTotalResults,
 				agentMaxTurns: DEFAULT_AGENT_MAX_TURNS
 			},
 			agentAvailable: this.dependencies.agentAvailable

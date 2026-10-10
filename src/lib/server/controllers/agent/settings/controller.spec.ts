@@ -46,7 +46,7 @@ const setup = () => {
 				preferenceEditing: new AgentPreferenceEditingService(),
 				...agentModelRulesFixture(),
 				preferences,
-				webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+				webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 				agentAvailable: true,
 				transactionRunner: new InMemoryTransactionRunner([repository]),
 				now: () => timestamp,

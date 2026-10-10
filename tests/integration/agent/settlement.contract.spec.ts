@@ -66,7 +66,7 @@ const setup = async (suffix: string) => {
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			events,
 			sessions,
 			transactionRunner: transaction.transactionRunner,

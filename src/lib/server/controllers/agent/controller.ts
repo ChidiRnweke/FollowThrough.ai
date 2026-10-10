@@ -2,7 +2,8 @@ import type {
 	IAgentModelSelectionService,
 	IAgentModelChoiceService
 } from '$lib/services/agent/model-selection';
-import { resolveWebResearch } from '$lib/services/agent/web-research';
+import type { AgentRunSettings } from '$lib/services/agent/run-settings';
+import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchOptions } from '$lib/models/agent';
 import {
 	prepareRunImages,
 	validateRunImages,
@@ -26,7 +27,6 @@ import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/muta
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
-	WebResearchSettings,
 	AgentPreferences,
 	AgentRun,
 	AgentRunId,
@@ -52,7 +52,6 @@ import type {
 	AgentPreferencesStore
 } from '$lib/server/services/agent/runs/preferences';
 import type { ConversationJournal } from '$lib/server/services/agent/runs/contracts';
-import { resolveAgentExecutionMode } from '$lib/server/services/agent/runs/preferences';
 
 import { activeRunStore } from '$lib/server/stores/agent/active-runs';
 import { rewindToUserItem } from '$lib/server/services/agent/conversations/rewind';
@@ -252,7 +251,8 @@ export interface AgentDependencies {
 	defaultModel: string;
 	/** Deployment fallback vision model when the user has not chosen one. */
 	defaultVisionModel: string;
-	webSearchDefaults: WebResearchSettings;
+	readonly runSettings: AgentRunSettings;
+	webSearchOverrides: WebResearchOptions;
 
 	readonly settlements: RunSettlement;
 
@@ -399,7 +399,7 @@ export class Agent implements AgentController {
 					userId: actor.userId,
 					conversationId: conversation.id,
 					model,
-					executionMode: resolveAgentExecutionMode(conversation, preferences),
+					executionMode: this.dependencies.runSettings.executionMode(conversation, preferences),
 					status: 'queued',
 					requestId: input.requestId,
 					pendingDecisions: [],
@@ -691,7 +691,7 @@ export class Agent implements AgentController {
 			])
 		];
 		// Freeze effective settings so later deployment changes cannot alter a resumed turn.
-		const webSearch = resolveWebResearch(
+		const webSearch = this.dependencies.runSettings.research(
 			{
 				...(preferences.webSearchEngine ? { engine: preferences.webSearchEngine } : {}),
 				...(preferences.webSearchMaxResults ? { maxResults: preferences.webSearchMaxResults } : {}),
@@ -699,7 +699,10 @@ export class Agent implements AgentController {
 					? { maxTotalResults: preferences.webSearchMaxTotalResults }
 					: {})
 			},
-			this.dependencies.webSearchDefaults
+			this.dependencies.runSettings.research(
+				this.dependencies.webSearchOverrides,
+				CHAT_WEB_SEARCH_DEFAULTS
+			)
 		);
 		return {
 			requestId: input.requestId,
@@ -853,7 +856,13 @@ export class Agent implements AgentController {
 				run,
 				request,
 				imageInput: prepareRunImages(request),
-				webSearch: resolveWebResearch(request.webSearch ?? {}, this.dependencies.webSearchDefaults),
+				webSearch: this.dependencies.runSettings.research(
+					request.webSearch ?? {},
+					this.dependencies.runSettings.research(
+						this.dependencies.webSearchOverrides,
+						CHAT_WEB_SEARCH_DEFAULTS
+					)
+				),
 				context: run.contextSnapshot,
 				...(decisions.length > 0 ? { decisions } : {}),
 				signal,

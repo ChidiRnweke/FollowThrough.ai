@@ -78,7 +78,7 @@ const approvalController = (db: typeof context.db) => {
 			cancellations: new RunCancellation(runs),
 			preparation: new RunPreparation(runs),
 			checkpoints: new RunCheckpoints(runs),
-			webSearchDefaults: CHAT_WEB_SEARCH_DEFAULTS,
+			webSearchOverrides: CHAT_WEB_SEARCH_DEFAULTS,
 			settlements: new RunSettlements(runs, events),
 			decisions: new AgentRunDecisionRecords(database),
 			eventBus: { notify: () => {} }

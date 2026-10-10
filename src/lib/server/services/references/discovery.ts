@@ -1,10 +1,4 @@
-import type { ActorContext } from '$lib/models/identity';
 import type { ReferenceCandidate, ReferenceSource } from '$lib/models/references';
-import type { TextSelection } from '$lib/models/notes';
-import type { WebReferenceClient } from '$lib/server/repositories/references/web-research';
-import type { ReferenceSearchOptions } from '$lib/models/references';
-import { ExternalServiceError, InvalidGeneratedContentError } from '$lib/errors';
-
 const STANDARD_HOSTS = [
 	'rfc-editor.org',
 	'ietf.org',
@@ -55,38 +49,22 @@ const candidateFromCitation = (
 	};
 };
 
-/** Domain ranking metadata for sources returned by the web provider. */
-export interface ReferenceFinder {
-	find(
-		actor: ActorContext,
-		selection: TextSelection,
-		options?: ReferenceSearchOptions
-	): Promise<readonly ReferenceCandidate[]>;
+export interface ReferenceCandidatePreparation {
+	prepare(
+		sources: readonly ReferenceSource[],
+		selectionText: string
+	): readonly ReferenceCandidate[];
 }
-export class ReferenceDiscovery implements ReferenceFinder {
-	constructor(private readonly client: WebReferenceClient) {}
-	async find(
-		_actor: ActorContext,
-		selection: TextSelection,
-		options: ReferenceSearchOptions = {}
-	): Promise<readonly ReferenceCandidate[]> {
-		try {
-			const sources = await this.client.search(selection.text, options);
-			if (!sources)
-				throw new InvalidGeneratedContentError('The provider returned no usable reference output');
-			const seen = new Set<string>();
-			return sources.flatMap((source) => {
-				if (seen.has(source.url)) return [];
-				seen.add(source.url);
-				return [candidateFromCitation(source, selection.text)];
-			});
-		} catch (error) {
-			if (options.signal?.aborted) throw error;
-			if (error instanceof InvalidGeneratedContentError || error instanceof ExternalServiceError)
-				throw error;
-			throw new ExternalServiceError('Reference search failed', {
-				cause: error instanceof Error ? error.message : String(error)
-			});
-		}
+export class ReferenceDiscovery implements ReferenceCandidatePreparation {
+	prepare(
+		sources: readonly ReferenceSource[],
+		selectionText: string
+	): readonly ReferenceCandidate[] {
+		const seen = new Set<string>();
+		return sources.flatMap((source) => {
+			if (seen.has(source.url)) return [];
+			seen.add(source.url);
+			return [candidateFromCitation(source, selectionText)];
+		});
 	}
 }

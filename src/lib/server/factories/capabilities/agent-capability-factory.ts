@@ -35,10 +35,10 @@ import {
 	type NoteActionSubmission
 } from '$lib/server/services/agent/runs/note-action-requests';
 import { OpenRouter } from '@openrouter/sdk';
-import { CHAT_WEB_SEARCH_DEFAULTS, type WebResearchSettings } from '$lib/models/agent';
+import type { WebResearchOptions } from '$lib/models/agent';
 import { normalizeLanguageModelId } from '$lib/models/agent';
 import { webSearchOptionsFromEnvironment } from '$lib/server/factories/agent/web-research-configuration';
-import { resolveWebResearch } from '$lib/services/agent/web-research';
+import { AgentRunSettingsService, type AgentRunSettings } from '$lib/services/agent/run-settings';
 import type { Database } from '$lib/server/db';
 import { ConversationRecords } from '$lib/server/repositories/agent/postgres/conversations';
 import {
@@ -92,7 +92,8 @@ export interface AgentCapability {
 	readonly preferenceEditing: AgentPreferenceEditing;
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly now: () => DateTime;
-	readonly webSearchDefaults: WebResearchSettings;
+	readonly runSettings: AgentRunSettings;
+	readonly webSearchOverrides: WebResearchOptions;
 	readonly agentAvailable: boolean;
 	readonly conversations: ConversationArchive;
 	readonly preferences: AgentPreferenceEditor;
@@ -170,10 +171,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 				tokens,
 				toolRetriever: input.toolRetriever
 			}),
-		webSearchDefaults: resolveWebResearch(
-			webSearchOptionsFromEnvironment(process.env),
-			CHAT_WEB_SEARCH_DEFAULTS
-		),
+		runSettings: new AgentRunSettingsService(),
+		webSearchOverrides: webSearchOptionsFromEnvironment(process.env),
 		agentAvailable: Boolean(input.openRouterApiKey.trim()),
 		now: () => new Date().toISOString() as DateTime,
 		conversations,

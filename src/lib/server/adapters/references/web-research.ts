@@ -1,3 +1,4 @@
+import type { WebReferenceClient } from '$lib/server/controllers/references/search';
 import type { ReferenceSearchOptions } from '$lib/models/references';
 import OpenAI from 'openai';
 import {
@@ -5,17 +6,10 @@ import {
 	type ReferenceSource,
 	type Url
 } from '$lib/models/references';
-import type { WebResearchTool } from '$lib/models/agent';
-import { withWebResearch } from '$lib/server/repositories/agent/web-research-transport';
+import type { WebResearchSettings } from '$lib/models/agent';
+import { withWebResearch } from '$lib/server/adapters/agent/web-research-transport';
 import type { OperationObserver } from '$lib/models/telemetry';
 import { ExternalServiceError } from '$lib/errors';
-
-export interface WebReferenceClient {
-	search(
-		text: string,
-		options?: ReferenceSearchOptions
-	): Promise<readonly ReferenceSource[] | undefined>;
-}
 
 const prompt = `Search the web for sources that directly support or clarify the selected architecture text.
 Prefer standards and official documentation, then vendor documentation, then community sources.
@@ -30,13 +24,13 @@ export class ReferenceResearch implements WebReferenceClient {
 			readonly baseURL: string;
 			readonly appURL: string;
 			readonly defaultModel: string;
-			readonly searchTool: WebResearchTool;
 			readonly observer: OperationObserver;
 		}
 	) {}
 
 	async search(
 		text: string,
+		research: WebResearchSettings,
 		options: ReferenceSearchOptions = {}
 	): Promise<readonly ReferenceSource[]> {
 		if (!this.apiKey)
@@ -45,7 +39,7 @@ export class ReferenceResearch implements WebReferenceClient {
 		const client = new OpenAI({
 			apiKey: this.apiKey,
 			baseURL: this.options.baseURL,
-			fetch: withWebResearch(globalThis.fetch, this.options.searchTool),
+			fetch: withWebResearch(globalThis.fetch, research),
 			defaultHeaders: { 'HTTP-Referer': this.options.appURL, 'X-OpenRouter-Title': 'FollowThrough' }
 		});
 		return this.options.observer.run(

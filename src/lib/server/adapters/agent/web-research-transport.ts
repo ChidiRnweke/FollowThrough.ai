@@ -1,4 +1,4 @@
-import type { WebResearchTool } from '$lib/models/agent';
+import type { WebResearchTool, WebResearchSettings } from '$lib/models/agent';
 import { z } from 'zod';
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -20,7 +20,7 @@ const appendWebSearchTool = (body: string, tool: WebResearchTool): string => {
 
 /** Adds OpenRouter's server-side search tool at the HTTP boundary for both supported generation protocols. */
 export const withWebResearch =
-	(delegate: Fetch, tool: WebResearchTool): Fetch =>
+	(delegate: Fetch, settings: WebResearchSettings): Fetch =>
 	async (input, init) => {
 		const pathname = requestUrl(input).pathname;
 		if (
@@ -28,5 +28,17 @@ export const withWebResearch =
 			typeof init?.body !== 'string'
 		)
 			return delegate(input, init);
-		return delegate(input, { ...init, body: appendWebSearchTool(init.body, tool) });
+		return delegate(input, {
+			...init,
+			body: appendWebSearchTool(init.body, openRouterWebSearchTool(settings))
+		});
 	};
+
+const openRouterWebSearchTool = (options: WebResearchSettings): WebResearchTool => ({
+	type: 'openrouter:web_search',
+	parameters: {
+		engine: options.engine,
+		max_results: options.maxResults,
+		max_total_results: options.maxTotalResults
+	}
+});

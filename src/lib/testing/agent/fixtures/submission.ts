@@ -15,7 +15,7 @@ export const agentSubmissionFixture = (
 	configuration: {
 		readonly defaultModel?: string;
 		readonly defaultVisionModel?: string;
-		readonly webSearchDefaults?: WebResearchSettings;
+		readonly webSearchOverrides?: WebResearchSettings;
 	} = {}
 ) => {
 	const { dependencies, runs } = agentContextFixture();
@@ -50,7 +50,7 @@ export const agentSubmissionFixture = (
 			contextConversations: journal,
 			transactionRunner: new InMemoryTransactionRunner([conversations, runs, sessions]),
 			preferences,
-			webSearchDefaults: configuration.webSearchDefaults ?? dependencies.webSearchDefaults,
+			webSearchOverrides: configuration.webSearchOverrides ?? dependencies.webSearchOverrides,
 			models,
 			defaultModel: configuration.defaultModel ?? 'openai/test-model',
 			defaultVisionModel: configuration.defaultVisionModel ?? 'openai/test-vision-model'

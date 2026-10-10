@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { openRouterWebSearchTool } from '$lib/server/services/agent/runs/reasoning';
 import { withWebResearch } from './web-research-transport';
 
 class RecordingFetch {
@@ -15,10 +14,7 @@ class RecordingFetch {
 describe('OpenRouter web search transport', () => {
 	it('preserves function tools when web search is enabled', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(
-			recorder.fetch,
-			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
-		);
+		const fetch = withWebResearch(recorder.fetch, CHAT_WEB_SEARCH_DEFAULTS);
 		await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			body: JSON.stringify({ tools: [{ type: 'function', function: { name: 'get_project' } }] })
@@ -36,13 +32,17 @@ describe('OpenRouter web search transport', () => {
 
 	it('does not duplicate an existing web search tool', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(
-			recorder.fetch,
-			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
-		);
+		const fetch = withWebResearch(recorder.fetch, CHAT_WEB_SEARCH_DEFAULTS);
 		await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
-			body: JSON.stringify({ tools: [openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)] })
+			body: JSON.stringify({
+				tools: [
+					{
+						type: 'openrouter:web_search',
+						parameters: { engine: 'auto', max_results: 20, max_total_results: 40 }
+					}
+				]
+			})
 		});
 		const tools = (recorder.body as { tools: unknown[] }).tools;
 		expect(tools).toHaveLength(1);
@@ -50,25 +50,24 @@ describe('OpenRouter web search transport', () => {
 
 	it('adds web search to Responses API requests', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(
-			recorder.fetch,
-			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
-		);
+		const fetch = withWebResearch(recorder.fetch, CHAT_WEB_SEARCH_DEFAULTS);
 		await fetch('https://openrouter.ai/api/v1/responses', {
 			method: 'POST',
 			body: JSON.stringify({ model: 'openai/gpt-5.6', input: 'Research this' })
 		});
 		expect(recorder.body).toMatchObject({
-			tools: [openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)]
+			tools: [
+				{
+					type: 'openrouter:web_search',
+					parameters: { engine: 'auto', max_results: 20, max_total_results: 40 }
+				}
+			]
 		});
 	});
 
 	it('leaves non-chat requests unchanged', async () => {
 		const recorder = new RecordingFetch();
-		const fetch = withWebResearch(
-			recorder.fetch,
-			openRouterWebSearchTool(CHAT_WEB_SEARCH_DEFAULTS)
-		);
+		const fetch = withWebResearch(recorder.fetch, CHAT_WEB_SEARCH_DEFAULTS);
 		await fetch('https://openrouter.ai/api/v1/models', {
 			method: 'POST',
 			body: JSON.stringify({ request: 'unchanged' })

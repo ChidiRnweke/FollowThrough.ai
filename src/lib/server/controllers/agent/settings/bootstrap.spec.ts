@@ -16,7 +16,7 @@ const setup = () => {
 			defaultModel: 'test/chat',
 			defaultVisionModel: 'test/vision',
 			agentAvailable: false,
-			webSearchDefaults: { engine: 'firecrawl', maxResults: 11, maxTotalResults: 23 }
+			webSearchOverrides: { engine: 'firecrawl', maxResults: 11, maxTotalResults: 23 }
 		})
 	);
 	return { controller, models };

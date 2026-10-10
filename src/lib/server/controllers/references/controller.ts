@@ -8,7 +8,7 @@ import type {
 	ReferenceCandidate
 } from '$lib/models/references';
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
-import type { ReferenceFinder } from '$lib/server/services/references/discovery';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
 import type { ReferenceRanker } from '$lib/server/services/references/ranking';
 import type { ReferenceSearchOptions } from '$lib/models/references';
 import type { SelectionOriginService } from '$lib/server/services/notes/selection-origin';

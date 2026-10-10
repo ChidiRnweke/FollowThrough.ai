@@ -1,5 +1,4 @@
 import { REFERENCE_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
-import { openRouterWebSearchTool } from '$lib/server/services/agent/runs/reasoning';
 import { describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import type { TextSelection } from '$lib/models/notes';
@@ -107,16 +106,17 @@ describe('Web reference client boundary', () => {
 			]
 		});
 		const client = new ReferenceResearch('local-key', {
-			searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'test/model',
 			observer: { run: (_name, _context, operation) => operation() }
 		});
 		try {
-			expect((await client.search(selection.text)).map((source) => source.url)).toEqual(
-				sources.map((source) => source.url)
-			);
+			expect(
+				(await client.search(selection.text, REFERENCE_WEB_SEARCH_DEFAULTS)).map(
+					(source) => source.url
+				)
+			).toEqual(sources.map((source) => source.url));
 		} finally {
 			await new Promise<void>((resolve, reject) =>
 				local.server.close((error) => (error ? reject(error) : resolve()))
@@ -126,14 +126,15 @@ describe('Web reference client boundary', () => {
 	it('sends the OpenRouter server tool with the selected model', async () => {
 		const local = await startResponseServer();
 		const client = new ReferenceResearch('local-key', {
-			searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'openai/gpt-5.6',
 			observer: { run: (_name, _context, body) => body() }
 		});
 		try {
-			await client.search(selection.text, { model: 'anthropic/claude-sonnet-4.5' });
+			await client.search(selection.text, REFERENCE_WEB_SEARCH_DEFAULTS, {
+				model: 'anthropic/claude-sonnet-4.5'
+			});
 		} finally {
 			await new Promise<void>((resolve, reject) =>
 				local.server.close((error) => (error ? reject(error) : resolve()))
@@ -157,7 +158,6 @@ describe('Web reference client boundary', () => {
 	it('maps native OpenRouter citation annotations to references', async () => {
 		const local = await startResponseServer();
 		const client = new ReferenceResearch('local-key', {
-			searchTool: openRouterWebSearchTool(REFERENCE_WEB_SEARCH_DEFAULTS),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'test/model',
@@ -165,7 +165,7 @@ describe('Web reference client boundary', () => {
 		});
 		let references: readonly { url: Url }[] | undefined;
 		try {
-			references = await client.search(selection.text);
+			references = await client.search(selection.text, REFERENCE_WEB_SEARCH_DEFAULTS);
 		} finally {
 			await new Promise<void>((resolve, reject) =>
 				local.server.close((error) => (error ? reject(error) : resolve()))
@@ -181,18 +181,17 @@ describe('Web reference client boundary', () => {
 	it('sends the resolved research settings without choosing new defaults in transport', async () => {
 		const local = await startResponseServer();
 		const client = new ReferenceResearch('local-key', {
-			searchTool: openRouterWebSearchTool({
-				engine: 'perplexity',
-				maxResults: 3,
-				maxTotalResults: 7
-			}),
 			baseURL: local.url,
 			appURL: 'https://followthrough.test',
 			defaultModel: 'test/model',
 			observer: { run: (_name, _context, operation) => operation() }
 		});
 		try {
-			await client.search(selection.text);
+			await client.search(selection.text, {
+				engine: 'perplexity',
+				maxResults: 3,
+				maxTotalResults: 7
+			});
 		} finally {
 			await new Promise<void>((resolve, reject) =>
 				local.server.close((error) => (error ? reject(error) : resolve()))

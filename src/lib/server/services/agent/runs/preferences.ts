@@ -1,11 +1,6 @@
 import type { AgentCatalogMetadata } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
-import type {
-	AgentExecutionMode,
-	AgentModel,
-	AgentPreferences,
-	Conversation
-} from '$lib/models/agent';
+import type { AgentModel, AgentPreferences } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type { AgentPreferencesRepository } from '$lib/server/repositories/agent';
@@ -89,11 +84,4 @@ export class AgentModels implements AgentModelCatalog {
 				(a, b) => Number(b.recommended) - Number(a.recommended) || a.name.localeCompare(b.name)
 			);
 	}
-}
-
-export function resolveAgentExecutionMode(
-	conversation: Pick<Conversation, 'executionModeOverride'>,
-	preferences: Pick<AgentPreferences, 'executionMode'>
-): AgentExecutionMode {
-	return conversation.executionModeOverride ?? preferences.executionMode;
 }

@@ -12,7 +12,7 @@ import type { AttachmentClaims } from './services/attachments/contracts';
 import type { EmbeddingClient } from './services/knowledge-search/contracts';
 import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
 import type { Reranker } from './services/knowledge-search/contracts';
-import type { ReferenceFinder } from '$lib/server/services/references/discovery';
+import type { ReferenceFinder } from '$lib/server/controllers/references/search';
 import type { TransactionRunner } from '$lib/server/repositories/workspace';
 import type { Database } from './db';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from './config';
@@ -434,7 +434,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		agent: {
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
-			webSearchDefaults: agentCapability.webSearchDefaults,
+			runSettings: agentCapability.runSettings,
+			webSearchOverrides: agentCapability.webSearchOverrides,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
 			conversationJournal,
@@ -470,7 +471,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			preferenceEditing: agentCapability.preferenceEditing,
 			modelSelection: agentCapability.modelSelection,
 			modelChoices: agentCapability.modelChoices,
-			webSearchDefaults: agentCapability.webSearchDefaults,
+			runSettings: agentCapability.runSettings,
+			webSearchOverrides: agentCapability.webSearchOverrides,
 			agentAvailable: agentCapability.agentAvailable,
 			now: agentCapability.now,
 			syncMutations: synchronization.mutations,

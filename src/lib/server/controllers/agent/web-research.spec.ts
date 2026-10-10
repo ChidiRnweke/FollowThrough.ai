@@ -34,7 +34,7 @@ it('freezes the deployment research defaults with a new run', async () => {
 
 it('freezes selected account settings together with deployment defaults', async () => {
 	const fixture = setup({
-		webSearchDefaults: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
+		webSearchOverrides: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
 	});
 	fixture.preferenceRecords.entries.set(testActor().userId, {
 		...fixture.preferences.defaults(testActor(), testNow),
@@ -55,7 +55,7 @@ it('freezes selected account settings together with deployment defaults', async 
 
 it('executes the frozen budget after injected deployment defaults change', async () => {
 	const defaults = { ...CHAT_WEB_SEARCH_DEFAULTS, maxResults: 7 };
-	const fixture = setup({ webSearchDefaults: defaults });
+	const fixture = setup({ webSearchOverrides: defaults });
 	await fixture.controller.submit(testActor(), {
 		requestId: crypto.randomUUID(),
 		input: 'Research this'
@@ -89,7 +89,7 @@ it('retains frozen research settings on retry after account preferences change',
 
 it('resolves missing fields of a legacy saved request before provider execution', async () => {
 	const fixture = setup({
-		webSearchDefaults: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
+		webSearchOverrides: { engine: 'firecrawl', maxResults: 17, maxTotalResults: 34 }
 	});
 	const receipt = await fixture.controller.submit(testActor(), {
 		requestId: crypto.randomUUID(),
