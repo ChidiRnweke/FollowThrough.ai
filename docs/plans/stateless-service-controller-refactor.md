@@ -1028,3 +1028,16 @@ Every service module below has a planned disposition. This is routing, not compl
   145 tests. Type check and lint pass before the final destination-lifetime effect adjustment;
   subsequent artifact changes are being checked together. Architecture remains at 52 prohibited
   imports and seven missing interfaces; topology/source/test-quality pass. Final verification remains.
+
+## Artifact browser actions — 2026-10-10
+
+- ArtifactActions owns download, regeneration and deletion with their synchronization sequence.
+  The library calls its interface and renders returned outcomes. Remotes and browser navigation
+  live in adapters; a mounted-library store owns outstanding action tokens. Closing the library
+  or stopping the account prevents a late download, success message or follow-up synchronization.
+- Outstanding work is released by its own token, so one completed action cannot clear another
+  action's busy state. Seven new controller cases verify outcomes, failure and lifetime behavior.
+  Focused deliverable controllers pass: three files / 23 tests. Artifact browser tests pass:
+  one file / three tests. Type checking and lint pass. Architecture remains at 52 prohibited
+  imports and seven missing interfaces; topology/source/test-quality pass. Full final checks,
+  document conversion and the remaining application capabilities are still pending.
