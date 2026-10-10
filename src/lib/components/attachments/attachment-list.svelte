@@ -13,6 +13,7 @@
 	import { FtAttachments as Paperclip, FtEllipsis as Ellipsis } from '$lib/components/icons';
 	import { userFacingMessage } from '$lib/errors';
 	import { fileChecksumSha256 } from '$lib/client/attachments/checksum';
+	import { storeUploadBytes } from '$lib/client/attachments/object-storage';
 	import {
 		initiateAttachmentUpload,
 		completeAttachmentUpload,
@@ -55,25 +56,15 @@
 				byteSize: file.size,
 				checksumSha256: await fileChecksumSha256(file)
 			});
-			const stored = await fetch(intent.uploadUrl, {
-				method: 'PUT',
-				headers: intent.requiredHeaders,
-				body: file
-			});
-			if (!stored.ok) {
-				const detail = (await stored.text()).match(/<Message>([^<]+)<\/Message>/)?.[1];
-				throw new Error(
-					detail
-						? `Object storage rejected the upload: ${detail}`
-						: `Object storage rejected the upload (${stored.status})`
-				);
-			}
+			await storeUploadBytes(() =>
+				fetch(intent.uploadUrl, { method: 'PUT', headers: intent.requiredHeaders, body: file })
+			);
 			await completeAttachmentUpload({ uploadId: intent.upload.id });
 			await workspaceSession.synchronize();
 			toast.success('Attachment queued for processing');
 			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Upload failed');
+			toast.error(userFacingMessage(error, 'The upload failed. Try again.'));
 		} finally {
 			busy = false;
 		}

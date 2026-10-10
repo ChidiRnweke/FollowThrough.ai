@@ -151,14 +151,14 @@ describe('uploadNoteAttachment', () => {
 				new Response('<Error><Message>Bucket full</Message></Error>', { status: 403 })
 		});
 		await expect(uploadNoteAttachment(noteId, file, failing)).rejects.toThrow(
-			'Object storage rejected the upload: Bucket full'
+			'File storage rejected the image: Bucket full'
 		);
 	});
 
 	it('propagates an object-storage rejection without an XML body', async () => {
 		const failing = transport({ put: async () => new Response('', { status: 403 }) });
 		await expect(uploadNoteAttachment(noteId, file, failing)).rejects.toThrow(
-			'Object storage rejected the upload (403)'
+			'File storage rejected the image (403)'
 		);
 	});
 });
