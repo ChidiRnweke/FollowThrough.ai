@@ -974,3 +974,28 @@ Every service module below has a planned disposition. This is routing, not compl
   Architecture remains at 55 prohibited imports and seven missing interfaces; topology, source
   and test-quality checks pass. The full suite at the prior artifact/template commit is not final
   evidence for this change. Shared export preparation and browser export coordination are next.
+
+## Export preparation and browser operations — 2026-10-10
+
+- ExportPreparationService discovers complete asset descriptors and prepares renderer input behind
+  a named interface. Traversals, attachment recognition and table width calculations are private.
+  Removed an unused inline-text helper. Table tests exercise prepared documents; removed the
+  impossible mismatched intermediate column count and NaN width fixtures (the document boundary
+  rejects NaN). Finite overflow and missing/zero width cases remain covered.
+- DocumentExports coordinates settings reads, selected-note loading, diagram rendering, preview
+  URLs, document generation and bundles. Dialogs observe readonly progress/results and retain local
+  form fields. ProjectExportSettings owns captured draft ancestry and durable default-setting saves.
+  Opening absent defaults creates no write. Browser adapters own remotes, hashing and object URLs.
+- Dialog generations and account identity guard late success/failure, submission after rendering and
+  preview publication. Replaced and closed previews release their object URLs. Sixteen controller
+  cases cover these lifetimes, exact export inputs, offline settings and failed writes/rendering.
+- Full unit verification passes: 549 files / 4,343 tests / one existing skip. Relevant browser tests
+  pass: 16 files / 108 tests. Isolated deliverable contracts pass: three files / 24 tests. Focused
+  export tests pass: 24 files / 153 tests before two further rendering cases; final controller cases
+  pass: two files / 16 tests. Type check and lint pass. The final settings error guard was verified
+  by the focused controller suite after the full run.
+- Architecture remains incomplete at 52 prohibited imports and seven missing interfaces;
+  topology/source/test-quality pass. Inventory: 63 shared modules / 105 exports (45 classes), 89
+  server modules / 175 exports (117 classes), 11,970 rows and 13,057 resolved imports. Artifact
+  library actions, note conversion, agent workflows and other browser capabilities remain pending.
+  No whole implementation phase or final verification is complete.

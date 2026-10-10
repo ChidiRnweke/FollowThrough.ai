@@ -4,7 +4,8 @@ import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { prepareExport } from '$lib/services/deliverables/export-preparation';
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
+const preparation = new ExportPreparationService();
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 type BoardPdfGenerator = TodosDependencies['pdfGenerator']['render'];
 type MarkdownToDocument = TodosDependencies['markdownToContent'];
@@ -42,7 +43,7 @@ const setup = () => {
 			todoContextReader: todos,
 			projectLister: projects,
 			markdownToContent: markdownToDocument,
-			exportPreparer: prepareExport,
+			exportPreparer: preparation,
 			pdfGenerator: new InMemoryDocumentRenderer(pdfGenerator)
 		})
 	);

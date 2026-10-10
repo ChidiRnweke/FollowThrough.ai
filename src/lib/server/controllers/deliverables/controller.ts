@@ -21,17 +21,11 @@ import type { DateTime, LocalDate } from '$lib/models/workspace';
 import type { Provenance, ProvenanceRequest } from '$lib/models/provenance';
 import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
 import type { ArtifactFiles } from '$lib/services/deliverables/artifact-files';
-import type {
-	prepareExport,
-	exportImageSources,
-	exportDiagramReferences,
-	exportWidgetReferences
-} from '$lib/services/deliverables/export-preparation';
+import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { DiagramExportRenderer } from './diagram-rendering';
 import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
 import type { MermaidThemeRules } from '$lib/services/diagrams/mermaid-theme';
-import { attachmentIdFromSrc } from '$lib/services/deliverables/export-preparation';
 import type {
 	DeliverableMutationRequest,
 	WorkspaceMutationResult
@@ -205,10 +199,7 @@ export interface DeliverablesDependencies {
 		downloadById(actor: ActorContext, id: AttachmentId): Promise<{ url: string }>;
 	};
 	fetchImage: (url: string) => Promise<string | undefined>;
-	prepareExport: typeof prepareExport;
-	exportImageSources: typeof exportImageSources;
-	exportDiagramReferences: typeof exportDiagramReferences;
-	exportWidgetReferences: typeof exportWidgetReferences;
+	prepareExport: ExportPreparation;
 	widgetReader: { get(actor: ActorContext, id: WidgetId): Promise<Widget> };
 	/** The project's todos and notes, read only for a widget that shows them. */
 	todoLister: { list(actor: ActorContext, filter: TodoListFilter): Promise<readonly Todo[]> };
@@ -406,6 +397,9 @@ export class Deliverables implements DeliverablesController {
 			})
 		);
 		const notes = sourceNotes.map((note) => ({ title: note.title, document: note.document }));
+		const assets = new Map(
+			sourceNotes.map((note) => [note, this.dependencies.prepareExport.assets(note.document)])
+		);
 		const settings = input.settings
 			? this.dependencies.exportSettingsRules.validate(input.settings)
 			: await this.getExportSettings(actor, input.projectId);
@@ -415,7 +409,7 @@ export class Deliverables implements DeliverablesController {
 		const images = new Map<string, string>();
 		const pendingDiagrams = new Map<string, ExportDiagramSource>();
 		for (const note of sourceNotes) {
-			for (const reference of this.dependencies.exportDiagramReferences(note.document)) {
+			for (const reference of assets.get(note)!.diagrams) {
 				if (reference.kind === 'mermaid') {
 					const key = createHash('sha256').update(reference.source, 'utf8').digest('hex');
 					if (!input.diagramPngs?.[key]) pendingDiagrams.set(key, { ...reference, key });
@@ -464,23 +458,27 @@ export class Deliverables implements DeliverablesController {
 			diagramPngs[key] = rendered.png;
 			diagramSizes[key] = rendered.size;
 		}
-		for (const source of new Set(
-			notes.flatMap((note) => this.dependencies.exportImageSources(note.document))
-		)) {
-			const attachmentId = attachmentIdFromSrc(source);
-			if (!attachmentId) continue;
+
+		const imageReferences = new Map(
+			[...assets.values()].flatMap((asset) =>
+				asset.images.map((image) => [image.source, image] as const)
+			)
+		);
+		for (const imageReference of imageReferences.values()) {
+			if (imageReference.kind !== 'attachment') continue;
 			const { url } = await this.dependencies.attachmentDownloader.downloadById(
 				actor,
-				attachmentId as AttachmentId
+				imageReference.id as AttachmentId
 			);
 			const image = await this.dependencies.fetchImage(url);
-			if (image) images.set(source, image);
+			if (image) images.set(imageReference.source, image);
 		}
+
 		// A widget the note embeds must be a live widget of the same project, as a diagram must;
 		// an export that silently left one out would misrepresent the note.
 		const widgets = new Map<string, WidgetExport>();
 		for (const note of sourceNotes)
-			for (const widgetId of this.dependencies.exportWidgetReferences(note.document)) {
+			for (const widgetId of assets.get(note)!.widgets) {
 				if (widgets.has(widgetId)) continue;
 				const widget = await this.dependencies.widgetReader.get(actor, widgetId as WidgetId);
 				if (widget.projectId !== note.projectId || widget.archivedAt)
@@ -506,7 +504,7 @@ export class Deliverables implements DeliverablesController {
 			diagramSizes,
 			...(styles ? { styles } : {})
 		};
-		return this.dependencies.prepareExport(exportInput);
+		return this.dependencies.prepareExport.prepare(exportInput);
 	}
 
 	private renderDocument(format: 'pdf' | 'docx', input: PreparedExport): Promise<Buffer> {

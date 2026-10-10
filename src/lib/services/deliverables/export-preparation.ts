@@ -1,3 +1,4 @@
+import type { ExportAssets } from '$lib/models/deliverables';
 import type { ProseMirrorDocument, ProseMirrorNode, ProseMirrorTextNode } from '$lib/models/notes';
 
 import {
@@ -10,9 +11,7 @@ import {
 	type PreparedExport
 } from '$lib/models/deliverables';
 
-export function exportDiagramReferences(
-	document: ProseMirrorDocument
-): readonly ExportDiagramReference[] {
+function exportDiagramReferences(document: ProseMirrorDocument): readonly ExportDiagramReference[] {
 	const references: ExportDiagramReference[] = [];
 	const walk = (node: ProseMirrorNode): void => {
 		if (node.type === 'mermaid') {
@@ -31,7 +30,7 @@ export function exportDiagramReferences(
 }
 
 /** Every widget a document embeds, in order, so the controller can load and authorize each. */
-export function exportWidgetReferences(document: ProseMirrorDocument): readonly string[] {
+function exportWidgetReferences(document: ProseMirrorDocument): readonly string[] {
 	const ids: string[] = [];
 	const walk = (node: ProseMirrorNode): void => {
 		if (node.type === 'widgetNode' && node.attrs?.widgetId) {
@@ -43,12 +42,12 @@ export function exportWidgetReferences(document: ProseMirrorDocument): readonly 
 }
 
 /** Extract the app-owned attachment reference; authorization still belongs to its service. */
-export function attachmentIdFromSrc(source: string): string | undefined {
+function attachmentIdFromSrc(source: string): string | undefined {
 	return /\/api\/attachments\/([^/]+)\/content$/.exec(source)?.[1];
 }
 
 /** Sources are discovered before rendering so controllers can authorize app-owned assets. */
-export function exportImageSources(doc: ProseMirrorDocument): readonly string[] {
+function exportImageSources(doc: ProseMirrorDocument): readonly string[] {
 	const sources = new Set<string>();
 	const walk = (node: ProseMirrorNode): void => {
 		if (node.type === 'image' && typeof node.attrs?.src === 'string') sources.add(node.attrs.src);
@@ -59,7 +58,7 @@ export function exportImageSources(doc: ProseMirrorDocument): readonly string[] 
 }
 
 /** Resolve format-independent values; all external asset work is complete before this call. */
-export function prepareExport(input: ExportInput): PreparedExport {
+function prepareExport(input: ExportInput): PreparedExport {
 	const images = new Map(input.images);
 	for (const note of input.notes)
 		for (const source of exportImageSources(note.document))
@@ -100,7 +99,7 @@ export function prepareExport(input: ExportInput): PreparedExport {
  * the browser reads it off its own render to send `diagramSizes`, and the server falls back
  * to it for any caller that still ships the full markup.
  */
-export function svgViewBoxSize(svg: string): DiagramSize | undefined {
+function svgViewBoxSize(svg: string): DiagramSize | undefined {
 	const attribute = /(?:^|\s)viewBox\s*=\s*(["'])([^"']*)\1/.exec(svg)?.[2];
 	if (attribute === undefined) return undefined;
 	const values = attribute.trim().split(/\s*,\s*|\s+/);
@@ -126,7 +125,7 @@ export function svgViewBoxSize(svg: string): DiagramSize | undefined {
  * and a DOCX divides it in twips. Sharing the arithmetic is also the point:
  * this ran twice, and a fix to one copy would not have reached the other.
  */
-export const columnShares = (
+const columnShares = (
 	colwidths: readonly (readonly number[] | null | undefined)[],
 	columnCount: number
 ): readonly number[] | undefined => {
@@ -147,14 +146,9 @@ export const columnShares = (
 };
 
 /** Direct children and inline text use the editor's existing document representation. */
-export const documentNodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
+const documentNodeContent = (node: ProseMirrorNode): readonly ProseMirrorNode[] =>
 	'content' in node ? (node.content ?? []) : [];
-export function documentInlineText(node: ProseMirrorNode): string {
-	return node.type === 'text'
-		? node.text
-		: documentNodeContent(node).map(documentInlineText).join('');
-}
-export function documentTextMarks(node: ProseMirrorTextNode): {
+function documentTextMarks(node: ProseMirrorTextNode): {
 	bold: boolean;
 	italic: boolean;
 	code: boolean;
@@ -206,4 +200,30 @@ function prepareNodes(
 	};
 	for (const document of documents) for (const node of document.content ?? []) visit(node);
 	return nodes;
+}
+
+export interface ExportPreparation {
+	prepare(input: ExportInput): PreparedExport;
+	assets(document: ProseMirrorDocument): ExportAssets;
+	diagramSize(svg: string): DiagramSize | undefined;
+}
+export class ExportPreparationService implements ExportPreparation {
+	prepare(input: ExportInput): PreparedExport {
+		return prepareExport(input);
+	}
+	assets(document: ProseMirrorDocument): ExportAssets {
+		return {
+			diagrams: exportDiagramReferences(document),
+			widgets: exportWidgetReferences(document),
+			images: exportImageSources(document).map((source) => {
+				const id = attachmentIdFromSrc(source);
+				return id
+					? { kind: 'attachment' as const, source, id }
+					: { kind: 'external' as const, source };
+			})
+		};
+	}
+	diagramSize(svg: string): DiagramSize | undefined {
+		return svgViewBoxSize(svg);
+	}
 }

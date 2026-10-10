@@ -14,7 +14,7 @@ import type { Project } from '$lib/models/projects';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import type { TodoBoardExport } from '$lib/services/todos/board-export';
 import type { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
-import type { prepareExport } from '$lib/services/deliverables/export-preparation';
+import type { ExportPreparation } from '$lib/services/deliverables/export-preparation';
 import type {
 	BoardPdfExportResult,
 	CreateTodoInput,
@@ -138,7 +138,7 @@ export interface TodosDependencies {
 	transactionRunner: TransactionRunner;
 	projectLister: { list(actor: ActorContext): Promise<readonly Project[]> };
 	markdownToContent: typeof noteContentFromMarkdown;
-	exportPreparer: typeof prepareExport;
+	exportPreparer: ExportPreparation;
 	pdfGenerator: PdfRenderingController;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
@@ -237,7 +237,7 @@ export class Todos implements TodosController {
 			'pdf'
 		);
 		const { document } = this.dependencies.markdownToContent(board.markdown);
-		const prepared = this.dependencies.exportPreparer({
+		const prepared = this.dependencies.exportPreparer.prepare({
 			title,
 			notes: [{ title, document }],
 			settings: { ...defaultExportSettings, includeTitle: true }

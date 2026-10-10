@@ -8,12 +8,7 @@ import {
 } from '$lib/server/controllers/deliverables/controller';
 import { createArtifactServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
 import { createTemplateServices } from '$lib/server/factories/capabilities/deliverable-storage-factory';
-import {
-	prepareExport,
-	exportImageSources,
-	exportDiagramReferences,
-	exportWidgetReferences
-} from '$lib/services/deliverables/export-preparation';
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import { DocumentBundleService } from '$lib/server/services/deliverables/bundle';
 import {
@@ -64,10 +59,7 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 			exportSettingsWriter: library.exportSettingsWriter,
 			noteReader: notes,
 			provenanceRecorder: provenance,
-			prepareExport,
-			exportImageSources,
-			exportDiagramReferences,
-			exportWidgetReferences,
+			prepareExport: new ExportPreparationService(),
 			widgetReader: new WidgetLibrary(
 				widgets,
 				new InMemoryProjectRepository(),

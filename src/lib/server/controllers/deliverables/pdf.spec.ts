@@ -5,8 +5,9 @@ import { PdfDocumentService } from '$lib/server/services/deliverables/pdf';
 import { NodePdfFontReader } from '$lib/server/adapters/deliverables/pdf-fonts';
 import { PdfMakeDocumentWriter } from '$lib/server/adapters/deliverables/pdf-writer';
 import { InMemoryPdfFontReader } from '$lib/testing/deliverables/fakes/pdf-fonts';
-import { prepareExport } from '$lib/services/deliverables/export-preparation';
-const document = prepareExport({
+import { ExportPreparationService } from '$lib/services/deliverables/export-preparation';
+const preparation = new ExportPreparationService();
+const document = preparation.prepare({
 	title: 'Export',
 	notes: [
 		{

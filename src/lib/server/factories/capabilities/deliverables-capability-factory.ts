@@ -26,10 +26,8 @@ import { DocxDocumentService, type DocxRenderer } from '$lib/server/services/del
 import { createPdfRendering } from './pdf-rendering-factory';
 import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
 import {
-	prepareExport,
-	exportImageSources,
-	exportDiagramReferences,
-	exportWidgetReferences
+	ExportPreparationService,
+	type ExportPreparation
 } from '$lib/services/deliverables/export-preparation';
 import { createDiagramExportRenderer } from '$lib/server/factories/capabilities/diagram-rendering-factory';
 import { DocxTemplateStyleReader } from '$lib/server/adapters/deliverables/template-styles';
@@ -49,10 +47,7 @@ export interface DeliverablesCapability {
 	readonly artifacts: ArtifactServices;
 	readonly artifactStorage: IAttachmentStorage;
 	readonly fetchImage: typeof fetchRemoteDataUrl;
-	readonly prepareExport: typeof prepareExport;
-	readonly exportImageSources: typeof exportImageSources;
-	readonly exportDiagramReferences: typeof exportDiagramReferences;
-	readonly exportWidgetReferences: typeof exportWidgetReferences;
+	readonly prepareExport: ExportPreparation;
 	readonly diagramRenderer: DiagramExportRenderer;
 	readonly mermaidThemes: MermaidThemeRules;
 	readonly docxGenerator: DocxRenderer;
@@ -74,10 +69,7 @@ export const createDeliverablesCapability = (
 	),
 	artifactStorage: input.storage,
 	fetchImage: fetchRemoteDataUrl,
-	prepareExport,
-	exportImageSources,
-	exportDiagramReferences,
-	exportWidgetReferences,
+	prepareExport: new ExportPreparationService(),
 	diagramRenderer: createDiagramExportRenderer(),
 	mermaidThemes: new MermaidThemeService(),
 	docxGenerator: new DocxDocumentService(),
