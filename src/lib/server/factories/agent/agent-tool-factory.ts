@@ -2111,13 +2111,13 @@ const sharedToolDefinitions = (
 			'proposal',
 			z.object({
 				scope: z.enum(['project', 'user']),
-				projectId: projectId
-					.optional()
-					.describe('Required for project scope; omit entirely for user scope.'),
+				projectId: optionalModelField(projectId).describe(
+					'Required for project scope; omit entirely for user scope.'
+				),
 				operation: z.enum(['add', 'update', 'remove']),
-				memoryEntryId: memoryEntryId
-					.optional()
-					.describe('Required for update or remove; omit entirely for add.'),
+				memoryEntryId: optionalModelField(memoryEntryId).describe(
+					'Required for update or remove; omit entirely for add.'
+				),
 				content: z
 					.string()
 					.optional()
@@ -2129,8 +2129,12 @@ const sharedToolDefinitions = (
 			}),
 			(input) => {
 				const { confidence, ...payload } = input;
+				// Which fields each scope and operation take is the model's to get right,
+				// so a mismatch is a correction for it, not a fault of ours.
+				const change = memoryChangePayloadSchema.safeParse(payload);
+				if (!change.success) throw new ValidationError(z.prettifyError(change.error));
 				return factory.memory().propose(actor, {
-					...memoryChangePayloadSchema.parse(payload),
+					...change.data,
 					provenanceId,
 					...(confidence !== undefined ? { confidence } : {})
 				});

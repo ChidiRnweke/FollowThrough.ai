@@ -16,6 +16,9 @@ import type { ApiTokensController } from '$lib/server/controllers/api-tokens/con
 import type { DeliverablesController } from '$lib/server/controllers/deliverables/controller';
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
+import type { MemoryController } from '$lib/server/controllers/memory/controller';
+import type { ProposeMemoryChangeInput } from '$lib/models/memory';
+import { readToolOutput } from '$lib/models/agent/tool-failure';
 import { noteEtag } from '$lib/services/notes/presentation';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import {
@@ -25,7 +28,8 @@ import {
 	testConversationId,
 	testDiagramId,
 	testActor,
-	testProvenanceId
+	testProvenanceId,
+	suggestionBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
 	AgentTools,
@@ -316,6 +320,48 @@ const boundToolNames = (): string[] =>
 	Object.values(agentToolCoverage)
 		.flatMap((controller) => Object.values(controller) as AgentToolContractBinding[])
 		.flatMap((binding) => (binding.kind === 'excluded' ? [] : binding.tools));
+
+/**
+ * OpenAI documents the schemas strict function calling accepts — String, Number, Boolean,
+ * Integer, Object, Array, Enum and anyOf — and answers any other schema with an error, before
+ * the model runs. Every tool is sent on every generation, so one keyword outside that subset
+ * would fail every request to such a model.
+ * https://developers.openai.com/api/docs/guides/structured-outputs
+ */
+describe('The tool schemas sent to the model', () => {
+	const unsupported = new Set([
+		'oneOf',
+		'allOf',
+		'not',
+		'if',
+		'then',
+		'else',
+		'dependentRequired',
+		'dependentSchemas'
+	]);
+	/** Every keyword in a JSON Schema, at any depth. Property names are not keywords. */
+	const keywords = (schema: unknown): string[] => {
+		if (Array.isArray(schema)) return schema.flatMap(keywords);
+		if (schema === null || typeof schema !== 'object') return [];
+		return Object.entries(schema).flatMap(([key, value]) => [
+			...(unsupported.has(key) ? [key] : []),
+			...(key === 'properties' || key === '$defs'
+				? Object.values(value ?? {}).flatMap(keywords)
+				: keywords(value))
+		]);
+	};
+
+	it('stay within the documented strict-mode subset', () => {
+		const offending = agentToolsFor('auto_accept', {
+			promoted: agentToolsRegistry('auto_accept', {})
+				.definitions()
+				.map(({ name }) => name)
+		})
+			.filter((tool): tool is FunctionTool => tool.type === 'function')
+			.flatMap((tool) => keywords(tool.parameters).map((keyword) => `${tool.name}: ${keyword}`));
+		expect(offending).toEqual([]);
+	});
+});
 
 describe('Agent tool coverage invariants', () => {
 	it('binds each catalog tool to exactly one controller method', () => {
@@ -872,6 +918,48 @@ describe('Agent tool coverage invariants', () => {
 			})
 		);
 		expect(received).toEqual({ query: 'deployment procedures' });
+	});
+
+	/** Strict model schemas make every field required, so a model fills an id it has none for. */
+	it('treats blank memory proposal identifiers as omitted', async () => {
+		const received: ProposeMemoryChangeInput[] = [];
+		const memory = capabilityDependencies<MemoryController>({
+			propose: async (_actor, input) => {
+				received.push(input);
+				return { suggestion: suggestionBuilder() };
+			}
+		});
+		await directToolFor('auto_accept', 'propose_memory_change', {
+			factory: capabilityDependencies<ControllerFactory>({ memory: () => memory })
+		}).invoke(
+			{} as never,
+			JSON.stringify({
+				scope: 'user',
+				projectId: '',
+				operation: 'add',
+				memoryEntryId: '',
+				content: 'Prefers async updates'
+			})
+		);
+		expect(received).toMatchObject([
+			{ scope: 'user', operation: 'add', content: 'Prefers async updates' }
+		]);
+	});
+
+	it('returns a broken memory proposal rule to the model as a correction', async () => {
+		const result = await directToolFor('auto_accept', 'propose_memory_change').invoke(
+			{} as never,
+			JSON.stringify({
+				scope: 'user',
+				operation: 'add',
+				memoryEntryId: '0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b',
+				content: 'Prefers async updates'
+			})
+		);
+		expect(readToolOutput(result)).toMatchObject({
+			kind: 'failure',
+			failure: { code: 'VALIDATION' }
+		});
 	});
 
 	it('treats blank optional todo filters as omitted', async () => {
