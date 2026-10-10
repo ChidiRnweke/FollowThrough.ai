@@ -23,7 +23,7 @@
 	import { createNoteDraftEditing } from '$lib/factories/notes/draft-editing';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
-	import { askAgent } from '$lib/client/shell/responsive-surfaces';
+	import { chatHandoff } from '$lib/factories/agent/chat-handoff';
 	import { agentActions } from '$lib/components/agent';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { noteActions } from '$lib/factories/notes/actions';
@@ -519,7 +519,7 @@
 	const comparable = $derived(workbench.splitNoteId !== undefined && !onCloseSplit);
 
 	function askAboutNote(): void {
-		askAgent({
+		chatHandoff.ask({
 			prompt: agentActions.note.prompt,
 			noteId: note.id,
 			projectId: view.note.projectId
@@ -527,7 +527,7 @@
 	}
 
 	function askCompare(): void {
-		askAgent({
+		chatHandoff.ask({
 			prompt: agentActions.noteCompare.prompt,
 			noteId: note.id,
 			projectId: view.note.projectId
@@ -541,7 +541,7 @@
 			toast.error('Select some text first.');
 			return;
 		}
-		askAgent({
+		chatHandoff.ask({
 			prompt,
 			selection,
 			noteId: selection.noteId,

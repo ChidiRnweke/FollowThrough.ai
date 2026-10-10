@@ -1,6 +1,6 @@
 import { SvelteMap } from 'svelte/reactivity';
 import type { ConversationImageInput } from '$lib/models/agent';
-import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+import { type ChatSessionKey } from '$lib/models/chat';
 
 /**
  * A picture of what the agent last drew, waiting to ride along with the next message.

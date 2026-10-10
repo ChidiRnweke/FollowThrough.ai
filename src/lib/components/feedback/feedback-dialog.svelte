@@ -5,7 +5,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from 'svelte-sonner';
 	import { page } from '$app/state';
-	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { appContext } from '$lib/factories/agent/app-context';
 	import { submitFeedback } from '$lib/remote/feedback/feedback.remote';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();

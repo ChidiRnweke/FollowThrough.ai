@@ -1,15 +1,8 @@
-import type { ShellContext } from '$lib/models/workspace-views';
-import type { AppContextSnapshotV1, PaneContext, SemanticInteraction } from '$lib/models/workspace';
+import type { AppContextSnapshotV1, PaneContext } from '$lib/models/workspace';
 import type { NoteId } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
-import { workbench } from '../workbench/workbench.svelte';
-import { chatKeyOf, noteIdOf, widgetIdOf } from '../workbench/tab-ref';
-import { workspaceSession } from '$lib/factories/workspace/session';
-
-export function surfaceFor(
-	pathname: string,
-	params: URLSearchParams
-): AppContextSnapshotV1['surface'] {
+import type { ChatContextFacts } from '$lib/models/chat';
+function surfaceFor(pathname: string, params: URLSearchParams): AppContextSnapshotV1['surface'] {
 	const filters: Record<string, string | number | boolean> = {};
 	for (const key of ['status', 'responsibility', 'projectId', 'query', 'page']) {
 		const value = params.get(key);
@@ -28,7 +21,10 @@ export function surfaceFor(
 	// Decided first, and it wins outright: a canvas tab is open, whatever route
 	// the user reached it by. Asking last meant the ladder below assigned a kind
 	// that was then thrown away.
-	const focusedWidget = widgetIdOf(params.get('focus') ?? undefined) !== undefined;
+	const focusedWidget =
+		/^widget:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+			(params.get('focus') ?? '').trim()
+		);
 	if (hasCanvasTab) kind = 'diagram_studio';
 	else if (focusedWidget || parts[0] === 'widgets') kind = 'widget';
 	else if (parts[0] === 'today') kind = 'today';
@@ -52,53 +48,17 @@ export function surfaceFor(
 	};
 }
 
-type PaneGetter = () => PaneContext | undefined;
-
-/** What a mounted chat pane reports about itself. */
-type ChatPaneGetter = () => { conversationId?: string; title: string };
-
-class AppContextStore {
-	private shell?: ShellContext;
-	private pathname = '/';
-	private search = '';
-	private panes = new Map<NoteId, PaneGetter>();
-	/**
-	 * Keyed by chat session. Registered by the pane rather than read from the
-	 * chat registry, because the chat stores already import this module — asking
-	 * them for their titles here would close that loop.
-	 */
-	private chatPanes = new Map<string, ChatPaneGetter>();
-	private interactions: SemanticInteraction[] = [];
-
-	configure(shell: ShellContext, url: URL): void {
-		this.shell = shell;
-		this.pathname = url.pathname;
-		this.search = url.search;
+export interface ChatContextPresentation {
+	surface(pathname: string, params: URLSearchParams): AppContextSnapshotV1['surface'];
+	capture(facts: ChatContextFacts): AppContextSnapshotV1;
+}
+export class ChatContextPresentationService implements ChatContextPresentation {
+	surface(pathname: string, params: URLSearchParams): AppContextSnapshotV1['surface'] {
+		return surfaceFor(pathname, params);
 	}
-
-	registerPane(noteId: NoteId, getter: PaneGetter): () => void {
-		this.panes.set(noteId, getter);
-		return () => this.panes.delete(noteId);
-	}
-
-	registerChatPane(sessionKey: string, getter: ChatPaneGetter): () => void {
-		this.chatPanes.set(sessionKey, getter);
-		return () => this.chatPanes.delete(sessionKey);
-	}
-
-	recordFocus(noteId: NoteId): void {
-		const interaction: SemanticInteraction = {
-			kind: 'focus',
-			resourceKind: 'note',
-			resourceId: noteId,
-			occurredAt: new Date().toISOString()
-		};
-		this.interactions = [interaction, ...this.interactions].slice(0, 5);
-	}
-
-	capture(): AppContextSnapshotV1 {
-		const now = new Date();
-		const surface = surfaceFor(this.pathname, new URLSearchParams(this.search));
+	capture(facts: ChatContextFacts): AppContextSnapshotV1 {
+		const { workbench } = facts;
+		const surface = surfaceFor(facts.pathname, new URLSearchParams(facts.search));
 		// Derived from the workbench itself, not the surface kind: a focused chat
 		// tab puts the URL on `/chats/*`, whose surface is `chat`, and gating on
 		// the kind would drop the whole workbench block — silently starving the
@@ -114,16 +74,14 @@ class AppContextStore {
 			.filter((id): id is NoteId => Boolean(id))
 			.slice(0, 2);
 		const visiblePanes = visibleIds
-			.map((id) => this.panes.get(id)?.())
+			.map((id) => facts.panes.get(id))
 			.filter((pane): pane is PaneContext => Boolean(pane));
-		const openTabs = workbench.openTabs.flatMap((tabId) => {
-			const note = this.shell?.noteTree.find((entry) => entry.id === noteIdOf(tabId));
+		const openTabs = workbench.openNotes.flatMap((noteId) => {
+			const note = facts.shell?.noteTree.find((entry) => entry.id === noteId);
 			return note ? [{ id: note.id, title: note.title, projectId: note.projectId }] : [];
 		});
-		const openChatTabs = workbench.openTabs.flatMap((tabId) => {
-			const sessionKey = chatKeyOf(tabId);
-			if (sessionKey === undefined) return [];
-			const reported = this.chatPanes.get(sessionKey)?.();
+		const openChatTabs = workbench.openChats.flatMap((sessionKey) => {
+			const reported = facts.chatPanes.get(sessionKey);
 			return [
 				{
 					sessionKey,
@@ -132,28 +90,18 @@ class AppContextStore {
 				}
 			];
 		});
-		const focusedNote = this.shell?.noteTree.find((entry) => entry.id === focusedNoteId);
+		const focusedNote = facts.shell?.noteTree.find((entry) => entry.id === focusedNoteId);
 		// A widget tab, or the widget page, tells the agent which widget `read_widget` should open.
-		const widgetId =
-			widgetIdOf(focusedNoteId) ??
-			(this.pathname.startsWith('/widgets/') ? this.pathname.split('/')[2] : undefined);
-		const focusedWidget = widgetId
-			? workspaceSession.current?.resources.views.widget(widgetId)
-			: undefined;
-		const pathProjectId = this.pathname.startsWith('/projects/')
-			? (this.pathname.split('/')[2] as ProjectId | undefined)
+		const focusedWidget = workbench.focusedWidget;
+		const pathProjectId = facts.pathname.startsWith('/projects/')
+			? (facts.pathname.split('/')[2] as ProjectId | undefined)
 			: undefined;
 		const projectId = focusedNote?.projectId ?? focusedWidget?.projectId ?? pathProjectId;
-		const project = this.shell?.projects.find((entry) => entry.id === projectId);
+		const project = facts.shell?.projects.find((entry) => entry.id === projectId);
 		return {
 			version: 1,
-			capturedAt: now.toISOString(),
-			client: {
-				locale: navigator.language,
-				timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-				localDate: now.toLocaleDateString('en-CA'),
-				layout: matchMedia('(max-width: 767px)').matches ? 'compact' : 'wide'
-			},
+			capturedAt: facts.capturedAt,
+			client: facts.client,
 			surface,
 			...(project ? { currentProject: { id: project.id, name: project.name } } : {}),
 			...(focusedNote
@@ -190,9 +138,7 @@ class AppContextStore {
 						}
 					}
 				: {}),
-			recentInteractions: this.interactions.slice(0, 5)
+			recentInteractions: facts.interactions.slice(0, 5)
 		};
 	}
 }
-
-export const appContext = new AppContextStore();

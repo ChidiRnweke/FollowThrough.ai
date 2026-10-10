@@ -8,7 +8,7 @@
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { editorSelectionRegistry } from '$lib/stores/notes/registries/editor-selection-registry.svelte';
 	import NoteWorkspace from '../../notes/workspace/note-workspace.svelte';
-	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { appContext } from '$lib/factories/agent/app-context';
 
 	let {
 		noteId,

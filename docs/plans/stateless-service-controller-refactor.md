@@ -111,6 +111,50 @@ Keep the worktree and branch while the draft PR is paused. The full original imp
 checklist follows, with unverified items left unchecked. Do not mark the draft ready or remove
 this execution plan until the original completion conditions are met.
 
+## Browser chat lifecycle and context handoff contribution — 2026-10-10
+
+This contribution starts from `5af62eb5` on `refactor/pr336-chat-lifecycle`. It owns browser
+chat sessions and their context/workbench handoff. It does not complete the application-wide
+refactor or make PR #336 ready to merge.
+
+- [x] Separate reactive chat/session ownership from controller-owned hydration, submission,
+      replay, approval, cancellation, reconnect and teardown. Expose readonly session views.
+- [x] Move transcript types and schemas into chat models, external-value readers into client
+      adapters, and transcript/chip/context rules into named stateless service contracts.
+- [x] Move composer draft/context preparation and staged handoffs into controllers. Keep
+      textarea input, focus and scrolling in components. Preserve storage keys and wire formats.
+- [x] Replace mutable registry access with session operations. Preserve session identity,
+      reference counts, saved approvals, transcript ordering and large durable cursors.
+- [x] Invalidate late submission, approval and reconnect results on release or account teardown.
+      Release application chat/context state when the account binding is torn down.
+- [x] Route note actions, docked/full-page chat and the chat/canvas association through the
+      new interfaces. General workbench navigation and persistence remain outside this slice.
+
+Observed validation for this contribution:
+
+- `pnpm lint`, `pnpm check` and `pnpm docs:check`: passed.
+- `pnpm test:unit`: 566 files, 4,443 passed and one existing skip. The existing Svelte
+  `derived_inert` warning remains in the broader suite.
+- `pnpm test:contracts`: 108 files and 522 passed against an isolated Postgres testcontainer.
+- `pnpm test:architecture`: topology, source and test-quality audits passed; Chisel still
+  reports 46 prohibited imports. A fresh check of the unchanged base reports 51. The remaining
+  file/rule pairs are all present on the base. No allowances or baselines were added.
+- `pnpm test:ui`, run separately after the chained architecture check stopped: passed.
+- Authenticated browser: all 16 existing composer layout scenarios passed. Two new handoff
+  scenarios passed at 1,680 px and 1,200 px, using an existing local note and no model calls.
+  They verify a prefilled prompt without starting a run. Run `pnpm test:e2e
+tests/e2e/chat-handoff.e2e.ts` to repeat them with the authenticated setup.
+- The existing selection suite stopped after two timeouts waiting for the editor's
+  “Ask about this” action, before chat invocation. The first timeout was reproduced against
+  unchanged `5af62eb5`. The multiple-passage browser scenario remains unverified; controller
+  tests cover preserved pinned selection and staged handoff consumption.
+
+Browser checks used a temporary configuration on port 5187 so they did not reuse another
+worktree's server. The unchanged-base comparison used port 5188. The dev server also reports
+its existing missing `/offline-shell.html` response. No new content was seeded for these checks.
+Production build and full PWA verification remain part of the parent PR's final acceptance.
+Existing application-wide checklist items remain open unless their complete scope was verified.
+
 ## A. Inventory and regression evidence
 
 Planning baseline: 63 shared-service modules, 191 exported functions, no exported classes;

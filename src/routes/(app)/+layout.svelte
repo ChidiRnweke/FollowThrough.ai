@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { chatPanel } from '$lib/factories/agent/chat-handoff';
 	import { WorkspaceStartup, WorkspaceRouteOutlet } from '$lib/components/shell';
 	import type { RouteReadiness } from '$lib/client/sync/route-access';
 	import type { NoteId } from '$lib/models/notes';
@@ -13,11 +14,11 @@
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
 	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { projectActions } from '$lib/factories/projects/actions';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
-	import { appContext } from '$lib/stores/agent/app-context.svelte';
+	import { appContext } from '$lib/factories/agent/app-context';
 	import { effectiveSidebarWidth } from '$lib/services/workspace/sidebar-width';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
@@ -110,6 +111,9 @@
 			return () => {
 				detachWorkbench();
 				layout.close();
+				chatPanel.reset();
+				chatRegistry.stop();
+				appContext.clear();
 			};
 		});
 	});
@@ -125,7 +129,11 @@
 		// only reads preferences — the checker itself is fetched by the first note
 		// that opens, never on the way to Today or a todo board.
 		proofreading.hydrate();
-		return () => workspaceSession.stop();
+		return () => {
+			chatRegistry.stop();
+			appContext.clear();
+			workspaceSession.stop();
+		};
 	});
 
 	// The URL is canonical for the workbench.  Synchronise store ↔ URL after

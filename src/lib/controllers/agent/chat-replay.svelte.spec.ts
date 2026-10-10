@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { AgentRunId, ConversationId, StoredAgentRunEventRecord } from '$lib/models/agent';
 import { InMemoryRunTransport } from '$lib/testing/agent/fakes/in-memory-run-transport';
 import { InMemoryRunClientStorage } from '$lib/testing/agent/fakes/in-memory-run-client-storage';
-import { ChatStore, entryText } from './chat.svelte';
+import { createChatFixture } from '$lib/testing/agent/chat-session';
+import { chatPresentation } from '$lib/factories/agent/presentation';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { DateTime } from '$lib/models/workspace';
 
@@ -24,7 +25,7 @@ const setup = async () => {
 		latestCursor: '0'
 	});
 	const storage = new InMemoryRunClientStorage();
-	const store = new ChatStore('replay-test', transport, storage);
+	const { chat: store } = createChatFixture('replay-test', transport, storage);
 	await store.send({ prompt: 'Read saved activity' });
 	return { store, storage, transport };
 };
@@ -77,7 +78,10 @@ describe('chat replay checkpoints', () => {
 		if (failed.kind !== 'failure') throw new Error('Storage failure was not exercised');
 		storage.writable = true;
 		await transport.deliver(frame);
-		expect({ cursor: store.cursor, text: entryText(store.entries.at(-1)!) }).toEqual({
+		expect({
+			cursor: store.cursor,
+			text: chatPresentation.entryText(store.entries.at(-1)!)
+		}).toEqual({
 			cursor: '1',
 			text: 'Saved once.'
 		});

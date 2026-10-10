@@ -1,7 +1,7 @@
 import type { ShellContext } from '$lib/models/workspace-views';
 import { describe, expect, it } from 'vitest';
 import { TOOL_DESCRIPTIONS } from '$lib/models/agent/tool-catalog';
-import type { ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { type ChatToolActivity } from '$lib/models/chat';
 import type { ToolActivityOverrides } from '$lib/testing/agent/tool-activity';
 import type { NoteSummary } from '$lib/models/notes';
 

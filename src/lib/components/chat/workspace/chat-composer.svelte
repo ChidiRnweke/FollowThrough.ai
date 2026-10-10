@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { AgentExecutionMode, AgentModel, ConversationImageInput } from '$lib/models/agent';
-	import type { ContextChip, SelectionChip } from '$lib/stores/agent/chat.svelte';
+	import { type ContextChip, type SelectionChip } from '$lib/models/chat';
 	import type { ResourceChip } from '$lib/models/chat';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';

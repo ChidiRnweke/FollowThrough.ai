@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { persistedSessionItemSchema } from '$lib/models/agent';
 import { readAgentEvent } from '$lib/server/repositories/agent/stored-values';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
-import { readJournalledTool } from '$lib/stores/agent/chat-tools';
+import { readJournalledTool } from '$lib/client/agent/chat-tool-reader';
 import { provenanceSchema } from '$lib/models/provenance';
 import { suggestionPayloadSchemas, type SuggestionKind } from '$lib/models/suggestions';
 

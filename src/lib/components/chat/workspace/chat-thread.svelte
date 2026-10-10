@@ -16,8 +16,8 @@
 		FtWarning as Warning
 	} from '$lib/components/icons';
 	import { Tip } from '$lib/components/ui/tooltip';
-	import type { ChatEntry } from '$lib/stores/agent/chat.svelte';
-	import { entryText, entryTools } from '$lib/stores/agent/chat.svelte';
+	import { type ChatEntry } from '$lib/models/chat';
+	import { chatPresentation } from '$lib/factories/agent/presentation';
 	import { SuggestionCard } from '$lib/components/suggestions';
 	import { AgentContextBar } from '$lib/components/agent';
 	import ErrorBoundary from '$lib/components/layout/error-boundary.svelte';
@@ -293,7 +293,7 @@
 									     hangs off the last group rather than repeating per group. -->
 										<TurnActivity
 											tools={group.tools}
-											turnTools={entryTools(entry)}
+											turnTools={chatPresentation.entryTools(entry)}
 											summarise={index === lastActivityIndex(entry)}
 											{shell}
 										/>
@@ -361,7 +361,7 @@
 									</div>
 								{/if}
 							</div>
-							{#if editingId !== entry.id && entryText(entry)}
+							{#if editingId !== entry.id && chatPresentation.entryText(entry)}
 								<!-- The actions belong to the turn, so they sit on the turn's own side. -->
 								<div
 									class="mt-2 flex items-center gap-1 opacity-0 transition-opacity duration-(--duration-micro) group-hover/turn:opacity-100 focus-within:opacity-100 {isUser

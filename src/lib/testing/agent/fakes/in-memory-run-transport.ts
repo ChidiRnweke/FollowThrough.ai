@@ -1,4 +1,5 @@
-import type { AgentRunTransport } from '$lib/client/agent/runs/contracts';
+import { submitAgentRunInputSchema } from '$lib/models/agent';
+import type { AgentRunTransport } from '$lib/controllers/agent/run-transport';
 import type {
 	AgentRunReceipt,
 	AgentRunSnapshot,
@@ -12,7 +13,7 @@ export class InMemoryRunTransport implements AgentRunTransport {
 	private connection?: Parameters<AgentRunTransport['openEvents']>[0];
 	constructor(readonly receipt: AgentRunReceipt) {}
 	async submit(input: Parameters<AgentRunTransport['submit']>[0]): Promise<AgentRunReceipt> {
-		this.requests.set(input.requestId, structuredClone(input));
+		this.requests.set(input.requestId, submitAgentRunInputSchema.parse(input));
 		return this.receipt;
 	}
 	async get(): Promise<AgentRunSnapshot> {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { surfaceFor } from './app-context.svelte';
+import { ChatContextPresentationService } from '$lib/services/chat/app-context';
+const presentation = new ChatContextPresentationService();
 
 describe('application surface mapping', () => {
 	it.each([
@@ -19,12 +20,12 @@ describe('application surface mapping', () => {
 		['/profile', 'profile'],
 		['/settings', 'settings']
 	])('maps %s to %s', (path, expected) => {
-		expect(surfaceFor(path, new URLSearchParams()).kind).toBe(expected);
+		expect(presentation.surface(path, new URLSearchParams()).kind).toBe(expected);
 	});
 
 	it('recognises the studio when a draft canvas is split beside a chat', () => {
 		expect(
-			surfaceFor(
+			presentation.surface(
 				'/chats/new',
 				new URLSearchParams('tabs=chat:a,draft:a&focus=chat:a&split=draft:a')
 			).kind
@@ -33,14 +34,16 @@ describe('application surface mapping', () => {
 
 	it('recognises the studio when a saved diagram is a workbench tab', () => {
 		expect(
-			surfaceFor('/notes/n1', new URLSearchParams('tabs=n1,diagram:d1&focus=n1&split=diagram:d1'))
-				.kind
+			presentation.surface(
+				'/notes/n1',
+				new URLSearchParams('tabs=n1,diagram:d1&focus=n1&split=diagram:d1')
+			).kind
 		).toBe('diagram_studio');
 	});
 
 	it('recognises a focused widget tab', () => {
 		expect(
-			surfaceFor(
+			presentation.surface(
 				'/widgets/77777777-7777-4777-8777-777777777777',
 				new URLSearchParams(
 					'tabs=n1,widget:77777777-7777-4777-8777-777777777777&focus=widget:77777777-7777-4777-8777-777777777777'
@@ -50,17 +53,19 @@ describe('application surface mapping', () => {
 	});
 
 	it('recognises the standalone widget page', () => {
-		expect(surfaceFor('/widgets/w1', new URLSearchParams()).kind).toBe('widget');
+		expect(presentation.surface('/widgets/w1', new URLSearchParams()).kind).toBe('widget');
 	});
 
 	it('leaves an ordinary note workbench alone', () => {
-		expect(surfaceFor('/notes/n1', new URLSearchParams('tabs=n1,n2&focus=n1')).kind).toBe(
+		expect(presentation.surface('/notes/n1', new URLSearchParams('tabs=n1,n2&focus=n1')).kind).toBe(
 			'note_workbench'
 		);
 	});
 
 	it('drops query parameters outside the filter allowlist', () => {
-		expect(surfaceFor('/todos', new URLSearchParams('secret=x&status=open')).filters).toEqual({
+		expect(
+			presentation.surface('/todos', new URLSearchParams('secret=x&status=open')).filters
+		).toEqual({
 			status: 'open'
 		});
 	});

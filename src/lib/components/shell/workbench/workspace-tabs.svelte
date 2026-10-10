@@ -20,7 +20,7 @@
 		writeTabDrag
 	} from '$lib/client/workbench/tab-drag';
 	import { isChatTab, noteIdOf, parseTabId, type TabId } from '$lib/stores/workbench/tab-ref';
-	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
+	import { chatRegistry } from '$lib/factories/agent/chat';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { Conversation } from '$lib/models/agent';
 	import { cubicOut } from 'svelte/easing';

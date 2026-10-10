@@ -4,7 +4,8 @@ import { agentPayloadItems } from '$lib/services/agent/payload';
 import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import type { EntityKind, EntityRef } from '$lib/models/tool-display';
 
-import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { type ChatToolActivity } from '$lib/models/chat';
 import { entityFrom } from './tool-entities';
 import { friendlyToolLabel } from './tool-labels';
 import type { ToolDisclosure } from './tool-disclosure';
@@ -60,7 +61,7 @@ export function toolCollection(
 	kind: EntityKind,
 	shell?: ShellContext
 ): ToolDisclosure {
-	const output = toolOutput(tool);
+	const output = chatPresentation.toolOutput(tool);
 	if (output === undefined) return { kind: 'none' };
 	let entities: readonly EntityRef[];
 	if (

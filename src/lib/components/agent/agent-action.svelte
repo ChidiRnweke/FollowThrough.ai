@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Tip } from '$lib/components/ui/tooltip';
 	import { FtArrowRight as ArrowRight } from '$lib/components/icons';
-	import { askAgent } from '$lib/client/shell/responsive-surfaces';
+	import { chatHandoff } from '$lib/factories/agent/chat-handoff';
 	import type { AgentActionSpec } from './agent-actions';
 
 	let {
@@ -49,7 +49,7 @@
 			onclick();
 			return;
 		}
-		askAgent(
+		chatHandoff.ask(
 			{ prompt, ...context },
 			event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
 		);

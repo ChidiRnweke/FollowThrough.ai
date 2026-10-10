@@ -4,7 +4,8 @@ import type { EntityRef } from '$lib/models/tool-display';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { type AgentPayload } from '$lib/models/agent/payload';
 import { isAgentPayloadObject } from '$lib/services/agent/payload';
-import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { type ChatToolActivity } from '$lib/models/chat';
 import { mechanismTools, type MechanismTool } from './rendered-tools';
 import { completedToolLabel, friendlyToolLabel, subjectVerb } from './tool-labels';
 import { explainToolFailure } from './tool-result';
@@ -278,7 +279,7 @@ const outcomeOf = (tool: ChatToolActivity): PassOutcome => {
 	if (tool.status === 'rejected') return 'rejected';
 	// Not `status === 'failed'`: a call can carry its failure in its result, which is how a
 	// no-op `edit_note` came to be summarised as `edited`.
-	return toolFailure(tool) !== undefined ? 'failed' : 'done';
+	return chatPresentation.toolFailure(tool) !== undefined ? 'failed' : 'done';
 };
 
 /**
@@ -449,7 +450,7 @@ function callEntries(
 	});
 
 	if (disclosure.kind === 'failure') {
-		const raw = toolFailure(tool) ?? 'The step did not complete.';
+		const raw = chatPresentation.toolFailure(tool) ?? 'The step did not complete.';
 		const named = toolEntity(tool, shell);
 		// A call that named nothing still failed, and the reader is owed a row for it. Named by
 		// the tool, which is the only identity it has — printed as `[]` this was the one kind of

@@ -4,7 +4,7 @@
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { AgentPreferenceValues } from '$lib/models/agent';
 
-	import { legacyNoteReview, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+	import { legacyNoteReview, type ChatToolActivity } from '$lib/models/chat';
 	import { createDiagramReviews } from '$lib/factories/diagrams/reviews';
 	const diagramReviews = createDiagramReviews();
 	import { Button } from '$lib/components/ui/button';

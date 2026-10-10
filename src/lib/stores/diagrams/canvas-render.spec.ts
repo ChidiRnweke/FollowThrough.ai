@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ConversationImageInput } from '$lib/models/agent';
-import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+import { type ChatSessionKey } from '$lib/models/chat';
 import { forgetCanvasRender, rememberCanvasRender, takeCanvasRender } from './canvas-render.svelte';
 
 const session = (name: string): ChatSessionKey => name as ChatSessionKey;

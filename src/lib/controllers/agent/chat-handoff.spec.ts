@@ -1,6 +1,7 @@
+import type { NoteId } from '$lib/models/notes';
 import { describe, expect, it } from 'vitest';
-import type { ChatHandoff } from '$lib/stores/agent/chat-handoff';
-import { createAskAgent, type AskAgentDependencies } from './responsive-surfaces';
+import { type ChatHandoff } from '$lib/models/chat';
+import { ChatHandoffs, type AskAgentDependencies } from '$lib/controllers/agent/chat-handoff';
 
 class FakeAskAgentSurface implements AskAgentDependencies {
 	fits = true;
@@ -29,7 +30,7 @@ const request = { prompt: 'Connect these notes' };
 describe('agent invocation surface', () => {
 	it('opens chat beside content when the docked panel fits', () => {
 		const surface = new FakeAskAgentSurface();
-		createAskAgent(surface)(request);
+		new ChatHandoffs(surface).ask(request);
 		expect({ opened: surface.opened, staged: surface.staged }).toEqual({
 			opened: true,
 			staged: request
@@ -39,7 +40,7 @@ describe('agent invocation surface', () => {
 	it('carries the prompt when chat needs a full-page navigation', () => {
 		const surface = new FakeAskAgentSurface();
 		surface.fits = false;
-		createAskAgent(surface)(request);
+		new ChatHandoffs(surface).ask(request);
 		expect({ carried: surface.carried, href: surface.href }).toEqual({
 			carried: request,
 			href: '/chats/new'
@@ -48,8 +49,14 @@ describe('agent invocation surface', () => {
 
 	it('preserves selection context for the eventual send', () => {
 		const surface = new FakeAskAgentSurface();
-		const selection = { noteId: 'note-1', text: 'a promise', from: 0, to: 9 };
-		createAskAgent(surface)({ ...request, selection } as ChatHandoff);
+		const selection = {
+			noteId: 'note-1' as NoteId,
+			revision: 0,
+			text: 'a promise',
+			from: 0,
+			to: 9
+		};
+		new ChatHandoffs(surface).ask({ ...request, selection });
 		expect(surface.staged?.selection).toEqual(selection);
 	});
 });

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { ChatStore } from './chat.svelte';
+import { createChatFixture } from '$lib/testing/agent/chat-session';
 import { InMemoryRunTransport } from '$lib/testing/agent/fakes/in-memory-run-transport';
 import { InMemoryRunClientStorage } from '$lib/testing/agent/fakes/in-memory-run-client-storage';
 import { testNoteId, testConversationId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -12,7 +12,11 @@ it('requests the selected skill by identity without selecting same-named skills'
 		status: 'queued',
 		latestCursor: '0'
 	});
-	const store = new ChatStore('mention-identity-test', transport, new InMemoryRunClientStorage());
+	const { chat: store } = createChatFixture(
+		'mention-identity-test',
+		transport,
+		new InMemoryRunClientStorage()
+	);
 	store.addChip({ kind: 'skill', id: testNoteId(7), name: 'Reviewer' });
 	await store.send({ prompt: 'Review this' });
 	const [request] = transport.requests.values();

@@ -1,7 +1,8 @@
 import type { ShellContext } from '$lib/models/workspace-views';
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 
-import { toolFailure, toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
+import { chatPresentation } from '$lib/factories/agent/presentation';
+import { type ChatToolActivity } from '$lib/models/chat';
 import { type AgentPayloadObject } from '$lib/models/agent/payload';
 import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-approval-fields';
@@ -59,7 +60,7 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 				? noteIdFromPath(path)
 				: undefined;
 
-	const failure = toolFailure(tool);
+	const failure = chatPresentation.toolFailure(tool);
 	const parts = (label: string): ToolStatusParts => ({
 		label,
 		...(subject ? { subject } : {}),
@@ -79,7 +80,7 @@ export function toolStatusParts(tool: ChatToolActivity, shell?: ShellContext): T
 			noteBodyTools.has(tool.name) ? 'Note was not saved' : `${friendlyToolLabel(tool.name)} failed`
 		);
 	if (tool.status === 'succeeded') {
-		const output = toolOutput(tool);
+		const output = chatPresentation.toolOutput(tool);
 		if (
 			tool.name === 'propose_memory_change' &&
 			output !== undefined &&
@@ -151,7 +152,7 @@ export const approvalConsequence = (name: string): string | undefined =>
  * failure, otherwise the arguments the tool actually ran with.
  */
 export function toolDetailLines(tool: ChatToolActivity): string[] {
-	const failure = toolFailure(tool);
+	const failure = chatPresentation.toolFailure(tool);
 	if (failure) return [failure];
 	const summaries = scalarSummaries(tool.arguments);
 	if (summaries.length > 0) return summaries;

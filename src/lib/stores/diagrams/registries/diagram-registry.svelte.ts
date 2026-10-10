@@ -1,6 +1,6 @@
 import type { ProjectId } from '$lib/models/projects';
 import { SvelteMap } from 'svelte/reactivity';
-import type { ChatSessionKey } from '$lib/stores/agent/chat.svelte';
+import { type ChatSessionKey } from '$lib/models/chat';
 
 /**
  * The project a studio draft belongs to, until it is kept.
