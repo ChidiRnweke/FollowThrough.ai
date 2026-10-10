@@ -1863,3 +1863,67 @@ Observed verification:
   Same-account session, account, pane, document replacement and editor-disposal races retain
   recovery without publishing late results. The final focused suite also verifies repeated
   receipts settle all waiting callers through the controller, while the store remains passive.
+
+### Browser attachment independence — implemented on #357
+
+This slice starts from #357 at `b5f22d9abca1476db5a0a615115809c2dba822ed` in
+`refactor/pr336-attachment-independence`. ADRs 0007, 0015, 0016, 0017, 0037, 0040
+and 0041 govern operation ownership, attachment lifecycle, browser state and parsing.
+The #345 inventory was checked against current code and open PRs. Coordination with
+[#348](https://github.com/ChidiRnweke/FollowThrough.ai/pull/348#issuecomment-6102647038)
+records the shared contracts. #356 concerns server pulls; #358 and #360 concern
+server search/completion. Their production changes do not overlap this slice.
+
+- [x] Remove attachment delegation to the workspace session, its preparation, views,
+      and synchronization controllers. Factories construct raw ports, pure services,
+      passive state and existing capability registries. No controller callback or
+      controller-backed adapter replaces the removed dependency.
+- [x] Let `Attachments` own local preparation, repository observation, attachment
+      projection and incremental metadata pulls. Share pure presentation and optimistic
+      projection rules. Reuse raw cache transactions, merge rules and the existing
+      in-flight cache pull slot. A mutation waits for an older pull, then obtains a
+      subsequent pass. Atomic commits preserve newer checkpoints and record versions.
+- [x] Reuse existing account resource identity, session generation, editor identity,
+      document generation and description checkpoints. Late account/session results
+      cannot publish state or open downloads. Replaced editors cannot receive completed
+      image URLs; replaced descriptions cannot receive screenshot links.
+- [x] Preserve reservation → transfer → completion ordering, independent concurrent
+      reservations, signed downloads, processing retries and protected removal.
+      Keep stable inline/screenshot content URLs. Report preparation and refresh errors
+      explicitly. Keep parsing in the existing storage/transport boundaries.
+- [x] Preserve listing, retry and removal in authenticated seeded journeys. Fix the
+      reproduced file-picker error in the existing Input primitive: file inputs bind
+      files, without writing their nonempty value back. Keep primitive enforcement intact.
+- [x] Add typed deferred fakes for phase failures/retries, concurrent uploads/pulls,
+      atomic failure, account/session races and editor replacement. Add three local
+      authenticated E2E cases with scenario-scoped cleanup.
+
+Server processing, general workspace synchronization, exports and editor internals
+remain outside this slice. The editor binding only exposes its existing document generation.
+
+Measured with unchanged checkers against the exact base:
+
+| Check                          | Before | After | New findings                          |
+| ------------------------------ | -----: | ----: | ------------------------------------- |
+| Global controller-import audit |     59 |    58 | None                                  |
+| Chisel prohibited imports      |     42 |    42 | None                                  |
+| #345 semantic checker          |    762 |   762 | No new file/rule/message combinations |
+| #350 strengthened checker      |   1283 |  1275 | No new file/rule/message combinations |
+
+These counts supplement source review; they are not new baselines or suppressions.
+Required architecture still fails on inherited findings. This slice does not complete
+#336 and is not ready to merge while those required checks fail.
+
+Observed validation includes lint, type checking, source/test-quality/UI audits,
+the full unit and browser suites, 44 focused attachment tests, 17 selected isolated
+attachment database contracts, and three authenticated E2E journeys. Docs checking
+retains one existing hint and TypeDoc entry-point warnings. Browser output retains
+existing `derived_inert` and rasterization warnings. Full suite counts and CI status
+are recorded in the stacked PR.
+
+Baseline listing and retry passed. Baseline removal passed after supplying the missing
+local table from the existing migration. Baseline reservation failure exposed the
+file-input error described above. All final journeys pass. The
+[matched evidence report](../pr-evidence/pr336-attachment-independence/README.md)
+records setup and limits. Real object-storage transfer, live model processing,
+production builds and full PWA verification were not run for this slice.

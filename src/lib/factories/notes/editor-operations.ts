@@ -15,6 +15,7 @@ export interface NoteEditorBinding {
 	readonly lifecycle: NoteEditorLifecycle;
 	readonly view: NoteEditorView;
 	readonly holdingSelection: boolean;
+	readonly documentGeneration: number;
 }
 export function createNoteEditorOperations(
 	editor: Editor,
@@ -36,6 +37,9 @@ export function createNoteEditorOperations(
 		operations: controller,
 		lifecycle: controller,
 		view: state.view,
+		get documentGeneration() {
+			return state.documentGeneration;
+		},
 		get holdingSelection() {
 			return state.holdingSelection;
 		}

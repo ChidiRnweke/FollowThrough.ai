@@ -384,10 +384,28 @@
 			// content endpoint (a 302 to a fresh presigned URL), never the expiring
 			// upload URL itself.
 			onFileUpload: async (file) => {
+				const mounted = binding;
+				const generation = mounted?.documentGeneration;
+				const originalNote = noteId;
+				const session = attachmentsController.sessionGeneration;
+				const current = () =>
+					mounted !== undefined &&
+					mounted.view.acceptsChanges &&
+					mounted.documentGeneration === generation &&
+					noteId === originalNote &&
+					attachmentsController.sessionGeneration === session;
+				if (!current()) throw new Error('The image editor is no longer available.');
 				try {
-					return await attachmentsController.uploadInline(noteId, file);
+					const url = await attachmentsController.uploadInline(
+						originalNote,
+						file,
+						mounted?.operations.identity
+					);
+					if (!current()) throw new Error('The image editor changed during the upload.');
+					return url;
 				} catch (error) {
-					toast.error(error instanceof Error ? error.message : 'Image upload failed');
+					if (current())
+						toast.error(error instanceof Error ? error.message : 'Image upload failed');
 					throw error;
 				}
 			},

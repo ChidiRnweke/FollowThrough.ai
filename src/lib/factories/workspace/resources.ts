@@ -1,3 +1,4 @@
+import { AttachmentPresentationService } from '$lib/services/attachments/presentation';
 import { CatalogWidgetCandidateReader } from '$lib/adapters/widgets/candidate-reader';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
@@ -71,7 +72,8 @@ export const assembleWorkspaceResources = (
 			new MemoryPresentationService(),
 			new ProjectTreePresentationService(),
 			new NotePresentationService(),
-			new NoteSectionNumberingService()
+			new NoteSectionNumberingService(),
+			new AttachmentPresentationService()
 		),
 		{
 			view: <K extends WorkspaceResourceType>(

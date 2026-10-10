@@ -1,3 +1,4 @@
+import type { AttachmentPresentation } from '$lib/services/attachments/presentation';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-views';
 import type { Project } from '$lib/models/projects';
@@ -100,7 +101,8 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly memoryPresentation: IMemoryPresentationService,
 		private readonly projectPresentation: ProjectTreePresentation,
 		private readonly notePresentation: NotePresentation,
-		private readonly sections: NoteSectionNumbering
+		private readonly sections: NoteSectionNumbering,
+		private readonly attachmentPresentation: AttachmentPresentation
 	) {}
 	private get records() {
 		return this.state.records;
@@ -253,23 +255,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		);
 	}
 	attachments(owner: { kind: 'project' | 'note'; id: string }): readonly AttachmentView[] {
-		return this.all('attachments')
-			.filter(
-				(attachment) =>
-					this.isActiveProject(attachment.projectId) &&
-					(owner.kind === 'project'
-						? attachment.projectId === owner.id && !attachment.noteId
-						: attachment.noteId === owner.id)
-			)
-			.flatMap((attachment) => {
-				const version = attachment.currentVersionId
-					? this.get('attachment_versions', attachment.currentVersionId)
-					: undefined;
-				return version
-					? [{ attachment: { ...attachment, currentVersionId: version.id }, version }]
-					: [];
-			})
-			.sort((a, b) => a.attachment.path.localeCompare(b.attachment.path));
+		return this.attachmentPresentation.list(owner, this.records.values());
 	}
 
 	/**

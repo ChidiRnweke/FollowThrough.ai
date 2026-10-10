@@ -307,3 +307,10 @@ export interface NoteActionRunState {
 	takeStream(runId: AgentRunId): NoteActionEventStream | undefined;
 	close(): readonly NoteActionEventStream[];
 }
+
+/** Existing account resource identity, exposed without controller operations. */
+export interface WorkspaceResourceBinding {
+	readonly accountId: string;
+	readonly generation: number;
+	readonly resourceKey: object;
+}

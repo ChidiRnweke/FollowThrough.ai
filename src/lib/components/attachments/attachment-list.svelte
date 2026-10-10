@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { attachmentsController } from '$lib/factories/attachments/capability';
-	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import { Input } from '$lib/components/ui/input';
 	import type { AttachmentView } from '$lib/models/attachments';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
@@ -19,48 +20,74 @@
 	}: { owner: { kind: 'project' | 'note'; id: string }; heroEmpty?: boolean } = $props();
 
 	let busy = $state(false);
+	let live = false;
 	let removeTarget = $state<AttachmentView | undefined>(undefined);
 	let blockedByNote = $state<{ id: string; title: string } | undefined>(undefined);
 	let removeOpen = $state(false);
 
+	const interaction = $derived(
+		`${attachmentsController.sessionGeneration}:${owner.kind}:${owner.id}`
+	);
 	const items = $derived(attachmentsController.list(owner));
 	let loadError = $state<string | null>(null);
 	$effect(() => {
-		if (!attachmentsController.available) return;
-		void attachmentsController.prepare().catch((error) => {
-			loadError = error instanceof Error ? error.message : 'Could not load attachments';
-			return { kind: 'failure', message: loadError };
+		const generation = attachmentsController.sessionGeneration;
+		live = true;
+		void interaction;
+		busy = false;
+		removeTarget = undefined;
+		blockedByNote = undefined;
+		removeOpen = false;
+		loadError = null;
+		if (!attachmentsController.available)
+			return () => {
+				live = false;
+			};
+		let active = true;
+		void untrack(() => attachmentsController.prepare()).catch((error) => {
+			const message = error instanceof Error ? error.message : 'Could not load attachments';
+			if (active && generation === attachmentsController.sessionGeneration) loadError = message;
+			return { kind: 'failure', message };
 		});
+		return () => {
+			active = false;
+			live = false;
+		};
 	});
 
 	async function upload(file: File): Promise<void> {
+		if (busy) return;
+		const started = interaction;
 		busy = true;
 		try {
 			await attachmentsController.upload(owner, file);
-			toast.success('Attachment queued for processing');
+			if (live && started === interaction) toast.success('Attachment queued for processing');
 			// audit-allow: silent-catch — the upload remains in place for retry and the failure is shown to the user.
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Upload failed');
+			if (live && started === interaction)
+				toast.error(error instanceof Error ? error.message : 'Upload failed');
 		} finally {
-			busy = false;
+			if (live && started === interaction) busy = false;
 		}
 	}
 
 	async function download(attachmentId: string): Promise<void> {
+		const started = interaction;
 		try {
 			await attachmentsController.download(attachmentId);
 			// audit-allow: silent-catch — the attachment action failure is reported in a toast.
 		} catch {
-			toast.error('The attachment action failed');
+			if (live && started === interaction) toast.error('The attachment action failed');
 		}
 	}
 
 	async function retry(attachmentId: string): Promise<void> {
+		const started = interaction;
 		try {
 			await attachmentsController.retry(attachmentId);
 			// audit-allow: silent-catch — retry failure is reported while the failed attachment remains retryable.
 		} catch {
-			toast.error('The attachment action failed');
+			if (live && started === interaction) toast.error('The attachment action failed');
 		}
 	}
 
@@ -72,10 +99,13 @@
 
 	async function confirmRemove(): Promise<void> {
 		if (!removeTarget) return;
-		const result = await remove(removeTarget.attachment.id);
-		if (!result) return;
+		const target = removeTarget;
+		const started = interaction;
+		const result = await remove(target.attachment.id);
+		if (!live || started !== interaction || removeTarget !== target || !result) return;
 		if (result.kind === 'referenced-by-note') {
 			blockedByNote = result.note;
+			removeOpen = true;
 			return;
 		}
 		removeOpen = false;
@@ -83,12 +113,14 @@
 	}
 
 	async function remove(attachmentId: string) {
+		const started = interaction;
 		try {
 			const result = await attachmentsController.remove(attachmentId);
 			return result;
 			// audit-allow: silent-catch — removal failure is reported and the attachment stays in the list.
 		} catch (error) {
-			toast.error(userFacingMessage(error, 'The attachment could not be removed.'));
+			if (live && started === interaction)
+				toast.error(userFacingMessage(error, 'The attachment could not be removed.'));
 			return undefined;
 		}
 	}
@@ -115,9 +147,26 @@
 <!-- The spacing ladder: a 24px step separates adding files from the files
      themselves, and 8px binds the list's heading to its rows. -->
 <div class="flex flex-col gap-6">
-	{#if loadError}<p role="alert">
-			{loadError}
-		</p>{:else if items.length === 0 && !attachmentsController.ready}<p role="status">
+	{#if loadError || attachmentsController.failure}<p role="alert">
+			{loadError || attachmentsController.failure}
+		</p>
+		<Button
+			variant="outline"
+			onclick={() => {
+				const started = interaction;
+				void attachmentsController
+					.prepare()
+					.then(() => {
+						if (live && started === interaction) loadError = null;
+					})
+					.catch((error) => {
+						const message = error instanceof Error ? error.message : 'Could not load attachments';
+						if (live && started === interaction) loadError = message;
+						return { kind: 'failure', message };
+					});
+			}}>Retry loading attachments</Button
+		>
+	{:else if items.length === 0 && !attachmentsController.ready}<p role="status">
 			Still downloading attachments.
 		</p>
 		{@render uploadButton()}{:else if items.length === 0}
@@ -137,8 +186,23 @@
 	{:else}
 		<div class="flex flex-wrap items-center gap-2">
 			{@render uploadButton()}
-			<Button variant="ghost" size="sm" onclick={() => void attachmentsController.refresh()}
-				>Refresh</Button
+			<Button
+				variant="ghost"
+				size="sm"
+				onclick={() => {
+					const generation = attachmentsController.sessionGeneration;
+					void attachmentsController
+						.refresh()
+						.then(() => {
+							if (generation === attachmentsController.sessionGeneration) loadError = null;
+						})
+						.catch((error) => {
+							const message =
+								error instanceof Error ? error.message : 'Could not refresh attachments';
+							if (generation === attachmentsController.sessionGeneration) toast.error(message);
+							return { kind: 'failure', message };
+						});
+				}}>Refresh</Button
 			>
 		</div>
 		<section class="flex flex-col gap-2">

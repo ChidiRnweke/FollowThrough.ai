@@ -1,3 +1,4 @@
+import { AttachmentPresentationService } from '$lib/services/attachments/presentation';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NotePresentationService } from '$lib/services/notes/presentation';
@@ -17,5 +18,6 @@ export const createWorkspaceViews = (
 		new MemoryPresentationService(),
 		new ProjectTreePresentationService(),
 		new NotePresentationService(),
-		new NoteSectionNumberingService()
+		new NoteSectionNumberingService(),
+		new AttachmentPresentationService()
 	);

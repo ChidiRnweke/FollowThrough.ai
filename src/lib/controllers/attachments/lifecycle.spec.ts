@@ -1,16 +1,17 @@
 import { expect, it } from 'vitest';
 import { attachmentActionsFixture } from '$lib/testing/attachments/fixtures/browser-actions';
-import { InMemoryAttachmentSession } from '$lib/testing/attachments/fakes/browser-actions';
 import { testProjectId } from '$lib/testing/workspace/fixtures/domain-builders';
 const owner = { kind: 'project' as const, id: testProjectId() };
 const file = new File(['hello'], 'brief.txt', { type: 'text/plain' });
 it('completes a list upload before synchronizing the bound workspace', async () => {
 	const { controller, remote, workspace } = attachmentActionsFixture();
-	const session = workspace.current;
 	await controller.upload(owner, file);
-	expect({ completed: remote.completed, synchronized: workspace.synchronized }).toEqual({
+	expect({
+		completed: remote.completed,
+		cache: await workspace.cache.load(workspace.account.accountId)
+	}).toEqual({
 		completed: [{ uploadId: remote.uploadId }],
-		synchronized: [session]
+		cache: { records: [], cursor: '0', inventoryComplete: true }
 	});
 });
 it.each(['stopped', 'replaced'] as const)(
@@ -24,16 +25,17 @@ it.each(['stopped', 'replaced'] as const)(
 			(error: Error) => error.message
 		);
 		await browser.writeStarted.promise;
-		workspace.current = change === 'stopped' ? null : new InMemoryAttachmentSession();
+		if (change === 'stopped') workspace.stop();
+		else workspace.replace();
 		gate.resolve();
 		expect({
 			outcome: await result,
 			completed: remote.completed,
-			synchronized: workspace.synchronized
+			cache: await workspace.cache.load(workspace.account.accountId)
 		}).toEqual({
 			outcome: 'The workspace account changed during the attachment action.',
 			completed: [],
-			synchronized: []
+			cache: { records: [], cursor: null, inventoryComplete: false }
 		});
 	}
 );
@@ -44,9 +46,9 @@ it('retains a completion failure without reporting a synchronized upload', async
 		() => 'unexpected success',
 		(error: Error) => error.message
 	);
-	expect({ outcome, synchronized: workspace.synchronized }).toEqual({
+	expect({ outcome, cache: await workspace.cache.load(workspace.account.accountId) }).toEqual({
 		outcome: 'Completion unavailable',
-		synchronized: []
+		cache: { records: [], cursor: null, inventoryComplete: false }
 	});
 });
 it('returns the note blocking removal without concealing that result', async () => {

@@ -1,5 +1,8 @@
 import type { WorkspaceSession } from '$lib/controllers/workspace/session';
-import type { WorkspaceBindingState } from '$lib/models/browser-workspace';
+import type {
+	WorkspaceResourceBinding,
+	WorkspaceBindingState
+} from '$lib/models/browser-workspace';
 import type { WorkspaceBootstrap } from '$lib/models/workspace-bootstrap';
 interface SessionRecord extends WorkspaceSession {
 	bootstrap: WorkspaceBootstrap;
@@ -7,6 +10,7 @@ interface SessionRecord extends WorkspaceSession {
 }
 /** Browser account lifetime. Updates never fetch, subscribe, recover storage or run workflows. */
 export interface WorkspaceSessionStateAccess {
+	readonly resourceBinding: WorkspaceResourceBinding | null;
 	readonly accountId: string | null;
 	readonly startupError: string | null;
 	refreshAt(generation: number, bootstrap: WorkspaceBootstrap): void;
@@ -28,6 +32,15 @@ export class WorkspaceSessionStore implements WorkspaceSessionStateAccess, Works
 	private pending: Promise<WorkspaceSession> | null = null;
 	private version = $state(0);
 	private unsubscribe: (() => void) | null = null;
+	get resourceBinding(): WorkspaceResourceBinding | null {
+		return this.value
+			? {
+					accountId: this.value.bootstrap.accountId,
+					generation: this.version,
+					resourceKey: this.value.resources
+				}
+			: null;
+	}
 	get accountId(): string | null {
 		return this.value?.bootstrap.accountId ?? null;
 	}
