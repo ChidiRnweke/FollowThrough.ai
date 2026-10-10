@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { online } from 'svelte/reactivity/window';
 	import type { DateTime } from '$lib/models/workspace';
 	import type { DraftStatus } from '$lib/models/outbox';
 	import { Button } from '$lib/components/ui/button';
@@ -24,7 +25,7 @@
 
 	const explanation = $derived.by(() => {
 		if (status === 'pending')
-			return 'This note is saved on your device but not yet on the server. Retrying now.';
+			return 'This note is saved on your device. It syncs to the server when you are back online.';
 		if (status === 'conflict')
 			return 'This note changed elsewhere since you started editing. Choose which version to keep.';
 		if (status === 'error')
@@ -38,7 +39,9 @@
 <div class="flex items-center" aria-live="polite">
 	{#if status === 'loading'}
 		<span class="text-xs text-muted-foreground">Loading device copy…</span>
-	{:else if status === 'saving'}
+	{:else if status === 'saving' || (status === 'pending' && online.current)}
+		<!-- A queued write while online is about to be sent, not stuck: it reads as
+		     syncing. Only an offline queue waits on the user. -->
 		<span class="flex items-center gap-1 text-xs text-muted-foreground">
 			<Spinner /> Syncing…
 		</span>
