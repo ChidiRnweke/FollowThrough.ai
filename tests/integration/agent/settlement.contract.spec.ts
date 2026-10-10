@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -60,6 +61,7 @@ const setup = async (suffix: string) => {
 	const runner = new InMemoryAgentRunner();
 	runner.events = [{ type: 'text_delta', text: 'Done' }];
 	const controller = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,

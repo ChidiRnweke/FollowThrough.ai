@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { expect, it } from 'vitest';
@@ -9,6 +10,7 @@ import { AgentSettings, type AgentSettingsDependencies } from './controller';
 const setup = () => {
 	const models = new InMemoryModelCatalog();
 	const controller = new AgentSettings(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
 			preferenceEditing: new AgentPreferenceEditingService(),
 			...agentRulesFixture(),

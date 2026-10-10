@@ -8,7 +8,8 @@ import { conflictingScopeWorkspace } from '../fixtures/workspaces/engineering';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
 import { type AgentPayloadObject } from '$lib/models/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+const { isAgentPayloadObject } = new AgentPayloadInspectionService();
 
 /**
  * The agent-level half of tool coverage.

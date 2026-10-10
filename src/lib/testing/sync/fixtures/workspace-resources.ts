@@ -1,4 +1,5 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';

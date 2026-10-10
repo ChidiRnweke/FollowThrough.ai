@@ -1,3 +1,4 @@
+import type { RelationshipCandidates } from '$lib/services/relationships/candidates';
 import { DuplicateNoteActionRequest } from '$lib/errors';
 import type { BacklinkSuggestion } from '$lib/models/suggestions';
 import type { ActorContext } from '$lib/models/identity';
@@ -8,7 +9,7 @@ import type {
 	LinkCandidate
 } from '$lib/models/relationships';
 import type { Note, TextSelection } from '$lib/models/notes';
-import { relatedNoteMatches, relatedNoteCandidate } from '$lib/services/relationships/candidates';
+
 import type { AtomicOperation as TransactionRunner } from '$lib/models/workspace';
 import type { RelationshipClassifier } from '$lib/server/services/relationships/discovery';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
@@ -68,7 +69,10 @@ export interface RelationshipsDependencies {
 }
 
 export class Relationships implements RelationshipsController {
-	constructor(private readonly dependencies: RelationshipsDependencies) {}
+	constructor(
+		private readonly relationshipCandidates: RelationshipCandidates,
+		private readonly dependencies: RelationshipsDependencies
+	) {}
 
 	async startSuggestFromSelection(
 		actor: ActorContext,
@@ -258,7 +262,7 @@ export class Relationships implements RelationshipsController {
 				: candidates;
 		signal?.throwIfAborted();
 		return Promise.all(
-			relatedNoteMatches(note.id, matches).map(async (match) => {
+			this.relationshipCandidates.relatedNoteMatches(note.id, matches).map(async (match) => {
 				const classification =
 					generation.kind === 'rules'
 						? await this.dependencies.relationshipRules.classify(selection.text, match.content)
@@ -269,7 +273,7 @@ export class Relationships implements RelationshipsController {
 								signal
 							);
 				signal?.throwIfAborted();
-				return relatedNoteCandidate(match, classification);
+				return this.relationshipCandidates.relatedNoteCandidate(match, classification);
 			})
 		);
 	}

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -35,6 +36,7 @@ const setup = () => {
 		new InMemoryProvenanceRepository()
 	);
 	const controller = new Todos(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

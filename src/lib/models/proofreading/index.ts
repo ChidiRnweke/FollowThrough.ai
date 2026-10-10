@@ -27,3 +27,13 @@ export interface ProofreadIssue {
 	readonly text: string;
 	readonly suggestions: readonly ProofreadSuggestion[];
 }
+
+/** Narrow values copied from the checker before releasing its native handles. */
+export interface ProofreadCandidate extends Omit<ProofreadIssue, 'suggestions'> {
+	readonly suggestions: readonly {
+		readonly kind: 'replace' | 'remove' | 'insertAfter';
+		readonly text: string;
+	}[];
+}
+export type StoredProofreadingDictionary =
+	{ readonly kind: 'words'; readonly words: readonly string[] } | { readonly kind: 'corrupt' };

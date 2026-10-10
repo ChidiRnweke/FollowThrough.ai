@@ -1,3 +1,4 @@
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { expect, it } from 'vitest';
@@ -19,6 +20,7 @@ it('returns the same memory review view from server and downloaded records', asy
 	reader.suggestions = [suggestion];
 	reader.contexts = [context];
 	const controller = new Suggestions(
+		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),

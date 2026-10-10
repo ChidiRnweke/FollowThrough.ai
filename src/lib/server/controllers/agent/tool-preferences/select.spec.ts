@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryToolCatalog } from '$lib/testing/agent/fakes/in-memory-tool-catalog';
 import type { ResolvedToolCatalogEntry } from '$lib/models/agent/tool-catalog';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
@@ -20,6 +21,7 @@ const catalog: readonly ResolvedToolCatalogEntry[] = [
 
 const controller = () =>
 	new ToolPreferences(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ToolPreferencesDependencies>({
 			preferences: new ToolAccess(new InMemoryToolPreferenceRepository()),
 			catalog: new InMemoryToolCatalog(catalog)

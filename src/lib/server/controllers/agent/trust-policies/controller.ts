@@ -1,4 +1,5 @@
-import { mutationResource } from '$lib/services/workspace/commands';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
 import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	TrustPolicyMutationRequest,
@@ -42,7 +43,7 @@ export class TrustPolicies implements TrustPoliciesController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -64,7 +65,10 @@ export class TrustPolicies implements TrustPoliciesController {
 			throw new ValidationError('The preferences belong to another account');
 		await this.update(actor, input.command);
 	}
-	constructor(private readonly dependencies: TrustPoliciesDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: TrustPoliciesDependencies
+	) {}
 	async list(actor: ActorContext): Promise<GetTrustPoliciesOutput> {
 		return { policies: await this.dependencies.trustPolicyStore.list(actor) };
 	}

@@ -1,5 +1,6 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { AtomicOperation } from '$lib/models/workspace';
 import type {
 	ToolPreferenceMutationRequest,
@@ -68,7 +69,7 @@ export class ToolPreferences implements ToolPreferencesController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -92,7 +93,10 @@ export class ToolPreferences implements ToolPreferencesController {
 		if (command.kind === 'resetProjectToolOverride') await this.clearOverride(actor, command);
 		else await this.setEnabled(actor, command);
 	}
-	constructor(private readonly dependencies: ToolPreferencesDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: ToolPreferencesDependencies
+	) {}
 
 	list(
 		actor: ActorContext,

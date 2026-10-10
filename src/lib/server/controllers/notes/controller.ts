@@ -1,3 +1,7 @@
+import type { BacklinkPresentation } from '$lib/services/relationships/presentation';
+import type { ReferencePresentation } from '$lib/services/references/presentation';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type {
@@ -15,10 +19,7 @@ import type {
 import type { DateTime } from '$lib/models/workspace';
 import type { NotePresentation } from '$lib/services/notes/presentation';
 import { noteEtag } from '$lib/models/notes';
-import { assembleBacklinkView } from '$lib/services/relationships/presentation';
-import { assembleReferenceView } from '$lib/services/references/presentation';
-import { mutationResource } from '$lib/services/workspace/commands';
-import { provenanceOrigin } from '$lib/services/provenance/presentation';
+
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
@@ -511,7 +512,7 @@ export class Notes implements NotesController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input, prepared.current);
@@ -581,7 +582,13 @@ export class Notes implements NotesController {
 		}
 	}
 
-	constructor(private readonly dependencies: NotesDependencies) {}
+	constructor(
+		private readonly backlinkPresentation: BacklinkPresentation,
+		private readonly referencePresentation: ReferencePresentation,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly provenancePresentation: ProvenancePresentation,
+		private readonly dependencies: NotesDependencies
+	) {}
 	async get(actor: ActorContext, input: GetNoteViewInput): Promise<ResolvedNoteView> {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const [note, relationships, references, diagrams, todos, pending] = await Promise.all([
@@ -603,10 +610,10 @@ export class Notes implements NotesController {
 		return this.dependencies.notePresentation.assemble({
 			note,
 			backlinks: backlinkContexts.map(({ relationship, source, target }) =>
-				assembleBacklinkView(relationship, source, target)
+				this.backlinkPresentation.assembleBacklinkView(relationship, source, target)
 			),
 			references: referenceContexts.map(({ reference, anchor }) =>
-				assembleReferenceView(reference, { anchor })
+				this.referencePresentation.assembleReferenceView(reference, { anchor })
 			),
 			diagrams,
 			todos: todoContexts.map((context) =>
@@ -616,7 +623,7 @@ export class Notes implements NotesController {
 				this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
 					note,
 					anchor,
-					origin: provenanceOrigin(provenance)
+					origin: this.provenancePresentation.provenanceOrigin(provenance)
 				})
 			),
 			sectionNumbering

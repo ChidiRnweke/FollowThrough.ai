@@ -2,7 +2,9 @@
 	import { createEditorSession } from '$lib/factories/workspace/editor-session';
 	import { onMount, untrack } from 'svelte';
 	import { diagramEtag } from '$lib/models/diagrams';
-	import { accessMessage } from '$lib/services/sync/state';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { accessMessage } = workspacePresentation;
+
 	import type {
 		DiagramId,
 		DiagramRevisionId,
@@ -10,7 +12,8 @@
 		DrawioDiagram
 	} from '$lib/models/diagrams';
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
-	import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
+	const { workspaceResourceKey } = workspacePresentation;
 
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { workspaceSession } from '$lib/factories/workspace/session';

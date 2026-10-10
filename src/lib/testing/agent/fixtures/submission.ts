@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
 import type { WebResearchSettings } from '$lib/models/agent';
@@ -43,6 +44,7 @@ export const agentSubmissionFixture = (
 	const preferenceRecords = new InMemoryAgentPreferencesRepository();
 	const preferences = new AgentPreferenceCatalog(preferenceRecords);
 	const controller = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			...dependencies,

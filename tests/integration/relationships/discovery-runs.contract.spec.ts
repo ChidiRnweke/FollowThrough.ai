@@ -1,3 +1,5 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { AgentRunStatusService } from '$lib/services/agent/run-status';
@@ -124,6 +126,7 @@ const setup = async (suffix: string) => {
 		suggestionCreator: suggestions.creator
 	};
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,
@@ -135,7 +138,7 @@ const setup = async (suffix: string) => {
 			eventBus: { notify: () => {} }
 		})
 	);
-	const controller = new Relationships(dependencies);
+	const controller = new Relationships(new RelationshipCandidatesService(), dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
@@ -233,7 +236,10 @@ it('rolls back backlink proposals and anchors when the result event fails', asyn
 it('reconstructs a queued related-note search after its submitting controller has been discarded', async () => {
 	const state = await setup('13004');
 	const receipt = await state.prepare();
-	await new Relationships(state.dependencies).recoverQueuedRelatedNoteRuns();
+	await new Relationships(
+		new RelationshipCandidatesService(),
+		state.dependencies
+	).recoverQueuedRelatedNoteRuns();
 	await state.finished(receipt.runId);
 	expect(
 		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>

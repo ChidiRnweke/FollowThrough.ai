@@ -7,7 +7,9 @@
 	import type { NoteView } from '$lib/models/workspace-views';
 
 	import { createEditorSession } from '$lib/factories/workspace/editor-session';
-	import { noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { noteHasUnpublishedChanges } = workspacePresentation;
+
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -34,7 +36,7 @@
 	import type { PerNoteEditorSlot } from '../editor-context';
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
 	import { suggestionActions } from '$lib/stores/suggestions/actions.svelte';
-	import type { EditorSelectionStore } from '$lib/stores/notes/editor-selection.svelte';
+	import type { EditorSelectionState } from '$lib/stores/notes/editor-selection.svelte';
 	import BacklinkChip from '../backlink-chip.svelte';
 	import NoteEditor, { type NoteAiAction } from '../note-editor.svelte';
 	import NoteOutlineRail from '../note-outline-rail.svelte';
@@ -59,7 +61,7 @@
 		view: NoteView;
 		shell: ShellContext;
 		draft: WorkspaceDraftController<'notes'>;
-		editorSelection: EditorSelectionStore;
+		editorSelection: EditorSelectionState;
 		inlineSuggestionsEnabled?: boolean;
 		onCloseSplit?: () => void;
 	} = $props();

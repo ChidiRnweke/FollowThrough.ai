@@ -5,7 +5,7 @@ import { type WorkspaceRecord } from '$lib/models/workspace-records';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 /** One identity rule for queue dependencies, optimistic views, guards, and receipts. */
-export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
+const mutationResource = (command: WorkspaceCommand): WorkspaceResourceIdentity => {
 	switch (command.kind) {
 		case 'renameConversation':
 			return { type: 'conversations', id: [command.conversationId] };
@@ -67,7 +67,7 @@ export const mutationResource = (command: WorkspaceCommand): WorkspaceResourceId
 };
 
 /** Serialize only editable note fields into a command. */
-export const noteCommand = (
+const noteCommand = (
 	note: Pick<Note, 'id' | 'document' | 'plainText' | 'title' | 'isPinned'>
 ): Extract<WorkspaceCommand, { kind: 'saveNote' }> => ({
 	kind: 'saveNote',
@@ -79,7 +79,7 @@ export const noteCommand = (
 });
 
 /** Validate identity once for every feature that appends to the shared outbox. */
-export const assertWorkspaceWriteIdentity = (
+const assertWorkspaceWriteIdentity = (
 	draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>
 ): void => {
 	if (workspaceResourceKey(mutationResource(draft.command)) !== draft.key)
@@ -91,10 +91,7 @@ export const assertWorkspaceWriteIdentity = (
 };
 
 /** Pending publication commands determine the local view until authoritative revisions arrive. */
-export const noteHasUnpublishedChanges = (
-	note: Note,
-	commands: readonly WorkspaceCommand[]
-): boolean => {
+const noteHasUnpublishedChanges = (note: Note, commands: readonly WorkspaceCommand[]): boolean => {
 	let unpublished = note.currentRevision > note.publishedRevision;
 	for (const command of commands) {
 		if (!('noteId' in command) || command.noteId !== note.id) continue;
@@ -105,16 +102,16 @@ export const noteHasUnpublishedChanges = (
 };
 
 /** Tuple encoding avoids delimiter collisions in composite identities such as tool names. */
-export const workspaceResourceKey = (identity: WorkspaceResourceIdentity): string =>
+const workspaceResourceKey = (identity: WorkspaceResourceIdentity): string =>
 	JSON.stringify([identity.type, ...identity.id]);
 
-export const isWorkspaceRecord = <K extends WorkspaceRecord['type']>(
+const isWorkspaceRecord = <K extends WorkspaceRecord['type']>(
 	record: WorkspaceRecord,
 	type: K
 ): record is WorkspaceRecordOf<K> => record.type === type;
 
 /** Record bodies and transport keys must name the same resource, including composite keys. */
-export const workspaceRecordIdentity = (record: WorkspaceRecord): WorkspaceResourceIdentity => {
+const workspaceRecordIdentity = (record: WorkspaceRecord): WorkspaceResourceIdentity => {
 	switch (record.type) {
 		case 'skills':
 			return { type: record.type, id: [record.value.noteId] };
@@ -140,3 +137,46 @@ export const workspaceRecordIdentity = (record: WorkspaceRecord): WorkspaceResou
 			return { type: record.type, id: [record.value.id] };
 	}
 };
+
+export interface WorkspaceCommandRules {
+	mutationResource(command: WorkspaceCommand): WorkspaceResourceIdentity;
+	noteCommand(
+		note: Pick<Note, 'id' | 'document' | 'plainText' | 'title' | 'isPinned'>
+	): Extract<WorkspaceCommand, { kind: 'saveNote' }>;
+	assertWorkspaceWriteIdentity(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): void;
+	noteHasUnpublishedChanges(note: Note, commands: readonly WorkspaceCommand[]): boolean;
+	workspaceResourceKey(identity: WorkspaceResourceIdentity): string;
+	isWorkspaceRecord<K extends WorkspaceRecord['type']>(
+		record: WorkspaceRecord,
+		type: K
+	): record is WorkspaceRecordOf<K>;
+	workspaceRecordIdentity(record: WorkspaceRecord): WorkspaceResourceIdentity;
+}
+export class WorkspaceCommandRulesService implements WorkspaceCommandRules {
+	mutationResource(command: WorkspaceCommand): WorkspaceResourceIdentity {
+		return mutationResource(command);
+	}
+	noteCommand(
+		note: Pick<Note, 'id' | 'document' | 'plainText' | 'title' | 'isPinned'>
+	): Extract<WorkspaceCommand, { kind: 'saveNote' }> {
+		return noteCommand(note);
+	}
+	assertWorkspaceWriteIdentity(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): void {
+		return assertWorkspaceWriteIdentity(draft);
+	}
+	noteHasUnpublishedChanges(note: Note, commands: readonly WorkspaceCommand[]): boolean {
+		return noteHasUnpublishedChanges(note, commands);
+	}
+	workspaceResourceKey(identity: WorkspaceResourceIdentity): string {
+		return workspaceResourceKey(identity);
+	}
+	isWorkspaceRecord<K extends WorkspaceRecord['type']>(
+		record: WorkspaceRecord,
+		type: K
+	): record is WorkspaceRecordOf<K> {
+		return isWorkspaceRecord(record, type);
+	}
+	workspaceRecordIdentity(record: WorkspaceRecord): WorkspaceResourceIdentity {
+		return workspaceRecordIdentity(record);
+	}
+}

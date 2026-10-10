@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it } from 'vitest';
 import { Agent, type AgentDependencies } from '$lib/server/controllers/agent/controller';
@@ -28,6 +29,7 @@ const setup = async (suffix: string) => {
 	if (parsed.type !== 'conversations') throw new Error('Expected a conversation');
 	const conversation = await records.insert(owner, parsed.value);
 	const controller = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			conversationMessages: new ConversationArchive(records),

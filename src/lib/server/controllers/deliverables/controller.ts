@@ -1,3 +1,4 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { DocxRenderer } from '$lib/server/services/deliverables/docx';
 import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
 import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
@@ -11,7 +12,7 @@ const widgetEvaluation = new WidgetEvaluationService();
 
 import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
 import type { Todo, TodoListFilter } from '$lib/models/todos';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import { NotFoundError, ValidationError } from '$lib/errors';
 import { randomUUID, createHash } from 'node:crypto';
 import { type ExportInput, type PreparedExport } from '$lib/models/deliverables';
@@ -228,7 +229,7 @@ export class Deliverables implements DeliverablesController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -251,7 +252,10 @@ export class Deliverables implements DeliverablesController {
 			throw new ValidationError('The export settings belong to another account');
 		await this.updateExportSettings(actor, command.projectId, command.settings);
 	}
-	constructor(private readonly dependencies: DeliverablesDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: DeliverablesDependencies
+	) {}
 
 	async initiateTemplateUpload(
 		actor: ActorContext,

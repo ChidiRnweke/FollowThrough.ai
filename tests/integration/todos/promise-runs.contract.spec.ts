@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -100,6 +101,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 		trustPolicyEvaluator: trust
 	});
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,
@@ -111,7 +113,7 @@ const setup = async (suffix: string, text = 'I will send it soon.') => {
 			eventBus: { notify: () => {} }
 		})
 	);
-	const controller = new Todos(dependencies);
+	const controller = new Todos(new WorkspaceCommandRulesService(), dependencies);
 	const input = { requestId: crypto.randomUUID(), selection };
 	const prepare = () =>
 		transactionRunner.run(() =>
@@ -243,7 +245,10 @@ it('rolls back accepted tasks when the database refuses the extraction result ev
 it('reconstructs a queued extraction after the submitting controller has been discarded', async () => {
 	const state = await setup('12504');
 	const receipt = await state.prepare();
-	await new Todos(state.dependencies).recoverQueuedPromiseRuns();
+	await new Todos(
+		new WorkspaceCommandRulesService(),
+		state.dependencies
+	).recoverQueuedPromiseRuns();
 	await state.finished(receipt.runId);
 	expect(
 		(await state.events.replay(state.owner, receipt.runId, '0')).flatMap((record) =>

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { describe, expect, it } from 'vitest';
 import type { PipelineKind, TrustPolicy, UpdateTrustPolicyInput } from '$lib/models/agent';
@@ -24,6 +25,7 @@ describe('trust policy controller behavior', () => {
 		];
 		const trustPolicyStore = new ToolTrust(repository);
 		const controller = new TrustPolicies(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TrustPoliciesDependencies>({ trustPolicyStore })
 		);
 		expect(
@@ -40,6 +42,7 @@ describe('trust policy controller behavior', () => {
 	it('returns the updated policy', async () => {
 		const trustPolicyStore = new ToolTrust(new InMemoryTrustPolicyRepository());
 		const controller = new TrustPolicies(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TrustPoliciesDependencies>({ trustPolicyStore })
 		);
 		const input: UpdateTrustPolicyInput = {

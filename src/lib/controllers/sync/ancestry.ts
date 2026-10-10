@@ -1,5 +1,6 @@
+import type { SyncResourceRules } from '$lib/services/sync/state';
 import type { OutboxEntry, WriteDraft, WriteReceipt, WriteRebase } from '$lib/models/outbox';
-import { compareSyncEtags } from '$lib/services/sync/state';
+
 /** Rebase coordination is synchronous so callers can keep it inside their storage transaction. */
 export interface WriteAncestryController<T> {
 	draft<C>(
@@ -13,7 +14,10 @@ export interface WriteAncestryController<T> {
 	): readonly OutboxEntry<C, T>[];
 }
 export class WriteAncestry<T> implements WriteAncestryController<T> {
-	constructor(private readonly rebase: WriteRebase<T>) {}
+	constructor(
+		private readonly syncResourceRules: SyncResourceRules,
+		private readonly rebase: WriteRebase<T>
+	) {}
 	/**
 	 * The durable queue, not the caller's in-memory copy, decides what a new edit is based on.
 	 * A caller may have computed its edit from a version that an earlier local edit to the same
@@ -34,7 +38,8 @@ export class WriteAncestry<T> implements WriteAncestryController<T> {
 			: receipt?.resource.kind === 'found' &&
 				  draft.basedOn === null &&
 				  draft.base !== null &&
-				  compareSyncEtags(receipt.resource.snapshot.etag, draft.base.etag) > 0
+				  this.syncResourceRules.compareSyncEtags(receipt.resource.snapshot.etag, draft.base.etag) >
+						0
 				? { base: receipt.resource.snapshot, basedOn: null, value: receipt.resource.snapshot.value }
 				: null;
 		if (!onto) return draft;

@@ -1,12 +1,15 @@
 import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
-import { noteCommand } from '$lib/services/workspace/commands';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { noteCommand } = new WorkspaceCommandRulesService();
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemoryAccountWriterLock } from '$lib/testing/sync/fakes/in-memory-outbox';

@@ -1,5 +1,6 @@
 import { syncEtag } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const identity = new WorkspaceCommandRulesService();
 import type { Database } from '$lib/server/db';
 import {
 	WorkspaceSyncChanges,
@@ -31,12 +32,12 @@ export const createSyncCapability = ({
 }): SyncCapability => {
 	const objects = new WorkspaceSyncObjects(db);
 	return {
-		changes: new WorkspaceSyncChanges(db, workspaceResourceKey, syncEtag),
+		changes: new WorkspaceSyncChanges(db, identity.workspaceResourceKey, syncEtag),
 		objects,
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,
-			mutationReceipts: new WorkspaceSyncReceipts(db, workspaceResourceKey)
+			mutationReceipts: new WorkspaceSyncReceipts(db, identity.workspaceResourceKey)
 		})
 	};
 };

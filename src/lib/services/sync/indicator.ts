@@ -1,6 +1,6 @@
 import type { SyncIndicatorInput } from '$lib/models/sync';
 
-export const syncIndicator = (
+const syncIndicator = (
 	input: SyncIndicatorInput
 ): {
 	kind: 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';
@@ -51,3 +51,22 @@ export const syncIndicator = (
 		badge: 0
 	};
 };
+
+export interface SyncPresentation {
+	syncIndicator(input: SyncIndicatorInput): {
+		kind: 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';
+		headline: string;
+		description: string;
+		badge: number;
+	};
+}
+export class SyncPresentationService implements SyncPresentation {
+	syncIndicator(input: SyncIndicatorInput): {
+		kind: 'synced' | 'saving' | 'offline' | 'downloading' | 'attention';
+		headline: string;
+		description: string;
+		badge: number;
+	} {
+		return syncIndicator(input);
+	}
+}

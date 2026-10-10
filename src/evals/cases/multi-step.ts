@@ -7,7 +7,8 @@ import { todosWorkspace } from '../fixtures/workspaces/todos';
 import { personaWorkspace } from '../fixtures/workspaces/profile';
 import { findCall, scoreToolCalling, scoreToolDiscovery } from '../assertions/tool-calls';
 import { agentPayloadResultSchema } from '$lib/models/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+const { isAgentPayloadObject } = new AgentPayloadInspectionService();
 import { ARCHETYPES, type EvalCase } from './types';
 import { expectSuggestionPending } from '../assertions/effects';
 

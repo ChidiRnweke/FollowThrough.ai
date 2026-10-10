@@ -1,3 +1,4 @@
+import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
 import type { TodoCreationRules } from '$lib/services/todos/edits';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
@@ -11,7 +12,7 @@ import type {
 	DrawioSvgPreviewSanitizer
 } from '$lib/server/services/diagrams/drawio';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
-import { provenanceOrigin } from '$lib/services/provenance/presentation';
+
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { Todo, TodoId, CreateTodoInput } from '$lib/models/todos';
@@ -151,7 +152,10 @@ export interface SuggestionsDependencies {
 	transactionRunner: TransactionRunner;
 }
 export class Suggestions implements SuggestionsController {
-	constructor(private readonly dependencies: SuggestionsDependencies) {}
+	constructor(
+		private readonly provenancePresentation: ProvenancePresentation,
+		private readonly dependencies: SuggestionsDependencies
+	) {}
 	async list(actor: ActorContext, input: ListSuggestionsInput): Promise<ListSuggestionsOutput> {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const suggestions = await this.dependencies.suggestionLister.listByStatus(actor, input.status);
@@ -185,7 +189,7 @@ export class Suggestions implements SuggestionsController {
 			this.dependencies.suggestionPresentation.assembleSuggestionView(suggestion, {
 				note,
 				anchor,
-				origin: provenanceOrigin(provenance)
+				origin: this.provenancePresentation.provenanceOrigin(provenance)
 			})
 		);
 	}

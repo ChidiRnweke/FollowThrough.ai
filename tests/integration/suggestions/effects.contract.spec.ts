@@ -1,3 +1,4 @@
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -50,6 +51,7 @@ const application = (
 	}
 	const index = createContentIndex(search, embeddings.model);
 	const controller = new Suggestions(
+		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),

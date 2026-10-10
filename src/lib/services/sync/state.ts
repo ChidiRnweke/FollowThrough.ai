@@ -15,20 +15,20 @@ import type {
 	TransferState
 } from '$lib/models/sync';
 
-export const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
+const compareSyncEtags = (left: SyncEtag, right: SyncEtag): number => {
 	const a = BigInt(left.slice(8));
 	const b = BigInt(right.slice(8));
 	return a < b ? -1 : a > b ? 1 : 0;
 };
 
-export const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
+const resourceVersion = <T>(state: ResourceState<T> | undefined): SyncEtag | null =>
 	state?.kind === 'present' ? state.snapshot.etag : (state?.etag ?? null);
-export const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
+const cachedSnapshot = <T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null =>
 	state?.kind === 'present' ? state.snapshot : null;
-export const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
+const resourceCurrent = <T>(state: ResourceState<T> | undefined): boolean =>
 	state?.kind === 'present';
 /** Page replication, targeted reads and write receipts all use the same monotonic merge. */
-export const mergeResourceStates = <T>(
+const mergeResourceStates = <T>(
 	current: ResourceState<T> | undefined,
 	incoming: ResourceState<T>
 ): ResourceState<T> => {
@@ -38,7 +38,7 @@ export const mergeResourceStates = <T>(
 	const order = compareSyncEtags(after, before);
 	return order > 0 || (order === 0 && incoming.kind === 'deleted') ? incoming : current;
 };
-export const receiveResource = <T>(
+const receiveResource = <T>(
 	state: ResourceState<T> | undefined,
 	received: SyncSnapshot<T> | ResourceDeletion
 ): ResourceState<T> =>
@@ -47,7 +47,7 @@ export const receiveResource = <T>(
 		'kind' in received ? received : { kind: 'present', snapshot: received }
 	);
 
-export const accessCache = <T>(
+const accessCache = <T>(
 	state: ResourceState<T> | undefined,
 	online: boolean,
 	transfer?: TransferState
@@ -61,7 +61,7 @@ export const accessCache = <T>(
 };
 
 /** One wording for each state a surface cannot render, named for the resource it concerns. */
-export const accessMessage = <T>(
+const accessMessage = <T>(
 	access: Exclude<CacheAccess<T>, { kind: 'ready' }>,
 	name: string
 ): string => {
@@ -252,7 +252,7 @@ const settleWrite = <C, T>(
 };
 
 /** Lists and detail reads share retained content while replication runs. */
-export const visibleResources = <C, T>(
+const visibleResources = <C, T>(
 	records: ReadonlyMap<string, ResourceState<T>>,
 	pending: readonly OutboxEntry<C, T>[]
 ): ReadonlyMap<string, T> => {
@@ -269,7 +269,7 @@ export const visibleResources = <C, T>(
 };
 
 /** A local edit remains usable even while its server base is refreshing or conflicted. */
-export const localResource = <C, T>(
+const localResource = <C, T>(
 	pending: readonly OutboxEntry<C, T>[],
 	key: string
 ): CacheAccess<T> | null => {
@@ -492,5 +492,76 @@ export class OutboxDeliveryService implements IOutboxDeliveryService {
 	}
 	authoritativeResource<T>(outcome: WriteOutcome<T>): WriteReceipt<T>['resource'] | null {
 		return authoritativeWriteResource(outcome);
+	}
+}
+
+export interface SyncResourceRules {
+	compareSyncEtags(left: SyncEtag, right: SyncEtag): number;
+	resourceVersion<T>(state: ResourceState<T> | undefined): SyncEtag | null;
+	cachedSnapshot<T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null;
+	resourceCurrent<T>(state: ResourceState<T> | undefined): boolean;
+	mergeResourceStates<T>(
+		current: ResourceState<T> | undefined,
+		incoming: ResourceState<T>
+	): ResourceState<T>;
+	receiveResource<T>(
+		state: ResourceState<T> | undefined,
+		received: SyncSnapshot<T> | ResourceDeletion
+	): ResourceState<T>;
+	accessCache<T>(
+		state: ResourceState<T> | undefined,
+		online: boolean,
+		transfer?: TransferState
+	): CacheAccess<T>;
+	accessMessage<T>(access: Exclude<CacheAccess<T>, { kind: 'ready' }>, name: string): string;
+	visibleResources<C, T>(
+		records: ReadonlyMap<string, ResourceState<T>>,
+		pending: readonly OutboxEntry<C, T>[]
+	): ReadonlyMap<string, T>;
+	localResource<C, T>(pending: readonly OutboxEntry<C, T>[], key: string): CacheAccess<T> | null;
+}
+export class SyncResourceRulesService implements SyncResourceRules {
+	compareSyncEtags(left: SyncEtag, right: SyncEtag): number {
+		return compareSyncEtags(left, right);
+	}
+	resourceVersion<T>(state: ResourceState<T> | undefined): SyncEtag | null {
+		return resourceVersion(state);
+	}
+	cachedSnapshot<T>(state: ResourceState<T> | undefined): SyncSnapshot<T> | null {
+		return cachedSnapshot(state);
+	}
+	resourceCurrent<T>(state: ResourceState<T> | undefined): boolean {
+		return resourceCurrent(state);
+	}
+	mergeResourceStates<T>(
+		current: ResourceState<T> | undefined,
+		incoming: ResourceState<T>
+	): ResourceState<T> {
+		return mergeResourceStates(current, incoming);
+	}
+	receiveResource<T>(
+		state: ResourceState<T> | undefined,
+		received: SyncSnapshot<T> | ResourceDeletion
+	): ResourceState<T> {
+		return receiveResource(state, received);
+	}
+	accessCache<T>(
+		state: ResourceState<T> | undefined,
+		online: boolean,
+		transfer?: TransferState
+	): CacheAccess<T> {
+		return accessCache(state, online, transfer);
+	}
+	accessMessage<T>(access: Exclude<CacheAccess<T>, { kind: 'ready' }>, name: string): string {
+		return accessMessage(access, name);
+	}
+	visibleResources<C, T>(
+		records: ReadonlyMap<string, ResourceState<T>>,
+		pending: readonly OutboxEntry<C, T>[]
+	): ReadonlyMap<string, T> {
+		return visibleResources(records, pending);
+	}
+	localResource<C, T>(pending: readonly OutboxEntry<C, T>[], key: string): CacheAccess<T> | null {
+		return localResource(pending, key);
 	}
 }

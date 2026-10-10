@@ -1,3 +1,4 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type {
 	IAgentModelSelectionService,
 	IAgentModelChoiceService
@@ -11,7 +12,7 @@ import {
 } from '$lib/models/agent';
 
 import type { AgentPreferenceEditing } from '$lib/services/agent/preferences';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { AtomicOperation, DateTime } from '$lib/models/workspace';
 import type {
 	AgentPreferenceMutationRequest,
@@ -93,7 +94,7 @@ export class AgentSettings implements AgentSettingsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -115,7 +116,10 @@ export class AgentSettings implements AgentSettingsController {
 			throw new ValidationError('The preferences belong to another account');
 		await this.updatePreferences(actor, input.command.patch);
 	}
-	constructor(private readonly dependencies: AgentSettingsDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: AgentSettingsDependencies
+	) {}
 
 	getPreferences(actor: ActorContext): Promise<AgentPreferences> {
 		return this.dependencies.preferences.get(actor);

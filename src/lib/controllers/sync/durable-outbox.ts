@@ -1,3 +1,4 @@
+import type { SyncResourceRules } from '$lib/services/sync/state';
 import type { IOutboxDeliveryService, IOutboxEditingService } from '$lib/services/sync/state';
 import type { WriteAncestryController } from './ancestry';
 import type {
@@ -10,7 +11,6 @@ import type {
 } from '$lib/models/outbox';
 import type { ResourceState } from '$lib/models/sync';
 import type { DurableWriteController } from './submission';
-import { receiveResource, cachedSnapshot } from '$lib/services/sync/state';
 
 export type OutboxTable = 'outbox' | 'records' | 'receipts';
 /** All methods operate on the same live storage transaction. */
@@ -41,6 +41,7 @@ export interface OutboxStorage<C, T> {
 /** Every read, domain decision and write stays inside the unit of work. */
 export class DurableOutbox<C, T> implements DurableWriteController<C, T> {
 	constructor(
+		private readonly syncResourceRules: SyncResourceRules,
 		private readonly storage: OutboxStorage<C, T>,
 		private readonly ancestry: WriteAncestryController<T>,
 		private readonly editing: IOutboxEditingService,
@@ -61,7 +62,7 @@ export class DurableOutbox<C, T> implements DurableWriteController<C, T> {
 			const receipt = await tx.receipt(draft.key);
 			const rebased = this.ancestry.draft(entries, draft, receipt);
 			const current = await tx.resource(draft.key);
-			const snapshot = cachedSnapshot(current);
+			const snapshot = this.syncResourceRules.cachedSnapshot(current);
 			const observed =
 				current?.kind === 'deleted'
 					? current
@@ -160,7 +161,10 @@ export class DurableOutbox<C, T> implements DurableWriteController<C, T> {
 		const current = await tx.resource(key);
 		await tx.putResource(
 			key,
-			receiveResource(current, resource.kind === 'found' ? resource.snapshot : resource)
+			this.syncResourceRules.receiveResource(
+				current,
+				resource.kind === 'found' ? resource.snapshot : resource
+			)
 		);
 	}
 

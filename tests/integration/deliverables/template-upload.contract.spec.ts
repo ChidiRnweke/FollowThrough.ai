@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { eq } from 'drizzle-orm';
 import { ProjectRecords } from '$lib/server/repositories/projects/postgres/projects';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -31,6 +32,7 @@ const setup = async (suffix: string) => {
 	const repository = new TemplateRecords(transaction.database);
 	const storage = new InMemoryAttachmentStorage();
 	const controller = new Deliverables(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...createTemplateServices(repository, () => now),
 			templateStorage: storage,

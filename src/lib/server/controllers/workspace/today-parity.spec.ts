@@ -1,3 +1,4 @@
+import { TodayPresentationService } from '$lib/services/workspace/today';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { describe, expect, it } from 'vitest';
@@ -64,6 +65,7 @@ describe('Today projection parity', () => {
 			new Map(records.map((record) => [JSON.stringify([record.type, record.value.id]), record]))
 		);
 		const server = new Workspace(
+			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),

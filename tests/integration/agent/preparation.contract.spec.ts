@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
 import { expect, it } from 'vitest';
@@ -57,6 +58,7 @@ const setup = async (suffix: string, memory = new InMemoryMemoryEntryRepository(
 	});
 	const fixture = agentContextFixture();
 	const controller = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			...fixture.dependencies,

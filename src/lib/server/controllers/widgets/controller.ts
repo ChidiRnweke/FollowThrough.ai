@@ -1,10 +1,11 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type {
 	IndexCompletion,
 	WidgetIndexing
 } from '$lib/server/services/knowledge-search/indexing';
 import type { WidgetCatalogReader } from '$lib/models/widgets';
 import { StaleRevisionError, ValidationError } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { WidgetEditingController } from '$lib/controllers/widgets/editing';
 import type { IWidgetLifecycleService } from '$lib/services/widgets/trash';
 import type { IWidgetCatalogService } from '$lib/services/widgets/catalog-prompt';
@@ -101,7 +102,10 @@ const decided = (result: WidgetEditResult): Widget => {
 };
 
 export class Widgets implements WidgetsController {
-	constructor(private readonly dependencies: WidgetsDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: WidgetsDependencies
+	) {}
 
 	async synchronize(
 		actor: ActorContext,
@@ -110,7 +114,7 @@ export class Widgets implements WidgetsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					const command = input.command;

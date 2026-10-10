@@ -9,8 +9,10 @@ import { explainToolFailure } from './tool-result';
 import { entityFrom, toolEntity, fileEntity } from './tool-entities';
 import { toolCollection } from './tool-collections';
 import { type AgentPayload } from '$lib/models/agent/payload';
-import { agentPayloadItems } from '$lib/services/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { agentPayloadItems } = agentPayloadOperations;
+
+const { isAgentPayloadObject } = agentPayloadOperations;
 
 /** The result detail for a call. Targets and concise outcomes render before any expansion. */
 

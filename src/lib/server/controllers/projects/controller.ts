@@ -1,3 +1,4 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
 import type { ProjectPlacement } from '$lib/services/projects/placement';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
@@ -5,7 +6,7 @@ import type { DateTime } from '$lib/models/workspace';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import type { ProjectDetailRules } from '$lib/services/projects/details';
 import { NotFoundError, ValidationError } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { Note, NoteId } from '$lib/models/notes';
 import type {
 	ProjectMutationRequest,
@@ -95,7 +96,7 @@ export class Projects implements ProjectsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -134,7 +135,10 @@ export class Projects implements ProjectsController {
 		}
 	}
 
-	constructor(private readonly dependencies: ProjectsDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: ProjectsDependencies
+	) {}
 
 	async list(actor: ActorContext): Promise<ListProjectsOutput> {
 		return { projects: await this.dependencies.projectLister.list(actor) };

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { workspaceReadiness } from './startup';
+import { WorkspaceReadinessRulesService } from '$lib/services/workspace/startup';
+const { workspaceReadiness } = new WorkspaceReadinessRulesService();
 import type { WorkspaceStartupFacts } from '$lib/models/workspace-startup';
 
 const downloaded: WorkspaceStartupFacts = {

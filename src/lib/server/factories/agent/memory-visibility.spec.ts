@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -60,6 +61,7 @@ const setup = (scope: 'user' | 'project') => {
 	projects.projects = [projectBuilder()];
 	const library = createMemoryServices(entries, projects, new InMemoryProvenanceRepository());
 	const controller = new Memory(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),

@@ -2,9 +2,11 @@ import { expect, it } from 'vitest';
 import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import type { WriteDraft } from '$lib/models/outbox';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
-import { assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
+
+const { assertWorkspaceWriteIdentity } = new WorkspaceCommandRulesService();
 import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 
 const project = projectBuilder();

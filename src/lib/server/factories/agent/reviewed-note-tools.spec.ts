@@ -1,3 +1,7 @@
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
@@ -227,6 +231,10 @@ describe('A note change that fails while it is being prepared', () => {
 		const content = new InMemoryNoteContent();
 		content.notes = [note];
 		const controller = new Notes(
+			new BacklinkPresentationService(),
+			new ReferencePresentationService(),
+			new WorkspaceCommandRulesService(),
+			new ProvenancePresentationService(),
 			capabilityDependencies<NotesDependencies>({
 				archiveImport: new NoteArchiveImportService(),
 				patchPreparation: new NotePatchPreparationService(),

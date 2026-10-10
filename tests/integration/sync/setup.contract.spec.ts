@@ -1,5 +1,6 @@
 import { syncEtag } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
 import { expect, it } from 'vitest';
 import { initialSyncCursor } from '$lib/models/sync';

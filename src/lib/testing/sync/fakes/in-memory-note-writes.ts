@@ -1,6 +1,7 @@
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { type SyncEtag } from '$lib/models/sync';
 import { syncEtag } from '$lib/models/sync';
 import type { WriteOutcome } from '$lib/models/outbox';

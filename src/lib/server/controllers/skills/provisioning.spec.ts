@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { expect, it } from 'vitest';
 import { Skills, type SkillsDependencies } from './controller';
 import { builtInSkillsFixture } from '$lib/testing/skills/fixtures/built-ins';
@@ -9,7 +10,10 @@ import { RETIRED_BUILT_INS } from '$lib/server/services/skills/built-in-definiti
 it('rolls back the Inbox, skill notes and revisions when metadata cannot be stored', async () => {
 	const state = builtInSkillsFixture();
 	state.skills.writeFailure = new Error('Skill storage unavailable');
-	const controller = new Skills(capabilityDependencies<SkillsDependencies>(state));
+	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<SkillsDependencies>(state)
+	);
 	const failure = await controller.list(testActor()).then(
 		() => {
 			throw new Error('Expected provisioning to fail');
@@ -63,7 +67,10 @@ it('preserves the released note and revision history when a built-in upgrade fai
 		skills: state.skills.skills
 	});
 	state.skills.writeFailure = new Error('Skill upgrade unavailable');
-	const controller = new Skills(capabilityDependencies<SkillsDependencies>(state));
+	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
+		capabilityDependencies<SkillsDependencies>(state)
+	);
 	await controller.list(testActor()).then(
 		() => {
 			throw new Error('Expected upgrade failure');

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import type { SyncScheduler } from '$lib/models/sync';
 import { GlobalSearch, type GlobalSearchController } from '$lib/controllers/search/global-search';
 import { GlobalSearchStore } from '$lib/stores/search/global-search.svelte';
@@ -16,7 +17,7 @@ export const createGlobalSearch = (
 		new GlobalSearchStore(),
 		workspace,
 		rules,
-		new NoteReplacements(rules),
+		new NoteReplacements(new WorkspaceCommandRulesService(), rules),
 		scheduler,
 		new SvelteSearchDraftCopy()
 	);

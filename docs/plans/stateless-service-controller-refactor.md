@@ -1332,3 +1332,29 @@ checker revisions, verification and the complete unsuppressed inventory: 802 sem
 51 Chisel prohibited imports. The inventory is evidence, not a checker baseline. The remaining
 application migration, semantic inventory review and full-refactor acceptance items above stay
 incomplete. Do not mark this original plan complete because the checker fixtures pass.
+
+## Shared service boundaries — 2026-10-10
+
+The next application slice stacks on #345's enforcement branch. All 17 shared helper modules
+now expose implemented capability interfaces. Components and adapters use controller operations;
+existing controller dependencies and test wiring use the declared service contracts. Concrete
+application and capability results now expose existing narrow interfaces.
+
+Proofreading coordination moved from its state store into a controller. The browser adapter
+owns persistence and raw linter output. Workspace replay coordinates field replay, widget patches
+and validation in its controller; transport adapters retain parsing and I/O while controllers
+validate resource identities and acknowledgements. Agent read tools parse at the adapter and
+coordinate result filtering in a controller. These changes preserve existing operation order,
+lazy linter ownership, error propagation and transaction-local replay.
+
+Full unit verification passes: 562 files, 4,461 tests and one existing skip. Isolated sync, notes
+and relationships contracts pass: 31 files, 168 tests. Type checking, lint, docs and UI audits
+pass. Topology, source and test-quality checks pass. The semantic inventory decreases from 802
+to 340 findings; Chisel decreases from 51 to 12. No checks or suppressions changed. Guidance did
+not change, and the three skill copies remain aligned.
+
+[The updated inventory and report](stateless-service-controller-enforcement.md) retain every
+remaining finding. Server public helpers, factory workflows, store coordination and chat store
+construction still need migration. The private indexing chunker finding also needs review.
+The chat store's new controller-factory imports remain prohibited and explicitly unresolved.
+Unrelated workflows stay outside this slice. The overall plan and final acceptance remain incomplete.

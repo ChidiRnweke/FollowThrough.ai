@@ -1,4 +1,5 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { afterEach, describe, expect, it } from 'vitest';
 import { flushSync } from 'svelte';
@@ -9,7 +10,8 @@ import {
 	type WorkspaceResourceIdentity,
 	type WorkspaceResourceType
 } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { initialSyncCursor } from '$lib/models/sync';
 import { syncEtag } from '$lib/models/sync';
 import {

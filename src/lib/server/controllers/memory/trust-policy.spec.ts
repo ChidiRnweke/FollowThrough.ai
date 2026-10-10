@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -99,6 +100,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 	const embeddings = new InMemoryEmbeddingClient();
 	const index = createContentIndex(search, embeddings.model);
 	const controller = new Memory(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),

@@ -9,7 +9,7 @@ import type { NamedModel, EffectiveModel, DescribedModel } from '$lib/models/age
  * default the account cannot list, say — and its last path segment is the
  * closest thing to a name that exists.
  */
-export const shortModelName = (name: string): string => {
+const shortModelName = (name: string): string => {
 	const afterVendor = name.slice(name.lastIndexOf(':') + 1).trim();
 	const candidate = afterVendor.length > 0 ? afterVendor : name.trim();
 	const afterPath = candidate.slice(candidate.lastIndexOf('/') + 1).trim();
@@ -19,7 +19,7 @@ export const shortModelName = (name: string): string => {
 const labelFor = (models: readonly NamedModel[], id: string): string =>
 	shortModelName(models.find((model) => model.id === id)?.name ?? id);
 
-export const effectiveModel = (
+const effectiveModel = (
 	models: readonly NamedModel[],
 	override: string | null,
 	defaultModelId: string
@@ -35,7 +35,7 @@ export const effectiveModel = (
  * digit by digit, and in a picker row it crowded out the model's name — the one
  * thing the row exists to say. The magnitude is the whole signal.
  */
-export const compactContextLength = (tokens: number): string => {
+const compactContextLength = (tokens: number): string => {
 	if (tokens >= 1_000_000) {
 		const millions = tokens / 1_000_000;
 		return `${millions >= 10 ? Math.round(millions) : Math.round(millions * 10) / 10}M`;
@@ -52,7 +52,7 @@ export const compactContextLength = (tokens: number): string => {
  * is a list item, not a property panel, and "do not render a control for a value
  * that is not set" applies — a dash there is noise that reads as content.
  */
-export const modelMetaLine = (model: DescribedModel): string =>
+const modelMetaLine = (model: DescribedModel): string =>
 	[
 		model.provider,
 		model.contextLength === undefined
@@ -71,8 +71,37 @@ export const modelMetaLine = (model: DescribedModel): string =>
  * picker renders the catalogue's long tail only once a query exists, and it has
  * to make that decision before the primitive gets a chance to filter.
  */
-export const modelMatchesQuery = (model: NamedModel, query: string): boolean => {
+const modelMatchesQuery = (model: NamedModel, query: string): boolean => {
 	const needle = query.trim().toLowerCase();
 	if (needle.length === 0) return true;
 	return `${model.name} ${model.provider} ${model.id}`.toLowerCase().includes(needle);
 };
+
+export interface ModelPresentation {
+	shortModelName(name: string): string;
+	effectiveModel(
+		models: readonly NamedModel[],
+		override: string | null,
+		defaultModelId: string
+	): EffectiveModel;
+	modelMetaLine(model: DescribedModel): string;
+	modelMatchesQuery(model: NamedModel, query: string): boolean;
+}
+export class ModelPresentationService implements ModelPresentation {
+	shortModelName(name: string): string {
+		return shortModelName(name);
+	}
+	effectiveModel(
+		models: readonly NamedModel[],
+		override: string | null,
+		defaultModelId: string
+	): EffectiveModel {
+		return effectiveModel(models, override, defaultModelId);
+	}
+	modelMetaLine(model: DescribedModel): string {
+		return modelMetaLine(model);
+	}
+	modelMatchesQuery(model: NamedModel, query: string): boolean {
+		return modelMatchesQuery(model, query);
+	}
+}

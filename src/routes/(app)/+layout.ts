@@ -1,3 +1,4 @@
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
 import type { LayoutLoad } from './$types';
 import { workspaceSession } from '$lib/factories/workspace/session';
 import { parseSidebarWidth } from '$lib/client/shell/sidebar-width';
@@ -15,6 +16,6 @@ export const load: LayoutLoad = async () => {
 	return {
 		session,
 		sidebarOpen: cookie('sidebar_state') !== 'false',
-		sidebarWidth: parseSidebarWidth(cookie('sidebar_width'))
+		sidebarWidth: parseSidebarWidth(workspacePresentation, cookie('sidebar_width'))
 	};
 };

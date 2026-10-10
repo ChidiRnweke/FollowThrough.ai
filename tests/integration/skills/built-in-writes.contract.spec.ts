@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
@@ -32,6 +33,7 @@ const controller = (
 	const skills = new SkillRecords(database);
 	const library = createSkillServices(skills, notes, new ProvenanceRecords(database));
 	return new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 import { describe, expect, it } from 'vitest';
 import { ToolPreferences } from '$lib/server/controllers/agent/tool-preferences/controller';
@@ -16,14 +17,14 @@ const setup = async (suffix: string) => {
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
 	const preferences = new ToolPreferenceRecords(database);
-	const tools = new ToolPreferences({
+	const tools = new ToolPreferences(new WorkspaceCommandRulesService(), {
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,
 		preferences: new ToolAccess(preferences),
 		catalog: new AgentToolCatalogService()
 	});
-	const policies = new TrustPolicies({
+	const policies = new TrustPolicies(new WorkspaceCommandRulesService(), {
 		syncMutations: sync.mutations,
 		syncRetry: sync.mutationRetry,
 		transactionRunner,

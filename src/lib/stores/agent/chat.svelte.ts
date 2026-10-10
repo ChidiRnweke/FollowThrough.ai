@@ -11,7 +11,9 @@ import type {
 	StoredMessage
 } from '$lib/models/agent';
 import { isHttpError } from '@sveltejs/kit';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import type { SuggestionView, SuggestionId } from '$lib/models/suggestions';
 import type {
 	AgentRunClientStorage,
@@ -22,7 +24,9 @@ import { RemoteAgentRunTransport } from '$lib/client/agent/runs/remote-transport
 import { SessionAgentRunStorage } from '$lib/client/agent/runs/session-storage';
 import type { WorkspaceResourcesController } from '$lib/controllers/workspace/resources';
 import type { WorkspaceValues } from '$lib/models/workspace-records';
-import { accessMessage } from '$lib/services/sync/state';
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
+const { accessMessage } = workspacePresentation;
+
 import {
 	matchToolActivity,
 	mergeToolActivity,
@@ -36,7 +40,9 @@ import type { SelectionChip } from '$lib/models/chat';
 import { SvelteSet } from 'svelte/reactivity';
 import type { ContextChip, MentionHistory } from '$lib/models/chat';
 import { createMentionHistory } from '$lib/models/chat';
-import { contextResourceRefOf, uniqueContextResources } from '$lib/services/chat/chips';
+import { agentContext } from '$lib/factories/agent/context';
+const { contextResourceRefOf, uniqueContextResources } = agentContext;
+
 export type { ContextChip, ResourceChip } from '$lib/models/chat';
 
 export type { ChatToolActivity } from './chat-tools';

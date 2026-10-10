@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { UserSettings, type UserSettingsDependencies } from './controller';
@@ -7,6 +8,7 @@ import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
 const setup = () => {
 	const preferences = new InMemoryUserPreferencesRepository();
 	const controller = new UserSettings(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<UserSettingsDependencies>({ preferences })
 	);
 	return { preferences, controller };

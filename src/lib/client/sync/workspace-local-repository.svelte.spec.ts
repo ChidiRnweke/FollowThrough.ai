@@ -1,10 +1,12 @@
 import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
-import { wholeValueRebase } from '$lib/services/sync/rebase';
+
+import { wholeValueRebase } from '$lib/testing/sync/fixtures/primitive-replay';
 import { afterEach, expect, it } from 'vitest';
 import { z } from 'zod';
 import { syncEtag } from '$lib/models/sync';
-import { cachedSnapshot } from '$lib/services/sync/state';
+import { SyncResourceRulesService } from '$lib/services/sync/state';
+const { cachedSnapshot } = new SyncResourceRulesService();
 import { requestValue } from './database';
 import {
 	DexieWorkspaceRepository,

@@ -40,7 +40,8 @@ import type { IAgentContext } from '$lib/server/services/agent/runs/context';
 import { createAgentContext } from '$lib/server/factories/agent-context';
 import { CachedAgentModels } from '$lib/server/controllers/agent/model-catalog';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const identity = new WorkspaceCommandRulesService();
 import type { TokenCounter } from '$lib/models/tokenization';
 import {
 	RunCheckpoints,
@@ -166,7 +167,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 	const conversationRepository = new ConversationRecords(input.db);
 	const conversations = new ConversationArchive(conversationRepository);
 	const preferences = new AgentPreferenceCatalog(
-		new AgentPreferenceRecords(input.db, workspaceResourceKey)
+		new AgentPreferenceRecords(input.db, identity.workspaceResourceKey)
 	);
 	const models =
 		input.modelCatalog ??

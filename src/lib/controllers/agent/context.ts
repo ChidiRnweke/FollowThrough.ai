@@ -1,3 +1,6 @@
+import type { ContextResourceRef } from '$lib/models/agent';
+import type { ContextChip } from '$lib/models/chat';
+import type { ContextChips } from '$lib/services/chat/chips';
 import type { ChatMentions } from '$lib/services/chat/mentions';
 import {
 	createMentionHistory,
@@ -11,6 +14,9 @@ import type { ResourceChip, MentionableResources } from '$lib/models/chat';
 import type { Diagram } from '$lib/models/diagrams';
 import type { AgentContextSelection } from '$lib/services/agent/context-selection';
 export interface AgentContextController {
+	chipKeyOf(chip: Pick<ContextChip, 'kind' | 'id'>): string;
+	contextResourceRefOf(chip: ContextChip): readonly ContextResourceRef[];
+	uniqueContextResources(refs: readonly ContextResourceRef[]): readonly ContextResourceRef[];
 	start(text: string): MentionHistory;
 	edit(history: MentionHistory, edit: MentionEdit): MentionHistory;
 	add(history: MentionHistory, chip: ResourceChip): MentionHistory;
@@ -34,7 +40,15 @@ export interface AgentContextController {
 	): ResourceChip[];
 }
 export class AgentContext implements AgentContextController {
+	readonly chipKeyOf = (chip: Pick<ContextChip, 'kind' | 'id'>): string =>
+		this.chips.chipKeyOf(chip);
+	readonly contextResourceRefOf = (chip: ContextChip): readonly ContextResourceRef[] =>
+		this.chips.contextResourceRefOf(chip);
+	readonly uniqueContextResources = (
+		refs: readonly ContextResourceRef[]
+	): readonly ContextResourceRef[] => this.chips.uniqueContextResources(refs);
 	constructor(
+		private readonly chips: ContextChips,
 		private readonly selection: AgentContextSelection,
 		private readonly mentions: ChatMentions
 	) {}

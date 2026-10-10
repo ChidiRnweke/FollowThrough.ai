@@ -1,4 +1,5 @@
-import { mutationResource } from '$lib/services/workspace/commands';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+
 import type { AtomicOperation } from '$lib/models/workspace';
 import { ValidationError } from '$lib/errors';
 import type {
@@ -53,7 +54,7 @@ export class UserSettings implements UserSettingsController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -77,7 +78,10 @@ export class UserSettings implements UserSettingsController {
 			sectionNumberingDefault: input.command.sectionNumberingDefault
 		});
 	}
-	constructor(private readonly dependencies: UserSettingsDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: UserSettingsDependencies
+	) {}
 
 	getPreferences(actor: ActorContext): Promise<UserPreferences> {
 		return this.dependencies.preferences.get(actor);

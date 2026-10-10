@@ -1,4 +1,5 @@
-import { mutationResource } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { mutationResource } = new WorkspaceCommandRulesService();
 import { expect, it } from 'vitest';
 import { WorkspaceMutationReceipts } from './mutation-receipts';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';

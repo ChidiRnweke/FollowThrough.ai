@@ -1,3 +1,4 @@
+import type { TodayPresentation } from '$lib/services/workspace/today';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodoView } from '$lib/models/todos';
 import type { SkillSummary } from '$lib/models/skills';
@@ -19,7 +20,7 @@ import type {
 } from '$lib/models/workspace';
 import type { Project } from '$lib/models/projects';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
-import { assembleToday } from '$lib/services/workspace/today';
+
 import type { NoteTreeReader } from '$lib/server/services/notes/catalog';
 
 import type { ProjectLister } from '$lib/server/services/projects/catalog';
@@ -75,7 +76,10 @@ export interface WorkspaceDependencies {
 }
 
 export class Workspace implements WorkspaceController {
-	constructor(private readonly dependencies: WorkspaceDependencies) {}
+	constructor(
+		private readonly todayPresentation: TodayPresentation,
+		private readonly dependencies: WorkspaceDependencies
+	) {}
 	async pullChangePage(actor: ActorContext, since: SyncCursor) {
 		if (since === '0')
 			await this.dependencies.transactionRunner.run(() =>
@@ -135,7 +139,7 @@ export class Workspace implements WorkspaceController {
 		const views = contexts.map((context) =>
 			this.dependencies.todoPresentation.view(context.todo, context)
 		);
-		return assembleToday({
+		return this.todayPresentation.assembleToday({
 			today: input.today,
 			due: views.slice(0, due.length),
 			waiting: views.slice(due.length),

@@ -1,3 +1,4 @@
+import { SyncResourceRulesService } from '$lib/services/sync/state';
 import { CacheSynchronization } from './cache';
 import { ResourceCacheStore } from '$lib/stores/sync/cache';
 import { describe, expect, it } from 'vitest';
@@ -126,7 +127,12 @@ it('does not retain a delayed targeted-read failure after account teardown', asy
 	const repository = new InMemorySyncCache<string>();
 	const transport = new InMemorySyncTransport<string>();
 	const state = new ResourceCacheStore<string>();
-	const cache = new CacheSynchronization('account', { repository, transport }, state);
+	const cache = new CacheSynchronization(
+		new SyncResourceRulesService(),
+		'account',
+		{ repository, transport },
+		state
+	);
 	const gate = transport.pause('note');
 	const opening = cache.open('note');
 	await gate.started;

@@ -1,3 +1,4 @@
+import { SyncResourceRulesService } from '$lib/services/sync/state';
 import {
 	DocumentExports,
 	type DocumentExportController
@@ -8,6 +9,7 @@ import { createDiagramExports } from './diagrams';
 import { workspaceSession } from '$lib/factories/workspace/session';
 export const createDocumentExports = (): DocumentExportController =>
 	new DocumentExports(
+		new SyncResourceRulesService(),
 		new DocumentExportStore(),
 		workspaceSession,
 		createDiagramExports(),

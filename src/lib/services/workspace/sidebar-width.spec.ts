@@ -9,7 +9,8 @@ import {
 	SIDEBAR_WIDTH_MIN_PX,
 	type SidebarConstraints
 } from '$lib/models/workspace';
-import { effectiveSidebarWidth } from './sidebar-width';
+import { SidebarSizingService } from '$lib/services/workspace/sidebar-width';
+const { effectiveSidebarWidth } = new SidebarSizingService();
 
 const roomy: SidebarConstraints = {
 	viewportWidth: 2560,

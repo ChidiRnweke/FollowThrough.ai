@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
@@ -27,6 +28,7 @@ const setup = async (suffix: string) => {
 		updatedAt: now
 	});
 	const controller = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			conversationMessages: journal,

@@ -1,7 +1,10 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { TodayPresentationService } from '$lib/services/workspace/today';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { syncEtag } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { afterAll, expect, it } from 'vitest';
 import { syncCursorSchema } from '$lib/models/sync';
 import postgres from 'postgres';
@@ -47,8 +50,12 @@ const setup = () => {
 	return {
 		projects,
 		notes,
-		skills: new Skills(capabilityDependencies<SkillsDependencies>(dependencies)),
+		skills: new Skills(
+			new WorkspaceCommandRulesService(),
+			capabilityDependencies<SkillsDependencies>(dependencies)
+		),
 		workspace: new Workspace(
+			new TodayPresentationService(),
 			capabilityDependencies<WorkspaceDependencies>({
 				todoPresentation: new TodoPresentationService(),
 				memoryPresentation: new MemoryPresentationService(),

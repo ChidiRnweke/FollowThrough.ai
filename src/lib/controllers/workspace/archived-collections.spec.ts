@@ -2,8 +2,10 @@ import type { WorkspaceViewsController } from './views';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { expect, it } from 'vitest';
 import { resourceDataSchemas, type WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity } = new WorkspaceCommandRulesService();
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import {
 	memorySuggestionBuilder,
 	testDiagramId,

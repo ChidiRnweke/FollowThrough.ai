@@ -3,7 +3,7 @@
  * words of a display name, so "Ada Lovelace" reads "AL" and a single name reads
  * as its one initial.
  */
-export function initialsOf(displayName: string): string {
+function initialsOf(displayName: string): string {
 	const words = displayName.trim().split(/\s+/).filter(Boolean);
 	const first = words.at(0);
 	if (!first) return '';
@@ -12,4 +12,13 @@ export function initialsOf(displayName: string): string {
 		.filter((word) => word !== undefined)
 		.map((word) => Array.from(word)[0].toLocaleUpperCase())
 		.join('');
+}
+
+export interface AccountPresentation {
+	initialsOf(displayName: string): string;
+}
+export class AccountPresentationService implements AccountPresentation {
+	initialsOf(displayName: string): string {
+		return initialsOf(displayName);
+	}
 }

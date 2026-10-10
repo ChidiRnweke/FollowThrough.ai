@@ -3,7 +3,9 @@ import type { EntityRef } from '$lib/models/tool-display';
 
 import type { AgentToolName } from '$lib/models/agent/tool-catalog';
 import { type AgentPayload } from '$lib/models/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import { toolFailure, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { mechanismTools, type MechanismTool } from './rendered-tools';
 import { completedToolLabel, friendlyToolLabel, subjectVerb } from './tool-labels';

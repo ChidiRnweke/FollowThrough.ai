@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -74,6 +75,7 @@ export const promiseExtractionFixture = () => {
 		transactionRunner: transactions
 	});
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,
@@ -99,6 +101,6 @@ export const promiseExtractionFixture = () => {
 		transactions,
 		dependencies,
 		agent,
-		controller: new Todos(dependencies)
+		controller: new Todos(new WorkspaceCommandRulesService(), dependencies)
 	};
 };

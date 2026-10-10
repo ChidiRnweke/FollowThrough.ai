@@ -1,10 +1,11 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { NoteMarkdownReader } from '$lib/server/controllers/notes/controller';
 import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodoEditingRules } from '$lib/services/todos/edits';
 import type { TodoCreationRules } from '$lib/services/todos/edits';
 import { DuplicateNoteActionRequest } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { SuggestionEffectService } from '$lib/server/services/suggestions/effects';
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoBatchReceiptService } from '$lib/server/services/todos/batch-receipts';
@@ -155,7 +156,7 @@ export class Todos implements TodosController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -192,6 +193,7 @@ export class Todos implements TodosController {
 	}
 
 	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly dependencies: TodosDependencies,
 		private readonly clock: () => DateTime = () => new Date().toISOString() as DateTime
 	) {}

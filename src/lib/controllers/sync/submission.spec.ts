@@ -1,4 +1,4 @@
-import { wholeValueRebase } from '$lib/services/sync/rebase';
+import { wholeValueRebase } from '$lib/testing/sync/fixtures/primitive-replay';
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';

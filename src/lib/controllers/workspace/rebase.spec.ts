@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { projectBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
-import { rebaseWorkspaceRecord } from './rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { widgetTemplates } from '$lib/models/widgets';
 import { widgetBuilder } from '$lib/testing/widgets/fixtures/widgets';
 

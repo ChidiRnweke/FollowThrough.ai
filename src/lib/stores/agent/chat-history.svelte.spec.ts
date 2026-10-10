@@ -1,4 +1,5 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -13,7 +14,8 @@ import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { syncEtag } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,

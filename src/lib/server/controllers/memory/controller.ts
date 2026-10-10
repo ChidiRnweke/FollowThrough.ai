@@ -1,9 +1,10 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { AppliedChange } from '$lib/models/proposal-effects';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { IMemoryEditingService } from '$lib/services/memory/edits';
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 import { ValidationError } from '$lib/errors';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import type { MemoryIndexer } from '$lib/server/services/memory/library';
@@ -102,7 +103,7 @@ export class Memory implements MemoryController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -133,7 +134,10 @@ export class Memory implements MemoryController {
 				break;
 		}
 	}
-	constructor(private readonly dependencies: MemoryDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: MemoryDependencies
+	) {}
 
 	async list(actor: ActorContext, input: ListMemoryInput): Promise<ListMemoryOutput> {
 		const entries = await this.dependencies.memoryLister.list(actor, {

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
@@ -57,6 +58,7 @@ export const loadedSkillFixture = (body = 'Number every finding.') => {
 	];
 	const library = createSkillServices(skills, notes, provenance);
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import {
@@ -58,6 +59,7 @@ export const referenceSearchFixture = () => {
 		transactionRunner: transactions
 	};
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,

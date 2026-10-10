@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
@@ -42,6 +43,7 @@ const setup = () => {
 		repository,
 		models,
 		controller: new AgentSettings(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentSettingsDependencies>({
 				preferenceEditing: new AgentPreferenceEditingService(),
 				...agentRulesFixture(),

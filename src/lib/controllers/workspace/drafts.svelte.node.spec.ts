@@ -1,11 +1,14 @@
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-scheduler';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { noteCommand } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { noteCommand } = new WorkspaceCommandRulesService();
 import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
 import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import {
 	noteBuilder,

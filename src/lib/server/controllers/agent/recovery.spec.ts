@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { describe, expect, it, vi } from 'vitest';
 import { agentContextFixture } from '$lib/testing/agent/fixtures/context';
@@ -28,6 +29,7 @@ const recover = async (status: 'running' | 'cancelling') => {
 	runs.runs.push(run);
 	const settlements = new RunSettlements(runs, runs);
 	await new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,

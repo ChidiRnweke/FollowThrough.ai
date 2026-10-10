@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import {
 	projectBuilder,

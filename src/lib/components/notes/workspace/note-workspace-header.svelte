@@ -26,7 +26,7 @@
 		FtDocument as FileText,
 		FtClose as X
 	} from '$lib/components/icons';
-	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
+	import { proofreading } from '$lib/factories/notes/proofreading';
 	import NoteBreadcrumb from '../note-breadcrumb.svelte';
 	import NoteSyncStatus from '../note-sync-status.svelte';
 

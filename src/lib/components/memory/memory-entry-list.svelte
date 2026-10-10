@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { accessMessage } from '$lib/services/sync/state';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { accessMessage } = workspacePresentation;
+
 	import { Form } from '$lib/components/ui/form';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import type { MemoryEntry, MemoryEntryId, MemoryEntryType } from '$lib/models/memory';

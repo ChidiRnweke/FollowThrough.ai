@@ -1,3 +1,4 @@
+import { TodayPresentationService } from '$lib/services/workspace/today';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
@@ -18,6 +19,7 @@ it('returns the newly provisioned Inbox together with its skills on the first sh
 	await users.ensureLocal(testActor());
 	const suggestions = new InMemorySuggestionReader();
 	const workspace = new Workspace(
+		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
 			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),

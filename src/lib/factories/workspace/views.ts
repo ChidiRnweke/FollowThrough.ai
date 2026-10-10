@@ -1,3 +1,8 @@
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NotePresentationService } from '$lib/services/notes/presentation';
@@ -11,6 +16,11 @@ export const createWorkspaceViews = (
 	records: ReadonlyMap<string, WorkspaceRecord>
 ): WorkspaceViewsController =>
 	new WorkspaceViews(
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
+		new TodayPresentationService(),
 		new TodoPresentationService(),
 		new WorkspaceProjectionStore(records),
 		new SuggestionPresentationService(),
