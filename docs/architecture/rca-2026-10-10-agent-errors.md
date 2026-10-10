@@ -257,10 +257,14 @@ other schema with an error. Tool schemas are now converted with `anyOf`, which a
 values because each branch has a distinct literal discriminator. Whether `oneOf` caused the
 stringified range is not established.
 
-E1 hypothesis, unverified: `sed` is a first-class tool, so its `oneOf` schema went out with every
-request. All six rejections used `openai/gpt-5.6-luna` and failed before any tool ran, which fits a
-schema error from a provider that enforces the documented subset. This requires the provider's
-response body or a controlled request to confirm (plan task 6).
+E1 confirmed on 2026-10-10 by a controlled request to `openai/gpt-5.6-luna` with the old tool
+schemas: OpenRouter returned HTTP 400, with OpenAI and then Azure answering "Invalid schema for
+function 'sed': In context=('properties', 'range'), 'oneOf' is not permitted." The `anyOf` schema
+is accepted. Because `sed` is sent on every generation, every request to a model that enforces the
+strict subset failed before any tool ran, which matches all six rejections. The same probe found a
+second rejected schema: `update_export_settings` keyed colours by any string (`'propertyNames' is
+not permitted`), so any request after `search_tools` surfaced it would fail the same way. It now
+names the palette keys, and the provider accepts all 81 agent tools.
 
 Evidence: a test of every tool schema the agent sends found `sed: oneOf` before the change and none
 after. Tests through the tool's public invocation show a blank memory id treated as omitted and a
@@ -292,8 +296,8 @@ upstream provider OpenRouter routed to and the request id, for example `400 Prov
 error (provider OpenAI, request req-1)`. The upstream body in `error.metadata.raw` is not read,
 because it may echo the prompt. The classification survives the outer wrapping (tasks 1–3). A
 failed background run is now logged once, because it runs outside the instrumented controller
-boundary and nothing else logged it. The historical cause of the six rejections is unresolved;
-see the task 4 hypothesis.
+boundary and nothing else logged it. The cause of the six rejections is the `oneOf` schema,
+confirmed under task 4.
 
 O1: unresolved. Source shows the web and worker processes start with the same preload, endpoint
 default, log level default and console bridge, and the record builders do not throw on the
