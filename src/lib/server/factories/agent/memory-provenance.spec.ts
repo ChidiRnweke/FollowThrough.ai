@@ -4,7 +4,7 @@ import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { expect, it } from 'vitest';
-import { AgentTools, McpTools } from './agent-tool-factory';
+import { createAgentToolSurface, createMcpToolDefinitions } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -81,7 +81,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
 	const tools =
 		surface === 'agent'
-			? new AgentTools(
+			? createAgentToolSurface(
 					testTokenizer,
 					factory,
 					actor,
@@ -95,7 +95,7 @@ const setup = (surface: 'agent' | 'mcp', trusted = false) => {
 					new InMemoryToolRetriever(),
 					{ isEnabled: () => true }
 				)
-			: new McpTools(
+			: createMcpToolDefinitions(
 					testTokenizer,
 					factory,
 					actor,

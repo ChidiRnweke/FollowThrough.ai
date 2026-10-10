@@ -1,3 +1,4 @@
+import type { AgentToolSurface } from './agent-tool-factory';
 import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
 import { ReferencePresentationService } from '$lib/services/references/presentation';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
@@ -19,7 +20,7 @@ import { SuggestionPresentationService } from '$lib/services/suggestions/present
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
 import { RunContext } from '@openai/agents';
-import { AgentTools } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
 import { type PendingAgentDecision, type AgentExecutionMode } from '$lib/models/agent';
 import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
 import { noteChangeReviewSchema } from '$lib/models/notes';
@@ -47,7 +48,7 @@ const setup = () => {
 		pending: readonly PendingAgentDecision[] = [],
 		mode: AgentExecutionMode = 'approval_required'
 	) =>
-		new AgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
 			testActor(),
@@ -67,12 +68,12 @@ const setup = () => {
 		toolName: 'edit_note',
 		arguments: { noteId: note.id, edits: [{ oldText: 'Monday', newText: 'Tuesday' }] }
 	};
-	const select = (tools: AgentTools, name = call.toolName) => {
+	const select = (tools: AgentToolSurface, name = call.toolName) => {
 		const tool = tools.tools().find((item) => item.name === name);
 		if (!tool || tool.type !== 'function') throw new Error('Expected note function tool');
 		return tool;
 	};
-	const invoke = (tools: AgentTools, pending = call) =>
+	const invoke = (tools: AgentToolSurface, pending = call) =>
 		select(tools, pending.toolName).invoke(context(), JSON.stringify(pending.arguments), {
 			toolCall: {
 				type: 'function_call',
@@ -263,7 +264,7 @@ describe('A note change that fails while it is being prepared', () => {
 				transactionRunner: new InMemoryTransactionRunner([content])
 			})
 		);
-		const tools = new AgentTools(
+		const tools = createAgentToolSurface(
 			testTokenizer,
 			capabilityDependencies<ControllerFactory>({ notes: () => controller }),
 			testActor(),

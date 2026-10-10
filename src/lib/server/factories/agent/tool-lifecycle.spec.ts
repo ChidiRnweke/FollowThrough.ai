@@ -5,7 +5,7 @@ const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { describe, it, expect } from 'vitest';
 import { Agent, Runner, RunState } from '@openai/agents';
-import { AgentTools } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
 import { reviewedNoteFixture } from '$lib/testing/notes/fixtures/reviewed-changes';
 
 import { InMemoryToolRetriever } from '$lib/testing/agent/fakes/in-memory-agent';
@@ -38,7 +38,7 @@ const scenario = (
 	const note = noteBuilder({ ...noteMarkdown.read('Launch Monday.'), title: 'Release' });
 	const fixture = reviewedNoteFixture(note, options.markdown);
 	const createRegistry = (pending: readonly PendingAgentDecision[] = []) =>
-		new AgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			fixture.factory,
 			testActor(),

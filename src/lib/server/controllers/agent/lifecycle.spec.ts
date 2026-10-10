@@ -10,7 +10,7 @@ import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
-import { AgentTools } from '$lib/server/factories/agent/agent-tool-factory';
+import { createAgentToolSurface } from '$lib/server/factories/agent/agent-tool-factory';
 import { createConversationSession } from '$lib/server/factories/agent/conversation-factory';
 import { InMemoryModelProvider } from '$lib/testing/agent/fakes/in-memory-model-provider';
 import { InMemoryToolCallingModel } from '$lib/testing/agent/fakes/in-memory-tool-calling-model';
@@ -617,7 +617,7 @@ it('journals a failed tool call and its correction through the production runner
 		createAgentStream,
 		async ({ run, executor, signal }) => {
 			if (!run.inputSnapshot) throw new Error('Run input is missing');
-			return new AgentTools(
+			return createAgentToolSurface(
 				testTokenizer,
 				notes.factory,
 				testActor(),

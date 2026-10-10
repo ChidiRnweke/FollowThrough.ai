@@ -33,7 +33,7 @@ const connect = async (
 		provenanceId: testProvenanceId(),
 		toolRetriever: options.retriever ?? new InMemoryToolRetriever(),
 		toolAccess: { isEnabled: (name) => !(options.disabled ?? []).includes(name) }
-	});
+	}).open();
 	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 	const client = new Client({ name: 'test', version: '1.0.0' });
 	await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);

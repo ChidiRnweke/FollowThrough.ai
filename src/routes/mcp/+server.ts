@@ -52,7 +52,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		scope: authenticated.scope,
 		provenanceId: provenance.id,
 		toolAccess: { isEnabled: (toolName) => !disabled.has(toolName) }
-	});
+	}).open();
 
 	// Stateless: no session to keep alive between requests, so this survives
 	// process restarts and multiple instances without sticky routing.

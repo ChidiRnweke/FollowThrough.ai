@@ -5,7 +5,7 @@ import { ProjectDetailService } from '$lib/services/projects/details';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
-import { AgentTools } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Projects, type ProjectsDependencies } from '$lib/server/controllers/projects/controller';
 import { createProjectServices } from '$lib/server/factories/capabilities/projects-capability-factory';
@@ -35,7 +35,7 @@ const toolsFor = (hasProject: boolean) => {
 			projectLister: catalog.lister
 		})
 	);
-	return new AgentTools(
+	return createAgentToolSurface(
 		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ projects: () => controller }),
 		testActor(),
@@ -55,6 +55,11 @@ const toolsFor = (hasProject: boolean) => {
 	).definitions();
 };
 const requests: { name: string; action: string; input: AgentPayloadObject }[] = [
+	{
+		name: 'create_widget',
+		action: 'create a widget',
+		input: { title: 'Dashboard', layout: 'invalid JSON', data: 'invalid JSON' }
+	},
 	{ name: 'create_note', action: 'create a note', input: { title: 'New note' } },
 	{ name: 'create_skill', action: 'create a skill', input: { name: 'New skill' } },
 	{ name: 'create_diagram', action: 'create a diagram', input: { source: 'flowchart LR\nA --> B' } }

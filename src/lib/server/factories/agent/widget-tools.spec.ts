@@ -6,7 +6,7 @@ import { createTestContentIndex as createContentIndex } from '$lib/testing/knowl
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { describe, expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
 import { jsonObjectSchema } from '$lib/server/adapters/agent/tool-call';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { WidgetLibrary } from '$lib/server/services/widgets/library';
@@ -55,7 +55,7 @@ const setup = () => {
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})
 	);
-	const tools = new AgentTools(
+	const tools = createAgentToolSurface(
 		testTokenizer,
 		capabilityDependencies<ControllerFactory>({ widgets: () => controller }),
 		testActor(),

@@ -1,3 +1,4 @@
+import type { AgentToolSurface } from './agent-tool-factory';
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { RunContext } from '@openai/agents';
 import type { ProvenanceId } from '$lib/models/provenance';
@@ -39,21 +40,15 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import {
-	AgentTools,
-	McpTools,
+	createAgentToolSurface,
+	createMcpToolDefinitions,
 	agentToolCoverage,
 	agentToolRegistry,
-	type ToolAccessPolicy,
-	type AgentToolDefinition
+	type ToolAccessPolicy
 } from './agent-tool-factory';
 import type { AgentToolContractBinding } from '$lib/models/agent';
-import type { ToolClassification } from '$lib/models/agent';
 import { toolFailureSchema } from '$lib/models/agent/tool-failure';
-import {
-	TOOL_DESCRIPTIONS,
-	LOCKED_TOOL_NAMES,
-	type ToolName
-} from '$lib/models/agent/tool-catalog';
+import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contracts';
 
 const executeDirectly: AgentToolExecutor = {
@@ -62,80 +57,27 @@ const executeDirectly: AgentToolExecutor = {
 const allTools: ToolAccessPolicy = { isEnabled: () => true };
 
 const createAgentTools = (
-	controllers: ConstructorParameters<typeof AgentTools>[1],
-	actor: ConstructorParameters<typeof AgentTools>[2],
-	mode: ConstructorParameters<typeof AgentTools>[3],
-	context: ConstructorParameters<typeof AgentTools>[4],
+	controllers: Parameters<typeof createAgentToolSurface>[1],
+	actor: Parameters<typeof createAgentToolSurface>[2],
+	mode: Parameters<typeof createAgentToolSurface>[3],
+	context: Parameters<typeof createAgentToolSurface>[4],
 	executor: AgentToolExecutor = executeDirectly,
 	retriever: InMemoryToolRetriever = new InMemoryToolRetriever(),
 	access: ToolAccessPolicy = allTools
-): AgentTools =>
-	new AgentTools(testTokenizer, controllers, actor, mode, context, executor, retriever, access);
+): AgentToolSurface =>
+	createAgentToolSurface(
+		testTokenizer,
+		controllers,
+		actor,
+		mode,
+		context,
+		executor,
+		retriever,
+		access
+	);
 
 let freshKeyCounter = 0;
 const freshKey = (): string => `fresh:${freshKeyCounter++}`;
-
-const definitionsCacheKey = (options: { classifications?: readonly ToolClassification[] } = {}) =>
-	JSON.stringify(options.classifications ?? null);
-
-const memoizedResult = <Args extends unknown[], Result>(
-	cache: Map<string, Result>,
-	args: Args,
-	build: () => Result
-): Result => {
-	const key = JSON.stringify(args);
-	const hit = cache.get(key);
-	if (hit !== undefined) return hit;
-	const value = build();
-	cache.set(key, value);
-	return value;
-};
-
-/**
- * The registry is pure and deterministic for a given set of constructor args, so
- * a whole test file can share one built instance and one set of method results.
- * Custom factory/retriever args and any test that invokes `search_tools` must
- * stay fresh: the former capture per-test state, the latter mutates a promotion
- * set that every subsequent test on that registry would otherwise inherit.
- */
-class MemoizedAgentTools extends AgentTools {
-	private readonly definitionsResults = new Map<string, AgentToolDefinition[]>();
-	private readonly toolsResults = new Map<string, Tool<unknown>[]>();
-	private readonly agentToolsResults = new Map<string, Tool<unknown>[]>();
-	private readonly offeredResults = new Map<string, ToolName[]>();
-
-	constructor(...args: ConstructorParameters<typeof AgentTools>) {
-		super(...args);
-	}
-
-	override definitions(
-		options: { classifications?: readonly ToolClassification[] } = {}
-	): AgentToolDefinition[] {
-		return memoizedResult(this.definitionsResults, [definitionsCacheKey(options)], () =>
-			super.definitions(options)
-		);
-	}
-
-	override tools(
-		options: { classifications?: readonly ToolClassification[] } = {}
-	): Tool<unknown>[] {
-		return memoizedResult(this.toolsResults, [definitionsCacheKey(options)], () =>
-			super.tools(options)
-		);
-	}
-
-	override agentTools(alreadyPromoted: readonly string[] = []): Tool<unknown>[] {
-		return memoizedResult(this.agentToolsResults, [alreadyPromoted.join('\u0000')], () =>
-			super.agentTools(alreadyPromoted)
-		);
-	}
-
-	override offeredToolNames(alreadyPromoted: readonly string[] = []): ToolName[] {
-		return memoizedResult(this.offeredResults, [alreadyPromoted.join('\u0000')], () =>
-			super.offeredToolNames(alreadyPromoted)
-		);
-	}
-}
 
 const memoizeAgentTools = <Args extends unknown[], Result>(
 	keyOf: (...args: Args) => string,
@@ -164,7 +106,7 @@ const registry = memoizeAgentTools(
 	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
 		options.factory ? freshKey() : `registry:${mode}`,
 	(mode: 'approval_required' | 'auto_accept', options: { factory?: ControllerFactory } = {}) =>
-		new MemoizedAgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
@@ -224,7 +166,7 @@ const agentToolsRegistry = memoizeAgentTools(
 		mode: 'approval_required' | 'auto_accept',
 		options: { factory?: ControllerFactory; retriever?: InMemoryToolRetriever } = {}
 	) =>
-		new MemoizedAgentTools(
+		createAgentToolSurface(
 			testTokenizer,
 			options.factory ?? ({} as ControllerFactory),
 			testActor(),
@@ -380,7 +322,7 @@ describe('Agent tool coverage invariants', () => {
 	 * lands in a window an external host cannot see.
 	 */
 	it('builds every contract on the MCP surface except the app-surface tools', () => {
-		const mcp = new McpTools(
+		const mcp = createMcpToolDefinitions(
 			testTokenizer,
 			{} as ControllerFactory,
 			testActor(),
@@ -950,7 +892,7 @@ describe('Agent tool coverage invariants', () => {
 		const input = JSON.stringify(payload);
 		const first = await selected.invoke({} as never, input);
 		const retry = await selected.invoke({} as never, input);
-		const mcp = new McpTools(
+		const mcp = createMcpToolDefinitions(
 			testTokenizer,
 			factory,
 			testActor(),
@@ -1555,9 +1497,9 @@ describe('Doomed note edits never reach the approval boundary', () => {
 describe('Deselected tools', () => {
 	const without = memoizeAgentTools(
 		(...disabled: string[]) => `without:${disabled.join(',')}`,
-		(...disabled: string[]): AgentTools => {
+		(...disabled: string[]): AgentToolSurface => {
 			const policy: ToolAccessPolicy = { isEnabled: (name) => !disabled.includes(name) };
-			return new MemoizedAgentTools(
+			return createAgentToolSurface(
 				testTokenizer,
 				{} as ControllerFactory,
 				testActor(),

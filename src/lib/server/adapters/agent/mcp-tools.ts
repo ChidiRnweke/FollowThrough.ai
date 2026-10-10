@@ -22,11 +22,11 @@ export interface McpToolDefinition {
 export class McpToolProtocol implements McpToolResultReader {
 	constructor(
 		private readonly definitions: readonly McpToolDefinition[],
-		private readonly failure: (value: AgentPayload) => boolean
+		private readonly readFailure: (value: AgentPayload) => string | undefined
 	) {}
 
 	failed(value: AgentPayload): boolean {
-		return this.failure(value);
+		return this.readFailure(value) !== undefined;
 	}
 
 	create(session: McpToolSessionControl): Server {

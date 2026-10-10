@@ -3,7 +3,7 @@ import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
 import { expect, it } from 'vitest';
-import { AgentTools } from './agent-tool-factory';
+import { createAgentToolSurface } from './agent-tool-factory';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -69,7 +69,7 @@ const setup = (scope: 'user' | 'project') => {
 		})
 	);
 	const factory = capabilityDependencies<ControllerFactory>({ memory: () => controller });
-	const tools = new AgentTools(
+	const tools = createAgentToolSurface(
 		testTokenizer,
 		factory,
 		testActor(),

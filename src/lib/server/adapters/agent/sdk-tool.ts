@@ -68,7 +68,11 @@ export interface SdkToolOptions {
 	) => Promise<AgentPayload>;
 }
 
-export class AgentSdkToolAdapter {
+export interface AgentSdkToolBuilder {
+	create(options: SdkToolOptions, invocation: AgentToolInvocationControl): Tool<unknown>;
+}
+
+export class AgentSdkToolAdapter implements AgentSdkToolBuilder {
 	create(options: SdkToolOptions, invocation: AgentToolInvocationControl): Tool<unknown> {
 		const schema = z.toJSONSchema(options.parameters, { io: 'input' });
 		const prepare = (input: unknown, callId: string | undefined, phase: 'approval' | 'execute') => {

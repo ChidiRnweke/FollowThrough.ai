@@ -1,7 +1,6 @@
-// chisel-ignore-file structural:factory-contains-logic -- Maps closed domain results to the shared tool wire contract.
-import { z } from 'zod';
-import type { AgentLsResult, AgentGrepResult, AgentSedResult } from '$lib/models/agent-files';
+import type { AgentGrepResult, AgentLsResult, AgentSedResult } from '$lib/models/agent-files';
 import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
+import { z } from 'zod';
 
 export function projectFileResult(
 	result: AgentLsResult
