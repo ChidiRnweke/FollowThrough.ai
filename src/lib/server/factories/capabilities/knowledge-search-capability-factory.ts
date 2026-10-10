@@ -1,3 +1,4 @@
+import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type { Database } from '$lib/server/db';
@@ -108,6 +109,11 @@ export const createKnowledgeSearchCapability = (
 		finalize: ({ preferences }) => ({
 			preferences,
 			inlineCompletion: new InlineSuggestionCompletion(input.openRouterApiKey, {
+				model: normalizeLanguageModelId(
+					process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
+						process.env.OPENROUTER_INLINE_MODEL ??
+						'deepseek/deepseek-v4-flash'
+				),
 				baseURL: input.openRouterBaseURL,
 				appURL: input.appURL,
 				observer: operationObserver

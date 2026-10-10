@@ -25,7 +25,9 @@ import {
 } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { VALID_DRAWIO_XML } from '$lib/testing/diagrams/fixtures/drawio';
 
-const setup = () => {
+const setup = (
+	index: DiagramStudioDependencies['diagramIndexer']['index'] = async () => ({ kind: 'stored' })
+) => {
 	const sourceNotes = new InMemoryNoteContent();
 	sourceNotes.notes = [noteBuilder()];
 	const diagrams = new InMemoryDiagramRepository();
@@ -52,7 +54,7 @@ const setup = () => {
 				transactionRunner: new InMemoryTransactionRunner([diagrams]),
 				now: () => testNow,
 				// Indexing is a downstream effect, not part of what these tests state.
-				diagramIndexer: { index: async () => ({ kind: 'stored' }) },
+				diagramIndexer: { index },
 				drawioXmlValidator: { validate: (source: string) => source },
 				drawioLabels: { read: () => ['Ingest Index Answer'] }
 			})
@@ -170,4 +172,21 @@ describe('Reading a saved diagram', () => {
 		const result = await controller.readProjectDiagram(testActor(), { diagramId: diagram.id });
 		expect(result.title).toBe('Ingest pipeline');
 	});
+});
+
+it('does not retain a newly created diagram when indexing fails', async () => {
+	const { controller, diagrams } = setup(async () => {
+		throw new Error('Index unavailable');
+	});
+	const result = await controller
+		.createDiagram(testActor(), {
+			source: VALID_DRAWIO_XML,
+			projectId: testProjectId(),
+			conversationId: testConversationId()
+		})
+		.then(
+			() => 'saved',
+			() => 'failed'
+		);
+	expect({ result, diagrams: diagrams.diagrams }).toEqual({ result: 'failed', diagrams: [] });
 });

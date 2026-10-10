@@ -65,18 +65,6 @@ export const sessionJsonObjectSchema: z.ZodType<SessionJsonObject> = z.record(
 );
 
 /**
- * A JSON object, or nothing — for a caller holding a value it has already
- * decoded and needs to know the shape of, such as a tool call's `arguments`.
- * Absence means "not an object", which is a fact the caller acts on, not a
- * failure it has to guess at.
- */
-// audit-allow: no-unknown-type — Session JSON off a stored row, before any arm has been chosen.
-export const readSessionJsonObject = (value: unknown): SessionJsonObject | undefined => {
-	const parsed = sessionJsonObjectSchema.safeParse(value);
-	return parsed.success ? parsed.data : undefined;
-};
-
-/**
  * The provider's own bag, passed through untouched.
  *
  * A genuine open-keyed map rather than a struct substitute: the keys belong to
@@ -258,18 +246,6 @@ const callIdentity = {
 	call_id: z.string().optional()
 };
 
-const resolveCallId = <Value extends { readonly callId?: string; readonly call_id?: string }>(
-	value: Value,
-	ctx: z.RefinementCtx
-): (Value & { readonly callId: string }) | typeof z.NEVER => {
-	const callId = value.callId ?? value.call_id;
-	if (callId === undefined) {
-		ctx.addIssue({ code: 'custom', path: ['callId'], message: 'A tool item must carry a call id' });
-		return z.NEVER;
-	}
-	return { ...value, callId };
-};
-
 /**
  * The stored spelling of a message: `type: 'message'` plus a `role`. The union
  * splits the two roles into arms because they carry different content and, for
@@ -307,7 +283,18 @@ const storedFunctionCallSchema = z
 		...providerData
 	})
 	.strict()
-	.transform(resolveCallId);
+	.transform((value, ctx) => {
+		const callId = value.callId ?? value.call_id;
+		if (callId === undefined) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['callId'],
+				message: 'A tool item must carry a call id'
+			});
+			return z.NEVER;
+		}
+		return { ...value, callId };
+	});
 
 const storedFunctionCallResultSchema = z
 	.object({
@@ -320,7 +307,18 @@ const storedFunctionCallResultSchema = z
 		...providerData
 	})
 	.strict()
-	.transform(resolveCallId);
+	.transform((value, ctx) => {
+		const callId = value.callId ?? value.call_id;
+		if (callId === undefined) {
+			ctx.addIssue({
+				code: 'custom',
+				path: ['callId'],
+				message: 'A tool item must carry a call id'
+			});
+			return z.NEVER;
+		}
+		return { ...value, callId };
+	});
 
 const storedReasoningSchema = z
 	.object({
@@ -332,94 +330,55 @@ const storedReasoningSchema = z
 	})
 	.strict();
 
-/**
- * An absent optional stays absent, rather than becoming a present `undefined`.
- *
- * These items are written back to `jsonb` and replayed to the provider, so a key
- * that was not there must not appear, and `JSON.stringify` is not the only path
- * a row takes.
- */
-const present = <Value>(key: string, value: Value | undefined) =>
-	value === undefined ? {} : { [key]: value };
-
-// audit-allow: no-unknown-type — Tries each persisted arm against a row nothing has parsed.
-const recognise = (value: unknown): PersistedSessionItem | undefined => {
-	const user = storedUserMessageSchema.safeParse(value);
-	if (user.success)
-		return {
-			type: 'user_message',
-			content: user.data.content,
-			...present('id', user.data.id),
-			...present('providerData', user.data.providerData)
-		};
-	const assistant = storedAssistantMessageSchema.safeParse(value);
-	if (assistant.success)
-		return {
-			type: 'assistant_message',
-			status: assistant.data.status,
-			content: assistant.data.content,
-			...present('id', assistant.data.id),
-			...present('providerData', assistant.data.providerData)
-		};
-	const call = storedFunctionCallSchema.safeParse(value);
-	if (call.success)
-		return {
-			type: 'function_call',
-			callId: call.data.callId,
-			name: call.data.name,
-			arguments: call.data.arguments,
-			...present('id', call.data.id),
-			...present('status', call.data.status),
-			...present('providerData', call.data.providerData)
-		};
-	const result = storedFunctionCallResultSchema.safeParse(value);
-	if (result.success)
-		return {
-			type: 'function_call_result',
-			callId: result.data.callId,
-			name: result.data.name,
-			status: result.data.status,
-			output: result.data.output,
-			...present('id', result.data.id),
-			...present('providerData', result.data.providerData)
-		};
-	const reasoning = storedReasoningSchema.safeParse(value);
-	if (reasoning.success)
-		return {
-			type: 'reasoning',
-			content: reasoning.data.content,
-			...present('rawContent', reasoning.data.rawContent),
-			...present('id', reasoning.data.id),
-			...present('providerData', reasoning.data.providerData)
-		};
-	return undefined;
-};
-
-/**
- * A stored row, as one of the arms.
- *
- * Throws only when the value is not a JSON object at all: that is a corrupt
- * column rather than an item shape this code has not met, and there is nothing
- * worth preserving. Everything else settles into an arm, so a conversation stays
- * readable.
- */
-// audit-allow: no-unknown-type — The repository read boundary for agent_session_items.
-export const parseSessionItem = (value: unknown): PersistedSessionItem => {
-	const recognised = recognise(value);
-	if (recognised) return recognised;
-	const raw = sessionJsonObjectSchema.safeParse(value);
-	if (!raw.success)
-		throw new Error(`A session item must be a JSON object: ${raw.error.issues[0]?.message}`);
-	const type = raw.data.type;
-	return {
-		type: 'unrecognised',
-		raw: raw.data,
+/** Decode storage spelling into the resolved session union at repository/provider boundaries. */
+export const persistedSessionItemSchema: z.ZodType<PersistedSessionItem> = z.union([
+	storedUserMessageSchema.transform((value): PersistedSessionItem => ({
+		type: 'user_message',
+		content: value.content,
+		...(value.id === undefined ? {} : { id: value.id }),
+		...(value.providerData === undefined ? {} : { providerData: value.providerData })
+	})),
+	storedAssistantMessageSchema.transform((value): PersistedSessionItem => ({
+		type: 'assistant_message',
+		status: value.status,
+		content: value.content,
+		...(value.id === undefined ? {} : { id: value.id }),
+		...(value.providerData === undefined ? {} : { providerData: value.providerData })
+	})),
+	storedFunctionCallSchema.transform((value): PersistedSessionItem => ({
+		type: 'function_call',
+		callId: value.callId,
+		name: value.name,
+		arguments: value.arguments,
+		...(value.id === undefined ? {} : { id: value.id }),
+		...(value.status === undefined ? {} : { status: value.status }),
+		...(value.providerData === undefined ? {} : { providerData: value.providerData })
+	})),
+	storedFunctionCallResultSchema.transform((value): PersistedSessionItem => ({
+		type: 'function_call_result',
+		callId: value.callId,
+		name: value.name,
+		status: value.status,
+		output: value.output,
+		...(value.id === undefined ? {} : { id: value.id }),
+		...(value.providerData === undefined ? {} : { providerData: value.providerData })
+	})),
+	storedReasoningSchema.transform((value): PersistedSessionItem => ({
+		type: 'reasoning',
+		content: value.content,
+		...(value.rawContent === undefined ? {} : { rawContent: value.rawContent }),
+		...(value.id === undefined ? {} : { id: value.id }),
+		...(value.providerData === undefined ? {} : { providerData: value.providerData })
+	})),
+	sessionJsonObjectSchema.transform((raw) => ({
+		type: 'unrecognised' as const,
+		raw,
 		reason:
-			typeof type === 'string'
-				? `No arm matches a stored item of type '${type}'`
+			typeof raw.type === 'string'
+				? `No arm matches a stored item of type '${raw.type}'`
 				: 'A stored item carries no recognisable type'
-	};
-};
+	}))
+]);
 
 /** What the two `message` arms share with their stored spelling. */
 type StoredMessage = {
@@ -451,70 +410,3 @@ type StoredReasoning = {
 };
 
 export type StoredSessionItem = StoredMessage | StoredTool | StoredReasoning | SessionJsonObject;
-
-/** The row as it is written back: the shape the provider sent, restored exactly. */
-export const toStoredSessionItem = (item: PersistedSessionItem): StoredSessionItem => {
-	switch (item.type) {
-		case 'user_message':
-			return {
-				type: 'message',
-				role: 'user',
-				content: item.content,
-				...present('id', item.id),
-				...present('providerData', item.providerData)
-			};
-		case 'assistant_message':
-			return {
-				type: 'message',
-				role: 'assistant',
-				status: item.status,
-				content: item.content,
-				...present('id', item.id),
-				...present('providerData', item.providerData)
-			};
-		case 'function_call':
-			return {
-				type: 'function_call',
-				callId: item.callId,
-				name: item.name,
-				arguments: item.arguments,
-				...present('id', item.id),
-				...present('status', item.status),
-				...present('providerData', item.providerData)
-			};
-		case 'function_call_result':
-			return {
-				type: 'function_call_result',
-				callId: item.callId,
-				name: item.name,
-				status: item.status,
-				output: item.output,
-				...present('id', item.id),
-				...present('providerData', item.providerData)
-			};
-		case 'reasoning':
-			return {
-				type: 'reasoning',
-				content: item.content,
-				...present('rawContent', item.rawContent),
-				...present('id', item.id),
-				...present('providerData', item.providerData)
-			};
-		case 'unrecognised':
-			return item.raw;
-	}
-};
-
-/**
- * The text a tool result carries, whichever of the three shapes it arrived in.
- *
- * `'type' in output` rather than `!Array.isArray(output)`: `Array.isArray`
- * narrows to `any[]`, which a `readonly` array member is not assignable to, so
- * the array would survive into the object branch. The key test discriminates the
- * union the compiler can actually check.
- */
-export const sessionOutputText = (item: FunctionCallResultSessionItem): string | undefined => {
-	const { output } = item;
-	if (typeof output === 'string') return output;
-	return 'type' in output ? output.text : undefined;
-};

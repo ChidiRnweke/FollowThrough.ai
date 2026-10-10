@@ -1,15 +1,10 @@
 import { z } from 'zod';
 export type AgentRunExecutionOutcome = 'completed' | 'awaiting_approval' | 'cancelled';
 import type { PersistedSessionItem } from './session-item';
+import { TOOL_DESCRIPTIONS, type AgentToolName, type ToolName } from './tool-catalog';
 import {
-	AGENT_TOOL_NAME_VALUES,
-	TOOL_NAME_VALUES,
-	type AgentToolName,
-	type ToolName
-} from './tool-catalog';
-import {
-	readAgentPayload,
-	readAgentPayloadObject,
+	agentPayloadSchema,
+	agentPayloadObjectSchema,
 	type AgentPayload,
 	type AgentPayloadObject
 } from './payload';
@@ -277,13 +272,6 @@ export const CHAT_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 
 export const DEFAULT_AGENT_MAX_TURNS = 20;
 
-/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
-export const normalizeLanguageModelId = (modelId: string): string => {
-	const separator = modelId.indexOf(':');
-	if (separator <= 0 || modelId.includes('/')) return modelId;
-	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
-};
-
 export const REFERENCE_WEB_SEARCH_DEFAULTS: WebResearchSettings = {
 	engine: 'exa',
 	maxResults: 8,
@@ -298,15 +286,6 @@ export interface WebResearchTool {
 		readonly max_total_results: number;
 	};
 }
-
-export const openRouterWebSearchTool = (options: WebResearchSettings): WebResearchTool => ({
-	type: 'openrouter:web_search',
-	parameters: {
-		engine: options.engine,
-		max_results: options.maxResults,
-		max_total_results: options.maxTotalResults
-	}
-});
 
 /**
  * The user's agent defaults. Every optional field is absent rather than null
@@ -1072,38 +1051,13 @@ export type StoredAgentEvent =
 	| { readonly kind: 'readable'; readonly event: AgentEvent }
 	| { readonly kind: 'unreadable'; readonly reason: string };
 
-/**
- * The JSON a tool call carried, read with {@link readAgentPayload} rather than a
- * zod schema. `z.record` accepts a `Date` — which has no enumerable keys — and
- * parses it clean to `{}`, which is the silent wrong answer this whole exercise
- * removes, so the value reaches the hand-written reader untouched.
- */
-const eventPayloadSchema = z
-	.custom<unknown>(() => true)
-	.transform((value, context) => {
-		const read = readAgentPayload(value);
-		if (read.kind === 'corrupt') {
-			context.addIssue({ code: 'custom', message: read.message });
-			return z.NEVER;
-		}
-		return read.value;
-	});
-
-const eventPayloadObjectSchema = z
-	.custom<unknown>(() => true)
-	.transform((value, context) => {
-		const read = readAgentPayloadObject(value);
-		if (read.kind === 'corrupt') {
-			context.addIssue({ code: 'custom', message: read.message });
-			return z.NEVER;
-		}
-		return read.value;
-	});
+const eventPayloadSchema = agentPayloadSchema;
+const eventPayloadObjectSchema = agentPayloadObjectSchema;
 
 const runIdSchema = z.string().transform((value) => value as AgentRunId);
 
 /** A catalog tool name. `search_tools` is not one; see {@link agentToolNameSchema}. */
-const toolNameSchema = z.enum(TOOL_NAME_VALUES);
+export const toolNameSchema = z.enum(TOOL_DESCRIPTIONS.map((entry) => entry.name));
 
 /**
  * Every name the agent surface can produce, catalog or not.
@@ -1113,7 +1067,7 @@ const toolNameSchema = z.enum(TOOL_NAME_VALUES);
  * `tests/corpus/`, the only name outside the catalog is `search_tools`, which
  * `AgentTools.agentTools()` assembles rather than defines.
  */
-export const agentToolNameSchema = z.enum(AGENT_TOOL_NAME_VALUES);
+export const agentToolNameSchema = z.union([toolNameSchema, z.literal('search_tools')]);
 
 export const pendingDecisionIdentitySchema = z.object({ callId: z.string() });
 
@@ -1327,7 +1281,7 @@ export interface ProviderToolCall {
 
 /**
  * The value a tool returned, taken out of the item without validation so
- * {@link readAgentPayload} can classify it.
+ * {@link agentPayloadResultSchema} can classify it.
  *
  * A `z.record`-shaped JSON schema accepts a `Date` — which has no enumerable
  * keys — and parses it to `{}`. That is the silent wrong answer `payload.ts` is

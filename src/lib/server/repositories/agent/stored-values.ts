@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { readAgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadResultSchema } from '$lib/models/agent/payload';
 import type { AgentEvent } from '$lib/models/agent';
 import type { NoteActionResult } from './agent-runs';
 
 /** The storage boundary serializes the resolved domain result into the event protocol. */
 export const noteActionEvent = (result: NoteActionResult): AgentEvent => {
-	const parsed = readAgentPayload(result.result);
+	const parsed = agentPayloadResultSchema.parse(result.result);
 	if (parsed.kind === 'corrupt')
 		throw new Error(`Note action result cannot be stored: ${parsed.message}`);
 	return { type: 'workflow_result', action: result.action, result: parsed.value };

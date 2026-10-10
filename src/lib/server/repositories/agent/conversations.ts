@@ -15,6 +15,7 @@ export interface ConversationListOptions {
 /** A conversation's context (project or note) is fixed on creation; nothing here ever changes it after the first turn. */
 export interface ConversationRepository {
 	list(actor: ActorContext, options?: ConversationListOptions): Promise<readonly Conversation[]>;
+	findForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined>;
 	findById(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined>;
 	insert(actor: ActorContext, conversation: Conversation): Promise<Conversation>;
 	update(actor: ActorContext, conversation: Conversation): Promise<Conversation>;

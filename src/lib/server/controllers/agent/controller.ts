@@ -331,10 +331,13 @@ export class Agent implements AgentController {
 	}
 
 	async deleteSession(actor: ActorContext, conversationId: ConversationId): Promise<void> {
-		const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
-		if (active)
-			throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
-		await this.dependencies.conversationJournal.remove(actor, conversationId);
+		await this.dependencies.transactionRunner.run(async () => {
+			await this.dependencies.conversationJournal.getForWrite(actor, conversationId);
+			const active = await this.dependencies.runs.findActiveByConversation(actor, conversationId);
+			if (active)
+				throw new ValidationError('Stop or resolve the active agent run before deleting this chat');
+			await this.dependencies.conversationJournal.remove(actor, conversationId);
+		});
 	}
 
 	async submit(actor: ActorContext, input: SubmitAgentRunInput): Promise<AgentRunReceipt> {

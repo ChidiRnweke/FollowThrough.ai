@@ -1,3 +1,4 @@
+import { z } from 'zod';
 type Brand<T, Name extends string> = T & { readonly __brand: Name };
 
 type ConversationId = Brand<string, 'ConversationId'>;
@@ -149,3 +150,84 @@ export type AgentSedResult =
 			readonly nextActions: readonly AgentFileNextAction[];
 	  }
 	| AgentFileError;
+
+/** Canonical resource paths are decoded by the virtual filesystem's input adapter. */
+const projectIdSchema = z.uuid().transform((value) => value as Brand<string, 'ProjectId'>);
+const noteIdSchema = z.uuid().transform((value) => value as Brand<string, 'NoteId'>);
+const pathSegmentsSchema = z.string().transform((path) => path.split('/'));
+export const agentResourcePathSchema = pathSegmentsSchema.pipe(
+	z.union([
+		z
+			.tuple([
+				z.literal(''),
+				z.literal('projects'),
+				projectIdSchema,
+				z.literal('notes'),
+				z
+					.string()
+					.endsWith('.md')
+					.transform((value) => value.slice(0, -3))
+					.pipe(noteIdSchema)
+			])
+			.transform(([, , projectId, , noteId]) => ({ kind: 'note' as const, projectId, noteId })),
+		z
+			.tuple([
+				z.literal(''),
+				z.literal('projects'),
+				projectIdSchema,
+				z.literal('notes'),
+				noteIdSchema,
+				z.literal('versions'),
+				z
+					.string()
+					.regex(/^\d+\.md$/)
+					.transform((value) => Number(value.slice(0, -3)))
+			])
+			.transform(([, , projectId, , noteId, , revision]) => ({
+				kind: 'version' as const,
+				projectId,
+				noteId,
+				revision
+			})),
+		z
+			.tuple([
+				z.literal(''),
+				z.literal('projects'),
+				projectIdSchema,
+				z.literal('attachments'),
+				z
+					.string()
+					.endsWith('.txt')
+					.transform((value) => value.slice(0, -4))
+					.pipe(z.uuid().transform((value) => value as Brand<string, 'AttachmentId'>))
+			])
+			.transform(([, , projectId, , attachmentId]) => ({
+				kind: 'attachment' as const,
+				projectId,
+				attachmentId
+			})),
+		z
+			.tuple([
+				z.literal(''),
+				z.literal('projects'),
+				projectIdSchema,
+				z.literal('diagrams'),
+				z
+					.string()
+					.transform((value) => value.split('.'))
+					.pipe(
+						z.tuple([
+							z.uuid().transform((value) => value as Brand<string, 'DiagramId'>),
+							z.enum(['mmd', 'drawio'])
+						])
+					)
+			])
+			.transform(([, , projectId, , [diagramId, extension]]) => ({
+				kind: 'diagram' as const,
+				projectId,
+				diagramId,
+				extension
+			}))
+	])
+);
+export type AgentResourcePath = z.infer<typeof agentResourcePathSchema>;

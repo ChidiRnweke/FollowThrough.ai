@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
-import { prepareExport } from '$lib/server/services/deliverables/export-preparation';
+import { prepareExport } from '$lib/services/deliverables/export-preparation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 type BoardPdfGenerator = TodosDependencies['pdfGenerator'];
 type MarkdownToDocument = TodosDependencies['markdownToContent'];

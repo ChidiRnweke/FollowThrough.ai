@@ -1,3 +1,4 @@
+import { normalizeLanguageModelId } from '$lib/services/agent/model-selection';
 import { type ActorContext } from '$lib/models/identity';
 import {
 	type InlineSuggestion,
@@ -19,6 +20,8 @@ import type { MemoryEntryLister } from '$lib/server/services/memory/contracts';
 import type { EmbeddingClient, Reranker } from '$lib/server/services/knowledge-search/contracts';
 import { queryVector, type KnowledgeLookup } from '$lib/server/services/knowledge-search/semantic';
 import {
+	eligibleInlinePrefix,
+	eligibleInlineNote,
 	retrievalQuery,
 	inlineMemoryPlan,
 	inlineRankedMemory,
@@ -32,7 +35,6 @@ import {
 } from '$lib/server/services/inline-suggestions/inline-context';
 import { MimeType, OpenInferenceSpanKind } from '@arizeai/openinference-semantic-conventions';
 
-const MIN_PREFIX_LENGTH = 12;
 const INELIGIBLE: InlineSuggestion = { outcome: 'no_suggestion', reason: 'ineligible' };
 
 /**
@@ -70,7 +72,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		request: InlineSuggestionRequest,
 		signal: AbortSignal
 	): Promise<InlineSuggestion> {
-		if (request.prefix.trim().length < MIN_PREFIX_LENGTH) return INELIGIBLE;
+		if (!eligibleInlinePrefix(request.prefix)) return INELIGIBLE;
 		// One read serves both the on/off gate and the model choice; ghost text
 		// fires on every typing pause, so a second round trip here is not free.
 		const preferences = await this.dependencies.preferences.get(actor);
@@ -111,7 +113,9 @@ export class InlineSuggestions implements InlineSuggestionsController {
 							authoritativeRequest,
 							context,
 							signal,
-							preferences.inlineModel
+							preferences.inlineModel === undefined
+								? undefined
+								: normalizeLanguageModelId(preferences.inlineModel)
 						);
 					} catch (error) {
 						if (signal.aborted) throw error;
@@ -215,6 +219,6 @@ export class InlineSuggestions implements InlineSuggestionsController {
 	): Promise<Note | undefined> {
 		if (!enabled) return undefined;
 		const note = await this.dependencies.noteReader.get(actor, request.noteId);
-		return note.archivedAt ? undefined : note;
+		return eligibleInlineNote(note) ? note : undefined;
 	}
 }

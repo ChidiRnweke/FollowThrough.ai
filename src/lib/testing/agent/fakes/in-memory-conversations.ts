@@ -35,6 +35,9 @@ export class InMemoryConversationRepository implements ConversationRepository, S
 		);
 	}
 
+	findForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined> {
+		return this.findById(actor, id);
+	}
 	async findById(actor: ActorContext, id: ConversationId): Promise<Conversation | undefined> {
 		return this.conversations.find(
 			(conversation) => conversation.id === id && conversation.userId === actor.userId

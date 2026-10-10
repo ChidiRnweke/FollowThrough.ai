@@ -1,11 +1,15 @@
-import { drawioLabelValues } from '$lib/models/diagrams/drawio-labels';
+/** Read draw.io label attributes in document order without applying display/search policy. */
+const drawioLabelValues = (document: Document): readonly string[] =>
+	Array.from(document.querySelectorAll('mxCell, object, UserObject'))
+		.flatMap((element) => [element.getAttribute('label'), element.getAttribute('value')])
+		.filter((value): value is string => value !== null);
+
 import { normalizedDrawioLabels } from '$lib/services/diagrams/labels';
 
 /**
  * The labels in a draw.io document, read in the browser.
  *
- * The walk is shared with the server (`models/diagrams/drawio-labels`); only the
- * parsing differs, because the server has jsdom and this has `DOMParser`. The
+ * The browser reads XML with `DOMParser`; the server uses jsdom. The
  * approval card uses it to say what a diagram contains without rendering it —
  * the server cannot draw draw.io, and a card that waited for a picture would
  * show nothing at the moment the user is deciding.

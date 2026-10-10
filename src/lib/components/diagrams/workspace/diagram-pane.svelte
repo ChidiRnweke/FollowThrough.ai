@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { EditorSession } from '$lib/stores/workspace/editor-session.svelte';
 	import { onMount, untrack } from 'svelte';
-	import { diagramEtag } from '$lib/models/diagrams';
+	import { diagramEtag } from '$lib/services/diagrams/editing';
 	import { accessMessage } from '$lib/services/sync/state';
 	import type {
 		DiagramId,
@@ -10,7 +10,7 @@
 		DrawioDiagram
 	} from '$lib/models/diagrams';
 	import type { DiagramMutationRequest } from '$lib/models/workspace-mutations';
-	import { workspaceResourceKey } from '$lib/models/workspace-sync';
+	import { workspaceResourceKey } from '$lib/services/workspace/commands';
 
 	import type { WorkspaceDraft } from '$lib/stores/workspace/resources.svelte';
 	import { workspaceSession } from '$lib/stores/workspace/session.svelte';

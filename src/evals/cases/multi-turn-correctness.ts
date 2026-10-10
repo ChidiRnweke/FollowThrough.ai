@@ -6,7 +6,8 @@ import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
 import { findCall } from '../assertions/tool-calls';
 import { expectMemoryAbsent, expectMemoryProposed } from '../assertions/effects';
 import { ARCHETYPES, type EvalCase } from './types';
-import { isAgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 
 /**
  * The note id a call targeted, at the top level or as `note.id` (which

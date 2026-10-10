@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import { noteCommand } from '$lib/services/workspace/commands';
 import { type WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { syncEtag } from '$lib/services/sync/versions';
 import {
 	noteBuilder,
 	projectBuilder,

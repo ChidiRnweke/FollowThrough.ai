@@ -1,3 +1,6 @@
+import type { AttachmentVersion } from '$lib/models/attachments';
+import type { DateTime } from '$lib/models/workspace';
+import type { ExtractedAttachmentContent } from '$lib/models/attachments/ocr';
 import type { RecognizedContent } from '$lib/models/attachments/ocr';
 import type { DocumentImageDescription, DocumentContentSlot } from '$lib/models/attachments/ocr';
 import { ValidationError } from '$lib/errors';
@@ -38,3 +41,35 @@ export class AttachmentContent {
 			.join('\n\n');
 	}
 }
+
+// Older indexing marked a fully extracted file partial when its index exceeded fifty chunks.
+export const savedTruncatedContent = (
+	version: AttachmentVersion
+): ExtractedAttachmentContent | undefined =>
+	version.processingStatus === 'partial' &&
+	version.processingFailure === undefined &&
+	version.extractedText !== undefined &&
+	version.parserKind !== undefined
+		? { text: version.extractedText, parserKind: version.parserKind }
+		: undefined;
+export const pendingAttachmentProcessing = (version: AttachmentVersion) =>
+	version.processingStatus === 'queued' ||
+	version.processingStatus === 'processing' ||
+	savedTruncatedContent(version) !== undefined;
+
+export const completedAttachmentVersion = (
+	version: AttachmentVersion,
+	extraction: ExtractedAttachmentContent | undefined,
+	timestamp: DateTime
+): AttachmentVersion => ({
+	...version,
+	parserKind: extraction?.parserKind,
+	extractedText: extraction?.text,
+	processingStatus: !extraction
+		? 'unsupported'
+		: extraction.processingFailure
+			? 'partial'
+			: 'ready',
+	processingFailure: extraction?.processingFailure,
+	processedAt: timestamp
+});

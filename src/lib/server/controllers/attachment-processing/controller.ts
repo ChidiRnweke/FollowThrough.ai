@@ -1,3 +1,8 @@
+import {
+	savedTruncatedContent,
+	pendingAttachmentProcessing,
+	completedAttachmentVersion
+} from '$lib/server/services/attachments/content';
 import type { ActorContext } from '$lib/models/identity';
 import type { AttachmentVersion, AttachmentView } from '$lib/models/attachments';
 import type { AgentPreferences } from '$lib/models/agent';
@@ -44,20 +49,6 @@ interface AttachmentProcessingDependencies {
 	visionModel: string;
 	logger: Pick<Console, 'error'>;
 }
-// Older indexing marked a fully extracted file partial when its index exceeded fifty chunks.
-const savedTruncatedContent = (
-	version: AttachmentVersion
-): ExtractedAttachmentContent | undefined =>
-	version.processingStatus === 'partial' &&
-	version.processingFailure === undefined &&
-	version.extractedText !== undefined &&
-	version.parserKind !== undefined
-		? { text: version.extractedText, parserKind: version.parserKind }
-		: undefined;
-const pending = (version: AttachmentVersion) =>
-	version.processingStatus === 'queued' ||
-	version.processingStatus === 'processing' ||
-	savedTruncatedContent(version) !== undefined;
 const now = () => new Date().toISOString() as DateTime;
 
 /** Queued and interrupted versions are the durable processing backlog. */
@@ -85,7 +76,7 @@ export class AttachmentProcessing {
 				const view = await this.dependencies.transactionRunner.run(async () => {
 					await claim.assertOwned();
 					const current = await this.dependencies.records.findVersionForUpdate(actor, versionId);
-					if (!current || !pending(current.version)) return undefined;
+					if (!current || !pendingAttachmentProcessing(current.version)) return undefined;
 					if (!savedTruncatedContent(current.version))
 						await this.dependencies.records.updateVersion(actor, {
 							...current.version,
@@ -215,7 +206,7 @@ export class AttachmentProcessing {
 		await this.dependencies.transactionRunner.run(async () => {
 			await claim.assertOwned();
 			const current = await this.dependencies.records.findVersionForUpdate(actor, view.version.id);
-			if (!current || !pending(current.version)) return;
+			if (!current || !pendingAttachmentProcessing(current.version)) return;
 			if (result.kind === 'failure') {
 				await this.dependencies.records.updateVersion(actor, {
 					...current.version,
@@ -228,18 +219,10 @@ export class AttachmentProcessing {
 			const extraction = result.extraction;
 			if (current.attachment.currentVersionId === current.version.id)
 				await this.dependencies.indexer.index(actor, current.attachment, extraction?.text ?? '');
-			await this.dependencies.records.updateVersion(actor, {
-				...current.version,
-				parserKind: extraction?.parserKind,
-				extractedText: extraction?.text,
-				processingStatus: !extraction
-					? 'unsupported'
-					: extraction.processingFailure
-						? 'partial'
-						: 'ready',
-				processingFailure: extraction?.processingFailure,
-				processedAt: now()
-			});
+			await this.dependencies.records.updateVersion(
+				actor,
+				completedAttachmentVersion(current.version, extraction, now())
+			);
 		});
 	}
 }

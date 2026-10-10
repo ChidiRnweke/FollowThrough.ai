@@ -6,7 +6,7 @@ import type {
 	WidgetExportBlock,
 	WidgetSourceRows
 } from '$lib/models/widgets';
-import { resolveWidgetState } from '$lib/services/widgets/formulas';
+import { resolveWidgetState } from '$lib/services/widgets/edits';
 import { widgetExport } from '$lib/services/widgets/export-blocks';
 
 export type JsonObject = { readonly [key: string]: JsonValue };

@@ -3,7 +3,11 @@ import createDOMPurify from 'dompurify';
 import type { WindowLike } from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { ValidationError } from '$lib/errors';
-import { drawioLabelValues } from '$lib/models/diagrams/drawio-labels';
+/** Read draw.io label attributes in document order without applying display/search policy. */
+const drawioLabelValues = (document: Document): readonly string[] =>
+	Array.from(document.querySelectorAll('mxCell, object, UserObject'))
+		.flatMap((element) => [element.getAttribute('label'), element.getAttribute('value')])
+		.filter((value): value is string => value !== null);
 
 const URL_ATTRIBUTES = new Set(['href', 'src', 'xlink:href']);
 const REFERENCE_ATTRIBUTES = ['parent', 'source', 'target'] as const;

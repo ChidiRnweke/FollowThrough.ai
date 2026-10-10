@@ -6,8 +6,9 @@ import type { ControllerFactory } from '$lib/server/factories/controller-factory
 import type { ActorContext, ApiTokenScope } from '$lib/models/identity';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
-import { readAgentPayload, type AgentPayload } from '$lib/models/agent/payload';
-import { readToolFailure, toolFailure } from '$lib/models/agent/tool-failure';
+import { agentPayloadResultSchema, type AgentPayload } from '$lib/models/agent/payload';
+import { toolFailure } from '$lib/models/agent/tool-failure';
+import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
 import {
 	McpTools,
 	FIRST_CLASS_TOOL_NAMES,
@@ -109,7 +110,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 							.map((name) => byName.get(name))
 							.filter((definition): definition is AgentToolDefinition => definition !== undefined);
 						for (const definition of matches) registered.add(definition.name);
-						const payload = readAgentPayload(
+						const payload = agentPayloadResultSchema.parse(
 							matches.map((definition) => ({
 								name: definition.name,
 								description: definition.description,

@@ -1,3 +1,4 @@
+import { agentToolNameSchema } from '$lib/models/agent';
 import { beforeAll, describe, expect, it } from 'vitest';
 import noteDocuments from '../corpus/note-documents.json' with { type: 'json' };
 import sessionItems from '../corpus/agent-session-items.json' with { type: 'json' };
@@ -5,12 +6,12 @@ import toolMessages from '../corpus/agent-tool-messages.json' with { type: 'json
 import messageContents from '../corpus/agent-message-contents.json' with { type: 'json' };
 import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' };
 import suggestionPayloads from '../corpus/suggestion-payloads.json' with { type: 'json' };
-import { readProseMirrorDocument, unknownProseMirrorNodes } from '$lib/models/notes';
+import { storedDocumentReadSchema } from '$lib/models/notes';
+import { unknownProseMirrorNodes } from '$lib/services/notes/editor-content';
 import { z } from 'zod';
-import { parseSessionItem } from '$lib/models/agent';
+import { persistedSessionItemSchema } from '$lib/models/agent';
 import { readAgentEvent } from '$lib/server/repositories/agent/stored-values';
-import { readAgentToolName } from '$lib/models/agent/tool-catalog';
-import { readAgentPayloadObject } from '$lib/models/agent/payload';
+import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { readJournalledTool } from '$lib/stores/agent/chat-tools';
 import { provenanceSchema } from '$lib/models/provenance';
 import { suggestionPayloadSchemas, type SuggestionKind } from '$lib/models/suggestions';
@@ -52,7 +53,7 @@ const reasons = (entries: readonly { readonly reason: string }[]): readonly stri
 
 describe('the stored note documents', () => {
 	it('read back as documents without unmodelled nodes', () => {
-		const documents = noteDocuments.map((document) => readProseMirrorDocument(document));
+		const documents = noteDocuments.map((document) => storedDocumentReadSchema.parse(document));
 		const unknown = documents.flatMap((document) => unknownProseMirrorNodes(document));
 		expect({
 			rootTypes: documents.map((document) => document.type),
@@ -67,7 +68,7 @@ describe('the stored note documents', () => {
 describe('the stored note revisions', () => {
 	it('contain no node the schema failed to model', () => {
 		const unknown = noteRevisionDocuments.flatMap((document) =>
-			unknownProseMirrorNodes(readProseMirrorDocument(document))
+			unknownProseMirrorNodes(storedDocumentReadSchema.parse(document))
 		);
 		expect(reasons(unknown)).toEqual([]);
 	});
@@ -76,7 +77,7 @@ describe('the stored note revisions', () => {
 describe('the stored agent session items', () => {
 	it('all parse into a modelled arm', () => {
 		const unrecognised = sessionItems
-			.map((item) => parseSessionItem(item))
+			.map((item) => persistedSessionItemSchema.parse(item))
 			.filter((item) => item.type === 'unrecognised');
 		expect(reasons(unrecognised)).toEqual([]);
 	});
@@ -105,7 +106,7 @@ describe('the stored agent run events', () => {
 describe('the stored message contents', () => {
 	it('all read as a payload object', () => {
 		const unreadable = messageContents.flatMap((content) => {
-			const read = readAgentPayloadObject(content);
+			const read = agentPayloadObjectResultSchema.parse(content);
 			return read.kind === 'corrupt' ? [read.message] : [];
 		});
 		expect([...new Set(unreadable)].sort()).toEqual([]);
@@ -152,7 +153,9 @@ describe('the tool names in both stored journals', () => {
 	it('are all names the agent surface has', () => {
 		const names = [...journalledToolNames(runEvents), ...journalledToolNames(toolMessages)];
 		expect({
-			unknownNames: [...new Set(names.filter((name) => readAgentToolName(name) === undefined))],
+			unknownNames: [
+				...new Set(names.filter((name) => agentToolNameSchema.safeParse(name).data === undefined))
+			],
 			hasSearchTools: journalledToolNames(runEvents).includes('search_tools')
 		}).toEqual({ unknownNames: [], hasSearchTools: true });
 	});

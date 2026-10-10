@@ -12,8 +12,8 @@ import type {
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { WorkspaceRecord, WorkspaceValues } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
-import { syncEtag } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { syncEtag } from '$lib/services/sync/versions';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { InMemorySyncTransport } from '$lib/testing/sync/fakes/in-memory-sync';
 import {
 	InMemoryOutbox,

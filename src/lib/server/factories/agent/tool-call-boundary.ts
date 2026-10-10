@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { DomainError, ValidationError, failureReport } from '$lib/errors';
 import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
 import {
-	readAgentPayload,
-	readAgentPayloadObject,
+	agentPayloadResultSchema,
+	agentPayloadObjectResultSchema,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
@@ -33,7 +33,7 @@ export const bindToolArguments = <Shape extends z.ZodRawShape>(
 		throw new ValidationError(
 			parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')
 		);
-	const payload = readAgentPayloadObject(parsed.data);
+	const payload = agentPayloadObjectResultSchema.parse(parsed.data);
 	if (payload.kind === 'corrupt') throw new Error(payload.message);
 	return { arguments: payload.value, execute: () => execute(parsed.data, payload.value) };
 };
@@ -71,7 +71,7 @@ export const executeToolAction = async (
 	signal.throwIfAborted();
 	try {
 		const output = await action.execute();
-		const result = readAgentPayload(output);
+		const result = agentPayloadResultSchema.parse(output);
 		if (result.kind === 'corrupt') throw new Error(result.message);
 		return result.value;
 	} catch (error) {

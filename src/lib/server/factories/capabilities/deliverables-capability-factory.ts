@@ -13,7 +13,7 @@ import {
 	exportImageSources,
 	exportDiagramReferences,
 	exportWidgetReferences
-} from '$lib/server/services/deliverables/export-preparation';
+} from '$lib/services/deliverables/export-preparation';
 import { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
 import { verifiedTemplateStyles } from '$lib/server/services/deliverables/template-styles';
 import { DocumentTemplates } from '$lib/server/services/deliverables/templates';

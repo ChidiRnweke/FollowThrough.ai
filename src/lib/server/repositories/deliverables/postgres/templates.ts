@@ -1,4 +1,5 @@
-import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { projects } from '$lib/server/db/schema/notes';
+import { inArray, isNull as projectIsNull, and, asc, eq, isNotNull } from 'drizzle-orm';
 import { NotFoundError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import {
@@ -39,13 +40,23 @@ const toUpload = (row: typeof schema.templateUploads.$inferSelect): TemplateUplo
 
 export class TemplateRecords implements TemplateRepository {
 	constructor(private readonly database: Database) {}
+	private activeProjectIds(actor: ActorContext) {
+		return this.database
+			.select({ id: projects.id })
+			.from(projects)
+			.where(and(eq(projects.userId, actor.userId), projectIsNull(projects.archivedAt)));
+	}
 
 	async insertUpload(actor: ActorContext, upload: TemplateUpload): Promise<TemplateUpload> {
 		const [project] = await this.database
 			.select({ id: schema.projects.id })
 			.from(schema.projects)
 			.where(
-				and(eq(schema.projects.id, upload.projectId), eq(schema.projects.userId, actor.userId))
+				and(
+					eq(schema.projects.id, upload.projectId),
+					eq(schema.projects.userId, actor.userId),
+					projectIsNull(schema.projects.archivedAt)
+				)
 			);
 		if (!project) throw new NotFoundError('Project not found');
 		const [row] = await this.database
@@ -59,7 +70,13 @@ export class TemplateRecords implements TemplateRepository {
 			.select()
 			.from(schema.templateUploads)
 			.where(
-				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, actor.userId))
+				and(
+					eq(schema.templateUploads.id, id),
+					and(
+						eq(schema.templateUploads.userId, actor.userId),
+						inArray(schema.templateUploads.projectId, this.activeProjectIds(actor))
+					)
+				)
 			);
 		return row ? toUpload(row) : undefined;
 	}
@@ -71,7 +88,13 @@ export class TemplateRecords implements TemplateRepository {
 			.select()
 			.from(schema.templateUploads)
 			.where(
-				and(eq(schema.templateUploads.id, id), eq(schema.templateUploads.userId, actor.userId))
+				and(
+					eq(schema.templateUploads.id, id),
+					and(
+						eq(schema.templateUploads.userId, actor.userId),
+						inArray(schema.templateUploads.projectId, this.activeProjectIds(actor))
+					)
+				)
 			)
 			.for('update');
 		return row ? toUpload(row) : undefined;
@@ -111,7 +134,10 @@ export class TemplateRecords implements TemplateRepository {
 			.where(
 				and(
 					eq(schema.projectTemplates.id, id),
-					eq(schema.projectTemplates.userId, actor.userId),
+					and(
+						eq(schema.projectTemplates.userId, actor.userId),
+						inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+					),
 					isNotNull(schema.projectTemplates.extractedStyles)
 				)
 			);
@@ -129,7 +155,10 @@ export class TemplateRecords implements TemplateRepository {
 				.where(
 					and(
 						eq(schema.projectTemplates.projectId, projectId),
-						eq(schema.projectTemplates.userId, actor.userId),
+						and(
+							eq(schema.projectTemplates.userId, actor.userId),
+							inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+						),
 						isNotNull(schema.projectTemplates.extractedStyles)
 					)
 				)
@@ -152,7 +181,10 @@ export class TemplateRecords implements TemplateRepository {
 			.where(
 				and(
 					eq(schema.projectTemplates.id, template.id),
-					eq(schema.projectTemplates.userId, actor.userId)
+					and(
+						eq(schema.projectTemplates.userId, actor.userId),
+						inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+					)
 				)
 			)
 			.returning();
@@ -163,7 +195,13 @@ export class TemplateRecords implements TemplateRepository {
 		await this.database
 			.delete(schema.projectTemplates)
 			.where(
-				and(eq(schema.projectTemplates.id, id), eq(schema.projectTemplates.userId, actor.userId))
+				and(
+					eq(schema.projectTemplates.id, id),
+					and(
+						eq(schema.projectTemplates.userId, actor.userId),
+						inArray(schema.projectTemplates.projectId, this.activeProjectIds(actor))
+					)
+				)
 			);
 	}
 }

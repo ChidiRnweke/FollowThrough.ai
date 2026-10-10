@@ -1,5 +1,4 @@
 import {
-	diagramEtag,
 	type Diagram,
 	type DiagramEtag,
 	type DiagramRevisionChange,
@@ -106,3 +105,6 @@ export function prepareDiagramWrite(
 		}
 	};
 }
+
+export const diagramEtag = (diagram: Pick<DrawioDiagram, 'id' | 'currentRevision'>): DiagramEtag =>
+	`diagram:${diagram.id}:r${diagram.currentRevision}` as DiagramEtag;

@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { resourceStateSchema, syncEtag } from './index';
+import { resourceStateSchema } from './index';
+import { syncEtag } from '$lib/services/sync/versions';
 import { z } from 'zod';
 it('rejects a persisted version without its complete body', () => {
 	expect(

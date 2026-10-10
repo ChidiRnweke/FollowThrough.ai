@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import OpenAI from 'openai';
 import { config as loadDotenv } from 'dotenv';
-import { TOOL_CATALOG } from '../src/lib/models/agent/tool-catalog.ts';
+import { TOOL_CATALOG } from '../src/lib/services/agent/tool-catalog.ts';
 
 const embeddingModel = process.env.EVAL_EMBEDDING_MODEL ?? 'openai/text-embedding-3-large';
 const toolEmbeddingText = (entry: (typeof TOOL_CATALOG)[number]): string =>

@@ -1,3 +1,4 @@
+import { AttachmentObjectRemoval } from '$lib/server/services/attachments/object-removal';
 import { AttachmentProcessing } from '$lib/server/controllers/attachment-processing/controller';
 import type { AttachmentClaims } from '$lib/server/services/attachments/contracts';
 import type { AtomicOperation } from '$lib/models/workspace';
@@ -53,6 +54,7 @@ export interface AttachmentsCapability {
 	readonly storage: IAttachmentStorage;
 	readonly library: AttachmentLibrary;
 	readonly retention: UploadRetention;
+	readonly objectRemoval: AttachmentObjectRemoval;
 	readonly processing: AttachmentProcessing;
 }
 
@@ -103,6 +105,7 @@ export const createAttachmentsCapability = (
 			visionModel: input.visionModel,
 			logger: console
 		}),
+		objectRemoval: new AttachmentObjectRemoval(repository, storage),
 		retention: new UploadRetention(repository, storage, {
 			...optionalProperty('intervalMs', positiveNumberFromEnvironment('UPLOAD_SWEEP_INTERVAL_MS')),
 			...optionalProperty('maxPerTick', positiveNumberFromEnvironment('UPLOAD_SWEEP_MAX_PER_TICK'))

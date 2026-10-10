@@ -1,4 +1,5 @@
-import { and, asc, count, eq, ilike, or, sql } from 'drizzle-orm';
+import { projects } from '$lib/server/db/schema/notes';
+import { inArray, isNull as projectIsNull, and, asc, count, eq, ilike, or, sql } from 'drizzle-orm';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Artifact,
@@ -33,6 +34,12 @@ const toArtifact = (row: typeof schema.artifacts.$inferSelect): Artifact => ({
 
 export class ArtifactRecords implements ArtifactRepository {
 	constructor(private readonly database: Database) {}
+	private activeProjectIds(actor: ActorContext) {
+		return this.database
+			.select({ id: projects.id })
+			.from(projects)
+			.where(and(eq(projects.userId, actor.userId), projectIsNull(projects.archivedAt)));
+	}
 
 	async insert(actor: ActorContext, artifact: Artifact): Promise<Artifact> {
 		const [row] = await this.database
@@ -70,7 +77,10 @@ export class ArtifactRecords implements ArtifactRepository {
 			: undefined;
 		const filters = and(
 			eq(schema.artifacts.projectId, projectId),
-			eq(schema.artifacts.userId, actor.userId),
+			and(
+				eq(schema.artifacts.userId, actor.userId),
+				inArray(schema.artifacts.projectId, this.activeProjectIds(actor))
+			),
 			search
 		);
 		const [{ total }] = await this.database
@@ -120,13 +130,29 @@ export class ArtifactRecords implements ArtifactRepository {
 		const [row] = await this.database
 			.select()
 			.from(schema.artifacts)
-			.where(and(eq(schema.artifacts.id, id), eq(schema.artifacts.userId, actor.userId)));
+			.where(
+				and(
+					eq(schema.artifacts.id, id),
+					and(
+						eq(schema.artifacts.userId, actor.userId),
+						inArray(schema.artifacts.projectId, this.activeProjectIds(actor))
+					)
+				)
+			);
 		return row ? toArtifact(row) : undefined;
 	}
 
 	async delete(actor: ActorContext, id: ArtifactId): Promise<void> {
 		await this.database
 			.delete(schema.artifacts)
-			.where(and(eq(schema.artifacts.id, id), eq(schema.artifacts.userId, actor.userId)));
+			.where(
+				and(
+					eq(schema.artifacts.id, id),
+					and(
+						eq(schema.artifacts.userId, actor.userId),
+						inArray(schema.artifacts.projectId, this.activeProjectIds(actor))
+					)
+				)
+			);
 	}
 }

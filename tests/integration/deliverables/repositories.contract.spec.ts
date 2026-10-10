@@ -161,6 +161,8 @@ describe('Postgres export-settings repository invariants', () => {
 			lineHeight: 1.5,
 			margin: 60
 		});
-		expect(await repository.find(actor('84'), project.id)).toBeUndefined();
+		await expect(repository.find(actor('84'), project.id)).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 });

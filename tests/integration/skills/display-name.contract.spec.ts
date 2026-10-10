@@ -1,3 +1,4 @@
+import { syncEtag } from '$lib/services/sync/versions';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
 import { storedNote } from '$lib/testing/notes/fixtures/stored-note';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +14,7 @@ import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
 import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { context, seedNote } from '../database-harness';
 
 const setup = async (suffix: string) => {
@@ -63,7 +64,7 @@ const setup = async (suffix: string) => {
 		records,
 		controller,
 		transactionRunner,
-		journal: new WorkspaceSyncChanges(database)
+		journal: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)
 	};
 };
 

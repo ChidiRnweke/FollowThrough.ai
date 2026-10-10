@@ -5,8 +5,9 @@ import { workspaceRecordSchema, resourceDataSchemas } from '$lib/models/workspac
 import { projectBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { createWorkspaceResources } from './resources.svelte';
 import { IndexedDbSyncCache } from '$lib/client/sync/indexeddb-cache';
-import { workspaceResourceKey, type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
-import { syncEtag } from '$lib/models/sync';
+import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { syncEtag } from '$lib/services/sync/versions';
 
 // SYNC-TABS: separate clients use real IndexedDB, Web Locks and BroadcastChannel.
 it('observes an offline edit from another client without a refresh', async () => {

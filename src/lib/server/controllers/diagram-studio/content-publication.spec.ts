@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { DiagramStudio, type DiagramStudioDependencies } from './controller';
-import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
+import { type DiagramWriteOutcome } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/services/diagrams/editing';
 import { DiagramLibrary } from '$lib/server/services/diagrams/library';
 import { ContentIndex } from '$lib/server/services/knowledge-search/indexing';
 import {

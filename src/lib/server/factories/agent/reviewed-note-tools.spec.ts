@@ -4,7 +4,7 @@ import { AgentTools } from './agent-tool-factory';
 import { type PendingAgentDecision, type AgentExecutionMode } from '$lib/models/agent';
 import { readPendingDecisions } from '$lib/server/repositories/agent/stored-values';
 import { noteChangeReviewSchema } from '$lib/models/notes';
-import { readToolFailure } from '$lib/models/agent/tool-failure';
+import { readToolFailure } from '$lib/server/repositories/agent/tool-failure';
 import { Notes, type NotesDependencies } from '$lib/server/controllers/notes/controller';
 import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';

@@ -12,7 +12,7 @@
 import { z } from 'zod';
 import { noteChangeReviewSchema, type NoteChangeReview } from '$lib/models/notes';
 import {
-	readAgentPayloadObject,
+	agentPayloadObjectResultSchema,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
@@ -72,7 +72,7 @@ export type ChatToolActivity =
  * sense, and the surfaces are already total over the empty case.
  */
 export const toolArguments = (value: unknown): AgentPayloadObject => {
-	const read = readAgentPayloadObject(value);
+	const read = agentPayloadObjectResultSchema.parse(value);
 	return read.kind === 'valid' ? read.value : {};
 };
 

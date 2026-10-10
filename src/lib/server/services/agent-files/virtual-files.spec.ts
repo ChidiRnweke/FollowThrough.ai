@@ -1,3 +1,4 @@
+import { getEncoding } from 'js-tiktoken';
 import { describe, expect, it } from 'vitest';
 import type { AttachmentRepository } from '$lib/server/repositories/attachments/attachments';
 import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagrams';
@@ -23,6 +24,7 @@ const content = 'alpha\nbeta warning\ngamma';
 const reader = (body = content): AgentVirtualFiles =>
 	new AgentVirtualFiles(
 		capabilityDependencies<AgentVirtualFilesDependencies>({
+			countTokens,
 			projects: capabilityDependencies<ProjectRepository>({
 				listActive: async () => [projectBuilder()]
 			}),
@@ -79,6 +81,7 @@ describe('AgentVirtualFiles ls', () => {
 		const revision = noteRevisionBuilder({ revision: 7 });
 		const service = new AgentVirtualFiles(
 			capabilityDependencies<AgentVirtualFilesDependencies>({
+				countTokens,
 				projects: capabilityDependencies<ProjectRepository>({
 					listActive: async () => [projectBuilder()]
 				}),
@@ -224,5 +227,21 @@ describe('AgentVirtualFiles sed', () => {
 			code: 'empty_file',
 			nextActions: [{ tool: 'ls', arguments: { path: `/projects/${projectId}/notes` } }]
 		});
+	});
+});
+
+const tokenEncoder = getEncoding('cl100k_base');
+const countTokens = (text: string): number => tokenEncoder.encode(text).length;
+
+it.each(['/', '.'])('searches every file beneath root %s', async (path) => {
+	const result = await reader('root needle').grep(testActor(), {
+		path,
+		pattern: 'needle',
+		fixed: true,
+		ignoreCase: false
+	});
+	expect(result).toMatchObject({
+		kind: 'matches',
+		matches: [{ path: notePath, lineNumber: 1, line: 'root needle' }]
 	});
 });

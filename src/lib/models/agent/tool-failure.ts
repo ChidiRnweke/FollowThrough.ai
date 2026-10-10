@@ -41,13 +41,3 @@ export const toolFailure = (
 	recovery: string,
 	details: ToolFailure['details'] = {}
 ): ToolFailure => ({ kind: 'failure', code, message, recovery, details });
-
-/** Parse only the current envelope; key order is immaterial. */
-// audit-allow: no-unknown-type — Reads a tool output at the protocol/replay boundary.
-export const readToolFailure = (output: unknown): string | undefined => {
-	const value: unknown =
-		typeof output === 'string' && output.trimStart().startsWith('{') ? JSON.parse(output) : output;
-	if (typeof value !== 'object' || value === null || !('kind' in value) || value.kind !== 'failure')
-		return undefined;
-	return toolFailureSchema.parse(value).message;
-};

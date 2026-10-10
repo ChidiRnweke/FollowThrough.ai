@@ -48,9 +48,15 @@ const toolActivityOutput = (activity: ToolActivity): AgentPayload => {
 export class ConversationArchive {
 	constructor(private readonly repository: ConversationRepository) {}
 
+	async getForWrite(actor: ActorContext, id: ConversationId): Promise<Conversation> {
+		const conversation = await this.repository.findForWrite(actor, id);
+		if (!conversation) throw new NotFoundError('Conversation was not found');
+		return conversation;
+	}
+
 	async getOrCreate(actor: ActorContext, input: StagedAgentRunInput): Promise<Conversation> {
 		if (input.conversationId) {
-			const existing = await this.repository.findById(actor, input.conversationId);
+			const existing = await this.repository.findForWrite(actor, input.conversationId);
 			if (!existing) throw new NotFoundError('Conversation was not found');
 			if (
 				input.modelOverride === undefined &&

@@ -1,10 +1,7 @@
 import type { ShellContext } from '$lib/client/shell/views';
-import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	type AgentPayloadObject,
-	type AgentPayload
-} from '$lib/models/agent/payload';
+import { type AgentPayloadObject, type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadItems } from '$lib/services/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 
 /**
  * What an approval card says about a pending call's arguments.

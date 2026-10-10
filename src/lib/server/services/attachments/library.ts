@@ -197,7 +197,6 @@ export class AttachmentLibrary {
 			return { kind: 'removed' };
 		}
 		await this.attachments.removeById(actor, attachmentId);
-		await this.storage.remove(found.version.objectKey);
 		return { kind: 'removed' };
 	}
 

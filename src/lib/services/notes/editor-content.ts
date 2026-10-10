@@ -1,3 +1,4 @@
+import type { ProseMirrorUnknownNode } from '$lib/models/notes';
 import type { ProseMirrorDocument, ProseMirrorNode } from '$lib/models/notes';
 
 /**
@@ -29,3 +30,9 @@ export const editableProseMirrorDocument = (document: ProseMirrorDocument): Pros
 	};
 	return { ...document, content: document.content?.map(convert) };
 };
+
+/** Every block that failed to parse, for the corpus spec and `check:boundaries`. */
+export const unknownProseMirrorNodes = (
+	document: ProseMirrorDocument
+): readonly ProseMirrorUnknownNode[] =>
+	(document.content ?? []).filter((node) => node.type === 'unknown');

@@ -1,3 +1,4 @@
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import {
 	AgentSettings,
@@ -20,7 +21,9 @@ const setup = async (suffix: string) => {
 	const { owner } = await seedNote(suffix);
 	const { database, transactionRunner } = createTransactionContext(context.db);
 	const sync = createSyncCapability({ db: database });
-	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(database));
+	const preferences = new AgentPreferenceCatalog(
+		new AgentPreferenceRecords(database, workspaceResourceKey)
+	);
 	const agent = new AgentSettings(
 		capabilityDependencies<AgentSettingsDependencies>({
 			preferences,

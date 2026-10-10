@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-	findProseMirrorDocumentIssue,
+	proseMirrorDocumentSchema,
 	type ProseMirrorDocument,
 	type ProseMirrorNode
 } from '$lib/models/notes';
@@ -12,7 +12,9 @@ const formatted = noteContentFromMarkdown(
 
 describe('Agent note Markdown', () => {
 	it('produces a valid ProseMirror document', () => {
-		expect(findProseMirrorDocumentIssue(formatted.document)).toBeUndefined();
+		expect(
+			proseMirrorDocumentSchema.safeParse(formatted.document).error?.issues[0]
+		).toBeUndefined();
 	});
 
 	it('preserves headings, bold text, and lists as readable plain text', () => {

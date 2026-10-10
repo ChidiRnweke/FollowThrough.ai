@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { syncEtag } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import { type OutboxEntry, type WriteDraft } from '$lib/models/outbox';
 import {
 	appendWrite,

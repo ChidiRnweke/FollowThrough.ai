@@ -3,7 +3,7 @@ import { inflateSync } from 'node:zlib';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import { generatePdf, mermaidSourceHash } from './pdf';
-import { prepareExport } from './export-preparation';
+import { prepareExport } from '$lib/services/deliverables/export-preparation';
 import type { ExportInput } from '$lib/models/deliverables';
 
 type GeneratePdfArgs = ExportInput;

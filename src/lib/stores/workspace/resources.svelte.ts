@@ -26,11 +26,11 @@ import {
 } from '$lib/services/sync/state';
 import {
 	workspaceRecordSchema,
-	workspaceRecordIdentity,
-	isWorkspaceRecord,
 	type WorkspaceValues,
 	type WorkspaceRecord
 } from '$lib/models/workspace-records';
+import { isWorkspaceRecord } from '$lib/services/workspace/commands';
+import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
 import {
 	workspaceCommandSchema,
 	type PreparedWorkspaceCommand,
@@ -42,10 +42,10 @@ import {
 	workspaceCommandNeedsInventory
 } from '$lib/controllers/workspace/commands';
 import {
-	workspaceResourceKey,
 	type WorkspaceResourceType,
 	type WorkspaceResourceIdentity
 } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { WorkspaceViews } from '$lib/controllers/workspace/views';
 import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
 import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';

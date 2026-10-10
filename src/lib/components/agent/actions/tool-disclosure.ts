@@ -8,11 +8,9 @@ import { argumentLabel, isIdentifierArgument } from '../../chat/actions/tool-app
 import { explainToolFailure } from './tool-result';
 import { entityFrom, toolEntity, fileEntity } from './tool-entities';
 import { toolCollection } from './tool-collections';
-import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	type AgentPayload
-} from '$lib/models/agent/payload';
+import { type AgentPayload } from '$lib/models/agent/payload';
+import { agentPayloadItems } from '$lib/services/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 
 /** The result detail for a call. Targets and concise outcomes render before any expansion. */
 

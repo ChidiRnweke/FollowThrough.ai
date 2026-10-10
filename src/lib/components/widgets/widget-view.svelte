@@ -10,7 +10,7 @@
 	import { createStateStore } from '@json-render/core';
 	import { JsonUIProvider, Renderer } from '@json-render/svelte';
 	import { diffWidgetData } from '$lib/services/widgets/edits';
-	import { resolveWidgetState, widgetDataOf } from '$lib/services/widgets/formulas';
+	import { resolveWidgetState, widgetDataOf } from '$lib/services/widgets/edits';
 	import {
 		widgetDataSchema,
 		type Widget,

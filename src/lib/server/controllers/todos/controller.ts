@@ -1,3 +1,5 @@
+import { promisesForResponsibility } from '$lib/server/services/todos/promise-discovery';
+import { hasTodoEdits } from '$lib/services/todos/edits';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import { applyTodoEdit } from '$lib/services/todos/edits';
 import { assembleTodoView } from '$lib/services/todos/presentation';
@@ -12,7 +14,7 @@ import type { Project } from '$lib/models/projects';
 import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
 import { boardExportDate, boardExportSlug, boardMarkdown } from '$lib/services/todos/board-export';
 import type { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
-import type { prepareExport } from '$lib/server/services/deliverables/export-preparation';
+import type { prepareExport } from '$lib/services/deliverables/export-preparation';
 import type {
 	BoardPdfExportResult,
 	CreateTodoInput,
@@ -248,7 +250,7 @@ export class Todos implements TodosController {
 		return { todo: await this.dependencies.todoCreator.create(actor, decision.todo) };
 	}
 	async update(actor: ActorContext, input: UpdateTodoInput): Promise<UpdateTodoOutput> {
-		if (Object.keys(input).every((key) => key === 'todoId')) {
+		if (!hasTodoEdits(input)) {
 			throw new InvalidGeneratedContentError('A todo update requires at least one edit');
 		}
 		return this.dependencies.transactionRunner.run(async () => {
@@ -455,7 +457,7 @@ export class Todos implements TodosController {
 		const source = await this.dependencies.selectionOrigins.resolve(actor, input.selection);
 		const { anchor } = source;
 		const candidates = input.responsibility
-			? extracted.filter((candidate) => candidate.responsibility === input.responsibility)
+			? promisesForResponsibility(extracted, input.responsibility)
 			: extracted;
 		const origin = await this.dependencies.selectionOrigins.record(actor, source, {
 			producerKind: 'pipeline',

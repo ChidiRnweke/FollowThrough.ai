@@ -1,3 +1,4 @@
+import { getEncoding } from 'js-tiktoken';
 import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import type { Tool } from '@openai/agents';
@@ -50,12 +51,12 @@ import type {
 	ToolClassification
 } from '$lib/models/agent';
 import {
-	agentPayloadItems,
-	isAgentPayloadObject,
-	readAgentPayload,
+	agentPayloadResultSchema,
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
+import { agentPayloadItems } from '$lib/services/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import type { NoteEtag, NoteId, NoteRevisionId, TextSelection } from '$lib/models/notes';
 import { createTodoBatchSchema, type TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -104,13 +105,10 @@ import {
 	type UserProjection
 } from '../../services/agent/runs/tool-views';
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
-import {
-	FIRST_CLASS_TOOL_NAMES,
-	FIRST_CLASS_TOOL_SET,
-	TOOL_CATALOG,
-	toolDescription,
-	type ToolName
-} from '$lib/models/agent/tool-catalog';
+import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
+import { toolDescription } from '$lib/services/agent/tool-catalog';
+import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
+import { FIRST_CLASS_TOOL_SET } from '$lib/services/agent/tool-catalog';
 import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
 
 export { FIRST_CLASS_TOOL_NAMES, FIRST_CLASS_TOOL_SET };
@@ -1067,7 +1065,7 @@ const defineTool = <Name extends ToolName, Shape extends z.ZodRawShape>(
 		prepare: (input) =>
 			bindToolArguments(parameters, input, async (parsed, payload) => {
 				const result = await execute(parsed);
-				const read = readAgentPayload(result);
+				const read = agentPayloadResultSchema.parse(result);
 				if (read.kind === 'corrupt')
 					throw new Error(`Tool output could not be represented as JSON: ${read.message}`);
 				return filterCreated(read.value, createdRange(payload));
@@ -1325,7 +1323,7 @@ export class AgentTools {
 				kind: 'ready',
 				action: bindToolArguments(searchParameters, input, async ({ query: toolQuery, limit }) => {
 					const ranked = await this.toolRetriever.retrieve(this.catalog(), toolQuery, limit ?? 5);
-					const result = readAgentPayload(
+					const result = agentPayloadResultSchema.parse(
 						ranked
 							.map((name) => byName.get(name))
 							.filter((definition): definition is Definition => definition !== undefined)
@@ -1414,7 +1412,7 @@ export class AgentTools {
 					prepared = {
 						arguments: action.arguments,
 						execute: async () => {
-							const result = readAgentPayload(
+							const result = agentPayloadResultSchema.parse(
 								await applyNoteReview(
 									this.controllers,
 									this.actor,
@@ -1641,7 +1639,10 @@ const sharedToolDefinitions = (
 				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
 				const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
 				const markdown = noteMarkdownFromContent(view.note.document);
-				return projectNoteView(view, agentFileOf(path, 'text/markdown', markdown).metadata);
+				return projectNoteView(
+					view,
+					agentFileOf(countTokens, path, 'text/markdown', markdown).metadata
+				);
 			}
 		),
 		create_note: define(
@@ -2736,3 +2737,6 @@ export const agentToolRegistry =
 			signal
 		);
 	};
+
+const tokenEncoder = getEncoding('cl100k_base');
+const countTokens = (text: string): number => tokenEncoder.encode(text).length;

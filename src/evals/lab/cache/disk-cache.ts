@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
-	readAgentPayloadObject,
-	readAgentPayload,
+	agentPayloadObjectResultSchema,
+	agentPayloadResultSchema,
 	type AgentPayload
 } from '$lib/models/agent/payload';
 
@@ -41,7 +41,7 @@ const readCacheFile = async (path: string): Promise<CacheContents> => {
 	} catch (error) {
 		return { kind: 'corrupt', reason: error instanceof Error ? error.message : String(error) };
 	}
-	const read = readAgentPayloadObject(parsed);
+	const read = agentPayloadObjectResultSchema.parse(parsed);
 	return read.kind === 'corrupt'
 		? { kind: 'corrupt', reason: read.message }
 		: { kind: 'entries', entries: { ...read.value } };
@@ -71,7 +71,7 @@ const quarantine = async (path: string, reason: string): Promise<void> => {
  * cannot carry is refused loudly instead of stored and corrupted at replay.
  */
 const cacheValueOf = (value: unknown): AgentPayload => {
-	const read = readAgentPayload(value);
+	const read = agentPayloadResultSchema.parse(value);
 	if (read.kind === 'corrupt')
 		throw new Error(`Eval aux response is not JSON and cannot be cached: ${read.message}`);
 	return read.value;

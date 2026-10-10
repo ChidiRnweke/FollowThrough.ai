@@ -1,11 +1,6 @@
 import type { WidgetExportBlock } from '$lib/models/widgets';
 import type { PreparedExport, PreparedDiagram } from '$lib/models/deliverables';
 import {
-	documentNodeContent as nodeContent,
-	documentInlineText as collectText,
-	documentTextMarks
-} from '$lib/models/notes';
-import {
 	AlignmentType,
 	BorderStyle,
 	Document,
@@ -33,7 +28,6 @@ import type {
 	ProseMirrorNode,
 	ProseMirrorTextNode
 } from '$lib/models/notes';
-import { columnShares } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 
 const HEADING_LEVELS = [
@@ -80,6 +74,7 @@ interface DocxContext {
 	readonly images: ReadonlyMap<string, string>;
 	readonly diagrams: ReadonlyMap<string, PreparedDiagram>;
 	readonly widgets: PreparedExport['widgets'];
+	readonly nodes: PreparedExport['nodes'];
 	readonly headingSpacing: PreparedExport['headingSpacing'];
 	/** Printable width in CSS pixels, for image and diagram sizing. */
 	readonly contentWidthPx: number;
@@ -135,13 +130,14 @@ type InlineRun = TextRun | ExternalHyperlink;
 
 function textRunFromNode(
 	node: ProseMirrorTextNode,
+	ctx: DocxContext,
 	styles: ExtractedTemplateStyles,
 	isCode: boolean = false,
 	forceItalics: boolean = false,
 	forceBold: boolean = false
 ): InlineRun {
 	const text = node.text;
-	const marks = documentTextMarks(node);
+	const marks = presentation(node, ctx).marks;
 	const bold = forceBold || marks.bold;
 	const italics = forceItalics || marks.italic;
 	const code = isCode || marks.code;
@@ -168,7 +164,7 @@ function inlineRuns(content: readonly ProseMirrorNode[], ctx: DocxContext): Inli
 	for (const child of content) {
 		if (child.type === 'text') {
 			children.push(
-				textRunFromNode(child, ctx.styles, false, ctx.blockquoteDepth > 0, ctx.forceBold)
+				textRunFromNode(child, ctx, ctx.styles, false, ctx.blockquoteDepth > 0, ctx.forceBold)
 			);
 		} else if (child.type === 'hardBreak') {
 			children.push(new TextRun({ break: 1 }));
@@ -322,13 +318,9 @@ function tableBlock(
 	// pixel widths to the printable width in twips. Otherwise let Word distribute.
 	const contentWidthTwips =
 		PAGE_WIDTH_TWIPS - ctx.styles.pageMargins.left - ctx.styles.pageMargins.right;
-	const firstRowCells = (rows[0]?.content ?? []).filter(
-		(cell) => cell.type === 'tableCell' || cell.type === 'tableHeader'
-	);
-	const shares = columnShares(
-		firstRowCells.map((cell) => cell.attrs?.colwidth),
-		columnCount
-	);
+
+	const preparedShares = presentation(node, ctx).columnShares;
+	const shares = preparedShares?.length === columnCount ? preparedShares : undefined;
 
 	const border = { style: BorderStyle.SINGLE, size: 4, color: TABLE_LINE_COLOR };
 	return new Table({
@@ -415,7 +407,7 @@ function mermaidBlock(
 	node: Extract<ProseMirrorNode, { type: 'mermaid' }>,
 	ctx: DocxContext
 ): Paragraph[] {
-	const source = collectText(node);
+	const source = presentation(node, ctx).text;
 	const image = diagramImage(mermaidSourceHash(source), ctx);
 	// Without a browser render the diagram source is still worth keeping.
 	return image ? [image] : [codeParagraph(source)];
@@ -496,13 +488,13 @@ function convertNode(
 	depth: number = 0
 ): (Paragraph | Table)[] {
 	const type = node.type;
-	const content = nodeContent(node);
+	const content = presentation(node, ctx).children;
 	const results: (Paragraph | Table)[] = [];
 
 	switch (type) {
 		case 'heading': {
 			const level = Math.min(node.attrs?.level ?? 1, 6);
-			const text = collectText(node);
+			const text = presentation(node, ctx).text;
 			const h = headingFont(ctx.styles, level);
 			const spacing = ctx.headingSpacing.get(level);
 			results.push(
@@ -544,10 +536,10 @@ function convertNode(
 			const listInstance = type === 'orderedList' ? ctx.orderedListInstances.next++ : undefined;
 			for (const item of content) {
 				if (item.type !== 'listItem') continue;
-				const itemContent = nodeContent(item);
+				const itemContent = presentation(item, ctx).children;
 				for (const child of itemContent) {
 					if (child.type === 'paragraph') {
-						const runs = inlineRuns(nodeContent(child), ctx);
+						const runs = inlineRuns(presentation(child, ctx).children, ctx);
 						results.push(
 							new Paragraph({
 								...(type === 'bulletList'
@@ -580,7 +572,7 @@ function convertNode(
 			break;
 		}
 		case 'codeBlock': {
-			results.push(codeParagraph(collectText(node)));
+			results.push(codeParagraph(presentation(node, ctx).text));
 			break;
 		}
 		case 'mermaid': {
@@ -657,6 +649,7 @@ export async function generateDocx(input: PreparedExport): Promise<Buffer> {
 		images,
 		diagrams,
 		widgets: input.widgets,
+		nodes: input.nodes,
 		headingSpacing: input.headingSpacing,
 		contentWidthPx:
 			((PAGE_WIDTH_TWIPS - styles.pageMargins.left - styles.pageMargins.right) / TWIPS_PER_INCH) *
@@ -780,4 +773,10 @@ export async function generateDocx(input: PreparedExport): Promise<Buffer> {
 	});
 
 	return Buffer.from(await Packer.toBuffer(doc));
+}
+
+function presentation(node: ProseMirrorNode, context: DocxContext) {
+	const value = context.nodes.get(node);
+	if (!value) throw new Error('Export node was not prepared');
+	return value;
 }

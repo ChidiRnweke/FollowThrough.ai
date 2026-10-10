@@ -10,7 +10,7 @@ import {
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { BuiltInSkills } from './built-ins';
 import { BUILT_INS, RETIRED_BUILT_INS } from './built-in-definitions';
-import { parseProseMirrorDocument } from '$lib/models/notes';
+import { proseMirrorDocumentSchema } from '$lib/models/notes';
 
 const legacyInstructions = `Use FollowThrough as an action-oriented workbench.
 
@@ -46,7 +46,7 @@ const setupLegacyFollowThrough = async () => {
 		publishedRevision: 0,
 		publishedAt: undefined
 	};
-	const storedNote = { ...note, document: parseProseMirrorDocument(note.document) };
+	const storedNote = { ...note, document: proseMirrorDocumentSchema.parse(note.document) };
 	state.notes.notes = state.notes.notes.map((candidate) =>
 		candidate.id === storedNote.id ? storedNote : candidate
 	);
@@ -169,7 +169,7 @@ describe('Built-in skill provisioning invariants', () => {
 		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
 		const edited = {
 			...current,
-			document: parseProseMirrorDocument({
+			document: proseMirrorDocumentSchema.parse({
 				type: 'doc',
 				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'My preferred workflow' }] }]
 			}),
@@ -193,7 +193,7 @@ describe('Built-in skill provisioning invariants', () => {
 		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
 		const edited = {
 			...current,
-			document: parseProseMirrorDocument({
+			document: proseMirrorDocumentSchema.parse({
 				type: 'doc',
 				content: [{ type: 'paragraph', content: [{ type: 'text', text: 'My preferred workflow' }] }]
 			}),
@@ -213,7 +213,7 @@ describe('Built-in skill provisioning invariants', () => {
 	it('preserves a formatting edit even when the stock guide plain text is unchanged', async () => {
 		const { provisioner, notes } = await setupLegacyFollowThrough();
 		const current = notes.notes.find((note) => note.builtInKey === 'followthrough')!;
-		const document = parseProseMirrorDocument({
+		const document = proseMirrorDocumentSchema.parse({
 			type: 'doc',
 			content: [
 				{
@@ -269,7 +269,7 @@ describe('Built-in skill provisioning invariants', () => {
 		const stale = skills.skills.find((skill) => skill.note.builtInKey === 'followthrough')!;
 		const staleNote = {
 			...stale.note,
-			document: parseProseMirrorDocument({
+			document: proseMirrorDocumentSchema.parse({
 				type: 'doc',
 				content: [
 					{

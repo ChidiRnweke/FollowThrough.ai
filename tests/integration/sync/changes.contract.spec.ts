@@ -1,6 +1,7 @@
+import { syncEtag } from '$lib/services/sync/versions';
 import { describe, expect, it } from 'vitest';
 import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { context, seedNote } from '../database-harness';
@@ -15,7 +16,7 @@ describe('compact account synchronization journal', () => {
 	});
 	it('returns no changes when the client already holds the current cursor', async () => {
 		const { owner } = await seedNote('8801');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		expect(await journal.pullPage(owner, initial.cursor)).toEqual({
 			cursor: initial.cursor,
@@ -26,7 +27,7 @@ describe('compact account synchronization journal', () => {
 
 	it('returns only the latest version of an object changed repeatedly since the cursor', async () => {
 		const { owner, note } = await seedNote('8802');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await context.client`update notes set title = 'First rename' where id = ${note.id}`;
 		await context.client`update notes set title = 'Second rename' where id = ${note.id}`;
@@ -50,7 +51,7 @@ describe('compact account synchronization journal', () => {
 
 	it('retains an explicit tombstone after a cascading parent deletion', async () => {
 		const { owner, note, project } = await seedNote('8803');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await context.client`delete from projects where id = ${project.id}`;
 		const batch = await journal.pullPage(owner, initial.cursor);
@@ -63,7 +64,7 @@ describe('compact account synchronization journal', () => {
 	it('does not send another account’s changes or tombstones', async () => {
 		const { owner } = await seedNote('8804');
 		const { note } = await seedNote('8805');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await context.client`delete from notes where id = ${note.id}`;
 		expect(await journal.pullPage(owner, initial.cursor)).toEqual({
@@ -75,7 +76,7 @@ describe('compact account synchronization journal', () => {
 
 	it('rolls back both the journal and its cursor with a failed mutation', async () => {
 		const { owner, note } = await seedNote('8806');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await context.client
 			.begin(async (transaction) => {
@@ -94,7 +95,7 @@ describe('compact account synchronization journal', () => {
 
 	it('replaces a tombstone with an upsert when the same stable identity is recreated', async () => {
 		const { owner, note } = await seedNote('8807');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		await context.client`delete from notes where id = ${note.id}`;
 		await context.client`insert into notes (id, user_id, project_id, title)
@@ -109,7 +110,7 @@ describe('compact account synchronization journal', () => {
 
 	it('does not advance the visible cursor past an uncommitted change', async () => {
 		const { owner, note } = await seedNote('8808');
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		const writer = connectPostgresTestDatabase(context.url);
 		try {
@@ -131,7 +132,7 @@ describe('compact account synchronization journal', () => {
 	it('assigns cursors at publication so a later transaction can commit first without hiding changes', async () => {
 		const { owner, note } = await seedNote('8809');
 		const { note: other } = await seedNote('8810', owner);
-		const journal = new WorkspaceSyncChanges(context.db);
+		const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 		const initial = await journal.pullPage(owner, initialSyncCursor);
 		const writer = connectPostgresTestDatabase(context.url);
 		try {
@@ -158,7 +159,7 @@ describe('compact account synchronization journal', () => {
 it('retains every journal record across page checkpoints', async () => {
 	const { owner, project } = await seedNote('8820');
 	await context.client`insert into notes (user_id, project_id, kind, title) select ${owner.userId}::uuid, ${project.id}::uuid, 'note', 'Page note ' || n from generate_series(1, 600) n`;
-	const journal = new WorkspaceSyncChanges(context.db);
+	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 	const expected =
 		await context.client`select resource_type, resource_id from workspace_sync_changes where account_id = ${owner.userId}`;
 	const [head] =
@@ -180,7 +181,7 @@ it('retains every journal record across page checkpoints', async () => {
 it('includes a resource moved beyond the current page checkpoint by a concurrent edit', async () => {
 	const { owner, project, note } = await seedNote('8821');
 	await context.client`insert into notes (user_id, project_id, kind, title) select ${owner.userId}::uuid, ${project.id}::uuid, 'note', 'Page note ' || n from generate_series(1, 300) n`;
-	const journal = new WorkspaceSyncChanges(context.db);
+	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 	const first = await journal.pullPage(owner, initialSyncCursor);
 	await context.client`update notes set title = 'Changed between pages' where id = ${note.id}`;
 	const keys: string[] = [];
@@ -197,7 +198,7 @@ it('includes a resource moved beyond the current page checkpoint by a concurrent
 
 it('includes the current body with the journal version in the same page', async () => {
 	const { owner, note } = await seedNote('8830');
-	const journal = new WorkspaceSyncChanges(context.db);
+	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 	const initial = await journal.pullPage(owner, initialSyncCursor);
 	await context.client`update notes set title = 'Complete page' where id = ${note.id}`;
 	const page = await journal.pullPage(owner, initial.cursor);
@@ -220,7 +221,7 @@ it('includes the current body with the journal version in the same page', async 
 
 it('fails a complete page when a selected live resource lost its version metadata', async () => {
 	const { owner, note } = await seedNote('8831');
-	const journal = new WorkspaceSyncChanges(context.db);
+	const journal = new WorkspaceSyncChanges(context.db, workspaceResourceKey, syncEtag);
 	const initial = await journal.pullPage(owner, initialSyncCursor);
 	await context.client`update notes set title = 'Needs metadata' where id = ${note.id}`;
 	await context.client.begin(async (tx) => {

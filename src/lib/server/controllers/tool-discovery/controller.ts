@@ -1,6 +1,6 @@
 import { InvalidGeneratedContentError } from '$lib/errors';
 import type { ToolDescriptor, ToolEmbeddingSeedSummary } from '$lib/models/agent/tool-index';
-import { TOOL_CATALOG } from '$lib/models/agent/tool-catalog';
+import { TOOL_CATALOG } from '$lib/services/agent/tool-catalog';
 import type { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 

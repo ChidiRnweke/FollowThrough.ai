@@ -1,7 +1,8 @@
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/models/workspace-sync';
-import { syncEtag, type SyncEtag } from '$lib/models/sync';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { type SyncEtag } from '$lib/models/sync';
+import { syncEtag } from '$lib/services/sync/versions';
 import type { WriteOutcome } from '$lib/models/outbox';
 import type { DateTime } from '$lib/models/workspace';
 import type { OutboxTransport } from '$lib/client/sync/outbox-contracts';

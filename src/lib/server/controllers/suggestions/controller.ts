@@ -1,3 +1,8 @@
+import {
+	groupSuggestionViews,
+	pendingMemorySuggestions,
+	newestMemoryViews
+} from '$lib/services/suggestions/presentation';
 import { searchableDrawioText } from '$lib/services/diagrams/labels';
 import { decideTodoCreation } from '$lib/services/todos/creation';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
@@ -35,14 +40,13 @@ import type {
 	AcceptSuggestionOutput,
 	ListSuggestionsInput,
 	ListSuggestionsOutput,
-	SuggestionGroup,
 	SuggestionView,
 	RejectSuggestionInput,
 	RevertSuggestionInput,
 	Suggestion
 } from '$lib/models/suggestions';
 import type { ListPendingMemoryInput } from '$lib/models/memory';
-import type { ListPendingMemoryOutput, MemorySuggestionView } from '$lib/models/suggestions';
+import type { ListPendingMemoryOutput } from '$lib/models/suggestions';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import { InvalidTransitionError, ValidationError } from '$lib/errors';
 import type {
@@ -159,20 +163,7 @@ export class Suggestions implements SuggestionsController {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const suggestions = await this.dependencies.suggestionLister.listByStatus(actor, input.status);
 		const views = await this.readViews(actor, suggestions);
-		const ordered = [...views].sort((a, b) =>
-			a.suggestion.createdAt.localeCompare(b.suggestion.createdAt)
-		);
-		const groups = new Map<string, { note?: SuggestionView['note']; views: SuggestionView[] }>();
-		for (const view of ordered) {
-			const key = view.note?.id ?? '';
-			const group = groups.get(key) ?? { note: view.note, views: [] };
-			group.views.push(view);
-			groups.set(key, group);
-		}
-		const result: SuggestionGroup[] = [...groups.values()].map((group) =>
-			group.note ? { note: group.note, suggestions: group.views } : { suggestions: group.views }
-		);
-		return { groups: result };
+		return { groups: groupSuggestionViews(views) };
 	}
 	async listPendingMemory(
 		actor: ActorContext,
@@ -180,15 +171,10 @@ export class Suggestions implements SuggestionsController {
 	): Promise<ListPendingMemoryOutput> {
 		await this.dependencies.suggestionExpirer.expire(actor);
 		const pending = await this.dependencies.suggestionLister.listByStatus(actor, 'proposed');
-		const memory = pending.filter(
-			(suggestion) =>
-				suggestion.kind === 'memory' && suggestion.payload.projectId === input.projectId
-		);
+		const memory = pendingMemorySuggestions(pending, input.projectId);
 		const views = await this.readViews(actor, memory);
 		return {
-			suggestions: views
-				.filter((view): view is MemorySuggestionView => view.suggestion.kind === 'memory')
-				.sort((a, b) => b.suggestion.createdAt.localeCompare(a.suggestion.createdAt))
+			suggestions: newestMemoryViews(views)
 		};
 	}
 	private async readViews(

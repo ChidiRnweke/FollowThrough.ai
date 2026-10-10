@@ -11,7 +11,7 @@ import type {
 	StoredMessage
 } from '$lib/models/agent';
 import { isHttpError } from '@sveltejs/kit';
-import { isAgentPayloadObject } from '$lib/models/agent/payload';
+import { isAgentPayloadObject } from '$lib/services/agent/payload';
 import type { SuggestionView, SuggestionId } from '$lib/models/suggestions';
 import type {
 	AgentRunClientStorage,

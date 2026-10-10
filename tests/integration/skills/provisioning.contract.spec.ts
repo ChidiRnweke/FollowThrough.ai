@@ -1,3 +1,5 @@
+import { syncEtag } from '$lib/services/sync/versions';
+import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { afterAll, expect, it } from 'vitest';
 import { syncCursorSchema } from '$lib/models/sync';
 import postgres from 'postgres';
@@ -47,7 +49,7 @@ const setup = () => {
 		workspace: new Workspace(
 			capabilityDependencies<WorkspaceDependencies>({
 				...dependencies,
-				syncChanges: new WorkspaceSyncChanges(database)
+				syncChanges: new WorkspaceSyncChanges(database, workspaceResourceKey, syncEtag)
 			})
 		)
 	};

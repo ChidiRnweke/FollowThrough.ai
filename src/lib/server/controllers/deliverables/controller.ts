@@ -1,5 +1,5 @@
 import { widgetExport } from '$lib/services/widgets/export-blocks';
-import { resolveWidgetState } from '$lib/services/widgets/formulas';
+import { resolveWidgetState } from '$lib/services/widgets/edits';
 import { widgetSourceRows } from '$lib/services/widgets/sources';
 import type { Widget, WidgetExport, WidgetId, WidgetSourceRows } from '$lib/models/widgets';
 import type { Todo, TodoListFilter } from '$lib/models/todos';
@@ -21,12 +21,12 @@ import type {
 	exportImageSources,
 	exportDiagramReferences,
 	exportWidgetReferences
-} from '$lib/server/services/deliverables/export-preparation';
+} from '$lib/services/deliverables/export-preparation';
 import type { Diagram, DiagramId } from '$lib/models/diagrams';
 import type { DiagramRasterizer } from '$lib/server/services/deliverables/diagram-rendering';
 import type { ExportDiagramSource, ExportDiagramRaster } from '$lib/models/deliverables';
 import { createMermaidConfig } from '$lib/services/diagrams/mermaid-theme';
-import { attachmentIdFromSrc } from '$lib/server/services/deliverables/export-preparation';
+import { attachmentIdFromSrc } from '$lib/services/deliverables/export-preparation';
 import type {
 	DeliverableMutationRequest,
 	WorkspaceMutationResult

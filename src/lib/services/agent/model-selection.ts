@@ -1,9 +1,4 @@
-import {
-	normalizeLanguageModelId,
-	type AgentModel,
-	type AgentPreferences,
-	type Conversation
-} from '$lib/models/agent';
+import { type AgentModel, type AgentPreferences, type Conversation } from '$lib/models/agent';
 
 /** Resolve the account choice against the deployment default supplied by the caller. */
 export function resolveDefaultAgentModel(
@@ -104,3 +99,10 @@ export function modelChoiceIssue(
 	if (!model) return 'The selected model is unavailable';
 	return null;
 }
+
+/** Construct the canonical identifier spelling without selecting a model or consulting a catalog. */
+export const normalizeLanguageModelId = (modelId: string): string => {
+	const separator = modelId.indexOf(':');
+	if (separator <= 0 || modelId.includes('/')) return modelId;
+	return `${modelId.slice(0, separator)}/${modelId.slice(separator + 1)}`;
+};

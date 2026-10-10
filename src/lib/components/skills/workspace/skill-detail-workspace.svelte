@@ -21,12 +21,12 @@
 	import WorkspaceWriteReview from '$lib/components/shared/workspace-write-review.svelte';
 	import { serializeSkillManifest } from '$lib/services/skills/manifest';
 	import type { WorkspaceSkill } from '$lib/models/workspace-views';
-	import { parseProseMirrorDocument, type Note } from '$lib/models/notes';
+	import { proseMirrorDocumentSchema, type Note } from '$lib/models/notes';
 
 	let { skill }: { skill: WorkspaceSkill } = $props();
 	const syncableNote = (): Note => ({
 		...skill.note,
-		document: parseProseMirrorDocument(skill.note.document)
+		document: proseMirrorDocumentSchema.parse(skill.note.document)
 	});
 
 	const noteId = $derived(skill.note.id);

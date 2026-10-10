@@ -53,7 +53,7 @@ import type {
 	SearchDiagramIconsInput,
 	SearchDiagramIconsOutput
 } from '$lib/models/diagrams';
-import { diagramEtag } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/services/diagrams/editing';
 import { StaleRevisionError, UnsupportedDiagramOperationError, ValidationError } from '$lib/errors';
 import type { AtomicOperation as TransactionRunner, DateTime } from '$lib/models/workspace';
 import type {
@@ -303,24 +303,26 @@ export class DiagramStudio implements DiagramStudioController {
 	async createDiagram(actor: ActorContext, input: CreateDiagramInput): Promise<DiagramWriteOutput> {
 		const source = this.dependencies.drawioXmlValidator.validate(input.source);
 		const timestamp = this.dependencies.now();
-		const diagram = await this.dependencies.diagramWriter.create(actor, {
-			id: crypto.randomUUID() as Diagram['id'],
-			userId: actor.userId,
-			projectId: input.projectId,
-			conversationId: input.conversationId,
-			kind: 'drawio',
-			title: input.title,
-			source,
-			// No preview yet. Only the draw.io embed can draw one, so the gallery says
-			// "No preview yet" until the canvas opens this and exports it.
-			searchableText: searchableDrawioText(this.dependencies.drawioLabels.read(source)),
-			currentRevision: 1,
-			publishedRevision: 0,
-			createdAt: timestamp,
-			updatedAt: timestamp
+		return this.dependencies.transactionRunner.run(async () => {
+			const diagram = await this.dependencies.diagramWriter.create(actor, {
+				id: crypto.randomUUID() as Diagram['id'],
+				userId: actor.userId,
+				projectId: input.projectId,
+				conversationId: input.conversationId,
+				kind: 'drawio',
+				title: input.title,
+				source,
+				// No preview yet. Only the draw.io embed can draw one, so the gallery says
+				// "No preview yet" until the canvas opens this and exports it.
+				searchableText: searchableDrawioText(this.dependencies.drawioLabels.read(source)),
+				currentRevision: 1,
+				publishedRevision: 0,
+				createdAt: timestamp,
+				updatedAt: timestamp
+			});
+			await this.indexDiagram(actor, diagram);
+			return { diagramId: diagram.id, ...(input.title ? { title: input.title } : {}) };
 		});
-		await this.indexDiagram(actor, diagram);
-		return { diagramId: diagram.id, ...(input.title ? { title: input.title } : {}) };
 	}
 
 	/**

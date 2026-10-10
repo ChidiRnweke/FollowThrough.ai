@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { drawioBuilder } from '$lib/testing/diagrams/fakes/in-memory-diagram-skills';
 import { testActor } from '$lib/testing/workspace/fixtures/domain-builders';
-import { diagramEtag } from '$lib/models/diagrams';
+import { diagramEtag } from '$lib/services/diagrams/editing';
 import { diagramRevisionFixture as setup } from '$lib/testing/diagrams/fixtures/revision-editing';
 
 describe('Diagram write outcomes', () => {

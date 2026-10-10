@@ -5,15 +5,9 @@ import {
 	SemanticConventions
 } from '@arizeai/openinference-semantic-conventions';
 import type { Attributes } from '@opentelemetry/api';
-import {
-	normalizeLanguageModelId,
-	type InlineCompletionContext,
-	type InlineSuggestionRequest
-} from '$lib/models/agent';
+import { type InlineCompletionContext, type InlineSuggestionRequest } from '$lib/models/agent';
 import type { OperationObserver } from '$lib/models/telemetry';
 const directObserver: OperationObserver = { run: (_name, _context, body) => body() };
-
-const DEFAULT_GENERATION_MODEL = 'deepseek/deepseek-v4-flash';
 
 interface LanguageModelClientOptions {
 	readonly baseURL?: string;
@@ -196,7 +190,7 @@ export const sanitizeCompletion = (prefix: string, raw: string): string => {
 };
 
 export interface InlineCompletionOptions extends LanguageModelClientOptions {
-	readonly model?: string;
+	readonly model: string;
 	readonly observer?: OperationObserver;
 }
 
@@ -205,12 +199,8 @@ export class InlineSuggestionCompletion implements IInlineSuggestionCompletion {
 	private readonly model: string;
 	private readonly observer: OperationObserver;
 
-	constructor(apiKey: string, options: InlineCompletionOptions = {}) {
-		this.model =
-			options.model ??
-			process.env.OPENROUTER_INLINE_COMPLETION_MODEL ??
-			process.env.OPENROUTER_INLINE_MODEL ??
-			DEFAULT_GENERATION_MODEL;
+	constructor(apiKey: string, options: InlineCompletionOptions) {
+		this.model = options.model;
 		this.client = createLanguageModelClient(apiKey, options);
 		this.observer = options.observer ?? directObserver;
 	}
@@ -224,7 +214,7 @@ export class InlineSuggestionCompletion implements IInlineSuggestionCompletion {
 		// The caller's per-user model wins; `this.model` is the environment
 		// default and stays the fallback for anyone who has not chosen one.
 		// Normalised here rather than at the call site so both branches get it.
-		const selected = normalizeLanguageModelId(model ?? this.model);
+		const selected = model ?? this.model;
 		const prompt = inlineCompletionPrompt(request, context);
 		const result = await this.observer.run(
 			'inline.generate',

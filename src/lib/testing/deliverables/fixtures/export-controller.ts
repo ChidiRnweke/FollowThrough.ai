@@ -1,3 +1,4 @@
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import {
 	Deliverables,
 	type DeliverablesDependencies
@@ -9,7 +10,7 @@ import {
 	exportImageSources,
 	exportDiagramReferences,
 	exportWidgetReferences
-} from '$lib/server/services/deliverables/export-preparation';
+} from '$lib/services/deliverables/export-preparation';
 import { fetchRemoteDataUrl } from '$lib/server/repositories/deliverables/export-images';
 import { packZip } from '$lib/server/services/deliverables/bundle';
 import {
@@ -53,7 +54,11 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			exportImageSources,
 			exportDiagramReferences,
 			exportWidgetReferences,
-			widgetReader: new WidgetLibrary(widgets, new InMemoryProjectRepository()),
+			widgetReader: new WidgetLibrary(
+				widgets,
+				new InMemoryProjectRepository(),
+				new InMemoryNoteRepository()
+			),
 			todoLister: todos,
 			noteLister: notes,
 			fetchImage: fetchRemoteDataUrl,

@@ -7,7 +7,7 @@ import {
 } from './text-search';
 import { describe, expect, it } from 'vitest';
 import {
-	findProseMirrorDocumentIssue,
+	proseMirrorDocumentSchema,
 	type NoteSearchOptions,
 	type ProseMirrorDocument,
 	type ProseMirrorNode,
@@ -196,7 +196,7 @@ describe('Replacing in a document', () => {
 			'x',
 			literal
 		);
-		expect(findProseMirrorDocumentIssue(result?.document)).toBeUndefined();
+		expect(proseMirrorDocumentSchema.safeParse(result?.document).error?.issues[0]).toBeUndefined();
 	});
 
 	it('never leaves the document without a block', () => {

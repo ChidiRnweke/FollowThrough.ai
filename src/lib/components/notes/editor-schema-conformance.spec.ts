@@ -4,8 +4,8 @@ import { Editor } from '@tiptap/core';
 import TableOfContents, { getHierarchicalIndexes } from '@tiptap/extension-table-of-contents';
 import { describe, expect, it } from 'vitest';
 import extensions from '$lib/components/edra/commands/extensions';
-import { findProseMirrorDocumentIssue, readProseMirrorDocument } from '$lib/models/notes';
-import { unknownProseMirrorNodes } from '$lib/models/notes';
+import { proseMirrorDocumentSchema, storedDocumentReadSchema } from '$lib/models/notes';
+import { unknownProseMirrorNodes } from '$lib/services/notes/editor-content';
 
 /**
  * What the editor writes must be what the model accepts.
@@ -68,11 +68,11 @@ describe('what the real editor serializes', () => {
 	// posts, and `remote/notes` parses it with exactly this schema. A document
 	// the editor can produce and the write boundary rejects is an unsaveable note.
 	it('satisfies the schema its own save path parses it with', () => {
-		expect(findProseMirrorDocumentIssue(document())).toBeUndefined();
+		expect(proseMirrorDocumentSchema.safeParse(document()).error?.issues[0]).toBeUndefined();
 	});
 
 	it('produces no block the model had to fall back on', () => {
-		expect(unknownProseMirrorNodes(readProseMirrorDocument(document()))).toEqual([]);
+		expect(unknownProseMirrorNodes(storedDocumentReadSchema.parse(document()))).toEqual([]);
 	});
 
 	// The two defaults that actually broke, pinned individually so a regression
@@ -83,6 +83,9 @@ describe('what the real editor serializes', () => {
 	});
 
 	it('accepts the table-of-contents attributes the extension adds to a heading', () => {
-		expect(findProseMirrorDocumentIssue(editorWith('<h2>Anchored</h2>').getJSON())).toBeUndefined();
+		expect(
+			proseMirrorDocumentSchema.safeParse(editorWith('<h2>Anchored</h2>').getJSON()).error
+				?.issues[0]
+		).toBeUndefined();
 	});
 });

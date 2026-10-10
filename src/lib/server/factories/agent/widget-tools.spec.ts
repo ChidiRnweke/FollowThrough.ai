@@ -1,3 +1,4 @@
+import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
 import { describe, expect, it } from 'vitest';
 import { AgentTools } from './agent-tool-factory';
 import { jsonObjectSchema } from './tool-call-boundary';
@@ -23,7 +24,7 @@ import {
 	testProvenanceId
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { widgetTemplates } from '$lib/models/widgets';
-import { readAgentPayloadObject } from '$lib/models/agent/payload';
+import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import { widgetReferencesIn } from '$lib/services/notes/references';
 
@@ -32,7 +33,7 @@ const setup = () => {
 	repository.widgets = [widgetBuilder()];
 	const projects = new InMemoryProjectRepository();
 	projects.projects = [projectBuilder()];
-	const library = new WidgetLibrary(repository, projects);
+	const library = new WidgetLibrary(repository, projects, new InMemoryNoteRepository());
 	const embeddings = new InMemoryEmbeddingClient();
 	const index = new ContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
@@ -123,7 +124,7 @@ describe('agent widget tools', () => {
 				data: JSON.stringify(widgetTemplates.checklist.data)
 			})
 			.execute();
-		const read = readAgentPayloadObject(output);
+		const read = agentPayloadObjectResultSchema.parse(output);
 		const embed = read.kind === 'valid' ? read.value.embed : null;
 		return {
 			embed: typeof embed === 'string' ? embed : '',
