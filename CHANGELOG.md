@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.1.0...v3.2.0) (2026-10-10)
+
+
+### Features
+
+* **empty-state:** draw scenes for large empty states ([#361](https://github.com/ChidiRnweke/FollowThrough.ai/issues/361)) ([56d1943](https://github.com/ChidiRnweke/FollowThrough.ai/commit/56d194360caeea33ce2eedbe9259d81a4a57e2d5))
+* **icons:** replace lucide and ft icons with the through-line set ([#359](https://github.com/ChidiRnweke/FollowThrough.ai/issues/359)) ([fc53381](https://github.com/ChidiRnweke/FollowThrough.ai/commit/fc53381e850dc0e555a52b4671d4d20c57788d16))
+
 ## [3.1.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v3.0.1...v3.1.0) (2026-10-10)
 
 
