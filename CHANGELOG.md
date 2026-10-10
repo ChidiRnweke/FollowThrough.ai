@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.3.0...v2.3.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **notes:** show exactly what changed in note diffs ([#321](https://github.com/ChidiRnweke/FollowThrough.ai/issues/321)) ([1c71ed8](https://github.com/ChidiRnweke/FollowThrough.ai/commit/1c71ed847a13d6d1d910f617c182dad08ccc82ba))
+
 ## [2.3.0](https://github.com/ChidiRnweke/FollowThrough.ai/compare/v2.2.0...v2.3.0) (2026-10-10)
 
 
