@@ -9,10 +9,6 @@
 	<path
 		class="ft-stroke"
 		pathLength="1"
-		d="M12 19.5V6.6a3 3 0 0 0-5.6-1.5 3.2 3.2 0 0 0-1.9 4.5 3.4 3.4 0 0 0 .4 5.6A3.4 3.4 0 0 0 9 19.5h3"
-	/><path
-		class="ft-stroke"
-		pathLength="1"
-		d="M12 6.6a3 3 0 0 1 5.6-1.5 3.2 3.2 0 0 1 1.9 4.5 3.4 3.4 0 0 1-.4 5.6"
-	/><circle class="ft-accent" cx="16.4" cy="18.6" r="1.45" fill="currentColor" stroke="none" />
+		d="M7 3.5h10a1 1 0 0 1 1 1V20l-6-4-6 4V4.5a1 1 0 0 1 1-1z"
+	/><circle class="ft-accent" cx="12" cy="9.5" r="1.6" fill="currentColor" stroke="none" />
 </Glyph>
