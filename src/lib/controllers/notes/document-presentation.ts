@@ -1,3 +1,5 @@
+import type { SectionNumberingSetting, SectionNumberingLevel } from '$lib/models/notes';
+import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import type { NoteReadingStatistics } from '$lib/services/notes/reading-statistics';
 import type { JSONContent } from '@tiptap/core';
 import type {
@@ -12,6 +14,8 @@ export interface EditorDocumentCopy {
 	copy(document: ProseMirrorDocument): JSONContent;
 }
 export interface NoteDocumentsController {
+	numberingLevel(setting: SectionNumberingSetting): SectionNumberingLevel;
+	sectionNumbers(levels: readonly number[]): readonly string[];
 	readingMinutes(words: number): number;
 	editorContent(document: ProseMirrorDocument): JSONContent;
 	changedBlocks(previous: ProseMirrorDocument, next: ProseMirrorDocument): readonly number[];
@@ -23,8 +27,15 @@ export class NoteDocuments implements NoteDocumentsController {
 	constructor(
 		private readonly presentation: NoteDocumentPresentation,
 		private readonly documents: EditorDocumentCopy,
-		private readonly reading: NoteReadingStatistics
+		private readonly reading: NoteReadingStatistics,
+		private readonly sections: NoteSectionNumbering
 	) {}
+	numberingLevel(setting: SectionNumberingSetting): SectionNumberingLevel {
+		return this.sections.toMenu(setting);
+	}
+	sectionNumbers(levels: readonly number[]): readonly string[] {
+		return this.sections.numbers(levels);
+	}
 	readingMinutes(words: number): number {
 		return this.reading.readingMinutes(words);
 	}

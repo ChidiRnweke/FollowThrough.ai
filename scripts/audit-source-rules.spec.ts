@@ -388,12 +388,21 @@ describe('tool lifecycle ownership', () => {
 });
 
 describe('data-only models', () => {
+	it('allows a value constructor with empty collections and nested data', () => {
+		expect(
+			model(
+				'export const history = (text: string) => ({ past: [], present: { text, references: [] }, future: [] })'
+			)
+		).toEqual([]);
+	});
+
 	it.each([
 		'export const total = (prices: number[]) => prices.reduce((sum, price) => sum + price, 0)',
 		'export function lookup(value: string) { return table.get(value); }',
 		'export const parseValue = (value: string) => schema.parse(value)',
 		'const query = (value: string) => value.length > 0',
-		'export const computed = (id: string) => ({ id: id.trim() })'
+		'export const computed = (id: string) => ({ id: id.trim() })',
+		'export const computed = (id: string) => ({ values: [id.trim()] })'
 	])('rejects model procedure: %s', (source) => {
 		expect(model(source).map((item) => item.rule)).toEqual(['model-procedure']);
 	});

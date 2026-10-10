@@ -1,3 +1,4 @@
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import { syncEtag } from '$lib/models/sync';
@@ -18,7 +19,13 @@ const setup = () => {
 		remote,
 		environment,
 		workspace,
-		controller: new ProjectActions(new ProjectActionStore(), workspace, remote, environment)
+		controller: new ProjectActions(
+			new ProjectActionStore(),
+			workspace,
+			remote,
+			environment,
+			new NoteSectionNumberingService()
+		)
 	};
 };
 it('returns committed deletion and refreshes the workspace before reporting completion', async () => {

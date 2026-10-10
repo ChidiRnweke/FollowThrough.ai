@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mentionCandidatesFor, mentionQueryOf, type MentionableResources } from './mentions';
+import { agentContext } from '$lib/factories/agent/context';
+import type { MentionableResources } from '$lib/models/chat';
 import { widgetBuilder, testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { attachmentViewBuilder } from '$lib/testing/attachments/fixtures/views';
 import { diagramBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -39,26 +40,26 @@ const skill = (name: string, noteId: NoteId): SkillSummary => ({
 
 describe('mention query detection', () => {
 	it('reads the word being typed after an @', () => {
-		expect(mentionQueryOf('summarise @rese')).toBe('rese');
+		expect(agentContext.query('summarise @rese')).toBe('rese');
 	});
 
 	it('offers everything on a bare @', () => {
-		expect(mentionQueryOf('summarise @')).toBe('');
+		expect(agentContext.query('summarise @')).toBe('');
 	});
 
 	it('closes once the tag is followed by a space', () => {
-		expect(mentionQueryOf('summarise @Research ')).toBeUndefined();
+		expect(agentContext.query('summarise @Research ')).toBeUndefined();
 	});
 
 	it('ignores an @ in the middle of a word', () => {
-		expect(mentionQueryOf('mail tester@local')).toBeUndefined();
+		expect(agentContext.query('mail tester@local')).toBeUndefined();
 	});
 });
 
 describe('mention candidates', () => {
 	it('does not offer a partial folder as complete context', () => {
 		expect(
-			mentionCandidatesFor(
+			agentContext.candidates(
 				'Research',
 				[entry({ id: id(1), title: 'Research', kind: 'folder' })],
 				[],
@@ -75,7 +76,7 @@ describe('mention candidates', () => {
 
 	it('offers folders alongside notes', () => {
 		expect(
-			mentionCandidatesFor('resea', tree, [], 'complete', none).map((chip) => chip.kind)
+			agentContext.candidates('resea', tree, [], 'complete', none).map((chip) => chip.kind)
 		).toEqual(['note', 'folder']);
 	});
 
@@ -85,37 +86,40 @@ describe('mention candidates', () => {
 			entry({ id: id(2), title: 'Findings', parentId: id(1) })
 		] as NoteSummary[];
 		expect(
-			mentionCandidatesFor('research', tree, [], 'complete', none).find(
-				(chip) => chip.kind === 'folder'
-			)?.noteCount
+			agentContext
+				.candidates('research', tree, [], 'complete', none)
+				.find((chip) => chip.kind === 'folder')?.noteCount
 		).toBe(1);
 	});
 
 	it('leaves archived entries out', () => {
 		expect(
-			mentionCandidatesFor('research', tree, [], 'complete', none).map((chip) => chip.name)
+			agentContext.candidates('research', tree, [], 'complete', none).map((chip) => chip.name)
 		).not.toContain('Archived research');
 	});
 
 	it('offers matching skills', () => {
 		expect(
-			mentionCandidatesFor('analy', [], [skill('Note analyzer', id(9))], 'complete', none)[0]?.kind
+			agentContext.candidates('analy', [], [skill('Note analyzer', id(9))], 'complete', none)[0]
+				?.kind
 		).toBe('skill');
 	});
 
 	it('offers widgets, diagrams and files after notes', () => {
 		expect(
-			mentionCandidatesFor('', [], [], 'complete', {
-				widgets: [widgetBuilder()],
-				diagrams: [diagramBuilder()],
-				attachments: [attachmentViewBuilder()]
-			}).map((chip) => chip.kind)
+			agentContext
+				.candidates('', [], [], 'complete', {
+					widgets: [widgetBuilder()],
+					diagrams: [diagramBuilder()],
+					attachments: [attachmentViewBuilder()]
+				})
+				.map((chip) => chip.kind)
 		).toEqual(['widget', 'diagram', 'attachment']);
 	});
 
 	it('names a file by its file name', () => {
 		expect(
-			mentionCandidatesFor('', [], [], 'complete', {
+			agentContext.candidates('', [], [], 'complete', {
 				...none,
 				attachments: [attachmentViewBuilder()]
 			})[0]?.name
@@ -124,7 +128,7 @@ describe('mention candidates', () => {
 
 	it('names an untitled diagram so it can still be picked', () => {
 		expect(
-			mentionCandidatesFor('', [], [], 'complete', { ...none, diagrams: [diagramBuilder()] })[0]
+			agentContext.candidates('', [], [], 'complete', { ...none, diagrams: [diagramBuilder()] })[0]
 				?.name
 		).toBe('Untitled diagram');
 	});
@@ -133,6 +137,6 @@ describe('mention candidates', () => {
 		const widgets = Array.from({ length: 9 }, (_, n) =>
 			widgetBuilder({ id: testWidgetId(n + 1), title: `Widget ${n}` })
 		);
-		expect(mentionCandidatesFor('', [], [], 'complete', { ...none, widgets })).toHaveLength(4);
+		expect(agentContext.candidates('', [], [], 'complete', { ...none, widgets })).toHaveLength(4);
 	});
 });

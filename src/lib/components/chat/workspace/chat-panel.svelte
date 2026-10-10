@@ -43,17 +43,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import ChatComposer from './chat-composer.svelte';
 	import ChatThread from './chat-thread.svelte';
-	import { folderNoteIds, resolveFolderContext } from '$lib/services/notes/folder-context';
-	import {
-		addMention,
-		removeMention,
-		editMentions,
-		createMentionHistory,
-		restoreMentions
-	} from '$lib/services/chat/mentions';
+	import { agentContext } from '$lib/factories/agent/context';
+
 	import type { ComposerSelection, MentionHistory } from '$lib/models/chat';
 	import { readMentionInput } from '$lib/client/agent/mention-input';
-	import { MENTION_PATTERN, diagramNameOf, mentionCandidatesFor, mentionQueryOf } from './mentions';
+	import { MENTION_PATTERN } from '$lib/models/chat';
 	import { chipKeyOf, contextResourceRefOf } from '$lib/services/chat/chips';
 
 	let {
@@ -350,7 +344,7 @@
 		if (canvas?.diagramId === openResource.id) return undefined;
 		const diagram = resources.views.diagram(openResource.id);
 		return diagram && !diagram.archivedAt
-			? { kind: 'diagram', id: diagram.id, name: diagramNameOf(diagram) }
+			? { kind: 'diagram', id: diagram.id, name: agentContext.diagramName(diagram) }
 			: undefined;
 	}
 
@@ -384,13 +378,13 @@
 
 	// --- @ mention picker ---
 
-	const mentionQuery = $derived(mentionQueryOf(prompt));
+	const mentionQuery = $derived(agentContext.query(prompt));
 	let highlighted = $state(0);
 
 	const mentionCandidates = $derived(
 		mentionQuery === undefined || !shell
 			? []
-			: mentionCandidatesFor(
+			: agentContext.candidates(
 					mentionQuery,
 					shell.noteTree,
 					shell.skills,
@@ -401,7 +395,7 @@
 	const visibleChips = $derived(
 		chat.chips.map((chip) =>
 			chip.kind === 'folder' && shell && resources.availability === 'complete'
-				? { ...chip, noteCount: folderNoteIds(shell.noteTree, chip.id).length }
+				? { ...chip, noteCount: agentContext.folderNotes(shell.noteTree, chip.id).length }
 				: chip
 		)
 	);
@@ -414,7 +408,7 @@
 	/** The tag stays in the sentence; the chip is the same choice, shown as a badge. */
 	function pick(candidate: ResourceChip): void {
 		replacePrompt(prompt);
-		chat.mentionDraft = addMention(chat.mentionDraft, candidate);
+		chat.mentionDraft = agentContext.add(chat.mentionDraft, candidate);
 		prompt = chat.mentionDraft.present.text;
 		chat.addChip(candidate);
 		saveDraft();
@@ -425,7 +419,7 @@
 		// A pinned selection put no token in the sentence, so there is nothing to take back
 		// out of it — and its name is a note title the user may well have typed themselves.
 		if (chip.kind !== 'selection') {
-			chat.mentionDraft = removeMention(chat.mentionDraft, chip);
+			chat.mentionDraft = agentContext.remove(chat.mentionDraft, chip);
 			prompt = chat.mentionDraft.present.text;
 		}
 		chat.removeChip(chip);
@@ -446,7 +440,7 @@
 	function replacePrompt(text: string): void {
 		prompt = text;
 		if (chat.mentionDraft.present.text !== text) {
-			chat.mentionDraft = createMentionHistory(text);
+			chat.mentionDraft = agentContext.start(text);
 			chat.chips = chat.chips.filter((chip) => chip.kind === 'selection');
 		}
 	}
@@ -457,7 +451,7 @@
 		const inputType = event instanceof InputEvent ? event.inputType : '';
 		let next: MentionHistory | undefined;
 		if (inputType === 'historyUndo' || inputType === 'historyRedo') {
-			const restored = restoreMentions(
+			const restored = agentContext.restore(
 				chat.mentionDraft,
 				text,
 				inputType === 'historyUndo' ? 'undo' : 'redo'
@@ -465,12 +459,12 @@
 			if (restored.kind === 'restored') next = restored.history;
 		} else if (beforeInput) {
 			const change = readMentionInput(chat.mentionDraft.present.text, text, beforeInput, inputType);
-			if (change.kind === 'edit') next = editMentions(chat.mentionDraft, change.edit);
+			if (change.kind === 'edit') next = agentContext.edit(chat.mentionDraft, change.edit);
 		} else if (text === chat.mentionDraft.present.text) next = chat.mentionDraft;
 		beforeInput = undefined;
 		if (!next && chat.mentionDraft.present.references.length)
 			toast.info('Context mentions were cleared by this edit. Add them again before sending.');
-		chat.mentionDraft = next ?? createMentionHistory(text);
+		chat.mentionDraft = next ?? agentContext.start(text);
 		prompt = text;
 		const mentioned = new Map(
 			chat.mentionDraft.present.references.map(({ chip }) => [`${chip.kind}:${chip.id}`, chip])
@@ -495,7 +489,7 @@
 		| { kind: 'ready'; request: Omit<RunAgentInput, 'conversationId'> }
 		| { kind: 'unavailable'; message: string } {
 		const folderIds = chat.chips.flatMap((chip) => (chip.kind === 'folder' ? [chip.id] : []));
-		const folders = resolveFolderContext(
+		const folders = agentContext.folders(
 			shell?.noteTree ?? [],
 			folderIds,
 			shell ? resources.availability : 'unknown'
@@ -575,7 +569,7 @@
 		});
 		// The tags left with the prompt, so the chips they stood for go too.
 		chat.chips = [];
-		chat.mentionDraft = createMentionHistory('');
+		chat.mentionDraft = agentContext.start('');
 		handoff = undefined;
 		await tick();
 		pinLatestQuestion();
@@ -670,7 +664,7 @@
 				event.preventDefault();
 				const match = MENTION_PATTERN.exec(prompt);
 				if (match) {
-					chat.mentionDraft = editMentions(chat.mentionDraft, {
+					chat.mentionDraft = agentContext.edit(chat.mentionDraft, {
 						from: match.index + match[1]!.length,
 						to: prompt.length,
 						text: ''

@@ -1,3 +1,4 @@
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NotePresentationService } from '$lib/services/notes/presentation';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -13,5 +14,6 @@ export const createWorkspaceViews = (
 		new SuggestionPresentationService(),
 		new MemoryPresentationService(),
 		new ProjectTreePresentationService(),
-		new NotePresentationService()
+		new NotePresentationService(),
+		new NoteSectionNumberingService()
 	);

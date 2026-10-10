@@ -1,3 +1,4 @@
+import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NoteEditingService as NoteEditingRulesService } from '$lib/services/notes/editing';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { NotePresentationService } from '$lib/services/notes/presentation';
@@ -22,6 +23,7 @@ it('lists persisted skill snapshots newest first while leaving the current draft
 	});
 	const notes = new Notes(
 		capabilityDependencies<NotesDependencies>({
+			sections: new NoteSectionNumberingService(),
 			noteCreationRules: new NoteLifecycleRulesService(),
 			noteTrashRules: new NoteLifecycleRulesService(),
 			notePublicationRules: new NoteLifecycleRulesService(),

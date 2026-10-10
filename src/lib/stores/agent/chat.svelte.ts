@@ -35,7 +35,7 @@ import type { ChatHandoff } from './chat-handoff';
 import type { SelectionChip } from '$lib/models/chat';
 import { SvelteSet } from 'svelte/reactivity';
 import type { ContextChip, MentionHistory } from '$lib/models/chat';
-import { createMentionHistory } from '$lib/services/chat/mentions';
+import { createMentionHistory } from '$lib/models/chat';
 import { contextResourceRefOf, uniqueContextResources } from '$lib/services/chat/chips';
 export type { ContextChip, ResourceChip } from '$lib/models/chat';
 

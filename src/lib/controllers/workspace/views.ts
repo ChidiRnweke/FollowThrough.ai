@@ -34,7 +34,7 @@ import type { LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectView } from '$lib/models/projects';
 import { type NoteId } from '$lib/models/notes';
-import { sectionNumberingView } from '$lib/services/notes/section-numbering';
+import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import { provenanceOrigin } from '$lib/services/provenance/presentation';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
@@ -98,7 +98,8 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		private readonly suggestionPresentation: ISuggestionPresentationService,
 		private readonly memoryPresentation: IMemoryPresentationService,
 		private readonly projectPresentation: ProjectTreePresentation,
-		private readonly notePresentation: NotePresentation
+		private readonly notePresentation: NotePresentation,
+		private readonly sections: NoteSectionNumbering
 	) {}
 	private get records() {
 		return this.state.records;
@@ -553,7 +554,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 				),
 				todos: this.todos({ noteId }),
 				pendingSuggestions,
-				sectionNumbering: sectionNumberingView(
+				sectionNumbering: this.sections.view(
 					note.sectionNumbering,
 					project?.sectionNumberingDefault,
 					preferences?.sectionNumberingDefault

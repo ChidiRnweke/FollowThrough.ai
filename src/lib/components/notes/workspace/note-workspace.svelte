@@ -7,7 +7,7 @@
 	import type { NoteView } from '$lib/models/workspace-views';
 
 	import { createEditorSession } from '$lib/factories/workspace/editor-session';
-	import { noteCommand, noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
+	import { noteHasUnpublishedChanges } from '$lib/services/workspace/commands';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -20,7 +20,7 @@
 	} from '$lib/models/notes';
 
 	import type { SuggestionId } from '$lib/models/suggestions';
-	import { sectionNumberingOverrideFor } from '$lib/services/notes/section-numbering';
+	import { createNoteDraftEditing } from '$lib/factories/notes/draft-editing';
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from 'svelte-sonner';
 	import { askAgent } from '$lib/client/shell/responsive-surfaces';
@@ -92,6 +92,7 @@
 	const saveFailed = $derived(editorSession.failure !== null);
 	// Keyed by note id rather than shared: in a split, the sibling pane's work must
 	// not show up as this note's.
+	const draftEditing = untrack(() => createNoteDraftEditing(view.note.id, draft));
 	const actionRuns = noteActionTracking.open(untrack(() => view.note.id));
 	const activeAction = $derived(
 		actionRuns.activeSelectionAction?.action as NoteAiAction | undefined
@@ -106,10 +107,9 @@
 	const sectionNumbering = $derived(view.sectionNumbering);
 
 	async function changeSectionNumbering(level: SectionNumberingLevel): Promise<void> {
-		const enabled = sectionNumberingOverrideFor(level);
-		const result = await draft.stage({ kind: 'noteNumbering', noteId: note.id, enabled });
+		const result = await draftEditing.numbering(level);
 		if (result.kind === 'failure') toast.error(result.message);
-		else note = { ...note, sectionNumbering: enabled };
+		else note = { ...note, sectionNumbering: result.value.sectionNumbering };
 	}
 
 	/**
@@ -237,18 +237,12 @@
 			.save(
 				async () => {
 					if (!editorRef) return { kind: 'failure', message: 'The editor is unavailable' };
-					const result = await draft.stage(
-						noteCommand({
-							...note,
-							title: note.title.trim(),
-							document: editorRef.getDocument(),
-							plainText: editorRef.getPlainText()
-						})
-					);
-					if (result.kind === 'failure') return result;
-					return result.value
-						? { kind: 'saved', value: result.value }
-						: { kind: 'failure', message: 'The note no longer exists' };
+					return draftEditing.save({
+						...note,
+						title: note.title.trim(),
+						document: editorRef.getDocument(),
+						plainText: editorRef.getPlainText()
+					});
 				},
 				(value, unchanged) => {
 					note = unchanged
@@ -278,14 +272,11 @@
 			if (dirty) return;
 		}
 		const isCurrent = editorSession.checkpoint();
-		const toggled = { ...note, isPinned: !note.isPinned };
-		const record = await draft.stage(
-			noteCommand({
-				...toggled,
-				document: editorRef.getDocument(),
-				plainText: editorRef.getPlainText()
-			})
-		);
+		const record = await draftEditing.togglePin({
+			...note,
+			document: editorRef.getDocument(),
+			plainText: editorRef.getPlainText()
+		});
 		if (record.kind === 'saved' && record.value) {
 			if (!isCurrent()) return;
 			note = { ...record.value };

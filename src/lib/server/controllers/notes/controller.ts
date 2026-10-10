@@ -102,7 +102,7 @@ import type {
 	ReplaceNoteTextOutput
 } from '$lib/models/notes';
 import { collectNoteLinkTargets } from '$lib/services/notes/references';
-import { sectionNumberingView } from '$lib/services/notes/section-numbering';
+import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
 import { NotFoundError, StaleRevisionError, ValidationError } from '$lib/errors';
 import {
 	buildNoteSearchPattern,
@@ -331,6 +331,7 @@ export interface NotesController {
 }
 /** Everything the {@link NotesController} needs, injected so it can be built and tested without real stores. */
 export interface NotesDependencies {
+	readonly sections: NoteSectionNumbering;
 	readonly noteEditingRules: NoteEditingRules;
 	readonly notePublicationRules: NotePublicationRules;
 	readonly noteTrashRules: NoteTrashRules;
@@ -634,7 +635,7 @@ export class Notes implements NotesController {
 			this.dependencies.projectReader.get(actor, note.projectId),
 			this.dependencies.userPreferences.get(actor)
 		]);
-		return sectionNumberingView(
+		return this.dependencies.sections.view(
 			note.sectionNumbering,
 			project.sectionNumberingDefault,
 			preferences.sectionNumberingDefault

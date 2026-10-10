@@ -1,3 +1,5 @@
+import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
+import type { SectionNumberingLevel } from '$lib/models/notes';
 import type {
 	ArchiveNoteOutput,
 	CreateNoteOutput,
@@ -73,7 +75,7 @@ export interface ProjectActionsController {
 	): Promise<{ project: WorkspaceValues['projects'] } | undefined>;
 	setSectionNumberingDefault(
 		projectId: ProjectId,
-		enabled?: boolean
+		level: SectionNumberingLevel
 	): Promise<SetProjectSectionNumberingOutput | undefined>;
 	createFolder(
 		projectId: ProjectId,
@@ -110,7 +112,8 @@ export class ProjectActions implements ProjectActionsController {
 		private readonly state: ProjectActionStore,
 		private readonly workspace: ProjectActionWorkspace,
 		private readonly remote: ProjectActionRemote,
-		private readonly environment: ProjectActionEnvironment
+		private readonly environment: ProjectActionEnvironment,
+		private readonly sections: NoteSectionNumbering
 	) {}
 	get busy(): boolean {
 		return this.currentState ? this.state.busy : false;
@@ -257,12 +260,12 @@ export class ProjectActions implements ProjectActionsController {
 		this.run(async () => ({
 			project: await this.edit('projects', projectId, { kind: 'archiveProject', projectId })
 		}));
-	setSectionNumberingDefault = (projectId: ProjectId, enabled?: boolean) =>
+	setSectionNumberingDefault = (projectId: ProjectId, level: SectionNumberingLevel) =>
 		this.run<SetProjectSectionNumberingOutput>(async () => ({
 			project: await this.edit('projects', projectId, {
 				kind: 'projectNumbering',
 				projectId,
-				enabled
+				enabled: this.sections.fromMenu(level)
 			})
 		}));
 

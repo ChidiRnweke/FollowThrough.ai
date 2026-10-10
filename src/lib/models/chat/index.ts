@@ -1,3 +1,6 @@
+import type { Widget } from '$lib/models/widgets';
+import type { Diagram } from '$lib/models/diagrams';
+import type { AttachmentView } from '$lib/models/attachments';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ContextResourceRef } from '$lib/models/agent';
 
@@ -55,3 +58,18 @@ export const MENTION_PATTERN = /(^|\s)@([^\s@]*)$/;
 export type NoteSelectionContext =
 	| { readonly kind: 'none' }
 	| { readonly kind: 'selected'; readonly selection: TextSelection; readonly noteTitle: string };
+
+export interface MentionableResources {
+	readonly widgets: readonly Widget[];
+	readonly diagrams: readonly Diagram[];
+	readonly attachments: readonly AttachmentView[];
+}
+
+export const createMentionHistory = (text: string): MentionHistory => ({
+	past: [],
+	present: { text, references: [] },
+	future: []
+});
+
+export type MentionRestore =
+	{ readonly kind: 'restored'; readonly history: MentionHistory } | { readonly kind: 'untracked' };

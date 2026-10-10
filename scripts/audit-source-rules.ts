@@ -59,6 +59,7 @@ const dataExpression = (expression: ts.Expression): boolean => {
 		value.kind === ts.SyntaxKind.NullKeyword
 	)
 		return true;
+	if (ts.isArrayLiteralExpression(value)) return value.elements.every(dataExpression);
 	if (!ts.isObjectLiteralExpression(value)) return false;
 	return value.properties.every(
 		(property) =>

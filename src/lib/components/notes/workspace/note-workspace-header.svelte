@@ -3,7 +3,7 @@
 
 	import type { Note, NoteId, NoteSummary } from '$lib/models/notes';
 	import { type SectionNumberingLevel, type SectionNumberingView } from '$lib/models/notes';
-	import { sectionNumberingLevelFor } from '$lib/services/notes/section-numbering';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import type { ProjectId } from '$lib/models/projects';
 
 	import type { WorkspaceDraftController } from '$lib/controllers/workspace/resources';
@@ -258,7 +258,7 @@
 						<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
 						<DropdownMenu.SubContent>
 							<DropdownMenu.RadioGroup
-								value={sectionNumberingLevelFor(sectionNumbering.noteOverride)}
+								value={noteDocuments.numberingLevel(sectionNumbering.noteOverride)}
 								onValueChange={(value) => onsectionnumbering(value as SectionNumberingLevel)}
 							>
 								<DropdownMenu.RadioItem value="on">On</DropdownMenu.RadioItem>

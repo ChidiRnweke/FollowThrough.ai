@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { folderNoteIds, resolveFolderContext } from './folder-context';
+import { AgentContextSelectionService } from './context-selection';
+const context = new AgentContextSelectionService();
 import { noteBuilder, testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 
 const folder = noteBuilder({ kind: 'folder', title: 'Research' });
@@ -12,48 +13,49 @@ const tree = [folder, nested, first, second, archived, outside];
 
 describe('complete folder context', () => {
 	it('includes live notes at every depth and excludes archived or unrelated notes', () => {
-		expect(folderNoteIds(tree, folder.id)).toEqual([first.id, second.id]);
+		expect(context.folderNotes(tree, folder.id)).toEqual([first.id, second.id]);
 	});
 	it('includes every note when a folder exceeds the former 25-note cap', () => {
 		const notes = Array.from({ length: 80 }, (_, index) =>
 			noteBuilder({ id: testNoteId(100 + index), parentId: folder.id })
 		);
-		expect(resolveFolderContext([folder, ...notes], [folder.id], 'complete')).toEqual({
+		expect(context.folders([folder, ...notes], [folder.id], 'complete')).toEqual({
 			kind: 'ready',
 			noteIds: notes.map((note) => note.id)
 		});
 	});
 	it('refuses to resolve a partially downloaded inventory', () => {
-		expect(resolveFolderContext([folder, first], [folder.id], 'unknown')).toEqual({
+		expect(context.folders([folder, first], [folder.id], 'unknown')).toEqual({
 			kind: 'incomplete'
 		});
 	});
 	it('distinguishes an unavailable folder from an empty folder', () => {
-		expect(resolveFolderContext([first], [folder.id], 'complete')).toEqual({
+		expect(context.folders([first], [folder.id], 'complete')).toEqual({
 			kind: 'missing',
 			folderId: folder.id
 		});
 	});
 	it('allows a known empty folder', () => {
-		expect(resolveFolderContext([folder], [folder.id], 'complete')).toEqual({
+		expect(context.folders([folder], [folder.id], 'complete')).toEqual({
 			kind: 'ready',
 			noteIds: []
 		});
 	});
 	it('includes overlapping folder selections once', () => {
-		expect(resolveFolderContext(tree, [folder.id, nested.id], 'complete')).toEqual({
+		expect(context.folders(tree, [folder.id, nested.id], 'complete')).toEqual({
 			kind: 'ready',
 			noteIds: [first.id, second.id]
 		});
 	});
 	it('rejects an archived folder as unavailable context', () => {
-		expect(
-			resolveFolderContext([{ ...folder, archivedAt: testNow }], [folder.id], 'complete')
-		).toEqual({ kind: 'missing', folderId: folder.id });
+		expect(context.folders([{ ...folder, archivedAt: testNow }], [folder.id], 'complete')).toEqual({
+			kind: 'missing',
+			folderId: folder.id
+		});
 	});
 	it('keeps duplicate-title folders distinct by their identities', () => {
 		const other = { ...nested, title: folder.title, parentId: undefined };
-		expect(resolveFolderContext([folder, other, first, second], [other.id], 'complete')).toEqual({
+		expect(context.folders([folder, other, first, second], [other.id], 'complete')).toEqual({
 			kind: 'ready',
 			noteIds: [second.id]
 		});

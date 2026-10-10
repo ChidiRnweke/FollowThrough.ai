@@ -18,10 +18,7 @@
 	import type { ProjectExportEntry } from '$lib/models/projects';
 	import { projectTreeController } from '$lib/factories/projects/tree';
 	import { type SectionNumberingLevel } from '$lib/models/notes';
-	import {
-		sectionNumberingLevelFor,
-		sectionNumberingOverrideFor
-	} from '$lib/services/notes/section-numbering';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { AgentAction, agentActions } from '$lib/components/agent';
 
 	let { data } = $props();
@@ -97,10 +94,7 @@
 	}
 
 	async function changeSectionNumberingDefault(level: SectionNumberingLevel): Promise<void> {
-		const output = await projectActions.setSectionNumberingDefault(
-			data.projectId,
-			sectionNumberingOverrideFor(level)
-		);
+		const output = await projectActions.setSectionNumberingDefault(data.projectId, level);
 		if (!output) toast.error('Could not update the project default. Try again.');
 	}
 </script>
@@ -146,7 +140,7 @@
 							<DropdownMenu.SubTrigger>Section numbering</DropdownMenu.SubTrigger>
 							<DropdownMenu.SubContent>
 								<DropdownMenu.RadioGroup
-									value={sectionNumberingLevelFor(project.sectionNumberingDefault)}
+									value={noteDocuments.numberingLevel(project.sectionNumberingDefault)}
 									onValueChange={(value) =>
 										void changeSectionNumberingDefault(value as SectionNumberingLevel)}
 								>

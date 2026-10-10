@@ -1,8 +1,9 @@
+import { agentContext } from '$lib/factories/agent/context';
 import { expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import ChatComposer from './chat-composer.svelte';
-import { addMention, createMentionHistory, editMentions } from '$lib/services/chat/mentions';
+
 import { readMentionInput } from '$lib/client/agent/mention-input';
 import type { ComposerSelection } from '$lib/models/chat';
 import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -10,13 +11,13 @@ import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 it('uses the real textarea selection to remove the first of two identical mentions', async () => {
 	const first = { kind: 'note' as const, id: testNoteId(1), name: 'Research' };
 	const second = { kind: 'note' as const, id: testNoteId(2), name: 'Research' };
-	let history = addMention(createMentionHistory('Compare @'), first);
-	history = editMentions(history, {
+	let history = agentContext.add(agentContext.start('Compare @'), first);
+	history = agentContext.edit(history, {
 		from: history.present.text.length,
 		to: history.present.text.length,
 		text: 'and @'
 	});
-	history = addMention(history, second);
+	history = agentContext.add(history, second);
 	let selection: ComposerSelection | undefined;
 	const noop = () => {};
 	const screen = await render(ChatComposer, {
@@ -63,7 +64,7 @@ it('uses the real textarea selection to remove the first of two identical mentio
 				event.inputType
 			);
 			if (result.kind !== 'edit') throw new Error('Untracked browser edit');
-			history = editMentions(history, result.edit);
+			history = agentContext.edit(history, result.edit);
 		}
 	});
 	const field = screen.getByRole('textbox');

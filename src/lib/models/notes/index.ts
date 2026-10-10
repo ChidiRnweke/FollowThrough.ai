@@ -1299,3 +1299,10 @@ export interface NoteBuiltInRepairWrite {
 }
 
 export type SelectionAction = 'promises' | 'reference' | 'relate';
+
+/** Editable fields captured from a mounted note editor. */
+export type NoteDraftInput = Pick<Note, 'id' | 'document' | 'plainText' | 'title' | 'isPinned'>;
+
+export type NoteDraftSave =
+	| { readonly kind: 'saved'; readonly value: Note }
+	| { readonly kind: 'failure'; readonly message: string };

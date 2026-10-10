@@ -1,4 +1,8 @@
 import {
+	NoteSectionNumberingService,
+	type NoteSectionNumbering
+} from '$lib/services/notes/section-numbering';
+import {
 	NoteLifecycleService as SharedNoteLifecycleService,
 	type NoteCreationRules,
 	type NoteTrashRules,
@@ -59,6 +63,7 @@ export interface NotesCapabilityInput {
 }
 
 export interface NotesCapability {
+	readonly sections: NoteSectionNumbering;
 	readonly creationRules: NoteCreationRules;
 	readonly trashRules: NoteTrashRules;
 	readonly publicationRules: NotePublicationRules;
@@ -81,6 +86,7 @@ export const createNotesCapability = (input: NotesCapabilityInput): NotesCapabil
 	const services = createNoteServices(repository, anchors, input.projects);
 	return {
 		presentation: new NotePresentationService(),
+		sections: new NoteSectionNumberingService(),
 		creationRules: lifecycleRules,
 		trashRules: lifecycleRules,
 		publicationRules: lifecycleRules,
