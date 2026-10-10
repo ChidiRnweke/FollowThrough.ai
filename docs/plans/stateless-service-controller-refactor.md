@@ -1359,29 +1359,39 @@ construction still need migration. The private indexing chunker finding also nee
 The chat store's new controller-factory imports remain prohibited and explicitly unresolved.
 Unrelated workflows stay outside this slice. The overall plan and final acceptance remain incomplete.
 
-## Agent tool orchestration — 2026-10-10
+## Agent tool orchestration repair — 2026-10-10
 
-This continuation is based on #348 in `refactor/pr336-agent-tool-orchestration`, with application
-revision `e646e3257f011bfb3357f04b1a6044cebefb13c5`. Capability-specific tool controllers own
-operation callbacks, project choice, result sequencing and preference before-images. Authority,
-review/executor coordination and MCP startup are controller operations. Factories retain
-construction and interface wiring; adapters retain parsing and protocol registration.
+PR #350 remains stacked on #348. Repair implementation and strengthened checks:
+`8e3e72fbf88dc9affb5980476134dad35c6a27ba`. The earlier tool-controller extraction was invalid: its controllers invoked other
+controllers, and the type-only import exception concealed that violation. Its 100-finding
+measurement and claim of completed ownership migration are superseded.
 
-The extraction preserves #348's read filtering, note-file metadata, saved review restoration,
-authorization, cancellation, errors and results. MCP's internal factory output is a startup
-controller; its route opens that controller before connecting the transport. No external tool
-schema or persisted format changes. Tool coverage remains total over the existing controller
-interfaces. No unrelated browser workflows or enforcement rules changed.
+- [x] Remove tool-operation controller wrappers and their provider. Put complete tool operations,
+      project choice, projections and read filtering in the existing owning controllers.
+- [x] Make `Notes` own reviewed preparation/application. Keep protocol caches and serialization in
+      adapters. Replace the action-taking executor with a data-only completion observer.
+- [x] Coordinate discovery through embedding/index capabilities and live authorization through
+      the preference service. Preserve SDK/MCP promotion lifetime, locked tools and scope checks.
+- [x] Remove the touched server widget controller's editing-controller dependency. Retain the
+      shared editing rules and keep browser store workflows out of this slice.
+- [x] Put shared tool/Markdown contracts in models. Update capability wiring, public boundary
+      instrumentation, coverage maps and tests using existing InMemory fakes.
+- [x] Reject controller chains through imports and injection, including model-owned ports. Add
+      adapter workflow checks with positive fixtures for independent protocol handlers. Align
+      SvelteKit and QA guidance across `.agents`, `.claude` and `.opencode`.
+- [x] Run unit tests, tool-policy/execution contracts, lint, type checking and every architecture
+      stage. Refresh the complete inventory without suppressions.
+- [ ] Continue the wider application migration and satisfy the blocking semantic/Chisel gates.
 
-Focused agent tests pass (60 files, 572 tests), as do the full unit suite (563 files, 4,465 tests,
-one existing skip), selected isolated PostgreSQL contracts (12 files, 72 tests), lint and type
-checking. Topology, source, test-quality and UI audits pass. The complete semantic inventory drops
-from 340 to 100: all 237 findings in the main tool factory, two in MCP wiring and one in SDK wiring
-are resolved. Chisel still reports 12 prohibited imports. The
-[full inventory and enforcement report](stateless-service-controller-enforcement.md) retain every
-remaining finding and reproducibility details.
+The final unit suite passes: 566 files, 4,485 tests, one existing skip. Selected isolated PostgreSQL
+contracts pass: 13 files, 81 tests. Lint, type checking, docs checking, topology, source, test-quality
+and UI checks pass. The current analyzer finds 772 violations on #348 source and 393 after this
+repair. Chisel still reports 53 prohibited imports. The stronger checks make the former 340/100
+counts unsuitable for comparison.
 
-The remaining browser workflows, other factory operations, server public helpers and concrete
-exposures still need migration. All overall completion boxes remain unchanged. Keep this PR draft
-while migration gates fail; do not mark the application refactor complete. No guidance changed,
-and all three SvelteKit, QA and PR skill copies remain aligned.
+The [complete inventory and enforcement report](stateless-service-controller-enforcement.md)
+record every remaining finding and verification command. Remaining work includes browser
+controller/store workflows and older server chains for conversation replay, stream mapping,
+reference search, diagram generation and PDF/document rendering. Other factory workflows,
+public service helpers and concrete exposures also remain. No overall completion box is changed;
+keep PR #350 draft while these migration gates fail.
