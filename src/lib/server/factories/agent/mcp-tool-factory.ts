@@ -17,13 +17,13 @@ import {
 	type AgentToolDefinition,
 	type ToolAccessPolicy
 } from './agent-tool-factory';
+import { ToolLifecycleError } from '$lib/errors';
 import {
-	ToolLifecycleError,
+	ToolCallBoundary,
 	jsonObjectSchema,
-	bindToolArguments,
-	executeToolAction,
-	prepareToolCall
-} from './tool-call-boundary';
+	bindToolArguments
+} from '$lib/server/adapters/agent/tool-call';
+import { AgentToolCalls } from '$lib/server/controllers/agent/tool-calls';
 
 export interface McpRequestContext {
 	readonly actor: ActorContext;
@@ -47,6 +47,7 @@ const result = (value: AgentPayload) => ({
 
 /** Validate inside our boundary, so schema errors and domain errors have one format. */
 export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => {
+	const calls = new AgentToolCalls(new ToolCallBoundary());
 	const registry = new McpTools(
 		options.tokens,
 		options.controllers,
@@ -105,7 +106,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 					'Use search_tools to discover an available capability.'
 				)
 			);
-		const prepared = await prepareToolCall(async () => {
+		const prepared = await calls.prepare(async () => {
 			if (name === 'search_tools')
 				return {
 					kind: 'ready',
@@ -137,7 +138,7 @@ export const createMcpToolSurface = (options: McpToolSurfaceOptions): Server => 
 			return { kind: 'ready', action: definition.prepare(input) };
 		}, extra.signal);
 		if (prepared.kind === 'failure') return result(prepared.failure);
-		const output = await executeToolAction(prepared.action, extra.signal);
+		const output = await calls.execute(prepared.action, extra.signal);
 		if (name === 'search_tools' && readToolFailure(output) === undefined)
 			await server.sendToolListChanged();
 		return result(output);

@@ -1143,3 +1143,16 @@ Every service module below has a planned disposition. This is routing, not compl
   resolved imports. Agent tool construction/review workflows in factories remain pending.
 - Rechecked PRs: #324 is still open at 11032df292820b19d9ec393b637364e4077ffdea; #325 is merged.
   The follow-up target remains refactor/controller-model-audit. No push, PR or completion claim yet.
+
+## Tool invocation preparation and execution — 2026-10-10
+
+- AgentToolInvocation owns preparation identity, approval/execution reuse and cancellation checks.
+  AgentToolInvocationStore retains pending preparations for one SDK tool in one execution. A reused
+  call identity with changed arguments still fails; concurrent calls share the prepared result.
+- AgentToolCalls owns failure handling around preparation and execution. SDK normalization, schema
+  reading and protocol error mapping live in adapters. The SDK factory only assembles dependencies.
+  The source audit and its accepted fixture now identify the adapter's new path.
+- Type checking and lint pass. Focused agent tests pass: 53 files / 545 tests, including five new
+  preparation/replay/isolation cases. Source-audit fixtures pass: 109 tests. Isolated agent contracts
+  pass: 10 files / 58 tests. Architecture still reports 51 prohibited imports; topology, source and
+  test-quality checks pass. Tool registry/review/discovery workflows and final verification remain.

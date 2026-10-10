@@ -1,4 +1,4 @@
-// chisel-ignore-file structural:factory-contains-logic -- Protocol adapter owns validation and tool-local failures, not application composition.
+import type { PreparedAction, ToolCallReader } from '$lib/server/controllers/agent/tool-calls';
 import { trace } from '@opentelemetry/api';
 import { z } from 'zod';
 import { DomainError, ValidationError, failureReport } from '$lib/errors';
@@ -9,18 +9,6 @@ import {
 	type AgentPayload,
 	type AgentPayloadObject
 } from '$lib/models/agent/payload';
-
-export interface PreparedAction {
-	readonly arguments: AgentPayloadObject;
-	readonly execute: () => Promise<AgentPayload>;
-}
-
-export type ToolPreparation =
-	| { readonly kind: 'ready'; readonly action: PreparedAction }
-	| { readonly kind: 'approval_required'; readonly action: PreparedAction }
-	| { readonly kind: 'failure'; readonly failure: ToolFailure };
-
-export class ToolLifecycleError extends Error {}
 
 /** Validation is owned here, before either protocol can ask for approval. */
 export const bindToolArguments = <Shape extends z.ZodRawShape>(
@@ -39,7 +27,7 @@ export const bindToolArguments = <Shape extends z.ZodRawShape>(
 };
 
 /** Only a tool-local stage may turn an exception into model feedback. */
-export const toolCallFailure = (error: unknown): ToolFailure => {
+const toolCallFailure = (error: unknown): ToolFailure => {
 	if (!(error instanceof DomainError))
 		trace.getActiveSpan()?.recordException(error instanceof Error ? error : String(error));
 	const report = failureReport(error);
@@ -50,36 +38,6 @@ export const toolCallFailure = (error: unknown): ToolFailure => {
 	);
 };
 
-export const prepareToolCall = async (
-	prepare: () => Promise<ToolPreparation>,
-	signal: AbortSignal
-): Promise<ToolPreparation> => {
-	signal.throwIfAborted();
-	try {
-		return await prepare();
-	} catch (error) {
-		signal.throwIfAborted();
-		if (error instanceof ToolLifecycleError) throw error;
-		return { kind: 'failure', failure: toolCallFailure(error) };
-	}
-};
-
-export const executeToolAction = async (
-	action: PreparedAction,
-	signal: AbortSignal
-): Promise<AgentPayload> => {
-	signal.throwIfAborted();
-	try {
-		const output = await action.execute();
-		const result = agentPayloadResultSchema.parse(output);
-		if (result.kind === 'corrupt') throw new Error(result.message);
-		return result.value;
-	} catch (error) {
-		signal.throwIfAborted();
-		if (error instanceof ToolLifecycleError) throw error;
-		return toolCallFailure(error);
-	}
-};
 /**
  * The Agents SDK uses a different Zod major, so it cannot consume this app's
  * Zod objects directly. Keep Zod as the execution validator and publish the
@@ -112,3 +70,14 @@ export const jsonObjectSchema = (schema: z.ZodObject) => {
 		...(converted.description ? { description: converted.description } : {})
 	};
 };
+
+export class ToolCallBoundary implements ToolCallReader {
+	output(value: AgentPayload): AgentPayload {
+		const result = agentPayloadResultSchema.parse(value);
+		if (result.kind === 'corrupt') throw new Error(result.message);
+		return result.value;
+	}
+	failure(error: unknown): ToolFailure {
+		return toolCallFailure(error);
+	}
+}

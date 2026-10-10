@@ -5,13 +5,10 @@ import type { AgentController } from '$lib/server/controllers/agent/controller';
 // chisel-ignore-file structural:factory-contains-logic -- Agent protocol adapter maps controller capabilities to SDK schemas; it makes no application-assembly decisions, and Chisel has no adapter layer.
 import type { Tool } from '@openai/agents';
 import { projectFileResult } from './tool-result-projectors';
-import { createSdkTool } from './sdk-tool-adapter';
-import {
-	bindToolArguments,
-	ToolLifecycleError,
-	type PreparedAction,
-	type ToolPreparation
-} from './tool-call-boundary';
+import { createSdkTool } from './sdk-tool-factory';
+import { bindToolArguments } from '$lib/server/adapters/agent/tool-call';
+import { ToolLifecycleError } from '$lib/errors';
+import type { PreparedAction, ToolPreparation } from '$lib/server/controllers/agent/tool-calls';
 import { z } from 'zod';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
 import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';

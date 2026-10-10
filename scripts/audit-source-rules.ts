@@ -533,7 +533,7 @@ export const analyzeSource = (
 		if (violations.some((v) => v.rule === rule && v.line === localLine + lineOffset)) return;
 		violations.push({ rule, line: localLine + lineOffset, message });
 	};
-	const sdkAdapter = 'src/lib/server/factories/agent/sdk-tool-adapter.ts';
+	const sdkAdapter = 'src/lib/server/adapters/agent/sdk-tool.ts';
 	const mcpAdapter = 'src/lib/server/factories/agent/mcp-tool-factory.ts';
 	const diagramProtocol = 'src/lib/server/adapters/diagrams/generation.ts';
 	const toolBoundaryImport = (node: ts.Node): boolean => {
