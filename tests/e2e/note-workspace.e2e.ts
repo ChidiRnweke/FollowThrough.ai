@@ -115,6 +115,9 @@ test('publication, draft discard and history restore preserve the saved note and
 	await savedText(editorNotes.first, 'Published second passage');
 	await openActions(page, 'Version history');
 	await page.getByRole('list', { name: 'Versions' }).getByRole('button').last().click();
+	await page.keyboard.press('Escape');
+	await openActions(page, 'Version history');
+	await page.getByRole('list', { name: 'Versions' }).getByRole('button').last().click();
 	await page.getByRole('button', { name: 'Restore previous version', exact: true }).click();
 	await page.getByRole('button', { name: 'Restore', exact: true }).click();
 	await expect(body(page)).toHaveText('Original passage');

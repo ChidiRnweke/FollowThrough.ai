@@ -26,7 +26,7 @@ export interface WorkspaceSessionStateAccess {
 export class WorkspaceSessionStore implements WorkspaceSessionStateAccess, WorkspaceBindingState {
 	private value = $state<SessionRecord | null>(null);
 	private pending: Promise<WorkspaceSession> | null = null;
-	private version = 0;
+	private version = $state(0);
 	private unsubscribe: (() => void) | null = null;
 	get accountId(): string | null {
 		return this.value?.bootstrap.accountId ?? null;
