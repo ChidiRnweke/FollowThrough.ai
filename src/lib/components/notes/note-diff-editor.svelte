@@ -8,7 +8,7 @@
 	import type { PerNoteEditorSlot } from './editor-context';
 	import { createEditor } from '$lib/components/edra/commands/editor';
 	import { MermaidNodeView } from '$lib/components/diagrams';
-	import { toEditorContent } from './editor-document';
+	import { noteDocuments } from '$lib/factories/notes/document-presentation';
 	import { TodoNode } from '$lib/components/edra/commands/TodoNode.js';
 	import { WidgetNode } from '$lib/components/edra/commands/BuiltinExtensions.js';
 	import { WidgetNodeView } from '$lib/components/widgets';
@@ -186,7 +186,7 @@
 
 	$effect(() => {
 		if (!editor) return;
-		editor.commands.setContent(toEditorContent(document));
+		editor.commands.setContent(noteDocuments.editorContent(document));
 		rendered = untrack(() => rendered) + 1;
 	});
 </script>

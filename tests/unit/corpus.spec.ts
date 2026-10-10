@@ -7,7 +7,7 @@ import messageContents from '../corpus/agent-message-contents.json' with { type:
 import provenanceRows from '../corpus/provenance-rows.json' with { type: 'json' };
 import suggestionPayloads from '../corpus/suggestion-payloads.json' with { type: 'json' };
 import { storedDocumentReadSchema } from '$lib/models/notes';
-import { unknownProseMirrorNodes } from '$lib/services/notes/editor-content';
+import { unreadableDocumentBlocks } from '$lib/testing/notes/fixtures/unreadable-documents';
 import { z } from 'zod';
 import { persistedSessionItemSchema } from '$lib/models/agent';
 import { readAgentEvent } from '$lib/server/repositories/agent/stored-values';
@@ -54,7 +54,7 @@ const reasons = (entries: readonly { readonly reason: string }[]): readonly stri
 describe('the stored note documents', () => {
 	it('read back as documents without unmodelled nodes', () => {
 		const documents = noteDocuments.map((document) => storedDocumentReadSchema.parse(document));
-		const unknown = documents.flatMap((document) => unknownProseMirrorNodes(document));
+		const unknown = documents.flatMap((document) => unreadableDocumentBlocks(document));
 		expect({
 			rootTypes: documents.map((document) => document.type),
 			unknownReasons: reasons(unknown)
@@ -68,7 +68,7 @@ describe('the stored note documents', () => {
 describe('the stored note revisions', () => {
 	it('contain no node the schema failed to model', () => {
 		const unknown = noteRevisionDocuments.flatMap((document) =>
-			unknownProseMirrorNodes(storedDocumentReadSchema.parse(document))
+			unreadableDocumentBlocks(storedDocumentReadSchema.parse(document))
 		);
 		expect(reasons(unknown)).toEqual([]);
 	});

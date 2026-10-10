@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { storedDocumentReadSchema } from '$lib/models/notes';
-import { editableProseMirrorDocument } from './editor-content';
+import { NoteDocumentPresentationService } from './document-presentation';
+const presentation = new NoteDocumentPresentationService();
 
 describe('editable document recovery', () => {
 	it('preserves readable siblings and exposes an unsupported block as copyable JSON', () => {
@@ -11,7 +12,7 @@ describe('editable document recovery', () => {
 			content: [paragraph, futureBlock]
 		});
 
-		expect(editableProseMirrorDocument(document).content).toEqual([
+		expect(presentation.prepare(document).content).toEqual([
 			paragraph,
 			{
 				type: 'codeBlock',
@@ -24,7 +25,7 @@ describe('editable document recovery', () => {
 	it('keeps a malformed stored document visible instead of opening an empty note', () => {
 		const raw = { damaged: true, content: 'Recover the original document' };
 
-		expect(editableProseMirrorDocument(storedDocumentReadSchema.parse(raw))).toEqual({
+		expect(presentation.prepare(storedDocumentReadSchema.parse(raw))).toEqual({
 			type: 'doc',
 			content: [
 				{
