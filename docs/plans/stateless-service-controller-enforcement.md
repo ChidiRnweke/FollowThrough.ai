@@ -470,3 +470,75 @@ indirect dependencies and concrete exposures still need work. The overall refact
 - SvelteKit, QA and PR skill copies match across all three locations. Guidance was not changed.
 - No live-provider, Phoenix round-trip, E2E, PWA or production-build validation was run.
   Local results do not imply CI success. Keep this stacked PR draft while migration gates fail.
+
+## Inline-suggestion completion boundaries — 2026-10-11
+
+This slice stacks on draft PR #358 at `ab83ff5c8fe2f152082ccec32af356086cda2eb0`.
+Application revision: `49cd5c82c64709f896ce511c19d88e8d2c276331`. The checkers are unchanged.
+Baseline verification matched all 370 semantic diagnostics with provenance and all 47 expanded
+Chisel diagnostics exactly. The JSON contains the complete remaining inventories, not only the
+changed family.
+
+### Corrected dependencies
+
+InlineSuggestions owns prompt preparation, provider execution and output sanitization through direct
+collaborators. InlineCompletionRules is a stateless service with two public capabilities; its context,
+wrapper, overlap and sentence helpers remain private. InlineSuggestionCompletion is a provider adapter
+with private trace mapping. It receives the SDK client from a factory and imports no services.
+
+One model-owned completion contract replaces the two service-local interfaces. The controller supplies
+the selected model explicitly. The normalized preference model still wins over the environment default;
+environment precedence is unchanged. Factories expose interface-typed outputs and construct the client,
+rules and adapter. The application only wires their outputs. Evaluations still set the model through
+preferences and invoke the owning inline-suggestion controller.
+
+The controller retains authorization, authoritative note/project context, admission, budget consumption,
+release and error normalization. Its existing generation span encloses provider execution and
+sanitization, with the same parent, model metadata, raw response attributes and sanitized output.
+The adapter preserves request parameters, headers, SDK cancellation and provider failures. The existing
+trace-only reasoning metadata remains distinct from the actual request. Prompt text, spacing, empty
+responses, overlap and output limits are unchanged. ADR 0036 fallback remains in the owning controllers.
+Public controller operations, boundary instrumentation and agent-tool coverage maps are unchanged.
+
+### Complete remaining inventory
+
+| Rule                       | #358 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   16 |        13 |
+| `indirect-dependency`      |    9 |         9 |
+| `concrete-dependency`      |    1 |         1 |
+| Semantic total             |  370 |       367 |
+| Chisel prohibited imports  |   47 |        47 |
+
+The removed identities are the three inline-completion public helpers. No diagnostic identities were
+added. Constructor, factory-output, contract, consumer and evaluation reviews are recorded separately
+from analyzer findings. The overall refactor remains incomplete. No checker or suppression changed.
+
+### Observed verification
+
+- Focused units: **15 files, 109 passed**, covering inline rules/controllers, local provider protocol,
+  ranking/cache regression, controller instrumentation and telemetry cancellation.
+- Full units: **577 files, 4,536 passed, one existing skip**. Passing browser output retains the
+  existing Svelte `derived_inert` warnings and chart rendering error.
+- Isolated PostgreSQL contracts: **21 files, 100 passed** with
+  `pnpm test:contracts:isolated tests/integration/knowledge-search tests/integration/notes tests/integration/memory tests/integration/agent/resolved-preferences.contract.spec.ts`.
+- Local HTTP fixtures verify request contents and factory headers, selected/provider model attribution,
+  raw text, usage, empty/refusal responses, provider errors and cancellation. In-memory OpenTelemetry
+  verifies one generation child span, raw attributes versus sanitized output, SDK cancellation status
+  and admission release. No telemetry server is needed.
+- Lint passed. Type checking passed with zero errors and warnings. Docs checking passed with zero
+  errors/warnings and one existing hint; TypeDoc entry-point warnings remain.
+- Every architecture stage ran. Topology, source, test quality and UI passed. The architecture chain
+  stopped at **367** semantic errors. Standalone Chisel failed with **47** prohibited imports.
+- SvelteKit, QA and PR skill trees match across `.agents`, `.claude` and `.opencode`; guidance did not
+  change. An initial focused test expected the wrong fixture source title; the expectation was corrected
+  before all passing results above.
+- No live provider, evaluation suite, Phoenix round-trip, E2E, PWA or production build was run. Local
+  results do not imply CI success. Keep the stacked PR draft while migration gates fail.
+
+Browser migrations, synchronization, preference writes, indexing, unrelated helpers, telemetry
+restructuring and the diagram SDK mismatch remain outside this slice. The wider application migration
+and its remaining factory/store/helper/dependency findings still need work.
