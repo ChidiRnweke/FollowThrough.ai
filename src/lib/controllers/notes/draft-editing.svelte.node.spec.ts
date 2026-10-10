@@ -2,7 +2,8 @@ import { expect, it } from 'vitest';
 import { NoteDraftEditing } from './draft-editing';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 

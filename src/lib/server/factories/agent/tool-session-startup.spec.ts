@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { RunContext } from '@openai/agents';
 import { ToolLifecycleError } from '$lib/errors';
@@ -30,6 +31,7 @@ const setup = () => {
 	const fixture = reviewedNoteFixture(note);
 	const preferences = new InMemoryToolPreferenceRepository();
 	const settings = new ToolPreferences(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ToolPreferencesDependencies>({
 			preferences: new ToolAccess(preferences),
 			catalog: new AgentToolCatalogService()

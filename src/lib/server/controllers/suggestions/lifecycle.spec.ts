@@ -1,3 +1,4 @@
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { SuggestionEffects } from '$lib/server/services/suggestions/effects';
@@ -43,6 +44,7 @@ describe('Pending memory review invariants', () => {
 			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
 		);
 		const controller = new Suggestions(
+			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
@@ -82,6 +84,7 @@ describe('Pending memory review invariants', () => {
 			suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
 		);
 		const controller = new Suggestions(
+			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
@@ -100,6 +103,7 @@ const setup = () => {
 	const artifacts = new InMemorySuggestionArtifacts();
 	const transactionRunner = new InMemoryTransactionRunner([suggestions, artifacts]);
 	const controller = new Suggestions(
+		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),

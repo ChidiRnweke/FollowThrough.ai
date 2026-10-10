@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { syncEtag } from '$lib/models/sync';
 import type { OutboxEntry, WriteDraft, WriteRebase } from '$lib/models/outbox';
 
-import { rebaseFields } from '$lib/services/sync/rebase';
+import { FieldReplayService } from '$lib/services/sync/rebase';
+const { rebaseFields } = new FieldReplayService();
 const editing = new OutboxEditingService();
 
 interface Task {

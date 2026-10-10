@@ -6,7 +6,8 @@ import { disambiguationWorkspace } from '../fixtures/workspaces/disambiguation';
 import { findCall } from '../assertions/tool-calls';
 import { ARCHETYPES, type EvalCase } from './types';
 import { type AgentPayload } from '$lib/models/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+const { isAgentPayloadObject } = new AgentPayloadInspectionService();
 
 /**
  * The note or todo id a call targeted, spelled either at the top level or as

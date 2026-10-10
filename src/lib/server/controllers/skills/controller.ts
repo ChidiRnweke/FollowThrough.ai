@@ -1,9 +1,10 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
 import type { NoteCreationRules } from '$lib/services/notes/lifecycle';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { NoteCreator } from '$lib/server/services/notes/catalog';
 import type { DateTime } from '$lib/models/workspace';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { IndexingResult } from '$lib/models/knowledge-search';
 import type { SkillPortability } from '$lib/services/skills/manifest';
 import type { SkillMetadataEditing } from '$lib/services/skills/metadata';
@@ -133,7 +134,7 @@ export class Skills implements SkillsController {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
 					await this.dependencies.skillEditor.lockCatalog(actor);
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -160,7 +161,10 @@ export class Skills implements SkillsController {
 		}
 	}
 
-	constructor(private readonly dependencies: SkillsDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: SkillsDependencies
+	) {}
 	async list(actor: ActorContext, input?: { projectId?: ProjectId }): Promise<ListSkillsOutput> {
 		await this.dependencies.transactionRunner.run(() =>
 			this.dependencies.builtInSkills.ensure(actor)

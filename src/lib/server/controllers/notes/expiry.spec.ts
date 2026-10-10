@@ -1,3 +1,7 @@
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -19,6 +23,10 @@ it('reports expiry failure before presenting a note’s pending proposals', asyn
 	const proposals = new InMemorySuggestionReader();
 	proposals.expiryFailure = new Error('Expiry storage is unavailable');
 	const controller = new Notes(
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),

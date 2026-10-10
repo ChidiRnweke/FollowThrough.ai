@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { ConversationHistoryService } from '$lib/server/services/agent/conversations/history';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { createTestAgentContext as createAgentContext } from '$lib/testing/agent/fixtures/context-formatter';
@@ -69,6 +70,7 @@ export const agentContextFixture = () => {
 		eventBus: new AgentEventStore()
 	};
 	const controller = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({ ...dependencies, ...agentRulesFixture() })
 	);
 	const builder = {

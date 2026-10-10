@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
 import { prepareWorkspaceCommand } from '$lib/testing/workspace/fixtures/commands';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import {
 	noteBuilder,
 	projectBuilder,

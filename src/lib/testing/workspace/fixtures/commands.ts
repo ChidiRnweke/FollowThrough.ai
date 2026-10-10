@@ -19,11 +19,9 @@ import type {
 import type { UpdateAgentPreferencesInput } from '$lib/models/agent';
 import type { UserId } from '$lib/models/identity';
 import type { DateTime } from '$lib/models/workspace';
-import {
-	isWorkspaceRecord,
-	workspaceRecordIdentity,
-	workspaceResourceKey
-} from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { isWorkspaceRecord, workspaceRecordIdentity, workspaceResourceKey } =
+	new WorkspaceCommandRulesService();
 import { testActor, testNow } from './domain-builders';
 
 class InMemoryCommandInventory implements WorkspaceCommandSource {

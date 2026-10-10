@@ -56,13 +56,11 @@ import type {
 	RunAgentInput,
 	ToolClassification
 } from '$lib/models/agent';
-import {
-	agentPayloadResultSchema,
-	type AgentPayload,
-	type AgentPayloadObject
-} from '$lib/models/agent/payload';
-import { agentPayloadItems } from '$lib/services/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+import { AgentReadTool } from '$lib/server/controllers/agent/read-tool';
+import { BoundReadTool, ToolResultBoundary } from '$lib/server/adapters/agent/read-tool';
+
 import type { NoteEtag, NoteId, NoteRevisionId, TextSelection } from '$lib/models/notes';
 import { createTodoBatchSchema, type TodoId } from '$lib/models/todos';
 import type { SuggestionId } from '$lib/models/suggestions';
@@ -724,48 +722,6 @@ const temporal = <T extends z.ZodRawShape>(shape: T) =>
 					message: 'createdAfter must be before or equal to createdBefore'
 				});
 		});
-const withinCreatedRange = (
-	createdAt: string,
-	range: { readonly createdAfter?: string; readonly createdBefore?: string }
-): boolean =>
-	(!range.createdAfter || createdAt >= range.createdAfter) &&
-	(!range.createdBefore || createdAt <= range.createdBefore);
-/**
- * A row is kept unless it carries a `createdAt` outside the range. The two
- * tests used to be inline object casts — `item as { createdAt?: unknown }`, then
- * `item as { createdAt: string }` — on a value whose type already said it was
- * JSON. Indexing an {@link AgentPayloadObject} answers with another
- * `AgentPayload`, so a plain `typeof` finishes the narrowing.
- */
-const filterCreated = (
-	value: AgentPayload,
-	range: { createdAfter?: string; createdBefore?: string }
-): AgentPayload => {
-	const items = agentPayloadItems(value);
-	if (items)
-		return items
-			.filter((item) => {
-				if (!isAgentPayloadObject(item)) return true;
-				const createdAt = item.createdAt;
-				return typeof createdAt !== 'string' || withinCreatedRange(createdAt, range);
-			})
-			.map((item) => filterCreated(item, range));
-	if (!isAgentPayloadObject(value)) return value;
-	return Object.fromEntries(
-		Object.entries(value).map(([key, item]) => [key, filterCreated(item, range)])
-	);
-};
-
-const createdRange = (
-	value: AgentPayloadObject
-): { createdAfter?: string; createdBefore?: string } => {
-	const createdAfter = 'createdAfter' in value ? value.createdAfter : undefined;
-	const createdBefore = 'createdBefore' in value ? value.createdBefore : undefined;
-	return {
-		...(typeof createdAfter === 'string' ? { createdAfter } : {}),
-		...(typeof createdBefore === 'string' ? { createdBefore } : {})
-	};
-};
 const id = z.string().uuid();
 const projectId = z
 	.string()
@@ -1043,14 +999,14 @@ const defineTool = <Name extends ToolName, Shape extends z.ZodRawShape>(
 		description,
 		classification,
 		parameters: strictParameters,
-		prepare: (input) =>
-			bindToolArguments(parameters, input, async (parsed, payload) => {
-				const result = await execute(parsed);
-				const read = agentPayloadResultSchema.parse(result);
-				if (read.kind === 'corrupt')
-					throw new Error(`Tool output could not be represented as JSON: ${read.message}`);
-				return filterCreated(read.value, createdRange(payload));
-			})
+		prepare: new BoundReadTool(
+			parameters,
+			new AgentReadTool(
+				execute,
+				new ToolResultBoundary<AgentToolOutput<Name>>(),
+				new AgentPayloadInspectionService()
+			)
+		).prepare
 	};
 };
 

@@ -4,7 +4,8 @@ import { ZodError } from 'zod';
 import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { actor, context, seedNote } from '../database-harness';
 
 describe('conditional normalized object reads', () => {

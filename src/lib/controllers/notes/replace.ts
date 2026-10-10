@@ -1,5 +1,6 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { Note, NoteId, ReplaceNoteTextInput, NoteReplacementReport } from '$lib/models/notes';
-import { noteCommand } from '$lib/services/workspace/commands';
+
 import { type PreparedWorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { NoteTextSearch } from '$lib/services/notes/text-search';
 
@@ -20,7 +21,10 @@ export interface NoteReplacementController {
 	): Promise<NoteReplacementReport>;
 }
 export class NoteReplacements implements NoteReplacementController {
-	constructor(private readonly rules: NoteTextSearch) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly rules: NoteTextSearch
+	) {}
 	async replace(
 		drafts: readonly NoteReplacementDraft[],
 		input: ReplaceNoteTextInput
@@ -40,7 +44,11 @@ export class NoteReplacements implements NoteReplacementController {
 			if (!replacement) continue;
 			try {
 				const result = await draft.stage(
-					noteCommand({ ...note, document: replacement.document, plainText: replacement.plainText })
+					this.workspaceCommandRules.noteCommand({
+						...note,
+						document: replacement.document,
+						plainText: replacement.plainText
+					})
 				);
 				if (result.kind === 'failure') throw new Error(result.message);
 				saved.push({ noteId: note.id, title: note.title, matches: replacement.replaced });

@@ -8,7 +8,8 @@ import { WorkspaceDatabase } from './database';
 import { DexieWorkspaceRepository } from './workspace-local-repository';
 import { IndexedDbStorageRecovery } from './storage-recovery';
 import { syncEtag } from '$lib/models/sync';
-import { receiveResource } from '$lib/services/sync/state';
+import { SyncResourceRulesService } from '$lib/services/sync/state';
+const { receiveResource } = new SyncResourceRulesService();
 
 const databases: WorkspaceDatabase[] = [];
 const setup = (account = 'alice', prefix = `recovery-${crypto.randomUUID()}`) => {

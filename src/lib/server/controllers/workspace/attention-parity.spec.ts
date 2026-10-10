@@ -1,3 +1,4 @@
+import { TodayPresentationService } from '$lib/services/workspace/today';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { expect, it } from 'vitest';
@@ -73,6 +74,7 @@ it('shows the same profile and visible-project memory attention from server and 
 		(suggestion) => suggestion.id !== testSuggestionId(3)
 	);
 	const server = new Workspace(
+		new TodayPresentationService(),
 		capabilityDependencies<WorkspaceDependencies>({
 			todoPresentation: new TodoPresentationService(),
 			memoryPresentation: new MemoryPresentationService(),

@@ -1,3 +1,7 @@
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -28,6 +32,10 @@ const controllerFor = (db: Database, transactionRunner: AtomicOperation) => {
 	const { services: catalog } = createNotesCapability({ db, projects: new ProjectRecords(db) });
 	const effects = new InMemoryNoteContent();
 	return new Notes(
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),

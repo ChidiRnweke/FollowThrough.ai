@@ -1,3 +1,6 @@
+import type { WorkspaceReadinessRules } from '$lib/services/workspace/startup';
+import type { SyncResourceRules } from '$lib/services/sync/state';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { WorkspaceLocalProjection } from '$lib/models/workspace-local';
 import type { WorkspaceResourceStore } from '$lib/stores/workspace/resources.svelte';
 import type {
@@ -16,7 +19,6 @@ import type { SubmissionResult } from '$lib/models/sync';
 
 import type { MutationQueueController } from '$lib/controllers/sync/submission';
 import type { ResourceCacheController } from '$lib/controllers/sync/cache';
-import { workspaceReadiness } from '$lib/services/workspace/startup';
 
 import type { WorkspaceSynchronizationController } from '$lib/controllers/sync/execution';
 
@@ -30,28 +32,20 @@ import {
 	type WriteConflictView,
 	type WriteBase
 } from '$lib/models/outbox';
-import {
-	visibleResources,
-	localResource,
-	accessCache,
-	accessMessage,
-	cachedSnapshot,
-	compareSyncEtags
-} from '$lib/services/sync/state';
+
 import { type WorkspaceValues, type WorkspaceRecord } from '$lib/models/workspace-records';
-import { isWorkspaceRecord } from '$lib/services/workspace/commands';
-import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
+
 import {
 	type PreparedWorkspaceCommand,
 	type WorkspaceCommand
 } from '$lib/models/workspace-mutations';
-import { mutationResource, assertWorkspaceWriteIdentity } from '$lib/services/workspace/commands';
+
 import type { WorkspaceCommandController } from '$lib/controllers/workspace/commands';
 import {
 	type WorkspaceResourceType,
 	type WorkspaceResourceIdentity
 } from '$lib/models/workspace-sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
 import type { WorkspaceViewsController } from '$lib/controllers/workspace/views';
 
 import { type CacheAccess, type SyncEtag, type SyncSnapshot } from '$lib/models/sync';
@@ -225,6 +219,9 @@ export class WorkspaceResources
 		return this.runtime.online;
 	}
 	constructor(
+		private readonly workspaceReadinessRules: WorkspaceReadinessRules,
+		private readonly syncResourceRules: SyncResourceRules,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		readonly accountId: string,
 		private readonly dependencies: WorkspaceResourcesDependencies,
 		private readonly data: WorkspaceResourceStore,
@@ -251,7 +248,9 @@ export class WorkspaceResources
 		if (this.stopped) return;
 		const previous = this.local?.writes.entries ?? [];
 		this.data.update({ local: projection });
-		this.projection.replace(visibleResources(this.cached, projection.writes.entries));
+		this.projection.replace(
+			this.syncResourceRules.visibleResources(this.cached, projection.writes.entries)
+		);
 		this.dependencies.cache.applyStored(projection.cache, false);
 		this.dependencies.writes.applyStored(projection.writes, false);
 		this.data.invalidate();
@@ -283,7 +282,7 @@ export class WorkspaceResources
 		const preferences = this.views.get('agent_preferences', this.accountId);
 		const state = this.state({ type: 'agent_preferences', id: [this.accountId] });
 		const read = this.readStatus;
-		return workspaceReadiness({
+		return this.workspaceReadinessRules.workspaceReadiness({
 			userKnown: shell !== null,
 			inboxKnown: shell?.projects.some((project) => project.role === 'inbox') === true,
 			preferencesKnown:
@@ -370,10 +369,14 @@ export class WorkspaceResources
 		void this.revision;
 		if (this.failure) return this.failure;
 		if (this.stopped) return { kind: 'unavailable' };
-		const key = workspaceResourceKey(identity);
+		const key = this.workspaceCommandRules.workspaceResourceKey(identity);
 		return (
-			localResource(this.pending, key) ??
-			accessCache(this.cached.get(key), this.online, this.dependencies.cache.transfer(key))
+			this.syncResourceRules.localResource(this.pending, key) ??
+			this.syncResourceRules.accessCache(
+				this.cached.get(key),
+				this.online,
+				this.dependencies.cache.transfer(key)
+			)
 		);
 	}
 	view<K extends WorkspaceResourceType>(
@@ -386,7 +389,9 @@ export class WorkspaceResources
 		await this.initialize();
 		const known = this.access(identity);
 		if (known.kind === 'ready' || known.kind === 'deleted') return known;
-		const result = await this.dependencies.cache.open(workspaceResourceKey(identity));
+		const result = await this.dependencies.cache.open(
+			this.workspaceCommandRules.workspaceResourceKey(identity)
+		);
 		if (result.kind !== 'ready' && result.kind !== 'deleted') return result;
 		await this.readLocal();
 		return this.access(identity);
@@ -397,8 +402,8 @@ export class WorkspaceResources
 	): Promise<CacheAccess<WorkspaceRecord> | { kind: 'absent' }> {
 		await this.initialize();
 		if (this.stopped) return { kind: 'unavailable' };
-		const key = workspaceResourceKey(identity);
-		if (localResource(this.pending, key)) return this.open(identity);
+		const key = this.workspaceCommandRules.workspaceResourceKey(identity);
+		if (this.syncResourceRules.localResource(this.pending, key)) return this.open(identity);
 		if (this.dependencies.cache.availability === 'unknown') {
 			const result = await this.dependencies.cache.refresh();
 			if (result.kind === 'failure') return result;
@@ -416,7 +421,7 @@ export class WorkspaceResources
 		local: WorkspaceRecord;
 	} {
 		void this.revision;
-		const key = workspaceResourceKey(identity);
+		const key = this.workspaceCommandRules.workspaceResourceKey(identity);
 		const pending = this.pending.findLast((entry) => entry.intent.key === key);
 		if (pending) {
 			if (!pending.intent.local) throw new Error('A locally deleted resource cannot be edited');
@@ -432,13 +437,13 @@ export class WorkspaceResources
 	}
 	state(identity: WorkspaceResourceIdentity) {
 		void this.revision;
-		return this.cached.get(workspaceResourceKey(identity));
+		return this.cached.get(this.workspaceCommandRules.workspaceResourceKey(identity));
 	}
 
 	snapshot(identity: WorkspaceResourceIdentity): SyncSnapshot<WorkspaceRecord> | null {
 		void this.revision;
-		const entry = this.cached.get(workspaceResourceKey(identity));
-		return entry?.kind === 'present' ? cachedSnapshot(entry) : null;
+		const entry = this.cached.get(this.workspaceCommandRules.workspaceResourceKey(identity));
+		return entry?.kind === 'present' ? this.syncResourceRules.cachedSnapshot(entry) : null;
 	}
 	refreshConflict(operationId: string): Promise<void> {
 		return this.dependencies.writes.refreshConflict(operationId).then(() => this.readLocal());
@@ -500,7 +505,9 @@ export class WorkspaceResources
 		await this.append({
 			...content,
 			operationId: this.environment.operationId(),
-			key: workspaceResourceKey(mutationResource(input)),
+			key: this.workspaceCommandRules.workspaceResourceKey(
+				this.workspaceCommandRules.mutationResource(input)
+			),
 			base: null,
 			basedOn: null
 		});
@@ -516,7 +523,7 @@ export class WorkspaceResources
 	 * own copy is not the version it now edits.
 	 */
 	async stage(draft: WriteDraft<WorkspaceCommand, WorkspaceRecord>): Promise<StagedWrite> {
-		assertWorkspaceWriteIdentity(draft);
+		this.workspaceCommandRules.assertWorkspaceWriteIdentity(draft);
 		// IndexedDB cannot clone a Svelte proxy; snapshot once at the shared UI boundary.
 		await this.initialize();
 		const operationId = await this.dependencies.writes.append(this.environment.snapshot(draft));
@@ -565,10 +572,11 @@ export class WorkspaceResources
 }
 
 const valueOf = <K extends WorkspaceResourceType>(
+	rules: WorkspaceCommandRules,
 	record: WorkspaceRecord,
 	type: K
 ): WorkspaceValues[K] => {
-	if (!isWorkspaceRecord(record, type))
+	if (!rules.isWorkspaceRecord(record, type))
 		throw new Error('The surface received another resource type');
 	return record.value;
 };
@@ -580,6 +588,7 @@ export class ResourceView<K extends WorkspaceResourceType> implements ResourceVi
 		return this.data.failure;
 	}
 	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly resources: WorkspaceResourcesController,
 		readonly identity: WorkspaceResourceIdentity & { type: K },
 		private readonly data: ResourceObservationStore,
@@ -593,7 +602,10 @@ export class ResourceView<K extends WorkspaceResourceType> implements ResourceVi
 		this.observe();
 		const access = this.resources.access(this.identity);
 		if (access.kind === 'ready')
-			return { kind: 'ready', value: valueOf(access.value, this.identity.type) };
+			return {
+				kind: 'ready',
+				value: valueOf(this.workspaceCommandRules, access.value, this.identity.type)
+			};
 		return this.failure ?? access;
 	}
 	async retry(): Promise<CacheAccess<WorkspaceRecord>> {
@@ -639,12 +651,14 @@ export class WorkspaceDraft<
 	}
 	private readonly key: string;
 	constructor(
+		private readonly syncResourceRules: SyncResourceRules,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly resources: WorkspaceEditorCoordinator,
 		readonly identity: WorkspaceResourceIdentity & { type: K },
 		private readonly data: WorkspaceDraftStore,
 		private readonly environment: WorkspaceEditingEnvironment
 	) {
-		this.key = workspaceResourceKey(identity);
+		this.key = this.workspaceCommandRules.workspaceResourceKey(identity);
 	}
 	get active(): boolean {
 		return this.resources.active;
@@ -654,7 +668,7 @@ export class WorkspaceDraft<
 		return this.resources.pending.filter((entry) => entry.intent.key === this.key);
 	}
 	private valueOf(record: WorkspaceRecord): WorkspaceValues[K] {
-		return valueOf(record, this.identity.type);
+		return valueOf(this.workspaceCommandRules, record, this.identity.type);
 	}
 	/** Ready once the editor has a captured base; until then, what the workspace knows. */
 	get state(): CacheAccess<WorkspaceValues[K]> {
@@ -679,7 +693,7 @@ export class WorkspaceDraft<
 			current.basedOn === null
 				? (current.base?.etag ?? null)
 				: this.resources.acknowledgedVersion(this.key, current.basedOn);
-		return observed !== null && compareSyncEtags(snapshot.etag, observed) > 0
+		return observed !== null && this.syncResourceRules.compareSyncEtags(snapshot.etag, observed) > 0
 			? this.valueOf(snapshot.value)
 			: null;
 	}
@@ -747,7 +761,11 @@ export class WorkspaceDraft<
 
 	/** Capture a rendered optional value without awaiting a newer, unseen server version. */
 	captureOrCreate(initial: WorkspaceRecord): void {
-		if (workspaceResourceKey(workspaceRecordIdentity(initial)) !== this.key)
+		if (
+			this.workspaceCommandRules.workspaceResourceKey(
+				this.workspaceCommandRules.workspaceRecordIdentity(initial)
+			) !== this.key
+		)
 			throw new Error('The initial value belongs to a different resource');
 		const state = this.resources.state(this.identity);
 		const pending = this.resources.pending.some((entry) => entry.intent.key === this.key);
@@ -767,7 +785,7 @@ export class WorkspaceDraft<
 			const opened = await this.resources.open(this.identity);
 			if (!isCurrent() || !this.resources.active) return { kind: 'superseded' };
 			if (opened.kind !== 'ready') {
-				this.error = accessMessage(opened, 'item');
+				this.error = this.syncResourceRules.accessMessage(opened, 'item');
 				return opened;
 			}
 			return { kind: 'ready', value: this.adopt() };
@@ -781,7 +799,11 @@ export class WorkspaceDraft<
 	async readOrCreate(initial: WorkspaceRecord): Promise<CacheAccess<WorkspaceValues[K]>> {
 		this.error = null;
 		try {
-			if (workspaceResourceKey(workspaceRecordIdentity(initial)) !== this.key)
+			if (
+				this.workspaceCommandRules.workspaceResourceKey(
+					this.workspaceCommandRules.workspaceRecordIdentity(initial)
+				) !== this.key
+			)
 				throw new Error('The initial value belongs to a different resource');
 			const opened = await this.resources.lookup(this.identity);
 			if (!this.resources.active) return { kind: 'unavailable' };
@@ -790,7 +812,7 @@ export class WorkspaceDraft<
 			} else if (opened.kind === 'absent' || opened.kind === 'deleted') {
 				this.current = { base: null, basedOn: null, local: initial };
 			} else {
-				this.error = accessMessage(opened, 'item');
+				this.error = this.syncResourceRules.accessMessage(opened, 'item');
 				return opened;
 			}
 			return { kind: 'ready', value: this.valueOf(this.current.local) };
@@ -800,13 +822,25 @@ export class WorkspaceDraft<
 		}
 	}
 
-	stage(command: PreparedWorkspaceCommand): ReturnType<WorkspaceDraft<K>['save']> {
+	stage(
+		command: PreparedWorkspaceCommand
+	): Promise<
+		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }
+	> {
 		return this.enqueue(command);
 	}
-	discardPublished(revision: NoteRevision): ReturnType<WorkspaceDraft<K>['save']> {
+	discardPublished(
+		revision: NoteRevision
+	): Promise<
+		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }
+	> {
 		return this.enqueue({ kind: 'discardPublished', revision });
 	}
-	private enqueue(command: DraftCommand): ReturnType<WorkspaceDraft<K>['save']> {
+	private enqueue(
+		command: DraftCommand
+	): Promise<
+		{ kind: 'saved'; value: WorkspaceValues[K] | null } | { kind: 'failure'; message: string }
+	> {
 		const input = this.environment.snapshot(command);
 		const now = this.environment.now();
 		this.savingLocal++;
@@ -833,7 +867,11 @@ export class WorkspaceDraft<
 				command.kind === 'discardPublished'
 					? this.publishedContent(command.revision, context.local)
 					: await this.resources.prepareCommand(command, context.local, now);
-			if (workspaceResourceKey(mutationResource(content.command)) !== this.key)
+			if (
+				this.workspaceCommandRules.workspaceResourceKey(
+					this.workspaceCommandRules.mutationResource(content.command)
+				) !== this.key
+			)
 				throw new Error('The edit belongs to a different resource');
 			if (content.local) this.valueOf(content.local);
 			const staged = await this.resources.stage({
@@ -915,7 +953,7 @@ export class WorkspaceDraft<
 				const observed = conflict.delivery.remote.snapshot;
 				if (
 					observed.etag !== null
-						? compareSyncEtags(snapshot.etag, observed.etag) < 0
+						? this.syncResourceRules.compareSyncEtags(snapshot.etag, observed.etag) < 0
 						: !this.resources.online || this.resources.readStatus.kind !== 'complete'
 				)
 					throw new Error('Reconnect to validate the server copy before discarding the local edit');

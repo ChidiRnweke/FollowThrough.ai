@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { saveNoteDraft } from '$lib/testing/notes/fixtures/saved-draft';
@@ -88,6 +89,7 @@ const setup = async (suffix: string) => {
 		runEvents: { notify: () => {} }
 	});
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,

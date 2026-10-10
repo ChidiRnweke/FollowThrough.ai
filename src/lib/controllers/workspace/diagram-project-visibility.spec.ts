@@ -1,8 +1,10 @@
 import { expect, it } from 'vitest';
 import { createWorkspaceViews } from '$lib/factories/workspace/views';
 import { type WorkspaceRecord } from '$lib/models/workspace-records';
-import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity } = new WorkspaceCommandRulesService();
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import {
 	projectBuilder,
 	diagramBuilder,

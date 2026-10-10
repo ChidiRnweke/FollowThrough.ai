@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { describe, expect, it } from 'vitest';
 import { defaultExportSettings } from '$lib/models/deliverables';
@@ -19,6 +20,7 @@ const setup = async (suffix: string) => {
 	const settings = new ExportSettingsRecords(database);
 	const artifacts = new ArtifactSettingsService(settings);
 	const controller = new Deliverables(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,

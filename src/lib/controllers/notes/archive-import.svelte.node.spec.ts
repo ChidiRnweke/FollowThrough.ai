@@ -4,7 +4,8 @@ import { ArchiveImportStore } from '$lib/stores/notes/archive-import.svelte';
 import { InMemoryArchiveImportUpload } from '$lib/testing/notes/fakes/archive-import';
 import { browserExportFixture } from '$lib/testing/deliverables/fixtures/browser-export';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import type { ArchiveImportResponse, ImportMarkdownArchiveOutput } from '$lib/models/projects';
 const partialReport: ImportMarkdownArchiveOutput = {

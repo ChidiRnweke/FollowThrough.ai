@@ -1,3 +1,4 @@
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
 import { prepareRoute, requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { todoRecordFields } from '$lib/models/workspace-records';
 import { safeReturnUrl } from '$lib/client/todos/return-url';
@@ -8,7 +9,7 @@ export const load: PageLoad = async ({ params, url, parent }) => {
 	const { session } = await parent();
 	const routeReady = prepareRoute(async () => {
 		const opened = await session.resources.open({ type: 'todos', id: [todoId] });
-		requireRouteResource(opened, session.resources.online, 'todo');
+		requireRouteResource(workspacePresentation, opened, session.resources.online, 'todo');
 		await session.resources.prepare();
 	});
 	return { routeReady, todoId, returnTo: safeReturnUrl(url.searchParams.get('returnTo')) };

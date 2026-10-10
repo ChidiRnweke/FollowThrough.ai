@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
@@ -16,6 +17,7 @@ import { WidgetLifecycleService } from '$lib/services/widgets/trash';
 import { createWidgetEditingController } from '$lib/factories/widgets/editing';
 export const createWorkspaceCommands = (): WorkspaceCommandController =>
 	new WorkspaceCommands(
+		new WorkspaceCommandRulesService(),
 		new ExportSettingsRuleService(),
 		new DiagramEditingService(),
 		new DiagramLifecycleService(),

@@ -1,5 +1,3 @@
-import type { WriteRebase } from '$lib/models/outbox';
-
 /** Key order and absent-versus-undefined fields do not distinguish stored JSON values. */
 const canonical = <V>(value: V): string =>
 	JSON.stringify(value, (_key, field) =>
@@ -8,23 +6,15 @@ const canonical = <V>(value: V): string =>
 			: field
 	) ?? 'undefined';
 
-export const sameValue = <V>(left: V, right: V): boolean =>
+const sameValue = <V>(left: V, right: V): boolean =>
 	left === right || canonical(left) === canonical(right);
-
-/** A value without fields is one field: a changed value either stands alone or collides. */
-export const wholeValueRebase =
-	<T extends string | number | boolean>(): WriteRebase<T> =>
-	(observed, local, onto) =>
-		sameValue(local, observed)
-			? { value: onto, overlaps: false }
-			: { value: local, overlaps: !sameValue(onto, observed) && !sameValue(onto, local) };
 
 /**
  * Three-way field replay. Every field the local edit changed keeps its local value; every other
  * field takes the newer version. `bookkeeping` fields (timestamps and counters the server
  * reassigns on every write) follow the same replay but never count as an overlap.
  */
-export const rebaseFields = <V extends object>(
+const rebaseFields = <V extends object>(
 	observed: V,
 	local: V,
 	onto: V,
@@ -48,3 +38,22 @@ export const rebaseFields = <V extends object>(
 	}
 	return { value, overlaps };
 };
+
+export interface FieldReplay {
+	rebaseFields<V extends object>(
+		observed: V,
+		local: V,
+		onto: V,
+		bookkeeping: ReadonlySet<string>
+	): { value: V; overlaps: boolean };
+}
+export class FieldReplayService implements FieldReplay {
+	rebaseFields<V extends object>(
+		observed: V,
+		local: V,
+		onto: V,
+		bookkeeping: ReadonlySet<string>
+	): { value: V; overlaps: boolean } {
+		return rebaseFields(observed, local, onto, bookkeeping);
+	}
+}

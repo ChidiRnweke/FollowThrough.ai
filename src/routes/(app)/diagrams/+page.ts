@@ -1,3 +1,4 @@
+import { workspacePresentation } from '$lib/factories/workspace/presentation';
 import { prepareRoute, requireRouteResource, routeResourceId } from '$lib/client/sync/route-access';
 import { redirect } from '@sveltejs/kit';
 import { projectRecordSchema } from '$lib/models/workspace-records';
@@ -17,7 +18,7 @@ export const load: PageLoad = async ({ parent, url }) => {
 	const routeReady = prepareRoute(async () => {
 		if (selectedProjectId) {
 			const opened = await session.resources.open({ type: 'projects', id: [selectedProjectId] });
-			requireRouteResource(opened, session.resources.online, 'project');
+			requireRouteResource(workspacePresentation, opened, session.resources.online, 'project');
 			await session.resources.requireCollections();
 			const total = session.resources.views.diagrams(selectedProjectId, query).length;
 			const canonicalPage = Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)));

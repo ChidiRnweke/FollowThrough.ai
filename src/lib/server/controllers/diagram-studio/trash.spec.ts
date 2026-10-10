@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
@@ -42,6 +43,7 @@ const setup = () => {
 		new InMemoryProjectRepository()
 	);
 	const controller = new DiagramStudio(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DiagramStudioDependencies>({
 			diagramEditing: new DiagramEditingService(),
 			diagramLifecycle: new DiagramLifecycleService(),

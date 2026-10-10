@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { agentPayloadItems, isAgentPayloadObject } from './payload';
+import { AgentPayloadInspectionService } from '$lib/services/agent/payload';
+const { agentPayloadItems, isAgentPayloadObject } = new AgentPayloadInspectionService();
 describe('Picking an arm of the payload union', () => {
 	it('does not mistake an array for an object', () => {
 		expect(isAgentPayloadObject([])).toBe(false);

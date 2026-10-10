@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
@@ -50,6 +51,7 @@ export const durableDiagramFixture = () => {
 		runEvents: { notify: () => {} }
 	});
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs: state.persistence,

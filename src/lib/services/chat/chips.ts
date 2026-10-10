@@ -2,11 +2,10 @@ import type { ContextResourceRef } from '$lib/models/agent';
 import type { ContextChip } from '$lib/models/chat';
 
 /** A chip's identity: ids are only unique within a kind, so the kind is part of the key. */
-export const chipKeyOf = (chip: Pick<ContextChip, 'kind' | 'id'>): string =>
-	`${chip.kind}:${chip.id}`;
+const chipKeyOf = (chip: Pick<ContextChip, 'kind' | 'id'>): string => `${chip.kind}:${chip.id}`;
 
 /** The resource a widget, diagram or file chip points at, as the run request carries it. */
-export const contextResourceRefOf = (chip: ContextChip): readonly ContextResourceRef[] => {
+const contextResourceRefOf = (chip: ContextChip): readonly ContextResourceRef[] => {
 	switch (chip.kind) {
 		case 'widget':
 			return [{ kind: 'widget', id: chip.id }];
@@ -23,7 +22,7 @@ export const contextResourceRefOf = (chip: ContextChip): readonly ContextResourc
 };
 
 /** One reference per resource, in first-attached order. */
-export const uniqueContextResources = (
+const uniqueContextResources = (
 	refs: readonly ContextResourceRef[]
 ): readonly ContextResourceRef[] => {
 	const seen = new Set<string>();
@@ -34,3 +33,20 @@ export const uniqueContextResources = (
 		return true;
 	});
 };
+
+export interface ContextChips {
+	chipKeyOf(chip: Pick<ContextChip, 'kind' | 'id'>): string;
+	contextResourceRefOf(chip: ContextChip): readonly ContextResourceRef[];
+	uniqueContextResources(refs: readonly ContextResourceRef[]): readonly ContextResourceRef[];
+}
+export class ContextChipsService implements ContextChips {
+	chipKeyOf(chip: Pick<ContextChip, 'kind' | 'id'>): string {
+		return chipKeyOf(chip);
+	}
+	contextResourceRefOf(chip: ContextChip): readonly ContextResourceRef[] {
+		return contextResourceRefOf(chip);
+	}
+	uniqueContextResources(refs: readonly ContextResourceRef[]): readonly ContextResourceRef[] {
+		return uniqueContextResources(refs);
+	}
+}

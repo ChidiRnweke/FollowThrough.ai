@@ -1,3 +1,10 @@
+import { WorkspaceReadinessRulesService } from '$lib/services/workspace/startup';
+import { SyncResourceRulesService } from '$lib/services/sync/state';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
+import { TodayPresentationService } from '$lib/services/workspace/today';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { NoteSectionNumberingService } from '$lib/services/notes/section-numbering';
 import { NotePresentationService } from '$lib/services/notes/presentation';
@@ -25,14 +32,15 @@ import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repos
 import { browserSyncScheduler } from '$lib/client/sync/scheduler';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
 import { browserWriterLock } from '$lib/client/sync/browser-writer-lock';
 import {
 	workspaceReadTransport,
 	workspaceWriteTransport
-} from '$lib/client/sync/workspace-transport';
+} from '$lib/factories/workspace/transport';
 export const assembleWorkspaceResources = (
 	accountId: string,
 	dependencies: WorkspaceResourcesDependencies
@@ -40,11 +48,19 @@ export const assembleWorkspaceResources = (
 	const projection = new WorkspaceProjectionStore(new Map());
 	const environment = new BrowserWorkspaceEditingEnvironment();
 	return new WorkspaceResources(
+		new WorkspaceReadinessRulesService(),
+		new SyncResourceRulesService(),
+		new WorkspaceCommandRulesService(),
 		accountId,
 		dependencies,
 		new WorkspaceResourceStore(),
 		projection,
 		new WorkspaceViews(
+			new BacklinkPresentationService(),
+			new ReferencePresentationService(),
+			new WorkspaceCommandRulesService(),
+			new ProvenancePresentationService(),
+			new TodayPresentationService(),
 			new TodoPresentationService(),
 			projection,
 			new SuggestionPresentationService(),
@@ -57,11 +73,26 @@ export const assembleWorkspaceResources = (
 			view: <K extends WorkspaceResourceType>(
 				resources: WorkspaceResourcesController,
 				identity: WorkspaceResourceIdentity & { type: K }
-			) => new ResourceView<K>(resources, identity, new ResourceObservationStore(), environment),
+			) =>
+				new ResourceView<K>(
+					new WorkspaceCommandRulesService(),
+					resources,
+					identity,
+					new ResourceObservationStore(),
+					environment
+				),
 			draft: <K extends WorkspaceResourceType>(
 				resources: WorkspaceEditorCoordinator,
 				identity: WorkspaceResourceIdentity & { type: K }
-			) => new WorkspaceDraft<K>(resources, identity, new WorkspaceDraftStore(), environment)
+			) =>
+				new WorkspaceDraft<K>(
+					new SyncResourceRulesService(),
+					new WorkspaceCommandRulesService(),
+					resources,
+					identity,
+					new WorkspaceDraftStore(),
+					environment
+				)
 		},
 		environment,
 		createWorkspaceCommands()

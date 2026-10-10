@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { initialsOf } from './initials';
+import { AccountPresentationService } from '$lib/services/workspace/initials';
+const { initialsOf } = new AccountPresentationService();
 
 describe('initialsOf', () => {
 	it('takes the first letter of the first and last words', () => {

@@ -1,3 +1,4 @@
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import { describe, expect, it } from 'vitest';
@@ -27,6 +28,7 @@ const setup = () => {
 		suggestion.kind === 'memory' ? [memorySuggestionContext(suggestion)] : []
 	);
 	const controller = new Suggestions(
+		new ProvenancePresentationService(),
 		capabilityDependencies<SuggestionsDependencies>({
 			todoCreationRules: new TodoEditingRulesService(),
 			suggestionPresentation: new SuggestionPresentationService(),

@@ -1,3 +1,4 @@
+import { SyncResourceRulesService } from '$lib/services/sync/state';
 import {
 	CacheSynchronization,
 	type ResourceCacheController,
@@ -9,4 +10,9 @@ export const createResourceCache = <T>(
 	accountId: string,
 	dependencies: ResourceCacheDependencies<T>
 ): ResourceCacheController<T> =>
-	new CacheSynchronization(accountId, dependencies, new ResourceCacheStore<T>());
+	new CacheSynchronization(
+		new SyncResourceRulesService(),
+		accountId,
+		dependencies,
+		new ResourceCacheStore<T>()
+	);

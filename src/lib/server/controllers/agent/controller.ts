@@ -1,3 +1,4 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type {
 	IAgentModelSelectionService,
 	IAgentModelChoiceService
@@ -12,7 +13,7 @@ import { RunPreparationCancelled } from '$lib/errors';
 import type { ChatRunPreparation } from '$lib/server/services/agent/runs/preparation';
 import type { RunApprovalDecisions } from '$lib/server/services/agent/runs/approvals';
 import type { RunCancellationDecisions } from '$lib/server/services/agent/runs/cancellation';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type {
 	ConversationMutationRequest,
 	WorkspaceMutationResult
@@ -288,7 +289,7 @@ export class Agent implements AgentController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
@@ -308,7 +309,10 @@ export class Agent implements AgentController {
 	): Promise<void> {
 		await this.renameSession(actor, input.command.conversationId, input.command.title);
 	}
-	constructor(private readonly dependencies: AgentDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: AgentDependencies
+	) {}
 
 	listSessions(
 		actor: ActorContext,

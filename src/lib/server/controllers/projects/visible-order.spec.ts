@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { NoteLifecycleService as NoteLifecycleRulesService } from '$lib/services/notes/lifecycle';
 import { ProjectTreePresentationService } from '$lib/services/projects/presentation';
 import { ProjectDetailService } from '$lib/services/projects/details';
@@ -19,6 +20,7 @@ const setup = () => {
 	repository.projects = [projectBuilder()];
 	const catalog = createProjectServices(repository, repository);
 	const controller = new Projects(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<ProjectsDependencies>({
 			noteCreationRules: new NoteLifecycleRulesService(),
 			details: new ProjectDetailService(),

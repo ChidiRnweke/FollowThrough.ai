@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { DiagramGenerationRuleService } from '$lib/server/services/diagrams/generation-rules';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { DiagramRunContext } from '$lib/server/services/diagrams/run-context';
@@ -235,6 +236,7 @@ it('does not publish a direct result after cancellation settles its run', async 
 		const runs = new AgentRunRecords(database);
 		const events = new AgentRunEventRecords(database);
 		const agent = new Agent(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentDependencies>({
 				...agentRulesFixture(),
 				runs,

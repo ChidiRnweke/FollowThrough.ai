@@ -1,6 +1,8 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { describe, expect, it } from 'vitest';
 import {
 	AgentSettings,
@@ -27,6 +29,7 @@ const setup = async (suffix: string) => {
 		new AgentPreferenceRecords(database, workspaceResourceKey)
 	);
 	const agent = new AgentSettings(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentSettingsDependencies>({
 			preferenceEditing: new AgentPreferenceEditingService(),
 			...agentRulesFixture(),
@@ -38,6 +41,7 @@ const setup = async (suffix: string) => {
 		})
 	);
 	const user = new UserSettings(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<UserSettingsDependencies>({
 			preferences: new UserPreferenceStore(new UserPreferencesRecords(database)),
 			syncMutations: sync.mutations,

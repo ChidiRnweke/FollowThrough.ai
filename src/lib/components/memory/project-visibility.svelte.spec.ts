@@ -5,7 +5,8 @@ import {
 	memoryEntryBuilder
 } from '$lib/testing/workspace/fixtures/domain-builders';
 import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-resources';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import MemoryEntryList from './memory-entry-list.svelte';
 

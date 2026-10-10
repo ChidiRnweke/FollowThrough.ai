@@ -1,11 +1,9 @@
 <script lang="ts">
 	import type { AgentModel } from '$lib/models/agent';
-	import {
-		effectiveModel,
-		modelMatchesQuery,
-		modelMetaLine,
-		shortModelName
-	} from '$lib/services/agent/model-label';
+	import { modelPresentationOperations } from '$lib/factories/agent/model-presentation';
+	const { effectiveModel, modelMatchesQuery, modelMetaLine, shortModelName } =
+		modelPresentationOperations;
+
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import * as Command from '$lib/components/ui/command';

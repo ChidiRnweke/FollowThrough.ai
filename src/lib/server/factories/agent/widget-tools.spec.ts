@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
@@ -42,6 +43,7 @@ const setup = () => {
 	const embeddings = new InMemoryEmbeddingClient();
 	const index = createContentIndex(new InMemorySearchRepository(), embeddings.model);
 	const controller = new Widgets(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
 			...createWidgetRules(),
 			widgetReader: library,

@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { type SyncIndicatorInput } from '$lib/models/sync';
-import { syncIndicator } from '$lib/services/sync/indicator';
+import { SyncPresentationService } from '$lib/services/sync/indicator';
+const { syncIndicator } = new SyncPresentationService();
 const synced: SyncIndicatorInput = {
 	online: true,
 	pending: 0,

@@ -1,3 +1,4 @@
+import type { ControllerFactory } from '$lib/server/factories/controller-factory';
 import type { McpSurfaceFactory } from './factories/agent/mcp-tool-factory';
 import {
 	ProductionControllerFactory,
@@ -85,7 +86,7 @@ export interface ApplicationConfig {
 
 export interface ProductionApplication {
 	readonly mcpSurface: McpSurfaceFactory;
-	readonly controllers: ProductionControllerFactory;
+	readonly controllers: ControllerFactory;
 	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
 	/**

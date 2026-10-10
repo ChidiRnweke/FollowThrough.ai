@@ -1,3 +1,4 @@
+import type { SyncResourceRules } from '$lib/services/sync/state';
 import {
 	defaultExportSettings,
 	type ExportSettings,
@@ -17,7 +18,6 @@ import type {
 } from '$lib/controllers/workspace/session';
 import type { DiagramExportController } from './diagrams';
 import type { DocumentExportStore } from '$lib/stores/deliverables/export.svelte';
-import { accessMessage } from '$lib/services/sync/state';
 
 export interface DocumentExportRemote {
 	generate(input: GenerateDocumentInput): Promise<{ readonly downloadUrl: string }>;
@@ -63,6 +63,7 @@ export interface DocumentExportController {
 }
 export class DocumentExports implements DocumentExportController {
 	constructor(
+		private readonly syncResourceRules: SyncResourceRules,
 		private readonly state: DocumentExportStore,
 		private readonly workspace: WorkspaceSessionController,
 		private readonly diagrams: DiagramExportController,
@@ -107,7 +108,8 @@ export class DocumentExports implements DocumentExportController {
 			if (result.kind === 'absent' || result.kind === 'deleted')
 				settings = { ...defaultExportSettings };
 			else {
-				if (result.kind !== 'ready') throw new Error(accessMessage(result, 'export setting'));
+				if (result.kind !== 'ready')
+					throw new Error(this.syncResourceRules.accessMessage(result, 'export setting'));
 				if (result.value.type !== 'export_settings')
 					throw new Error('The export defaults have the wrong resource type');
 				settings = { ...defaultExportSettings, ...result.value.value.settings };
@@ -177,7 +179,8 @@ export class DocumentExports implements DocumentExportController {
 			const documents = await Promise.all(
 				input.entries.map(async (entry) => {
 					const result = await session.resources.open({ type: 'notes', id: [entry.id] });
-					if (result.kind !== 'ready') throw new Error(accessMessage(result, 'note'));
+					if (result.kind !== 'ready')
+						throw new Error(this.syncResourceRules.accessMessage(result, 'note'));
 					if (result.value.type !== 'notes') throw new Error('The selected resource is not a note');
 					return result.value.value;
 				})

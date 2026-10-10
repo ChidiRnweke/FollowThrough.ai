@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Document, Packer, Paragraph } from 'docx';
@@ -16,6 +17,7 @@ const setup = async () => {
 	const storage = new InMemoryAttachmentStorage();
 	const repository = new InMemoryTemplateRepository();
 	const controller = new Deliverables(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			...createTemplateServices(repository, () => testNow),
 			templateStorage: storage,

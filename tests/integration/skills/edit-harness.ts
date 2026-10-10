@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { SkillPortabilityService } from '$lib/services/skills/manifest';
 import { SkillMetadataEditingService } from '$lib/services/skills/metadata';
 import { NoteReferenceService } from '$lib/services/notes/references';
@@ -35,6 +36,7 @@ export const skillController = (database: Database, transactionRunner: Transacti
 	const content = new InMemoryNoteContent();
 	const sync = createSyncCapability({ db: database });
 	return new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),

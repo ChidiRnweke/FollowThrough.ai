@@ -34,7 +34,9 @@
 	import SyncStatusMenu from '../sync/sync-status-menu.svelte';
 	import { workspaceSession } from '$lib/factories/workspace/session';
 	import FeedbackDialog from '../../feedback/feedback-dialog.svelte';
-	import { initialsOf } from '$lib/services/workspace/initials';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { initialsOf } = workspacePresentation;
+
 	import type { Component } from 'svelte';
 
 	let {

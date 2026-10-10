@@ -3,8 +3,11 @@ import type { EntityKind, EntityRef } from '$lib/models/tool-display';
 
 import { toolOutput, type ChatToolActivity } from '$lib/stores/agent/chat-tools';
 import { type AgentPayload } from '$lib/models/agent/payload';
-import { agentPayloadItems } from '$lib/services/agent/payload';
-import { isAgentPayloadObject } from '$lib/services/agent/payload';
+import { agentPayloadOperations } from '$lib/factories/agent/payload';
+const { agentPayloadItems } = agentPayloadOperations;
+
+const { isAgentPayloadObject } = agentPayloadOperations;
+
 import { noteTitle } from '../../chat/actions/tool-approval-fields';
 import { toolResultFields, type ToolResultFields } from './tool-result-fields';
 import { toolPresentationKind } from './tool-catalog-presentation';

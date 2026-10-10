@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { relatedNoteMatches, relatedNoteCandidate } from './candidates';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
+const { relatedNoteMatches, relatedNoteCandidate } = new RelationshipCandidatesService();
 import { searchDocumentBuilder } from '$lib/testing/knowledge-search/fixtures/documents';
 import { testNoteId, testMemoryEntryId } from '$lib/testing/workspace/fixtures/domain-builders';
 

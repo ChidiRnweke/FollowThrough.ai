@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { restoredToolReviews } from '$lib/testing/agent/fixtures/tool-reviews';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
@@ -125,6 +126,7 @@ const setup = <T extends AgentRunner>(
 	runs.runs.push(run);
 	const transactions = new InMemoryTransactionRunner([runs, sessions]);
 	const lifecycle = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,

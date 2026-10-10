@@ -1,3 +1,4 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { ExportSettingsRules } from '$lib/services/deliverables/settings';
 import type { NoteCreationRules, NoteTrashRules } from '$lib/services/notes/lifecycle';
 import type { NoteEditingRules } from '$lib/services/notes/editing';
@@ -26,14 +27,14 @@ import type { DateTime } from '$lib/models/workspace';
 import { type Note, type NoteId } from '$lib/models/notes';
 import type { WriteContent, OutboxEntry } from '$lib/models/outbox';
 import { type WorkspaceRecord, type WorkspaceValues } from '$lib/models/workspace-records';
-import { isWorkspaceRecord } from '$lib/services/workspace/commands';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
 import type {
 	WorkspaceCommand,
 	PreparedWorkspaceCommand,
 	WorkspaceCommandContext
 } from '$lib/models/workspace-mutations';
 const todoWrite = (
+	identity: WorkspaceCommandRules,
 	rules: TodoEditingRules,
 	todo: Todo,
 	patch: Omit<UpdateTodoInput, 'todoId'>,
@@ -43,7 +44,7 @@ const todoWrite = (
 	local: { type: 'todos', value: rules.edit(todo, patch, timestamp) },
 	coalesce: null,
 	references: patch.linkedNoteId
-		? [workspaceResourceKey({ type: 'notes', id: [patch.linkedNoteId] })]
+		? [identity.workspaceResourceKey({ type: 'notes', id: [patch.linkedNoteId] })]
 		: []
 });
 
@@ -94,6 +95,7 @@ const newNote = (
 
 /** Match the trash placement rules while retaining the complete local note. */
 const noteTrashWrite = (
+	identity: WorkspaceCommandRules,
 	rules: NoteTrashRules,
 	note: Note,
 	action: 'archive' | 'restore',
@@ -124,7 +126,7 @@ const noteTrashWrite = (
 		coalesce: null,
 		references:
 			action === 'restore' && local.parentId
-				? [workspaceResourceKey({ type: 'notes', id: [local.parentId] })]
+				? [identity.workspaceResourceKey({ type: 'notes', id: [local.parentId] })]
 				: []
 	};
 };
@@ -188,6 +190,7 @@ const agentPreferenceWrite = (
 
 /** Commands whose meaning depends on a complete collection rather than one loaded record. */
 function workspaceCommandNeedsInventory(
+	identity: WorkspaceCommandRules,
 	rules: NoteTrashRules,
 	command: PreparedWorkspaceCommand,
 	observed: WorkspaceRecord | null,
@@ -202,7 +205,9 @@ function workspaceCommandNeedsInventory(
 		case 'restoreNote': {
 			if (observed?.type !== 'notes') return false;
 			const parent = observed.value.parentId
-				? records.get(workspaceResourceKey({ type: 'notes', id: [observed.value.parentId] }))
+				? records.get(
+						identity.workspaceResourceKey({ type: 'notes', id: [observed.value.parentId] })
+					)
 				: undefined;
 			const decision = rules.restorePlacement(
 				observed.value,
@@ -246,6 +251,7 @@ export interface WorkspaceCommandController {
 /** Resolve required inventory and prepare the complete optimistic command from observed facts. */
 export class WorkspaceCommands implements WorkspaceCommandController {
 	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
 		private readonly exportSettingsRules: ExportSettingsRules,
 		private readonly diagramEditing: DiagramEditingRules,
 		private readonly diagramLifecycle: DiagramLifecycleRules,
@@ -285,7 +291,13 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				(intent.command.kind === 'createFolder' && intent.command.id === newParentId)
 		);
 		if (
-			workspaceCommandNeedsInventory(this.noteTrashRules, command, observed, workspace.records) &&
+			workspaceCommandNeedsInventory(
+				this.workspaceCommandRules,
+				this.noteTrashRules,
+				command,
+				observed,
+				workspace.records
+			) &&
 			!knownNewScope
 		)
 			await workspace.requireCollections();
@@ -303,7 +315,13 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 		context: WorkspaceCommandContext
 	): WriteContent<WorkspaceCommand, WorkspaceRecord> {
 		if (
-			workspaceCommandNeedsInventory(this.noteTrashRules, command, observed, context.records) &&
+			workspaceCommandNeedsInventory(
+				this.workspaceCommandRules,
+				this.noteTrashRules,
+				command,
+				observed,
+				context.records
+			) &&
 			context.inventory !== 'complete'
 		)
 			throw new Error(
@@ -311,7 +329,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			);
 		const { userId, now, records } = context;
 		const value = <K extends WorkspaceRecord['type']>(type: K): WorkspaceValues[K] => {
-			if (!observed || !isWorkspaceRecord(observed, type))
+			if (!observed || !this.workspaceCommandRules.isWorkspaceRecord(observed, type))
 				throw new Error('Open the resource before editing');
 			return observed.value;
 		};
@@ -325,7 +343,8 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			references,
 			coalesce
 		});
-		const projectKey = (id: ProjectId) => workspaceResourceKey({ type: 'projects', id: [id] });
+		const projectKey = (id: ProjectId) =>
+			this.workspaceCommandRules.workspaceResourceKey({ type: 'projects', id: [id] });
 		const notes = () =>
 			[...records.values()]
 				.filter((record) => record.type === 'notes')
@@ -353,7 +372,12 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				return content({ type: 'notes', value: note }, [
 					projectKey(command.projectId),
 					...(command.parentId
-						? [workspaceResourceKey({ type: 'notes', id: [command.parentId] })]
+						? [
+								this.workspaceCommandRules.workspaceResourceKey({
+									type: 'notes',
+									id: [command.parentId]
+								})
+							]
 						: [])
 				]);
 			}
@@ -410,6 +434,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 			case 'archiveNote':
 			case 'restoreNote':
 				return noteTrashWrite(
+					this.workspaceCommandRules,
 					this.noteTrashRules,
 					value('notes'),
 					command.kind === 'archiveNote' ? 'archive' : 'restore',
@@ -429,7 +454,7 @@ export class WorkspaceCommands implements WorkspaceCommandController {
 				const { kind, todoId, ...patch } = command;
 				void kind;
 				void todoId;
-				return todoWrite(this.todoEditing, value('todos'), patch, now);
+				return todoWrite(this.workspaceCommandRules, this.todoEditing, value('todos'), patch, now);
 			}
 			case 'createMemory':
 				return content(

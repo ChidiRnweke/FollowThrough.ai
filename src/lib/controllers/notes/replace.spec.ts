@@ -1,7 +1,11 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { describe, expect, it } from 'vitest';
 import { NoteReplacements } from './replace';
 import { NoteTextSearchService } from '$lib/services/notes/text-search';
-const replacements = new NoteReplacements(new NoteTextSearchService());
+const replacements = new NoteReplacements(
+	new WorkspaceCommandRulesService(),
+	new NoteTextSearchService()
+);
 import { InMemoryReplacementDraft } from '$lib/testing/notes/fakes/in-memory-replacement-draft';
 import { noteBuilder, testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 

@@ -1,7 +1,9 @@
 import { createCachePersistence } from '$lib/factories/sync/cache-persistence';
 import { createDurableOutbox } from '$lib/factories/sync/durable-outbox';
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
-import { wholeValueRebase } from '$lib/services/sync/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
+
+import { wholeValueRebase } from '$lib/testing/sync/fixtures/primitive-replay';
 import { WorkspaceDatabase } from './database';
 import { workspaceCommandSchema } from '$lib/models/workspace-mutations';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';

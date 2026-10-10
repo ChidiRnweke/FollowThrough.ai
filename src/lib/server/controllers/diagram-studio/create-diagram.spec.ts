@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { DiagramEditingService } from '$lib/services/diagrams/editing';
 import { DiagramLifecycleService } from '$lib/services/diagrams/trash';
@@ -48,6 +49,7 @@ const setup = (
 	return {
 		diagrams,
 		controller: new DiagramStudio(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				diagramEditing: new DiagramEditingService(),
 				diagramLifecycle: new DiagramLifecycleService(),
@@ -107,6 +109,7 @@ describe('Creating a diagram', () => {
 
 	it('validates draw.io XML before storing it', async () => {
 		const controller = new DiagramStudio(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<DiagramStudioDependencies>({
 				diagramEditing: new DiagramEditingService(),
 				diagramLifecycle: new DiagramLifecycleService(),

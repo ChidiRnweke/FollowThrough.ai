@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
 import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { ArtifactFileService } from '$lib/services/deliverables/artifact-files';
@@ -46,6 +47,7 @@ export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
 	const widgets = new InMemoryWidgetRepository();
 	const todos = new InMemoryTodoRepository();
 	const service = new Deliverables(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<DeliverablesDependencies>({
 			exportSettingsRules: new ExportSettingsRuleService(),
 			artifactFiles: new ArtifactFileService(),

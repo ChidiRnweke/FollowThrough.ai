@@ -1,8 +1,10 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { AgentPreferenceEditingService } from '$lib/services/agent/preferences';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { expect, it, vi } from 'vitest';
 import postgres from 'postgres';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
 import { AgentPreferenceRecords } from '$lib/server/repositories/agent/postgres/agent-settings';
@@ -33,6 +35,7 @@ it.each([false, true])(
 		const controller = (connection: typeof first) => {
 			const { database, transactionRunner } = createTransactionContext(connection.db);
 			return new AgentSettings(
+				new WorkspaceCommandRulesService(),
 				capabilityDependencies<AgentSettingsDependencies>({
 					preferenceEditing: new AgentPreferenceEditingService(),
 					...agentRulesFixture(),

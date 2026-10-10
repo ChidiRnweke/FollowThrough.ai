@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { contextResourceRefOf, uniqueContextResources } from './chips';
+import { ContextChipsService } from '$lib/services/chat/chips';
+const { contextResourceRefOf, uniqueContextResources } = new ContextChipsService();
 import { testWidgetId } from '$lib/testing/widgets/fixtures/widgets';
 import { testNoteId } from '$lib/testing/workspace/fixtures/domain-builders';
 

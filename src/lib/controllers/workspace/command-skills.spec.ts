@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { resourceDataSchemas } from '$lib/models/workspace-records';
 import { testNoteId, testNow } from '$lib/testing/workspace/fixtures/domain-builders';
 import { skillMetadataWrite } from '$lib/testing/workspace/fixtures/commands';
-import { mutationResource } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { mutationResource } = new WorkspaceCommandRulesService();
 const entry = resourceDataSchemas.skills.parse({
 	noteId: testNoteId(),
 	name: 'Writing',

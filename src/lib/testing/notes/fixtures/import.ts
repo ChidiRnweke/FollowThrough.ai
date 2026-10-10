@@ -1,3 +1,7 @@
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 const noteMarkdown = new NodeNoteMarkdown();
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
@@ -47,6 +51,10 @@ export const importedNotesFixture = () => {
 	const catalog = createNoteServices(records, new InMemoryAnchorRepository(), projects);
 	const consequences = new InMemoryNoteContent();
 	const controller = new Notes(
+		new BacklinkPresentationService(),
+		new ReferencePresentationService(),
+		new WorkspaceCommandRulesService(),
+		new ProvenancePresentationService(),
 		capabilityDependencies<NotesDependencies>({
 			archiveImport: new NoteArchiveImportService(),
 			patchPreparation: new NotePatchPreparationService(),

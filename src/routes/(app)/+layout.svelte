@@ -12,13 +12,15 @@
 	import type { ProjectId } from '$lib/models/projects';
 	import { workbench } from '$lib/stores/workbench/workbench.svelte';
 	import { IndexedDbWorkbenchLayout } from '$lib/client/workbench/indexeddb-layout';
-	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
+	import { proofreading } from '$lib/factories/notes/proofreading';
 	import { chatRegistry } from '$lib/stores/agent/registries/chat-registry.svelte';
 	import { projectActions } from '$lib/factories/projects/actions';
 	import { CommandKeyboardHandler } from '$lib/commands/keyboard';
 	import { cn } from '$lib/utils';
 	import { appContext } from '$lib/stores/agent/app-context.svelte';
-	import { effectiveSidebarWidth } from '$lib/services/workspace/sidebar-width';
+	import { workspacePresentation } from '$lib/factories/workspace/presentation';
+	const { effectiveSidebarWidth } = workspacePresentation;
+
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
 	import { IsDockedPanel } from '$lib/hooks/is-docked-panel.svelte';
 	import { Button } from '$lib/components/ui/button';

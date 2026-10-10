@@ -1,3 +1,8 @@
+import type { BacklinkPresentation } from '$lib/services/relationships/presentation';
+import type { ReferencePresentation } from '$lib/services/references/presentation';
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
+import type { ProvenancePresentation } from '$lib/services/provenance/presentation';
+import type { TodayPresentation } from '$lib/services/workspace/today';
 import type { ISuggestionPresentationService } from '$lib/services/suggestions/presentation';
 import type { ShellContext, TodayView, NoteView } from '$lib/models/workspace-views';
 import type { Project } from '$lib/models/projects';
@@ -6,8 +11,7 @@ import type { WorkspaceViewState } from '$lib/models/workspace-views';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { ProjectTreePresentation } from '$lib/services/projects/presentation';
 import type { NotePresentation } from '$lib/services/notes/presentation';
-import { assembleBacklinkView } from '$lib/services/relationships/presentation';
-import { assembleReferenceView } from '$lib/services/references/presentation';
+
 import { TOOL_DESCRIPTIONS, LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
 import type { UserId } from '$lib/models/identity';
 import type {
@@ -29,17 +33,17 @@ import {
 	type WorkspaceValues,
 	type WorkspaceRecordOf
 } from '$lib/models/workspace-records';
-import { isWorkspaceRecord } from '$lib/services/workspace/commands';
+
 import type { LocalDate } from '$lib/models/workspace';
 import type { Todo, TodoListFilter, TodoView } from '$lib/models/todos';
 import type { ProjectId, ProjectView } from '$lib/models/projects';
 import { type NoteId } from '$lib/models/notes';
 import type { NoteSectionNumbering } from '$lib/services/notes/section-numbering';
-import { provenanceOrigin } from '$lib/services/provenance/presentation';
+
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SkillSummary } from '$lib/models/skills';
 import type { WorkspaceSkill } from '$lib/models/workspace-views';
-import { assembleToday } from '$lib/services/workspace/today';
+
 import type { IMemoryPresentationService } from '$lib/services/memory/presentation';
 
 /** Coordinates feature views from the normalized records, including local write overlays. */
@@ -94,6 +98,11 @@ export interface WorkspaceViewsController {
 
 export class WorkspaceViews implements WorkspaceViewsController {
 	constructor(
+		private readonly backlinkPresentation: BacklinkPresentation,
+		private readonly referencePresentation: ReferencePresentation,
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly provenancePresentation: ProvenancePresentation,
+		private readonly todayPresentation: TodayPresentation,
 		private readonly todoPresentation: TodoPresentation,
 		private readonly state: WorkspaceViewState,
 		private readonly suggestionPresentation: ISuggestionPresentationService,
@@ -119,7 +128,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 		...id: [string, ...string[]]
 	): WorkspaceValues[K] | undefined {
 		const record = this.records.get(JSON.stringify([type, ...id]));
-		if (!record || !isWorkspaceRecord(record, type)) return undefined;
+		if (!record || !this.workspaceCommandRules.isWorkspaceRecord(record, type)) return undefined;
 		return record.value;
 	}
 	get projects(): readonly Project[] {
@@ -245,7 +254,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 						: undefined;
 					return [
 						this.suggestionPresentation.assembleSuggestionView(suggestion, {
-							origin: provenanceOrigin(provenance),
+							origin: this.provenancePresentation.provenanceOrigin(provenance),
 							anchor
 						})
 					];
@@ -511,7 +520,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 					this.get('projects', target.projectId)?.archivedAt
 				)
 					return [];
-				return [assembleBacklinkView(relationship, source, target)];
+				return [this.backlinkPresentation.assembleBacklinkView(relationship, source, target)];
 			});
 		const references = this.all('references')
 			.filter((reference) => reference.noteId === noteId)
@@ -522,7 +531,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 				if (reference.sourceAnchorId && !anchor)
 					missing.push({ type: 'source_anchors', id: [reference.sourceAnchorId] });
 				const { projectId: _projectId, ...domainReference } = reference;
-				return assembleReferenceView(domainReference, { anchor });
+				return this.referencePresentation.assembleReferenceView(domainReference, { anchor });
 			});
 		const pendingSuggestions = this.pendingSuggestions
 			.filter((suggestion) => suggestion.noteId === noteId)
@@ -541,7 +550,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 					this.suggestionPresentation.assembleSuggestionView(suggestion, {
 						note,
 						anchor,
-						origin: provenanceOrigin(provenance)
+						origin: this.provenancePresentation.provenanceOrigin(provenance)
 					})
 				];
 			});
@@ -619,7 +628,7 @@ export class WorkspaceViews implements WorkspaceViewsController {
 	today(today: LocalDate): TodayView {
 		const due = this.todos({ dueBefore: today, responsibility: 'mine' });
 		const notes = this.notes.filter((note) => note.kind !== 'skill');
-		return assembleToday({
+		return this.todayPresentation.assembleToday({
 			today,
 			due,
 			waiting: this.todos({ responsibility: 'waiting_on' }),

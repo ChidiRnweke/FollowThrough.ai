@@ -1,3 +1,5 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { RelationshipCandidatesService } from '$lib/services/relationships/candidates';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunCancellation } from '$lib/server/services/agent/runs/cancellation';
 import {
@@ -75,6 +77,7 @@ export const relatedNoteFixture = () => {
 		runEvents: { notify: () => {} }
 	};
 	const agent = new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,
@@ -87,7 +90,7 @@ export const relatedNoteFixture = () => {
 		})
 	);
 	return {
-		controller: new Relationships(dependencies),
+		controller: new Relationships(new RelationshipCandidatesService(), dependencies),
 		dependencies,
 		repository,
 		client,

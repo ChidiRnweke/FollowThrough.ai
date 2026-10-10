@@ -107,8 +107,8 @@
 		proofreadSelection,
 		type ProofreadSelection
 	} from '$lib/components/edra/commands/Proofread.js';
-	import { proofreading } from '$lib/stores/notes/proofreading.svelte';
-	import { dictionaryWordFor } from '$lib/services/proofreading/rules';
+	import { proofreading } from '$lib/factories/notes/proofreading';
+	const { dictionaryWordFor } = proofreading;
 	import { noteReveal } from '$lib/stores/notes/note-reveal.svelte';
 	import type { NoteRevealMatch } from '$lib/stores/notes/note-reveal.svelte';
 	import { rightPanel } from '$lib/stores/shell/right-panel.svelte';
@@ -451,7 +451,7 @@
 			// own copy only takes effect on the next pass, and the block the caret sits
 			// in is not re-linted until the writer stops typing — so a word they just
 			// added would stay underlined until they paused.
-			proofread: async (text) => proofreading.accepted(await proofreading.linter().lint(text)),
+			proofread: (text) => proofreading.proofread(text),
 			proofreadEnabled: proofreading.enabled,
 			findLinkableNotes: (query) => rankNoteLinkTargets(linkableNotes, query),
 			// Read through the prop inside the closure: `createEditor` runs once, so

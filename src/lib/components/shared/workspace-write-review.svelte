@@ -40,13 +40,14 @@
 		FtWorkflow,
 		FtSkills
 	} from '$lib/components/icons';
-	import {
-		writeTitle as title,
+	import { writeReviewOperations } from '$lib/factories/workspace/write-review';
+	const {
+		writeTitle: title,
 		writeGroup,
 		writeExplanation,
 		writeStatus,
 		hasReviewContent
-	} from '$lib/services/workspace/write-review';
+	} = writeReviewOperations;
 
 	type Entry = OutboxEntry<WorkspaceCommand, WorkspaceRecord>;
 	let {

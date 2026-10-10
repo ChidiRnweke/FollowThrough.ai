@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { InMemoryNoteMarkdownReader } from '$lib/testing/notes/fakes/markdown-reader';
 import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
@@ -35,6 +36,7 @@ const setup = () => {
 		return Buffer.from('pdf-bytes');
 	};
 	const service = new Todos(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<TodosDependencies>({
 			boardExport: new TodoBoardExportService(),
 			todoPresentation: new TodoPresentationService(),

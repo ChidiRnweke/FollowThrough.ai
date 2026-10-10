@@ -1,7 +1,8 @@
 import { syncEtag } from '$lib/models/sync';
 import { describe, expect, it } from 'vitest';
 import { initialSyncCursor } from '$lib/models/sync';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
 import { connectPostgresTestDatabase } from '$lib/server/db/postgres-test-context';
 import { context, seedNote } from '../database-harness';

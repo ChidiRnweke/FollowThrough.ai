@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { RunCheckpoints } from '$lib/server/services/agent/runs/checkpoints';
@@ -56,6 +57,7 @@ const cancellationController = (db: typeof context.db) => {
 	const runs = new AgentRunRecords(database);
 	const events = new AgentRunEventRecords(database);
 	return new Agent(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
 			...agentRulesFixture(),
 			runs,

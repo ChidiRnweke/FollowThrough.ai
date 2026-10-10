@@ -1,3 +1,4 @@
+import { SyncResourceRulesService } from '$lib/services/sync/state';
 import {
 	DocumentExports,
 	type BrowserDocumentExportInput
@@ -24,7 +25,8 @@ import { workspaceResourcesFixture } from '$lib/testing/sync/fixtures/workspace-
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
 import { noteBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { defaultExportSettings } from '$lib/models/deliverables';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 export const browserExportFixture = async () => {
 	const note = noteBuilder();
@@ -52,6 +54,7 @@ export const browserExportFixture = async () => {
 	const remote = new InMemoryDocumentExportRemote();
 	const urls = new InMemoryDocumentPreviewUrls();
 	const controller = new DocumentExports(
+		new SyncResourceRulesService(),
 		new DocumentExportStore(),
 		workspace,
 		new ExportDiagrams(

@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { MemoryEditingService } from '$lib/services/memory/edits';
 import { MemoryPresentationService } from '$lib/services/memory/presentation';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
@@ -28,6 +29,7 @@ const setup = async (suffix: string) => {
 	const indexEmbeddings = new InMemoryEmbeddingClient();
 	const indexWriter = createContentIndex(new InMemorySearchRepository(), indexEmbeddings.model);
 	const controller = new Memory(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<MemoryDependencies>({
 			editing: new MemoryEditingService(),
 			presentation: new MemoryPresentationService(),

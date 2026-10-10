@@ -1,3 +1,4 @@
+import type { SyncResourceRules } from '$lib/services/sync/state';
 import type { ResourceCacheStore } from '$lib/stores/sync/cache';
 import type { SyncPage, SyncObjectRead } from '$lib/models/sync';
 import {
@@ -10,12 +11,7 @@ import {
 	type TransferState,
 	type SyncSnapshot
 } from '$lib/models/sync';
-import {
-	accessCache,
-	receiveResource,
-	resourceVersion,
-	resourceCurrent
-} from '$lib/services/sync/state';
+
 import type { CacheCommit, StoredCache, SynchronizationResult } from '$lib/models/sync';
 
 export interface SyncCacheRepository<T> {
@@ -56,6 +52,7 @@ export interface ResourceCacheController<T> {
 
 export class CacheSynchronization<T> implements ResourceCacheController<T> {
 	constructor(
+		private readonly syncResourceRules: SyncResourceRules,
 		readonly accountId: string,
 		private readonly dependencies: ResourceCacheDependencies<T>,
 		private readonly state: ResourceCacheStore<T>
@@ -73,7 +70,7 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 			(entry) => entry.kind !== 'deleted'
 		);
 		return {
-			completed: present.filter(resourceCurrent).length,
+			completed: present.filter(this.syncResourceRules.resourceCurrent).length,
 			total: present.length,
 			inventoryComplete: this.state.read().inventoryComplete
 		};
@@ -97,7 +94,11 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 
 	access(key: string): CacheAccess<T> {
 		if (this.state.read().stopped) return { kind: 'unavailable' };
-		return accessCache(this.entry(key), this.state.read().online, this.transfer(key));
+		return this.syncResourceRules.accessCache(
+			this.entry(key),
+			this.state.read().online,
+			this.transfer(key)
+		);
 	}
 
 	setOnline(online: boolean): void {
@@ -168,7 +169,7 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 		await this.initialize();
 		if (this.state.read().stopped) return;
 		await this.commit(() => ({
-			put: [{ key, entry: receiveResource(undefined, received) }],
+			put: [{ key, entry: this.syncResourceRules.receiveResource(undefined, received) }],
 			remove: []
 		}));
 	}
@@ -178,9 +179,9 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 	}
 	transfer(key: string): TransferState | undefined {
 		const attempt = this.state.attempts().get(key);
-		return !resourceCurrent(this.entry(key)) &&
+		return !this.syncResourceRules.resourceCurrent(this.entry(key)) &&
 			this.entry(key)?.kind !== 'deleted' &&
-			attempt?.target === resourceVersion(this.entry(key))
+			attempt?.target === this.syncResourceRules.resourceVersion(this.entry(key))
 			? attempt?.transfer
 			: undefined;
 	}
@@ -235,7 +236,7 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 						throw new Error('The server change cursor moved backwards');
 					const put = batch.records.map(({ key, resource }) => ({
 						key,
-						entry: receiveResource<T>(
+						entry: this.syncResourceRules.receiveResource<T>(
 							undefined,
 							resource.kind === 'found' ? resource.snapshot : resource
 						)
@@ -290,7 +291,7 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 			if (response.kind === 'unchanged') throw new Error('An uncached read returned no body');
 			if (response.kind === 'unavailable') {
 				this.state.setAttempt(key, {
-					target: resourceVersion(this.entry(key)),
+					target: this.syncResourceRules.resourceVersion(this.entry(key)),
 					transfer: { kind: 'missing' }
 				});
 				this.notify();
@@ -300,7 +301,7 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 				put: [
 					{
 						key,
-						entry: receiveResource<T>(
+						entry: this.syncResourceRules.receiveResource<T>(
 							undefined,
 							response.kind === 'found' ? response.snapshot : response
 						)
@@ -315,7 +316,7 @@ export class CacheSynchronization<T> implements ResourceCacheController<T> {
 			const message =
 				error instanceof Error ? error.message : 'The resource could not be downloaded';
 			this.state.setAttempt(key, {
-				target: resourceVersion(this.entry(key)),
+				target: this.syncResourceRules.resourceVersion(this.entry(key)),
 				transfer: { kind: 'failed', message }
 			});
 			this.notify();

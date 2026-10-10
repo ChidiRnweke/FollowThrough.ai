@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { WorkspaceRecord } from '$lib/models/workspace-records';
 import type { WorkspaceCommand } from '$lib/models/workspace-mutations';
 import type { UpdateTodoInput } from '$lib/models/todos';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { syncEtag } from '$lib/models/sync';
 import { testNow, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
 import { InMemorySyncCache } from '$lib/testing/sync/fakes/in-memory-sync';
@@ -14,7 +15,8 @@ import { InMemorySyncScheduler } from '$lib/testing/sync/fakes/in-memory-schedul
 import { InMemoryTodoWrites } from '$lib/testing/sync/fakes/in-memory-todo-writes';
 import { createResourceCache } from '$lib/factories/sync/cache';
 import { createMutationQueue } from '$lib/factories/sync/submission';
-import { rebaseWorkspaceRecord } from '$lib/controllers/workspace/rebase';
+import { workspaceRebase } from '$lib/factories/workspace/rebase';
+const rebaseWorkspaceRecord = workspaceRebase.rebase;
 import { assembleWorkspaceResources } from '$lib/factories/workspace/resources';
 
 const setup = async () => {

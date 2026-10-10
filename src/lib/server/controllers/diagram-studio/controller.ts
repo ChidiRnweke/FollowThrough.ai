@@ -1,3 +1,4 @@
+import type { WorkspaceCommandRules } from '$lib/services/workspace/commands';
 import type { IconSearch } from '$lib/server/services/diagrams/icons';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { DrawioLabels } from '$lib/server/services/diagrams/drawio';
@@ -6,7 +7,7 @@ import type { DiagramEditingRules } from '$lib/services/diagrams/editing';
 import type { DiagramRevisionChange } from '$lib/models/diagrams';
 import type { DiagramLifecycleRules } from '$lib/services/diagrams/trash';
 import type { DiagramLifecycle } from '$lib/server/services/diagrams/library';
-import { mutationResource } from '$lib/services/workspace/commands';
+
 import type { WorkspaceMutationCurrent } from '$lib/models/workspace-mutations';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
@@ -231,7 +232,7 @@ export class DiagramStudio implements DiagramStudioController {
 		try {
 			return await this.dependencies.transactionRunner.run(
 				async () => {
-					const target = mutationResource(input.command);
+					const target = this.workspaceCommandRules.mutationResource(input.command);
 					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input, prepared.current);
@@ -289,7 +290,10 @@ export class DiagramStudio implements DiagramStudioController {
 			throw new StaleRevisionError('The diagram changed during the guarded write');
 	}
 
-	constructor(private readonly dependencies: DiagramStudioDependencies) {}
+	constructor(
+		private readonly workspaceCommandRules: WorkspaceCommandRules,
+		private readonly dependencies: DiagramStudioDependencies
+	) {}
 
 	/**
 	 * Create a diagram, the way `create_note` creates a note.

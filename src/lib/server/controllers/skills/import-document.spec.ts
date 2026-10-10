@@ -1,3 +1,7 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+import { BacklinkPresentationService } from '$lib/services/relationships/presentation';
+import { ReferencePresentationService } from '$lib/services/references/presentation';
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { NoteArchiveImportService } from '$lib/server/services/notes/import';
 import { NotePatchPreparationService } from '$lib/server/services/notes/patches';
 import { NoteRevisionComparisonService } from '$lib/server/services/notes/revision-diff';
@@ -46,6 +50,7 @@ const setup = () => {
 	const content = new InMemoryNoteContent();
 	const transactionRunner = new InMemoryTransactionRunner([notes, skills]);
 	const controller = new Skills(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<SkillsDependencies>({
 			skillPortability: new SkillPortabilityService(),
 			skillMetadataEditing: new SkillMetadataEditingService(),
@@ -283,6 +288,10 @@ describe('Skill document imports', () => {
 		const { controller, catalog, notes, transactionRunner } = importSkill();
 		const result = await controller.update(testActor(), input);
 		const publisher = new Notes(
+			new BacklinkPresentationService(),
+			new ReferencePresentationService(),
+			new WorkspaceCommandRulesService(),
+			new ProvenancePresentationService(),
 			capabilityDependencies<NotesDependencies>({
 				archiveImport: new NoteArchiveImportService(),
 				patchPreparation: new NotePatchPreparationService(),

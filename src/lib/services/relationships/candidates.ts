@@ -3,7 +3,7 @@ import type { NoteId } from '$lib/models/notes';
 import type { LinkCandidate, RelatedNoteMatch } from '$lib/models/relationships';
 
 /** Classify the strongest passage from each other note, preserving retrieval order. */
-export function relatedNoteMatches(
+function relatedNoteMatches(
 	source: NoteId,
 	matches: readonly SearchMatch[]
 ): readonly RelatedNoteMatch[] {
@@ -18,7 +18,7 @@ export function relatedNoteMatches(
 	return [...unique.values()];
 }
 
-export function relatedNoteCandidate(
+function relatedNoteCandidate(
 	match: RelatedNoteMatch,
 	classification: Omit<LinkCandidate, 'targetNoteId'>
 ): LinkCandidate {
@@ -31,4 +31,23 @@ export function relatedNoteCandidate(
 				2
 		)
 	};
+}
+
+export interface RelationshipCandidates {
+	relatedNoteMatches(source: NoteId, matches: readonly SearchMatch[]): readonly RelatedNoteMatch[];
+	relatedNoteCandidate(
+		match: RelatedNoteMatch,
+		classification: Omit<LinkCandidate, 'targetNoteId'>
+	): LinkCandidate;
+}
+export class RelationshipCandidatesService implements RelationshipCandidates {
+	relatedNoteMatches(source: NoteId, matches: readonly SearchMatch[]): readonly RelatedNoteMatch[] {
+		return relatedNoteMatches(source, matches);
+	}
+	relatedNoteCandidate(
+		match: RelatedNoteMatch,
+		classification: Omit<LinkCandidate, 'targetNoteId'>
+	): LinkCandidate {
+		return relatedNoteCandidate(match, classification);
+	}
 }

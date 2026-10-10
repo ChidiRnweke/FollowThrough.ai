@@ -1,3 +1,4 @@
+import { ProvenancePresentationService } from '$lib/services/provenance/presentation';
 import { DiagramLabelPresentationService } from '$lib/services/diagrams/labels';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
 import { SuggestionPresentationService } from '$lib/services/suggestions/presentation';
@@ -59,6 +60,7 @@ describe('Proposal effect coordination', () => {
 		const notes = new InMemoryNoteContent();
 		notes.notes = [noteBuilder()];
 		const controller = new Suggestions(
+			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),
@@ -123,6 +125,7 @@ describe('Proposal effect coordination', () => {
 		]);
 		await indexer.index(testActor(), replacement);
 		const controller = new Suggestions(
+			new ProvenancePresentationService(),
 			capabilityDependencies<SuggestionsDependencies>({
 				todoCreationRules: new TodoEditingRulesService(),
 				suggestionPresentation: new SuggestionPresentationService(),

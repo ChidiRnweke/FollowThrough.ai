@@ -1,6 +1,6 @@
-import type { ProofreadIssue, ProofreadSuggestion } from '$lib/models/proofreading';
-import type { ProofreadLinter } from '$lib/services/proofreading/contracts';
-import { proofreadSuggestion } from '$lib/services/proofreading/rules';
+import type { ProofreadCandidate } from '$lib/models/proofreading';
+import type { ProofreadLinter } from '$lib/controllers/notes/proofreading';
+
 import type { Lint, Linter, Suggestion } from 'harper.js';
 
 /** The checker is a browser capability; SSR renders the document without it. */
@@ -49,7 +49,7 @@ export class HarperLinter implements ProofreadLinter {
 		await this.start();
 	}
 
-	async lint(text: string): Promise<readonly ProofreadIssue[]> {
+	async lint(text: string): Promise<readonly ProofreadCandidate[]> {
 		// SSR renders the document without decorations; the first client pass adds them.
 		if (!inBrowser() || text.trim() === '') return [];
 		const { linter, kinds } = await this.start();
@@ -96,7 +96,7 @@ interface SuggestionKinds {
 	readonly insertAfter: number;
 }
 
-const toIssue = (lint: Lint, kinds: SuggestionKinds): ProofreadIssue => {
+const toIssue = (lint: Lint, kinds: SuggestionKinds): ProofreadCandidate => {
 	const span = lint.span();
 	const text = lint.get_problem_text();
 	try {
@@ -106,7 +106,7 @@ const toIssue = (lint: Lint, kinds: SuggestionKinds): ProofreadIssue => {
 			message: lint.message(),
 			kind: lint.lint_kind(),
 			text,
-			suggestions: lint.suggestions().map((suggestion) => toSuggestion(suggestion, text, kinds))
+			suggestions: lint.suggestions().map((suggestion) => toSuggestion(suggestion, kinds))
 		};
 	} finally {
 		free(span);
@@ -115,17 +115,15 @@ const toIssue = (lint: Lint, kinds: SuggestionKinds): ProofreadIssue => {
 
 const toSuggestion = (
 	suggestion: Suggestion,
-	problemText: string,
 	kinds: SuggestionKinds
-): ProofreadSuggestion => {
+): ProofreadCandidate['suggestions'][number] => {
 	try {
 		const kind = suggestion.kind() as number;
-		if (kind === kinds.remove) return proofreadSuggestion('remove', '', problemText);
-		return proofreadSuggestion(
-			kind === kinds.insertAfter ? 'insertAfter' : 'replace',
-			suggestion.get_replacement_text(),
-			problemText
-		);
+		if (kind === kinds.remove) return { kind: 'remove', text: '' };
+		return {
+			kind: kind === kinds.insertAfter ? 'insertAfter' : 'replace',
+			text: suggestion.get_replacement_text()
+		};
 	} finally {
 		free(suggestion);
 	}

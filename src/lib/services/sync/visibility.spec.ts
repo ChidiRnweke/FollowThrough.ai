@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { type ResourceState } from '$lib/models/sync';
 import { syncEtag } from '$lib/models/sync';
 import { type WriteDraft } from '$lib/models/outbox';
-import { localResource, visibleResources } from '$lib/services/sync/state';
+import { SyncResourceRulesService } from '$lib/services/sync/state';
+const { localResource, visibleResources } = new SyncResourceRulesService();
 const editing = new OutboxEditingService();
 
 const draft: WriteDraft<string, string> = {

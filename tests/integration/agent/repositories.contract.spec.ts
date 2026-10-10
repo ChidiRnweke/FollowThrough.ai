@@ -1,5 +1,7 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { agentRulesFixture } from '$lib/testing/agent/fixtures/rules';
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { RunPreparation } from '$lib/server/services/agent/runs/preparation';
 import { PresentedCanvasSource } from '$lib/server/services/diagrams/canvas-source';
 import { testDiagramId } from '$lib/testing/workspace/fixtures/domain-builders';
@@ -347,6 +349,7 @@ describe('Postgres durable agent run repository invariants', () => {
 			model: run.model
 		});
 		const controller = new Agent(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentDependencies>({
 				...agentRulesFixture(),
 				events,
@@ -409,6 +412,7 @@ describe('Postgres durable agent run repository invariants', () => {
 	it('does not expose another actor’s run through event-stream completion', async () => {
 		const run = await seedQueuedRun('17803');
 		const controller = new Agent(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<AgentDependencies>({
 				...agentRulesFixture(),
 				runs: new AgentRunRecords(context.db),

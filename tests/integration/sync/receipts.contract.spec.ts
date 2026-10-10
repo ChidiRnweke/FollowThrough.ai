@@ -1,4 +1,5 @@
-import { workspaceResourceKey } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';

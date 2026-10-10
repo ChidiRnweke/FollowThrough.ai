@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { RunContext } from '@openai/agents';
 import type { ProvenanceId } from '$lib/models/provenance';
 import type { AgentToolSessionInput } from '$lib/server/controllers/agent/tool-sessions';
@@ -925,6 +926,7 @@ describe('Agent tool coverage invariants', () => {
 		const todos = new InMemoryTodos();
 		const receipts = new InMemoryTodoBatchReceipts();
 		const controller = new Todos(
+			new WorkspaceCommandRulesService(),
 			capabilityDependencies<TodosDependencies>({
 				boardExport: new TodoBoardExportService(),
 				todoPresentation: new TodoPresentationService(),

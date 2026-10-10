@@ -2,8 +2,11 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ProofreadIssue } from '$lib/models/proofreading';
-import type { ProofreadLinter } from '$lib/services/proofreading/contracts';
-import { ProofreadingStore } from './proofreading.svelte';
+import type { ProofreadLinter } from '$lib/controllers/notes/proofreading';
+import { ProofreadingStore } from '$lib/stores/notes/proofreading.svelte';
+import { Proofreading } from './proofreading';
+import { BrowserProofreadingPreferences } from '$lib/client/proofreading/preferences';
+import { ProofreadingRulesService } from '$lib/services/proofreading/rules';
 
 /** A linter that records what it was told, so no WebAssembly is booted here. */
 const recordingLinter = () => {
@@ -21,7 +24,13 @@ const recordingLinter = () => {
 	return { linter, learned, setupCount: () => setups };
 };
 
-const store = (linter: ProofreadLinter) => new ProofreadingStore(() => linter);
+const store = (linter: ProofreadLinter) =>
+	new Proofreading(
+		new ProofreadingStore(),
+		new BrowserProofreadingPreferences(),
+		new ProofreadingRulesService(),
+		() => linter
+	);
 
 const issue = (text: string): ProofreadIssue => ({
 	start: 0,
@@ -32,7 +41,7 @@ const issue = (text: string): ProofreadIssue => ({
 	suggestions: []
 });
 
-describe('ProofreadingStore', () => {
+describe('proofreading operations', () => {
 	beforeEach(() => {
 		localStorage.clear();
 	});
@@ -117,4 +126,24 @@ describe('ProofreadingStore', () => {
 		proofreading.hydrate();
 		expect(proofreading.dictionary.size).toBe(0);
 	});
+});
+
+it('translates checker suggestions and filters dictionary words in one proofreading operation', async () => {
+	const linter: ProofreadLinter = {
+		setup: async () => {},
+		addWord: async () => {},
+		lint: async () => [
+			{ ...issue('Nweke'), suggestions: [] },
+			{ ...issue('Hello'), kind: 'Punctuation', suggestions: [{ kind: 'insertAfter', text: ',' }] }
+		]
+	};
+	const proofreading = store(linter);
+	proofreading.addWord('Nweke');
+	expect(await proofreading.proofread('Nweke Hello')).toEqual([
+		{
+			...issue('Hello'),
+			kind: 'Punctuation',
+			suggestions: [{ label: 'Hello,', replacement: 'Hello,' }]
+		}
+	]);
 });

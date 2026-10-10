@@ -48,7 +48,8 @@
 	import type { ComposerSelection, MentionHistory } from '$lib/models/chat';
 	import { readMentionInput } from '$lib/client/agent/mention-input';
 	import { MENTION_PATTERN } from '$lib/models/chat';
-	import { chipKeyOf, contextResourceRefOf } from '$lib/services/chat/chips';
+
+	const { chipKeyOf, contextResourceRefOf } = agentContext;
 
 	let {
 		chat,

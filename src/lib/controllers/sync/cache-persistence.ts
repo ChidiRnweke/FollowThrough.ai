@@ -1,3 +1,4 @@
+import type { SyncResourceRules } from '$lib/services/sync/state';
 import type {
 	CacheCommit,
 	StoredCache,
@@ -6,7 +7,7 @@ import type {
 	SyncCursor
 } from '$lib/models/sync';
 import type { SyncCacheRepository } from './cache';
-import { mergeResourceStates, resourceVersion } from '$lib/services/sync/state';
+
 export interface CacheCheckpoint {
 	readonly cursor: SyncCursor;
 	readonly inventoryComplete: boolean;
@@ -24,7 +25,10 @@ export interface CacheStorage<T> {
 }
 /** Merge against the values read in this transaction, including writes from other tabs. */
 export class CachePersistence<T> implements SyncCacheRepository<T> {
-	constructor(private readonly storage: CacheStorage<T>) {}
+	constructor(
+		private readonly syncResourceRules: SyncResourceRules,
+		private readonly storage: CacheStorage<T>
+	) {}
 	load(accountId: string) {
 		return this.storage.load(accountId);
 	}
@@ -37,14 +41,19 @@ export class CachePersistence<T> implements SyncCacheRepository<T> {
 			await tx.put(
 				changes.put.map((proposed) => ({
 					key: proposed.key,
-					entry: mergeResourceStates(previous.get(proposed.key), proposed.entry)
+					entry: this.syncResourceRules.mergeResourceStates(
+						previous.get(proposed.key),
+						proposed.entry
+					)
 				}))
 			);
 			await tx.remove(
 				changes.remove
 					.filter((removal) => {
 						const entry = previous.get(removal.key);
-						return entry === undefined || resourceVersion(entry) === removal.etag;
+						return (
+							entry === undefined || this.syncResourceRules.resourceVersion(entry) === removal.etag
+						);
 					})
 					.map((removal) => removal.key)
 			);

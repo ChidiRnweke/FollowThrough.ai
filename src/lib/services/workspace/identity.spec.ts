@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { workspaceRecordSchema } from '$lib/models/workspace-records';
-import { workspaceRecordIdentity } from '$lib/services/workspace/commands';
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
+const { workspaceRecordIdentity } = new WorkspaceCommandRulesService();
 
 const first = 'a0000000-0000-4000-8000-000000000001';
 const second = 'a0000000-0000-4000-8000-000000000002';

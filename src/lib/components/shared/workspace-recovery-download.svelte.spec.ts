@@ -6,7 +6,8 @@ import { Dexie } from 'dexie';
 import { DexieWorkspaceRepository } from '$lib/client/sync/workspace-local-repository';
 import { IndexedDbStorageRecovery } from '$lib/client/sync/storage-recovery';
 import { syncEtag } from '$lib/models/sync';
-import { receiveResource } from '$lib/services/sync/state';
+import { SyncResourceRulesService } from '$lib/services/sync/state';
+const { receiveResource } = new SyncResourceRulesService();
 import WorkspaceRecoveryDownload from './workspace-recovery-download.svelte';
 const cleanups: (() => Promise<void>)[] = [];
 const setup = async () => {

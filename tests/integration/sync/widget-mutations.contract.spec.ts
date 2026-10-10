@@ -1,3 +1,4 @@
+import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { createTestContentIndex as createContentIndex } from '$lib/testing/knowledge-search/fixtures/content-index';
 import { NoteRecords } from '$lib/server/repositories/notes/postgres/notes';
 import { describe, expect, it } from 'vitest';
@@ -29,6 +30,7 @@ const setup = async (suffix: string) => {
 		true
 	);
 	const controller = new Widgets(
+		new WorkspaceCommandRulesService(),
 		capabilityDependencies<WidgetsDependencies>({
 			catalogReader: widgets.catalogReader,
 			editing: widgets.editing,
