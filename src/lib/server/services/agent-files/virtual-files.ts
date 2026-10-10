@@ -58,14 +58,17 @@ const lineCount = (content: string): number =>
 	content.length === 0 ? 0 : content.split('\n').length;
 
 /** Where an attachment's extracted text is mounted. */
-export const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
+const attachmentFilePath = (projectId: ProjectId, attachmentId: AttachmentId): string =>
 	`/projects/${projectId}/attachments/${attachmentId}.txt`;
 
 /** Where a diagram's source is mounted; the extension says which language it is. */
-export const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
+const diagramFilePath = (diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string =>
 	`/projects/${diagram.projectId}/diagrams/${diagram.id}.${diagram.kind === 'mermaid' ? 'mmd' : 'drawio'}`;
 
-export const agentFileOf = (
+const noteFilePath = (note: Pick<Note, 'projectId' | 'id'>): string =>
+	`/projects/${note.projectId}/notes/${note.id}.md`;
+
+const agentFileOf = (
 	tokens: TokenCounter,
 	path: string,
 	mediaType: string,
@@ -102,6 +105,29 @@ const parentOf = (path: string): string => {
 	const index = path.lastIndexOf('/');
 	return index <= 0 ? '/' : path.slice(0, index);
 };
+
+/** Where agent-readable resources are mounted, and how a mounted file is described. */
+export interface AgentFileReferences {
+	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string;
+	diagramPath(diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string;
+	noteMetadata(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFile['metadata'];
+}
+
+export class AgentFileReferenceService implements AgentFileReferences {
+	constructor(private readonly tokens: TokenCounter) {}
+
+	attachmentPath(projectId: ProjectId, attachmentId: AttachmentId): string {
+		return attachmentFilePath(projectId, attachmentId);
+	}
+
+	diagramPath(diagram: Pick<Diagram, 'projectId' | 'id' | 'kind'>): string {
+		return diagramFilePath(diagram);
+	}
+
+	noteMetadata(note: Pick<Note, 'projectId' | 'id'>, markdown: string): AgentFile['metadata'] {
+		return agentFileOf(this.tokens, noteFilePath(note), 'text/markdown', markdown).metadata;
+	}
+}
 
 export interface AgentFileReader {
 	ls(actor: ActorContext, path?: string): Promise<AgentLsResult>;
@@ -216,7 +242,7 @@ export class AgentVirtualFiles implements AgentFileReader {
 						.map((note) =>
 							agentFileOf(
 								this.dependencies.tokens,
-								`/projects/${project.id}/notes/${note.id}.md`,
+								noteFilePath({ projectId: project.id, id: note.id }),
 								'text/markdown',
 								this.dependencies.noteMarkdown.write(note.document)
 							)

@@ -1,3 +1,4 @@
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import { DiagramGenerationStore } from '$lib/server/stores/diagrams/generation';
 import { createAgentStream } from '$lib/server/factories/agent/stream-factory';
 import { InMemoryMermaidSyntaxReader } from '$lib/testing/diagrams/fakes/mermaid-syntax';
@@ -48,6 +49,7 @@ export const diagramGenerationFixture = () => {
 		contextMemory: new InMemoryMemoryEntryRepository(),
 		conversations: new ConversationArchive(conversations),
 		conversationMessages: new ConversationArchive(conversations),
+		toolActivity: new ToolActivityProjection(),
 		preferences: new AgentPreferenceCatalog(new InMemoryAgentPreferencesRepository()),
 		models,
 		runs: new AgentRunLedger(persistence),

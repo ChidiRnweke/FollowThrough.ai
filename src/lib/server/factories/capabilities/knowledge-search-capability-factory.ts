@@ -1,4 +1,4 @@
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { InlineCompletionGenerator } from '$lib/models/agent';
 import {
 	InlineCompletionRules,
@@ -62,7 +62,7 @@ import {
 	KnowledgeLookup,
 	type IKnowledgeLookup
 } from '$lib/server/services/knowledge-search/semantic';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { operationObserver, workflowObserver } from '$lib/server/adapters/telemetry/tracing';
 
 export interface KnowledgeSearchCapabilityInput {
 	readonly db: Database;
@@ -109,7 +109,8 @@ export interface KnowledgeSearchFinalized {
 	readonly completionRules: IInlineCompletionRules;
 	readonly defaultCompletionModel: string;
 	readonly inlineContext: IInlineContextService;
-	readonly observer: typeof operationObserver;
+	readonly observer: OperationObserver;
+	readonly workflow: WorkflowObserver;
 	readonly inlineAdmission: InlineSuggestionThrottle;
 }
 
@@ -182,6 +183,7 @@ export const createKnowledgeSearchCapability = (
 				appURL: input.appURL
 			}),
 			observer: operationObserver,
+			workflow: workflowObserver,
 			inlineAdmission: createInlineAdmission()
 		}),
 		reranker,

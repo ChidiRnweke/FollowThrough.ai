@@ -23,7 +23,12 @@ import {
 	OpenInferenceSpanKind,
 	SemanticConventions
 } from '@arizeai/openinference-semantic-conventions';
-import type { OperationObserver, WorkflowTraceContext } from '$lib/models/telemetry';
+import type {
+	OperationObserver,
+	TraceContextReader,
+	WorkflowObserver,
+	WorkflowTraceContext
+} from '$lib/models/telemetry';
 export type { WorkflowTraceContext } from '$lib/models/telemetry';
 
 const TRACER_NAME = 'followthrough';
@@ -75,7 +80,6 @@ const MAX_SUMMARY_CHARS = 500;
  * One-line rendering of an argument or result for a log record: JSON, capped,
  * base64 elided. Summaries, never raw payloads — privacy and record size.
  */
-// audit-allow: no-unknown-type — Formats whatever a span attribute holds, which by definition has no type yet.
 export const summarize = (value: unknown, maxChars: number = MAX_SUMMARY_CHARS): string => {
 	let rendered: string;
 	if (value instanceof Error) rendered = `${value.name}: ${value.message}`;
@@ -112,15 +116,12 @@ export const activeTraceparent = (): string | undefined => {
 	return toTraceparent(span);
 };
 
-// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this reads a message off one.
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
-// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this classifies one.
 const isExpectedCancellation = (error: unknown): boolean =>
 	error instanceof Error && (error.name === 'AbortError' || error instanceof APIUserAbortError);
 
-// audit-allow: no-unknown-type — TypeScript types a caught error as unknown; this records one on a span.
 const recordError = (span: Span, error: unknown): void => {
 	if (isExpectedCancellation(error)) {
 		span.setAttribute(SemanticConventions.OUTPUT_VALUE, 'cancelled');
@@ -270,6 +271,23 @@ export const operationObserver: OperationObserver = {
 	): Promise<T> {
 		return traceOperation(name, params, body, describeOutput, describeAttributes);
 	}
+};
+
+/** Adapter injected into controllers that open their own workflow root. */
+export const workflowObserver: WorkflowObserver = {
+	run<T>(
+		name: string,
+		params: WorkflowTraceContext,
+		body: () => Promise<T>,
+		describeOutput?: (result: T) => string
+	): Promise<T> {
+		return traceWorkflow(name, params, body, describeOutput);
+	}
+};
+
+/** Adapter injected into controllers that persist a trace link for later resumption. */
+export const traceContextReader: TraceContextReader = {
+	activeTraceparent: () => activeTraceparent()
 };
 
 export interface AgentTurnSpanParams {

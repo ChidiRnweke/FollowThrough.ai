@@ -24,7 +24,7 @@ import {
 	type RelationshipRuleClassifier
 } from '$lib/server/services/relationships/rules';
 import { RelationshipLanguageModel } from '$lib/server/repositories/relationships/classification';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { operationObserver } from '$lib/server/adapters/telemetry/tracing';
 import type { SelectionGeneration } from '$lib/models/agent';
 
 export interface RelationshipsCapabilityInput {

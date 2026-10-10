@@ -8,8 +8,10 @@ import { DiagramRecords } from '$lib/server/repositories/diagrams/postgres/diagr
 import type { NoteRepository } from '$lib/server/repositories/notes/notes';
 import type { ProjectRepository } from '$lib/server/repositories/projects/projects';
 import {
+	AgentFileReferenceService,
 	AgentVirtualFiles,
-	type AgentFileReader
+	type AgentFileReader,
+	type AgentFileReferences
 } from '$lib/server/services/agent-files/virtual-files';
 
 export interface AgentFilesCapabilityInput {
@@ -21,6 +23,7 @@ export interface AgentFilesCapabilityInput {
 
 export interface AgentFilesCapability {
 	readonly reader: AgentFileReader;
+	readonly references: AgentFileReferences;
 	readonly repository: AgentFileRepository;
 }
 
@@ -31,6 +34,7 @@ export const createAgentFilesCapability = (
 	const repository = new AgentFileRecords(input.db, tokens);
 	return {
 		repository,
+		references: new AgentFileReferenceService(tokens),
 		reader: new AgentVirtualFiles({
 			tokens,
 			projects: input.projects,

@@ -96,7 +96,6 @@ export interface ApplicationConfig {
 export interface ProductionApplication {
 	readonly mcpSurface: McpSurfaceFactory;
 	readonly controllers: ControllerFactory;
-	readonly recoverInterruptedRuns: () => Promise<number>;
 	readonly eventBus: AgentEventBus;
 	/**
 	 * Periodic work for the worker sidecar to run. The web process builds these
@@ -474,6 +473,8 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncRetry: synchronization.mutationRetry,
 			conversationSessions,
 			conversationMessages,
+			toolActivity: agentCapability.toolActivity,
+			traceContext: agentCapability.traceContext,
 			preferences,
 			models: modelCatalog,
 			runs: runRepository,
@@ -496,6 +497,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			contextWidgets: widgets.reader,
 			contextDiagrams: diagrams.finder,
 			contextAttachments: attachmentCapability.reader,
+			contextFiles: agentFilesCapability.references,
 			builtInSkills: skillCapability.builtIns,
 			contextMemory: memory.lister,
 			contextProjects: projects.reader,
@@ -632,7 +634,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoContextReader: todos.context
 		},
 		notes: {
-			toolTokens: knowledgeSearch.tokenizer,
+			agentFiles: agentFilesCapability.references,
 			projectLister: projects.lister,
 			...toolResults,
 			todoPresentation: todoCapability.presentation,
@@ -774,6 +776,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			reranker: searchReranker,
 			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
+			workflow: finalizedKnowledgeSearch.workflow,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
 			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission
@@ -784,16 +787,6 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 	return {
 		controllers: controllerFactory,
 		mcpSurface: agentCapability.mcpSurface,
-		recoverInterruptedRuns: async () => {
-			const interrupted = await controllerFactory.agent().recoverInterruptedRuns();
-			return (
-				interrupted +
-				(await controllerFactory.todos().recoverQueuedPromiseRuns()) +
-				(await controllerFactory.references().recoverQueuedReferenceRuns()) +
-				(await controllerFactory.relationships().recoverQueuedRelatedNoteRuns()) +
-				(await controllerFactory.diagrams().recoverQueuedDiagramRuns())
-			);
-		},
 		backgroundTasks: [
 			knowledgeSearch.maintenance,
 			attachmentCapability.retention,

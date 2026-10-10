@@ -10,9 +10,8 @@ import type { AgentPayload } from '$lib/models/agent/payload';
 import { toolFailure } from '$lib/models/agent/tool-failure';
 import type { NoteMarkdown } from '$lib/models/note-markdown';
 import { noteEtag } from '$lib/models/notes';
-import type { TokenCounter } from '$lib/models/tokenization';
 import type { DateTime } from '$lib/models/workspace';
-import { agentFileOf } from '$lib/server/services/agent-files/virtual-files';
+import type { AgentFileReferences } from '$lib/server/services/agent-files/virtual-files';
 import type { AgentToolPresentation } from '$lib/server/services/agent/runs/tool-views';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type {
@@ -404,7 +403,7 @@ export interface NotesDependencies {
 	readonly toolPresentation: AgentToolPresentation;
 	readonly toolPayloads: AgentPayloadInspection;
 	readonly toolResults: ToolResultReader;
-	readonly toolTokens: TokenCounter;
+	readonly agentFiles: AgentFileReferences;
 	readonly toolProjectChoice: AgentProjectChoiceRules;
 	readonly projectLister: ProjectLister;
 
@@ -1227,11 +1226,10 @@ export class Notes implements NotesController {
 	): Promise<AgentPayload> {
 		const result = await (async () => {
 			const view = await this.get(actor, { noteId: input.noteId as NoteId });
-			const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
 			const markdown = this.dependencies.markdown.write(view.note.document);
 			return this.dependencies.toolPresentation.projectNoteView(
 				view,
-				agentFileOf(this.dependencies.toolTokens, path, 'text/markdown', markdown).metadata
+				this.dependencies.agentFiles.noteMetadata(view.note, markdown)
 			);
 		})();
 		const payload = this.dependencies.toolResults.read(result);

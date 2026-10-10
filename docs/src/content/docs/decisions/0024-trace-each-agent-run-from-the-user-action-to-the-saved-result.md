@@ -37,6 +37,6 @@ span and trace-linked logs.
 ## Evidence
 
 - Agent submission and run records preserve trace context.
-- `src/lib/server/controllers/instrumentation.ts` wraps controller methods.
+- `src/lib/server/adapters/telemetry/controller-boundary.ts` wraps controller methods.
 - Agent telemetry tests check trace hierarchy across run work.
 - `scripts/otel-instrumentation.js` connects spans and logs through OpenTelemetry.

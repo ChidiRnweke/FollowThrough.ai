@@ -6,7 +6,7 @@ import { SemanticConventions } from '@arizeai/openinference-semantic-conventions
 import { ValidationError } from '$lib/errors';
 import { instrumentedController } from '$lib/server/factories/controller-instrumentation';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
-import { traceOperation } from '$lib/server/services/telemetry';
+import { traceOperation } from '$lib/server/adapters/telemetry/tracing';
 
 type RecordedEntry = { readonly level: string; readonly args: readonly unknown[] };
 

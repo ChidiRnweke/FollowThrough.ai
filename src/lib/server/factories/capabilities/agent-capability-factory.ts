@@ -94,7 +94,7 @@ import {
 	ToolAccess,
 	type ToolPreferenceCapability
 } from '$lib/server/services/agent/tools/preferences';
-import { traceAgentTurn } from '$lib/server/services/telemetry';
+import { traceAgentTurn, traceContextReader } from '$lib/server/adapters/telemetry/tracing';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import {
@@ -110,6 +110,11 @@ import {
 import { AgentRunSettingsService, type AgentRunSettings } from '$lib/services/agent/run-settings';
 import { AgentRunStatusService, type AgentRunStatusRules } from '$lib/services/agent/run-status';
 import { AgentToolCatalogService, type AgentToolCatalog } from '$lib/services/agent/tool-catalog';
+import {
+	ToolActivityProjection,
+	type ToolActivityReader
+} from '$lib/server/services/agent/conversations/tool-activity';
+import type { TraceContextReader } from '$lib/models/telemetry';
 import { OpenRouter } from '@openrouter/sdk';
 
 export interface AgentCapabilityInput {
@@ -140,6 +145,8 @@ export interface AgentCapability {
 	readonly agentAvailable: boolean;
 	readonly conversations: ConversationSessions;
 	readonly conversationMessages: ConversationMessages;
+	readonly toolActivity: ToolActivityReader;
+	readonly traceContext: TraceContextReader;
 	readonly preferences: AgentPreferenceEditor;
 	readonly models: AgentModelCatalog;
 	readonly modelSelection: IAgentModelSelectionService;
@@ -232,6 +239,8 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		conversationMessages: conversations,
+		toolActivity: new ToolActivityProjection(),
+		traceContext: traceContextReader,
 		conversationHistory: new ConversationHistoryService(sessions),
 		preferences,
 		models,

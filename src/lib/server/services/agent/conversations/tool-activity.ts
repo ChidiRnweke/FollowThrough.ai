@@ -7,7 +7,7 @@ import type { AgentEvent, ToolOutcomeEvent, ToolActivity } from '$lib/models/age
  * three-way `type` test at every reader is how the old single arm's
  * `!event.failure` test came to mean three different things in three files.
  */
-export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefined =>
+const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefined =>
 	event.type === 'tool_succeeded' ||
 	event.type === 'tool_reported_failure' ||
 	event.type === 'tool_failed'
@@ -15,7 +15,7 @@ export const toolOutcomeEvent = (event: AgentEvent): ToolOutcomeEvent | undefine
 		: undefined;
 
 /** Project a resolved tool event into the journal activity shared by chat and diagrams. */
-export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
+const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefined => {
 	if (event.type === 'tool_started')
 		return { callId: event.callId, name: event.name, input: event.arguments, status: 'running' };
 	if (event.type === 'approval_required')
@@ -45,3 +45,19 @@ export const toolActivityFromEvent = (event: AgentEvent): ToolActivity | undefin
 		? { ...settled, failure: outcome.failure, status: 'failed' }
 		: { ...settled, failure: outcome.failure, output: outcome.output, status: 'reported_failure' };
 };
+
+/** Reads tool calls out of agent events, so every journal answers "did it finish?" alike. */
+export interface ToolActivityReader {
+	outcome(event: AgentEvent): ToolOutcomeEvent | undefined;
+	activity(event: AgentEvent): ToolActivity | undefined;
+}
+
+export class ToolActivityProjection implements ToolActivityReader {
+	outcome(event: AgentEvent): ToolOutcomeEvent | undefined {
+		return toolOutcomeEvent(event);
+	}
+
+	activity(event: AgentEvent): ToolActivity | undefined {
+		return toolActivityFromEvent(event);
+	}
+}

@@ -7,12 +7,14 @@ import type {
 	AgentRunStatus,
 	ConversationId
 } from '$lib/models/agent';
-import { toolOutcomeEvent } from '$lib/server/services/agent/conversations/tool-activity';
+import { ToolActivityProjection } from '$lib/server/services/agent/conversations/tool-activity';
 import type { NoteId, TextSelection } from '$lib/models/notes';
 import type { ProjectId } from '$lib/models/projects';
 import type { AppContextSnapshotV1 } from '$lib/models/workspace';
 import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { Lab } from './application';
+
+const toolActivity = new ToolActivityProjection();
 
 const TERMINAL: readonly AgentRunStatus[] = [
 	'completed',
@@ -202,7 +204,7 @@ function reconstructToolCalls(events: readonly AgentRunEventRecord[]): readonly 
 			});
 			continue;
 		}
-		const outcome = toolOutcomeEvent(event);
+		const outcome = toolActivity.outcome(event);
 		if (outcome) {
 			// A completion the run could not name settles no call here. Correlating it
 			// by guesswork would attribute an outcome to a call that may not be its
