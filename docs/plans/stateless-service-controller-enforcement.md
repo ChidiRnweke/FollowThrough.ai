@@ -542,3 +542,90 @@ from analyzer findings. The overall refactor remains incomplete. No checker or s
 Browser migrations, synchronization, preference writes, indexing, unrelated helpers, telemetry
 restructuring and the diagram SDK mismatch remain outside this slice. The wider application migration
 and its remaining factory/store/helper/dependency findings still need work.
+
+## Retrieval-provider boundaries — 2026-10-11
+
+This slice stacks on draft PR #360 at `71baf694ed1fade904113a06561928fd3012dfa7`.
+Application revision: `f9904532` (the complete SHA is in the JSON inventory). Baseline verification
+matched every recorded semantic diagnostic, including provenance, and every expanded Chisel
+message and location. The checkers are unchanged.
+
+### Corrected boundaries
+
+Embeddings and SearchQueryGeneration are provider adapters. Retrieval factories construct their
+SDK clients and expose model-owned interfaces. Default and selected models, base URLs, headers,
+timeouts, provider errors and protocol behavior retain their existing values. The duplicate
+service-local embedding contracts and query provider interface are removed.
+
+EmbeddingBatching is a stateless rules service. It preserves lazy token counting, the existing
+30,000-token budget, empty inputs and oversized singleton behavior. The nine multi-input owners
+coordinate sequential requests and combine their results before completing writes. Combination
+preserves returned model labels for existing completion validation and rejects mixed-model batches.
+The provider adapter retains response sorting, count/index validation, cancellation and one
+existing embedding span per physical request. Single-input consumers keep their direct calls.
+Index staging, reuse, transactions and completion semantics are unchanged.
+
+Retrieval coordinates SearchQueryRules and the query adapter. The rules service owns the exact
+prompt and trim/nonempty rules. Authorized conversation lookup and the legacy condensation path
+remain unchanged. The existing generation span still encloses generation and output validation,
+with the same error envelope. ADR 0036 fallback stays in the owning controllers.
+
+Query evaluation caching now exposes lookup and storage through a model-owned contract, without a
+workflow callback. Retrieval reads before generation and stores only validated success. Existing
+`search-query-v2` keys, trimmed strings, counters and record-mode behavior remain compatible. Cache
+errors stay outside provider-error wrapping; hits skip generation and its span. Evaluation observers
+preserve previous trace suppression. The embedding cache retains per-content/model keys, Float32
+encoding and ordering. Its existing lack of cancellation forwarding is unchanged; query generation
+also retains its existing API without a cancellation parameter.
+
+Production and evaluation constructors, factory outputs, application overrides, controller consumers,
+InMemory fakes and deploy seeding were reviewed. Provider constructors exist only in factories;
+adapters do not import services. Controller public operations, instrumentation and agent-tool maps
+remain unchanged. No service composition, controller chains or test-only production helpers were added.
+
+### Complete remaining inventory
+
+| Rule                       | #360 | Remaining |
+| -------------------------- | ---: | --------: |
+| `controller-orchestration` |  277 |       277 |
+| `factory-workflow`         |   12 |        12 |
+| `store-workflow`           |   55 |        55 |
+| `public-service-helper`    |   13 |        13 |
+| `indirect-dependency`      |    9 |         9 |
+| `concrete-dependency`      |    1 |         1 |
+| Semantic total             |  367 |       367 |
+| Chisel prohibited imports  |   47 |        47 |
+
+No diagnostic identities were added or removed. The complete JSON refreshes source locations and
+provenance and records the manual dependency corrections separately. These corrections were not
+analyzer findings; unchanged counts do not mean the provider review was skipped. The overall
+application migration remains incomplete. No checker or suppression was added or weakened.
+
+### Observed verification
+
+- Final focused units: **24 files, 126 passed**, covering rules, controller query generation,
+  provider protocol, traces, sequential tool seeding, maintenance, ranking and evaluation caches.
+- Final full units: **584 files, 4,562 passed, one existing skip**. Passing browser output retains
+  the existing Svelte `derived_inert` warnings and chart rendering error.
+- Affected isolated PostgreSQL contracts: **62 files, 272 passed**, with:
+  `pnpm test:contracts:isolated tests/integration/knowledge-search tests/integration/notes tests/integration/memory tests/integration/relationships tests/integration/diagrams tests/integration/widgets tests/integration/skills tests/integration/suggestions tests/integration/attachments tests/integration/sync/diagram-mutations.contract.spec.ts tests/integration/sync/memory-mutations.contract.spec.ts tests/integration/sync/widget-mutations.contract.spec.ts tests/integration/agent/resolved-preferences.contract.spec.ts`.
+- Local HTTP fixtures exercise the real SDK, factory headers, selected models, base64 embedding
+  decoding, raw query output and cancellation. In-memory OpenTelemetry records successful and
+  rejected query output under the existing generation span. Cache tests prove replay, trimmed
+  success-only storage, retries after failure and record-mode replacement without live providers.
+- Multi-batch tool tests prove vector ordering and no partial publication after a later request
+  fails. The attachment-tail regression still proves visibility beyond fifty chunks and complete
+  embedding within existing budgets.
+- Lint and type checks passed. Docs checking passed with zero errors/warnings and one existing
+  hint; TypeDoc entry-point warnings remain. All three SvelteKit, QA and PR skill copies match.
+- Every architecture stage ran. Topology, source, test quality and UI passed. Semantic failed with
+  **367** findings; Chisel failed with **47** prohibited imports. The chained command stops at
+  semantic, and all stages also ran independently.
+- Early verification caught missing dependency wiring and legacy array-based provider fixtures;
+  these were corrected before the final passing runs. Review also corrected model-label aggregation.
+  Chisel required a colocated query-rules test; the final inventory has no new coverage diagnostic.
+- No live provider, evaluation suite, Phoenix round-trip, E2E, PWA or production-build validation
+  ran. Local evidence does not imply CI success. Keep the stacked PR draft while migration gates fail.
+
+Browser migrations, indexing redesign, telemetry restructuring and the diagram SDK mismatch remain
+outside this slice. Do not mark the overall refactor complete.
