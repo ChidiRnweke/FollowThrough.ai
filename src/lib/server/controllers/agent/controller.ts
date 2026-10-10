@@ -22,7 +22,7 @@ import type {
 	ConversationMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	AgentEvent,
@@ -223,7 +223,7 @@ export interface AgentController {
 export interface AgentDependencies {
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	/** Persists conversations and their message history. */
 	conversationJournal: ConversationJournal;

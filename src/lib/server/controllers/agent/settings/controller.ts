@@ -15,7 +15,7 @@ import type {
 	AgentPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { AgentModel, AgentPreferences, UpdateAgentPreferencesInput } from '$lib/models/agent';
 import type { AgentModelDefaults } from '$lib/models/agent/model-label';
@@ -67,7 +67,7 @@ export interface AgentSettingsController {
 export interface AgentSettingsDependencies {
 	readonly modelSelection: IAgentModelSelectionService;
 	readonly modelChoices: IAgentModelChoiceService;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
 	preferences: AgentPreferenceEditor;

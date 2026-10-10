@@ -11,7 +11,7 @@ import type {
 	ProjectMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ArchiveProjectInput,
@@ -71,7 +71,7 @@ export interface ProjectsController {
 
 export interface ProjectsDependencies {
 	readonly noteCreationRules: NoteCreationRules;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	projectCreator: ProjectCreator;
 	projectReader: ProjectReader;

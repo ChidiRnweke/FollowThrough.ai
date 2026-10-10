@@ -7,7 +7,7 @@ import type { SuggestionEffectService } from '$lib/server/services/suggestions/e
 import type { TodoSuggestion } from '$lib/models/suggestions';
 import type { TodoBatchReceiptService } from '$lib/server/services/todos/batch-receipts';
 import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { Project } from '$lib/models/projects';
 import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
@@ -119,7 +119,7 @@ export interface TodosDependencies {
 	readonly todoPresentation: TodoPresentation;
 	readonly todoEditingRules: TodoEditingRules;
 	readonly todoCreationRules: TodoCreationRules;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	todoLister: TodoLister;
 	todoContextReader: TodoContextReader;

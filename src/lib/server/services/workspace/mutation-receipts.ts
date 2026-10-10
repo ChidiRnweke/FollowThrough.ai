@@ -14,12 +14,30 @@ import type { SyncObjectRepository } from '$lib/server/repositories/workspace/sy
 import type { SyncReceiptRepository } from '$lib/server/repositories/workspace/sync-receipts';
 
 export interface WorkspaceMutationReceiptDependencies {
-	mutationReceipts: SyncReceiptRepository;
-	syncObjects: SyncObjectRepository;
+	readonly mutationReceipts: SyncReceiptRepository;
+	readonly syncObjects: SyncObjectRepository;
 }
 
+export interface WorkspaceMutationGuard {
+	prepare(
+		actor: ActorContext,
+		input: WorkspaceMutationRequest,
+		identity: WorkspaceResourceIdentity
+	): Promise<WorkspaceMutationPreparation>;
+	complete(
+		actor: ActorContext,
+		input: WorkspaceMutationRequest,
+		identity: WorkspaceResourceIdentity
+	): Promise<WorkspaceMutationResult>;
+	reject(error: Error): WorkspaceMutationResult;
+}
+export interface WorkspaceWriteRecoveryService {
+	cancel(actor: ActorContext, input: WorkspaceWriteCancellation): Promise<WorkspaceWriteRecovery>;
+}
 /** Version guards and durable receipts. The calling controller owns the enclosing transaction. */
-export class WorkspaceMutationReceipts {
+export class WorkspaceMutationReceipts
+	implements WorkspaceMutationGuard, WorkspaceWriteRecoveryService
+{
 	constructor(private readonly dependencies: WorkspaceMutationReceiptDependencies) {}
 
 	async cancel(

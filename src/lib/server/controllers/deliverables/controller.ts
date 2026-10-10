@@ -36,7 +36,7 @@ import type {
 	DeliverableMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	Artifact,
@@ -173,7 +173,7 @@ export interface DeliverablesController {
 
 /** Everything the {@link DeliverablesController} needs, injected so it can be built and tested without real stores. */
 export interface DeliverablesDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	templates: DocumentTemplates;
 	templateStorage: ExportObjectStorage;

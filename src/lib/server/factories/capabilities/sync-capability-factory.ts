@@ -1,18 +1,34 @@
 import { syncEtag } from '$lib/models/sync';
 import { workspaceResourceKey } from '$lib/services/workspace/commands';
 import type { Database } from '$lib/server/db';
-import { WorkspaceSyncChanges } from '$lib/server/repositories/workspace/sync-changes';
-import { WorkspaceSyncObjects } from '$lib/server/repositories/workspace/sync-objects';
+import {
+	WorkspaceSyncChanges,
+	type SyncChangesRepository
+} from '$lib/server/repositories/workspace/sync-changes';
+import {
+	WorkspaceSyncObjects,
+	type SyncObjectRepository
+} from '$lib/server/repositories/workspace/sync-objects';
 import { WorkspaceSyncReceipts } from '$lib/server/repositories/workspace/sync-receipts';
-import { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import {
+	WorkspaceMutationReceipts,
+	type WorkspaceMutationGuard,
+	type WorkspaceWriteRecoveryService
+} from '$lib/server/services/workspace/mutation-receipts';
 
+export interface SyncCapability {
+	readonly changes: SyncChangesRepository;
+	readonly objects: SyncObjectRepository;
+	readonly mutationRetry: 'database-only' | 'never';
+	readonly mutations: WorkspaceMutationGuard & WorkspaceWriteRecoveryService;
+}
 export const createSyncCapability = ({
 	db,
 	deferEmbedding = false
 }: {
 	readonly db: Database;
 	readonly deferEmbedding?: boolean;
-}) => {
+}): SyncCapability => {
 	const objects = new WorkspaceSyncObjects(db);
 	return {
 		changes: new WorkspaceSyncChanges(db, workspaceResourceKey, syncEtag),

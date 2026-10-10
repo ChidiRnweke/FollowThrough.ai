@@ -5,7 +5,7 @@ import type {
 	UserPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	ActorContext,
 	UpdateUserPreferencesInput,
@@ -39,7 +39,7 @@ export interface UserSettingsController {
 }
 
 export interface UserSettingsDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
 	preferences: UserPreferencesReader & UserPreferencesWriter;

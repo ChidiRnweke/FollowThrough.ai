@@ -13,7 +13,7 @@ import type {
 	MemoryMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateMemoryEntryInput,
@@ -80,7 +80,7 @@ export interface MemoryDependencies {
 	indexEmbeddings: IEmbeddings;
 	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	memoryLister: MemoryEntryLister;
 	memoryCreator: MemoryEntryCreator;

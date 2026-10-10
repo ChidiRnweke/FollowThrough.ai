@@ -879,3 +879,12 @@ Every service module below has a planned disposition. This is routing, not compl
   values (38 classes); 92 server modules / 176 exports (105 classes), 11,785 rows and 12,916
   resolved imports. Browser skill catalog actions, other capabilities and final whole-application
   verification remain pending. No implementation phase is complete.
+
+## Workspace receipt contracts — 2026-10-10
+
+- WorkspaceMutationReceipts explicitly implements mutation guarding and write-recovery interfaces.
+  Controllers no longer use Pick of its concrete class. The synchronization factory exposes narrow
+  repository and service contracts. Operation locks, permanent proofs and atomic completion are unchanged.
+- Type checking passes. Focused receipt/workspace/synchronization tests pass: 6 files / 20 tests.
+  Architecture remains incomplete at 59 prohibited imports and 18 missing interfaces; topology,
+  source and test-quality checks pass. Whole-application final verification remains pending.

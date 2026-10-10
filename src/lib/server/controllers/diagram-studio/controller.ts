@@ -12,7 +12,7 @@ import type { NoteReader } from '$lib/server/services/notes/catalog';
 import type { DiagramIndexContext, IndexingResult } from '$lib/models/knowledge-search';
 import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
 import { diagramIndexNoteId } from '$lib/server/services/knowledge-search/indexing';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	DiagramMutationRequest,
 	WorkspaceMutationResult
@@ -194,7 +194,7 @@ export interface DiagramStudioController {
 }
 
 export interface DiagramStudioDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	transactionRunner: TransactionRunner;
 	diagramFinder: DiagramFinder;

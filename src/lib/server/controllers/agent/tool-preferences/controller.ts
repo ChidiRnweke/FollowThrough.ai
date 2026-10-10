@@ -4,7 +4,7 @@ import type {
 	ToolPreferenceMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import { ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
 import type { ProjectId } from '$lib/models/projects';
@@ -52,7 +52,7 @@ export interface ToolPreferencesController {
 }
 
 export interface ToolPreferencesDependencies {
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	transactionRunner: AtomicOperation;
 	syncRetry: 'database-only' | 'never';
 	preferences: ToolPreferenceStore;

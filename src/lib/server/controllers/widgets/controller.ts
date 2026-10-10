@@ -27,7 +27,7 @@ import type {
 	WidgetMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type {
 	WidgetLister,
 	WidgetReader,
@@ -70,7 +70,7 @@ export interface WidgetsDependencies {
 	lifecycle: IWidgetLifecycleService;
 	catalog: IWidgetCatalogService;
 	search: IWidgetSearchService;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	widgetReader: WidgetReader;
 	widgetLister: WidgetLister;

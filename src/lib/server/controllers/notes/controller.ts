@@ -38,7 +38,7 @@ import type { Diagram } from '$lib/models/diagrams';
 import type { TodoView } from '$lib/models/todos';
 import type { SuggestionView } from '$lib/models/suggestions';
 import type { NoteMutationRequest, WorkspaceMutationResult } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	ImportMarkdownArchiveInput,
@@ -337,7 +337,7 @@ export interface NotesDependencies {
 	readonly notePresentation: NotePresentation;
 	readonly suggestionPresentation: ISuggestionPresentationService;
 	markdown: NoteMarkdown;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	noteReader: NoteReader;
 	noteTreeReader: NoteTreeReader;

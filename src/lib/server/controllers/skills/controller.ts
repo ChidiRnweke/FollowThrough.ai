@@ -17,7 +17,7 @@ import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { WorkspaceMutationReceipts } from '$lib/server/services/workspace/mutation-receipts';
+import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type {
 	CreateSkillFromSelectionInput,
@@ -103,7 +103,7 @@ export interface SkillsDependencies {
 	readonly noteEditingRules: NoteEditingRules;
 	readonly noteCreationRules: NoteCreationRules;
 	builtInSkills: Pick<BuiltInSkillProvisioner, 'ensure'>;
-	syncMutations: Pick<WorkspaceMutationReceipts, 'prepare' | 'complete' | 'reject'>;
+	syncMutations: WorkspaceMutationGuard;
 	syncRetry: 'database-only' | 'never';
 	skillFinder: SkillFinder;
 	skillUsageLister: SkillUsageLister;
