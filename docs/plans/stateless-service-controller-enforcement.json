@@ -1,6 +1,6 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "2ac36efffe033660513f4bf80a574b5f1854734f",
+	"applicationRevision": "2da09b3422bb2ac8c8af98747f94b7ad248ba8be",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
@@ -4760,7 +4760,7 @@
 			"subject": "Controller instrumentation and durable execution consumers",
 			"status": "corrected",
 			"previousDependency": "ControllerBoundary, Agent submission/retry and inline suggestions imported global helpers. Agent execution and diagram generation duplicated observer contracts.",
-			"currentOwner": "ControllerBoundary is infrastructure middleware with explicit observer/logging/clock/logger inputs. Existing controllers keep operations, transactions, journal writes and execution order. Agent receives TraceContextReader; execution receives required AgentTurnObserver; diagrams and inline suggestions receive WorkflowObserver.",
+			"currentOwner": "ControllerBoundary is infrastructure middleware with explicit observer/logging/clock/logger inputs. Existing controllers keep operations, transactions, journal writes and execution order. Agent owns the TraceContextReader outbound contract. AgentExecution owns AgentTurnObserver and its onRoot observation callback; diagrams, inline suggestions and knowledge search declare their own outbound observer requirements.",
 			"evidence": [
 				"src/lib/server/adapters/telemetry/controller-boundary.ts",
 				"src/lib/server/controllers/agent/controller.ts",
@@ -4776,7 +4776,7 @@
 			"subject": "Telemetry factory outputs, observer consumers and evaluations",
 			"status": "corrected",
 			"previousDependency": "Capability factories imported singleton observers; knowledge search exposed typeof operationObserver.",
-			"currentOwner": "createTelemetryCapability constructs log policy, environment, rendering and tracing and returns model-owned interfaces. Capability factories wire observers into controllers and provider/repository adapters. Application wiring constructs no service.",
+			"currentOwner": "createTelemetryCapability constructs log policy, environment, rendering and tracing and returns owner-declared interfaces. Capability factories wire observers into controllers and provider/repository adapters. Application wiring constructs no service. Models hold trace/configuration data only; no executable contracts are re-exported through models.",
 			"evidence": [
 				"src/lib/server/factories/telemetry.ts",
 				"src/lib/server/factories/capabilities/agent-capability-factory.ts",
@@ -4812,6 +4812,27 @@
 			"currentOwner": "Existing application recovery retains agent recovery before queued workflow recoveries; this telemetry slice does not change the sequence.",
 			"evidence": ["src/lib/server/application.ts"],
 			"inventoryNote": "Confirmed current source still contains the gap reported in #371. Zero remaining server semantic findings does not establish complete ADR 0007 compliance. Resolve separately without reordering recovery as part of this slice."
+		},
+		{
+			"subject": "Telemetry data and behavioral contract ownership",
+			"status": "corrected",
+			"previousDependency": "models/telemetry held observer, logging-policy and runtime interfaces plus the onRoot callback. These describe behavior, not model data.",
+			"currentOwner": "Models retain only WorkflowTraceContext, AgentTurnContext, LogLevel and LogEnvironment. TelemetryLogPolicy is declared directly beside its service. Tracing, rendering and runtime interfaces live beside their adapters. Agent controllers own their outbound context/turn ports; other controller and repository consumers declare the observation ports they need. Factories check structural compatibility when supplying adapters. No behavioral re-export remains in models.",
+			"evidence": [
+				"src/lib/models/telemetry/index.ts",
+				"src/lib/server/services/telemetry/log-policy.ts",
+				"src/lib/server/adapters/telemetry/tracing.ts",
+				"src/lib/server/adapters/telemetry/logging.ts",
+				"src/lib/server/controllers/agent/controller.ts",
+				"src/lib/server/controllers/agent/execution.ts",
+				"src/lib/server/controllers/inline-suggestions/controller.ts",
+				"src/lib/server/controllers/knowledge-search/controller.ts",
+				"src/lib/server/controllers/diagrams/controller.ts",
+				"src/lib/server/repositories/todos/classification.ts",
+				"src/lib/server/repositories/relationships/classification.ts",
+				"src/lib/server/factories/telemetry.ts"
+			],
+			"inventoryNote": "AST inspection finds no function types, method signatures, call signatures or construct signatures in models/telemetry/index.ts. TypeScript ESNext emission with comments removed is identical for all 26 changed files against 99ed86a3. Runtime rules, callback invocation, span behavior and persisted formats are unchanged. Existing semantic and Chisel diagnostics match exactly; no checks or suppressions changed. Focused regressions, full units, affected isolated contracts and all architecture stages were rerun."
 		}
 	]
 }

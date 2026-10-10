@@ -787,7 +787,7 @@ the diagram SDK mismatch remain outside this slice. Do not mark the overall refa
 ## Telemetry boundaries — 2026-10-11
 
 Base: draft #370 at `85def21d534c7278283d0e3d8e6f6f1a999a6acc`.
-Application revision: `2ac36efffe033660513f4bf80a574b5f1854734f`. Checkers are unchanged.
+Application revision: `2da09b3422bb2ac8c8af98747f94b7ad248ba8be`. Checkers are unchanged.
 The baseline reproduced all 362 recorded semantic diagnostics and provenance and all 47 expanded
 Chisel findings exactly. Sibling draft #371 (`49e62a50`) supplied the adapter placement and
 workflow/context injection pattern; its agent-file and tool-activity alternatives were not ported
@@ -795,11 +795,17 @@ over the implementations already in #370.
 
 ### Corrected boundaries
 
-Model contracts describe operation, workflow and agent-turn observation, active trace context,
-logging, environment and clock dependencies. The telemetry factory constructs implementations
-and exposes interfaces. Knowledge search no longer exposes a singleton-derived type. All affected
-capability factories, application wiring, provider/repository observers and evaluations were checked.
-Evaluations retain their production application path and query-observer suppression.
+Telemetry models describe only trace context, turn context, log levels and environment values.
+The logging-policy service declares its own public behavior interface. Tracing, rendering and
+runtime interfaces live with their adapters. Agent controllers own their outbound context/turn
+contracts, including the onRoot callback. Other controller and repository consumers declare the
+observation ports they need. Factory construction checks compatibility against those requirements.
+No behavior contract is re-exported through models, and controllers do not import adapter modules.
+
+The telemetry factory constructs implementations and exposes declared interfaces. Knowledge search
+no longer exposes a singleton-derived type. All affected factories, application wiring,
+provider/repository observers and evaluations were checked. Evaluations retain their production
+application path and query-observer suppression.
 
 OpenTelemetryTracing owns span/context mechanics, traceparent compatibility and SDK cancellation
 recognition. TelemetryLogPolicyService owns level selection and rendered-text redaction/truncation.
@@ -810,7 +816,7 @@ ControllerBoundary is infrastructure middleware. Its observer, log policy access
 are explicit. It preserves receiver binding, cached methods, one kind-null boundary span, log
 severity and summaries. Custom boundary loggers remain distinct from tracing debug output.
 Agent submission/retry use the injected context reader; execution, diagrams and inline suggestions
-use model-owned observers. Controllers retain complete operations and transaction/journal ownership.
+use owner-declared observer ports. Controllers retain complete operations and transaction/journal ownership.
 No service composition or controller chains were introduced.
 
 ### Complete remaining inventory
@@ -860,3 +866,18 @@ findings is not a claim that the overall refactor is complete.
 
 Browser migrations, journal redesign, indexing, collector configuration and the diagram SDK
 mismatch remain out of scope. The original application checklist remains incomplete.
+
+### Contract-placement revalidation
+
+The callable contracts previously placed in models/telemetry have moved to their service,
+infrastructure or consuming operation owners. The telemetry model now has no function types,
+method signatures, call signatures or construct signatures. No alias or barrel preserves the
+old behavioral model API. The log policy has a direct local public interface, without forwarding
+method types from models.
+
+This correction emits identical JavaScript for all 26 changed files against `99ed86a3`, using
+TypeScript ESNext with comments removed. It does not move or duplicate runtime rules. Focused
+regressions (55 files/377 tests), full units (595 files/4,631 tests, one skip), affected isolated
+contracts (39 files/190 tests), lint, type/docs checks and every architecture stage were rerun.
+The complete semantic and Chisel inventories match the preceding revision exactly. The wider
+migration remains incomplete; the PR stays draft. No check or suppression changed.
