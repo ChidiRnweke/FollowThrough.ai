@@ -54,3 +54,19 @@ REST contract for an operation already exposed through the controller/remote bou
 Use colocated specs, shared `InMemory*` fakes and one expect per test. Run the type checker, lint,
 architecture audits and relevant behavior tests. Current checker permissions are not an exception
 to an accepted ADR; record unresolved violations and correct the implementation and checker.
+
+## Checking indirect dependencies
+
+Run `pnpm test:architecture:semantic` as well as Chisel. It follows symbol aliases, re-exports,
+callable objects and statically connected callback ports. A service calling another service
+through an injected function still violates ADR 0007. A factory callback that calls a controller
+still owns a workflow. Construct the controller and expose its operation interface instead.
+
+Readonly state views are valid operation results. Service instances, transports, queues and mutable
+store APIs are collaborators, not results. An interface or utility type based on a concrete class
+does not repair a dependency boundary. Declare the actual contract and annotate factory results.
+
+Private evaluators created inside one operation and immutable configuration are valid. Retained
+mutable fields, module caches and captured cross-call state need a store owner. Test both sides of
+each distinction. See `docs/architecture/semantic-enforcement.md` for analysis limits; do not infer
+whole-application compliance from a passing check. Record unresolved findings without suppressions.

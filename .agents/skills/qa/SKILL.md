@@ -48,3 +48,17 @@ or create a test for every method.
 
 Follow project instructions and run relevant checks. Report conflicts and unavailable infrastructure;
 do not weaken checks or claim untested results passed.
+
+## Architecture checker tests
+
+For ADR 0007 enforcement, exercise the analyzer with small source projects and the CLI with real
+temporary directories. Check both forbidden and valid patterns: alias/barrel dependencies versus
+controller operations, concrete types versus declared interfaces, retained mutable state versus
+operation-local evaluators, and workflows versus construction or controlled state updates.
+
+Expected diagnostics must come from the ADR, not from the analyzer's current output. Check source
+locations and provenance where indirection matters. Include Svelte scripts, cyclic barrels and
+resolution failures. A missing module must fail rather than produce an empty result. Run Chisel
+fixtures too; the semantic audit supplements existing checks. Record application violations as
+migration evidence, never as suppression input. Review dynamic behavior and capability cohesion
+separately from the mechanically enforced patterns.

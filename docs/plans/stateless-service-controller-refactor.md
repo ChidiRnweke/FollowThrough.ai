@@ -1318,3 +1318,17 @@ Every service module below has a planned disposition. This is routing, not compl
   test imports of removed functions; updated them before these successful runs.
 - Architecture remains at 51 prohibited imports; topology/source/test-quality pass. Browser chat
   state and workflows are under review next; the remaining inventory and final checks stay pending.
+
+## Enforcement and guidance follow-up — 2026-10-10
+
+The follow-up above #336 implements the tooling and guidance slice of section G in its own
+`chore/pr336-architecture-enforcement` worktree/branch. It adds the project-symbol audit, tests
+indirect dependencies and public surfaces, narrows Chisel's type-only controller permission, and
+aligns the changed SvelteKit and QA guidance in all three skill copies. Application implementation
+is unchanged.
+
+[The enforcement report](stateless-service-controller-enforcement.md) records the exact source and
+checker revisions, verification and the complete unsuppressed inventory: 802 semantic findings and
+51 Chisel prohibited imports. The inventory is evidence, not a checker baseline. The remaining
+application migration, semantic inventory review and full-refactor acceptance items above stay
+incomplete. Do not mark this original plan complete because the checker fixtures pass.

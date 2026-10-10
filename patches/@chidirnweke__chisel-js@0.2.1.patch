@@ -1,5 +1,5 @@
 diff --git a/dist/main.js b/dist/main.js
-index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b237af49d39 100644
+index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c6a3fd8a750d70f5485367a1f0755e27153fe01e 100644
 --- a/dist/main.js
 +++ b/dist/main.js
 @@ -8267,6 +8267,7 @@ var Layer = {
@@ -69,7 +69,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
 +    // Contracts are declared with their operation owner. Boundary adapters implement
 +    // those contracts, and coordinators receive them from factories; no construction leaks.
 +    if (edge.isTypeOnly && importedLayer === Layer.CONTROLLERS &&
-+        [Layer.CONTROLLERS, Layer.CLIENT, Layer.ADAPTERS, Layer.STORES].includes(importerLayer))
++        [Layer.CONTROLLERS, Layer.CLIENT, Layer.ADAPTERS, Layer.STORES].includes(importerLayer) && this._importsInterfaces(edge))
 +      return [];
 +    // A provider adapter implements repository-owned input/output protocols. Only
 +    // named interface imports qualify: a concrete class remains a dependency leak.
@@ -79,43 +79,76 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
      const banned = BANNED_INTERNAL.get(importerLayer);
      if (banned === undefined)
        return [];
-@@ -9100,6 +9128,35 @@ class ImportBoundaryService {
+@@ -9100,6 +9128,68 @@ class ImportBoundaryService {
        return [];
      return [this._violation(edge, "banned-layer-import", `${importerLayer} must not import ${importedLayer} (${edge.imported}). ` + `${fixFor(importerLayer, importedLayer)}`)];
    }
 +  _importsInterfaces(edge) {
 +    const source = this.files.get(edge.importer);
-+    const target = this.files.get(edge.imported);
-+    if (!source?.ast || !target?.ast) return false;
-+    const exported = new Set();
-+    for (const { sf } of scriptsOf(target.ast)) {
-+      for (const statement of sf.statements) {
-+        if (ts2.isInterfaceDeclaration(statement) &&
-+            statement.modifiers?.some((modifier) => modifier.kind === ts2.SyntaxKind.ExportKeyword))
-+          exported.add(statement.name.text);
-+      }
-+    }
++    if (!source?.ast) return false;
 +    let matched = false;
 +    for (const { sf } of scriptsOf(source.ast)) {
 +      for (const statement of sf.statements) {
-+        if (!ts2.isImportDeclaration(statement) ||
-+            !ts2.isStringLiteral(statement.moduleSpecifier) ||
-+            statement.moduleSpecifier.text !== edge.specifier) continue;
++        if (ts2.isExportDeclaration(statement) && statement.isTypeOnly && statement.moduleSpecifier && ts2.isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === edge.specifier) {
++          matched = true;
++          if (!statement.exportClause || !ts2.isNamedExports(statement.exportClause)) return false;
++          if (!statement.exportClause.elements.every((entry) => this._isContract(edge.imported, (entry.propertyName ?? entry.name).text, new Set()))) return false;
++          continue;
++        }
++        if (!ts2.isImportDeclaration(statement) || !ts2.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== edge.specifier) continue;
 +        matched = true;
 +        const clause = statement.importClause;
 +        const bindings = clause?.namedBindings;
-+        if (clause?.name || !bindings || !ts2.isNamedImports(bindings)) return false;
-+        if (bindings.elements.length === 0) return false;
-+        if (!bindings.elements.every((entry) => exported.has((entry.propertyName ?? entry.name).text)))
-+          return false;
++        if (clause?.name || !bindings || !ts2.isNamedImports(bindings) || bindings.elements.length === 0) return false;
++        if (!bindings.elements.every((entry) => this._isContract(edge.imported, (entry.propertyName ?? entry.name).text, new Set()))) return false;
 +      }
 +    }
 +    return matched;
 +  }
++  _isContract(path, name, seen) {
++    const key = `${path}:${name}`;
++    if (seen.has(key)) return false;
++    seen.add(key);
++    const file = this.files.get(path);
++    if (!file?.ast) return false;
++    const target = (specifier) => this.graph.allImports.find((edge) => edge.importer === path && edge.specifier === specifier)?.imported;
++    for (const { sf } of scriptsOf(file.ast)) {
++      for (const statement of sf.statements) {
++        if (statement.name?.text === name) {
++          if (ts2.isInterfaceDeclaration(statement)) return true;
++          if (ts2.isTypeAliasDeclaration(statement)) {
++            // Data unions and literal contracts are valid. Concrete-class aliases are not.
++            const type = statement.type;
++            if (ts2.isTypeReferenceNode(type) && ts2.isIdentifier(type.typeName)) return this._isContract(path, type.typeName.text, new Set(seen));
++            return !ts2.isTypeQueryNode(type);
++          }
++          if (ts2.isClassDeclaration(statement)) return false;
++        }
++        if (ts2.isImportDeclaration(statement) && ts2.isStringLiteral(statement.moduleSpecifier)) {
++          const bindings = statement.importClause?.namedBindings;
++          if (bindings && ts2.isNamedImports(bindings)) for (const entry of bindings.elements) {
++            if (entry.name.text === name) {
++              const imported = target(statement.moduleSpecifier.text);
++              return !!imported && this._isContract(imported, (entry.propertyName ?? entry.name).text, new Set(seen));
++            }
++          }
++        }
++        if (ts2.isExportDeclaration(statement)) {
++          const imported = statement.moduleSpecifier && ts2.isStringLiteral(statement.moduleSpecifier) ? target(statement.moduleSpecifier.text) : path;
++          if (!imported) continue;
++          if (!statement.exportClause && this._isContract(imported, name, new Set(seen))) return true;
++          if (statement.exportClause && ts2.isNamedExports(statement.exportClause)) for (const entry of statement.exportClause.elements) {
++            if (entry.name.text === name && this._isContract(imported, (entry.propertyName ?? entry.name).text, new Set(seen))) return true;
++          }
++        }
++      }
++    }
++    return false;
++  }
    _checkExternal(edge, importerLayer) {
      if (!BANNED_INTERNAL.has(importerLayer))
        return [];
-@@ -9190,30 +9247,26 @@ function fixFor(importer, imported) {
+@@ -9190,30 +9280,26 @@ function fixFor(importer, imported) {
      return "One service never imports another. If you need a shared type, it is domain " + "data — move it to $lib/models. Service-local data is fine, but no other " + "service may reach for it. If you need the behaviour, orchestrate both " + "services from a controller.";
    }
    if (importer === Layer.CONTROLLERS && imported === Layer.CONTROLLERS) {
@@ -150,7 +183,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
  class LayoutService {
    ruleIdPrefix = "structure";
    check(project) {
-@@ -9375,8 +9428,8 @@ class StructuralSvelteService {
+@@ -9375,8 +9461,8 @@ class StructuralSvelteService {
        {
          id: "structural:missing-service-interface",
          category: "structural",
@@ -161,7 +194,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
        },
        {
          id: "structural:factory-contains-logic",
-@@ -9445,16 +9498,19 @@ class StructuralSvelteService {
+@@ -9445,16 +9531,19 @@ class StructuralSvelteService {
          if (!ts3.isClassDeclaration(statement) || statement.name === undefined)
            continue;
          const name = statement.name.text;
@@ -184,7 +217,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
          }));
        }
      }
-@@ -10244,7 +10300,6 @@ class TestStructureService {
+@@ -10244,7 +10333,6 @@ class TestStructureService {
          continue;
        violations.push(...this._checkTestLocation(file));
        violations.push(...this._checkTestNaming(file));
@@ -192,7 +225,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
        violations.push(...this._checkMockingBanned(file));
        violations.push(...this._checkSkipReason(file));
      }
-@@ -10291,29 +10346,6 @@ class TestStructureService {
+@@ -10291,29 +10379,6 @@ class TestStructureService {
      }
      return violations;
    }
@@ -222,7 +255,7 @@ index 4e1ced3d431a5d770dd7c2008851dbbbed0d5276..c1259fea2bc64f4c2685f572552f8b23
    _checkMockingBanned(file) {
      const violations = [];
      if (!file.path.includes("tests/"))
-@@ -10370,7 +10402,6 @@ class TestStructureService {
+@@ -10370,7 +10435,6 @@ class TestStructureService {
          description: "Test name does not describe an invariant",
          fixGuidance: "Name the test after the invariant it proves: test_cannot_X, test_returns_Y_when_Z."
        },

@@ -199,6 +199,18 @@ dev, info in prod.
 - Factories construct and connect dependencies and expose their interfaces. They do not execute
   application workflows or expose mutable internals to components.
 
+## Semantic architecture checks
+
+`pnpm test:architecture:semantic` supplements Chisel with project-symbol checks for indirect
+behavior dependencies, public service helpers, concrete dependency types, retained service state,
+and workflows in stores/factories. See `docs/architecture/semantic-enforcement.md` for the rule IDs,
+valid patterns and analysis limits. A type-only import or `Pick<ConcreteClass, ...>` does not hide
+a concrete dependency. A callback does not move workflow ownership out of its factory or store.
+
+Keep analyzer fixtures for both the prohibited pattern and its valid neighbor. Record existing
+application findings in the refactor plan without baselines or suppressions. When the chained
+architecture command stops, run the remaining stages individually and report each result.
+
 ## Layering rules the audits enforce
 
 - Each `src/lib/models/<domain>/` domain is self-contained: no imports of sibling files in the
