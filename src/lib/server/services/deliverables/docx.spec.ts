@@ -9,7 +9,9 @@ import type {
 } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
 import AdmZip from 'adm-zip';
-import { generateDocx } from './docx';
+import { DocxDocumentService } from '$lib/server/services/deliverables/docx';
+const docxRendering = new DocxDocumentService();
+const generateDocx = docxRendering.render.bind(docxRendering);
 import { prepareExport } from '$lib/services/deliverables/export-preparation';
 import type { ExportInput } from '$lib/models/deliverables';
 import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';

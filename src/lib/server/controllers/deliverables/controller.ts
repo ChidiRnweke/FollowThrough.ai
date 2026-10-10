@@ -1,3 +1,5 @@
+import type { DocxRenderer } from '$lib/server/services/deliverables/docx';
+import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
 import type { DocumentBundlePacker } from '$lib/server/services/deliverables/bundle';
 import { WidgetExportService } from '$lib/services/widgets/export-blocks';
 const widgetExporting = new WidgetExportService();
@@ -216,8 +218,8 @@ export interface DeliverablesDependencies {
 	diagramReader: { get(actor: ActorContext, id: DiagramId): Promise<Diagram> };
 	diagramRenderer: DiagramExportRenderer;
 	readonly mermaidThemes: MermaidThemeRules;
-	docxGenerator: (input: PreparedExport) => Promise<Buffer>;
-	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
+	docxGenerator: DocxRenderer;
+	pdfGenerator: PdfRenderingController;
 	zipPacker: DocumentBundlePacker;
 	exportSettingsReader: ExportSettingsReader;
 	exportSettingsWriter: ExportSettingsWriter;
@@ -509,8 +511,8 @@ export class Deliverables implements DeliverablesController {
 
 	private renderDocument(format: 'pdf' | 'docx', input: PreparedExport): Promise<Buffer> {
 		return format === 'pdf'
-			? this.dependencies.pdfGenerator(input)
-			: this.dependencies.docxGenerator(input);
+			? this.dependencies.pdfGenerator.render(input)
+			: this.dependencies.docxGenerator.render(input);
 	}
 
 	async generateBundle(
@@ -554,7 +556,9 @@ export class Deliverables implements DeliverablesController {
 		actor: ActorContext,
 		input: PreviewDocumentInput
 	): Promise<PreviewDocumentOutput> {
-		const buffer = await this.dependencies.pdfGenerator(await this.prepareDocument(actor, input));
+		const buffer = await this.dependencies.pdfGenerator.render(
+			await this.prepareDocument(actor, input)
+		);
 		return { data: buffer.toString('base64') };
 	}
 

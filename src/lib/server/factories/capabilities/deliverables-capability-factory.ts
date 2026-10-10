@@ -22,8 +22,9 @@ import {
 	DocumentBundleService,
 	type DocumentBundlePacker
 } from '$lib/server/services/deliverables/bundle';
-import { generateDocx } from '$lib/server/services/deliverables/docx';
-import { generatePdf } from '$lib/server/services/deliverables/pdf';
+import { DocxDocumentService, type DocxRenderer } from '$lib/server/services/deliverables/docx';
+import { createPdfRendering } from './pdf-rendering-factory';
+import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
 import {
 	prepareExport,
 	exportImageSources,
@@ -54,8 +55,8 @@ export interface DeliverablesCapability {
 	readonly exportWidgetReferences: typeof exportWidgetReferences;
 	readonly diagramRenderer: DiagramExportRenderer;
 	readonly mermaidThemes: MermaidThemeRules;
-	readonly docxGenerator: typeof generateDocx;
-	readonly pdfGenerator: typeof generatePdf;
+	readonly docxGenerator: DocxRenderer;
+	readonly pdfGenerator: PdfRenderingController;
 	readonly zipPacker: DocumentBundlePacker;
 	readonly markdownToContent: typeof noteContentFromMarkdown;
 }
@@ -79,8 +80,8 @@ export const createDeliverablesCapability = (
 	exportWidgetReferences,
 	diagramRenderer: createDiagramExportRenderer(),
 	mermaidThemes: new MermaidThemeService(),
-	docxGenerator: generateDocx,
-	pdfGenerator: generatePdf,
+	docxGenerator: new DocxDocumentService(),
+	pdfGenerator: createPdfRendering(),
 	zipPacker: new DocumentBundleService(),
 	markdownToContent: noteContentFromMarkdown
 });

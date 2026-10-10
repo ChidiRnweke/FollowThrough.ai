@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { inflateSync } from 'node:zlib';
 import type { ProseMirrorDocument } from '$lib/models/notes';
 import { defaultExportSettings } from '$lib/models/deliverables';
-import { generatePdf, mermaidSourceHash } from './pdf';
+import { createPdfRendering } from '$lib/server/factories/capabilities/pdf-rendering-factory';
+const pdfRendering = createPdfRendering();
+const generatePdf = pdfRendering.render.bind(pdfRendering);
+import { mermaidSourceHash } from '$lib/server/repositories/deliverables/export-images';
 import { prepareExport } from '$lib/services/deliverables/export-preparation';
 import type { ExportInput } from '$lib/models/deliverables';
 

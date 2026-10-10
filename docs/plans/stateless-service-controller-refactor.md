@@ -958,3 +958,19 @@ Every service module below has a planned disposition. This is routing, not compl
   contracts pass: 20 files / 123 tests. Architecture remains incomplete at 55 prohibited imports
   and seven missing interfaces; topology/source/test-quality pass. Document rendering, shared
   export preparation and complete browser export workflows still need migration.
+
+## Document rendering and font lifetime — 2026-10-10
+
+- DocxDocumentService renders through a narrow interface with private layout helpers. PDF layout
+  preparation is a stateless capability receiving resolved glyph coverage. PdfRendering owns font
+  loading, shared initialization and retry; a process store owns the immutable resource snapshot.
+  The PDF SDK adapter alone configures local file access and writes document bytes.
+- Font coverage retains the existing fontkit glyph test and fallback order. Unicode, tables,
+  diagrams and widget export cases still exercise real PDF/DOCX output. The test-only hash re-export
+  is removed. Todo and artifact controllers receive named renderer interfaces.
+- Type checking and lint pass. Focused renderer/controller/factory tests pass: 36 files / 354 tests;
+  the final glyph-coverage cases pass: one file / eight tests. Two additional controller cases
+  verify cached fonts survive later reader failure and failed initialization can be retried.
+  Architecture remains at 55 prohibited imports and seven missing interfaces; topology, source
+  and test-quality checks pass. The full suite at the prior artifact/template commit is not final
+  evidence for this change. Shared export preparation and browser export coordination are next.

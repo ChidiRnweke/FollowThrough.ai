@@ -1,3 +1,4 @@
+import type { PdfRenderingController } from '$lib/server/controllers/deliverables/pdf';
 import type { TodoPresentation } from '$lib/services/todos/presentation';
 import type { TodoEditingRules } from '$lib/services/todos/edits';
 import type { TodoCreationRules } from '$lib/services/todos/edits';
@@ -10,7 +11,7 @@ import type { TodoMutationRequest, WorkspaceMutationResult } from '$lib/models/w
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 import type { ActorContext } from '$lib/models/identity';
 import type { Project } from '$lib/models/projects';
-import { defaultExportSettings, type PreparedExport } from '$lib/models/deliverables';
+import { defaultExportSettings } from '$lib/models/deliverables';
 import type { TodoBoardExport } from '$lib/services/todos/board-export';
 import type { noteContentFromMarkdown } from '$lib/server/services/notes/markdown';
 import type { prepareExport } from '$lib/services/deliverables/export-preparation';
@@ -138,7 +139,7 @@ export interface TodosDependencies {
 	projectLister: { list(actor: ActorContext): Promise<readonly Project[]> };
 	markdownToContent: typeof noteContentFromMarkdown;
 	exportPreparer: typeof prepareExport;
-	pdfGenerator: (input: PreparedExport) => Promise<Buffer>;
+	pdfGenerator: PdfRenderingController;
 	noteActionRequests: NoteActionSubmission;
 	runSettlements: RunSettlement;
 	runEvents: Pick<AgentEventBus, 'notify'>;
@@ -241,7 +242,7 @@ export class Todos implements TodosController {
 			notes: [{ title, document }],
 			settings: { ...defaultExportSettings, includeTitle: true }
 		});
-		const pdf = await this.dependencies.pdfGenerator(prepared);
+		const pdf = await this.dependencies.pdfGenerator.render(prepared);
 		return {
 			data: pdf.toString('base64'),
 			filename: board.filename

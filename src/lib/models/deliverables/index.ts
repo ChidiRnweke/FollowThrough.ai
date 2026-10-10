@@ -329,3 +329,9 @@ export interface BundleFile {
 	readonly path: string;
 	readonly bytes: Uint8Array;
 }
+
+export interface PdfFontResources {
+	readonly directory: string;
+	readonly files: Readonly<Record<string, Readonly<Record<string, string>>>>;
+	readonly coverage: ReadonlyMap<string, ReadonlySet<number>>;
+}

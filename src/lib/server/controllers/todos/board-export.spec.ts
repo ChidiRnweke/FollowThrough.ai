@@ -1,3 +1,4 @@
+import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
 import { TodoBoardExportService } from '$lib/services/todos/board-export';
 import { TodoPresentationService } from '$lib/services/todos/presentation';
 import { TodoEditingRulesService } from '$lib/services/todos/edits';
@@ -5,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { Todos, type TodosDependencies } from './controller';
 import { prepareExport } from '$lib/services/deliverables/export-preparation';
 import { capabilityDependencies } from '$lib/testing/workspace/fakes/dependency-builder';
-type BoardPdfGenerator = TodosDependencies['pdfGenerator'];
+type BoardPdfGenerator = TodosDependencies['pdfGenerator']['render'];
 type MarkdownToDocument = TodosDependencies['markdownToContent'];
 import { InMemoryTodos } from '$lib/testing/todos/fakes/in-memory-todos';
 import { InMemoryProjects } from '$lib/testing/projects/fakes/in-memory-projects';
@@ -42,7 +43,7 @@ const setup = () => {
 			projectLister: projects,
 			markdownToContent: markdownToDocument,
 			exportPreparer: prepareExport,
-			pdfGenerator
+			pdfGenerator: new InMemoryDocumentRenderer(pdfGenerator)
 		})
 	);
 	return { todos, projects, markdownSources, pdfInputs, service };

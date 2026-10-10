@@ -1,3 +1,4 @@
+import { InMemoryDocumentRenderer } from '$lib/testing/deliverables/fakes/document-renderer';
 import { ExportSettingsRuleService } from '$lib/services/deliverables/settings';
 import { ArtifactFileService } from '$lib/services/deliverables/artifact-files';
 import { InMemoryNoteRepository } from '$lib/testing/notes/fakes/in-memory-note-repositories';
@@ -30,7 +31,16 @@ import { InMemoryWidgetRepository } from '$lib/testing/widgets/fakes/in-memory-w
 import { InMemoryProjectRepository } from '$lib/testing/projects/fakes/in-memory-project-repository';
 import { InMemoryTodoRepository } from '$lib/testing/todos/fakes/in-memory-todo-repository';
 
-export const exportControllerFixture = (overrides: Partial<DeliverablesDependencies> = {}) => {
+type ExportOverrides = Omit<Partial<DeliverablesDependencies>, 'docxGenerator' | 'pdfGenerator'> & {
+	docxGenerator?: DeliverablesDependencies['docxGenerator']['render'];
+	pdfGenerator?: DeliverablesDependencies['pdfGenerator']['render'];
+};
+export const exportControllerFixture = (overrides: ExportOverrides = {}) => {
+	const {
+		docxGenerator = async () => Buffer.from('docx'),
+		pdfGenerator = async () => Buffer.from('pdf'),
+		...dependencies
+	} = overrides;
 	const artifacts = new InMemoryArtifactRepository();
 	const storage = new InMemoryAttachmentStorage();
 	const notes = new InMemoryNoteContent();
@@ -66,11 +76,11 @@ export const exportControllerFixture = (overrides: Partial<DeliverablesDependenc
 			todoLister: todos,
 			noteLister: notes,
 			fetchImage: fetchRemoteDataUrl,
-			docxGenerator: async () => Buffer.from('docx'),
-			pdfGenerator: async () => Buffer.from('pdf'),
+			docxGenerator: new InMemoryDocumentRenderer(docxGenerator),
+			pdfGenerator: new InMemoryDocumentRenderer(pdfGenerator),
 			zipPacker: new DocumentBundleService(),
 			transactionRunner: new InMemoryTransactionRunner([artifacts, provenance]),
-			...overrides
+			...dependencies
 		})
 	);
 	return {
