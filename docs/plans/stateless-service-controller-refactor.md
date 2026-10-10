@@ -1423,3 +1423,27 @@ are still errors, not a baseline. Browser migrations remain out of scope.
 The [enforcement report](stateless-service-controller-enforcement.md) records the exact commands,
 complete inventory and limitations, including the existing SDK diagram submission-tool mismatch.
 The overall refactor remains incomplete; keep the stacked PR draft. No guidance or check was weakened.
+
+## Server composition dependency repair — 2026-10-10
+
+Application revision `5a22f8289a7afb19f557f384c663dd1f94da9f55`, based on draft #353 at `85f5cc7b`.
+The complete semantic and normalized Chisel inventories were verified against the base before edits.
+
+- [x] Resolve preference resource keys in AgentSettings before repository locking.
+- [x] Resolve receipt resource keys in each synchronization owner and pass data into persistence.
+- [x] Give LocalIdentity ownership of provisioning and verified lookup; update hook, MCP and
+      evaluation callers, declared service capabilities and boundary instrumentation.
+- [x] Preserve SQL locks, authorization, defaults, transactions, replay/cancellation proofs,
+      publication, tombstones, errors and public transport contracts.
+- [x] Update InMemory fakes, unit and repository contracts; verify absent-row lock contention.
+- [x] Run unit, isolated identity/preference/sync contracts, lint, type and docs checks, and every
+      architecture stage. Refresh the full inventory without weakening enforcement.
+- [ ] Complete the remaining application migration and satisfy semantic and Chisel gates.
+
+Full units passed: 569 files, 4,492 tests and one existing skip. Selected isolated contracts
+passed: 23 files, 149 tests across the initial suite and added contention contract. Lint, type,
+docs, topology, source, test-quality and UI checks passed. Semantic findings fell from 379 to 375;
+Chisel retains 47 prohibited imports. The [enforcement report](stateless-service-controller-enforcement.md)
+records commands, corrected provenance, remaining dependencies and limitations. The separate
+WorkspaceSyncChanges rule callback remains pending along with browser migrations and other
+inventory work. The overall refactor remains incomplete; the stacked PR stays draft.

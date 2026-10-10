@@ -1,7 +1,10 @@
 import { workspaceWriteRejection } from '$lib/server/repositories/workspace/write-failure';
 import { DomainError, ValidationError } from '$lib/errors';
 import type { ActorContext } from '$lib/models/identity';
-import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import type {
+	WorkspaceResourceIdentity,
+	ResolvedWorkspaceResource
+} from '$lib/models/workspace-sync';
 import {
 	type WorkspaceMutationRequest,
 	type WorkspaceMutationResult,
@@ -22,7 +25,7 @@ export interface WorkspaceMutationGuard {
 	prepare(
 		actor: ActorContext,
 		input: WorkspaceMutationRequest,
-		identity: WorkspaceResourceIdentity
+		resource: ResolvedWorkspaceResource
 	): Promise<WorkspaceMutationPreparation>;
 	complete(
 		actor: ActorContext,
@@ -61,8 +64,9 @@ export class WorkspaceMutationReceipts
 	async prepare(
 		actor: ActorContext,
 		input: WorkspaceMutationRequest,
-		identity: WorkspaceResourceIdentity
+		resource: ResolvedWorkspaceResource
 	): Promise<WorkspaceMutationPreparation> {
+		const { identity } = resource;
 		await this.dependencies.mutationReceipts.lockOperation(actor, input.operationId);
 		const previous = await this.dependencies.mutationReceipts.find(
 			actor,
@@ -94,7 +98,7 @@ export class WorkspaceMutationReceipts
 						: previous
 			};
 		}
-		await this.dependencies.mutationReceipts.lockResource(actor, identity);
+		await this.dependencies.mutationReceipts.lockResource(actor, resource);
 		const current = await this.dependencies.syncObjects.read(actor, identity, null);
 		if (current.kind === 'unchanged')
 			throw new Error('An unconditional resource read returned no body');

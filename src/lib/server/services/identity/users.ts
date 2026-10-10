@@ -5,12 +5,15 @@ export interface UserReader {
 	get(actor: ActorContext): Promise<User>;
 }
 
-export class UserDirectory implements UserReader {
+export interface LocalUserProvisioner {
+	ensureLocal(actor: ActorContext): Promise<void>;
+}
+
+export class UserDirectory implements UserReader, LocalUserProvisioner {
 	constructor(private readonly users: UserRepository) {}
 
-	async initializeLocal(actor: ActorContext): Promise<User> {
-		await this.users.ensureLocal(actor);
-		return this.get(actor);
+	ensureLocal(actor: ActorContext): Promise<void> {
+		return this.users.ensureLocal(actor);
 	}
 
 	async get(actor: ActorContext): Promise<User> {

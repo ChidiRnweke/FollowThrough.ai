@@ -11,7 +11,7 @@ import type {
 export interface AgentPreferencesRepository {
 	get(actor: ActorContext): Promise<AgentPreferences | undefined>;
 	/** Serialize both first creation and subsequent edits within the caller transaction. */
-	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined>;
+	getForWrite(actor: ActorContext, resourceKey: string): Promise<AgentPreferences | undefined>;
 	upsert(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences>;
 }
 

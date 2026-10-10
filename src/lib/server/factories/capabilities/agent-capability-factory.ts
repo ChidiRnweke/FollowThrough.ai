@@ -110,9 +110,7 @@ import {
 import { AgentRunSettingsService, type AgentRunSettings } from '$lib/services/agent/run-settings';
 import { AgentRunStatusService, type AgentRunStatusRules } from '$lib/services/agent/run-status';
 import { AgentToolCatalogService, type AgentToolCatalog } from '$lib/services/agent/tool-catalog';
-import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
 import { OpenRouter } from '@openrouter/sdk';
-const identity = new WorkspaceCommandRulesService();
 
 export interface AgentCapabilityInput {
 	readonly tokens: TokenCounter;
@@ -168,9 +166,7 @@ export interface AgentCapability {
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
 	const conversationRepository = new ConversationRecords(input.db);
 	const conversations = new ConversationArchive(conversationRepository);
-	const preferences = new AgentPreferenceCatalog(
-		new AgentPreferenceRecords(input.db, identity.workspaceResourceKey)
-	);
+	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(input.db));
 	const models =
 		input.modelCatalog ??
 		new CachedAgentModels(

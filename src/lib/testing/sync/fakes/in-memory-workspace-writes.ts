@@ -1,9 +1,10 @@
+import type { ResolvedWorkspaceResource } from '$lib/models/workspace-sync';
 import { syncEtag } from '$lib/models/sync';
 import type { ActorContext } from '$lib/models/identity';
 import type { WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 import type { WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
 import type { SyncObjectReader, SyncReceiptWriter } from '$lib/server/services/workspace/contracts';
-import type { ReceiptLookup } from '$lib/server/repositories/workspace/sync-receipts';
+import type { ReceiptLookup } from '$lib/models/workspace-mutations';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
 
 export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
@@ -13,7 +14,7 @@ export class InMemoryWorkspaceReceipts implements SyncReceiptWriter {
 		{ request: string; outcome: Exclude<ReceiptLookup, { kind: 'missing' | 'reused' }> }
 	>();
 	writeFailure: string | null = null;
-	async lockResource(): Promise<void> {}
+	async lockResource(_actor: ActorContext, _resource: ResolvedWorkspaceResource): Promise<void> {}
 	async lockOperation(): Promise<void> {}
 	async cancel(actor: ActorContext, operationId: string, request: string): Promise<void> {
 		this.receipts.set(JSON.stringify([actor.userId, operationId]), {

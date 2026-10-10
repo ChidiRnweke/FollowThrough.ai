@@ -17,7 +17,7 @@ export interface AgentModelCatalog {
 
 export interface AgentPreferenceEditor extends AgentPreferencesStore {
 	defaults(actor: ActorContext, timestamp: DateTime): AgentPreferences;
-	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined>;
+	getForWrite(actor: ActorContext, resourceKey: string): Promise<AgentPreferences | undefined>;
 	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences>;
 }
 
@@ -36,8 +36,8 @@ export class AgentPreferenceCatalog implements AgentPreferencesStore, AgentPrefe
 	async get(actor: ActorContext): Promise<AgentPreferences> {
 		return (await this.repository.get(actor)) ?? this.defaults(actor, now());
 	}
-	getForWrite(actor: ActorContext): Promise<AgentPreferences | undefined> {
-		return this.repository.getForWrite(actor);
+	getForWrite(actor: ActorContext, resourceKey: string): Promise<AgentPreferences | undefined> {
+		return this.repository.getForWrite(actor, resourceKey);
 	}
 	persist(actor: ActorContext, preferences: AgentPreferences): Promise<AgentPreferences> {
 		if (preferences.userId !== actor.userId)

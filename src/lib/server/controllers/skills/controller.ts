@@ -183,7 +183,10 @@ export class Skills implements SkillsController {
 				async () => {
 					await this.dependencies.skillEditor.lockCatalog(actor);
 					const target = this.workspaceCommandRules.mutationResource(input.command);
-					const prepared = await this.dependencies.syncMutations.prepare(actor, input, target);
+					const prepared = await this.dependencies.syncMutations.prepare(actor, input, {
+						identity: target,
+						key: this.workspaceCommandRules.workspaceResourceKey(target)
+					});
 					if (prepared.kind === 'finished') return prepared.result;
 					await this.applySynchronizedCommand(actor, input);
 					return this.dependencies.syncMutations.complete(actor, input, target);

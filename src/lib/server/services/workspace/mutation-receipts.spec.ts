@@ -1,5 +1,5 @@
 import { WorkspaceCommandRulesService } from '$lib/services/workspace/commands';
-const { mutationResource } = new WorkspaceCommandRulesService();
+const { mutationResource, workspaceResourceKey } = new WorkspaceCommandRulesService();
 import { expect, it } from 'vitest';
 import { WorkspaceMutationReceipts } from './mutation-receipts';
 import { InMemoryNoteContent } from '$lib/testing/notes/fakes/in-memory-content';
@@ -33,7 +33,12 @@ const setup = () => {
 it('returns the observed note when its version matches the requested base', async () => {
 	const { content, service } = setup();
 	content.notes = [noteBuilder()];
-	expect(await service.prepare(testActor(), input, mutationResource(input.command))).toEqual({
+	expect(
+		await service.prepare(testActor(), input, {
+			identity: mutationResource(input.command),
+			key: workspaceResourceKey(mutationResource(input.command))
+		})
+	).toEqual({
 		kind: 'ready',
 		current: {
 			kind: 'found',

@@ -1,3 +1,4 @@
+import type { AppliedWriteProof } from '$lib/models/outbox';
 import { z } from 'zod';
 import { appliedWriteProofSchema } from '$lib/models/outbox';
 import { exportSettingsSchema } from '$lib/models/deliverables';
@@ -321,3 +322,9 @@ export interface WorkspaceCommandContext {
 	readonly records: ReadonlyMap<string, WorkspaceRecord>;
 	readonly inventory: 'complete' | 'partial';
 }
+
+export type ReceiptLookup =
+	| { readonly kind: 'missing' }
+	| { readonly kind: 'reused' }
+	| { readonly kind: 'cancelled' }
+	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof };

@@ -37,7 +37,7 @@ export const createSyncCapability = ({
 		mutationRetry: deferEmbedding ? ('database-only' as const) : ('never' as const),
 		mutations: new WorkspaceMutationReceipts({
 			syncObjects: objects,
-			mutationReceipts: new WorkspaceSyncReceipts(db, identity.workspaceResourceKey)
+			mutationReceipts: new WorkspaceSyncReceipts(db)
 		})
 	};
 };

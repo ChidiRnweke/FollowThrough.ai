@@ -1,23 +1,18 @@
+import type { ReceiptLookup } from '$lib/models/workspace-mutations';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { appliedWriteProofSchema, type AppliedWriteProof } from '$lib/models/outbox';
 import type { ActorContext } from '$lib/models/identity';
-import { type WorkspaceResourceIdentity } from '$lib/models/workspace-sync';
+import { type ResolvedWorkspaceResource } from '$lib/models/workspace-sync';
 import { type WorkspaceWriteReceipt } from '$lib/models/workspace-records';
 import type { Database } from '$lib/server/db';
 import { syncIdentityPredicate, syncRegistrations, syncOwnerSql } from './sync-catalog';
-
-export type ReceiptLookup =
-	| { readonly kind: 'missing' }
-	| { readonly kind: 'reused' }
-	| { readonly kind: 'cancelled' }
-	| { readonly kind: 'proven'; readonly proof: AppliedWriteProof };
 
 export interface SyncReceiptRepository {
 	publishChanges(): Promise<void>;
 	lockOperation(actor: ActorContext, operationId: string): Promise<void>;
 	cancel(actor: ActorContext, operationId: string, request: string): Promise<void>;
-	lockResource(actor: ActorContext, identity: WorkspaceResourceIdentity): Promise<void>;
+	lockResource(actor: ActorContext, resource: ResolvedWorkspaceResource): Promise<void>;
 	find(actor: ActorContext, operationId: string, request: string): Promise<ReceiptLookup>;
 	save(actor: ActorContext, request: string, receipt: WorkspaceWriteReceipt): Promise<void>;
 }
@@ -29,10 +24,7 @@ const requestHash = (request: string) =>
 
 /** Mutation locks and receipt creation participate in the domain transaction. */
 export class WorkspaceSyncReceipts implements SyncReceiptRepository {
-	constructor(
-		private readonly db: Database,
-		private readonly resourceKey: (identity: WorkspaceResourceIdentity) => string
-	) {}
+	constructor(private readonly db: Database) {}
 	async publishChanges(): Promise<void> {
 		// Domain writes are finished. Publish now so deletion receipts can read their
 		// authoritative tombstone, while retaining the domain-row-before-head lock order.
@@ -50,9 +42,10 @@ export class WorkspaceSyncReceipts implements SyncReceiptRepository {
 			values (${actor.userId}, ${operationId}, ${requestHash(request)}, 'cancelled', null)`);
 	}
 
-	async lockResource(actor: ActorContext, identity: WorkspaceResourceIdentity): Promise<void> {
+	async lockResource(actor: ActorContext, resource: ResolvedWorkspaceResource): Promise<void> {
+		const { identity } = resource;
 		await this.db.execute(
-			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'resource:' + this.resourceKey(identity)}))`
+			sql`select pg_advisory_xact_lock(hashtext(${actor.userId}), hashtext(${'resource:' + resource.key}))`
 		);
 		const registration = syncRegistrations.find((item) => item.type === identity.type);
 		if (!registration) throw new Error(`No synchronization registration for ${identity.type}`);
