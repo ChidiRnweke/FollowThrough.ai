@@ -7,7 +7,8 @@ import type { Tool } from '@openai/agents';
 import { projectFileResult } from './tool-result-projectors';
 import { createSdkTool } from './sdk-tool-factory';
 import { bindToolArguments } from '$lib/server/adapters/agent/tool-call';
-import { ToolLifecycleError } from '$lib/errors';
+import { createToolReviews } from './tool-review-factory';
+import type { AgentToolReviewControl } from '$lib/server/controllers/agent/tool-reviews';
 import type { PreparedAction, ToolPreparation } from '$lib/server/controllers/agent/tool-calls';
 import { z } from 'zod';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
@@ -71,27 +72,8 @@ import type { AgentToolExecutor } from '$lib/server/services/agent/runs/contract
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ToolRetriever } from '$lib/server/controllers/tool-discovery/controller';
 
-import {
-	noteChangeRequestSchema,
-	noteChangeReviewSchema,
-	type NoteChangeReview,
-	type NoteChangeRequest,
-	type NoteChangeTarget
-} from '$lib/models/notes';
 import { webSearchEngines } from '$lib/models/agent';
-import { toolFailure } from '$lib/models/agent/tool-failure';
 import {
-	projectMemory,
-	projectNoteRevision,
-	projectNoteSummary,
-	projectNoteView,
-	projectNoteWrite,
-	projectProject,
-	projectSkillView,
-	projectSuggestion,
-	projectTodo,
-	projectTodoWrite,
-	projectUser,
 	type MemoryProjection,
 	type NoteRevisionProjection,
 	type NoteViewProjection,
@@ -101,8 +83,10 @@ import {
 	type SuggestionProjection,
 	type TodoProjection,
 	type TodoWriteProjection,
-	type UserProjection
+	type UserProjection,
+	AgentToolPresentationService
 } from '../../services/agent/runs/tool-views';
+const toolPresentation = new AgentToolPresentationService();
 import type { ToolFailure } from '$lib/models/agent/tool-failure';
 import { FIRST_CLASS_TOOL_NAMES, type ToolName } from '$lib/models/agent/tool-catalog';
 import { toolDescription } from '$lib/services/agent/tool-catalog';
@@ -1117,46 +1101,6 @@ const jsonArgument = <T>(text: string, schema: z.ZodType<T>, name: string): T =>
 	}
 };
 
-const isReviewedNoteTool = (name: string): boolean =>
-	name === 'save_note' || name === 'edit_note' || name === 'save_skill' || name === 'edit_skill';
-
-const prepareNoteReview = async (
-	factory: ControllerFactory,
-	actor: ActorContext,
-	input: NoteChangeRequest,
-	target: NoteChangeTarget
-): Promise<NoteChangeReview> => factory.notes().prepareChange(actor, input, target);
-
-const applyNoteReview = async (
-	factory: ControllerFactory,
-	actor: ActorContext,
-	review: NoteChangeReview,
-	target: NoteChangeTarget
-) => {
-	if (review.kind === 'failure')
-		return toolFailure(
-			'NOTE_REVIEW_FAILED',
-			'No changes were applied.',
-			'Correct the problems below and submit a new tool call.',
-			{ problems: [...review.problems] }
-		);
-	const result = await factory.notes().applyReviewedChange(actor, review.change, target);
-	if (result.kind === 'failure')
-		return toolFailure(
-			result.code,
-			result.message,
-			'Read the note and submit a new tool call for review.'
-		);
-	const projection = projectNoteWrite(result.note);
-	return review.change.operation.kind === 'patch'
-		? {
-				...projection,
-				appliedEdits: review.change.operation.appliedEdits,
-				matchedTexts: review.change.operation.matchedTexts
-			}
-		: projection;
-};
-
 export class AgentTools {
 	private readonly controllers: ControllerFactory;
 	private readonly actor: ActorContext;
@@ -1165,7 +1109,7 @@ export class AgentTools {
 	private readonly toolExecutor: AgentToolExecutor;
 	private readonly toolRetriever: ToolRetriever;
 	private readonly toolAccess: ToolAccessPolicy;
-	private readonly noteReviews = new Map<string, NoteChangeReview>();
+	private readonly reviews: AgentToolReviewControl;
 
 	constructor(
 		private readonly tokens: TokenCounter,
@@ -1186,42 +1130,13 @@ export class AgentTools {
 		this.toolExecutor = toolExecutor;
 		this.toolRetriever = toolRetriever;
 		this.toolAccess = toolAccess;
-		for (const pending of pendingDecisions) {
-			if (!isReviewedNoteTool(pending.toolName)) continue;
-			if (!pending.review)
-				throw new ToolLifecycleError('A saved note approval is missing its prepared review');
-			const review = noteChangeReviewSchema.parse(JSON.parse(pending.review.content));
-			this.noteReviews.set(pending.callId, review);
-		}
+		this.reviews = createToolReviews(() => controllers.notes(), actor);
+		this.reviews.restore(pendingDecisions);
 	}
 
 	/** Carry the exact preparation used by the approval gate into the durable checkpoint. */
 	reviewDecision(pending: PendingAgentDecision): PendingAgentDecision {
-		if (!isReviewedNoteTool(pending.toolName)) return pending;
-		const review = this.noteReviews.get(pending.callId);
-		if (!review) throw new Error('A note approval has no prepared review');
-		return { ...pending, review: { kind: 'note_change', content: JSON.stringify(review) } };
-	}
-
-	private async prepareNoteCall(
-		name: string,
-		args: AgentPayloadObject,
-		callId: string
-	): Promise<NoteChangeReview> {
-		const prepared = this.noteReviews.get(callId);
-		if (prepared) return prepared;
-		const request = noteChangeRequestSchema.parse({
-			...args,
-			kind: name === 'save_note' || name === 'save_skill' ? 'replace' : 'patch'
-		});
-		const review = await prepareNoteReview(
-			this.controllers,
-			this.actor,
-			request,
-			name.endsWith('_skill') ? 'skill' : 'authored'
-		);
-		this.noteReviews.set(callId, review);
-		return review;
+		return this.reviews.checkpoint(pending);
 	}
 
 	tools(
@@ -1389,50 +1304,15 @@ export class AgentTools {
 			parameters: definition.parameters,
 			signal: this.signal,
 			...options,
-			prepare: async (input, callId, phase): Promise<ToolPreparation> => {
-				const action = definition.prepare(input);
-				let prepared = action;
-				if (isReviewedNoteTool(definition.name)) {
-					if (!callId) throw new ToolLifecycleError('A note change requires a tool call identity');
-					const saved = this.noteReviews.get(callId);
-					if (!saved && phase === 'execute' && this.mode === 'approval_required')
-						throw new ToolLifecycleError('A resumed note approval is missing its prepared review');
-					const review =
-						saved ?? (await this.prepareNoteCall(definition.name, action.arguments, callId));
-					if (review.kind === 'failure')
-						return {
-							kind: 'failure',
-							failure: toolFailure(
-								'NOTE_REVIEW_FAILED',
-								'No changes were applied.',
-								'Correct the problems below and submit a new tool call.',
-								{ problems: [...review.problems] }
-							)
-						};
-					prepared = {
-						arguments: action.arguments,
-						execute: async () => {
-							const result = agentPayloadResultSchema.parse(
-								await applyNoteReview(
-									this.controllers,
-									this.actor,
-									review,
-									definition.name.endsWith('_skill') ? 'skill' : 'authored'
-								)
-							);
-							if (result.kind === 'corrupt') throw new Error(result.message);
-							return result.value;
-						}
-					};
-				}
-				return {
-					kind:
-						definition.classification === 'mutation' && this.mode === 'approval_required'
-							? 'approval_required'
-							: 'ready',
-					action: prepared
-				};
-			},
+			prepare: (input, callId, phase): Promise<ToolPreparation> =>
+				this.reviews.prepare(
+					definition.name,
+					definition.classification,
+					this.mode,
+					definition.prepare(input),
+					callId,
+					phase
+				),
 			execute: (action, callId, run) =>
 				this.toolExecutor.execute(
 					{
@@ -1463,6 +1343,7 @@ const sharedToolDefinitions = (
 	provenanceId: ProvenanceId,
 	tokens: TokenCounter
 ) => {
+	const reviews = createToolReviews(() => factory.notes(), actor);
 	const define = defineTool;
 	const retrieval = () => ({
 		ls: define(
@@ -1552,10 +1433,10 @@ const sharedToolDefinitions = (
 			async () => {
 				const shell = await factory.workspace().getShellContext(actor);
 				return {
-					user: projectUser(shell.user),
-					projects: shell.projects.map(projectProject),
+					user: toolPresentation.projectUser(shell.user),
+					projects: shell.projects.map((value) => toolPresentation.projectProject(value)),
 					// Structure only — the agent calls get_note for content.
-					noteTree: shell.noteTree.map(projectNoteSummary),
+					noteTree: shell.noteTree.map((value) => toolPresentation.projectNoteSummary(value)),
 					skills: shell.skills,
 					pendingSuggestionCount: shell.pendingSuggestionCount
 				};
@@ -1576,7 +1457,9 @@ const sharedToolDefinitions = (
 			'read',
 			temporal({}),
 			async () => ({
-				projects: (await factory.projects().list(actor)).projects.map(projectProject)
+				projects: (await factory.projects().list(actor)).projects.map((value) =>
+					toolPresentation.projectProject(value)
+				)
 			})
 		),
 		get_project: define(
@@ -1591,21 +1474,24 @@ const sharedToolDefinitions = (
 			toolDescription('create_project'),
 			'mutation',
 			z.object({ name: z.string().min(1), description: z.string().optional() }),
-			async (input) => projectProject((await factory.projects().create(actor, input)).project)
+			async (input) =>
+				toolPresentation.projectProject((await factory.projects().create(actor, input)).project)
 		),
 		rename_project: define(
 			'rename_project',
 			toolDescription('rename_project'),
 			'mutation',
 			z.object({ projectId: projectId, name: z.string().min(1) }),
-			async (input) => projectProject((await factory.projects().rename(actor, input)).project)
+			async (input) =>
+				toolPresentation.projectProject((await factory.projects().rename(actor, input)).project)
 		),
 		archive_project: define(
 			'archive_project',
 			toolDescription('archive_project'),
 			'mutation',
 			z.object({ projectId: projectId }),
-			async (input) => projectProject((await factory.projects().archive(actor, input)).project)
+			async (input) =>
+				toolPresentation.projectProject((await factory.projects().archive(actor, input)).project)
 		),
 		create_folder: define(
 			'create_folder',
@@ -1615,7 +1501,9 @@ const sharedToolDefinitions = (
 			// A folder is a note, so it takes the note write projection rather than shipping a
 			// (necessarily empty) ProseMirror document with it.
 			async (input) =>
-				projectNoteWrite((await factory.projects().createFolder(actor, input)).folder)
+				toolPresentation.projectNoteWrite(
+					(await factory.projects().createFolder(actor, input)).folder
+				)
 		),
 		move_project_entry: define(
 			'move_project_entry',
@@ -1640,7 +1528,10 @@ const sharedToolDefinitions = (
 				const view = await factory.notes().get(actor, { noteId: input.noteId as NoteId });
 				const path = `/projects/${view.note.projectId}/notes/${view.note.id}.md`;
 				const markdown = noteMarkdown.write(view.note.document);
-				return projectNoteView(view, agentFileOf(tokens, path, 'text/markdown', markdown).metadata);
+				return toolPresentation.projectNoteView(
+					view,
+					agentFileOf(tokens, path, 'text/markdown', markdown).metadata
+				);
 			}
 		),
 		create_note: define(
@@ -1671,7 +1562,7 @@ const sharedToolDefinitions = (
 				const created = await factory
 					.notes()
 					.create(actor, { ...input, projectId: chosenProjectId });
-				return projectNoteWrite(created.note);
+				return toolPresentation.projectNoteWrite(created.note);
 			}
 		),
 		save_note: define(
@@ -1683,19 +1574,12 @@ const sharedToolDefinitions = (
 				markdown: z.string()
 			}),
 			async (input) =>
-				applyNoteReview(
-					factory,
-					actor,
-					await prepareNoteReview(
-						factory,
-						actor,
-						{
-							kind: 'replace',
-							noteId: input.noteId as NoteId,
-							markdown: input.markdown
-						},
-						'authored'
-					),
+				reviews.change(
+					{
+						kind: 'replace',
+						noteId: input.noteId as NoteId,
+						markdown: input.markdown
+					},
 					'authored'
 				)
 		),
@@ -1705,19 +1589,12 @@ const sharedToolDefinitions = (
 			'mutation',
 			noteEdits,
 			async (input) =>
-				applyNoteReview(
-					factory,
-					actor,
-					await prepareNoteReview(
-						factory,
-						actor,
-						{
-							kind: 'patch',
-							noteId: input.noteId as NoteId,
-							edits: input.edits
-						},
-						'authored'
-					),
+				reviews.change(
+					{
+						kind: 'patch',
+						noteId: input.noteId as NoteId,
+						edits: input.edits
+					},
 					'authored'
 				)
 		),
@@ -1726,21 +1603,24 @@ const sharedToolDefinitions = (
 			toolDescription('rename_note'),
 			'mutation',
 			z.object({ noteId: noteId, title: z.string().min(1) }),
-			async (input) => projectNoteWrite((await factory.notes().rename(actor, input)).note)
+			async (input) =>
+				toolPresentation.projectNoteWrite((await factory.notes().rename(actor, input)).note)
 		),
 		archive_note: define(
 			'archive_note',
 			toolDescription('archive_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
-			async (input) => projectNoteWrite((await factory.notes().archive(actor, input)).note)
+			async (input) =>
+				toolPresentation.projectNoteWrite((await factory.notes().archive(actor, input)).note)
 		),
 		restore_note: define(
 			'restore_note',
 			toolDescription('restore_note'),
 			'mutation',
 			z.object({ noteId: noteId }),
-			async (input) => projectNoteWrite((await factory.notes().restore(actor, input)).note)
+			async (input) =>
+				toolPresentation.projectNoteWrite((await factory.notes().restore(actor, input)).note)
 		),
 		list_trashed_notes: define(
 			'list_trashed_notes',
@@ -1790,7 +1670,7 @@ const sharedToolDefinitions = (
 				// The etag survives the projection: publish_note takes it as an argument, and
 				// restoring a version is the step most likely to be followed by publishing it.
 				const restored = await factory.notes().restoreRevision(actor, input);
-				return { ...projectNoteWrite(restored.note), etag: restored.etag };
+				return { ...toolPresentation.projectNoteWrite(restored.note), etag: restored.etag };
 			}
 		),
 		publish_note: define(
@@ -1800,7 +1680,7 @@ const sharedToolDefinitions = (
 			z.object({ noteId: noteId, baseEtag: noteEtag }),
 			async (input) => {
 				const published = await factory.notes().publish(actor, input);
-				return { ...projectNoteWrite(published.note), etag: published.etag };
+				return { ...toolPresentation.projectNoteWrite(published.note), etag: published.etag };
 			}
 		),
 		discard_note_draft: define(
@@ -1825,7 +1705,7 @@ const sharedToolDefinitions = (
 			}),
 			async (input) => ({
 				todos: (await factory.todos().list(actor, input)).todos.map((view) =>
-					projectTodo(view.todo)
+					toolPresentation.projectTodo(view.todo)
 				)
 			})
 		),
@@ -1841,7 +1721,8 @@ const sharedToolDefinitions = (
 				waitingOn: z.string().optional(),
 				dueDate: localDate.optional()
 			}),
-			async (input) => projectTodoWrite((await factory.todos().create(actor, input)).todo)
+			async (input) =>
+				toolPresentation.projectTodoWrite((await factory.todos().create(actor, input)).todo)
 		),
 		create_todos: define(
 			'create_todos',
@@ -1849,7 +1730,9 @@ const sharedToolDefinitions = (
 			'mutation',
 			createTodoBatchSchema,
 			async (input) => ({
-				todos: (await factory.todos().createBatch(actor, input)).todos.map(projectTodoWrite)
+				todos: (await factory.todos().createBatch(actor, input)).todos.map((value) =>
+					toolPresentation.projectTodoWrite(value)
+				)
 			})
 		),
 		update_todo: define(
@@ -1867,7 +1750,8 @@ const sharedToolDefinitions = (
 				status: z.enum(['backlog', 'open', 'in_progress', 'done', 'cancelled']).optional()
 			}),
 			// The controller also returns the whole `TodoView`, which the model never reads.
-			async (input) => projectTodoWrite((await factory.todos().update(actor, input)).todo)
+			async (input) =>
+				toolPresentation.projectTodoWrite((await factory.todos().update(actor, input)).todo)
 		)
 	});
 	const diagrams = () => ({
@@ -1917,7 +1801,7 @@ const sharedToolDefinitions = (
 			temporal({ status: z.enum(['proposed', 'accepted', 'rejected', 'expired', 'reverted']) }),
 			async (input) => ({
 				suggestions: (await factory.suggestions().list(actor, input)).groups.flatMap((group) =>
-					group.suggestions.map((view) => projectSuggestion(view.suggestion))
+					group.suggestions.map((view) => toolPresentation.projectSuggestion(view.suggestion))
 				)
 			})
 		),
@@ -1958,19 +1842,12 @@ const sharedToolDefinitions = (
 			'mutation',
 			z.object({ noteId, markdown: z.string() }),
 			async (input) =>
-				applyNoteReview(
-					factory,
-					actor,
-					await prepareNoteReview(
-						factory,
-						actor,
-						{
-							kind: 'replace',
-							noteId: input.noteId as NoteId,
-							markdown: input.markdown
-						},
-						'skill'
-					),
+				reviews.change(
+					{
+						kind: 'replace',
+						noteId: input.noteId as NoteId,
+						markdown: input.markdown
+					},
 					'skill'
 				)
 		),
@@ -1980,19 +1857,12 @@ const sharedToolDefinitions = (
 			'mutation',
 			noteEdits,
 			async (input) =>
-				applyNoteReview(
-					factory,
-					actor,
-					await prepareNoteReview(
-						factory,
-						actor,
-						{
-							kind: 'patch',
-							noteId: input.noteId as NoteId,
-							edits: input.edits
-						},
-						'skill'
-					),
+				reviews.change(
+					{
+						kind: 'patch',
+						noteId: input.noteId as NoteId,
+						edits: input.edits
+					},
 					'skill'
 				)
 		),
@@ -2024,7 +1894,7 @@ const sharedToolDefinitions = (
 			temporal({ noteId: noteId }),
 			async (input) => {
 				const revisions = await factory.skills().listVersions(actor, input);
-				return { revisions: revisions.map(projectNoteRevision) };
+				return { revisions: revisions.map((value) => toolPresentation.projectNoteRevision(value)) };
 			}
 		),
 		restore_skill_version: define(
@@ -2096,7 +1966,7 @@ const sharedToolDefinitions = (
 						projectId: input.projectId as ProjectId,
 						sharedOnly: true
 					})
-				).entries.map(projectMemory)
+				).entries.map((value) => toolPresentation.projectMemory(value))
 			})
 		),
 		list_user_memory: define(
@@ -2106,7 +1976,7 @@ const sharedToolDefinitions = (
 			temporal({}),
 			async () => {
 				const entries = (await factory.memory().list(actor, { sharedOnly: true })).entries.map(
-					projectMemory
+					(value) => toolPresentation.projectMemory(value)
 				);
 				return { entries };
 			}
@@ -2571,7 +2441,10 @@ const appToolDefinitions = (
 					contextNoteId: input.noteId,
 					provenanceId: context.provenanceId
 				});
-				return projectSkillView(view, noteMarkdown.write(view.skill.note.document));
+				return toolPresentation.projectSkillView(
+					view,
+					noteMarkdown.write(view.skill.note.document)
+				);
 			}
 		),
 		create_diagram: defineTool(
@@ -2646,7 +2519,7 @@ const mcpOnlyDefinitions = (
 				noteId: fields.noteId as NoteId,
 				provenanceId: context.provenanceId
 			});
-			return projectSkillView(view, noteMarkdown.write(view.skill.note.document));
+			return toolPresentation.projectSkillView(view, noteMarkdown.write(view.skill.note.document));
 		}
 	)
 });

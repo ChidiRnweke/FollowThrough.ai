@@ -38,25 +38,11 @@ export interface MemoryProjection {
 	readonly createdAt: string;
 }
 
-export const projectMemory = (entry: MemoryEntry): MemoryProjection => ({
-	id: entry.id,
-	content: entry.content,
-	// Only meaningful when listing across scopes; user-scope entries omit it.
-	...(entry.projectId ? { projectId: entry.projectId } : {}),
-	createdAt: entry.createdAt
-});
-
 export interface ProjectProjection {
 	readonly id: string;
 	readonly name: string;
 	readonly createdAt: string;
 }
-
-export const projectProject = (project: Project): ProjectProjection => ({
-	id: project.id,
-	name: project.name,
-	createdAt: project.createdAt
-});
 
 export interface NoteSummaryProjection {
 	readonly id: string;
@@ -69,32 +55,10 @@ export interface NoteSummaryProjection {
 }
 
 /**
- * Structure only. The tree is for navigation — the agent picks an id and calls
- * `get_note` for content.
- *
- * Worth stating plainly: the declared type here is already `NoteSummary`, a
- * `Pick<Note, …>` that excludes `document` and `plainText`. The repository still
- * returns whole rows, and TypeScript only narrows the static type — it does not
- * strip fields at runtime, and `JSON.stringify` serialises whatever is actually
- * there. So every note body was being shipped twice on every call despite a type
- * that said otherwise. Constructing the object explicitly is what makes the
- * declared shape true on the wire.
- */
-export const projectNoteSummary = (note: NoteSummary): NoteSummaryProjection => ({
-	id: note.id,
-	title: note.title,
-	kind: note.kind,
-	projectId: note.projectId,
-	...(note.parentId ? { parentId: note.parentId } : {}),
-	...(note.isPinned ? { isPinned: true as const } : {}),
-	createdAt: note.createdAt
-});
-
-/**
  * What a note write leaves behind: the id it can be reached by, and the facts
  * that changed. Nothing else.
  *
- * The same argument as {@link projectNoteSummary}, applied to the write path,
+ * The same argument as {@link AgentToolPresentation.projectNoteSummary}, applied to the write path,
  * which never got it. `create_note` and friends returned `{ note: Note }`
  * straight from the controller, so every mutation shipped the whole
  * ProseMirror `document` and its `plainText` twin — and the replay virtualizer
@@ -116,26 +80,12 @@ export interface NoteWriteProjection {
 	readonly currentRevision: number;
 }
 
-export const projectNoteWrite = (
-	note: Pick<Note, 'id' | 'title' | 'currentRevision'>
-): NoteWriteProjection => ({
-	noteId: note.id,
-	title: note.title,
-	currentRevision: note.currentRevision
-});
-
 /** The same, for a todo write. `todoId` for the same reason `noteId` is. */
 export interface TodoWriteProjection {
 	readonly todoId: string;
 	readonly title: string;
 	readonly status: string;
 }
-
-export const projectTodoWrite = (todo: Todo): TodoWriteProjection => ({
-	todoId: todo.id,
-	title: todo.title,
-	status: todo.status
-});
 
 /**
  * A revision in a history listing. `revisionId` is kept because
@@ -151,14 +101,6 @@ export interface NoteRevisionProjection {
 	readonly createdAt: string;
 }
 
-export const projectNoteRevision = (revision: NoteRevision): NoteRevisionProjection => ({
-	revisionId: revision.id,
-	noteId: revision.noteId,
-	revision: revision.revision,
-	title: revision.title,
-	createdAt: revision.createdAt
-});
-
 export interface TodoProjection {
 	readonly id: string;
 	readonly title: string;
@@ -172,32 +114,10 @@ export interface TodoProjection {
 	readonly createdAt: string;
 }
 
-export const projectTodo = (todo: Todo): TodoProjection => ({
-	id: todo.id,
-	title: todo.title,
-	status: todo.status,
-	// Whether this is the user's own commitment or one they are waiting on is
-	// exactly the distinction the agent is asked about; it stays.
-	responsibility: todo.responsibility,
-	...(todo.description ? { description: todo.description } : {}),
-	...(todo.waitingOn ? { waitingOn: todo.waitingOn } : {}),
-	// A due date is something the agent reasons about; audit stamps are not.
-	...(todo.dueDate ? { dueDate: todo.dueDate } : {}),
-	projectId: todo.projectId,
-	...(todo.linkedNoteId ? { linkedNoteId: todo.linkedNoteId } : {}),
-	createdAt: todo.createdAt
-});
-
 export interface UserProjection {
 	readonly displayName: string;
 	readonly email: string;
 }
-
-/** The agent never addresses the user by id, only refers to them. */
-export const projectUser = (user: User): UserProjection => ({
-	displayName: user.displayName,
-	email: user.email
-});
 
 export interface SuggestionProjection {
 	readonly noteId?: string;
@@ -214,16 +134,6 @@ export interface SuggestionProjection {
 	readonly createdAt: string;
 }
 
-export const projectSuggestion = (suggestion: Suggestion): SuggestionProjection => ({
-	...(suggestion.noteId ? { noteId: suggestion.noteId } : {}),
-	id: suggestion.id,
-	kind: suggestion.kind,
-	status: suggestion.status,
-	...(suggestion.confidence === undefined ? {} : { confidence: suggestion.confidence }),
-	payload: suggestion.payload,
-	createdAt: suggestion.createdAt
-});
-
 export interface NoteViewProjection {
 	readonly noteId: string;
 	readonly title: string;
@@ -238,28 +148,6 @@ export interface NoteViewProjection {
 	pendingSuggestions: ResolvedNoteView['pendingSuggestions'];
 }
 
-/**
- * The agent's read surface for a note. Its body points at the same Markdown the
- * write tools anchor against; the ProseMirror `document` and the redundant
- * `plainText` are storage formats the model never uses, so they stay off the
- * wire. Constructed explicitly (see {@link projectNoteSummary}) so the
- * declared shape is true on the wire.
- */
-export const projectNoteView = (
-	view: ResolvedNoteView,
-	file: AgentFileMetadata
-): NoteViewProjection => ({
-	noteId: view.note.id,
-	title: view.note.title,
-	body: { kind: 'file', file },
-	etag: view.etag,
-	backlinks: view.backlinks,
-	references: view.references,
-	diagrams: view.diagrams,
-	todos: view.todos,
-	pendingSuggestions: view.pendingSuggestions
-});
-
 export interface SkillViewProjection {
 	readonly noteId: string;
 	readonly name: string;
@@ -269,21 +157,156 @@ export interface SkillViewProjection {
 	readonly instructions: string;
 }
 
-/**
- * The agent's read surface for a skill. The body is Markdown, matching the
- * write tools' anchor text; `isEnabled` already filtered the finder, so it is
- * never returned. The underlying `note` (ProseMirror `document`, revisions)
- * and `usages` telemetry stay off the wire.
- */
-export const projectSkillView = (
-	view: SkillView<Note>,
-	instructions: string
-): SkillViewProjection => ({
-	noteId: view.skill.note.id,
-	name: view.skill.note.title,
-	description: view.skill.description,
-	triggerHints: view.skill.triggerHints,
-	instructions
-});
-
 type ResolvedNoteView = NoteView<BacklinkView, ReferenceView, Diagram, TodoView, SuggestionView>;
+
+export interface AgentToolPresentation {
+	projectMemory(entry: MemoryEntry): MemoryProjection;
+	projectProject(project: Project): ProjectProjection;
+	projectNoteSummary(note: NoteSummary): NoteSummaryProjection;
+	projectNoteWrite(note: Pick<Note, 'id' | 'title' | 'currentRevision'>): NoteWriteProjection;
+	projectTodoWrite(todo: Todo): TodoWriteProjection;
+	projectNoteRevision(revision: NoteRevision): NoteRevisionProjection;
+	projectTodo(todo: Todo): TodoProjection;
+	projectUser(user: User): UserProjection;
+	projectSuggestion(suggestion: Suggestion): SuggestionProjection;
+	projectNoteView(view: ResolvedNoteView, file: AgentFileMetadata): NoteViewProjection;
+	projectSkillView(view: SkillView<Note>, instructions: string): SkillViewProjection;
+}
+export class AgentToolPresentationService implements AgentToolPresentation {
+	projectMemory(entry: MemoryEntry): MemoryProjection {
+		return {
+			id: entry.id,
+			content: entry.content,
+			// Only meaningful when listing across scopes; user-scope entries omit it.
+			...(entry.projectId ? { projectId: entry.projectId } : {}),
+			createdAt: entry.createdAt
+		};
+	}
+	projectProject(project: Project): ProjectProjection {
+		return {
+			id: project.id,
+			name: project.name,
+			createdAt: project.createdAt
+		};
+	}
+	/**
+	 * Structure only. The tree is for navigation — the agent picks an id and calls
+	 * `get_note` for content.
+	 *
+	 * Worth stating plainly: the declared type here is already `NoteSummary`, a
+	 * `Pick<Note, …>` that excludes `document` and `plainText`. The repository still
+	 * returns whole rows, and TypeScript only narrows the static type — it does not
+	 * strip fields at runtime, and `JSON.stringify` serialises whatever is actually
+	 * there. So every note body was being shipped twice on every call despite a type
+	 * that said otherwise. Constructing the object explicitly is what makes the
+	 * declared shape true on the wire.
+	 */
+
+	projectNoteSummary(note: NoteSummary): NoteSummaryProjection {
+		return {
+			id: note.id,
+			title: note.title,
+			kind: note.kind,
+			projectId: note.projectId,
+			...(note.parentId ? { parentId: note.parentId } : {}),
+			...(note.isPinned ? { isPinned: true as const } : {}),
+			createdAt: note.createdAt
+		};
+	}
+	projectNoteWrite(note: Pick<Note, 'id' | 'title' | 'currentRevision'>): NoteWriteProjection {
+		return {
+			noteId: note.id,
+			title: note.title,
+			currentRevision: note.currentRevision
+		};
+	}
+	projectTodoWrite(todo: Todo): TodoWriteProjection {
+		return {
+			todoId: todo.id,
+			title: todo.title,
+			status: todo.status
+		};
+	}
+	projectNoteRevision(revision: NoteRevision): NoteRevisionProjection {
+		return {
+			revisionId: revision.id,
+			noteId: revision.noteId,
+			revision: revision.revision,
+			title: revision.title,
+			createdAt: revision.createdAt
+		};
+	}
+	projectTodo(todo: Todo): TodoProjection {
+		return {
+			id: todo.id,
+			title: todo.title,
+			status: todo.status,
+			// Whether this is the user's own commitment or one they are waiting on is
+			// exactly the distinction the agent is asked about; it stays.
+			responsibility: todo.responsibility,
+			...(todo.description ? { description: todo.description } : {}),
+			...(todo.waitingOn ? { waitingOn: todo.waitingOn } : {}),
+			// A due date is something the agent reasons about; audit stamps are not.
+			...(todo.dueDate ? { dueDate: todo.dueDate } : {}),
+			projectId: todo.projectId,
+			...(todo.linkedNoteId ? { linkedNoteId: todo.linkedNoteId } : {}),
+			createdAt: todo.createdAt
+		};
+	}
+	/** The agent never addresses the user by id, only refers to them. */
+
+	projectUser(user: User): UserProjection {
+		return {
+			displayName: user.displayName,
+			email: user.email
+		};
+	}
+	projectSuggestion(suggestion: Suggestion): SuggestionProjection {
+		return {
+			...(suggestion.noteId ? { noteId: suggestion.noteId } : {}),
+			id: suggestion.id,
+			kind: suggestion.kind,
+			status: suggestion.status,
+			...(suggestion.confidence === undefined ? {} : { confidence: suggestion.confidence }),
+			payload: suggestion.payload,
+			createdAt: suggestion.createdAt
+		};
+	}
+	/**
+	 * The agent's read surface for a note. Its body points at the same Markdown the
+	 * write tools anchor against; the ProseMirror `document` and the redundant
+	 * `plainText` are storage formats the model never uses, so they stay off the
+	 * wire. Constructed explicitly (see {@link AgentToolPresentation.projectNoteSummary}) so the
+	 * declared shape is true on the wire.
+	 */
+
+	projectNoteView(view: ResolvedNoteView, file: AgentFileMetadata): NoteViewProjection {
+		return {
+			noteId: view.note.id,
+			title: view.note.title,
+			body: { kind: 'file', file },
+			etag: view.etag,
+			backlinks: view.backlinks,
+			references: view.references,
+			diagrams: view.diagrams,
+			todos: view.todos,
+			pendingSuggestions: view.pendingSuggestions
+		};
+	}
+	/**
+	 * The agent's read surface for a skill. The body is Markdown, matching the
+	 * write tools' anchor text; `isEnabled` already filtered the finder, so it is
+	 * never returned. The underlying `note` (ProseMirror `document`, revisions)
+	 * and `usages` telemetry stay off the wire.
+	 */
+
+	projectSkillView(view: SkillView<Note>, instructions: string): SkillViewProjection {
+		return {
+			noteId: view.skill.note.id,
+			name: view.skill.note.title,
+			description: view.skill.description,
+			triggerHints: view.skill.triggerHints,
+			instructions
+		};
+	}
+}

@@ -1156,3 +1156,20 @@ Every service module below has a planned disposition. This is routing, not compl
   preparation/replay/isolation cases. Source-audit fixtures pass: 109 tests. Isolated agent contracts
   pass: 10 files / 58 tests. Architecture still reports 51 prohibited imports; topology, source and
   test-quality checks pass. Tool registry/review/discovery workflows and final verification remain.
+
+## Reviewed tool operations and result presentation — 2026-10-10
+
+- AgentToolReviews owns restored review checkpoints, preparation, approval gating and conditional
+  application for note and skill bodies. AgentToolReviewStore retains exact preparations for one
+  execution. Its boundary reader validates saved reviews and tool requests. MCP body changes call
+  the same complete change operation. Registry startup still invokes restoration from the old
+  factory facade and remains pending with the larger registry migration.
+- AgentToolPresentationService implements the explicit agent result contract. Its projections retain
+  existing fields, receipts and body-file references; exported projection functions are removed.
+  Replaced incomplete cast fixtures in its tests with valid domain builders.
+- Type checking and lint pass. Focused tests pass: 50 files / 508 tests. Full unit verification
+  passes: 557 files / 4,368 tests / one existing skip. Isolated agent and reviewed-note contracts
+  pass: 11 files / 66 tests. Initial extraction missed callback references and used an overly broad
+  output type; both were corrected before these passing checks. Architecture remains at 51
+  prohibited imports; topology, source and test-quality pass. Final application verification and
+  remaining factory/browser/enforcement work remain incomplete.

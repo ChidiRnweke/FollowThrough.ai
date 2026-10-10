@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { projectNoteWrite, projectTodoWrite } from './tool-views';
+import { noteBuilder, todoBuilder } from '$lib/testing/workspace/fixtures/domain-builders';
+import { AgentToolPresentationService } from './tool-views';
+const toolPresentation = new AgentToolPresentationService();
 
 /**
  * The write path never got the treatment the read path did.
@@ -15,26 +17,23 @@ import { projectNoteWrite, projectTodoWrite } from './tool-views';
  * unreachable from the moment it said it had made it.
  */
 describe('A write says what it made, and nothing else', () => {
-	const note = {
-		id: 'note-1',
+	const note = noteBuilder({
 		title: 'Solution design',
-		projectId: 'project-1',
 		currentRevision: 4,
-		document: { type: 'doc', content: [] },
 		plainText: 'a very long body'
-	} as never;
+	});
 
 	it('returns only the note receipt needed by the transcript', () => {
-		const view = projectNoteWrite(note);
+		const view = toolPresentation.projectNoteWrite(note);
 		expect({
 			noteId: view.noteId,
 			document: 'document' in view,
 			plainText: 'plainText' in view
-		}).toEqual({ noteId: 'note-1', document: false, plainText: false });
+		}).toEqual({ noteId: note.id, document: false, plainText: false });
 	});
 
 	it('does the same for a todo', () => {
-		const todo = { id: 'todo-1', title: 'Renew certificates', status: 'open' } as never;
-		expect(projectTodoWrite(todo).todoId).toBe('todo-1');
+		const todo = todoBuilder({ title: 'Renew certificates', status: 'open' });
+		expect(toolPresentation.projectTodoWrite(todo).todoId).toBe(todo.id);
 	});
 });
