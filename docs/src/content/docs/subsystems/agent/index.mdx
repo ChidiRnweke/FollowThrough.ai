@@ -151,7 +151,7 @@ invariant-to-test map is in `docs/architecture/tool-recovery-invariants.md`.
 
 Telemetry is opt-in. `scripts/otel-instrumentation.js` is a Node preload: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set, a `NodeSDK` starts with auto-instrumentations plus the OpenInference instrumentation for `@openai/agents`, exporting to one OTLP collector; spans with the `openinference.project.name` resource attribute route on to Phoenix. `OTEL_*` and `PHOENIX_*` are platform keys, so the secrets hydration never reads them from the secrets backend.
 
-Each turn runs inside `traceAgentTurn` (`src/lib/server/services/telemetry.ts:193`), which opens an `agent.turn` root span with the conversation as session id and the model and run id as metadata. The SDK's AGENT/LLM/TOOL spans nest beneath it, so one run reads as one Phoenix trace. Two details are load-bearing: the runner ends the current agent span before parking on an approval (`reasoning.ts:437`), because the resumed turn opens a fresh root and an un-ended span would orphan its children, and expected cancellations record `cancelled` as output with an OK status rather than an error.
+Each turn runs inside `traceAgentTurn` (`src/lib/server/adapters/telemetry/tracing.ts`), which opens an `agent.turn` root span with the conversation as session id and the model and run id as metadata. The SDK's AGENT/LLM/TOOL spans nest beneath it, so one run reads as one Phoenix trace. Two details are load-bearing: the runner ends the current agent span before parking on an approval (`reasoning.ts:437`), because the resumed turn opens a fresh root and an un-ended span would orphan its children, and expected cancellations record `cancelled` as output with an OK status rather than an error.
 
 ## Touching other parts of the system
 

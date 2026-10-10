@@ -1,3 +1,4 @@
+import type { TraceContextReader } from '$lib/models/telemetry';
 import type { WebResearchOptions, ToolActivityProjection } from '$lib/models/agent';
 import { createToolActivityProjection } from '$lib/server/factories/agent/tool-activity-factory';
 import { normalizeLanguageModelId } from '$lib/models/agent';
@@ -95,7 +96,7 @@ import {
 	ToolAccess,
 	type ToolPreferenceCapability
 } from '$lib/server/services/agent/tools/preferences';
-import { traceAgentTurn } from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import { AgentEventStore, type AgentEventBus } from '$lib/server/stores/agent/events';
 import { ModelCatalogStore } from '$lib/server/stores/agent/model-catalog';
 import {
@@ -129,6 +130,7 @@ export interface AgentCapabilityInput {
 }
 
 export interface AgentCapability {
+	readonly traceContext: TraceContextReader;
 	readonly toolActivityProjection: ToolActivityProjection;
 	readonly runStatus: AgentRunStatusRules;
 	readonly streamPresentation: Pick<AgentStreamPresentation, 'segments'>;
@@ -166,6 +168,7 @@ export interface AgentCapability {
 }
 
 export const createAgentCapability = (input: AgentCapabilityInput): AgentCapability => {
+	const { turns: traceAgentTurn, traceContext } = createTelemetryCapability();
 	const conversationRepository = new ConversationRecords(input.db);
 	const conversations = new ConversationArchive(conversationRepository);
 	const preferences = new AgentPreferenceCatalog(new AgentPreferenceRecords(input.db));
@@ -234,6 +237,7 @@ export const createAgentCapability = (input: AgentCapabilityInput): AgentCapabil
 		now: () => new Date().toISOString() as DateTime,
 		conversations,
 		conversationMessages: conversations,
+		traceContext,
 		toolActivityProjection: createToolActivityProjection(),
 		conversationHistory: new ConversationHistoryService(sessions),
 		preferences,

@@ -14,8 +14,7 @@ import type { InlineCompletionGenerator } from '$lib/models/agent';
 import type { IInlineCompletionRules } from '$lib/server/services/inline-suggestions/completion-rules';
 import type { NoteReader } from '$lib/server/services/notes/catalog';
 
-import { traceWorkflow } from '$lib/server/services/telemetry';
-import type { OperationObserver } from '$lib/models/telemetry';
+import type { OperationObserver, WorkflowObserver } from '$lib/models/telemetry';
 import type { MemoryEntryLister } from '$lib/server/services/memory/library';
 import type { Reranker } from '$lib/models/knowledge-search';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
@@ -50,6 +49,7 @@ export interface InlineSuggestionsDependencies {
 	reranker: Reranker;
 	memory: MemoryEntryLister;
 	observer: OperationObserver;
+	workflow: WorkflowObserver;
 	inlineSuggestionThrottle: InlineSuggestionThrottle;
 	noteReader: NoteReader;
 	preferences: AgentPreferencesStore;
@@ -73,7 +73,7 @@ export class InlineSuggestions implements InlineSuggestionsController {
 		if (!admission.allowed)
 			return { outcome: admission.reason, retryAfterMs: admission.retryAfterMs };
 		const authoritativeRequest = { ...request, projectId: note.projectId };
-		return traceWorkflow(
+		return this.dependencies.workflow.run(
 			'inline.suggestion',
 			{
 				input: JSON.stringify({

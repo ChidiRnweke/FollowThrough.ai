@@ -1,3 +1,4 @@
+import { InMemoryTurnObserver } from '$lib/testing/telemetry/fakes/in-memory-turn-observer';
 import type { AgentRunContext, PendingAgentDecision, PreparedAgentRun } from '$lib/models/agent';
 import { CHAT_WEB_SEARCH_DEFAULTS } from '$lib/models/agent';
 import type { DateTime } from '$lib/models/workspace';
@@ -49,7 +50,7 @@ it('fails clearly when no API key is configured', async () => {
 		},
 		false,
 		new AgentSdkInfrastructure('', undefined, undefined, undefined, undefined),
-		undefined
+		new InMemoryTurnObserver()
 	);
 	const updates = runner.execute({
 		actor: testActor(),
@@ -142,7 +143,7 @@ describe('Agent turn span lifecycle', () => {
 			new ApprovalFetch().fetch,
 			undefined
 		),
-		undefined
+		new InMemoryTurnObserver()
 	);
 
 	it('ends the SDK agent span when the run parks on an approval', async () => {
@@ -209,7 +210,7 @@ describe('Agent turn span lifecycle', () => {
 				new ApprovalFetch().fetch,
 				undefined
 			),
-			undefined
+			new InMemoryTurnObserver()
 		);
 		const parked: PreparedAgentRun = {
 			...run,

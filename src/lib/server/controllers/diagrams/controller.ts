@@ -1,3 +1,4 @@
+import type { WorkflowObserver } from '$lib/models/telemetry';
 import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentStreamState } from '$lib/server/stores/agent/stream';
 import type { AgentStreamPresentation } from '$lib/server/services/agent/runs/stream-presentation';
@@ -28,7 +29,6 @@ import type {
 	RunSettlementOutcome,
 	WorkflowRunContext
 } from '$lib/models/agent';
-import type { AgentPayloadObject } from '$lib/models/agent/payload';
 import type { Note, NoteId, TextSelection } from '$lib/models/notes';
 import type { Provenance, ProvenanceId, ProvenanceRequest } from '$lib/models/provenance';
 import type { Skill } from '$lib/models/skills';
@@ -180,19 +180,6 @@ export interface DiagramsController {
 	): Promise<AgentPayload>;
 }
 
-type DiagramWorkflowObserver = <T>(
-	name: string,
-	context: {
-		input: string;
-		sessionId: string;
-		userId?: string;
-		metadata?: AgentPayloadObject;
-		tags?: readonly string[];
-	},
-	operation: () => Promise<T>,
-	output: (result: T) => string
-) => Promise<T>;
-
 export interface DiagramAgentDependencies {
 	readonly toolActivityProjection: ToolActivityProjection;
 	readonly contextFormatter: IAgentContext;
@@ -231,7 +218,7 @@ export interface DiagramAgentDependencies {
 		reader: AgentStreamReader;
 		presentation: AgentStreamPresentation;
 	};
-	readonly observeWorkflow: DiagramWorkflowObserver;
+	readonly observeWorkflow: WorkflowObserver;
 	readonly generator: DiagramProviderFactory;
 	readonly createGenerationState: () => DiagramGenerationState;
 }
@@ -781,7 +768,7 @@ export class Diagrams implements DiagramsController {
 			await this.dependencies.generation.runContext.persist(actor, run.id, change);
 		});
 
-		return await this.dependencies.generation.observeWorkflow(
+		return await this.dependencies.generation.observeWorkflow.run(
 			'diagram.agent-turn',
 			{
 				input: input.prompt,

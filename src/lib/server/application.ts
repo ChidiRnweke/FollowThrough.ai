@@ -486,6 +486,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			syncRetry: synchronization.mutationRetry,
 			conversationSessions,
 			conversationMessages,
+			traceContext: agentCapability.traceContext,
 			toolActivityProjection,
 			preferences,
 			models: modelCatalog,
@@ -788,6 +789,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			reranker: searchReranker,
 			memory: memory.lister,
 			observer: finalizedKnowledgeSearch.observer,
+			workflow: finalizedKnowledgeSearch.workflow,
 			// Controllers are constructed per request, so the process-wide spend
 			// guard is wired once here.
 			inlineSuggestionThrottle: finalizedKnowledgeSearch.inlineAdmission

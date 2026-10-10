@@ -60,7 +60,7 @@ export const diagramGenerationFixture = () => {
 		defaultVisionModel: 'test/vision',
 		modelSelection: new AgentModelSelectionService(),
 		createStream: createAgentStream,
-		observeWorkflow: (_name, _context, operation) => operation(),
+		observeWorkflow: { run: (_name, _context, operation) => operation() },
 		createGenerationState: () => new DiagramGenerationStore(),
 		generator: provider
 	};

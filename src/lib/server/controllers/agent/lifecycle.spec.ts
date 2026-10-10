@@ -1,3 +1,5 @@
+import { InMemoryTurnObserver } from '$lib/testing/telemetry/fakes/in-memory-turn-observer';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import { AgentSdkInfrastructure } from '$lib/server/adapters/agent/execution-infrastructure';
 import { NodeNoteMarkdown } from '$lib/server/adapters/notes/markdown';
 import { AgentExecution } from '$lib/server/controllers/agent/execution';
@@ -133,6 +135,7 @@ const setup = <T extends AgentRunner>(
 	const lifecycle = new Agent(
 		new WorkspaceCommandRulesService(),
 		capabilityDependencies<AgentDependencies>({
+			traceContext: createTelemetryCapability().traceContext,
 			...agentRulesFixture(),
 			runs,
 			cancellations: new RunCancellation(runs),
@@ -650,7 +653,7 @@ it('journals a failed tool call and its correction through the production runner
 			undefined,
 			() => new InMemoryModelProvider(model)
 		),
-		undefined
+		new InMemoryTurnObserver()
 	);
 	const fixture = setup(reasoning);
 	fixture.runs.runs = fixture.runs.runs.map((run) => ({ ...run, executionMode: 'auto_accept' }));

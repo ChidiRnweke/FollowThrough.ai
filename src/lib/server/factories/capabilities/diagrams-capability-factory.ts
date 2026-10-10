@@ -85,7 +85,7 @@ import type { DiagramRepository } from '$lib/server/repositories/diagrams/diagra
 import type { ProvenanceRecorder } from '$lib/server/services/notes/provenance';
 import type { AgentSessionRepository } from '$lib/server/repositories/agent';
 import type { BuiltInSkillProvisioner } from '$lib/server/services/skills/built-ins';
-import { traceWorkflow } from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import type { ProjectRepository } from '$lib/server/repositories/projects';
 
 export interface DiagramsCapabilityInput {
@@ -137,6 +137,7 @@ export interface DiagramsCapability {
 }
 
 export const createDiagramsCapability = (input: DiagramsCapabilityInput): DiagramsCapability => {
+	const { workflows: traceWorkflow } = createTelemetryCapability();
 	const services = createDiagramServices(
 		new DiagramRecords(input.db),
 		input.notes,

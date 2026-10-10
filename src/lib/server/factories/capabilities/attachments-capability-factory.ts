@@ -38,7 +38,7 @@ import {
 	type IAttachmentStorage,
 	type ObjectStorageConfig
 } from '$lib/server/repositories/attachments/object-storage';
-import { operationObserver } from '$lib/server/services/telemetry';
+import { createTelemetryCapability } from '$lib/server/factories/telemetry';
 import {
 	DEFAULT_MISTRAL_BASE_URL,
 	DEFAULT_OCR_MODEL,
@@ -81,6 +81,7 @@ export interface AttachmentsCapability {
 export const createAttachmentsCapability = (
 	input: AttachmentsCapabilityInput
 ): AttachmentsCapability => {
+	const { operations: operationObserver } = createTelemetryCapability();
 	const repository = new AttachmentRecords(input.db);
 	const storage =
 		input.storage ??

@@ -1,7 +1,12 @@
 import { DomainError } from '$lib/errors';
-import { logLevelEnabled, summarize, traceOperation } from '$lib/server/services/telemetry';
+import type {
+	OperationObserver,
+	TelemetryLogging,
+	TelemetryClock,
+	BoundaryLogger
+} from '$lib/models/telemetry';
 import type { ControllerSurface } from '$lib/models/controller-boundary';
-type BoundaryLogger = Pick<Console, 'info' | 'debug' | 'warn' | 'error'>;
+
 /** Runtime boundary middleware. Construction creates a facade; calls retain original receivers. */
 export class ControllerBoundary<T extends object> {
 	readonly controller: T;
@@ -9,9 +14,13 @@ export class ControllerBoundary<T extends object> {
 		domain: string,
 		controller: T,
 		surface: ControllerSurface<T>,
-		logger: BoundaryLogger = console
+		dependencies: {
+			observer: OperationObserver;
+			logging: TelemetryLogging;
+			clock: TelemetryClock;
+			logger: BoundaryLogger;
+		}
 	) {
-		// audit-allow: no-unknown-type — The boundary facade preserves heterogeneous controller method signatures.
 		const methods = new Map<PropertyKey, (...args: unknown[]) => unknown>();
 		this.controller = new Proxy(controller, {
 			get(target, name) {
@@ -20,33 +29,36 @@ export class ControllerBoundary<T extends object> {
 				const cached = methods.get(name);
 				if (cached) return cached;
 				if (!Object.hasOwn(surface, name) || !surface[name as keyof T]) return value.bind(target);
-				// audit-allow: no-unknown-type — One wrapper handles each declared capability without changing its input or output.
+
 				const wrapped = (...args: unknown[]): Promise<unknown> =>
-					traceOperation(`${domain}.${String(name)}`, { kind: null }, async () => {
+					dependencies.observer.run(`${domain}.${String(name)}`, { kind: null }, async () => {
 						const [actor, ...rest] = args;
 						const userId =
 							typeof actor === 'object' && actor !== null && 'userId' in actor
 								? actor.userId
 								: undefined;
-						if (logLevelEnabled('info'))
-							logger.info(
+						if (dependencies.logging.enabled('info'))
+							dependencies.logger.info(
 								`[${domain}] ${String(name)}`,
-								summarize({ ...(userId !== undefined ? { userId } : {}), args: rest })
+								dependencies.logging.summarize({
+									...(userId !== undefined ? { userId } : {}),
+									args: rest
+								})
 							);
-						const startedAt = performance.now();
+						const startedAt = dependencies.clock.now();
 						try {
 							const result = await Reflect.apply(value, target, args);
-							if (logLevelEnabled('debug'))
-								logger.debug(
-									`[${domain}] ${String(name)} completed in ${Math.round(performance.now() - startedAt)}ms`,
-									summarize(result)
+							if (dependencies.logging.enabled('debug'))
+								dependencies.logger.debug(
+									`[${domain}] ${String(name)} completed in ${Math.round(dependencies.clock.now() - startedAt)}ms`,
+									dependencies.logging.summarize(result)
 								);
 							return result;
 						} catch (error) {
 							if (error instanceof DomainError) {
-								if (logLevelEnabled('warn'))
-									logger.warn(`[${domain}] ${String(name)} failed`, error);
-							} else logger.error(`[${domain}] ${String(name)} failed`, error);
+								if (dependencies.logging.enabled('warn'))
+									dependencies.logger.warn(`[${domain}] ${String(name)} failed`, error);
+							} else dependencies.logger.error(`[${domain}] ${String(name)} failed`, error);
 							throw error;
 						}
 					});
