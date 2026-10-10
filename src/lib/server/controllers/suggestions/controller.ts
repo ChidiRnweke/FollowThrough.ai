@@ -1,3 +1,4 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { DiagramIndexing } from '$lib/server/services/knowledge-search/indexing';
 import type { MemoryIndexing as MemoryIndexer } from '$lib/server/services/knowledge-search/indexing';
 import type { ToolResultReader } from '$lib/models/agent-tool-context';
@@ -10,7 +11,7 @@ import type {
 	DrawioXmlContentValidator
 } from '$lib/server/services/diagrams/drawio';
 import type { DiagramWriter } from '$lib/server/services/diagrams/library';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { IndexCompletion } from '$lib/server/services/knowledge-search/indexing';
 import type { AppliedRecord } from '$lib/server/services/suggestions/inbox';
 import type { AgentPayloadInspection } from '$lib/services/agent/payload';
@@ -159,7 +160,8 @@ export interface SuggestionsDependencies {
 	memoryChanges: MemoryChanges;
 	sourceNotes: NoteReader;
 	suggestionEffects: SuggestionEffectService;
-	indexEmbeddings: IEmbeddings;
+	indexEmbeddings: EmbeddingClient;
+	embeddingBatching: IEmbeddingBatching;
 	indexWriter: IndexCompletion;
 	memoryIndexer: MemoryIndexer;
 	diagramIndexer: DiagramIndexing;
@@ -432,8 +434,15 @@ export class Suggestions implements SuggestionsController {
 
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
 		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.dependencies.embeddingBatching.batches(
 			result.missing.map((chunk) => chunk.input)
+		)) {
+			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
+		}
+		const batch = this.dependencies.embeddingBatching.combine(
+			this.dependencies.indexEmbeddings.model,
+			batches
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}

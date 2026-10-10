@@ -1,7 +1,10 @@
 import type { SearchMatch } from '$lib/models/knowledge-search';
 import type { Reranker } from '$lib/models/knowledge-search';
 import type { EmbeddingBatch, EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import type { ISearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
+import {
+	cachedSearchQuerySchema,
+	type SearchQueryCache
+} from '$lib/models/knowledge-search/query-generation';
 import {
 	DEFAULT_RERANK_MODEL,
 	RERANKING_STRATEGY,
@@ -86,15 +89,17 @@ export class CachedReranker implements Reranker {
 	}
 }
 
-export class CachedSearchQueryGeneration implements ISearchQueryGeneration {
-	constructor(
-		private readonly inner: ISearchQueryGeneration,
-		private readonly cache: DiskCache
-	) {}
+export class DiskSearchQueryCache implements SearchQueryCache {
+	constructor(private readonly cache: DiskCache) {}
 
-	generate(text: string): Promise<string> {
-		return this.cache.resolve(DiskCache.key('search-query-v2', { text }), () =>
-			this.inner.generate(text)
-		);
+	async read(text: string): ReturnType<SearchQueryCache['read']> {
+		const entry = await this.cache.lookup(DiskCache.key('search-query-v2', { text }));
+		return entry.kind === 'hit'
+			? { kind: 'hit', query: cachedSearchQuerySchema.parse(entry.value) }
+			: { kind: 'miss' };
+	}
+
+	write(text: string, query: string): Promise<void> {
+		return this.cache.store(DiskCache.key('search-query-v2', { text }), query);
 	}
 }

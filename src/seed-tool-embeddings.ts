@@ -18,22 +18,25 @@ import { ToolEmbeddingRecords } from '$lib/server/repositories/agent/postgres/to
 import { ToolDiscovery } from '$lib/server/controllers/tool-discovery/controller';
 import { ToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
+import { createEmbeddings } from '$lib/server/factories/retrieval-providers';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 
 const main = async (): Promise<void> => {
 	await hydrateEnvironment();
-	const embeddings = new Embeddings(
-		requiredEnvironmentValue('OPENROUTER_API_KEY'),
-		new Cl100kTokenizer(),
+	const embeddings = createEmbeddings(
 		{
+			apiKey: requiredEnvironmentValue('OPENROUTER_API_KEY'),
 			baseURL: process.env.OPENROUTER_BASE_URL ?? DEFAULT_LANGUAGE_MODEL_BASE_URL,
 			appURL: process.env.ORIGIN ?? 'http://localhost:5173'
-		}
+		},
+		{ run: (_name, _context, body) => body() }
 	);
+	const embeddingBatching = new EmbeddingBatching(new Cl100kTokenizer());
 	const transaction = createTransactionContext(db);
 	const summary = await new ToolDiscovery(
 		new ToolCatalogIndex(new ToolEmbeddingRecords(transaction.database)),
 		embeddings,
+		embeddingBatching,
 		transaction.transactionRunner,
 		new AgentToolCatalogService()
 	).seed();

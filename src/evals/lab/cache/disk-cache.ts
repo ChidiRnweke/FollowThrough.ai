@@ -118,18 +118,14 @@ export class DiskCache {
 		return `${namespace}:${hash.slice(0, 32)}`;
 	}
 
-	async resolve<T>(
+	async lookup(
 		key: string,
-		produce: () => Promise<T>,
 		options: { deterministic?: boolean } = {}
-	): Promise<T> {
+	): Promise<{ readonly kind: 'hit'; readonly value: AgentPayload } | { readonly kind: 'miss' }> {
 		const entries = await this.load();
 		if (!DiskCache.recording() && key in entries) {
 			this.counters.hits += 1;
-			// The entry survived a JSON round trip in this cache's own file, so a
-			// value that satisfies the caller's `T` needs no further shape check.
-			// audit-allow: shape-cast — `T` is the caller's declared payload type, and no static check can re-verify a JSON round trip here.
-			return entries[key] as unknown as T;
+			return { kind: 'hit', value: entries[key] };
 		}
 		this.counters.misses += 1;
 		if (!DiskCache.recording()) {
@@ -142,9 +138,28 @@ export class DiskCache {
 			);
 		}
 		this.counters.live += 1;
-		const value = await produce();
-		entries[key] = cacheValueOf(value);
+		return { kind: 'miss' };
+	}
+
+	async store(key: string, value: AgentPayload): Promise<void> {
+		const entries = await this.load();
+		entries[key] = value;
 		this.dirty = true;
+	}
+
+	async resolve<T>(
+		key: string,
+		produce: () => Promise<T>,
+		options: { deterministic?: boolean } = {}
+	): Promise<T> {
+		const entry = await this.lookup(key, options);
+		if (entry.kind === 'hit') {
+			// The entry survived a JSON round trip in this cache's own file.
+			// audit-allow: shape-cast — `T` is the caller's declared payload type, and no static check can re-verify a JSON round trip here.
+			return entry.value as unknown as T;
+		}
+		const value = await produce();
+		await this.store(key, cacheValueOf(value));
 		return value;
 	}
 

@@ -1,3 +1,4 @@
+import type { OperationObserver } from '$lib/models/telemetry';
 import type { InlineCompletionGenerator } from '$lib/models/agent';
 import {
 	InlineCompletionRules,
@@ -22,7 +23,18 @@ import {
 	InlineContextService,
 	type IInlineContextService
 } from '$lib/server/services/inline-suggestions/inline-context';
-import { Embeddings } from '$lib/server/services/knowledge-search/embeddings';
+import {
+	createEmbeddings,
+	createSearchQueryGeneration
+} from '$lib/server/factories/retrieval-providers';
+import {
+	EmbeddingBatching,
+	type IEmbeddingBatching
+} from '$lib/server/services/knowledge-search/embedding-batching';
+import {
+	SearchQueryRules,
+	type ISearchQueryRules
+} from '$lib/server/services/knowledge-search/query-rules';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import type {
 	AttachmentIndexing,
@@ -44,10 +56,7 @@ import type { AgentPreferenceEditor } from '$lib/server/services/agent/runs/pref
 import { createInlineCompletion } from '$lib/server/factories/inline-completion';
 import type { Reranker } from '$lib/models/knowledge-search';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
-import {
-	SearchQueryGeneration,
-	type ISearchQueryGeneration
-} from '$lib/server/services/knowledge-search/query-generation';
+import type { SearchQueryGenerator } from '$lib/models/knowledge-search/query-generation';
 import { SearchRanking } from '$lib/server/adapters/knowledge-search/ranking';
 import {
 	KnowledgeLookup,
@@ -63,7 +72,8 @@ export interface KnowledgeSearchCapabilityInput {
 	readonly appURL: string;
 	readonly embeddingClient?: EmbeddingClient;
 	readonly reranker?: Reranker;
-	readonly queryGenerator?: ISearchQueryGeneration;
+	readonly queryGenerator?: SearchQueryGenerator;
+	readonly queryObserver?: OperationObserver;
 	readonly deferEmbedding: boolean;
 }
 
@@ -73,7 +83,10 @@ export interface KnowledgeSearchCapability {
 	readonly indexWriter: IndexCompletion;
 	readonly embeddingClient: EmbeddingClient;
 	readonly reranker: Reranker;
-	readonly queryGenerator: ISearchQueryGeneration;
+	readonly queryGenerator: SearchQueryGenerator;
+	readonly queryRules: ISearchQueryRules;
+	readonly queryObserver: OperationObserver;
+	readonly embeddingBatching: IEmbeddingBatching;
 	readonly attachmentIndexer: AttachmentIndexing;
 	readonly noteIndexer: NoteIndexing;
 	readonly diagramIndexer: DiagramIndexing;
@@ -105,13 +118,13 @@ export const createKnowledgeSearchCapability = (
 ): KnowledgeSearchCapability => {
 	const tokenizer = new Cl100kTokenizer();
 	const repository = new KnowledgeIndexRecords(input.db);
+	const embeddingBatching = new EmbeddingBatching(tokenizer);
 	const embeddingClient =
 		input.embeddingClient ??
-		new Embeddings(input.openRouterApiKey, tokenizer, {
-			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			observer: operationObserver
-		});
+		createEmbeddings(
+			{ apiKey: input.openRouterApiKey, baseURL: input.openRouterBaseURL, appURL: input.appURL },
+			operationObserver
+		);
 	const reranker =
 		input.reranker ??
 		new SearchRanking(input.openRouterApiKey, {
@@ -125,10 +138,10 @@ export const createKnowledgeSearchCapability = (
 	};
 	const queryGenerator =
 		input.queryGenerator ??
-		new SearchQueryGeneration(input.openRouterApiKey, {
+		createSearchQueryGeneration({
+			apiKey: input.openRouterApiKey,
 			baseURL: input.openRouterBaseURL,
-			appURL: input.appURL,
-			observer: operationObserver
+			appURL: input.appURL
 		});
 	const index = createContentIndex(
 		repository,
@@ -146,6 +159,7 @@ export const createKnowledgeSearchCapability = (
 		toolRetriever: new ToolDiscovery(
 			new ToolCatalogIndex(new ToolEmbeddingRecords(input.db)),
 			embeddingClient,
+			embeddingBatching,
 			input.transactionRunner,
 			new AgentToolCatalogService()
 		),
@@ -172,6 +186,9 @@ export const createKnowledgeSearchCapability = (
 		}),
 		reranker,
 		queryGenerator,
+		queryRules: new SearchQueryRules(),
+		queryObserver: input.queryObserver ?? operationObserver,
+		embeddingBatching,
 		attachmentIndexer: index,
 		noteIndexer: index,
 		diagramIndexer: index,
@@ -181,6 +198,7 @@ export const createKnowledgeSearchCapability = (
 		maintenance: new EmbeddingMaintenance(
 			new IndexBacklog(repository),
 			embeddingClient,
+			embeddingBatching,
 			input.transactionRunner,
 			new EmbeddingProgressStore(),
 			{

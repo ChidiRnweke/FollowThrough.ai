@@ -1,3 +1,4 @@
+import { SearchQueryRules } from '$lib/server/services/knowledge-search/query-rules';
 import {
 	Retrieval,
 	type RetrievalDependencies
@@ -18,6 +19,9 @@ export const searchControllerFixture = (overrides: Partial<RetrievalDependencies
 	const controller = new Retrieval(
 		capabilityDependencies<RetrievalDependencies>({
 			...agentToolResultsFixture(),
+			queryRules: new SearchQueryRules(),
+			queryCache: undefined,
+			observer: { run: (_name, _context, body) => body() },
 			knowledgeLookup: new KnowledgeLookup(repository),
 			embeddings,
 			reranker,

@@ -1,3 +1,4 @@
+import type { OperationObserver } from '$lib/models/telemetry';
 import type { ScheduledTask } from '$lib/models/maintenance';
 import type { WebReferenceClient } from '$lib/server/controllers/references/controller';
 import { createAgentToolResults } from '$lib/server/factories/agent/tool-result-factory';
@@ -41,7 +42,10 @@ import type { AgentModelCatalog } from './services/agent/runs/preferences';
 import type { AttachmentClaims } from './services/attachments/contracts';
 import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { Reranker } from '$lib/models/knowledge-search';
-import type { ISearchQueryGeneration } from './services/knowledge-search/query-generation';
+import type {
+	SearchQueryGenerator,
+	SearchQueryCache
+} from '$lib/models/knowledge-search/query-generation';
 import type { ProvenanceRecorder } from './services/notes/provenance';
 import type { AgentEventBus } from './stores/agent/events';
 
@@ -54,7 +58,9 @@ import type { AgentEventBus } from './stores/agent/events';
 export interface ApplicationOverrides {
 	readonly embeddingClient?: EmbeddingClient;
 	readonly reranker?: Reranker;
-	readonly queryGenerator?: ISearchQueryGeneration;
+	readonly queryGenerator?: SearchQueryGenerator;
+	readonly queryCache?: SearchQueryCache;
+	readonly queryObserver?: OperationObserver;
 	readonly attachmentStorage?: IAttachmentStorage;
 	readonly referenceClient?: WebReferenceClient;
 	readonly modelCatalog?: AgentModelCatalog;
@@ -187,6 +193,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 		embeddingClient: overrides.embeddingClient,
 		reranker: overrides.reranker,
 		queryGenerator: overrides.queryGenerator,
+		queryObserver: overrides.queryObserver,
 		deferEmbedding
 	});
 	const {
@@ -377,6 +384,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			generationRules: diagramCapability.generationRules,
 			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			selectionOrigins: noteCapability.selectionOrigins,
 			generation: diagramCapability.generation,
@@ -401,6 +409,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			diagramLifecycle: diagramCapability.lifecycleRules,
 			diagramSourceNotes: notes.reader,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
@@ -427,6 +436,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			todoCreationRules: todoCapability.creationRules,
 			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			suggestionLister: suggestions.lister,
 			suggestionExpirer: suggestions.expirer,
@@ -578,6 +588,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			noteCreationRules: noteCapability.creationRules,
 			noteEditingRules: noteCapability.editingRules,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			syncMutations: synchronization.mutations,
 			syncRetry: synchronization.mutationRetry,
@@ -635,6 +646,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			notePresentation: noteCapability.presentation,
 			suggestionPresentation: suggestionCapability.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			markdown: noteCapability.markdown,
 			archiveImport: noteCapability.archiveImport,
@@ -684,6 +696,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			editing: memory.editing,
 			presentation: memory.presentation,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			memoryIndexer,
 			syncMutations: synchronization.mutations,
@@ -716,6 +729,7 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			widgetWriter: widgets.writer,
 			widgetIndexer: knowledgeSearch.widgetIndexer,
 			indexEmbeddings: knowledgeSearch.embeddingClient,
+			embeddingBatching: knowledgeSearch.embeddingBatching,
 			indexWriter: knowledgeSearch.indexWriter,
 			transactionRunner
 		},
@@ -743,6 +757,9 @@ export function createApplication(config: ApplicationConfig): ProductionApplicat
 			embeddings: searchEmbeddings,
 			reranker: searchReranker,
 			queryGenerator,
+			queryRules: knowledgeSearch.queryRules,
+			queryCache: overrides.queryCache,
+			observer: knowledgeSearch.queryObserver,
 			conversations: conversationMessages
 		},
 		inlineSuggestions: {

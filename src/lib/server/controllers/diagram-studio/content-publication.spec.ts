@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { diagramEtag, type DiagramWriteOutcome } from '$lib/models/diagrams';
 import { createDiagramServices } from '$lib/server/factories/capabilities/diagrams-capability-factory';
 import {
@@ -66,6 +68,7 @@ const setup = () => {
 			diagramDraftWriter: library.draftWriter,
 			diagramIndexer: index,
 			indexEmbeddings: embeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			indexWriter: index,
 			drawioXmlValidator: new DrawioXmlValidator(),
 			drawioSvgSanitizer: new DrawioSvgSanitizer(),

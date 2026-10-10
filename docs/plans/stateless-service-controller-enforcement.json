@@ -1,21 +1,21 @@
 {
 	"recordedAt": "2026-10-11",
-	"applicationRevision": "49cd5c82c64709f896ce511c19d88e8d2c276331",
+	"applicationRevision": "f9904532f104d03c8e519fb7d604de48361dddcd",
 	"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
 	"purpose": "Migration evidence only. No checker reads this inventory. All violations remain errors. The overall refactor is incomplete.",
 	"comparison": {
-		"applicationBase": "ab83ff5c8fe2f152082ccec32af356086cda2eb0",
+		"applicationBase": "71baf694ed1fade904113a06561928fd3012dfa7",
 		"toolingRevision": "85f5cc7bea5229f5cefaa31e8e59806304bcde0f",
-		"method": "Baseline verification on draft #358 matched all 370 semantic diagnostics with provenance and all 47 expanded Chisel diagnostics exactly. The unchanged analyzers remove the three inline-completion public helper findings. No diagnostic identities were added. Constructors, factory outputs, the shared completion contract, controller consumers and evaluation dependencies were reviewed separately.",
+		"method": "Baseline verification on draft #360 matched all 367 semantic diagnostics with provenance and all 47 expanded Chisel diagnostics exactly. The unchanged analyzers report the same diagnostic identities and counts after this slice; source locations and provenance are refreshed. Provider constructors, factory outputs, batching owners, shared contracts, consumers, evaluation caches and seeding were reviewed separately.",
 		"semanticCounts": {
 			"concrete-dependency": 1,
 			"controller-orchestration": 277,
 			"factory-workflow": 12,
 			"indirect-dependency": 9,
-			"public-service-helper": 16,
+			"public-service-helper": 13,
 			"store-workflow": 55
 		},
-		"semanticTotal": 370,
+		"semanticTotal": 367,
 		"chiselCounts": {
 			"import-boundary:banned-layer-import": 47
 		},
@@ -4745,6 +4745,41 @@
 				"src/evals/cases/inline-suggestion.ts"
 			],
 			"inventoryNote": "Production constructors, factory output annotations, application wiring, InMemory fakes and evaluations were reviewed. Evaluations still invoke the owning controller after setting their model through preferences. No live evaluation or provider was run. Authorization, context isolation, throttling, cancellation, errors and controller-owned ADR 0036 fallback remain unchanged. No service dependency is hidden behind an adapter contract."
+		},
+		{
+			"subject": "Embedding provider construction, batch rules and controller-owned execution",
+			"status": "corrected",
+			"previousDependency": "Embeddings constructed OpenAI and mixed token budgets, sequential batch execution, provider response validation and tracing in a service. A service-local domain interface duplicated the model contract and a second EmbeddingClient name described the SDK seam.",
+			"currentOwner": "EmbeddingBatching owns lazy token budgets and ordered result combination. Indexing owners and ToolDiscovery execute batches sequentially before completing writes. Embeddings is a single-request adapter with protocol validation, cancellation, errors and per-batch tracing. Factories construct the SDK and expose the shared model-owned EmbeddingClient.",
+			"evidence": [
+				"src/lib/server/services/knowledge-search/embedding-batching.ts",
+				"src/lib/server/adapters/knowledge-search/embeddings.ts",
+				"src/lib/server/factories/retrieval-providers.ts",
+				"src/lib/server/factories/capabilities/knowledge-search-capability-factory.ts",
+				"src/lib/models/knowledge-search/embeddings.ts",
+				"src/lib/server/controllers/tool-discovery/batching.spec.ts",
+				"src/lib/server/controllers/knowledge-indexing/attachment-tail.spec.ts",
+				"src/lib/server/adapters/knowledge-search/retrieval-provider-protocol.spec.ts"
+			],
+			"inventoryNote": "All nine multi-input owners, single-input consumers, constructor calls, factory outputs, InMemory fakes, evaluation construction/cache and deploy seeding were reviewed. Returned model labels reach existing completion validation; mixed-model batches fail. Budget, ordering, empty input and oversized singleton behavior remain. This manual correction does not remove analyzer findings."
+		},
+		{
+			"subject": "Search query provider, prompt/output rules, tracing and evaluation cache ownership",
+			"status": "corrected",
+			"previousDependency": "SearchQueryGeneration constructed its SDK and combined prompt rules, generation, trim/empty checks and tracing. Controllers, factories and evaluation caches imported its service-local provider interface. The evaluation decorator cached the complete generation operation.",
+			"currentOwner": "Retrieval owns cache lookup, prompt preparation, provider execution, output validation and successful cache storage. SearchQueryRules owns the exact prompt and trim/empty rules. SearchQueryGeneration is an SDK adapter constructed in the factory. Generator, prompt, result and cache contracts live in models. The existing query span encloses generation and validation; cache I/O stays outside provider error wrapping.",
+			"evidence": [
+				"src/lib/models/knowledge-search/query-generation.ts",
+				"src/lib/server/services/knowledge-search/query-rules.ts",
+				"src/lib/server/adapters/knowledge-search/query-generation.ts",
+				"src/lib/server/controllers/knowledge-search/controller.ts",
+				"src/lib/server/controllers/knowledge-search/query-tracing.spec.ts",
+				"src/evals/lab/application.ts",
+				"src/evals/lab/cache/cached-clients.ts",
+				"src/evals/lab/cache/query-generation.spec.ts",
+				"src/seed-tool-embeddings.ts"
+			],
+			"inventoryNote": "Existing search-query-v2 keys, trimmed string payloads, counters, record mode and failure exclusion remain. Evaluation query observers preserve previous trace suppression. Query generation still has no cancellation parameter. CachedEmbeddingClient still does not forward cancellation, matching its pre-existing evaluation behavior. ADR 0004 legacy condensation remains unchanged. No live provider or evaluation ran; the overall migration remains incomplete."
 		}
 	]
 }

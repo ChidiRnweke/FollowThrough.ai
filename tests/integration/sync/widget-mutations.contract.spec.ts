@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { widgetTemplates, type WidgetId } from '$lib/models/widgets';
 import { Widgets, type WidgetsDependencies } from '$lib/server/controllers/widgets/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -43,6 +45,7 @@ const setup = async (suffix: string) => {
 			search: widgets.search,
 			widgetIndexer: index,
 			indexEmbeddings: new InMemoryEmbeddingClient(),
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			indexWriter: index,
 			syncMutations: sync.mutations,
 			syncRetry: sync.mutationRetry,

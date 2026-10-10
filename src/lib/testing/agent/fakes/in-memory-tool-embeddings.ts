@@ -1,12 +1,12 @@
 import type { StoredToolEmbedding, ToolEmbeddingWrite } from '$lib/models/agent/tool-index';
 import type { ToolEmbeddingRepository } from '$lib/server/repositories/agent/tool-embeddings';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type {
 	SnapshotParticipant,
 	RestoreSnapshot
 } from '$lib/testing/workspace/fakes/in-memory-transaction';
 
-export class InMemoryToolEmbeddings implements IEmbeddings {
+export class InMemoryToolEmbeddings implements EmbeddingClient {
 	vectors: readonly (readonly number[])[] | undefined;
 	failure?: Error;
 	constructor(readonly model = 'test-model') {}

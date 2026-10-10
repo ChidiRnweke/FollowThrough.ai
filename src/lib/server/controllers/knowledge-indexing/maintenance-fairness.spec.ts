@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { EmbeddingProgressStore } from '$lib/server/stores/maintenance/embedding-progress';
 import { IndexBacklog } from '$lib/server/services/knowledge-search/index-backlog';
 import { expect, it } from 'vitest';
@@ -28,6 +30,7 @@ const setup = async () => {
 	const worker = new EmbeddingMaintenance(
 		new IndexBacklog(repository),
 		client,
+		new EmbeddingBatching(testTokenizer),
 		new InMemoryTransactionRunner([repository]),
 		new EmbeddingProgressStore(),
 		{ maxSourcesPerTick: 2, logger: { error: () => {}, log: () => {} } }

@@ -11,3 +11,6 @@ export interface EmbeddingClient {
 	readonly model: string;
 	embed(contents: readonly string[], signal?: AbortSignal): Promise<EmbeddingBatch>;
 }
+
+/** Stored search vectors use this model's 3072 dimensions. */
+export const DEFAULT_EMBEDDING_MODEL = 'openai/text-embedding-3-large';

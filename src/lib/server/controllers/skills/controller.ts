@@ -1,3 +1,4 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentSkillContext, ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
@@ -37,7 +38,7 @@ import type {
 	SkillMutationRequest,
 	WorkspaceMutationResult
 } from '$lib/models/workspace-mutations';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type {
 	NoteAttachmentRestorer,
 	NoteEditor,
@@ -162,7 +163,8 @@ export interface SkillsDependencies {
 	revisionRecorder: NoteRevisionRecorder;
 	attachmentRestorer: NoteAttachmentRestorer;
 	anchorRepairer: SourceAnchorRepairer;
-	indexEmbeddings: IEmbeddings;
+	indexEmbeddings: EmbeddingClient;
+	embeddingBatching: IEmbeddingBatching;
 	indexWriter: IndexCompletion;
 	noteIndexer: NoteIndexer;
 	noteLinkReconciler: NoteLinkReconciler;
@@ -416,8 +418,15 @@ export class Skills implements SkillsController {
 	}
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
 		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.dependencies.embeddingBatching.batches(
 			result.missing.map((chunk) => chunk.input)
+		)) {
+			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
+		}
+		const batch = this.dependencies.embeddingBatching.combine(
+			this.dependencies.indexEmbeddings.model,
+			batches
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}

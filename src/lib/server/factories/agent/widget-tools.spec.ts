@@ -1,3 +1,4 @@
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { createWidgetRules } from '$lib/factories/widgets/rules';
 import { agentPayloadObjectResultSchema } from '$lib/models/agent/payload';
 import { widgetTemplates } from '$lib/models/widgets';
@@ -53,6 +54,7 @@ const setup = () => {
 			widgetWriter: library,
 			widgetIndexer: index,
 			indexEmbeddings: embeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			indexWriter: index,
 			transactionRunner: new InMemoryTransactionRunner([repository])
 		})

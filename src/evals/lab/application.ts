@@ -1,20 +1,21 @@
 import { AgentToolCatalogService } from '$lib/services/agent/tool-catalog';
 const toolCatalogRules = new AgentToolCatalogService();
 import { Cl100kTokenizer } from '$lib/server/adapters/tokenization/cl100k';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
+import {
+	createEmbeddings,
+	createSearchQueryGeneration
+} from '$lib/server/factories/retrieval-providers';
 import { InMemoryAttachmentClaims } from '$lib/testing/attachments/fakes/claims';
 import { fileURLToPath } from 'node:url';
 import { createApplication, type ProductionApplication } from '$lib/server/application';
-import {
-	Embeddings,
-	DEFAULT_EMBEDDING_MODEL
-} from '$lib/server/services/knowledge-search/embeddings';
+import { DEFAULT_EMBEDDING_MODEL } from '$lib/models/knowledge-search/embeddings';
 import { SearchRanking } from '$lib/server/adapters/knowledge-search/ranking';
-import { SearchQueryGeneration } from '$lib/server/services/knowledge-search/query-generation';
 import { DEFAULT_GENERATION_MODEL, DEFAULT_LANGUAGE_MODEL_BASE_URL } from '$lib/server/config';
 import { config as loadDotenv } from 'dotenv';
 import { DiskCache } from './cache/disk-cache';
 import {
-	CachedSearchQueryGeneration,
+	DiskSearchQueryCache,
 	CachedEmbeddingClient,
 	CachedReranker
 } from './cache/cached-clients';
@@ -85,8 +86,10 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	);
 	const deterministicToolTexts = new Set(toolPlan.pending.map((entry) => entry.input));
 	const clientOptions = { baseURL, appURL };
+	const providerConfiguration = { apiKey: openRouterApiKey, ...clientOptions };
+	const embeddingBatching = new EmbeddingBatching(new Cl100kTokenizer());
 	const embeddingClient = new CachedEmbeddingClient(
-		new Embeddings(openRouterApiKey, new Cl100kTokenizer(), clientOptions),
+		createEmbeddings(providerConfiguration, { run: (_name, _context, body) => body() }),
 		cache,
 		(content) => deterministicToolTexts.has(content)
 	);
@@ -104,10 +107,9 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 		overrides: {
 			embeddingClient,
 			reranker: new CachedReranker(new SearchRanking(openRouterApiKey, clientOptions), cache),
-			queryGenerator: new CachedSearchQueryGeneration(
-				new SearchQueryGeneration(openRouterApiKey, clientOptions),
-				cache
-			),
+			queryGenerator: createSearchQueryGeneration(providerConfiguration),
+			queryCache: new DiskSearchQueryCache(cache),
+			queryObserver: { run: (_name, _context, body) => body() },
 			attachmentStorage: new InMemoryAttachmentStorage(),
 			modelCatalog: new StubModelCatalog()
 		}
@@ -117,7 +119,13 @@ export async function createLab(options: LabOptions = {}): Promise<Lab> {
 	// explicitly rather than making every long-tail tool appear unavailable.
 	// Deploys run this seed next to migrations; the lab has to do the same or it
 	// evaluates a configuration that never ships.
-	await new ToolDiscovery(toolIndex, embeddingClient, transactionRunner, toolCatalogRules).seed();
+	await new ToolDiscovery(
+		toolIndex,
+		embeddingClient,
+		embeddingBatching,
+		transactionRunner,
+		toolCatalogRules
+	).seed();
 
 	return {
 		...application,

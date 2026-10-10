@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { UpdateTrustPolicyInput } from '$lib/models/agent';
 import type { ActorContext } from '$lib/models/identity';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -114,6 +116,7 @@ it.each(scenarios)('persists the memory policy outcome for $name', async (scenar
 			memoryIndexer: index,
 			indexWriter: index,
 			indexEmbeddings: embeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			transactionRunner: new InMemoryTransactionRunner([entries, effects, search])
 		})
 	);

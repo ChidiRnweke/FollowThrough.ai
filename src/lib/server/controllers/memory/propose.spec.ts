@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import { ValidationError } from '$lib/errors';
 import type { ProposeMemoryChangeInput } from '$lib/models/memory';
 import { createMemoryServices } from '$lib/server/factories/capabilities/memory-capability-factory';
@@ -74,6 +76,7 @@ const setup = () => {
 			memoryLister: memory.lister,
 			memoryIndexer: indexWriter,
 			indexEmbeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			indexWriter,
 			memoryCreator: memory.creator,
 			memoryEditor: memory.editor,

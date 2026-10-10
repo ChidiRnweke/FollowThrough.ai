@@ -9,7 +9,7 @@ import { toolFailure, type ToolFailure } from '$lib/models/agent/tool-failure';
 import type { ToolDescriptor } from '$lib/models/agent/tool-index';
 import type { ApiTokenScope } from '$lib/models/identity';
 import type { IToolCatalogIndex } from '$lib/server/services/agent/tools/tool-index';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient } from '$lib/models/knowledge-search/embeddings';
 import type { AgentToolDiscoveryState } from '$lib/server/stores/agent/tool-discovery';
 import type { AgentToolCatalog } from '$lib/services/agent/tool-catalog';
 export interface AgentToolAuthority {
@@ -36,7 +36,7 @@ export class AgentToolAuthorities implements AgentToolAuthority {
 		private readonly rules: AgentToolCatalog,
 		private readonly access: ToolAccessPolicy,
 		private readonly index: Pick<IToolCatalogIndex, 'rank'>,
-		private readonly embeddings: Pick<IEmbeddings, 'embed'>,
+		private readonly embeddings: Pick<EmbeddingClient, 'embed'>,
 		private readonly state: AgentToolDiscoveryState,
 		private readonly approval: AgentToolApprovalPolicy
 	) {}

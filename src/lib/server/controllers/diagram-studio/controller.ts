@@ -1,3 +1,4 @@
+import type { IEmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { AgentToolContext, ToolResultReader } from '$lib/models/agent-tool-context';
 import type { AgentToolInput } from '$lib/models/agent-tool-inputs';
 import type { AgentPayload } from '$lib/models/agent/payload';
@@ -76,7 +77,7 @@ import type {
 	DiagramRevisionReader,
 	DiagramWriter
 } from '$lib/server/services/diagrams/library';
-import type { IEmbeddings } from '$lib/server/services/knowledge-search/embeddings';
+import type { EmbeddingClient, EmbeddingBatch } from '$lib/models/knowledge-search/embeddings';
 import type { WorkspaceMutationGuard } from '$lib/server/services/workspace/mutation-receipts';
 
 /**
@@ -246,7 +247,8 @@ export interface DiagramStudioDependencies {
 	diagramTrash: DiagramLifecycle;
 	diagramWriter: Pick<DiagramWriter, 'create'>;
 	diagramSourceNotes: NoteReader;
-	indexEmbeddings: IEmbeddings;
+	indexEmbeddings: EmbeddingClient;
+	embeddingBatching: IEmbeddingBatching;
 	indexWriter: IndexCompletion;
 	diagramIndexer: DiagramIndexer;
 	drawioXmlValidator: DrawioXmlContentValidator;
@@ -709,8 +711,15 @@ export class DiagramStudio implements DiagramStudioController {
 
 	private async finishIndex(actor: ActorContext, result: IndexingResult): Promise<void> {
 		if (result.kind === 'stored') return;
-		const batch = await this.dependencies.indexEmbeddings.embed(
+		const batches: EmbeddingBatch[] = [];
+		for (const contents of this.dependencies.embeddingBatching.batches(
 			result.missing.map((chunk) => chunk.input)
+		)) {
+			batches.push(await this.dependencies.indexEmbeddings.embed(contents));
+		}
+		const batch = this.dependencies.embeddingBatching.combine(
+			this.dependencies.indexEmbeddings.model,
+			batches
 		);
 		await this.dependencies.indexWriter.complete(actor, result, batch);
 	}

@@ -1,3 +1,5 @@
+import { testTokenizer } from '$lib/testing/tokenization/fixtures/tokenizer';
+import { EmbeddingBatching } from '$lib/server/services/knowledge-search/embedding-batching';
 import type { MemoryEntryId } from '$lib/models/memory';
 import { Memory, type MemoryDependencies } from '$lib/server/controllers/memory/controller';
 import { createTransactionContext } from '$lib/server/db/transaction-context';
@@ -43,6 +45,7 @@ const setup = async (suffix: string) => {
 			transactionRunner,
 			memoryIndexer: indexWriter,
 			indexEmbeddings,
+			embeddingBatching: new EmbeddingBatching(testTokenizer),
 			indexWriter
 		})
 	);
