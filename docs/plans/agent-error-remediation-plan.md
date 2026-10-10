@@ -78,7 +78,7 @@ journal failures remain outside ordinary tool recovery.
       **Verify:** malformed result text and malformed reserved envelopes cannot crash observation
       or become silent success. Rejection is visible after reload and causes no rejected write.
 
-- [ ] **4. Diagnose and correct repeated invalid arguments (E4–E6).**
+- [x] **4. Diagnose and correct repeated invalid arguments (E4–E6).**
       For each representative trace, compare the advertised schema, discovery response, emitted
       arguments, feedback, and next generation's input. Inspect `grep`'s boolean fields, `sed`'s
       range object, and the memory add/update/remove schemas at their tool factory/binder boundary.

@@ -5,6 +5,7 @@ import { projectFileResult } from './tool-result-projectors';
 import { createSdkTool } from './sdk-tool-adapter';
 import { bindToolArguments, type PreparedAction, type ToolPreparation } from './tool-call-boundary';
 import { z } from 'zod';
+import type { MERMAID_PALETTE_KEYS } from '$lib/models/diagrams/mermaid-theme';
 import { memoryChangePayloadSchema } from '$lib/models/memory';
 import { PROPOSAL_AUTO_ACCEPT_PIPELINES } from '$lib/models/agent';
 import { LOCKED_TOOL_NAMES } from '$lib/models/agent/tool-catalog';
@@ -706,6 +707,27 @@ type _CoverageNamesNothingElse = Total<Exclude<BoundToolName, ToolName>>;
 
 const none = z.object({});
 const dateTime = z.iso.datetime({ offset: true }).transform((value) => value as DateTime);
+/**
+ * The export diagram theme as the model can send it. The settings schema keys colours by any
+ * string, which strict function calling cannot express (`propertyNames` is not permitted, and
+ * the whole request fails). The renderer reads exactly the palette keys, so they are named.
+ */
+const paletteColor = z.string().optional();
+const exportDiagramTheme = z.object({
+	base: z.enum(['light', 'dark']),
+	colors: z
+		.object({
+			background: paletteColor,
+			foreground: paletteColor,
+			brand: paletteColor,
+			muted: paletteColor,
+			mutedForeground: paletteColor,
+			border: paletteColor,
+			surface: paletteColor
+		} satisfies Record<(typeof MERMAID_PALETTE_KEYS)[number], typeof paletteColor>)
+		.strict()
+		.optional()
+});
 const optionalModelField = <T extends z.ZodType>(schema: T) =>
 	z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 /**
@@ -2111,13 +2133,13 @@ const sharedToolDefinitions = (
 			'proposal',
 			z.object({
 				scope: z.enum(['project', 'user']),
-				projectId: projectId
-					.optional()
-					.describe('Required for project scope; omit entirely for user scope.'),
+				projectId: optionalModelField(projectId).describe(
+					'Required for project scope; omit entirely for user scope.'
+				),
 				operation: z.enum(['add', 'update', 'remove']),
-				memoryEntryId: memoryEntryId
-					.optional()
-					.describe('Required for update or remove; omit entirely for add.'),
+				memoryEntryId: optionalModelField(memoryEntryId).describe(
+					'Required for update or remove; omit entirely for add.'
+				),
 				content: z
 					.string()
 					.optional()
@@ -2129,8 +2151,12 @@ const sharedToolDefinitions = (
 			}),
 			(input) => {
 				const { confidence, ...payload } = input;
+				// Which fields each scope and operation take is the model's to get right,
+				// so a mismatch is a correction for it, not a fault of ours.
+				const change = memoryChangePayloadSchema.safeParse(payload);
+				if (!change.success) throw new ValidationError(z.prettifyError(change.error));
 				return factory.memory().propose(actor, {
-					...memoryChangePayloadSchema.parse(payload),
+					...change.data,
 					provenanceId,
 					...(confidence !== undefined ? { confidence } : {})
 				});
@@ -2275,7 +2301,7 @@ const sharedToolDefinitions = (
 			'update_export_settings',
 			toolDescription('update_export_settings'),
 			'mutation',
-			exportSettingsSchema.extend({ projectId }),
+			exportSettingsSchema.extend({ projectId, diagramTheme: exportDiagramTheme.optional() }),
 			({ projectId, ...settings }) =>
 				factory.deliverables().updateExportSettings(actor, projectId, settings)
 		),

@@ -49,10 +49,22 @@ const feedback = (error: unknown): ToolFailure => {
 /**
  * The Agents SDK uses a different Zod major, so it cannot consume this app's
  * Zod objects directly. Keep Zod as the execution validator and publish the
- * exact strict object schema Zod generates for the model-facing protocol.
+ * strict object schema Zod generates for the model-facing protocol, within the
+ * subset strict function calling documents.
  */
 export const jsonObjectSchema = (schema: z.ZodObject) => {
-	const converted = z.toJSONSchema(schema, { io: 'input' });
+	const converted = z.toJSONSchema(schema, {
+		io: 'input',
+		// Zod writes a discriminated union as `oneOf`, which is outside the subset strict
+		// function calling documents (it accepts `anyOf`) and is answered with an error. The
+		// branches already exclude each other by their literal discriminator, so `anyOf`
+		// accepts exactly the same values.
+		override: ({ jsonSchema }) => {
+			if (!jsonSchema.oneOf) return;
+			jsonSchema.anyOf = jsonSchema.oneOf;
+			delete jsonSchema.oneOf;
+		}
+	});
 	if (
 		converted.type !== 'object' ||
 		converted.additionalProperties !== false ||

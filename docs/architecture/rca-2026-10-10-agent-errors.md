@@ -1,6 +1,6 @@
 # RCA: agent and observability errors, 2026-10-10
 
-Status: investigation recorded; plan tasks 1–3 resolved (see Resolution log).
+Status: investigation recorded; plan tasks 1–4 resolved (see Resolution log).
 
 This record covers **2026-10-08 06:43:09 UTC through 2026-10-10 06:43:09 UTC**.
 It preserves the evidence for the [remediation plan](../plans/agent-error-remediation-plan.md).
@@ -238,3 +238,30 @@ implementation-level tests had missed: a failed call was labelled in the past te
 completed", "Saved"), and the claim that the summary shows every attempt was false — by existing
 design it reports a failure only when nothing put it right. The label is fixed and covered by
 rendered tests; the claim is corrected. Those implementation-level tests were replaced.
+
+### Plan task 4 (E4–E6)
+
+E4: the advertised `grep` schema (`boolean` or null for `fixed` and `ignoreCase`) matches execution,
+and the feedback names the field and the expected type. No contract defect was found; repeated
+string values are recorded as model behavior.
+
+E5: strict mode requires every field, so a model must fill `memoryEntryId` on an add. A blank
+`projectId` or `memoryEntryId` is now treated as omitted, which is the existing convention for
+blank optional model fields. A broken scope or operation rule, such as an id on an add, now returns
+`VALIDATION` with the field, where it returned `INTERNAL_ERROR` with advice not to retry. Whether
+the model also sent other values in the recorded traces is not established.
+
+E6: the advertised `sed` schema wrote `range` as `oneOf`. OpenAI documents strict function calling
+as accepting String, Number, Boolean, Integer, Object, Array, Enum and `anyOf`, and answers any
+other schema with an error. Tool schemas are now converted with `anyOf`, which accepts the same
+values because each branch has a distinct literal discriminator. Whether `oneOf` caused the
+stringified range is not established.
+
+E1 hypothesis, unverified: `sed` is a first-class tool, so its `oneOf` schema went out with every
+request. All six rejections used `openai/gpt-5.6-luna` and failed before any tool ran, which fits a
+schema error from a provider that enforces the documented subset. This requires the provider's
+response body or a controlled request to confirm (plan task 6).
+
+Evidence: a test of every tool schema the agent sends found `sed: oneOf` before the change and none
+after. Tests through the tool's public invocation show a blank memory id treated as omitted and a
+broken memory rule returned as `VALIDATION`; both failed before the change.
